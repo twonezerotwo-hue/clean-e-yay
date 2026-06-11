@@ -1,75 +1,70 @@
 # TASK RESULT
 
 Date: 2026-06-11
-Task: L — Local live dev environment (API + web)
+Task: G4 — Correlation-aware sizing
 Status: completed
 
 ## Files changed
 
-- `Makefile` — `dev` (scripts/dev.sh), `api-dev` (PYTHONPATH), `web-dev`,
-  `compose-up`, `compose-down`.
-- `scripts/dev.sh` (new) — tek komut: API (8000) + web (3000); env auto
-  bootstrap; Ctrl+C clean shutdown.
-- `apps/web/.env.example` (new) — `NEXT_PUBLIC_API_BASE_URL`.
-- `apps/web/lib/api/client.ts` — `NEXT_PUBLIC_API_BASE_URL` tercih,
-  `NEXT_PUBLIC_API_BASE` fallback, default `127.0.0.1:8000`.
-- `apps/api/main.py` — CORS: `DEV_CORS=true` → "*"; whitelist 3000/3001 +
-  `CORS_EXTRA_ORIGINS`.
-- `docker-compose.dev.yml` (new) — api + web + (profil) tick_worker +
-  learning_worker; tek bind-mount; PAPER_SAFE.
-- `README.md` — "Run locally" bölümü: `make dev`, smoke testleri,
-  docker-compose, env değişkenleri.
-- `.gitignore` — `.claude/` (yerel ajan config gitignore).
-- `apps/web/pnpm-lock.yaml` — pnpm install ile oluştu, commit (CI reproducibility).
+- `packages/risk/correlation.py` (new) — pairwise rho: verified trade
+  PnL serisinden 30g pencerede computed → config `correlation_baseline`
+  → neutral fallback sırası; `cluster_exposure()` (aday için aynı yönlü
+  cluster cap, hedge ayrımı), `open_clusters()` (union-find,
+  OK/WARNING/BREACH).
+- `packages/decision/engine.py` — mistake gate'ten sonra G4 cluster cap:
+  cluster ≥ `max_cluster_pct` → hold; ≥ yarısı → size×0.5; asla artırmaz.
+  TradeDecision `cluster_report`; `decide_all(open_positions=...)`.
+- `apps/api/routers/risk.py` (new) — `GET /api/v1/risk/correlation`.
+- `apps/api/main.py` — risk router kayıt.
+- `apps/api/routers/paper_trading.py`, `apps/tick_worker/main.py` —
+  decide_all'a `ps.open_positions` geçirir.
+- `config/thresholds_v1.0.yaml` — `max_cluster_pct: 0.30`,
+  `correlation_min_overlap_days: 5`, `correlation_baseline` bölümü.
+- `contracts/openapi.yaml` — `/api/v1/risk/correlation` + CorrelationEntry
+  / ExposureCluster / CorrelationState şemaları.
+- `tests/unit/test_correlation.py` (new) — 14 test.
+- Frontend: `components/panels/CorrelationPanel/` (new),
+  `TradingPanel` (flagged cluster satırları),
+  `lib/selectors/correlation.ts` (new), `lib/api/client.ts`,
+  `lib/queries/{keys,hooks}.ts`, `lib/panel-registry.ts`
+  (`correlation`), `types/generated/api.ts`, `app/page.tsx` (tek
+  GridCell).
+- Ayrıca: önceki oturumdan kalan **provenance mode block** işi ayrı
+  commit olarak kaydedildi (989c932).
 
-## Smoke test (canlı)
+## Safety
 
-API ✅ tüm 6 endpoint 200:
-- `/api/v1/health` → 200
-- `/api/v1/dashboard/state` → 200
-- `/api/v1/learning/mistakes` → 200
-- `/api/v1/learning/calibration` → 200
-- `/api/v1/learning/rebalance/proposal` → 200
-- `/api/v1/data/snapshot` → 200
-
-Web ✅ `http://127.0.0.1:3000` HTTP 200 (~18.3 KB), Ready in 5.8s.
-
-Render edilen paneller (`data-panel` markerları, 25 adet):
-agent_votes, ai_report, calibration, capital_rotation, chat,
-command_signals, data_quality, decision, event_calendar, learning,
-market_data, mistake_memory, news, panel_audit, patterns,
-position_checks, provider_status, replay_status, risk_gate, scenario,
-snapshot, system_health, trading, weight_history, weight_proposal.
-
-Görünür başlıklar: "Karar Merkezi", "Risk Kapısı", "Veri Kalitesi",
-"Sağlayıcı Durumu", "Snapshot", "Piyasa Verisi", "Ağırlık Önerisi",
-"Calibration", "Mistake Memory". HeroScene `<canvas>` ve `PAPER_ONLY`
-banner doğrulandı.
-
-Console error: yok (web log temiz, hata grep boş).
+- RiskGate bypass YOK: KILL_SWITCH→blocked, RISK_REDUCE/
+  NO_POSITION_INCREASE→hold correlation'dan önce döner; DQS<55 →
+  KILL_SWITCH → trade yok (testli).
+- Correlation logic yalnızca küçültür: size_factor ∈ {1.0, 0.5, 0.0}.
+- |rho| ≥ 0.7 aynı risk cluster; ters yön → hedge (cap'e girmez).
+- Veri yetersiz → neutral fallback, adjustment yok,
+  `insufficient_correlation_data` uyarısı.
+- PAPER_SAFE / NO_EXECUTION korunuyor; live network bağımlılığı yok
+  (sadece verified trade PnL + config baseline).
 
 ## Tests run
 
-- `pytest -q` → 47/47 passed.
+- `pytest -q` → **72/72 passed** (14 yeni G4).
 - `ruff check packages apps/api apps/tick_worker apps/learning_worker`
   → All checks passed.
-- Web HTML SSR smoke ✅.
+- `pnpm exec tsc --noEmit` → temiz; `pnpm build` → yeşil (4/4 static).
+
+## Live verification
+
+- API `GET /api/v1/risk/correlation` → 200: threshold 0.7, cap 0.30,
+  4 sembol, BTC↔ETH baseline 0.75, neutral çiftler insufficient_pairs'te.
+- Web `http://127.0.0.1:3000` → 200; SSR'de **26 panel**
+  (`data-panel="correlation"` dahil), "Korelasyon" başlığı, HeroScene
+  canvas, PAPER_ONLY banner. Web log temiz.
+- Not: 3000 portunu eski E_YAY CODEX frontend'i (nohup artığı) kapmıştı;
+  süreç kapatıldı, Clean E-yAy web yeniden bağlandı.
 
 ## Result
 
 passed
 
-## Notes
-
-- Lokal node: ~/.local/node (Node 20 binary, brew failed Tier 2);
-  corepack ile pnpm 9.0.0 aktif.
-- Preview MCP sandbox `Clean E-yAy` directory'sini reddetti (harness
-  E_YAY CODEX'e bağlı). Yine de web başarıyla başlatıldı (`nohup` +
-  background Bash), SSR HTML doğrulandı.
-- Browser screenshot için kullanıcı `http://127.0.0.1:3000` açar
-  (klavyeden veya `open` ile).
-
 ## Next
 
-- G4 — correlation-aware sizing. Live dev artık hazır; her panel
-  değişikliği için ayrı doğrulama yapılır.
+- G5 — daily-loss / max-DD halt (DrawdownGuardPanel / KillSwitchTimeline).

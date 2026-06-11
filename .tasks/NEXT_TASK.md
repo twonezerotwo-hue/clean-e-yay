@@ -1,32 +1,27 @@
-# NEXT TASK — G4 Correlation-Aware Sizing
+# NEXT TASK — G5 Daily-Loss / Max-DD Halt
 
-Aynı yöne çok korelasyonlu varlıkları aynı anda büyük boyutla açma.
+Günlük zarar veya max drawdown limiti aşıldığında sistem otomatik durur
+ve durduğunu görünür şekilde raporlar.
 
 ## Scope
 
-- `packages/risk/correlation.py` (yeni):
-  - Closed trade verisinden (PnL serisi) sembol başına 30g rolling
-    pencerede pairwise korelasyon hesapla; veri yetersiz olduğunda
-    deterministic baseline kullan (örnek: BTC↔ETH=0.75, BTC↔QQQ=0.6,
-    XAU↔DXY=-0.65 vs. — config'ten).
-  - `cluster_exposure(open_positions, candidate) -> ClusterReport`:
-    aynı yön + |ρ| > threshold pozisyonların toplam %equity'sini
-    hesapla. Threshold thresholds.yaml `correlation_threshold` (mevcut).
-- `packages/decision/engine.py`:
-  - Aday open_long/open_short için cluster_exposure → eğer toplam ≥
-    `max_cluster_pct` (örn. 0.30) → size_multiplier düşür veya 0.
-  - Verdict TradeDecision'a `cluster_report` damgalı.
-- **Hard kural**: correlation-aware sizing **RiskGate'i bypass etmez**.
-  Sadece size küçültür; KILL_SWITCH/RISK_REDUCE her zaman önce çalışır.
-  DQS BLOCKED → trade yok.
-- Az veri varsa baseline + log uyarı (insufficient_correlation_data),
-  size adjustment uygulanmaz (neutral fallback).
-- `GET /api/v1/risk/correlation` endpoint: matris + cluster exposure.
-- Dashboard `CorrelationPanel`: matrix heatmap (basit grid) + uyarı.
+- `packages/risk/` — halt durumu kalıcı hale gelsin:
+  - Mevcut risk engine KILL_SWITCH/RISK_REDUCE üretiyor; ek olarak halt
+    event'leri (`halt_started_at`, `reason`, `evidence`) diske yazılsın
+    (örn. `data/runtime/risk_halts.json`).
+  - Halt aktifken yeni pozisyon açılmaz (tick_worker + paper tick);
+    sadece mevcut pozisyonların SL/TP tetiklenebilir.
+  - Günlük zarar halt'i gün dönümünde otomatik kalkar (daily anchor);
+    max-DD halt'i owner onayı/explicit reset ister.
+- `GET /api/v1/risk/halts` — aktif halt + son halt timeline'ı.
+- Dashboard: `DrawdownGuardPanel` (aktif halt + DD/daily-loss durumu +
+  KillSwitch timeline). Selector + panel-registry + tek GridCell.
 
 ## Rules
 
 - `PAPER_SAFE / NO_EXECUTION`
-- Decision/risk threshold'larını gevşetme.
-- DATA_POLICY: only verified trade PnL'leri korelasyon için kullanılır.
-- Test offline (mock paper state seed).
+- RiskGate threshold'larını gevşetme; halt sadece kısıtlayıcı.
+- KILL_SWITCH / RISK_REDUCE / NO_POSITION_INCREASE öncelik sırası korunur.
+- Frontend hesap yapmaz; backend state gösterir.
+- Test offline (mock paper state seed): daily-loss halt, max-DD halt,
+  halt aktifken open yok, gün dönümünde daily halt reset, endpoint 200.

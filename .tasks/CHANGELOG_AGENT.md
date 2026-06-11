@@ -39,3 +39,13 @@
   Canlı doğrulandı: 6 API endpoint 200, web HTML 25 panel + HeroScene
   canvas + PAPER_ONLY banner.
 - Next task → G4 correlation-aware sizing.
+- Provenance mode block commit'lendi (önceki oturum işi): LIVE/MOCK_MODE/
+  SIMULATION/INSUFFICIENT_DATA damgası + module_health data/news durumu.
+- G4 completed: correlation-aware sizing. Verified trade PnL'den 30g
+  pairwise rho (computed→baseline→neutral fallback); aynı yönlü |rho|≥0.7
+  cluster toplamı ≥%30 equity → hold, ≥%15 → size×0.5; ters yön hedge
+  ayrı; asla size artırmaz; RiskGate/DQS bypass yok. Yeni endpoint
+  /risk/correlation + CorrelationPanel (heatmap + cluster uyarıları) +
+  TradingPanel cluster satırları. 72/72 pytest, ruff + tsc + build yeşil;
+  SSR'de 26 panel doğrulandı.
+- Next task → G5 daily-loss / max-DD halt.
