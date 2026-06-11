@@ -46,3 +46,11 @@ export const useLearningSummary = () =>
     queryFn: api.learningSummary,
     staleTime: 5 * 60_000,
   });
+
+export const useDataSnapshot = () =>
+  useQuery({
+    queryKey: qk.dataSnapshot,
+    queryFn: api.dataSnapshot,
+    staleTime: 15_000,
+    refetchInterval: 30_000,
+  });

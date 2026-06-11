@@ -181,3 +181,42 @@ export type Health = {
   version: string;
   uptime_sec: number;
 };
+
+export type ProviderStatus = {
+  status: "ok" | "degraded" | "down" | "unknown";
+  last_success_at: string | null;
+  last_error: string | null;
+  calls: number;
+  fallbacks: number;
+};
+
+export type DqsBreakdown = {
+  score: number;
+  freshness: number;
+  completeness: number;
+  drift: number;
+  reconciliation: number;
+  decision_usage: number;
+  fallback_used: boolean;
+  notes: string[];
+};
+
+export type LivePrice = {
+  symbol: string;
+  price: number;
+  ts: string;
+  source: string;
+  fallback: boolean;
+};
+
+export type DataSnapshot = {
+  meta: {
+    snapshot_id: string;
+    generated_at: string;
+    symbols: string[];
+  };
+  prices: LivePrice[];
+  dqs: DqsBreakdown;
+  provider_status: Record<string, ProviderStatus>;
+  warnings: string[];
+};

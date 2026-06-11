@@ -39,6 +39,7 @@ class MarketSnapshot:
     rotation: RotationView
     quality: QualityReport
     warnings: list[str] = field(default_factory=list)
+    provider_status: dict[str, dict] = field(default_factory=dict)
 
 
 def _make_id(now: datetime) -> str:
@@ -55,6 +56,7 @@ def build_snapshot(symbols: list[str] | None = None) -> MarketSnapshot:
     rotation = rot_provider.get_rotation()
     quality = compute_dqs(prices, syms)
     warnings = list(quality.notes)
+    provider_status = price_provider.get_provider_status()
     return MarketSnapshot(
         snapshot_id=_make_id(now),
         generated_at=now,
@@ -65,6 +67,7 @@ def build_snapshot(symbols: list[str] | None = None) -> MarketSnapshot:
         rotation=rotation,
         quality=quality,
         warnings=warnings,
+        provider_status=provider_status,
     )
 
 

@@ -20,6 +20,10 @@ import { TradingPanel } from "@/components/panels/TradingPanel";
 import { ReplayStatusPanel } from "@/components/panels/ReplayStatusPanel";
 import { PanelAuditPanel } from "@/components/panels/PanelAuditPanel";
 import { SystemHealthBar } from "@/components/panels/SystemHealthBar";
+import { DataQualityPanel } from "@/components/panels/DataQualityPanel";
+import { ProviderStatusPanel } from "@/components/panels/ProviderStatusPanel";
+import { SnapshotPanel } from "@/components/panels/SnapshotPanel";
+import { MarketDataPanel } from "@/components/panels/MarketDataPanel";
 
 import { useKeyboardShortcuts } from "@/hooks/useKeyboardShortcuts";
 
@@ -49,6 +53,12 @@ export default function HomePage() {
       </section>
 
       <DashboardGrid>
+        <GridCell span="2"><DataQualityPanel /></GridCell>
+        <GridCell span="1"><ProviderStatusPanel /></GridCell>
+
+        <GridCell span="1"><SnapshotPanel /></GridCell>
+        <GridCell span="2"><MarketDataPanel /></GridCell>
+
         <GridCell span="2"><RiskGatePanel /></GridCell>
         <GridCell span="1"><AgentVotesPanel /></GridCell>
 

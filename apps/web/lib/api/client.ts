@@ -5,6 +5,7 @@
 import type {
   AIReport,
   DashboardState,
+  DataSnapshot,
   Health,
   LearningSummary,
   PaperTradingState,
@@ -38,4 +39,5 @@ export const api = {
     fetchJSON<TickResult>("/api/v1/paper-trading/tick", { method: "POST" }),
   learningSummary: () =>
     fetchJSON<LearningSummary>("/api/v1/learning/summary"),
+  dataSnapshot: () => fetchJSON<DataSnapshot>("/api/v1/data/snapshot"),
 };

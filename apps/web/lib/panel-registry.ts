@@ -19,7 +19,11 @@ export type PanelKey =
   | "trading"
   | "replay_status"
   | "panel_audit"
-  | "system_health";
+  | "system_health"
+  | "data_quality"
+  | "provider_status"
+  | "snapshot"
+  | "market_data";
 
 export type PanelMeta = {
   id: PanelKey;
@@ -47,4 +51,8 @@ export const PANEL_REGISTRY: PanelMeta[] = [
   { id: "replay_status",    title: "Replay Durumu",       defaultVisible: false, span: "1",    group: "ops" },
   { id: "panel_audit",      title: "Pano Denetimi",       defaultVisible: false, span: "1",    group: "ops" },
   { id: "system_health",    title: "Sistem Sağlığı",      defaultVisible: true,  span: "full", group: "ops" },
+  { id: "data_quality",     title: "Veri Kalitesi",        defaultVisible: true,  span: "2",    group: "data" },
+  { id: "provider_status",  title: "Sağlayıcı Durumu",     defaultVisible: true,  span: "1",    group: "data" },
+  { id: "snapshot",         title: "Snapshot",             defaultVisible: true,  span: "1",    group: "data" },
+  { id: "market_data",      title: "Piyasa Verisi",        defaultVisible: true,  span: "2",    group: "data" },
 ];
