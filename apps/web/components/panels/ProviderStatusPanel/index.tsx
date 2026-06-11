@@ -10,8 +10,8 @@ import { fmtRelative } from "@/lib/format";
 
 const STATUS_COLOR: Record<string, string> = {
   ok: "bg-signal-up/20 text-signal-up",
-  degraded: "bg-amber-400/20 text-amber-400",
-  down: "bg-signal-down/20 text-signal-down",
+  degraded: "bg-signal-down/20 text-signal-down",
+  down: "bg-signal-down/30 text-signal-down",
   unknown: "bg-white/10 text-white/40",
 };
 
@@ -42,27 +42,32 @@ export function ProviderStatusPanel() {
       />
       <ul className="space-y-1.5 text-xs">
         {providers.map((p) => (
-          <li
-            key={p.name}
-            className="flex items-center justify-between border-b border-white/5 pb-1"
-          >
-            <span className="font-medium uppercase tracking-wide">{p.name}</span>
-            <span className="flex items-center gap-2">
-              <span
-                className={`rounded px-1.5 py-0.5 uppercase tracking-wide text-[10px] ${
-                  STATUS_COLOR[p.status] ?? STATUS_COLOR.unknown
-                }`}
-              >
-                {p.status}
+          <li key={p.name} className="border-b border-white/5 pb-1">
+            <div className="flex items-center justify-between">
+              <span className="font-medium uppercase tracking-wide">
+                {p.name}
               </span>
-              <span className="text-white/40 tabular-nums">
-                {p.calls} çağrı
+              <span className="flex items-center gap-2">
+                <span
+                  className={`rounded px-1.5 py-0.5 uppercase tracking-wide text-[10px] ${
+                    STATUS_COLOR[p.status] ?? STATUS_COLOR.unknown
+                  }`}
+                >
+                  {p.status}
+                </span>
+                <span className="text-white/40 tabular-nums">
+                  {p.calls} çağrı
+                </span>
+                <span className="text-white/40">
+                  {fmtRelative(p.last_success_at)}
+                </span>
               </span>
-              {p.fallbacks > 0 ? (
-                <span className="text-signal-down">{p.fallbacks} fallback</span>
-              ) : null}
-              <span className="text-white/40">{fmtRelative(p.last_success_at)}</span>
-            </span>
+            </div>
+            {p.last_error ? (
+              <p className="mt-1 text-[11px] text-signal-down">
+                hata: {p.last_error}
+              </p>
+            ) : null}
           </li>
         ))}
       </ul>

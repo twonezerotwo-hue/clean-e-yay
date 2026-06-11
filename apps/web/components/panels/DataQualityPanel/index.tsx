@@ -7,14 +7,21 @@ import { EmptyState } from "@/components/shell/EmptyState";
 import { DataQualityBadge } from "@/components/shell/DataQualityBadge";
 import { useDataSnapshot } from "@/lib/queries/hooks";
 import { selectDqs, selectSnapshotMeta } from "@/lib/selectors/snapshot";
+import type { DqsStatus } from "@/types/generated/api";
 
-const ROWS: { key: keyof NonNullable<ReturnType<typeof selectDqs>>; label: string }[] = [
+const ROWS = [
   { key: "freshness", label: "Freshness" },
   { key: "completeness", label: "Completeness" },
   { key: "drift", label: "Drift" },
   { key: "reconciliation", label: "Reconciliation" },
   { key: "decision_usage", label: "Decision usage" },
-];
+] as const;
+
+const STATUS_TONE: Record<DqsStatus, string> = {
+  OK: "bg-signal-up/20 text-signal-up",
+  DEGRADED: "bg-amber-400/20 text-amber-400",
+  BLOCKED: "bg-signal-down/20 text-signal-down",
+};
 
 function bar(v: number) {
   const pct = Math.max(0, Math.min(100, v));
@@ -53,11 +60,18 @@ export function DataQualityPanel() {
         title="Veri Kalitesi"
         subtitle="DQS — 5 konsept"
         actions={
-          <DataQualityBadge
-            dqs={dqs.score}
-            generatedAt={meta?.generated_at}
-            fallback={dqs.fallback_used}
-          />
+          <div className="flex items-center gap-2">
+            <span
+              className={`rounded px-1.5 py-0.5 text-[10px] uppercase tracking-widest ${STATUS_TONE[dqs.status]}`}
+            >
+              {dqs.status}
+            </span>
+            <DataQualityBadge
+              dqs={dqs.score}
+              generatedAt={meta?.generated_at}
+              fallback={dqs.fallback_used}
+            />
+          </div>
         }
       />
       <div className="space-y-2 text-xs">
@@ -66,12 +80,18 @@ export function DataQualityPanel() {
             <div className="flex items-center justify-between">
               <span className="text-white/60">{r.label}</span>
               <span className="text-white/80 tabular-nums">
-                {(dqs[r.key] as number).toFixed(0)}
+                {dqs[r.key].toFixed(0)}
               </span>
             </div>
-            {bar(dqs[r.key] as number)}
+            {bar(dqs[r.key])}
           </div>
         ))}
+        {dqs.status === "BLOCKED" ? (
+          <p className="mt-2 text-[11px] text-signal-down">
+            Veri kalitesi yetersiz — yeni karar üretilmiyor. Sağlayıcı
+            durumunu kontrol edin.
+          </p>
+        ) : null}
         {dqs.notes.length ? (
           <ul className="pt-2 space-y-0.5 text-[11px] text-white/50">
             {dqs.notes.map((n, i) => (

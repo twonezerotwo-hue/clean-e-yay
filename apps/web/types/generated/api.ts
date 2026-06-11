@@ -190,8 +190,11 @@ export type ProviderStatus = {
   fallbacks: number;
 };
 
+export type DqsStatus = "OK" | "DEGRADED" | "BLOCKED";
+
 export type DqsBreakdown = {
   score: number;
+  status: DqsStatus;
   freshness: number;
   completeness: number;
   drift: number;
@@ -201,12 +204,23 @@ export type DqsBreakdown = {
   notes: string[];
 };
 
+export type PriceStatus = "OK" | "DATA_UNAVAILABLE" | "MOCK";
+
 export type LivePrice = {
   symbol: string;
-  price: number;
+  price: number | null;
   ts: string;
   source: string;
+  verified: boolean;
+  status: PriceStatus;
+  error: string | null;
   fallback: boolean;
+};
+
+export type SnapshotMode = {
+  mock_mode: boolean;
+  mock_warning: boolean;
+  test_mock: boolean;
 };
 
 export type DataSnapshot = {
@@ -215,6 +229,7 @@ export type DataSnapshot = {
     generated_at: string;
     symbols: string[];
   };
+  mode: SnapshotMode;
   prices: LivePrice[];
   dqs: DqsBreakdown;
   provider_status: Record<string, ProviderStatus>;

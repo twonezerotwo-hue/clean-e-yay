@@ -57,6 +57,8 @@ def build_snapshot(symbols: list[str] | None = None) -> MarketSnapshot:
     quality = compute_dqs(prices, syms)
     warnings = list(quality.notes)
     provider_status = price_provider.get_provider_status()
+    if price_provider.is_runtime_mock_explicit():
+        warnings.insert(0, "PRICE_USE_MOCK=true — TEST/MOCK MODE")
     return MarketSnapshot(
         snapshot_id=_make_id(now),
         generated_at=now,

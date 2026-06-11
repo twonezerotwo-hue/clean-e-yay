@@ -33,9 +33,16 @@ def _direction(score: float) -> str:
     return "neutral"
 
 
+def _price_or(snap: MarketSnapshot, symbol: str, default: float) -> float:
+    for q in snap.prices:
+        if q.symbol == symbol and q.price is not None:
+            return q.price
+    return default
+
+
 def _liquidity_layer(snap: MarketSnapshot) -> RegimeLayer:
-    dxy = next((q.price for q in snap.prices if q.symbol == "DXY"), 104.0)
-    us10y = next((q.price for q in snap.prices if q.symbol == "US10Y"), 4.3)
+    dxy = _price_or(snap, "DXY", 104.0)
+    us10y = _price_or(snap, "US10Y", 4.3)
     # Yüksek DXY + yüksek getiri → likidite daralıyor
     score = max(0.0, min(100.0, 100.0 - (dxy - 100.0) * 2.0 - (us10y - 4.0) * 5.0))
     return RegimeLayer(
@@ -47,7 +54,7 @@ def _liquidity_layer(snap: MarketSnapshot) -> RegimeLayer:
 
 
 def _appetite_layer(snap: MarketSnapshot) -> RegimeLayer:
-    vix = next((q.price for q in snap.prices if q.symbol == "VIX"), 14.0)
+    vix = _price_or(snap, "VIX", 14.0)
     # Düşük VIX → risk iştahı yüksek
     score = max(0.0, min(100.0, 100.0 - (vix - 12.0) * 4.0))
     return RegimeLayer(

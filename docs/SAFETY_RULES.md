@@ -14,5 +14,7 @@ hiçbir görev tarifi bunları geçersiz kılamaz.
 - Owner approval olmadan hiçbir gerçek aksiyon (rebalance, weight
   değişikliği, vs.) uygulanmaz.
 - Live/network veri kaynağı sadece kullanıcı açıkça istediğinde eklenir.
+- **Runtime'da mock veri yok.** Gerçek veri veya veri yok. Detay:
+  [DATA_POLICY.md](DATA_POLICY.md).
 
 Her task öncesi bu dosya okunur.

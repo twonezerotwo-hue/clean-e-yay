@@ -1,14 +1,15 @@
-"""Fiyat orchestrator — sembolü doğru sağlayıcıya yönlendirir.
+"""Fiyat orchestrator.
 
-Kurallar:
-- `PRICE_USE_MOCK=true` (default) → daima mock kullan.
-- `PRICE_USE_MOCK=false` → primary live sağlayıcıyı dene. Hata/None
-  durumunda mock'a düş ve `fallback=True` işaretle.
-- Provider durumları process-içi sözlükte tutulur ve `get_provider_status()`
-  ile snapshot/API'ye verilir.
+Politika ([docs/DATA_POLICY.md]):
+- Runtime'da **mock fallback yasaktır**.
+- Live provider başarısız olursa quote `price=None`, `status="DATA_UNAVAILABLE"`,
+  `verified=False`, `error=<sebep>` ile döner. Mock'a düşülmez.
+- Mock yalnızca test/dev path için: `TEST_USE_MOCK=true` (conftest tarafından
+  set edilir) veya açık `PRICE_USE_MOCK=true` runtime opt-in (dashboard'da
+  kırmızı banner görünür).
 
-Test/CI offline kalır: PRICE_USE_MOCK default true olduğu için live
-çağrı yapılmaz.
+Env değişkenleri her çağrıda okunur (modül-seviyesi cache yok), böylece
+test monkeypatch ve runtime override doğru çalışır.
 """
 from __future__ import annotations
 
@@ -19,9 +20,7 @@ from datetime import UTC, datetime
 from packages.data.providers.price import coingecko, fred, mock, yfinance
 from packages.data.types import PriceQuote
 
-USE_MOCK = os.environ.get("PRICE_USE_MOCK", "true").lower() != "false"
-
-# Sembol → birincil sağlayıcı modülü. Eşleşmeyen sembol mock'a düşer.
+# Sembol → birincil sağlayıcı modülü.
 _PRIMARY = {
     **{s: coingecko for s in coingecko.SUPPORTED},
     **{s: yfinance for s in yfinance.SUPPORTED},
@@ -43,11 +42,36 @@ _STATUS: dict[str, dict] = {
 }
 
 
-def _provider_name(mod) -> str:
-    return mod.__name__.rsplit(".", 1)[-1]
+# ---------- Env / mod sorgusu ----------
+
+def _truthy(v: str | None) -> bool:
+    return (v or "").lower() == "true"
 
 
-def _mark(name: str, *, ok: bool, error: str | None = None, fallback: bool = False) -> None:
+def is_test_mock_allowed() -> bool:
+    """Test fixture açık mı? conftest TEST_USE_MOCK=true ile gelir."""
+    return _truthy(os.environ.get("TEST_USE_MOCK"))
+
+
+def is_runtime_mock_explicit() -> bool:
+    """Runtime opt-in: PRICE_USE_MOCK=true → dashboard kırmızı banner."""
+    return _truthy(os.environ.get("PRICE_USE_MOCK"))
+
+
+def is_mock_mode() -> bool:
+    """Herhangi bir nedenle mock kullanılıyor mu?"""
+    return is_test_mock_allowed() or is_runtime_mock_explicit()
+
+
+# ---------- Provider status ----------
+
+def _mark(
+    name: str,
+    *,
+    ok: bool,
+    error: str | None = None,
+    fallback: bool = False,
+) -> None:
     with _LOCK:
         st = _STATUS[name]
         st["calls"] += 1
@@ -64,13 +88,11 @@ def _mark(name: str, *, ok: bool, error: str | None = None, fallback: bool = Fal
 
 
 def get_provider_status() -> dict[str, dict]:
-    """Son durum kopyası — okuma için, mutate edilmez."""
     with _LOCK:
         return {k: dict(v) for k, v in _STATUS.items()}
 
 
 def reset_provider_status() -> None:
-    """Test/dev için sayaç sıfırlama."""
     with _LOCK:
         for v in _STATUS.values():
             v.update(
@@ -82,41 +104,69 @@ def reset_provider_status() -> None:
             )
 
 
-def _try_live(symbol: str) -> PriceQuote | None:
+# ---------- Quote akışı ----------
+
+def _provider_name(mod) -> str:
+    return mod.__name__.rsplit(".", 1)[-1]
+
+
+def _data_unavailable(symbol: str, *, source: str, error: str) -> PriceQuote:
+    return PriceQuote(
+        symbol=symbol,
+        price=None,
+        source=source,
+        verified=False,
+        status="DATA_UNAVAILABLE",
+        error=error,
+    )
+
+
+def _try_live(symbol: str) -> PriceQuote:
+    """Birincil live provider'ı dener. Başarısızsa DATA_UNAVAILABLE döner.
+
+    Asla mock'a düşmez.
+    """
     primary = _PRIMARY.get(symbol)
     if primary is None:
-        return None
+        _mark("mock", ok=False, error="no_live_provider_mapped")
+        return _data_unavailable(
+            symbol,
+            source="none",
+            error="no live provider configured for symbol",
+        )
     name = _provider_name(primary)
     try:
         q = primary.get_quote(symbol)
-    except Exception as exc:  # provider iç hatası — sessizce mock'a düş
-        _mark(name, ok=False, error=str(exc)[:200])
-        return None
+    except Exception as exc:
+        msg = str(exc)[:200] or "provider raised"
+        _mark(name, ok=False, error=msg)
+        return _data_unavailable(symbol, source=name, error=msg)
     if q is None:
-        _mark(name, ok=False, error="no_data")
-        return None
+        # Live provider sebepleri kendi içinde swallow ediyor (key yok, HTTP
+        # hatası, parse hatası); ortak DATA_UNAVAILABLE üret.
+        reason = _explain_none(name)
+        _mark(name, ok=False, error=reason)
+        return _data_unavailable(symbol, source=name, error=reason)
     _mark(name, ok=True)
     return q
 
 
-def _mock_quote(symbol: str, *, fallback: bool) -> PriceQuote:
+def _explain_none(provider_name: str) -> str:
+    if provider_name == "fred" and not os.environ.get("FRED_API_KEY"):
+        return "FRED_API_KEY missing"
+    return "provider returned no data"
+
+
+def _mock_quote(symbol: str) -> PriceQuote:
     q = mock.get_quote(symbol)
-    if fallback:
-        q = q.model_copy(update={"fallback": True})
-        _mark("mock", ok=True, fallback=True)
-    else:
-        _mark("mock", ok=True)
+    _mark("mock", ok=True)
     return q
 
 
 def get_quote(symbol: str) -> PriceQuote:
-    if USE_MOCK:
-        return _mock_quote(symbol, fallback=False)
-    live = _try_live(symbol)
-    if live is not None:
-        return live
-    # Live başarısız → mock fallback
-    return _mock_quote(symbol, fallback=True)
+    if is_mock_mode():
+        return _mock_quote(symbol)
+    return _try_live(symbol)
 
 
 def get_quotes(symbols: list[str]) -> list[PriceQuote]:

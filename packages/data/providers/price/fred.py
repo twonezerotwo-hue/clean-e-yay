@@ -55,5 +55,7 @@ def get_quote(symbol: str) -> PriceQuote | None:
         price=px,
         ts=utcnow(),
         source="fred",
+        verified=True,
+        status="OK",
         fallback=False,
     )

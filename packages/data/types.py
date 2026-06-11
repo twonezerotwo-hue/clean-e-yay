@@ -17,12 +17,25 @@ RegimeLabel = Literal["OFFENSIVE", "NEUTRAL", "DEFENSIVE", "CRISIS"]
 AssetStatus = Literal["BLOCKING", "PENDING", "CONFIRMED"]
 
 
+PriceStatus = Literal["OK", "DATA_UNAVAILABLE", "MOCK"]
+
+
 class PriceQuote(BaseModel):
+    """Tek fiyat noktası.
+
+    `price=None` → veri yok (runtime'da live provider başarısız). Mock
+    verisi yalnızca test/dev modunda `status="MOCK"` ile döner;
+    runtime'da kullanılmaz.
+    """
+
     symbol: str
-    price: float
+    price: float | None = None
     ts: datetime = Field(default_factory=utcnow)
-    source: str = "mock"
-    fallback: bool = False
+    source: str = "unknown"
+    verified: bool = False
+    status: PriceStatus = "DATA_UNAVAILABLE"
+    error: str | None = None
+    fallback: bool = False  # geriye dönük uyumluluk için
 
 
 class TechnicalSnapshot(BaseModel):

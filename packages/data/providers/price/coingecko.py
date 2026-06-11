@@ -42,5 +42,7 @@ def get_quote(symbol: str) -> PriceQuote | None:
         price=float(px),
         ts=utcnow(),
         source="coingecko",
+        verified=True,
+        status="OK",
         fallback=False,
     )

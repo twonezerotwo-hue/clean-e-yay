@@ -1,42 +1,57 @@
 # TASK RESULT
 
 Date: 2026-06-11
-Task: G1 — Real price providers + DQS visibility
+Task: G1.1 — Disable runtime mock fallback (data policy enforcement)
 Status: completed
 
 ## Files changed
 
-Backend:
-- `packages/data/providers/price/coingecko.py` (new)
-- `packages/data/providers/price/yfinance.py` (new)
-- `packages/data/providers/price/fred.py` (new)
-- `packages/data/providers/price/__init__.py` (rewrite — orchestrator + status tracker)
-- `packages/data/ingestion/pipeline.py` (provider_status field on MarketSnapshot)
-- `apps/api/routers/data.py` (new — `/api/v1/data/snapshot`)
-- `apps/api/main.py` (wire data router)
-- `tests/unit/test_providers.py` (new — 4 tests)
+Backend
+- `packages/data/types.py` — PriceQuote: `price: float | None`, +verified,
+  +status (`OK/DATA_UNAVAILABLE/MOCK`), +error.
+- `packages/data/providers/price/mock.py` — quotes marked `verified=False`,
+  `status="MOCK"`; unmapped symbol → `DATA_UNAVAILABLE`.
+- `packages/data/providers/price/coingecko.py` — success: verified+OK.
+- `packages/data/providers/price/yfinance.py` — success: verified+OK.
+- `packages/data/providers/price/fred.py` — success: verified+OK.
+- `packages/data/providers/price/__init__.py` — rewrite: dynamic env,
+  `is_test_mock_allowed()`, `is_runtime_mock_explicit()`, `is_mock_mode()`;
+  no mock fallback at runtime; FRED missing key explained in error.
+- `packages/data/quality/dqs.py` — None-aware DQS, `status` enum
+  (OK/DEGRADED/BLOCKED).
+- `packages/data/ingestion/pipeline.py` — MOCK MODE warning when runtime
+  opt-in.
+- `packages/regime/classifier.py` — `_price_or()` helper, None-safe.
+- `apps/api/routers/data.py` — serializes new fields + `mode` block.
+- `apps/api/routers/paper_trading.py` — filter None prices.
+- `apps/tick_worker/main.py` — filter None prices.
+- `conftest.py` — set `TEST_USE_MOCK=true` for full test session.
+- `tests/unit/test_providers.py` — full rewrite, 10 tests covering policy.
 
-Frontend:
-- `apps/web/types/generated/api.ts` (DataSnapshot, ProviderStatus, DqsBreakdown, LivePrice types)
-- `apps/web/lib/api/client.ts` (api.dataSnapshot)
-- `apps/web/lib/queries/{keys,hooks}.ts` (useDataSnapshot)
-- `apps/web/lib/selectors/snapshot.ts` (new)
-- `apps/web/components/panels/DataQualityPanel/index.tsx` (new)
-- `apps/web/components/panels/ProviderStatusPanel/index.tsx` (new)
-- `apps/web/components/panels/SnapshotPanel/index.tsx` (new)
-- `apps/web/components/panels/MarketDataPanel/index.tsx` (new)
-- `apps/web/lib/panel-registry.ts` (4 new entries)
-- `apps/web/app/page.tsx` (4 new GridCells, en üstte)
+Frontend
+- `apps/web/types/generated/api.ts` — LivePrice nullable price + verified
+  + status + error; DqsStatus; SnapshotMode; DataSnapshot.mode.
+- `apps/web/components/panels/MarketDataPanel` — "VERİ YOK" badge,
+  MOCK/unverified chips.
+- `apps/web/components/panels/DataQualityPanel` — DQS status badge,
+  BLOCKED footer message.
+- `apps/web/components/panels/ProviderStatusPanel` — error mesajı satırı.
+- `apps/web/components/panels/SystemHealthBar` — DQS status chip.
+- `apps/web/components/shell/MockModeBanner.tsx` (new) — red banner when
+  runtime opt-in active.
+- `apps/web/app/page.tsx` — banner placement.
 
-Docs:
-- `docs/CURRENT_STATE.md` (G1 done, next = G2)
-- `.tasks/NEXT_TASK.md` (G2'ye güncellenecek — finalize sonrası)
-- `.tasks/CHANGELOG_AGENT.md` (G1 entry)
+Docs / tasks
+- `docs/DATA_POLICY.md` (new).
+- `docs/SAFETY_RULES.md` — link to policy.
+- `docs/CURRENT_STATE.md` — G1.1 done.
+- `.tasks/CHANGELOG_AGENT.md` — entry.
 
 ## Tests run
 
-- `pytest -q` → 12/12 passed (4 yeni provider/snapshot testi)
-- `ruff check packages apps/api apps/tick_worker apps/learning_worker` → All checks passed
+- `pytest -q` → 18/18 passed (10 new policy tests + 8 prior).
+- `ruff check packages apps/api apps/tick_worker apps/learning_worker`
+  → All checks passed.
 
 ## Result
 
@@ -44,12 +59,12 @@ passed
 
 ## Notes
 
-- Live provider'lar stdlib `urllib.request` ile yazıldı; ek Python dep yok.
-- `PRICE_USE_MOCK=true` default → tests + CI offline kalıyor.
-- FRED için `FRED_API_KEY` env değişkeni gerek; yoksa None → mock fallback.
-- Lokal `node`/`pnpm` yok; `next build` doğrulaması CI'da yapılacak.
-- Preview server eski projeye (`E_YAY CODEX`) bağlı olduğu için yerel
-  browser verify yapılamadı.
+- PAPER_SAFE / NO_EXECUTION preserved. Risk gate KILL_SWITCH (DQS < 55)
+  automatically covers BLOCKED status; no separate kill switch added.
+- decide_for_symbol / risk thresholds intact.
+- Test fixture (`TEST_USE_MOCK=true`) is **explicit** in conftest; tests
+  that need live-only behavior disable it via `monkeypatch.delenv`.
+- Lokal `node`/`pnpm` yok → `next build` CI'da doğrulanacak.
 
 ## Next
 

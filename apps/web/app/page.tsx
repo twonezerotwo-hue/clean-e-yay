@@ -2,6 +2,7 @@
 
 import { HeroScene } from "@/components/visuals/HeroScene";
 import { DashboardGrid, GridCell } from "@/components/shell/DashboardGrid";
+import { MockModeBanner } from "@/components/shell/MockModeBanner";
 
 import { DecisionPanel } from "@/components/panels/DecisionPanel";
 import { RiskGatePanel } from "@/components/panels/RiskGatePanel";
@@ -42,6 +43,8 @@ export default function HomePage() {
           PAPER_ONLY · NO_EXECUTION
         </div>
       </header>
+
+      <MockModeBanner />
 
       <section className="relative overflow-hidden rounded-2xl border border-ink-700/60 bg-ink-800/70 backdrop-blur min-h-[14rem]">
         <div className="absolute inset-0 -z-10 opacity-70">

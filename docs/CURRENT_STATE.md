@@ -4,20 +4,28 @@ _Bu dosya kısa ve güncel tutulur. Her görev sonunda güncellenir._
 
 ## Last known status
 
-- Backend endpoints çalışıyor; **G1 tamamlandı**: gerçek price provider'lar
-  (CoinGecko, yfinance, FRED) + orchestrator + provider status tracker +
-  mock fallback davranışı.
-- Yeni endpoint: `GET /api/v1/data/snapshot` — prices, DQS breakdown,
-  provider status, snapshot meta.
-- 4 yeni dashboard paneli bağlı: DataQualityPanel, ProviderStatusPanel,
-  SnapshotPanel, MarketDataPanel (panel-registry + page.tsx).
-- `PRICE_USE_MOCK=true` default (tests offline kalır). `PRICE_USE_MOCK=false`
-  ile live denenir, hata → mock fallback + `fallback_used=true`.
-- Pytest: **12/12** yeşil (4 yeni provider/snapshot testi).
+- **Data policy uygulandı** ([DATA_POLICY.md](DATA_POLICY.md)): runtime'da
+  mock fallback yasak. Live provider başarısız → `price=null`,
+  `status="DATA_UNAVAILABLE"`, `verified=false`, `error=<sebep>`.
+- `PRICE_USE_MOCK` default `false`. Test'ler `TEST_USE_MOCK=true` (conftest
+  ile) altında mock alır; runtime opt-in `PRICE_USE_MOCK=true` dashboard'da
+  kırmızı banner gösterir.
+- DQS `status` alanı: `OK / DEGRADED / BLOCKED`. BLOCKED → risk gate
+  KILL_SWITCH → yeni paper trade yok.
+- Yeni endpoint: `GET /api/v1/data/snapshot` — `prices[].price` nullable;
+  her quote `verified/status/error`; `mode.{mock_mode,mock_warning,test_mock}`
+  alanları.
+- Frontend: MarketDataPanel "VERİ YOK" gösterir, DataQualityPanel BLOCKED
+  banner'lı, ProviderStatusPanel hata mesajı satırı, SystemHealthBar DQS
+  status chip'i, MockModeBanner page üstünde.
+- Paper tick consumer'ları None fiyatları filtreler; mock fiyatla işlem
+  açılmaz.
+- Pytest: **18/18** yeşil (runtime-fail, FRED missing key, paper tick
+  no-open dahil).
 - Ruff (CI scope): yeşil.
-- Web build: CI'da doğrulanacak (lokalde node yok).
+- Web build: CI'da doğrulanacak.
 
 ## Next task
 
-- **G2** — auto-weight trainer (bkz. `docs/ROADMAP.md`)
-- `NEXT_TASK.md` G2 için güncellenmelidir.
+- **G2** — auto-weight trainer (bkz. `docs/ROADMAP.md`).
+- `.tasks/NEXT_TASK.md` G2 tanımı hazır.

@@ -42,7 +42,7 @@ def _install_signals() -> None:
 async def run_once() -> None:
     snap = get_cached_snapshot()
     ps = paper_state.load()
-    prices = {q.symbol: q.price for q in snap.prices}
+    prices = {q.symbol: q.price for q in snap.prices if q.price is not None}
     closed = price_tick(ps, prices)
     for cls in closed:
         log.info("close: %s %s pnl=%.2f reason=%s", cls.symbol, cls.side, cls.pnl_usd, cls.close_reason)

@@ -50,7 +50,8 @@ def get_paper_state() -> dict:
 def post_paper_tick() -> dict:
     ps = paper_state.load()
     snap = get_cached_snapshot()
-    prices = {q.symbol: q.price for q in snap.prices}
+    # None fiyatlar lifecycle'a aktarılmaz; mock fiyat dağıtılmaz.
+    prices = {q.symbol: q.price for q in snap.prices if q.price is not None}
 
     # Önce mevcut pozisyonları fiyatla güncelle (SL/TP)
     closed = price_tick(ps, prices)

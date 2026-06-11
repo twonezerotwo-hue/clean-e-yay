@@ -1,30 +1,32 @@
 """Data Quality Score — 5 concern, tek dosya.
 
-Eski projedeki 150 snapshot_replay_source_quality_* dosyası yerine
-bütün kalite kontrolleri burada toplandı:
-
-  1) freshness    — kaynak ne kadar bayat
-  2) completeness — eksik veri yok mu
-  3) drift        — değerler beklenen bant içinde mi
-  4) reconciliation — kaynaklar arası tutarlılık
-  5) decision_usage_consistency — verified_required kaynak fallback'a düştü mü
+Politika ([docs/DATA_POLICY.md]):
+- `price is None` veya `verified=False` quote'lar gerçek kullanılabilir
+  veri sayılmaz; completeness ve decision_usage düşer.
+- Tüm semboller None ise score=0, status=BLOCKED.
+- Status alanı `OK / DEGRADED / BLOCKED` enum'u; risk gate ve dashboard
+  bu damgayı okur.
 """
 from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
+from typing import Literal
 
 from packages.data.types import PriceQuote
+
+QualityStatus = Literal["OK", "DEGRADED", "BLOCKED"]
 
 
 @dataclass
 class QualityReport:
-    score: float                  # 0–100
-    freshness: float              # 0–100
-    completeness: float           # 0–100
-    drift: float                  # 0–100
-    reconciliation: float         # 0–100
-    decision_usage: float         # 0–100
+    score: float
+    freshness: float
+    completeness: float
+    drift: float
+    reconciliation: float
+    decision_usage: float
+    status: QualityStatus = "OK"
     fallback_used: bool = False
     notes: list[str] = field(default_factory=list)
 
@@ -41,25 +43,38 @@ def _freshness(quotes: list[PriceQuote], max_age_sec: int = 300) -> float:
 def _completeness(quotes: list[PriceQuote], expected: list[str]) -> float:
     if not expected:
         return 100.0
-    have = {q.symbol for q in quotes}
+    have = {q.symbol for q in quotes if q.price is not None}
     return 100.0 * len(have & set(expected)) / len(expected)
 
 
 def _drift(quotes: list[PriceQuote]) -> float:
-    if not quotes:
-        return 50.0
-    bad = sum(1 for q in quotes if q.price <= 0 or q.price > 1_000_000)
+    valid = [q for q in quotes if q.price is not None]
+    if not valid:
+        return 0.0
+    bad = sum(1 for q in valid if q.price <= 0 or q.price > 1_000_000)
     return max(0.0, 100.0 - 25.0 * bad)
 
 
 def _reconciliation(quotes: list[PriceQuote]) -> float:
-    # Mock için trivial; v2.1'de cross-source aynı sembol karşılaştırılır.
-    return 100.0 if quotes else 50.0
+    return 100.0 if any(q.price is not None for q in quotes) else 0.0
 
 
 def _decision_usage(quotes: list[PriceQuote]) -> tuple[float, bool]:
-    fallback = any(q.fallback for q in quotes)
-    return (60.0 if fallback else 100.0, fallback)
+    if not quotes:
+        return (0.0, True)
+    verified_with_value = sum(
+        1 for q in quotes if q.verified and q.price is not None
+    )
+    fb = verified_with_value < len(quotes)
+    return (100.0 * verified_with_value / len(quotes), fb)
+
+
+def _status(score: float, completeness: float) -> QualityStatus:
+    if score < 40 or completeness <= 0:
+        return "BLOCKED"
+    if score < 70:
+        return "DEGRADED"
+    return "OK"
 
 
 def compute(quotes: list[PriceQuote], expected: list[str]) -> QualityReport:
@@ -68,18 +83,20 @@ def compute(quotes: list[PriceQuote], expected: list[str]) -> QualityReport:
     dr = _drift(quotes)
     rc = _reconciliation(quotes)
     du, fb = _decision_usage(quotes)
-    # Ağırlıklı toplam — completeness ve decision_usage daha kritik
     score = round(
         0.20 * fr + 0.30 * co + 0.15 * dr + 0.10 * rc + 0.25 * du,
         1,
     )
+    status = _status(score, co)
     notes: list[str] = []
-    if fb:
-        notes.append("fallback kaynak kullanıldı")
-    if co < 100:
-        notes.append(f"completeness düştü: {co:.0f}%")
-    if fr < 60:
-        notes.append("kaynaklar bayatlıyor")
+    missing = [s for s in expected if not any(q.symbol == s and q.price is not None for q in quotes)]
+    if missing:
+        notes.append(f"veri yok: {', '.join(missing)}")
+    unverified = [q.symbol for q in quotes if not q.verified and q.price is not None]
+    if unverified:
+        notes.append("doğrulanmamış kaynak (mock/test)")
+    if status == "BLOCKED":
+        notes.append("DQS BLOCKED — yeni karar üretilmez")
     return QualityReport(
         score=score,
         freshness=round(fr, 1),
@@ -87,6 +104,7 @@ def compute(quotes: list[PriceQuote], expected: list[str]) -> QualityReport:
         drift=round(dr, 1),
         reconciliation=round(rc, 1),
         decision_usage=round(du, 1),
+        status=status,
         fallback_used=fb,
         notes=notes,
     )
