@@ -88,6 +88,20 @@ make codegen
 
 (Henüz hiçbiri çalışmaz — iskelet aşaması.)
 
+## Agent Development Protocol
+
+Yeni bir göreve başlamadan önce şunları oku:
+
+- [docs/AGENT_CONTEXT.md](docs/AGENT_CONTEXT.md)
+- [docs/SAFETY_RULES.md](docs/SAFETY_RULES.md)
+- [docs/CURRENT_STATE.md](docs/CURRENT_STATE.md)
+- [docs/ROADMAP.md](docs/ROADMAP.md)
+- [docs/DASHBOARD_RULES.md](docs/DASHBOARD_RULES.md) (frontend dokunuluyorsa)
+- [.tasks/NEXT_TASK.md](.tasks/NEXT_TASK.md)
+
+Uzun mimari promptları tekrar tekrar yapıştırma. Her görev sonunda
+`CURRENT_STATE.md` ve `TASK_RESULT.md` güncellenir.
+
 ## Lisans
 
 Henüz tanımlanmadı (private repo).
