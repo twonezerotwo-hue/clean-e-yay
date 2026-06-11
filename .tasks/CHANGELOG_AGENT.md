@@ -32,4 +32,10 @@
   bypass etmez (KILL_SWITCH > BOOST, DQS BLOCKED > BOOST). Yeni
   endpoint /learning/mistakes + MistakeMemoryPanel. 47/47 pytest,
   ruff green.
-- Next task → G4 correlation-aware sizing or G5 daily-loss/max-DD halt.
+- L (local live dev) completed: scripts/dev.sh + Makefile dev/api-dev/
+  web-dev/compose-up, apps/web/.env.example, client reads
+  NEXT_PUBLIC_API_BASE_URL (fallback NEXT_PUBLIC_API_BASE), API CORS
+  3000/3001/DEV_CORS, docker-compose.dev.yml, README "Run locally".
+  Canlı doğrulandı: 6 API endpoint 200, web HTML 25 panel + HeroScene
+  canvas + PAPER_ONLY banner.
+- Next task → G4 correlation-aware sizing.

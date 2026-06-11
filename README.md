@@ -73,20 +73,74 @@ contracts/
 - Walk-forward 70/30, ileri kayan pencere
 - Ağırlık versiyonlu YAML (`weights_v1.x.yaml`), audit trail kalıcı
 
-## Geliştirme
+## Run locally
+
+API + web tek komutla kalksın:
+
+```bash
+make dev
+# → API  http://127.0.0.1:8000
+# → Web  http://127.0.0.1:3000
+```
+
+`scripts/dev.sh` arkasından:
+- API → `PYTHONPATH=. uvicorn apps.api.main:app --reload --port 8000`
+- Web → `pnpm dev --port 3000` (ilk kez `pnpm install` çalıştırır)
+- `apps/web/.env.local` yoksa `NEXT_PUBLIC_API_BASE_URL=http://127.0.0.1:8000`
+  ile otomatik oluşturulur.
+- Ctrl+C ikisini birlikte durdurur.
+
+### Tek tek başlatmak
+
+```bash
+# API (FastAPI + reload)
+make api-dev
+
+# Web (Next.js dev)
+make web-dev
+```
+
+### Docker (node/pnpm lokalde yoksa)
+
+```bash
+docker compose -f docker-compose.dev.yml up --build
+# api + web ayağa kalkar. Workers istiyorsan:
+docker compose -f docker-compose.dev.yml --profile workers up --build
+```
+
+### Smoke testleri
 
 ```bash
 # Backend
-cd apps/api && uv sync && uvicorn main:app --reload
+curl http://127.0.0.1:8000/api/v1/health
+curl http://127.0.0.1:8000/api/v1/dashboard/state
+curl http://127.0.0.1:8000/api/v1/learning/mistakes
+curl http://127.0.0.1:8000/api/v1/learning/calibration
+curl http://127.0.0.1:8000/api/v1/learning/rebalance/proposal
+curl http://127.0.0.1:8000/api/v1/data/snapshot
 
-# Frontend
-cd apps/web && pnpm install && pnpm dev
+# Web (HTML)
+curl -I http://127.0.0.1:3000
 
-# Sözleşme codegen
-make codegen
+# Tests
+make test
+make lint
 ```
 
-(Henüz hiçbiri çalışmaz — iskelet aşaması.)
+### Web ortam değişkenleri
+
+`apps/web/.env.local`:
+
+```env
+NEXT_PUBLIC_API_BASE_URL=http://127.0.0.1:8000
+# Eski isim (NEXT_PUBLIC_API_BASE) hâlâ fallback olarak okunur.
+```
+
+### Sözleşme codegen
+
+```bash
+make codegen   # OpenAPI → Pydantic + TS (TODO: codegen pipeline)
+```
 
 ## Agent Development Protocol
 

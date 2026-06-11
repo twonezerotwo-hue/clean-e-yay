@@ -1,12 +1,15 @@
-.PHONY: help codegen lint test web-dev api-dev
+.PHONY: help codegen lint test web-dev api-dev dev compose-up compose-down
 
 help:
 	@echo "Clean E-yAy — make targets"
-	@echo "  codegen   Regenerate Pydantic + TypeScript types from contracts/openapi.yaml"
-	@echo "  lint      Run ruff on Python packages"
-	@echo "  test      Run pytest"
-	@echo "  web-dev   Start Next.js dev server"
-	@echo "  api-dev   Start FastAPI with reload"
+	@echo "  dev         Start API (8000) + web (3000) together (Ctrl+C kapatır)"
+	@echo "  api-dev     FastAPI --reload (8000)"
+	@echo "  web-dev     Next.js dev (3000)"
+	@echo "  compose-up  docker-compose dev (api+web+workers)"
+	@echo "  compose-down"
+	@echo "  codegen     OpenAPI → Pydantic + TS"
+	@echo "  lint        ruff packages + apps"
+	@echo "  test        pytest"
 
 codegen:
 	@echo "[codegen] OpenAPI → Pydantic + TS (not yet implemented)"
@@ -17,8 +20,17 @@ lint:
 test:
 	pytest
 
+api-dev:
+	PYTHONPATH=. uvicorn apps.api.main:app --reload --host 127.0.0.1 --port 8000
+
 web-dev:
 	cd apps/web && pnpm dev
 
-api-dev:
-	cd apps/api && uvicorn main:app --reload
+dev:
+	./scripts/dev.sh
+
+compose-up:
+	docker compose -f docker-compose.dev.yml up --build
+
+compose-down:
+	docker compose -f docker-compose.dev.yml down -v

@@ -16,8 +16,12 @@ import type {
   TickResult,
 } from "@/types/generated/api";
 
+// NEXT_PUBLIC_API_BASE_URL tercih edilen; NEXT_PUBLIC_API_BASE geriye dönük
+// uyumluluk için fallback olarak okunur.
 const BASE =
-  process.env.NEXT_PUBLIC_API_BASE ?? "http://127.0.0.1:8000";
+  process.env.NEXT_PUBLIC_API_BASE_URL ??
+  process.env.NEXT_PUBLIC_API_BASE ??
+  "http://127.0.0.1:8000";
 
 async function fetchJSON<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`${BASE}${path}`, {

@@ -1,56 +1,59 @@
 # TASK RESULT
 
 Date: 2026-06-11
-Task: G3 — Mistake Memory Gate (no RiskGate bypass)
+Task: L — Local live dev environment (API + web)
 Status: completed
 
 ## Files changed
 
-Backend
-- `packages/learning/mistake_memory.py` (new) — Mistake / MistakeVerdict
-  dataclasses; `summary()` aggregates verified+fingerprint'li closed
-  trades; `evaluate()` returns AVOID / BOOST / WARNING / NEUTRAL with
-  size_factor. `MIN_TRADES=3` fallback → NEUTRAL.
-- `packages/decision/engine.py` — TradeDecision now carries `fingerprint`
-  and `mistake_verdict`. After consensus thresholds pass, mistake memory
-  is consulted: AVOID → hold; BOOST/WARNING → size_factor multiplier
-  (size capped at 1.5). **RiskGate hard gates run first**; KILL_SWITCH,
-  RISK_REDUCE, NO_POSITION_INCREASE override mistake memory.
-- `apps/api/routers/learning.py` — added
-  `GET /api/v1/learning/mistakes` (records + verdicts + thresholds +
-  flagged_count + total_fingerprints).
+- `Makefile` — `dev` (scripts/dev.sh), `api-dev` (PYTHONPATH), `web-dev`,
+  `compose-up`, `compose-down`.
+- `scripts/dev.sh` (new) — tek komut: API (8000) + web (3000); env auto
+  bootstrap; Ctrl+C clean shutdown.
+- `apps/web/.env.example` (new) — `NEXT_PUBLIC_API_BASE_URL`.
+- `apps/web/lib/api/client.ts` — `NEXT_PUBLIC_API_BASE_URL` tercih,
+  `NEXT_PUBLIC_API_BASE` fallback, default `127.0.0.1:8000`.
+- `apps/api/main.py` — CORS: `DEV_CORS=true` → "*"; whitelist 3000/3001 +
+  `CORS_EXTRA_ORIGINS`.
+- `docker-compose.dev.yml` (new) — api + web + (profil) tick_worker +
+  learning_worker; tek bind-mount; PAPER_SAFE.
+- `README.md` — "Run locally" bölümü: `make dev`, smoke testleri,
+  docker-compose, env değişkenleri.
+- `.gitignore` — `.claude/` (yerel ajan config gitignore).
+- `apps/web/pnpm-lock.yaml` — pnpm install ile oluştu, commit (CI reproducibility).
 
-Frontend
-- `apps/web/types/generated/api.ts` — MistakeAction / MistakeRecord /
-  MistakeVerdict / MistakesState.
-- `apps/web/lib/api/client.ts` + `lib/queries/{keys,hooks}.ts` —
-  `api.mistakes` + `useMistakes`.
-- `apps/web/lib/selectors/mistakes.ts` (new).
-- `apps/web/components/panels/MistakeMemoryPanel/index.tsx` (new) —
-  flagged fingerprints + action badge + reason + size×factor + record
-  stats (trades / win_rate / total_pnl / streak / last_seen).
-- `apps/web/lib/panel-registry.ts` — mistake_memory entry (learning group).
-- `apps/web/app/page.tsx` — grid cell.
+## Smoke test (canlı)
 
-Tests
-- `tests/unit/test_mistake_memory.py` (new, 11 tests):
-  - summary skips unverified + missing-fp.
-  - evaluate NEUTRAL below MIN_TRADES.
-  - evaluate AVOID for low win_rate.
-  - evaluate BOOST for high win_rate.
-  - evaluate WARNING for marginal win_rate (no streak).
-  - evaluate AVOID for streak ≥ STREAK_AVOID.
-  - decision AVOID → hold (forced strong-bullish consensus path).
-  - **KILL_SWITCH beats BOOST**.
-  - **RISK_REDUCE beats BOOST**.
-  - **DQS BLOCKED → blocked even with forced BOOST**.
-  - endpoint returns records + verdicts + thresholds.
+API ✅ tüm 6 endpoint 200:
+- `/api/v1/health` → 200
+- `/api/v1/dashboard/state` → 200
+- `/api/v1/learning/mistakes` → 200
+- `/api/v1/learning/calibration` → 200
+- `/api/v1/learning/rebalance/proposal` → 200
+- `/api/v1/data/snapshot` → 200
+
+Web ✅ `http://127.0.0.1:3000` HTTP 200 (~18.3 KB), Ready in 5.8s.
+
+Render edilen paneller (`data-panel` markerları, 25 adet):
+agent_votes, ai_report, calibration, capital_rotation, chat,
+command_signals, data_quality, decision, event_calendar, learning,
+market_data, mistake_memory, news, panel_audit, patterns,
+position_checks, provider_status, replay_status, risk_gate, scenario,
+snapshot, system_health, trading, weight_history, weight_proposal.
+
+Görünür başlıklar: "Karar Merkezi", "Risk Kapısı", "Veri Kalitesi",
+"Sağlayıcı Durumu", "Snapshot", "Piyasa Verisi", "Ağırlık Önerisi",
+"Calibration", "Mistake Memory". HeroScene `<canvas>` ve `PAPER_ONLY`
+banner doğrulandı.
+
+Console error: yok (web log temiz, hata grep boş).
 
 ## Tests run
 
-- `pytest -q` → 47/47 passed (11 new G3 + 36 prior).
+- `pytest -q` → 47/47 passed.
 - `ruff check packages apps/api apps/tick_worker apps/learning_worker`
   → All checks passed.
+- Web HTML SSR smoke ✅.
 
 ## Result
 
@@ -58,13 +61,15 @@ passed
 
 ## Notes
 
-- Mistake memory is informational/sizing-only; **never** loosens RiskGate
-  or hard gates.
-- NEUTRAL fallback: size_factor=1.0; AVOID size_factor=0.0; BOOST=1.2;
-  WARNING=0.7.
-- Decision engine size_multiplier final capped at [0, 1.5] post-factor.
-- Lokal `node`/`pnpm` yok → `next build` CI'da doğrulanacak.
+- Lokal node: ~/.local/node (Node 20 binary, brew failed Tier 2);
+  corepack ile pnpm 9.0.0 aktif.
+- Preview MCP sandbox `Clean E-yAy` directory'sini reddetti (harness
+  E_YAY CODEX'e bağlı). Yine de web başarıyla başlatıldı (`nohup` +
+  background Bash), SSR HTML doğrulandı.
+- Browser screenshot için kullanıcı `http://127.0.0.1:3000` açar
+  (klavyeden veya `open` ile).
 
 ## Next
 
-- G4 — correlation-aware sizing veya G5 — daily-loss / max-DD halt.
+- G4 — correlation-aware sizing. Live dev artık hazır; her panel
+  değişikliği için ayrı doğrulama yapılır.

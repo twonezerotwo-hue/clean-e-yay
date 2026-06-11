@@ -1,0 +1,75 @@
+# Clean E-yAy — local dev compose.
+# Tek komut: `docker compose -f docker-compose.dev.yml up --build`
+# API   → http://127.0.0.1:8000
+# Web   → http://127.0.0.1:3000
+#
+# Notlar:
+# - Lokalde node/pnpm yoksa bu compose ile çalıştır.
+# - Repo `./` bind-mount edilir → kaynak değişiklikleri canlıdır (HMR).
+# - `data/runtime/` host'a bağlı volume (paper state, calibration, rebalance).
+# - PAPER_SAFE / NO_EXECUTION korunur — broker yok.
+
+services:
+  api:
+    image: python:3.12-slim
+    working_dir: /app
+    command: >
+      bash -lc "pip install --no-cache-dir 'fastapi' 'uvicorn[standard]' 'pydantic>=2'
+                                            'pyyaml' 'httpx' &&
+                exec uvicorn apps.api.main:app --reload
+                  --host 0.0.0.0 --port 8000"
+    environment:
+      - PYTHONPATH=/app
+      - DEV_CORS=true
+      - PRICE_USE_MOCK=false   # runtime mock yasak; live provider'lar
+      # - FRED_API_KEY=<key>   # opsiyonel
+    ports:
+      - "8000:8000"
+    volumes:
+      - .:/app
+
+  web:
+    image: node:20-alpine
+    working_dir: /app/apps/web
+    command: >
+      sh -lc "corepack enable && corepack prepare pnpm@9.0.0 --activate &&
+              pnpm install --no-frozen-lockfile &&
+              pnpm dev --port 3000 --hostname 0.0.0.0"
+    environment:
+      - NEXT_PUBLIC_API_BASE_URL=http://127.0.0.1:8000
+    ports:
+      - "3000:3000"
+    volumes:
+      - .:/app
+    depends_on:
+      - api
+
+  tick_worker:
+    profiles: ["workers"]
+    image: python:3.12-slim
+    working_dir: /app
+    command: >
+      bash -lc "pip install --no-cache-dir 'pydantic>=2' 'pyyaml' &&
+                exec python -m apps.tick_worker.main"
+    environment:
+      - PYTHONPATH=/app
+      - TICK_INTERVAL_SEC=30
+      - PRICE_USE_MOCK=false
+    volumes:
+      - .:/app
+    depends_on:
+      - api
+
+  learning_worker:
+    profiles: ["workers"]
+    image: python:3.12-slim
+    working_dir: /app
+    command: >
+      bash -lc "pip install --no-cache-dir 'pydantic>=2' 'pyyaml' &&
+                exec python -m apps.learning_worker.main"
+    environment:
+      - PYTHONPATH=/app
+    volumes:
+      - .:/app
+    depends_on:
+      - api

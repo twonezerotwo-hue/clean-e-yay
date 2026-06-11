@@ -34,9 +34,10 @@ data/state/
 .DS_Store
 Thumbs.db
 
-# IDE
+# IDE / local agent
 .idea/
 .vscode/
+.claude/
 *.swp
 *.swo
 

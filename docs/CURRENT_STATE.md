@@ -29,8 +29,12 @@ _Bu dosya kısa ve güncel tutulur. Her görev sonunda güncellenir._
 - Ruff (CI scope): yeşil.
 - Web build: CI'da doğrulanacak.
 
+- **Local live dev** hazır: `make dev` → API (8000) + web (3000) tek
+  komut. Tüm 6 endpoint 200; web HTML SSR'de 25 panel render edildi
+  (HeroScene canvas, PAPER_ONLY banner, 9 başlık doğrulandı).
+  Docker alternatifi: `docker compose -f docker-compose.dev.yml up`.
+
 ## Next task
 
-- **G4** — correlation-aware sizing veya **G5** — daily-loss / max-DD halt
-  (bkz. `docs/ROADMAP.md`).
-- `.tasks/NEXT_TASK.md` güncellendi (G4).
+- **G4** — correlation-aware sizing (bkz. `docs/ROADMAP.md`).
+- `.tasks/NEXT_TASK.md` G4 için hazır.
