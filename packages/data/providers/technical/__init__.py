@@ -4,7 +4,7 @@ from __future__ import annotations
 import hashlib
 import time
 
-from packages.data.types import TechnicalSnapshot
+from packages.data.types import TIMEFRAMES, TechnicalSnapshot
 
 
 def _det(symbol: str, salt: str, lo: float, hi: float) -> float:
@@ -20,7 +20,8 @@ def get_snapshot(symbol: str, timeframe: str = "1d") -> TechnicalSnapshot:
     ema_h = _det(symbol, f"ema-{timeframe}-{t}", 0, 1)
     stack = "bullish" if ema_h > 0.6 else "bearish" if ema_h < 0.4 else "mixed"
     score = max(0.0, min(100.0, 50.0 + (rsi - 50) * 0.6 + macd * 5))
-    tf_lit: str = "1h" if timeframe == "1h" else "4h" if timeframe == "4h" else "1d"
+    # T0: geçerli tüm timeframe'ler passthrough; bilinmeyen → "1d"
+    tf_lit: str = timeframe if timeframe in TIMEFRAMES else "1d"
     return TechnicalSnapshot(
         symbol=symbol,
         timeframe=tf_lit,  # type: ignore[arg-type]

@@ -16,6 +16,12 @@ Sentiment = Direction
 RegimeLabel = Literal["OFFENSIVE", "NEUTRAL", "DEFENSIVE", "CRISIS"]
 AssetStatus = Literal["BLOCKING", "PENDING", "CONFIRMED"]
 
+# T0 — Timeframe = first-class dimension. Sinyal uzayı (symbol, timeframe)
+# çiftiyle anahtarlanır; risk/halt portföy seviyesinde global kalır.
+Timeframe = Literal["15m", "1h", "4h", "1d", "1w"]
+TIMEFRAMES: tuple[Timeframe, ...] = ("15m", "1h", "4h", "1d", "1w")
+DEFAULT_TIMEFRAME: Timeframe = "1d"
+
 
 PriceStatus = Literal["OK", "DATA_UNAVAILABLE", "MOCK"]
 
@@ -40,7 +46,7 @@ class PriceQuote(BaseModel):
 
 class TechnicalSnapshot(BaseModel):
     symbol: str
-    timeframe: Literal["1h", "4h", "1d"] = "1d"
+    timeframe: Timeframe = "1d"
     rsi: float | None = None
     macd: float | None = None
     atr: float | None = None
@@ -66,6 +72,25 @@ class Catalyst(BaseModel):
     title: str
     importance: Literal["low", "medium", "high"] = "low"
     region: str | None = None
+
+
+class CatalystImpact(BaseModel):
+    """T0 contract seed — half-life motoru v2.7 deep data ile gelir.
+
+    Bu model şimdilik yalnızca sözleşmedir: hiçbir engine üretmez/tüketmez.
+    Haber tipine göre asset × timeframe etki haritası taşır.
+    """
+
+    catalyst_id: str
+    event_type: str                 # ceasefire | cpi | fomc | opec | etf_flow | ...
+    surprise_level: float = 0.0     # -1..+1 (beklentiden sapma)
+    affected_assets: list[str] = Field(default_factory=list)
+    expected_half_life_minutes: int = 60
+    affected_timeframes: list[Timeframe] = Field(default_factory=list)
+    timeframe_bias: dict[Timeframe, Direction] = Field(default_factory=dict)
+    valid_until: datetime | None = None
+    decay_curve: Literal["exponential", "linear", "step"] = "exponential"
+    confidence: float = 0.0         # 0..1 (kaynak doğrulaması)
 
 
 class RotationView(BaseModel):

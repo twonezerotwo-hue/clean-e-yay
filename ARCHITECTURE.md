@@ -923,6 +923,49 @@ secrets .env.example ile yönetilmeli
 
 ---
 
+## 17.5. Timeframe = first-class dimension (T0+)
+
+Sinyal uzayı sembol değil, **(symbol, timeframe)** çiftiyle anahtarlanır:
+
+```text
+Timeframe: 15m | 1h | 4h | 1d | 1w
+
+15m → news shock / scout          (risk×0.25, sıkı time-stop)
+1h  → intraday confirmation       (risk×0.5)
+4h  → tactical setup              (risk×1.0)
+1d  → swing bias                  (risk×1.0)
+1w  → strategic view              (paper trade AÇMAZ — sadece bias/filtre)
+```
+
+Katman kuralları:
+
+```text
+- Risk kapsamı GLOBAL kalır: DQS veto, KILL_SWITCH, daily-loss/max-DD
+  halt timeframe ayrımı yapmaz — halt aktifse 5 TF'in 5'inde de trade yok.
+- timeframe_risk çarpanları yalnızca küçültür (≤1.0); hiçbir TF
+  RiskGate'i bypass edemez veya gevşetemez.
+- Üst TF, alt TF'e veto/scale-down uygular; asla scale-up yok.
+- Fingerprint v2 TF segmenti taşır: asset|v2|tf|regime|direction|bucket|C|module.
+  Legacy (TF'siz) kayıtlar v2 ile eşleşmez → mistake memory MIN_TRADES
+  altında NEUTRAL fallback ile doğal karantina.
+- Position/Trade/TradeDecision `timeframe` taşır (default "1d",
+  backward compatible).
+- CatalystImpact (haber half-life modeli) contract'ı T0'da tanımlı;
+  motoru v2.7 deep data ile gelir (gerçek haber feed'i şart).
+```
+
+Faz planı:
+
+```text
+T0 — contracts + schema seeding        (tamamlandı)
+T1 — OHLCV provider + gerçek multi-TF technicals
+T2 — TF consensus + decision + paper (time-stop) + TimeframeMatrixPanel
+sonra v2.6 LLM persona
+T3 — catalyst half-life motoru → v2.7 deep data ile
+```
+
+---
+
 ## 18. En önemli 10 kural
 
 ```text

@@ -289,6 +289,7 @@ components:
         sl: { type: number }
         tp: { type: number }
         opened_at: { type: string, format: date-time }
+        timeframe: { $ref: "#/components/schemas/Timeframe" }
 
     Trade:
       type: object
@@ -304,6 +305,7 @@ components:
         closed_at: { type: string, format: date-time }
         close_reason: { type: string, enum: [SL_HIT, TP_HIT, SIGNAL_REVERSAL, RISK_REDUCE, MANUAL] }
         fingerprint: { type: string }
+        timeframe: { $ref: "#/components/schemas/Timeframe" }
 
     PaperTradingState:
       type: object
@@ -474,3 +476,63 @@ components:
         cleared:
           type: array
           items: { $ref: "#/components/schemas/HaltEvent" }
+
+    Timeframe:
+      type: string
+      enum: ["15m", "1h", "4h", "1d", "1w"]
+      default: "1d"
+      description: T0 — sinyal uzayı (symbol, timeframe) ile anahtarlanır.
+
+    CatalystImpact:
+      type: object
+      description: >
+        T0 contract seed — half-life motoru v2.7 deep data ile implement
+        edilir. Şimdilik hiçbir endpoint üretmez/tüketmez.
+      required: [catalyst_id, event_type]
+      properties:
+        catalyst_id: { type: string }
+        event_type: { type: string }
+        surprise_level: { type: number, minimum: -1, maximum: 1 }
+        affected_assets:
+          type: array
+          items: { type: string }
+        expected_half_life_minutes: { type: integer }
+        affected_timeframes:
+          type: array
+          items: { $ref: "#/components/schemas/Timeframe" }
+        timeframe_bias:
+          type: object
+          additionalProperties: { type: string, enum: [bullish, bearish, neutral] }
+        valid_until: { type: string, format: date-time, nullable: true }
+        decay_curve: { type: string, enum: [exponential, linear, step] }
+        confidence: { type: number, minimum: 0, maximum: 1 }
+
+    TimeframeDecision:
+      type: object
+      description: T0 taslak — T2'de /api/v1/decision/matrix bunu döner.
+      required: [symbol, timeframe, action]
+      properties:
+        symbol: { type: string }
+        timeframe: { $ref: "#/components/schemas/Timeframe" }
+        action: { type: string, enum: [open_long, open_short, hold, blocked, watch] }
+        score: { type: number }
+        direction: { type: string, enum: [bullish, bearish, neutral] }
+        confidence: { type: number }
+        size_multiplier: { type: number }
+        reason: { type: string }
+
+    DecisionMatrix:
+      type: object
+      description: T0 taslak — symbol × timeframe karar matrisi (T2).
+      required: [generated_at, symbols, timeframes, cells]
+      properties:
+        generated_at: { type: string, format: date-time }
+        symbols:
+          type: array
+          items: { type: string }
+        timeframes:
+          type: array
+          items: { $ref: "#/components/schemas/Timeframe" }
+        cells:
+          type: array
+          items: { $ref: "#/components/schemas/TimeframeDecision" }

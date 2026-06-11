@@ -40,6 +40,9 @@ class MarketSnapshot:
     quality: QualityReport
     warnings: list[str] = field(default_factory=list)
     provider_status: dict[str, dict] = field(default_factory=dict)
+    # T0 contract seed — T1'de OHLCV bazlı multi-TF technicals doldurur.
+    # None → yalnızca legacy `technicals` (1d) mevcut. Anahtar: symbol → tf.
+    technicals_by_tf: dict[str, dict[str, TechnicalSnapshot]] | None = None
 
 
 def _make_id(now: datetime) -> str:

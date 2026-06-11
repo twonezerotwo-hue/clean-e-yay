@@ -4,6 +4,25 @@ _Bu dosya kısa ve güncel tutulur. Her görev sonunda güncellenir._
 
 ## Last known status
 
+- **T0 tamamlandı**: timeframe-first contracts + schema seeding (runtime
+  davranış değişmedi, tamamı additive/backward-compatible).
+  - `Timeframe = Literal["15m","1h","4h","1d","1w"]` (`data/types.py`);
+    `TechnicalSnapshot.timeframe` genişledi; provider passthrough.
+  - `Position`/`Trade`/`TradeDecision` → `timeframe` alanı (default "1d";
+    legacy JSON kayıtları default ile yüklenir).
+  - `MarketSnapshot.technicals_by_tf` opsiyonel taslak (None — T1 doldurur).
+  - **Fingerprint v2**: `asset|v2|tf|regime|...` — legacy ile çakışmaz;
+    eski kayıtlar doğal karantinada (NEUTRAL fallback).
+  - `thresholds.timeframe_risk`: 15m scout ×0.25 / 1h ×0.5 / 4h ×1.0 /
+    1d ×1.0 / 1w ×0.0 + `paper_execution: false` (1w trade açamaz).
+    Tüm çarpanlar ≤1.0 — sadece risk azaltıcı.
+  - `CatalystImpact` contract'ı (Pydantic + OpenAPI) tanımlı — motor
+    v2.7'de. `TimeframeDecision`/`DecisionMatrix` OpenAPI taslakları T2 için.
+  - Frontend: sadece types (Timeframe/CatalystImpact/TimeframeDecision/
+    DecisionMatrix + Position/Trade.timeframe) — panel T2/T4'te.
+  - Pytest **94/94** (9 yeni T0); ruff + tsc + build yeşil.
+- **v2.6 LLM persona ertelendi** → T1+T2 sonrası (bkz. ROADMAP).
+
 - **G5 tamamlandı**: daily-loss / max-DD halt — file-backed, sadece risk
   azaltıcı.
   - `packages/risk/halt.py` — breach tespiti tick yollarında
@@ -66,5 +85,5 @@ _Bu dosya kısa ve güncel tutulur. Her görev sonunda güncellenir._
 
 ## Next task
 
-- **v2.6** — LLM persona (Groq, narrative-only; bkz. `docs/ROADMAP.md`).
-- `.tasks/NEXT_TASK.md` v2.6 için hazır.
+- **T1** — OHLCV provider + gerçek multi-timeframe technicals.
+- `.tasks/NEXT_TASK.md` T1 için hazır.

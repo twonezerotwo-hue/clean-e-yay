@@ -1,33 +1,37 @@
-# NEXT TASK — v2.6 LLM Persona (Groq, narrative-only)
+# NEXT TASK — T1 OHLCV Provider + Gerçek Multi-Timeframe Technicals
 
-AI yalnızca açıklar/eleştirir — karar vermez. Deterministic decision +
-RiskGate tek karar otoritesidir.
+T0 contract'ları kodla doldur: gerçek mum verisi + gerçek indikatörler.
+Mevcut hash-mock teknik sağlayıcı yerini OHLCV bazlı hesaba bırakır.
 
 ## Scope
 
-- `packages/agent/llm_client.py` (yeni): Groq client + token budget
-  guard (`agent.groq_daily_token_budget`, file-backed günlük sayaç).
-  `GROQ_API_KEY` yoksa veya budget aşıldıysa → mevcut deterministik
-  narrative fallback (hata yok, degrade).
-- Personas: `analyst`, `risk_officer`, `macro_strategist`
-  (thresholds.yaml `agent.personas`); quorum_required=2 mevcut
-  build_votes akışıyla uyumlu kalsın — LLM yalnızca narrative üretir,
-  vote'ları değiştirmez.
-- `/api/v1/ai-report/current` — LLM narrative (varsa) + persona
-  yorumları; `mode` damgası (provenance) korunur; LLM çıktısı
-  `llm_generated: true` ile işaretlenir.
-- `POST /api/v1/chat` — dashboard ChatPanel'e bağlanır; yalnızca mevcut
-  snapshot/decision/risk state'i üzerinden cevap verir; trade komutu
-  almaz/uygulamaz.
-- Dashboard: `AIReportPanel` LLM narrative + persona bölümü;
-  `ChatPanel` gerçek POST'a bağlanır. Selector + registry mevcut.
+- `packages/data/types.py` — `OHLCVBar` modeli (symbol, timeframe, o/h/l/c,
+  volume, ts, source, verified).
+- `packages/data/providers/ohlcv/` (yeni):
+  - CoinGecko (BTC/ETH: günlük + saatlik OHLC), yfinance chart API
+    (XAU/XAG/endeks: 15m/1h/1d/1wk) — mevcut provider error-handling +
+    provider_status desenini izle.
+  - 15m/1h/4h/1w: kaynak desteklemiyorsa üst/alt TF'ten **resample**
+    (4h = 1h×4); resample edilen barlar `source: "resampled:<base>"`.
+  - Disk cache (`data/runtime/ohlcv/`) — tekrar eden çağrıları azalt;
+    cache TTL TF'e orantılı (15m→5dk, 1d→6sa).
+- `packages/data/providers/technical/` — RSI(14), MACD(12/26/9), ATR(14),
+  EMA stack (20/50/200) **gerçek OHLCV'den** hesapla; bar yetersizse
+  `TechnicalSnapshot` alanları None + DEGRADED işareti (mock değer YOK —
+  DATA_POLICY).
+- `packages/data/ingestion/pipeline.py` — `technicals_by_tf` doldur
+  (5 TF × DEFAULT_SYMBOLS[:4]); legacy `technicals` alanı 1d'den beslenmeye
+  devam eder (geriye uyum). DQS: TF bazlı freshness kuralı (15m>30dk eski
+  → DEGRADED; 1d>48sa → DEGRADED).
+- Test offline: fixture OHLCV barlarıyla indikatör doğruluğu (bilinen
+  seriye bilinen RSI), resample doğruluğu, bar yetersiz → None/DEGRADED,
+  legacy `technicals` değişmedi, network yok (provider mock'lanır).
 
 ## Rules
 
-- `PAPER_SAFE / NO_EXECUTION` — LLM hiçbir aksiyon tetikleyemez.
-- LLM karar vermez; RiskGate/DQS/halt mantığına dokunulmaz.
-- Network yalnızca Groq API (kullanıcı onayladı: roadmap v2.6); key yoksa
-  tamamen offline degrade.
-- Token budget guard zorunlu; budget aşımı → fallback + uyarı.
-- Test offline: mock LLM client (network yok), budget guard testi,
-  fallback testi, chat endpoint 200, key'siz davranış.
+- `PAPER_SAFE / NO_EXECUTION`; RiskGate/halt/DQS davranışı değişmez.
+- Consensus/decision henüz multi-TF OKUMAZ (o T2) — bu görev sadece veri.
+- Runtime'da mock bar yok; veri yoksa None + DEGRADED (DATA_POLICY).
+- `technicals_by_tf` dolduğunda dashboard `SnapshotPanel`/`MarketDataPanel`
+  içinde minimum görünürlük: TF başına teknik özet satırı (büyük panel yok
+  — TimeframeMatrixPanel T2'de).

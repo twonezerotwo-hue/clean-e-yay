@@ -116,6 +116,7 @@ export type Position = {
   sl?: number;
   tp?: number;
   opened_at: string;
+  timeframe?: Timeframe;
 };
 
 export type Trade = {
@@ -129,6 +130,7 @@ export type Trade = {
   closed_at: string;
   close_reason: "SL_HIT" | "TP_HIT" | "SIGNAL_REVERSAL" | "RISK_REDUCE" | "MANUAL";
   fingerprint?: string;
+  timeframe?: Timeframe;
 };
 
 export type PaperTradingState = {
@@ -401,4 +403,39 @@ export type HaltsState = {
 export type HaltResetResult = {
   cleared_count: number;
   cleared: HaltEvent[];
+};
+
+// ---------------- T0 — Timeframe contracts (panel T2/T4'te gelir) ----------------
+
+export type Timeframe = "15m" | "1h" | "4h" | "1d" | "1w";
+
+export type CatalystImpact = {
+  catalyst_id: string;
+  event_type: string;
+  surprise_level?: number;
+  affected_assets?: string[];
+  expected_half_life_minutes?: number;
+  affected_timeframes?: Timeframe[];
+  timeframe_bias?: Partial<Record<Timeframe, "bullish" | "bearish" | "neutral">>;
+  valid_until?: string | null;
+  decay_curve?: "exponential" | "linear" | "step";
+  confidence?: number;
+};
+
+export type TimeframeDecision = {
+  symbol: string;
+  timeframe: Timeframe;
+  action: "open_long" | "open_short" | "hold" | "blocked" | "watch";
+  score?: number;
+  direction?: "bullish" | "bearish" | "neutral";
+  confidence?: number;
+  size_multiplier?: number;
+  reason?: string;
+};
+
+export type DecisionMatrix = {
+  generated_at: string;
+  symbols: string[];
+  timeframes: Timeframe[];
+  cells: TimeframeDecision[];
 };

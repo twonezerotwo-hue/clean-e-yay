@@ -57,3 +57,15 @@
   (gauge'lar + timeline + reset) + TradingPanel RISK FREEZE badge.
   85/85 pytest, ruff + tsc + build yeşil; SSR'de 27 panel doğrulandı.
 - Next task → v2.6 LLM persona (Groq, narrative-only).
+- Mimari değerlendirme: timeframe first-class dimension raporu kabul
+  edildi; v2.6 ertelendi → yeni sıra T0→T1→T2→v2.6 (T3 half-life motoru
+  v2.7 deep data ile).
+- T0 completed: timeframe contracts + schema seeding. Timeframe Literal
+  (15m/1h/4h/1d/1w); Position/Trade/TradeDecision.timeframe default "1d"
+  (legacy uyumlu); technicals_by_tf taslağı; fingerprint v2 (TF segmenti,
+  legacy çakışmaz, NEUTRAL karantina); thresholds.timeframe_risk (1w
+  paper_execution=false, çarpanlar ≤1.0); CatalystImpact +
+  TimeframeDecision/DecisionMatrix OpenAPI şemaları (motor/endpoint yok);
+  web'de sadece types. Runtime logic sıfır diff. 94/94 pytest, ruff +
+  tsc + build yeşil.
+- Next task → T1 OHLCV provider + gerçek multi-TF technicals.

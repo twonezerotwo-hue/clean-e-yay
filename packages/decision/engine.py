@@ -59,6 +59,7 @@ class TradeDecision:
     fingerprint: str | None = None
     mistake_verdict: dict = field(default_factory=dict)
     cluster_report: dict = field(default_factory=dict)
+    timeframe: str = "1d"  # T0 additive — T2'de (symbol, tf) karar uzayına geçer
 
 
 def _regime_multiplier(label: str) -> float:

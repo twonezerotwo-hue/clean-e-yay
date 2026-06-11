@@ -21,6 +21,17 @@ risk_gates:
   vol_regime_zscore: 2.0
   position_cap_per_asset_pct: 0.25   # equity'nin %25'i
 
+# T0 — timeframe risk politikası (contract seed; T2'de decision/paper
+# katmanı uygular). risk_multiplier yalnızca küçültür (≤1.0) —
+# RiskGate/halt/DQS gate'lerini hiçbir şekilde etkilemez.
+# paper_execution=false → o TF doğrudan paper trade AÇAMAZ (sadece bias).
+timeframe_risk:
+  "15m": { role: scout,        risk_multiplier: 0.25, paper_execution: true,  time_stop_hours: 6 }
+  "1h":  { role: confirmation, risk_multiplier: 0.50, paper_execution: true,  time_stop_hours: 48 }
+  "4h":  { role: tactical,     risk_multiplier: 1.00, paper_execution: true,  time_stop_hours: 168 }
+  "1d":  { role: swing,        risk_multiplier: 1.00, paper_execution: true,  time_stop_hours: 672 }
+  "1w":  { role: strategic,    risk_multiplier: 0.00, paper_execution: false, time_stop_hours: 0 }
+
 # G4 — trade PnL verisi yetersizken kullanılan deterministik korelasyon
 # baseline'ı. Çiftler simetrik okunur; listede olmayan çift → neutral (rho=0,
 # insufficient_correlation_data uyarısı, size adjustment yok).

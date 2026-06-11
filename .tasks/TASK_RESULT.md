@@ -1,68 +1,60 @@
 # TASK RESULT
 
 Date: 2026-06-11
-Task: G5 — Daily-loss / Max-DD halt
+Task: T0 — Timeframe contracts + schema seeding
 Status: completed
 
-## Files changed
+## Files changed (tamamı additive)
 
-- `packages/risk/halt.py` (new) — file-backed halt store
-  (`RISK_HALT_PATH`, default `data/runtime/risk_halts.json`).
-  `sync(risk_input)` breach'te halt'i persist eder (idempotent);
-  `active_halts()` salt okur; `owner_reset()` tek çıkış yolu —
-  **otomatik reset yok**. `metrics()` gauge oranlarını üretir.
-- `packages/risk/engine.py` — aktif halt ek candidate: DAILY_LOSS →
-  KILL_SWITCH, MAX_DRAWDOWN → RISK_REDUCE. Sadece kısıtlayıcı; mevcut
-  hard gate'ler (DQS, daily loss, max DD, pozisyon sayısı) değişmedi.
-- `packages/paper/lifecycle.py` — `flatten_all()`: KILL_SWITCH halt'te
-  tüm pozisyonları KILL_SWITCH_EXIT ile kapatır; fiyatı olmayan pozisyon
-  açık kalır (mock fiyat uydurulmaz, DATA_POLICY).
-- `apps/api/routers/paper_trading.py`, `apps/tick_worker/main.py` —
-  tick akışı: halt.sync → KILL_SWITCH seviyesinde flatten → decide_all
-  (risk engine halt'i görür, yeni açılış bloklanır).
-- `apps/api/routers/risk.py` — `GET /api/v1/risk/halts`,
-  `POST /api/v1/risk/halts/reset` (owner).
-- `contracts/openapi.yaml` — iki endpoint + HaltEvent / HaltMetrics /
-  HaltsState / HaltResetResult şemaları.
-- `tests/unit/test_halt.py` (new) — 13 test.
-- Frontend: `components/panels/DrawdownGuardPanel/` (new: DailyLossGauge
-  + MaxDDGauge + KillSwitchTimeline + Owner Reset butonu), `TradingPanel`
-  RISK FREEZE badge, `lib/selectors/halts.ts` (new), client/keys/hooks
-  (`useRiskHalts`, `useHaltReset` mutation), panel-registry
-  `drawdown_guard`, `types/generated/api.ts`, page.tsx tek GridCell.
+- `packages/data/types.py` — `Timeframe` Literal (15m/1h/4h/1d/1w) +
+  `TIMEFRAMES`/`DEFAULT_TIMEFRAME`; `TechnicalSnapshot.timeframe` Literal
+  genişledi (15m+1w); `CatalystImpact` Pydantic modeli (contract-only).
+- `packages/data/providers/technical/__init__.py` — TF passthrough
+  (önceden 15m/1w → "1d"e eziliyordu; bilinmeyen hâlâ "1d").
+- `packages/data/ingestion/pipeline.py` — `MarketSnapshot.technicals_by_tf`
+  opsiyonel alan (default None; T1 doldurur).
+- `packages/paper/state.py` — `Position.timeframe` + `Trade.timeframe`
+  (default "1d").
+- `packages/decision/engine.py` — `TradeDecision.timeframe` (default "1d").
+- `packages/learning/fingerprint.py` — **v2**: `asset|v2|tf|regime|
+  direction|bucket|C|module`; `is_v2()` helper; default tf="1d".
+- `config/thresholds_v1.0.yaml` — `timeframe_risk` politikası (role,
+  risk_multiplier ≤1.0, paper_execution, time_stop_hours; 1w execution=false).
+- `contracts/openapi.yaml` — `Timeframe` enum; Position/Trade'e additive
+  `timeframe`; `CatalystImpact`, `TimeframeDecision`, `DecisionMatrix`
+  şemaları (taslak — endpoint T2'de).
+- `apps/web/types/generated/api.ts` — Timeframe/CatalystImpact/
+  TimeframeDecision/DecisionMatrix tipleri; Position/Trade.timeframe?.
+  Panel YOK (T2/T4).
+- `tests/unit/test_timeframe_contracts.py` (new) — 9 test.
+- Docs: ARCHITECTURE.md §17.5 "Timeframe = first-class dimension";
+  ROADMAP yeni sıra (T0✓→T1→T2→v2.6; T3→v2.7); CURRENT_STATE; NEXT_TASK→T1.
 
-## Safety
+## Backward compatibility garantileri
 
-- RiskGate bypass YOK: halt yalnızca ek kısıtlayıcı candidate;
-  KILL_SWITCH > RISK_REDUCE > NO_POSITION_INCREASE sırası korunur.
-- DQS < 55 → KILL_SWITCH → trade yok (halt'ten bağımsız, testli).
-- Halt aktif → yeni pozisyon yok; KILL_SWITCH halt → flatten
-  (KILL_SWITCH_EXIT); RISK_REDUCE halt → mevcut pozisyonlar SL/TP ile
-  yönetilir, yeni risk eklenmez.
-- Otomatik reset yok — yalnızca owner reset endpoint'i; geçmiş timeline
-  korunur (`cleared_by: owner_reset`).
-- PAPER_SAFE / NO_EXECUTION; broker yok; live network bağımlılığı yok.
+- Legacy `paper_state.json` kayıtları (timeframe alanı olmadan) default
+  "1d" ile yüklenir — testli (`test_legacy_position_and_trade_load_default_1d`).
+- Legacy fingerprint'ler v2 ile ASLA çakışmaz (v2 tag'i + segment sayısı);
+  eski kayıtlar mistake memory'de kendi içinde çalışmaya devam eder,
+  v2 lookup'ları MIN_TRADES altında NEUTRAL fallback alır — testli.
+- `MarketSnapshot.technicals` (legacy 1d alanı) aynen korunur;
+  `technicals_by_tf` None.
+- OpenAPI değişiklikleri additive (yeni şema + opsiyonel property).
+- Mevcut 85 testin tamamı değişmeden yeşil.
+
+## Değişmeyen runtime logic
+
+- RiskGate hard gate'leri, halt (G5), DQS veto, KILL_SWITCH — sıfır diff.
+- Decision/consensus akışı — `timeframe` yalnızca default'lu alan;
+  fingerprint formatı dışında karar yolu aynı.
+- Correlation sizing (G4), mistake memory eşikleri, calibration — aynı.
+- timeframe_risk yalnızca config'te durur; T2'ye kadar hiçbir kod okumaz.
 
 ## Tests run
 
-- `pytest -q` → **85/85 passed** (13 yeni G5: daily-loss breach → halt,
-  max-DD breach → halt, idempotent+sticky, owner reset, engine escalate
-  (KILL_SWITCH/RISK_REDUCE), haltsiz davranış değişmedi, DQS BLOCKED,
-  flatten fiyatlı/fiyatsız, tick'te open yok + flatten, DD halt'te
-  flatten yok, endpoint GET/POST, gauge oranları).
-- `ruff check packages apps/...` → All checks passed.
-- `pnpm exec tsc --noEmit` → temiz; `pnpm build` → yeşil.
-
-## Live verification
-
-- `GET /api/v1/risk/halts` → 200 (halt_active=false, metrics: daily
-  limit 2000 USD, dd limit %8, oranlar 0).
-- Web `http://127.0.0.1:3000` → 200; SSR'de **27 panel**
-  (`data-panel="drawdown_guard"` dahil), "Drawdown Guard" başlığı,
-  HeroScene canvas + PAPER_ONLY banner. Web log temiz.
-- Not: eski E_YAY CODEX frontend'inin `next dev` ebeveyn süreçleri port
-  3000'i tekrar kapıyordu (port-kill çocuğu öldürüyor, ebeveyn yeniden
-  doğuruyor) — ebeveyn süreçler temizlendi.
+- `pytest -q` → **94/94 passed** (9 yeni T0).
+- `ruff check` → All checks passed.
+- `pnpm exec tsc --noEmit` + `pnpm build` → yeşil.
 
 ## Result
 
@@ -70,4 +62,5 @@ passed
 
 ## Next
 
-- v2.6 — LLM persona (Groq, narrative-only).
+- T1 — OHLCV provider + gerçek multi-timeframe technicals
+  (`.tasks/NEXT_TASK.md` hazır).

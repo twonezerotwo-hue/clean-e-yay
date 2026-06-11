@@ -32,6 +32,7 @@ class Position:
     predicted_confidence: float | None = None  # calibrated p(win) at open
     raw_confidence: float | None = None        # pre-calibration p(win)
     confidence_source: str | None = None       # identity | fitted | insufficient
+    timeframe: str = "1d"  # T0 additive — legacy kayıtlar default "1d" yüklenir
 
     @property
     def unrealized_pnl_usd(self) -> float:
@@ -56,6 +57,7 @@ class Trade:
     predicted_confidence: float | None = None
     raw_confidence: float | None = None
     confidence_source: str | None = None
+    timeframe: str = "1d"  # T0 additive — legacy kayıtlar default "1d" yüklenir
 
 
 @dataclass
