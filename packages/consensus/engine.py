@@ -16,7 +16,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from packages.data.ingestion.pipeline import MarketSnapshot
-from packages.data.registry.loader import load_weights
+from packages.data.registry.loader import load_active_weights
 from packages.regime.classifier import RegimeOutput
 
 
@@ -105,7 +105,7 @@ def build(
         "quantum": _quantum(snap),
         # chart_pattern: şimdilik yok — ağırlığı redistribute edilir
     }
-    weights_cfg = load_weights()
+    weights_cfg = load_active_weights()
     base = weights_cfg["regimes"].get(regime.label, weights_cfg["regimes"]["NEUTRAL"])
     available = set(raw.keys())
     w = _redistribute(base, available)

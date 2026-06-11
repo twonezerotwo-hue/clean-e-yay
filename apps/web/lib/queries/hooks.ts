@@ -54,3 +54,11 @@ export const useDataSnapshot = () =>
     staleTime: 15_000,
     refetchInterval: 30_000,
   });
+
+export const useRebalanceProposal = () =>
+  useQuery({
+    queryKey: qk.rebalanceProposal,
+    queryFn: api.rebalanceProposal,
+    staleTime: 60_000,
+    refetchInterval: 60_000,
+  });

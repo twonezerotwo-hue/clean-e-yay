@@ -235,3 +235,49 @@ export type DataSnapshot = {
   provider_status: Record<string, ProviderStatus>;
   warnings: string[];
 };
+
+export type WeightDelta = {
+  module: string;
+  old: number;
+  new: number;
+  delta: number;
+};
+
+export type ModulePerf = {
+  module: string;
+  trades: number;
+  wins: number;
+  win_rate: number;
+  avg_pnl: number;
+  total_pnl: number;
+  score: number;
+};
+
+export type ProposalStatus =
+  | "PENDING"
+  | "APPROVED"
+  | "REJECTED";
+
+export type RebalanceProposalRecord = {
+  status: ProposalStatus;
+  from_version: string;
+  to_version: string;
+  generated_at: string;
+  regime: string;
+  deltas: WeightDelta[];
+  evidence: ModulePerf[];
+  proposed_yaml: Record<string, unknown>;
+  audit_note: string;
+  dataset_size: number;
+  rejected_records: number;
+  notes?: string[];
+  approved_by?: string;
+  reject_reason?: string;
+  active_yaml?: string;
+};
+
+export type RebalanceState = {
+  active_version: string;
+  current: RebalanceProposalRecord | null;
+  history: RebalanceProposalRecord[];
+};

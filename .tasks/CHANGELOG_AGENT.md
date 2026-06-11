@@ -13,4 +13,11 @@
   test-only mock via TEST_USE_MOCK; runtime opt-in PRICE_USE_MOCK shows
   red banner. Frontend panels show "VERİ YOK" / BLOCKED states. 18/18
   pytest, ruff green. DATA_POLICY.md added.
-- Next task → G2 auto-weight trainer.
+- G2 completed: auto-weight trainer + owner-approved rebalance flow.
+  Position/Trade carry data_verified; trainer filters non-verified.
+  RebalanceProposal generated when ≥10 verified trades; constraints
+  enforced; `/learning/rebalance/{proposal,propose,approve,reject}`.
+  Approve writes weights_v1.x.yaml + manifest, consensus reads via
+  load_active_weights(). 2 dashboard panels (WeightProposal,
+  WeightHistory). 26/26 pytest, ruff green.
+- Next task → G6 confidence calibration or G3 mistake memory gate.

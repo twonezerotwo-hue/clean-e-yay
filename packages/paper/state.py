@@ -28,6 +28,7 @@ class Position:
     tp: float | None
     opened_at: str
     fingerprint: str | None = None
+    data_verified: bool = False  # quote.verified at open; learning filters non-verified
 
     @property
     def unrealized_pnl_usd(self) -> float:
@@ -48,6 +49,7 @@ class Trade:
     closed_at: str
     close_reason: str
     fingerprint: str | None = None
+    data_verified: bool = False  # mirrors Position; learning trainer filters
 
 
 @dataclass

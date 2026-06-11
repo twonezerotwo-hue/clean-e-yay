@@ -25,6 +25,8 @@ import { DataQualityPanel } from "@/components/panels/DataQualityPanel";
 import { ProviderStatusPanel } from "@/components/panels/ProviderStatusPanel";
 import { SnapshotPanel } from "@/components/panels/SnapshotPanel";
 import { MarketDataPanel } from "@/components/panels/MarketDataPanel";
+import { WeightProposalPanel } from "@/components/panels/WeightProposalPanel";
+import { WeightHistoryPanel } from "@/components/panels/WeightHistoryPanel";
 
 import { useKeyboardShortcuts } from "@/hooks/useKeyboardShortcuts";
 
@@ -84,6 +86,9 @@ export default function HomePage() {
 
         <GridCell span="2"><LearningPanel /></GridCell>
         <GridCell span="1"><TradingPanel /></GridCell>
+
+        <GridCell span="2"><WeightProposalPanel /></GridCell>
+        <GridCell span="1"><WeightHistoryPanel /></GridCell>
 
         <GridCell span="full"><SystemHealthBar /></GridCell>
       </DashboardGrid>

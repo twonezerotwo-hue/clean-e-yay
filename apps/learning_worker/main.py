@@ -1,4 +1,4 @@
-"""Learning worker — periyodik kalibrasyon + walk-forward.
+"""Learning worker — periyodik kalibrasyon + walk-forward + auto-weight proposal.
 
 Çalıştırma:
     python -m apps.learning_worker.main
@@ -10,6 +10,8 @@ import logging
 import os
 from pathlib import Path
 
+from packages.learning import auto_weight_trainer as trainer
+from packages.learning import rebalance_store
 from packages.learning.summary import build_summary
 
 log = logging.getLogger("learning_worker")
@@ -27,6 +29,20 @@ def run_once() -> dict:
         summary["win_rate"],
         summary.get("sharpe"),
     )
+
+    # G2: auto-weight trainer. Yeterli veri varsa pending proposal güncellenir;
+    # active weights değişmez — owner approval gerekir.
+    result = trainer.train(regime="NEUTRAL")
+    if isinstance(result, trainer.RebalanceProposal):
+        rebalance_store.set_pending(trainer.proposal_to_dict(result))
+        log.info(
+            "rebalance proposal pending: %s → %s (n=%s)",
+            result.from_version,
+            result.to_version,
+            result.dataset_size,
+        )
+    else:
+        log.info("rebalance trainer skipped: %s", result)
     return summary
 
 

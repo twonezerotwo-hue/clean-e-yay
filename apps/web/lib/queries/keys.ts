@@ -6,4 +6,5 @@ export const qk = {
   paperTradingState: ["paper-trading", "state"] as const,
   learningSummary: ["learning", "summary"] as const,
   dataSnapshot: ["data", "snapshot"] as const,
+  rebalanceProposal: ["learning", "rebalance"] as const,
 };

@@ -9,6 +9,7 @@ import type {
   Health,
   LearningSummary,
   PaperTradingState,
+  RebalanceState,
   RegimeReport,
   TickResult,
 } from "@/types/generated/api";
@@ -40,4 +41,6 @@ export const api = {
   learningSummary: () =>
     fetchJSON<LearningSummary>("/api/v1/learning/summary"),
   dataSnapshot: () => fetchJSON<DataSnapshot>("/api/v1/data/snapshot"),
+  rebalanceProposal: () =>
+    fetchJSON<RebalanceState>("/api/v1/learning/rebalance/proposal"),
 };

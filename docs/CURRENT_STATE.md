@@ -4,28 +4,36 @@ _Bu dosya kısa ve güncel tutulur. Her görev sonunda güncellenir._
 
 ## Last known status
 
-- **Data policy uygulandı** ([DATA_POLICY.md](DATA_POLICY.md)): runtime'da
-  mock fallback yasak. Live provider başarısız → `price=null`,
-  `status="DATA_UNAVAILABLE"`, `verified=false`, `error=<sebep>`.
-- `PRICE_USE_MOCK` default `false`. Test'ler `TEST_USE_MOCK=true` (conftest
-  ile) altında mock alır; runtime opt-in `PRICE_USE_MOCK=true` dashboard'da
-  kırmızı banner gösterir.
-- DQS `status` alanı: `OK / DEGRADED / BLOCKED`. BLOCKED → risk gate
-  KILL_SWITCH → yeni paper trade yok.
-- Yeni endpoint: `GET /api/v1/data/snapshot` — `prices[].price` nullable;
-  her quote `verified/status/error`; `mode.{mock_mode,mock_warning,test_mock}`
-  alanları.
-- Frontend: MarketDataPanel "VERİ YOK" gösterir, DataQualityPanel BLOCKED
-  banner'lı, ProviderStatusPanel hata mesajı satırı, SystemHealthBar DQS
-  status chip'i, MockModeBanner page üstünde.
-- Paper tick consumer'ları None fiyatları filtreler; mock fiyatla işlem
-  açılmaz.
-- Pytest: **18/18** yeşil (runtime-fail, FRED missing key, paper tick
-  no-open dahil).
+- **G2 tamamlandı**: auto-weight trainer + owner-approved rebalance akışı.
+  - `packages/learning/auto_weight_trainer.py` — closed verified trade'leri
+    fingerprint'in `dominant_module` parçasına göre grupluyor, per-module
+    `win_rate + avg_pnl` skoru üretiyor, `weights_v1.0.yaml`
+    constraints'lerine (`max_delta_per_module`, `max_total_drift`,
+    `min_module_floor`) uygun delta önerip versiyonu `1.x.0`'a bump
+    ediyor.
+  - `packages/learning/rebalance_store.py` — pending/approved/rejected
+    proposals + history (file-backed `data/runtime/rebalance.json`).
+  - `packages/data/registry/loader.py` — `load_active_weights()` +
+    `weights_manifest_path()` + `active_weights_version()`; consensus
+    engine artık aktif weights'i okuyor.
+  - Endpoints: `GET /api/v1/learning/rebalance/proposal`,
+    `POST /learning/rebalance/{propose,approve,reject}`.
+  - Approve → `config/weights_v1.x.yaml` + manifest günceller →
+    consensus yeni weights ile çalışır.
+- **DATA_POLICY uyumlu**: `Position.data_verified` ve `Trade.data_verified`
+  alanları eklendi; mock/data-unavailable trade'ler trainer dataset'ine
+  alınmaz; runtime mock kullanılmıyor.
+- `learning_worker` periyodik olarak `auto_weight_trainer.train()` çağırır,
+  yeterli veri varsa pending proposal yazar (active weights değiştirilmez).
+- Frontend yeni paneller: `WeightProposalPanel`, `WeightHistoryPanel`
+  (selector + panel-registry + page.tsx).
+- Pytest: **26/26** yeşil (8 yeni G2 testi: insufficient, propose/approve/
+  reject akışı, verified filter, consensus active weights).
 - Ruff (CI scope): yeşil.
 - Web build: CI'da doğrulanacak.
 
 ## Next task
 
-- **G2** — auto-weight trainer (bkz. `docs/ROADMAP.md`).
-- `.tasks/NEXT_TASK.md` G2 tanımı hazır.
+- **G6** — confidence calibration (Platt scaling tam entegrasyon)
+  veya **G3** — mistake memory gate (bkz. `docs/ROADMAP.md`).
+- `.tasks/NEXT_TASK.md` G6 için güncellenecek.

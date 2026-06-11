@@ -18,6 +18,7 @@ from apps.api.routers import (
     health,
     learning,
     paper_trading,
+    rebalance,
     regime_report,
 )
 
@@ -53,6 +54,7 @@ def create_app() -> FastAPI:
     app.include_router(paper_trading.router, prefix=prefix)
     app.include_router(learning.router, prefix=prefix)
     app.include_router(data.router, prefix=prefix)
+    app.include_router(rebalance.router, prefix=prefix)
     return app
 
 

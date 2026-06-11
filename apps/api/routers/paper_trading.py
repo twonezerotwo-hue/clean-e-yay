@@ -52,6 +52,7 @@ def post_paper_tick() -> dict:
     snap = get_cached_snapshot()
     # None fiyatlar lifecycle'a aktarılmaz; mock fiyat dağıtılmaz.
     prices = {q.symbol: q.price for q in snap.prices if q.price is not None}
+    verified_flags = {q.symbol: q.verified for q in snap.prices}
 
     # Önce mevcut pozisyonları fiyatla güncelle (SL/TP)
     closed = price_tick(ps, prices)
@@ -101,6 +102,7 @@ def post_paper_tick() -> dict:
             entry_price=price,
             size_multiplier=d.size_multiplier,
             fingerprint=fp,
+            data_verified=verified_flags.get(d.symbol, False),
         )
         actions.append({"symbol": d.symbol, "action": "open", "reason": d.reason})
 

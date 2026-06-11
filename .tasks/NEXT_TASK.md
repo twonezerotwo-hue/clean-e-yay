@@ -1,33 +1,30 @@
-# NEXT TASK — G2 Auto-Weight Trainer
+# NEXT TASK — G6 Confidence Calibration (Platt scaling tam entegrasyon)
 
-Consensus modül ağırlıklarını paper trading sonuçlarına göre öğren.
+`packages/learning/calibration.py` zaten Platt fit/apply içeriyor; bunu
+gerçek decision akışına ve dashboard'a tam bağla.
 
 ## Scope
 
-- `packages/learning/auto_weight_trainer.py`:
-  - Kapalı trade'leri fingerprint'e göre grupla.
-  - Modül × sonuç (win/loss/PnL) tablosundan modül başına performans
-    skoru üret.
-  - Mevcut `weights_v1.0.yaml`'a göre yeni `weights_v1.x.yaml` öner
-    (versiyon bump, audit notu).
-- `learning_worker` periyodik trainer çağrısı (her N trade veya günde
-  bir).
-- Owner approval mekanizması — `RebalanceProposal` dosyaya yazılır;
-  manuel `approve` olmadan canlı `weights` değiştirilmez.
-- `GET /api/v1/learning/rebalance/proposal` ve
-  `POST /api/v1/learning/rebalance/approve` endpoint'leri.
+- Karar engine her trade için `predicted_confidence` üretir (consensus
+  skor → logit → Platt). Bu değer Position/Trade'e kaydedilir.
+- Closed trade'lerden `[(predicted, won)]` örnekleri toplanır; periyodik
+  `fit_platt` ile (a, b) parametreleri öğrenilir.
+- Parametreler dosyaya yazılır: `data/runtime/platt.json`. Kararda
+  `apply_platt` ile düzeltilmiş confidence üretilir.
+- `/api/v1/learning/calibration` endpoint'i — `bins`, `(a,b)`, sample
+  count.
+- DATA_POLICY: yalnızca `data_verified=True` trade'ler örneklere alınır.
 
 ## Dashboard parallel visibility
 
-- `WeightProposalPanel` — bekleyen rebalance önerisi, modül delta'ları,
-  approve/reject aksiyonları (sadece görünüm, network çağrısı V2'de).
-- `WeightHistoryPanel` — versiyon zaman çizelgesi.
-- selector + panel-registry girişleri.
+- `CalibrationPanel` (varsa LearningPanel içinde) gerçek bin'leri ve (a,b)
+  parametrelerini gösterir; eski placeholder (0.5 baseline) kaldırılır.
 
 ## Rules
 
 - `PAPER_SAFE / NO_EXECUTION`
-- Owner approval olmadan ağırlık güncellemesi yok.
-- Decision / risk / paper paketlerinde redesign yok.
-- Test offline (mock paper state ile).
-- G1 tamamlanmış sayılır (real provider fallback davranışı stabil).
+- Decision threshold'larını gevşetme.
+- Owner approval rule sadece weights için; calibration parametreleri
+  workshop verisinden öğrenilir, ayrı bir approval gerektirmez (audit
+  trail tutulur).
+- Test offline: Trade örnekleri seed edilir.

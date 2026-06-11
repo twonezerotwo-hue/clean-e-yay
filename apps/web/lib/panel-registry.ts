@@ -23,7 +23,9 @@ export type PanelKey =
   | "data_quality"
   | "provider_status"
   | "snapshot"
-  | "market_data";
+  | "market_data"
+  | "weight_proposal"
+  | "weight_history";
 
 export type PanelMeta = {
   id: PanelKey;
@@ -55,4 +57,6 @@ export const PANEL_REGISTRY: PanelMeta[] = [
   { id: "provider_status",  title: "Sağlayıcı Durumu",     defaultVisible: true,  span: "1",    group: "data" },
   { id: "snapshot",         title: "Snapshot",             defaultVisible: true,  span: "1",    group: "data" },
   { id: "market_data",      title: "Piyasa Verisi",        defaultVisible: true,  span: "2",    group: "data" },
+  { id: "weight_proposal",  title: "Ağırlık Önerisi",      defaultVisible: true,  span: "2",    group: "learning" },
+  { id: "weight_history",   title: "Ağırlık Geçmişi",      defaultVisible: true,  span: "1",    group: "learning" },
 ];
