@@ -26,4 +26,10 @@
   filter eder; MIN_SAMPLES=10 altında identity. New endpoints
   /learning/calibration[/retrain] + CalibrationPanel. 36/36 pytest,
   ruff green.
-- Next task → G3 mistake memory gate or G4 correlation-aware sizing.
+- G3 completed: mistake memory gate. verified+fingerprint'li closed
+  trade'lerden AVOID/BOOST/WARNING/NEUTRAL verdict; decision engine
+  consensus eşiği aşıldıktan sonra applies; RiskGate hard gate'leri
+  bypass etmez (KILL_SWITCH > BOOST, DQS BLOCKED > BOOST). Yeni
+  endpoint /learning/mistakes + MistakeMemoryPanel. 47/47 pytest,
+  ruff green.
+- Next task → G4 correlation-aware sizing or G5 daily-loss/max-DD halt.

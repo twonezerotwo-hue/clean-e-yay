@@ -1,4 +1,4 @@
-"""GET /api/v1/learning/{summary, calibration}
+"""GET /api/v1/learning/{summary, calibration, mistakes}
 POST /api/v1/learning/calibration/retrain
 """
 from __future__ import annotations
@@ -7,7 +7,7 @@ from dataclasses import asdict
 
 from fastapi import APIRouter
 
-from packages.learning import calibration_store, calibration_trainer
+from packages.learning import calibration_store, calibration_trainer, mistake_memory
 from packages.learning.calibration import reliability_bins
 from packages.learning.summary import build_summary
 from packages.paper import state as paper_state
@@ -44,3 +44,30 @@ def get_calibration() -> dict:
 @router.post("/learning/calibration/retrain")
 def post_retrain_calibration() -> dict:
     return calibration_trainer.train()
+
+
+@router.get("/learning/mistakes")
+def get_mistakes() -> dict:
+    mems = mistake_memory.summary()
+    items = [asdict(m) for m in mems]
+    # Verdict listesi (her fingerprint için)
+    verdicts = []
+    for m in mems:
+        v = mistake_memory._verdict_for(m, m.fingerprint)
+        verdicts.append(
+            {
+                "fingerprint": m.fingerprint,
+                "action": v.action,
+                "reason": v.reason,
+                "size_factor": v.size_factor,
+                "evidence": list(v.evidence),
+            }
+        )
+    flagged = [v for v in verdicts if v["action"] in {"AVOID", "BOOST", "WARNING"}]
+    return {
+        "thresholds": mistake_memory.thresholds(),
+        "records": items,
+        "verdicts": verdicts,
+        "flagged_count": len(flagged),
+        "total_fingerprints": len(items),
+    }

@@ -70,3 +70,11 @@ export const useCalibration = () =>
     staleTime: 60_000,
     refetchInterval: 5 * 60_000,
   });
+
+export const useMistakes = () =>
+  useQuery({
+    queryKey: qk.mistakes,
+    queryFn: api.mistakes,
+    staleTime: 60_000,
+    refetchInterval: 2 * 60_000,
+  });

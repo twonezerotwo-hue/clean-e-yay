@@ -1,62 +1,54 @@
 # TASK RESULT
 
 Date: 2026-06-11
-Task: G6 — Confidence Calibration (Platt scaling tam entegrasyon)
+Task: G3 — Mistake Memory Gate (no RiskGate bypass)
 Status: completed
 
 ## Files changed
 
 Backend
-- `packages/learning/calibration_store.py` (new) — Platt params file store
-  (a, b, samples, fitted_at, status); `predict_calibrated()` +
-  `raw_confidence_from_score()`. Identity default, no live calibration
-  bypass.
-- `packages/learning/calibration_trainer.py` (new) — train() reads paper
-  state, filters `data_verified=True` and `predicted_confidence is not
-  None`, requires `MIN_SAMPLES=10`, writes params + reliability bins.
-- `packages/decision/engine.py` — TradeDecision now carries
-  `raw_confidence` + `confidence_source`. Calibrated `confidence` (cal_p)
-  used for sizing/info only. **RiskGate hard gates run BEFORE consensus
-  thresholds:** KILL_SWITCH→blocked (conf=0); RISK_REDUCE/NO_POSITION_
-  INCREASE→hold (conf=0). Consensus eşiği aşılmadığında neutral fallback.
-- `packages/paper/state.py` + `packages/paper/lifecycle.py` —
-  Position/Trade get `predicted_confidence/raw_confidence/confidence_source`.
+- `packages/learning/mistake_memory.py` (new) — Mistake / MistakeVerdict
+  dataclasses; `summary()` aggregates verified+fingerprint'li closed
+  trades; `evaluate()` returns AVOID / BOOST / WARNING / NEUTRAL with
+  size_factor. `MIN_TRADES=3` fallback → NEUTRAL.
+- `packages/decision/engine.py` — TradeDecision now carries `fingerprint`
+  and `mistake_verdict`. After consensus thresholds pass, mistake memory
+  is consulted: AVOID → hold; BOOST/WARNING → size_factor multiplier
+  (size capped at 1.5). **RiskGate hard gates run first**; KILL_SWITCH,
+  RISK_REDUCE, NO_POSITION_INCREASE override mistake memory.
 - `apps/api/routers/learning.py` — added
-  `GET /api/v1/learning/calibration`,
-  `POST /api/v1/learning/calibration/retrain`.
-- `apps/api/routers/paper_trading.py` + `apps/tick_worker/main.py` —
-  pass calibration trio from TradeDecision to open_position.
-- `apps/learning_worker/main.py` — calls calibration trainer before
-  auto-weight trainer.
-- `packages/learning/summary.py` — replaced 0.5 placeholder with real
-  `predicted_confidence` samples (verified filter).
+  `GET /api/v1/learning/mistakes` (records + verdicts + thresholds +
+  flagged_count + total_fingerprints).
 
 Frontend
-- `apps/web/types/generated/api.ts` — CalibrationParams + CalibrationState.
+- `apps/web/types/generated/api.ts` — MistakeAction / MistakeRecord /
+  MistakeVerdict / MistakesState.
 - `apps/web/lib/api/client.ts` + `lib/queries/{keys,hooks}.ts` —
-  `api.calibration` + `useCalibration`.
-- `apps/web/components/panels/CalibrationPanel/index.tsx` (new) — status
-  chip, (a, b), last fit, reliability grid (uses existing
-  CalibrationGrid chart).
-- `apps/web/lib/panel-registry.ts` — calibration entry (learning group).
+  `api.mistakes` + `useMistakes`.
+- `apps/web/lib/selectors/mistakes.ts` (new).
+- `apps/web/components/panels/MistakeMemoryPanel/index.tsx` (new) —
+  flagged fingerprints + action badge + reason + size×factor + record
+  stats (trades / win_rate / total_pnl / streak / last_seen).
+- `apps/web/lib/panel-registry.ts` — mistake_memory entry (learning group).
 - `apps/web/app/page.tsx` — grid cell.
 
 Tests
-- `tests/unit/test_calibration.py` (new, 10 tests):
-  - predict identity by default.
-  - trainer INSUFFICIENT below MIN_SAMPLES; identity-store wrote.
-  - trainer FITTED with sufficient samples; a>0; calibrated p>0.5 for
-    high raw.
-  - unverified or missing-predicted records excluded.
-  - **KILL_SWITCH/RISK_REDUCE not bypassed** by high calibration.
-  - TradeDecision carries raw_confidence + confidence_source.
-  - GET /learning/calibration returns state.
-  - POST /learning/calibration/retrain returns FITTED.
-  - DQS BLOCKED → all decisions "blocked" even with calibration high.
+- `tests/unit/test_mistake_memory.py` (new, 11 tests):
+  - summary skips unverified + missing-fp.
+  - evaluate NEUTRAL below MIN_TRADES.
+  - evaluate AVOID for low win_rate.
+  - evaluate BOOST for high win_rate.
+  - evaluate WARNING for marginal win_rate (no streak).
+  - evaluate AVOID for streak ≥ STREAK_AVOID.
+  - decision AVOID → hold (forced strong-bullish consensus path).
+  - **KILL_SWITCH beats BOOST**.
+  - **RISK_REDUCE beats BOOST**.
+  - **DQS BLOCKED → blocked even with forced BOOST**.
+  - endpoint returns records + verdicts + thresholds.
 
 ## Tests run
 
-- `pytest -q` → 36/36 passed (10 new G6 + 26 prior).
+- `pytest -q` → 47/47 passed (11 new G3 + 36 prior).
 - `ruff check packages apps/api apps/tick_worker apps/learning_worker`
   → All checks passed.
 
@@ -66,13 +58,13 @@ passed
 
 ## Notes
 
-- Calibration is informational/sizing-only; **never** loosens RiskGate.
-- Insufficient data path keeps identity (a=1, b=0); confidence_source
-  damgalanır ki dashboard kullanıcıyı uyarsın.
-- Owner approval calibration için gerekmez (audit: params + fitted_at +
-  status + samples).
+- Mistake memory is informational/sizing-only; **never** loosens RiskGate
+  or hard gates.
+- NEUTRAL fallback: size_factor=1.0; AVOID size_factor=0.0; BOOST=1.2;
+  WARNING=0.7.
+- Decision engine size_multiplier final capped at [0, 1.5] post-factor.
 - Lokal `node`/`pnpm` yok → `next build` CI'da doğrulanacak.
 
 ## Next
 
-- G3 — mistake memory gate veya G4 — correlation-aware sizing.
+- G4 — correlation-aware sizing veya G5 — daily-loss / max-DD halt.

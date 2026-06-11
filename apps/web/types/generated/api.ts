@@ -296,3 +296,32 @@ export type CalibrationState = {
   samples_in_state: number;
   bins: CalibrationBin[];
 };
+
+export type MistakeAction = "NEUTRAL" | "AVOID" | "BOOST" | "WARNING";
+
+export type MistakeRecord = {
+  fingerprint: string;
+  trades: number;
+  wins: number;
+  losses: number;
+  win_rate: number;
+  total_pnl: number;
+  last_seen_at: string | null;
+  streak_losses: number;
+};
+
+export type MistakeVerdict = {
+  fingerprint: string;
+  action: MistakeAction;
+  reason: string;
+  size_factor: number;
+  evidence: string[];
+};
+
+export type MistakesState = {
+  thresholds: Record<string, number>;
+  records: MistakeRecord[];
+  verdicts: MistakeVerdict[];
+  flagged_count: number;
+  total_fingerprints: number;
+};

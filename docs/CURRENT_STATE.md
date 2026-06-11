@@ -4,35 +4,33 @@ _Bu dosya kısa ve güncel tutulur. Her görev sonunda güncellenir._
 
 ## Last known status
 
-- **G6 tamamlandı**: confidence calibration tam entegrasyon.
-  - `packages/learning/calibration_store.py` — file-backed Platt (a, b)
-    parametreleri; `predict_calibrated(raw_p)` → `(cal_p, source)`.
-    Yetersiz veride identity döner.
-  - `packages/learning/calibration_trainer.py` — sadece
-    `data_verified=True` ve `predicted_confidence is not None` örnekleri
-    kullanır; `MIN_SAMPLES=10` altında insufficient.
-  - `packages/decision/engine.py` — her `TradeDecision` artık
-    `confidence` (calibrated), `raw_confidence`, `confidence_source`
-    taşır. **Calibrated confidence RiskGate'i bypass etmez** —
-    KILL_SWITCH/RISK_REDUCE/NO_POSITION_INCREASE hard gate'ler önce
-    çalışır; DQS < 55 zaten KILL_SWITCH üretir.
-  - `Position`/`Trade` predicted/raw/source alanlarını taşır; open call
-    site'ları (paper router + tick_worker) decision'dan geçirir.
-  - Endpoints: `GET /api/v1/learning/calibration`,
-    `POST /api/v1/learning/calibration/retrain`.
-  - `learning_worker.run_once` calibration trainer'ı çağırır
-    (auto-weight'ten önce).
-  - `learning/summary.py` — 0.5 placeholder kaldırıldı; gerçek
-    `predicted_confidence` örnekleri kullanılıyor (verified filter).
-- Frontend: `CalibrationPanel` (Platt a/b + reliability bins + status)
-  selector/registry/page'e bağlandı.
-- Pytest: **36/36** yeşil (10 yeni G6 testi: insufficient/fit, verified
-  filter, RiskGate bypass yok, DQS BLOCKED → trade yok).
+- **G3 tamamlandı**: mistake memory gate — sadece avoid/boost/warning/
+  size_adjust üretir.
+  - `packages/learning/mistake_memory.py` — verified+fingerprint'li
+    closed trade'leri toplar; `Mistake` records + `MistakeVerdict`
+    (AVOID / BOOST / WARNING / NEUTRAL).
+  - Threshold'lar: `MIN_TRADES=3`, `AVOID_WIN_RATE=0.35`,
+    `BOOST_WIN_RATE=0.65`, `WARNING_WIN_RATE=0.50`, `STREAK_AVOID=3`.
+  - Size factor: AVOID=0.0 (hold), WARNING=0.7, NEUTRAL=1.0, BOOST=1.2.
+  - `MIN_TRADES` altında → NEUTRAL (no_adjustment) fallback.
+  - `packages/decision/engine.py` — consensus eşiği aşıldıktan sonra
+    `evaluate(fp)` çağrılır. AVOID → hold; BOOST/WARNING → size×factor
+    (1.5 cap'i korunur). TradeDecision `fingerprint` + `mistake_verdict`
+    taşır.
+  - **Hard kural**: mistake memory **RiskGate'i bypass etmez**.
+    KILL_SWITCH→blocked, RISK_REDUCE/NO_POSITION_INCREASE→hold; DQS<55
+    BLOCKED → trade yok (BOOST olsa bile).
+  - `GET /api/v1/learning/mistakes` — kayıtlar + verdict'ler + threshold.
+- **Frontend**: `MistakeMemoryPanel` — flagged fingerprint'ler + verdict
+  + size adjustment + win_rate/streak/last_seen.
+- Pytest: **47/47** yeşil (11 yeni G3 testi: aggregate, NEUTRAL/AVOID/
+  BOOST/WARNING/streak, decision AVOID→hold, KILL_SWITCH/RISK_REDUCE
+  bypass yok, DQS BLOCKED bypass yok, endpoint 200).
 - Ruff (CI scope): yeşil.
 - Web build: CI'da doğrulanacak.
 
 ## Next task
 
-- **G3** — mistake memory gate veya **G4** — correlation-aware sizing
+- **G4** — correlation-aware sizing veya **G5** — daily-loss / max-DD halt
   (bkz. `docs/ROADMAP.md`).
-- `.tasks/NEXT_TASK.md` G3 için güncellenecek.
+- `.tasks/NEXT_TASK.md` güncellendi (G4).

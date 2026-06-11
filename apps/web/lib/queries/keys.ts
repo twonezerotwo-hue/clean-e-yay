@@ -8,4 +8,5 @@ export const qk = {
   dataSnapshot: ["data", "snapshot"] as const,
   rebalanceProposal: ["learning", "rebalance"] as const,
   calibration: ["learning", "calibration"] as const,
+  mistakes: ["learning", "mistakes"] as const,
 };

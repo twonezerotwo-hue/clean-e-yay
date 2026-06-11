@@ -9,6 +9,7 @@ import type {
   DataSnapshot,
   Health,
   LearningSummary,
+  MistakesState,
   PaperTradingState,
   RebalanceState,
   RegimeReport,
@@ -46,4 +47,5 @@ export const api = {
     fetchJSON<RebalanceState>("/api/v1/learning/rebalance/proposal"),
   calibration: () =>
     fetchJSON<CalibrationState>("/api/v1/learning/calibration"),
+  mistakes: () => fetchJSON<MistakesState>("/api/v1/learning/mistakes"),
 };

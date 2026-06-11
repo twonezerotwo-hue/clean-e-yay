@@ -1,28 +1,32 @@
-# NEXT TASK — G3 Mistake Memory Gate
+# NEXT TASK — G4 Correlation-Aware Sizing
 
-Geçmişte tekrarlanan kayıp paterni yeni kararı engellesin.
+Aynı yöne çok korelasyonlu varlıkları aynı anda büyük boyutla açma.
 
 ## Scope
 
-- `packages/learning/mistake_memory.py`:
-  - `Mistake` kaydı: `fingerprint`, `streak_losses`, `total_pnl`,
-    `last_seen_at`.
-  - Closed verified trade'lerden fingerprint başına aggregate.
-  - Streak ≥ N veya win_rate < threshold → AVOID seviyesinde flag.
-- Decision engine'de filter:
-  - Aday TradeDecision için `fingerprint` üret (aynı `make_fingerprint`
-    fonksiyonu).
-  - Mistake memory `should_avoid(fp)` derse `action="blocked"` reason
-    `"mistake_memory:<fp>"`.
-- **Önemli**: mistake memory **RiskGate'i bypass etmez**; sadece olası
-  trade'i bloklar. KILL_SWITCH/RISK_REDUCE zaten kazanır.
-- DATA_POLICY: yalnızca `data_verified=True` kayıtlar memory'ye girer.
-- `/api/v1/learning/mistakes` endpoint — flagged fingerprint listesi.
-- Dashboard `MistakeMemoryPanel` — flagged fingerprint'ler + sebep.
+- `packages/risk/correlation.py` (yeni):
+  - Closed trade verisinden (PnL serisi) sembol başına 30g rolling
+    pencerede pairwise korelasyon hesapla; veri yetersiz olduğunda
+    deterministic baseline kullan (örnek: BTC↔ETH=0.75, BTC↔QQQ=0.6,
+    XAU↔DXY=-0.65 vs. — config'ten).
+  - `cluster_exposure(open_positions, candidate) -> ClusterReport`:
+    aynı yön + |ρ| > threshold pozisyonların toplam %equity'sini
+    hesapla. Threshold thresholds.yaml `correlation_threshold` (mevcut).
+- `packages/decision/engine.py`:
+  - Aday open_long/open_short için cluster_exposure → eğer toplam ≥
+    `max_cluster_pct` (örn. 0.30) → size_multiplier düşür veya 0.
+  - Verdict TradeDecision'a `cluster_report` damgalı.
+- **Hard kural**: correlation-aware sizing **RiskGate'i bypass etmez**.
+  Sadece size küçültür; KILL_SWITCH/RISK_REDUCE her zaman önce çalışır.
+  DQS BLOCKED → trade yok.
+- Az veri varsa baseline + log uyarı (insufficient_correlation_data),
+  size adjustment uygulanmaz (neutral fallback).
+- `GET /api/v1/risk/correlation` endpoint: matris + cluster exposure.
+- Dashboard `CorrelationPanel`: matrix heatmap (basit grid) + uyarı.
 
 ## Rules
 
 - `PAPER_SAFE / NO_EXECUTION`
 - Decision/risk threshold'larını gevşetme.
-- Sadece eklemeli filter; başka politikaları zayıflatma.
+- DATA_POLICY: only verified trade PnL'leri korelasyon için kullanılır.
 - Test offline (mock paper state seed).
