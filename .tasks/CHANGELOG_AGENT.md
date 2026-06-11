@@ -20,4 +20,10 @@
   Approve writes weights_v1.x.yaml + manifest, consensus reads via
   load_active_weights(). 2 dashboard panels (WeightProposal,
   WeightHistory). 26/26 pytest, ruff green.
-- Next task → G6 confidence calibration or G3 mistake memory gate.
+- G6 completed: confidence calibration tam entegrasyon. Decision engine
+  raw → Platt-calibrated p(win) üretir; RiskGate'i bypass etmez.
+  Position/Trade calibration trio taşır; trainer verified+predicted
+  filter eder; MIN_SAMPLES=10 altında identity. New endpoints
+  /learning/calibration[/retrain] + CalibrationPanel. 36/36 pytest,
+  ruff green.
+- Next task → G3 mistake memory gate or G4 correlation-aware sizing.

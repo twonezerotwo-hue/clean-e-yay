@@ -41,6 +41,9 @@ def open_position(
     size_multiplier: float,
     fingerprint: str | None = None,
     data_verified: bool = False,
+    predicted_confidence: float | None = None,
+    raw_confidence: float | None = None,
+    confidence_source: str | None = None,
 ) -> Position:
     sl_pct = _sl_pct_for(symbol)
     tp_pct = sl_pct * _tp_rr()
@@ -60,6 +63,9 @@ def open_position(
         opened_at=opened_at,
         fingerprint=fingerprint,
         data_verified=bool(data_verified),
+        predicted_confidence=predicted_confidence,
+        raw_confidence=raw_confidence,
+        confidence_source=confidence_source,
     )
     state.open_positions.append(pos)
     return pos
@@ -83,6 +89,9 @@ def close_position(state: PaperState, pos: Position, *, exit_price: float, reaso
         close_reason=reason,
         fingerprint=pos.fingerprint,
         data_verified=pos.data_verified,
+        predicted_confidence=pos.predicted_confidence,
+        raw_confidence=pos.raw_confidence,
+        confidence_source=pos.confidence_source,
     )
     state.recent_trades.append(trade)
     state.open_positions = [p for p in state.open_positions if p.id != pos.id]

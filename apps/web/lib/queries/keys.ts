@@ -7,4 +7,5 @@ export const qk = {
   learningSummary: ["learning", "summary"] as const,
   dataSnapshot: ["data", "snapshot"] as const,
   rebalanceProposal: ["learning", "rebalance"] as const,
+  calibration: ["learning", "calibration"] as const,
 };

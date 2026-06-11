@@ -1,60 +1,62 @@
 # TASK RESULT
 
 Date: 2026-06-11
-Task: G2 — Auto-Weight Trainer + Owner-Approved Rebalance
+Task: G6 — Confidence Calibration (Platt scaling tam entegrasyon)
 Status: completed
 
 ## Files changed
 
 Backend
-- `packages/paper/state.py` — Position/Trade `data_verified: bool` flag.
-- `packages/paper/lifecycle.py` — `open_position(..., data_verified)`;
-  close transfers flag.
-- `apps/api/routers/paper_trading.py` — `verified_flags` from snapshot,
-  passed into open.
-- `apps/tick_worker/main.py` — same wiring.
-- `packages/data/registry/loader.py` — `load_active_weights()`,
-  `weights_manifest_path()`, `active_weights_version()` (no cache).
-- `packages/consensus/engine.py` — uses `load_active_weights()`.
-- `packages/learning/auto_weight_trainer.py` (new) — `train()`,
-  `proposal_to_dict()`, RebalanceProposal/ModulePerf/WeightDelta dataclasses.
-  Filters non-verified trades; respects YAML constraints; bumps version.
-- `packages/learning/rebalance_store.py` (new) — file-backed proposal
-  store (pending/history); `approve_current()` writes new YAML + manifest;
-  `reject_current()` archives.
-- `apps/api/routers/rebalance.py` (new) — propose/proposal/approve/reject
-  endpoints.
-- `apps/api/main.py` — wire rebalance router.
-- `apps/learning_worker/main.py` — calls `trainer.train()` after summary;
-  writes pending proposal when eligible.
+- `packages/learning/calibration_store.py` (new) — Platt params file store
+  (a, b, samples, fitted_at, status); `predict_calibrated()` +
+  `raw_confidence_from_score()`. Identity default, no live calibration
+  bypass.
+- `packages/learning/calibration_trainer.py` (new) — train() reads paper
+  state, filters `data_verified=True` and `predicted_confidence is not
+  None`, requires `MIN_SAMPLES=10`, writes params + reliability bins.
+- `packages/decision/engine.py` — TradeDecision now carries
+  `raw_confidence` + `confidence_source`. Calibrated `confidence` (cal_p)
+  used for sizing/info only. **RiskGate hard gates run BEFORE consensus
+  thresholds:** KILL_SWITCH→blocked (conf=0); RISK_REDUCE/NO_POSITION_
+  INCREASE→hold (conf=0). Consensus eşiği aşılmadığında neutral fallback.
+- `packages/paper/state.py` + `packages/paper/lifecycle.py` —
+  Position/Trade get `predicted_confidence/raw_confidence/confidence_source`.
+- `apps/api/routers/learning.py` — added
+  `GET /api/v1/learning/calibration`,
+  `POST /api/v1/learning/calibration/retrain`.
+- `apps/api/routers/paper_trading.py` + `apps/tick_worker/main.py` —
+  pass calibration trio from TradeDecision to open_position.
+- `apps/learning_worker/main.py` — calls calibration trainer before
+  auto-weight trainer.
+- `packages/learning/summary.py` — replaced 0.5 placeholder with real
+  `predicted_confidence` samples (verified filter).
 
 Frontend
-- `apps/web/types/generated/api.ts` — WeightDelta, ModulePerf,
-  RebalanceProposalRecord, RebalanceState, ProposalStatus.
+- `apps/web/types/generated/api.ts` — CalibrationParams + CalibrationState.
 - `apps/web/lib/api/client.ts` + `lib/queries/{keys,hooks}.ts` —
-  `api.rebalanceProposal` + `useRebalanceProposal`.
-- `apps/web/lib/selectors/rebalance.ts` (new).
-- `apps/web/components/panels/WeightProposalPanel/index.tsx` (new) —
-  active version → proposed version, top delta'lar, audit_note;
-  "owner approval bekliyor" badge.
-- `apps/web/components/panels/WeightHistoryPanel/index.tsx` (new) —
-  history timeline.
-- `apps/web/lib/panel-registry.ts` — 2 yeni giriş (learning group).
-- `apps/web/app/page.tsx` — 2 yeni GridCell.
+  `api.calibration` + `useCalibration`.
+- `apps/web/components/panels/CalibrationPanel/index.tsx` (new) — status
+  chip, (a, b), last fit, reliability grid (uses existing
+  CalibrationGrid chart).
+- `apps/web/lib/panel-registry.ts` — calibration entry (learning group).
+- `apps/web/app/page.tsx` — grid cell.
 
 Tests
-- `tests/unit/test_rebalance.py` (new, 8 tests):
-  - INSUFFICIENT: no_verified_trades, below_min_total.
-  - Proposal emit + normalized weights.
-  - Unverified records excluded; rejected_records count correct.
-  - Propose → approve → manifest yazar, active_weights_version yeni.
-  - Reject pending'i siler, baseline'a düşer.
-  - active_weights baseline fallback (manifest yok).
-  - consensus active weights üzerinden çalışır.
+- `tests/unit/test_calibration.py` (new, 10 tests):
+  - predict identity by default.
+  - trainer INSUFFICIENT below MIN_SAMPLES; identity-store wrote.
+  - trainer FITTED with sufficient samples; a>0; calibrated p>0.5 for
+    high raw.
+  - unverified or missing-predicted records excluded.
+  - **KILL_SWITCH/RISK_REDUCE not bypassed** by high calibration.
+  - TradeDecision carries raw_confidence + confidence_source.
+  - GET /learning/calibration returns state.
+  - POST /learning/calibration/retrain returns FITTED.
+  - DQS BLOCKED → all decisions "blocked" even with calibration high.
 
 ## Tests run
 
-- `pytest -q` → 26/26 passed (8 new G2 + 18 prior).
+- `pytest -q` → 36/36 passed (10 new G6 + 26 prior).
 - `ruff check packages apps/api apps/tick_worker apps/learning_worker`
   → All checks passed.
 
@@ -64,14 +66,13 @@ passed
 
 ## Notes
 
-- Owner approval mantığı: pending proposal yazılır; consensus baseline
-  okur. Yalnızca `POST /learning/rebalance/approve` çağrısı yeni yaml +
-  manifest yazar → consensus o anda yeni weights'e geçer.
-- Trainer constraint'lere uyar: `max_delta_per_module=0.03`,
-  `max_total_drift=0.10`, `min_module_floor=0.02`.
+- Calibration is informational/sizing-only; **never** loosens RiskGate.
+- Insufficient data path keeps identity (a=1, b=0); confidence_source
+  damgalanır ki dashboard kullanıcıyı uyarsın.
+- Owner approval calibration için gerekmez (audit: params + fitted_at +
+  status + samples).
 - Lokal `node`/`pnpm` yok → `next build` CI'da doğrulanacak.
 
 ## Next
 
-- G6 — confidence calibration (Platt scaling tam entegrasyon)
-  veya G3 — mistake memory gate.
+- G3 — mistake memory gate veya G4 — correlation-aware sizing.

@@ -62,3 +62,11 @@ export const useRebalanceProposal = () =>
     staleTime: 60_000,
     refetchInterval: 60_000,
   });
+
+export const useCalibration = () =>
+  useQuery({
+    queryKey: qk.calibration,
+    queryFn: api.calibration,
+    staleTime: 60_000,
+    refetchInterval: 5 * 60_000,
+  });

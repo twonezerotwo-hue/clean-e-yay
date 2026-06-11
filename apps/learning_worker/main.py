@@ -11,7 +11,7 @@ import os
 from pathlib import Path
 
 from packages.learning import auto_weight_trainer as trainer
-from packages.learning import rebalance_store
+from packages.learning import calibration_trainer, rebalance_store
 from packages.learning.summary import build_summary
 
 log = logging.getLogger("learning_worker")
@@ -29,6 +29,10 @@ def run_once() -> dict:
         summary["win_rate"],
         summary.get("sharpe"),
     )
+
+    # G6: confidence calibration. Yetersiz veri → identity (a=1, b=0).
+    cal = calibration_trainer.train()
+    log.info("calibration: %s n=%s", cal["status"], cal["samples"])
 
     # G2: auto-weight trainer. Yeterli veri varsa pending proposal güncellenir;
     # active weights değişmez — owner approval gerekir.

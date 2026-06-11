@@ -4,6 +4,7 @@
  */
 import type {
   AIReport,
+  CalibrationState,
   DashboardState,
   DataSnapshot,
   Health,
@@ -43,4 +44,6 @@ export const api = {
   dataSnapshot: () => fetchJSON<DataSnapshot>("/api/v1/data/snapshot"),
   rebalanceProposal: () =>
     fetchJSON<RebalanceState>("/api/v1/learning/rebalance/proposal"),
+  calibration: () =>
+    fetchJSON<CalibrationState>("/api/v1/learning/calibration"),
 };

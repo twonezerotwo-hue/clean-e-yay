@@ -80,6 +80,9 @@ async def run_once() -> None:
             size_multiplier=d.size_multiplier,
             fingerprint=fp,
             data_verified=verified_flags.get(d.symbol, False),
+            predicted_confidence=d.confidence,
+            raw_confidence=d.raw_confidence,
+            confidence_source=d.confidence_source,
         )
         log.info("open: %s %s @ %.4f size=%.0f", pos.symbol, pos.side, pos.entry_price, pos.size_usd)
 

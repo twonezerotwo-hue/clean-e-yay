@@ -29,6 +29,9 @@ class Position:
     opened_at: str
     fingerprint: str | None = None
     data_verified: bool = False  # quote.verified at open; learning filters non-verified
+    predicted_confidence: float | None = None  # calibrated p(win) at open
+    raw_confidence: float | None = None        # pre-calibration p(win)
+    confidence_source: str | None = None       # identity | fitted | insufficient
 
     @property
     def unrealized_pnl_usd(self) -> float:
@@ -50,6 +53,9 @@ class Trade:
     close_reason: str
     fingerprint: str | None = None
     data_verified: bool = False  # mirrors Position; learning trainer filters
+    predicted_confidence: float | None = None
+    raw_confidence: float | None = None
+    confidence_source: str | None = None
 
 
 @dataclass

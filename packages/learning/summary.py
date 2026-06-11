@@ -23,9 +23,15 @@ def build_summary() -> dict:
         sd = var**0.5 if var > 0 else 0.0
         sharpe = round((mean / sd) * (252**0.5), 3) if sd > 0 else 0.0
 
-    # Kalibrasyon: predicted (0..1) yaklaşımı = |consensus_skor - 50| / 50
-    # Trade'e kadar saklanan confidence yoksa pnl-based 0.5 baseline.
-    samples = [(0.5, t.pnl_usd > 0) for t in trades]
+    # G6: gerçek predicted_confidence (verified trade'lerden). Placeholder
+    # 0.5 baseline'ı kaldırıldı — DATA_POLICY: verified+predicted'a sahip
+    # trade'ler örneklere alınır.
+    samples = [
+        (float(t.predicted_confidence), t.pnl_usd > 0)
+        for t in trades
+        if getattr(t, "data_verified", False)
+        and getattr(t, "predicted_confidence", None) is not None
+    ]
     bins = [asdict(b) for b in reliability_bins(samples, n_bins=5)]
 
     wf = wf_summarize(pnls)

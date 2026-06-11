@@ -1,30 +1,28 @@
-# NEXT TASK — G6 Confidence Calibration (Platt scaling tam entegrasyon)
+# NEXT TASK — G3 Mistake Memory Gate
 
-`packages/learning/calibration.py` zaten Platt fit/apply içeriyor; bunu
-gerçek decision akışına ve dashboard'a tam bağla.
+Geçmişte tekrarlanan kayıp paterni yeni kararı engellesin.
 
 ## Scope
 
-- Karar engine her trade için `predicted_confidence` üretir (consensus
-  skor → logit → Platt). Bu değer Position/Trade'e kaydedilir.
-- Closed trade'lerden `[(predicted, won)]` örnekleri toplanır; periyodik
-  `fit_platt` ile (a, b) parametreleri öğrenilir.
-- Parametreler dosyaya yazılır: `data/runtime/platt.json`. Kararda
-  `apply_platt` ile düzeltilmiş confidence üretilir.
-- `/api/v1/learning/calibration` endpoint'i — `bins`, `(a,b)`, sample
-  count.
-- DATA_POLICY: yalnızca `data_verified=True` trade'ler örneklere alınır.
-
-## Dashboard parallel visibility
-
-- `CalibrationPanel` (varsa LearningPanel içinde) gerçek bin'leri ve (a,b)
-  parametrelerini gösterir; eski placeholder (0.5 baseline) kaldırılır.
+- `packages/learning/mistake_memory.py`:
+  - `Mistake` kaydı: `fingerprint`, `streak_losses`, `total_pnl`,
+    `last_seen_at`.
+  - Closed verified trade'lerden fingerprint başına aggregate.
+  - Streak ≥ N veya win_rate < threshold → AVOID seviyesinde flag.
+- Decision engine'de filter:
+  - Aday TradeDecision için `fingerprint` üret (aynı `make_fingerprint`
+    fonksiyonu).
+  - Mistake memory `should_avoid(fp)` derse `action="blocked"` reason
+    `"mistake_memory:<fp>"`.
+- **Önemli**: mistake memory **RiskGate'i bypass etmez**; sadece olası
+  trade'i bloklar. KILL_SWITCH/RISK_REDUCE zaten kazanır.
+- DATA_POLICY: yalnızca `data_verified=True` kayıtlar memory'ye girer.
+- `/api/v1/learning/mistakes` endpoint — flagged fingerprint listesi.
+- Dashboard `MistakeMemoryPanel` — flagged fingerprint'ler + sebep.
 
 ## Rules
 
 - `PAPER_SAFE / NO_EXECUTION`
-- Decision threshold'larını gevşetme.
-- Owner approval rule sadece weights için; calibration parametreleri
-  workshop verisinden öğrenilir, ayrı bir approval gerektirmez (audit
-  trail tutulur).
-- Test offline: Trade örnekleri seed edilir.
+- Decision/risk threshold'larını gevşetme.
+- Sadece eklemeli filter; başka politikaları zayıflatma.
+- Test offline (mock paper state seed).

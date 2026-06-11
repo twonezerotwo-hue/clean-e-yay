@@ -27,6 +27,7 @@ import { SnapshotPanel } from "@/components/panels/SnapshotPanel";
 import { MarketDataPanel } from "@/components/panels/MarketDataPanel";
 import { WeightProposalPanel } from "@/components/panels/WeightProposalPanel";
 import { WeightHistoryPanel } from "@/components/panels/WeightHistoryPanel";
+import { CalibrationPanel } from "@/components/panels/CalibrationPanel";
 
 import { useKeyboardShortcuts } from "@/hooks/useKeyboardShortcuts";
 
@@ -89,6 +90,8 @@ export default function HomePage() {
 
         <GridCell span="2"><WeightProposalPanel /></GridCell>
         <GridCell span="1"><WeightHistoryPanel /></GridCell>
+
+        <GridCell span="2"><CalibrationPanel /></GridCell>
 
         <GridCell span="full"><SystemHealthBar /></GridCell>
       </DashboardGrid>

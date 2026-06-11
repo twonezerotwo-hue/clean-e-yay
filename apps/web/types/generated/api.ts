@@ -281,3 +281,18 @@ export type RebalanceState = {
   current: RebalanceProposalRecord | null;
   history: RebalanceProposalRecord[];
 };
+
+export type CalibrationParams = {
+  a: number;
+  b: number;
+  samples: number;
+  fitted_at: string | null;
+  status: "identity" | "fitted" | "insufficient";
+};
+
+export type CalibrationState = {
+  params: CalibrationParams;
+  min_required: number;
+  samples_in_state: number;
+  bins: CalibrationBin[];
+};
