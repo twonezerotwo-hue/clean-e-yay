@@ -49,3 +49,11 @@
   TradingPanel cluster satırları. 72/72 pytest, ruff + tsc + build yeşil;
   SSR'de 26 panel doğrulandı.
 - Next task → G5 daily-loss / max-DD halt.
+- G5 completed: daily-loss / max-DD halt. File-backed halt store
+  (RISK_HALT_PATH); breach tick'te persist; DAILY_LOSS→KILL_SWITCH
+  (flatten KILL_SWITCH_EXIT), MAX_DRAWDOWN→RISK_REDUCE (yeni açılış yok);
+  otomatik reset yok, sadece owner reset endpoint'i; RiskGate bypass yok.
+  Yeni endpoint'ler /risk/halts + /risk/halts/reset; DrawdownGuardPanel
+  (gauge'lar + timeline + reset) + TradingPanel RISK FREEZE badge.
+  85/85 pytest, ruff + tsc + build yeşil; SSR'de 27 panel doğrulandı.
+- Next task → v2.6 LLM persona (Groq, narrative-only).

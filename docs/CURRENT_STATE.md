@@ -4,6 +4,28 @@ _Bu dosya kısa ve güncel tutulur. Her görev sonunda güncellenir._
 
 ## Last known status
 
+- **G5 tamamlandı**: daily-loss / max-DD halt — file-backed, sadece risk
+  azaltıcı.
+  - `packages/risk/halt.py` — breach tespiti tick yollarında
+    `sync(risk_input)` ile persist edilir (`RISK_HALT_PATH`, default
+    `data/runtime/risk_halts.json`). DAILY_LOSS → KILL_SWITCH seviyesi,
+    MAX_DRAWDOWN → RISK_REDUCE seviyesi. **Otomatik reset yok** — halt
+    sticky; yalnızca `POST /api/v1/risk/halts/reset` (owner) kapatır.
+  - `packages/risk/engine.py` — aktif halt ek candidate olarak okunur
+    (sadece kısıtlayıcı; mevcut gate'ler değişmedi).
+  - KILL_SWITCH halt → `flatten_all` (KILL_SWITCH_EXIT) paper tick +
+    tick_worker'da; fiyatı olmayan pozisyon kapatılmaz (mock fiyat yok).
+    RISK_REDUCE halt → yeni açılış yok, SL/TP yönetimi sürer.
+  - `GET /api/v1/risk/halts` — aktif halt + timeline + gauge metrikleri
+    (daily_loss_ratio, drawdown_ratio — frontend hesap yapmaz).
+- **Frontend (G5)**: `DrawdownGuardPanel` — DailyLossGauge + MaxDDGauge
+  (oran bazlı bar gauge) + KillSwitchTimeline + Owner Reset butonu;
+  `TradingPanel` "RISK FREEZE" badge. Selector `lib/selectors/halts.ts`;
+  registry `drawdown_guard`; page.tsx'e tek GridCell.
+- Pytest: **85/85** yeşil (13 yeni G5 testi). Ruff + tsc + build yeşil.
+- Canlı: `/api/v1/risk/halts` 200; SSR'de **27 panel**
+  (`drawdown_guard` dahil), HeroScene + PAPER_ONLY korunuyor.
+
 - **G4 tamamlandı**: correlation-aware sizing — sadece risk azaltıcı.
   - `packages/risk/correlation.py` — verified kapalı trade'lerin günlük
     PnL serisinden 30g pencerede pairwise rho (`computed`); ortak gün <
@@ -44,5 +66,5 @@ _Bu dosya kısa ve güncel tutulur. Her görev sonunda güncellenir._
 
 ## Next task
 
-- **G5** — daily-loss / max-DD halt (bkz. `docs/ROADMAP.md`).
-- `.tasks/NEXT_TASK.md` G5 için hazırlanacak.
+- **v2.6** — LLM persona (Groq, narrative-only; bkz. `docs/ROADMAP.md`).
+- `.tasks/NEXT_TASK.md` v2.6 için hazır.

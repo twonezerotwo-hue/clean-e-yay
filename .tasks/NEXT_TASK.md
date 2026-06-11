@@ -1,27 +1,33 @@
-# NEXT TASK — G5 Daily-Loss / Max-DD Halt
+# NEXT TASK — v2.6 LLM Persona (Groq, narrative-only)
 
-Günlük zarar veya max drawdown limiti aşıldığında sistem otomatik durur
-ve durduğunu görünür şekilde raporlar.
+AI yalnızca açıklar/eleştirir — karar vermez. Deterministic decision +
+RiskGate tek karar otoritesidir.
 
 ## Scope
 
-- `packages/risk/` — halt durumu kalıcı hale gelsin:
-  - Mevcut risk engine KILL_SWITCH/RISK_REDUCE üretiyor; ek olarak halt
-    event'leri (`halt_started_at`, `reason`, `evidence`) diske yazılsın
-    (örn. `data/runtime/risk_halts.json`).
-  - Halt aktifken yeni pozisyon açılmaz (tick_worker + paper tick);
-    sadece mevcut pozisyonların SL/TP tetiklenebilir.
-  - Günlük zarar halt'i gün dönümünde otomatik kalkar (daily anchor);
-    max-DD halt'i owner onayı/explicit reset ister.
-- `GET /api/v1/risk/halts` — aktif halt + son halt timeline'ı.
-- Dashboard: `DrawdownGuardPanel` (aktif halt + DD/daily-loss durumu +
-  KillSwitch timeline). Selector + panel-registry + tek GridCell.
+- `packages/agent/llm_client.py` (yeni): Groq client + token budget
+  guard (`agent.groq_daily_token_budget`, file-backed günlük sayaç).
+  `GROQ_API_KEY` yoksa veya budget aşıldıysa → mevcut deterministik
+  narrative fallback (hata yok, degrade).
+- Personas: `analyst`, `risk_officer`, `macro_strategist`
+  (thresholds.yaml `agent.personas`); quorum_required=2 mevcut
+  build_votes akışıyla uyumlu kalsın — LLM yalnızca narrative üretir,
+  vote'ları değiştirmez.
+- `/api/v1/ai-report/current` — LLM narrative (varsa) + persona
+  yorumları; `mode` damgası (provenance) korunur; LLM çıktısı
+  `llm_generated: true` ile işaretlenir.
+- `POST /api/v1/chat` — dashboard ChatPanel'e bağlanır; yalnızca mevcut
+  snapshot/decision/risk state'i üzerinden cevap verir; trade komutu
+  almaz/uygulamaz.
+- Dashboard: `AIReportPanel` LLM narrative + persona bölümü;
+  `ChatPanel` gerçek POST'a bağlanır. Selector + registry mevcut.
 
 ## Rules
 
-- `PAPER_SAFE / NO_EXECUTION`
-- RiskGate threshold'larını gevşetme; halt sadece kısıtlayıcı.
-- KILL_SWITCH / RISK_REDUCE / NO_POSITION_INCREASE öncelik sırası korunur.
-- Frontend hesap yapmaz; backend state gösterir.
-- Test offline (mock paper state seed): daily-loss halt, max-DD halt,
-  halt aktifken open yok, gün dönümünde daily halt reset, endpoint 200.
+- `PAPER_SAFE / NO_EXECUTION` — LLM hiçbir aksiyon tetikleyemez.
+- LLM karar vermez; RiskGate/DQS/halt mantığına dokunulmaz.
+- Network yalnızca Groq API (kullanıcı onayladı: roadmap v2.6); key yoksa
+  tamamen offline degrade.
+- Token budget guard zorunlu; budget aşımı → fallback + uyarı.
+- Test offline: mock LLM client (network yok), budget guard testi,
+  fallback testi, chat endpoint 200, key'siz davranış.

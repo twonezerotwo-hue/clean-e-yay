@@ -1,65 +1,68 @@
 # TASK RESULT
 
 Date: 2026-06-11
-Task: G4 — Correlation-aware sizing
+Task: G5 — Daily-loss / Max-DD halt
 Status: completed
 
 ## Files changed
 
-- `packages/risk/correlation.py` (new) — pairwise rho: verified trade
-  PnL serisinden 30g pencerede computed → config `correlation_baseline`
-  → neutral fallback sırası; `cluster_exposure()` (aday için aynı yönlü
-  cluster cap, hedge ayrımı), `open_clusters()` (union-find,
-  OK/WARNING/BREACH).
-- `packages/decision/engine.py` — mistake gate'ten sonra G4 cluster cap:
-  cluster ≥ `max_cluster_pct` → hold; ≥ yarısı → size×0.5; asla artırmaz.
-  TradeDecision `cluster_report`; `decide_all(open_positions=...)`.
-- `apps/api/routers/risk.py` (new) — `GET /api/v1/risk/correlation`.
-- `apps/api/main.py` — risk router kayıt.
+- `packages/risk/halt.py` (new) — file-backed halt store
+  (`RISK_HALT_PATH`, default `data/runtime/risk_halts.json`).
+  `sync(risk_input)` breach'te halt'i persist eder (idempotent);
+  `active_halts()` salt okur; `owner_reset()` tek çıkış yolu —
+  **otomatik reset yok**. `metrics()` gauge oranlarını üretir.
+- `packages/risk/engine.py` — aktif halt ek candidate: DAILY_LOSS →
+  KILL_SWITCH, MAX_DRAWDOWN → RISK_REDUCE. Sadece kısıtlayıcı; mevcut
+  hard gate'ler (DQS, daily loss, max DD, pozisyon sayısı) değişmedi.
+- `packages/paper/lifecycle.py` — `flatten_all()`: KILL_SWITCH halt'te
+  tüm pozisyonları KILL_SWITCH_EXIT ile kapatır; fiyatı olmayan pozisyon
+  açık kalır (mock fiyat uydurulmaz, DATA_POLICY).
 - `apps/api/routers/paper_trading.py`, `apps/tick_worker/main.py` —
-  decide_all'a `ps.open_positions` geçirir.
-- `config/thresholds_v1.0.yaml` — `max_cluster_pct: 0.30`,
-  `correlation_min_overlap_days: 5`, `correlation_baseline` bölümü.
-- `contracts/openapi.yaml` — `/api/v1/risk/correlation` + CorrelationEntry
-  / ExposureCluster / CorrelationState şemaları.
-- `tests/unit/test_correlation.py` (new) — 14 test.
-- Frontend: `components/panels/CorrelationPanel/` (new),
-  `TradingPanel` (flagged cluster satırları),
-  `lib/selectors/correlation.ts` (new), `lib/api/client.ts`,
-  `lib/queries/{keys,hooks}.ts`, `lib/panel-registry.ts`
-  (`correlation`), `types/generated/api.ts`, `app/page.tsx` (tek
-  GridCell).
-- Ayrıca: önceki oturumdan kalan **provenance mode block** işi ayrı
-  commit olarak kaydedildi (989c932).
+  tick akışı: halt.sync → KILL_SWITCH seviyesinde flatten → decide_all
+  (risk engine halt'i görür, yeni açılış bloklanır).
+- `apps/api/routers/risk.py` — `GET /api/v1/risk/halts`,
+  `POST /api/v1/risk/halts/reset` (owner).
+- `contracts/openapi.yaml` — iki endpoint + HaltEvent / HaltMetrics /
+  HaltsState / HaltResetResult şemaları.
+- `tests/unit/test_halt.py` (new) — 13 test.
+- Frontend: `components/panels/DrawdownGuardPanel/` (new: DailyLossGauge
+  + MaxDDGauge + KillSwitchTimeline + Owner Reset butonu), `TradingPanel`
+  RISK FREEZE badge, `lib/selectors/halts.ts` (new), client/keys/hooks
+  (`useRiskHalts`, `useHaltReset` mutation), panel-registry
+  `drawdown_guard`, `types/generated/api.ts`, page.tsx tek GridCell.
 
 ## Safety
 
-- RiskGate bypass YOK: KILL_SWITCH→blocked, RISK_REDUCE/
-  NO_POSITION_INCREASE→hold correlation'dan önce döner; DQS<55 →
-  KILL_SWITCH → trade yok (testli).
-- Correlation logic yalnızca küçültür: size_factor ∈ {1.0, 0.5, 0.0}.
-- |rho| ≥ 0.7 aynı risk cluster; ters yön → hedge (cap'e girmez).
-- Veri yetersiz → neutral fallback, adjustment yok,
-  `insufficient_correlation_data` uyarısı.
-- PAPER_SAFE / NO_EXECUTION korunuyor; live network bağımlılığı yok
-  (sadece verified trade PnL + config baseline).
+- RiskGate bypass YOK: halt yalnızca ek kısıtlayıcı candidate;
+  KILL_SWITCH > RISK_REDUCE > NO_POSITION_INCREASE sırası korunur.
+- DQS < 55 → KILL_SWITCH → trade yok (halt'ten bağımsız, testli).
+- Halt aktif → yeni pozisyon yok; KILL_SWITCH halt → flatten
+  (KILL_SWITCH_EXIT); RISK_REDUCE halt → mevcut pozisyonlar SL/TP ile
+  yönetilir, yeni risk eklenmez.
+- Otomatik reset yok — yalnızca owner reset endpoint'i; geçmiş timeline
+  korunur (`cleared_by: owner_reset`).
+- PAPER_SAFE / NO_EXECUTION; broker yok; live network bağımlılığı yok.
 
 ## Tests run
 
-- `pytest -q` → **72/72 passed** (14 yeni G4).
-- `ruff check packages apps/api apps/tick_worker apps/learning_worker`
-  → All checks passed.
-- `pnpm exec tsc --noEmit` → temiz; `pnpm build` → yeşil (4/4 static).
+- `pytest -q` → **85/85 passed** (13 yeni G5: daily-loss breach → halt,
+  max-DD breach → halt, idempotent+sticky, owner reset, engine escalate
+  (KILL_SWITCH/RISK_REDUCE), haltsiz davranış değişmedi, DQS BLOCKED,
+  flatten fiyatlı/fiyatsız, tick'te open yok + flatten, DD halt'te
+  flatten yok, endpoint GET/POST, gauge oranları).
+- `ruff check packages apps/...` → All checks passed.
+- `pnpm exec tsc --noEmit` → temiz; `pnpm build` → yeşil.
 
 ## Live verification
 
-- API `GET /api/v1/risk/correlation` → 200: threshold 0.7, cap 0.30,
-  4 sembol, BTC↔ETH baseline 0.75, neutral çiftler insufficient_pairs'te.
-- Web `http://127.0.0.1:3000` → 200; SSR'de **26 panel**
-  (`data-panel="correlation"` dahil), "Korelasyon" başlığı, HeroScene
-  canvas, PAPER_ONLY banner. Web log temiz.
-- Not: 3000 portunu eski E_YAY CODEX frontend'i (nohup artığı) kapmıştı;
-  süreç kapatıldı, Clean E-yAy web yeniden bağlandı.
+- `GET /api/v1/risk/halts` → 200 (halt_active=false, metrics: daily
+  limit 2000 USD, dd limit %8, oranlar 0).
+- Web `http://127.0.0.1:3000` → 200; SSR'de **27 panel**
+  (`data-panel="drawdown_guard"` dahil), "Drawdown Guard" başlığı,
+  HeroScene canvas + PAPER_ONLY banner. Web log temiz.
+- Not: eski E_YAY CODEX frontend'inin `next dev` ebeveyn süreçleri port
+  3000'i tekrar kapıyordu (port-kill çocuğu öldürüyor, ebeveyn yeniden
+  doğuruyor) — ebeveyn süreçler temizlendi.
 
 ## Result
 
@@ -67,4 +70,4 @@ passed
 
 ## Next
 
-- G5 — daily-loss / max-DD halt (DrawdownGuardPanel / KillSwitchTimeline).
+- v2.6 — LLM persona (Groq, narrative-only).
