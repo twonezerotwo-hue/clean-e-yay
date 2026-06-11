@@ -105,6 +105,30 @@ paths:
               schema:
                 $ref: "#/components/schemas/CorrelationState"
 
+  /api/v1/risk/halts:
+    get:
+      operationId: getRiskHalts
+      summary: G5 — aktif halt + timeline + daily-loss/max-DD gauge metrikleri
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HaltsState"
+
+  /api/v1/risk/halts/reset:
+    post:
+      operationId: postRiskHaltsReset
+      summary: G5 — owner reset (tek manuel çıkış; otomatik reset yok)
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HaltResetResult"
+
 components:
   schemas:
     Health:
@@ -398,3 +422,55 @@ components:
         insufficient_pairs:
           type: array
           items: { type: string }
+
+    HaltEvent:
+      type: object
+      required: [id, type, level, started_at, reason, active]
+      properties:
+        id: { type: string }
+        type: { type: string, enum: [DAILY_LOSS, MAX_DRAWDOWN] }
+        level: { type: string, enum: [KILL_SWITCH, RISK_REDUCE] }
+        started_at: { type: string, format: date-time }
+        reason: { type: string }
+        evidence:
+          type: array
+          items: { type: string }
+        active: { type: boolean }
+        cleared_at: { type: string, format: date-time, nullable: true }
+        cleared_by: { type: string, nullable: true }
+
+    HaltMetrics:
+      type: object
+      required: [equity_usd, daily_pnl_usd, daily_loss_limit_usd, daily_loss_ratio, drawdown_pct, max_drawdown_pct, drawdown_ratio]
+      properties:
+        equity_usd: { type: number }
+        peak_equity_usd: { type: number }
+        daily_pnl_usd: { type: number }
+        daily_loss_limit_usd: { type: number }
+        daily_loss_ratio: { type: number }
+        drawdown_pct: { type: number }
+        max_drawdown_pct: { type: number }
+        drawdown_ratio: { type: number }
+
+    HaltsState:
+      type: object
+      required: [halt_active, active, timeline, metrics]
+      properties:
+        halt_active: { type: boolean }
+        active:
+          type: array
+          items: { $ref: "#/components/schemas/HaltEvent" }
+        timeline:
+          type: array
+          items: { $ref: "#/components/schemas/HaltEvent" }
+        metrics: { $ref: "#/components/schemas/HaltMetrics" }
+        reset_hint: { type: string }
+
+    HaltResetResult:
+      type: object
+      required: [cleared_count, cleared]
+      properties:
+        cleared_count: { type: integer }
+        cleared:
+          type: array
+          items: { $ref: "#/components/schemas/HaltEvent" }

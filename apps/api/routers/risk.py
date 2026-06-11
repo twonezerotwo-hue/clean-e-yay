@@ -1,4 +1,7 @@
-"""GET /api/v1/risk/correlation — korelasyon matrisi + cluster exposure."""
+"""GET /api/v1/risk/correlation — korelasyon matrisi + cluster exposure.
+GET /api/v1/risk/halts — aktif halt + timeline + gauge metrikleri.
+POST /api/v1/risk/halts/reset — owner reset (tek manuel çıkış yolu).
+"""
 from __future__ import annotations
 
 from dataclasses import asdict
@@ -9,8 +12,45 @@ from packages.data.ingestion.pipeline import DEFAULT_SYMBOLS
 from packages.data.registry.loader import load_thresholds
 from packages.paper import state as paper_state
 from packages.risk import correlation
+from packages.risk import halt as halt_store
+from packages.risk.engine import RiskInput
 
 router = APIRouter(tags=["risk"])
+
+
+def _risk_input(ps: paper_state.PaperState) -> RiskInput:
+    return RiskInput(
+        dqs_score=100.0,  # halt metrikleri DQS'ten bağımsız (equity bazlı)
+        equity_usd=ps.equity_usd,
+        peak_equity_usd=ps.peak_equity_usd,
+        daily_pnl_usd=ps.daily_pnl_usd,
+        open_position_count=len(ps.open_positions),
+    )
+
+
+@router.get("/risk/halts")
+def get_halts() -> dict:
+    ps = paper_state.load()
+    state = halt_store.load()
+    events = [asdict(e) for e in state.events][-halt_store.MAX_HISTORY:]
+    events.reverse()  # en yeni önce
+    active = [e for e in events if e["active"]]
+    return {
+        "halt_active": bool(active),
+        "active": active,
+        "timeline": events,
+        "metrics": halt_store.metrics(_risk_input(ps)),
+        "reset_hint": "POST /api/v1/risk/halts/reset (owner) — otomatik reset yok",
+    }
+
+
+@router.post("/risk/halts/reset")
+def post_halts_reset() -> dict:
+    cleared = halt_store.owner_reset()
+    return {
+        "cleared_count": len(cleared),
+        "cleared": [asdict(e) for e in cleared],
+    }
 
 
 @router.get("/risk/correlation")

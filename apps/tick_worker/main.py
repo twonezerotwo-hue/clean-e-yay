@@ -20,8 +20,9 @@ from packages.data.ingestion.pipeline import DEFAULT_SYMBOLS, get_cached_snapsho
 from packages.decision.engine import decide_all
 from packages.learning.fingerprint import make as make_fingerprint
 from packages.paper import state as paper_state
-from packages.paper.lifecycle import open_position
+from packages.paper.lifecycle import flatten_all, open_position
 from packages.paper.lifecycle import tick as price_tick
+from packages.risk import halt as halt_store
 from packages.risk.engine import RiskInput
 
 log = logging.getLogger("tick_worker")
@@ -55,6 +56,26 @@ async def run_once() -> None:
         daily_pnl_usd=ps.daily_pnl_usd,
         open_position_count=len(ps.open_positions),
     )
+
+    # G5 — halt durumunu oku/persist et; KILL_SWITCH halt → flatten,
+    # yeni trade açma (risk engine halt'i KILL_SWITCH/RISK_REDUCE'a çevirir).
+    halts = halt_store.sync(risk_in)
+    if any(h.level == "KILL_SWITCH" for h in halts):
+        for cls in flatten_all(ps, prices):
+            log.info(
+                "halt flatten: %s %s pnl=%.2f reason=%s",
+                cls.symbol, cls.side, cls.pnl_usd, cls.close_reason,
+            )
+        risk_in = RiskInput(
+            dqs_score=snap.quality.score,
+            equity_usd=ps.equity_usd,
+            peak_equity_usd=ps.peak_equity_usd,
+            daily_pnl_usd=ps.daily_pnl_usd,
+            open_position_count=len(ps.open_positions),
+        )
+    if halts:
+        log.warning("active halts: %s", [h.type for h in halts])
+
     regime, _risk, decisions = decide_all(
         DEFAULT_SYMBOLS[:4], snap, risk_in, open_positions=ps.open_positions
     )

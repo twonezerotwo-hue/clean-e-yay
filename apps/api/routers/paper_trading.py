@@ -11,12 +11,14 @@ from packages.decision.engine import decide_all
 from packages.learning.fingerprint import make as make_fingerprint
 from packages.paper import state as paper_state
 from packages.paper.lifecycle import (
+    flatten_all,
     max_drawdown_pct,
     open_position,
 )
 from packages.paper.lifecycle import (
     tick as price_tick,
 )
+from packages.risk import halt as halt_store
 from packages.risk.engine import RiskInput
 
 router = APIRouter(tags=["paper-trading"])
@@ -64,11 +66,27 @@ def post_paper_tick() -> dict:
         daily_pnl_usd=ps.daily_pnl_usd,
         open_position_count=len(ps.open_positions),
     )
+
+    # G5 — breach varsa halt'i persist et; KILL_SWITCH seviyesinde halt
+    # aktifse mevcut pozisyonları düzleştir (KILL_SWITCH_EXIT). Sadece risk
+    # azaltıcı; yeni açılışlar zaten risk engine'deki halt ile bloklanır.
+    actions: list[dict] = []
+    halts = halt_store.sync(risk_in)
+    if any(h.level == "KILL_SWITCH" for h in halts):
+        for cls in flatten_all(ps, prices):
+            closed.append(cls)
+        risk_in = RiskInput(
+            dqs_score=snap.quality.score,
+            equity_usd=ps.equity_usd,
+            peak_equity_usd=ps.peak_equity_usd,
+            daily_pnl_usd=ps.daily_pnl_usd,
+            open_position_count=len(ps.open_positions),
+        )
+
     regime, _risk, decisions = decide_all(
         DEFAULT_SYMBOLS[:4], snap, risk_in, open_positions=ps.open_positions
     )
 
-    actions: list[dict] = []
     for cls in closed:
         actions.append({"symbol": cls.symbol, "action": "close", "reason": cls.close_reason})
 

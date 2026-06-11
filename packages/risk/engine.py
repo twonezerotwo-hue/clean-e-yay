@@ -4,6 +4,10 @@ Eski projedeki `risk_engine.py` (services/) + `engine/risk_engine.py` duplikatı
 burada birleştirildi. Action sıralaması (priority):
 
   HOLD < WATCH < HEDGE_INCREASE < NO_POSITION_INCREASE < RISK_REDUCE < KILL_SWITCH
+
+G5: aktif halt (daily-loss / max-DD, file-backed) ek candidate olarak
+okunur — sadece kısıtlayıcı; mevcut gate'leri gevşetmez. Halt yalnızca
+owner reset ile kalkar.
 """
 from __future__ import annotations
 
@@ -11,6 +15,7 @@ from dataclasses import dataclass
 from typing import Literal
 
 from packages.data.registry.loader import load_thresholds
+from packages.risk import halt as halt_store
 
 RiskAction = Literal[
     "HOLD",
@@ -93,6 +98,17 @@ def evaluate(inp: RiskInput) -> RiskDecision:
     # 5) Hafif uyarılar
     if inp.dqs_score < 70:
         candidates.append(("WATCH", "DQS marjinal", [f"DQS {inp.dqs_score:.1f}"]))
+
+    # 6) G5 — aktif halt (persist edilmiş; sadece owner reset ile kalkar).
+    #    Sadece kısıtlayıcı candidate ekler, mevcut gate'leri etkilemez.
+    for h in halt_store.active_halts():
+        candidates.append(
+            (
+                h.level,  # DAILY_LOSS→KILL_SWITCH, MAX_DRAWDOWN→RISK_REDUCE
+                f"{h.type} halt aktif — owner reset gerekli",
+                [h.reason, *h.evidence],
+            )
+        )
 
     if not candidates:
         return RiskDecision(action="HOLD", reason="Risk kapısı açık.", evidence=[])

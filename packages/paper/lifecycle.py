@@ -127,6 +127,23 @@ def tick(state: PaperState, prices: dict[str, float]) -> list[Trade]:
     return closed
 
 
+def flatten_all(state: PaperState, prices: dict[str, float]) -> list[Trade]:
+    """G5 — KILL_SWITCH halt: tüm açık pozisyonları kapat (KILL_SWITCH_EXIT).
+
+    Sadece risk azaltıcı; fiyatı olmayan pozisyon açık kalır (mock fiyat
+    uydurulmaz — DATA_POLICY), bir sonraki tick'te tekrar denenir.
+    """
+    closed: list[Trade] = []
+    for pos in list(state.open_positions):
+        price = prices.get(pos.symbol)
+        if price is None or price <= 0:
+            continue
+        closed.append(
+            close_position(state, pos, exit_price=price, reason="KILL_SWITCH_EXIT")
+        )
+    return closed
+
+
 def max_drawdown_pct(state: PaperState) -> float:
     if state.peak_equity_usd <= 0:
         return 0.0
