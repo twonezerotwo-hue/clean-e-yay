@@ -21,6 +21,7 @@ from apps.api.routers import (
     paper_trading,
     rebalance,
     regime_report,
+    risk,
 )
 
 _START_TS = time.monotonic()
@@ -67,6 +68,7 @@ def create_app() -> FastAPI:
     app.include_router(learning.router, prefix=prefix)
     app.include_router(data.router, prefix=prefix)
     app.include_router(rebalance.router, prefix=prefix)
+    app.include_router(risk.router, prefix=prefix)
     return app
 
 

@@ -64,7 +64,9 @@ def post_paper_tick() -> dict:
         daily_pnl_usd=ps.daily_pnl_usd,
         open_position_count=len(ps.open_positions),
     )
-    regime, _risk, decisions = decide_all(DEFAULT_SYMBOLS[:4], snap, risk_in)
+    regime, _risk, decisions = decide_all(
+        DEFAULT_SYMBOLS[:4], snap, risk_in, open_positions=ps.open_positions
+    )
 
     actions: list[dict] = []
     for cls in closed:

@@ -16,8 +16,25 @@ risk_gates:
   max_drawdown_pct: 0.08        # peak'ten %8
   correlation_threshold: 0.7
   correlation_window_days: 30
+  correlation_min_overlap_days: 5    # bunun altında computed rho kullanılmaz
+  max_cluster_pct: 0.30              # aynı risk cluster'ın toplam %equity tavanı
   vol_regime_zscore: 2.0
   position_cap_per_asset_pct: 0.25   # equity'nin %25'i
+
+# G4 — trade PnL verisi yetersizken kullanılan deterministik korelasyon
+# baseline'ı. Çiftler simetrik okunur; listede olmayan çift → neutral (rho=0,
+# insufficient_correlation_data uyarısı, size adjustment yok).
+correlation_baseline:
+  BTCUSD:
+    ETHUSD: 0.75
+    QQQ: 0.60
+  ETHUSD:
+    QQQ: 0.55
+  XAUUSD:
+    XAGUSD: 0.80
+    DXY: -0.65
+  XAGUSD:
+    DXY: -0.55
 
 paper_trading:
   initial_equity_usd: 100000

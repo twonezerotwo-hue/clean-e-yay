@@ -9,8 +9,15 @@ G3 — Mistake memory gate:
   çağrılır. AVOID→hold, BOOST→size_factor×, WARNING→size_factor×.
 - NEUTRAL/insufficient → no_adjustment (size_factor=1.0).
 
-**Hard kural:** mistake memory ve calibration **RiskGate'i bypass ETMEZ**.
-KILL_SWITCH→blocked; RISK_REDUCE/NO_POSITION_INCREASE→hold.
+G4 — Correlation-aware sizing:
+- Mistake gate'ten sonra `cluster_exposure(open_positions, aday)` çağrılır.
+  Aynı yönlü |rho| ≥ 0.7 cluster toplamı `max_cluster_pct`'yi aştıysa →
+  hold; yarısını aştıysa size×0.5. **Sadece küçültür, asla artırmaz.**
+  Veri yetersizse neutral fallback (adjustment yok).
+
+**Hard kural:** mistake memory, calibration ve correlation sizing
+**RiskGate'i bypass ETMEZ**. KILL_SWITCH→blocked;
+RISK_REDUCE/NO_POSITION_INCREASE→hold.
 DQS < 55 zaten risk engine'inde KILL_SWITCH üretir → BLOCKED state'te trade
 yok (calibration BOOST veya mistake BOOST yüksek olsa bile).
 """
@@ -31,6 +38,7 @@ from packages.learning.calibration_store import (
 from packages.learning.fingerprint import make as make_fingerprint
 from packages.learning.mistake_memory import MistakeVerdict
 from packages.regime.classifier import RegimeOutput, classify
+from packages.risk import correlation
 from packages.risk.engine import RiskDecision, RiskInput
 from packages.risk.engine import evaluate as evaluate_risk
 
@@ -50,6 +58,7 @@ class TradeDecision:
     confidence_source: str = "identity"
     fingerprint: str | None = None
     mistake_verdict: dict = field(default_factory=dict)
+    cluster_report: dict = field(default_factory=dict)
 
 
 def _regime_multiplier(label: str) -> float:
@@ -73,6 +82,9 @@ def decide_for_symbol(
     regime: RegimeOutput,
     risk: RiskDecision,
     mistakes: list | None = None,
+    open_positions: list | None = None,
+    equity_usd: float = 0.0,
+    corr_entries: list | None = None,
 ) -> TradeDecision:
     th = load_thresholds()["consensus"]
     cons = build_consensus(symbol, snap, regime)
@@ -170,6 +182,36 @@ def decide_for_symbol(
     size *= verdict.size_factor
     size = max(0.0, min(1.5, size))
 
+    # ----- G4: Correlation cluster cap (sadece küçültür, RiskGate'i bypass etmez) -----
+    cluster = correlation.cluster_exposure(
+        open_positions or [],
+        symbol,
+        "long" if action == "open_long" else "short",
+        equity_usd,
+        entries=corr_entries,
+    )
+    cluster_dict = asdict(cluster)
+    if cluster.size_factor <= 0.0:
+        return TradeDecision(
+            symbol=symbol,
+            action="hold",
+            confidence=round(cal_conf, 3),
+            size_multiplier=0.0,
+            consensus=cons,
+            risk=risk,
+            reason=(
+                f"correlation_cluster: aynı yönlü exposure {cluster.cluster_pct:.0%}"
+                f" ≥ cap {cluster.max_cluster_pct:.0%}"
+            ),
+            raw_confidence=round(raw_conf, 4),
+            confidence_source=conf_source,
+            fingerprint=fp,
+            mistake_verdict=_verdict_to_dict(verdict),
+            cluster_report=cluster_dict,
+        )
+    size *= min(1.0, cluster.size_factor)
+    size = max(0.0, min(1.5, size))
+
     return TradeDecision(
         symbol=symbol,
         action=action,
@@ -180,11 +222,13 @@ def decide_for_symbol(
         reason=(
             f"{cons.direction} signal · dominant={cons.dominant_module}"
             + (f" · mistake:{verdict.action.lower()}" if verdict.action != "NEUTRAL" else "")
+            + (f" · correlation:{cluster.status.lower()}" if cluster.status != "OK" else "")
         ),
         raw_confidence=round(raw_conf, 4),
         confidence_source=conf_source,
         fingerprint=fp,
         mistake_verdict=_verdict_to_dict(verdict),
+        cluster_report=cluster_dict,
     )
 
 
@@ -192,10 +236,28 @@ def decide_all(
     symbols: list[str],
     snap: MarketSnapshot,
     paper_state_input: RiskInput,
+    open_positions: list | None = None,
 ) -> tuple[RegimeOutput, RiskDecision, list[TradeDecision]]:
     regime = classify(snap)
     risk = evaluate_risk(paper_state_input)
     # Tek pass mistake özeti — tüm semboller için aynı snapshot.
     mems = mistake_memory.summary()
-    decisions = [decide_for_symbol(s, snap, regime, risk, mistakes=mems) for s in symbols]
+    positions = open_positions or []
+    # Korelasyon matrisi tek pass (aday + açık pozisyon sembolleri).
+    corr_entries = correlation.matrix(
+        sorted({*symbols, *(p.symbol for p in positions)})
+    )
+    decisions = [
+        decide_for_symbol(
+            s,
+            snap,
+            regime,
+            risk,
+            mistakes=mems,
+            open_positions=positions,
+            equity_usd=paper_state_input.equity_usd,
+            corr_entries=corr_entries,
+        )
+        for s in symbols
+    ]
     return regime, risk, decisions

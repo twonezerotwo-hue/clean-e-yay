@@ -55,7 +55,9 @@ async def run_once() -> None:
         daily_pnl_usd=ps.daily_pnl_usd,
         open_position_count=len(ps.open_positions),
     )
-    regime, _risk, decisions = decide_all(DEFAULT_SYMBOLS[:4], snap, risk_in)
+    regime, _risk, decisions = decide_all(
+        DEFAULT_SYMBOLS[:4], snap, risk_in, open_positions=ps.open_positions
+    )
     open_symbols = {p.symbol for p in ps.open_positions}
     for d in decisions:
         if d.action in {"blocked", "hold"} or d.symbol in open_symbols:

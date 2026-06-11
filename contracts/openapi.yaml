@@ -93,6 +93,18 @@ paths:
               schema:
                 $ref: "#/components/schemas/LearningSummary"
 
+  /api/v1/risk/correlation:
+    get:
+      operationId: getRiskCorrelation
+      summary: G4 — korelasyon matrisi + aynı yönlü cluster exposure (read-only)
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CorrelationState"
+
 components:
   schemas:
     Health:
@@ -333,3 +345,56 @@ components:
           type: object
           additionalProperties: { type: number }
         weights_version: { type: string }
+
+    CorrelationEntry:
+      type: object
+      required: [symbol_a, symbol_b, rho, source, samples]
+      properties:
+        symbol_a: { type: string }
+        symbol_b: { type: string }
+        rho: { type: number }
+        source: { type: string, enum: [computed, baseline, neutral] }
+        samples: { type: integer }
+
+    ExposureCluster:
+      type: object
+      required: [symbols, positions, total_usd, cluster_pct, status]
+      properties:
+        symbols:
+          type: array
+          items: { type: string }
+        positions:
+          type: array
+          items:
+            type: object
+            properties:
+              id: { type: string }
+              symbol: { type: string }
+              side: { type: string, enum: [long, short] }
+              size_usd: { type: number }
+        total_usd: { type: number }
+        cluster_pct: { type: number }
+        status: { type: string, enum: [OK, WARNING, BREACH] }
+
+    CorrelationState:
+      type: object
+      required: [threshold, max_cluster_pct, symbols, matrix, clusters]
+      properties:
+        threshold: { type: number }
+        max_cluster_pct: { type: number }
+        window_days: { type: integer }
+        min_overlap_days: { type: integer }
+        symbols:
+          type: array
+          items: { type: string }
+        matrix:
+          type: array
+          items: { $ref: "#/components/schemas/CorrelationEntry" }
+        clusters:
+          type: array
+          items: { $ref: "#/components/schemas/ExposureCluster" }
+        open_position_count: { type: integer }
+        equity_usd: { type: number }
+        insufficient_pairs:
+          type: array
+          items: { type: string }
