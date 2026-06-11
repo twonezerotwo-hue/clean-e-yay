@@ -29,6 +29,7 @@ import { WeightProposalPanel } from "@/components/panels/WeightProposalPanel";
 import { WeightHistoryPanel } from "@/components/panels/WeightHistoryPanel";
 import { CalibrationPanel } from "@/components/panels/CalibrationPanel";
 import { MistakeMemoryPanel } from "@/components/panels/MistakeMemoryPanel";
+import { CorrelationPanel } from "@/components/panels/CorrelationPanel";
 
 import { useKeyboardShortcuts } from "@/hooks/useKeyboardShortcuts";
 
@@ -68,6 +69,8 @@ export default function HomePage() {
 
         <GridCell span="2"><RiskGatePanel /></GridCell>
         <GridCell span="1"><AgentVotesPanel /></GridCell>
+
+        <GridCell span="2"><CorrelationPanel /></GridCell>
 
         <GridCell span="3"><PositionChecksPanel /></GridCell>
 

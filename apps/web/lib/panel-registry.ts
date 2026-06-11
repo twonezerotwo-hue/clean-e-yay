@@ -27,7 +27,8 @@ export type PanelKey =
   | "weight_proposal"
   | "weight_history"
   | "calibration"
-  | "mistake_memory";
+  | "mistake_memory"
+  | "correlation";
 
 export type PanelMeta = {
   id: PanelKey;
@@ -63,4 +64,5 @@ export const PANEL_REGISTRY: PanelMeta[] = [
   { id: "weight_history",   title: "Ağırlık Geçmişi",      defaultVisible: true,  span: "1",    group: "learning" },
   { id: "calibration",      title: "Calibration",          defaultVisible: true,  span: "2",    group: "learning" },
   { id: "mistake_memory",   title: "Mistake Memory",       defaultVisible: true,  span: "1",    group: "learning" },
+  { id: "correlation",      title: "Korelasyon",           defaultVisible: true,  span: "2",    group: "decision" },
 ];

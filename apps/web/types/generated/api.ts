@@ -325,3 +325,41 @@ export type MistakesState = {
   flagged_count: number;
   total_fingerprints: number;
 };
+
+export type CorrelationSource = "computed" | "baseline" | "neutral";
+
+export type CorrelationEntry = {
+  symbol_a: string;
+  symbol_b: string;
+  rho: number;
+  source: CorrelationSource;
+  samples: number;
+};
+
+export type ClusterPosition = {
+  id: string;
+  symbol: string;
+  side: "long" | "short";
+  size_usd: number;
+};
+
+export type ExposureCluster = {
+  symbols: string[];
+  positions: ClusterPosition[];
+  total_usd: number;
+  cluster_pct: number;
+  status: "OK" | "WARNING" | "BREACH";
+};
+
+export type CorrelationState = {
+  threshold: number;
+  max_cluster_pct: number;
+  window_days: number;
+  min_overlap_days: number;
+  symbols: string[];
+  matrix: CorrelationEntry[];
+  clusters: ExposureCluster[];
+  open_position_count: number;
+  equity_usd: number;
+  insufficient_pairs: string[];
+};

@@ -78,3 +78,11 @@ export const useMistakes = () =>
     staleTime: 60_000,
     refetchInterval: 2 * 60_000,
   });
+
+export const useRiskCorrelation = () =>
+  useQuery({
+    queryKey: qk.riskCorrelation,
+    queryFn: api.riskCorrelation,
+    staleTime: 60_000,
+    refetchInterval: 2 * 60_000,
+  });

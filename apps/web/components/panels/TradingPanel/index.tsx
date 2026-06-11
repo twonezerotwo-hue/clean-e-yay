@@ -5,11 +5,13 @@ import { PanelHeader } from "@/components/shell/PanelHeader";
 import { LoadingState } from "@/components/shell/LoadingState";
 import { EmptyState } from "@/components/shell/EmptyState";
 import { SparkLine } from "@/components/charts/SparkLine";
-import { usePaperTradingState } from "@/lib/queries/hooks";
+import { usePaperTradingState, useRiskCorrelation } from "@/lib/queries/hooks";
+import { selectFlaggedClusters, selectLimits } from "@/lib/selectors/correlation";
 import { fmtUSD, fmtPct, fmtNum } from "@/lib/format";
 
 export function TradingPanel() {
   const { data, isLoading } = usePaperTradingState();
+  const { data: corr } = useRiskCorrelation();
   if (isLoading) {
     return (
       <PanelFrame id="trading">
@@ -56,7 +58,34 @@ export function TradingPanel() {
       <div className="text-[10px] uppercase tracking-widest text-white/40 mt-2">
         Sharpe 30g: {fmtNum(data.sharpe_30d)}
       </div>
+      <ClusterExposure corr={corr} />
     </PanelFrame>
+  );
+}
+
+/** G4 — aynı yönlü korelasyonlu cluster exposure (backend hesaplar). */
+function ClusterExposure({
+  corr,
+}: {
+  corr: Parameters<typeof selectFlaggedClusters>[0];
+}) {
+  const flagged = selectFlaggedClusters(corr);
+  if (!flagged.length) return null;
+  const { maxClusterPct } = selectLimits(corr);
+  return (
+    <div className="mt-2 space-y-1 text-[11px]">
+      {flagged.map((c) => (
+        <div
+          key={c.symbols.join("|")}
+          className={
+            c.status === "BREACH" ? "text-signal-down" : "text-amber-400"
+          }
+        >
+          cluster {c.symbols.join("+")} · {fmtPct(c.cluster_pct, 1)} /{" "}
+          {fmtPct(maxClusterPct, 0)} · {c.status}
+        </div>
+      ))}
+    </div>
   );
 }
 

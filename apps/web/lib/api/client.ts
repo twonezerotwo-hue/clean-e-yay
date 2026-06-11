@@ -5,6 +5,7 @@
 import type {
   AIReport,
   CalibrationState,
+  CorrelationState,
   DashboardState,
   DataSnapshot,
   Health,
@@ -52,4 +53,6 @@ export const api = {
   calibration: () =>
     fetchJSON<CalibrationState>("/api/v1/learning/calibration"),
   mistakes: () => fetchJSON<MistakesState>("/api/v1/learning/mistakes"),
+  riskCorrelation: () =>
+    fetchJSON<CorrelationState>("/api/v1/risk/correlation"),
 };
