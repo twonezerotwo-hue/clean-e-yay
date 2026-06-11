@@ -2,7 +2,9 @@
 
 Clean rewrite of **E_YAY CODEX** — a paper-trading decision-support system that prepares trading-data agents for real execution through paper trading + calibrated heuristic learning.
 
-> Status: **v2.0-skeleton** — monorepo iskeleti. Hiçbir paket henüz implement edilmedi. Endpoint'ler stub.
+> **Nihai mimari için → [ARCHITECTURE.md](ARCHITECTURE.md).** Yeni iş başlamadan önce o belge okunur.
+>
+> Status: **v2.5-web** — dikey dilim canlı (mock veriyle uçtan uca yeşil, 8/8 test, CI yeşil). Sıradaki: v2.1 gerçek data hunter + validator.
 
 ## Felsefe
 
