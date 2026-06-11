@@ -20,7 +20,6 @@ from apps.api.routers import (
     regime_report,
 )
 
-
 _START_TS = time.monotonic()
 
 

@@ -5,7 +5,7 @@ import json
 import os
 import threading
 from dataclasses import asdict, dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 from packages.data.registry.loader import load_thresholds
@@ -72,7 +72,7 @@ class PaperState:
         }
 
     @classmethod
-    def from_dict(cls, d: dict) -> "PaperState":
+    def from_dict(cls, d: dict) -> PaperState:
         return cls(
             equity_usd=float(d.get("equity_usd", 0)),
             peak_equity_usd=float(d.get("peak_equity_usd", 0)),
@@ -110,4 +110,4 @@ def save(state: PaperState) -> None:
 
 
 def utc_iso() -> str:
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()

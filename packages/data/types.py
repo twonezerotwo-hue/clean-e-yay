@@ -1,14 +1,14 @@
 """Veri katmanı için ortak veri tipleri (Pydantic)."""
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Literal
 
 from pydantic import BaseModel, Field
 
 
 def utcnow() -> datetime:
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 Direction = Literal["bullish", "bearish", "neutral"]

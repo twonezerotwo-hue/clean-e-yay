@@ -12,7 +12,7 @@ bütün kalite kontrolleri burada toplandı:
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from packages.data.types import PriceQuote
 
@@ -32,7 +32,7 @@ class QualityReport:
 def _freshness(quotes: list[PriceQuote], max_age_sec: int = 300) -> float:
     if not quotes:
         return 0.0
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     ages = [(now - q.ts).total_seconds() for q in quotes]
     avg = sum(ages) / len(ages)
     return max(0.0, min(100.0, 100.0 * (1.0 - min(avg / max_age_sec, 1.0))))

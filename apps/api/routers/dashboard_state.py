@@ -1,7 +1,7 @@
 """GET /api/v1/dashboard/state"""
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from fastapi import APIRouter
 
@@ -33,7 +33,7 @@ def get_dashboard_state() -> dict:
     # Top sembolün consensus'üyle agent oyu üret
     top_cons = build_consensus(DEFAULT_SYMBOLS[0], snap, regime)
     votes, quorum = build_votes(top_cons, regime, risk)
-    now_iso = datetime.now(timezone.utc).isoformat()
+    now_iso = datetime.now(UTC).isoformat()
     return {
         "meta": {
             "snapshot_id": snap.snapshot_id,

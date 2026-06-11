@@ -8,11 +8,13 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Literal
 
-from packages.consensus.engine import ConsensusResult, build as build_consensus
+from packages.consensus.engine import ConsensusResult
+from packages.consensus.engine import build as build_consensus
 from packages.data.ingestion.pipeline import MarketSnapshot
 from packages.data.registry.loader import load_thresholds
 from packages.regime.classifier import RegimeOutput, classify
-from packages.risk.engine import RiskDecision, RiskInput, evaluate as evaluate_risk
+from packages.risk.engine import RiskDecision, RiskInput
+from packages.risk.engine import evaluate as evaluate_risk
 
 Action = Literal["open_long", "open_short", "hold", "blocked"]
 

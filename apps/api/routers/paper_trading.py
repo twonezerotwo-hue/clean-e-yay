@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from dataclasses import asdict
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from fastapi import APIRouter
 
@@ -11,12 +11,12 @@ from packages.decision.engine import decide_all
 from packages.learning.fingerprint import make as make_fingerprint
 from packages.paper import state as paper_state
 from packages.paper.lifecycle import (
-    close_position,
     max_drawdown_pct,
     open_position,
+)
+from packages.paper.lifecycle import (
     tick as price_tick,
 )
-from packages.regime.classifier import classify
 from packages.risk.engine import RiskInput
 
 router = APIRouter(tags=["paper-trading"])
@@ -62,7 +62,7 @@ def post_paper_tick() -> dict:
         daily_pnl_usd=ps.daily_pnl_usd,
         open_position_count=len(ps.open_positions),
     )
-    regime, risk, decisions = decide_all(DEFAULT_SYMBOLS[:4], snap, risk_in)
+    regime, _risk, decisions = decide_all(DEFAULT_SYMBOLS[:4], snap, risk_in)
 
     actions: list[dict] = []
     for cls in closed:
@@ -106,7 +106,7 @@ def post_paper_tick() -> dict:
     paper_state.save(ps)
 
     return {
-        "tick_at": datetime.now(timezone.utc).isoformat(),
+        "tick_at": datetime.now(UTC).isoformat(),
         "signals_processed": len(decisions),
         "actions": actions,
     }
@@ -115,7 +115,7 @@ def post_paper_tick() -> dict:
 # Test/dev: pozisyonları sıfırla
 @router.post("/paper-trading/reset")
 def reset() -> dict:
-    ps = paper_state._initial_state()  # noqa: SLF001
+    ps = paper_state._initial_state()
     # SL/TP olmadan sadece son trade ve pozisyonları temizle, equity sıfırlama:
     # gerçek "reset" davranışı için _initial_state yeterli
     paper_state.save(ps)

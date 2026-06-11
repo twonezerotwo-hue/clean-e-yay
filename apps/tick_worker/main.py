@@ -20,7 +20,8 @@ from packages.data.ingestion.pipeline import DEFAULT_SYMBOLS, get_cached_snapsho
 from packages.decision.engine import decide_all
 from packages.learning.fingerprint import make as make_fingerprint
 from packages.paper import state as paper_state
-from packages.paper.lifecycle import open_position, tick as price_tick
+from packages.paper.lifecycle import open_position
+from packages.paper.lifecycle import tick as price_tick
 from packages.risk.engine import RiskInput
 
 log = logging.getLogger("tick_worker")
@@ -53,7 +54,7 @@ async def run_once() -> None:
         daily_pnl_usd=ps.daily_pnl_usd,
         open_position_count=len(ps.open_positions),
     )
-    regime, risk, decisions = decide_all(DEFAULT_SYMBOLS[:4], snap, risk_in)
+    regime, _risk, decisions = decide_all(DEFAULT_SYMBOLS[:4], snap, risk_in)
     open_symbols = {p.symbol for p in ps.open_positions}
     for d in decisions:
         if d.action in {"blocked", "hold"} or d.symbol in open_symbols:
@@ -93,7 +94,7 @@ async def run() -> None:
             log.exception("tick failed: %s", exc)
         try:
             await asyncio.wait_for(_STOP.wait(), timeout=INTERVAL)
-        except asyncio.TimeoutError:
+        except TimeoutError:
             pass
     log.info("tick_worker stopped")
 

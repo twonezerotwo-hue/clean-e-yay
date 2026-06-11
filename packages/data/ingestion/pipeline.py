@@ -8,14 +8,15 @@ from __future__ import annotations
 import hashlib
 import time
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from packages.data.providers import calendar as cal_provider
 from packages.data.providers import news as news_provider
 from packages.data.providers import price as price_provider
 from packages.data.providers import rotation as rot_provider
 from packages.data.providers import technical as tech_provider
-from packages.data.quality.dqs import QualityReport, compute as compute_dqs
+from packages.data.quality.dqs import QualityReport
+from packages.data.quality.dqs import compute as compute_dqs
 from packages.data.types import (
     Catalyst,
     NewsHeadline,
@@ -46,7 +47,7 @@ def _make_id(now: datetime) -> str:
 
 def build_snapshot(symbols: list[str] | None = None) -> MarketSnapshot:
     syms = symbols or DEFAULT_SYMBOLS
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     prices = price_provider.get_quotes(syms)
     technicals = {s: tech_provider.get_snapshot(s, "1d") for s in syms}
     headlines = news_provider.list_headlines(14)
