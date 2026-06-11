@@ -1,0 +1,8 @@
+{
+  "app.title": "Clean E-yAy",
+  "app.tagline": "Contract-driven decision-support dashboard",
+  "decision.title": "Decision Center",
+  "panels.command_signals": "Command Signals",
+  "panels.event_calendar": "Event Calendar",
+  "panels.scenario": "Scenario"
+}

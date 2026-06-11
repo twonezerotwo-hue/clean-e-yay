@@ -1,0 +1,17 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: dark;
+}
+
+html, body {
+  background: radial-gradient(ellipse at top, #0a0d1a 0%, #05060d 60%);
+  color: #e6e9f5;
+  font-family: Inter, system-ui, sans-serif;
+}
+
+.panel {
+  @apply rounded-2xl border border-ink-700/60 bg-ink-800/70 backdrop-blur p-4;
+}

@@ -1,0 +1,33 @@
+version: "1.0.0"
+created_at: "2026-06-11"
+
+features:
+  - id: liquidity_trend
+    inputs: [M2SL, US10Y, DXY]
+    critical: true
+    description: Makro likidite eğilimi
+
+  - id: inflation_stability
+    inputs: [USCPI, USPPI]
+    critical: false
+    description: Enflasyon istikrarı
+
+  - id: credit_spread_stress
+    inputs: [HYG, LQD]
+    critical: true
+    description: Kredi spreadi stresi
+
+  - id: volatility_pressure
+    inputs: [VIX, QQQ]
+    critical: true
+    description: Volatilite baskısı
+
+  - id: btc_dominance_shift
+    inputs: [BTC.D, USDT.D]
+    critical: false
+    description: Kripto dominans rotasyonu
+
+  - id: gold_oil_ratio
+    inputs: [XAUUSD, BRENT]
+    critical: false
+    description: Risk-off vs reflation göstergesi

@@ -1,0 +1,48 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+dist/
+build/
+
+# Node
+node_modules/
+.next/
+.turbo/
+*.tsbuildinfo
+out/
+
+# Env / secrets
+.env
+.env.*
+!.env.example
+
+# Runtime data
+data/runtime/
+data/state/
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Codegen artifacts (regenerated, not tracked)
+contracts/codegen/python/
+contracts/codegen/typescript/
+
+# Misc
+.cache/

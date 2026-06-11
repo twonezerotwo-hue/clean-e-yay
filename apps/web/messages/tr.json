@@ -1,0 +1,8 @@
+{
+  "app.title": "Clean E-yAy",
+  "app.tagline": "Sözleşme tarafından yönlendirilen karar-destek panosu",
+  "decision.title": "Karar Merkezi",
+  "panels.command_signals": "Komuta Sinyalleri",
+  "panels.event_calendar": "Olay Takvimi",
+  "panels.scenario": "Senaryo"
+}

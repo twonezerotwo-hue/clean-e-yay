@@ -1,0 +1,335 @@
+openapi: 3.1.0
+info:
+  title: Clean E-yAy API
+  version: 2.0.0
+  description: |
+    Sözleşme-önce API. Pydantic ve TypeScript tipleri buradan üretilir.
+    `make codegen` ile yenilenir. Manuel düzenleme yok.
+servers:
+  - url: http://127.0.0.1:8000
+    description: Local dev
+paths:
+  /api/v1/health:
+    get:
+      operationId: getHealth
+      summary: Liveness probe
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Health"
+
+  /api/v1/regime-report/current:
+    get:
+      operationId: getRegimeReportCurrent
+      summary: En güncel rejim raporu
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RegimeReport"
+
+  /api/v1/dashboard/state:
+    get:
+      operationId: getDashboardState
+      summary: Canonical dashboard state — risk gate + agent votes + module health
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DashboardState"
+
+  /api/v1/ai-report/current:
+    get:
+      operationId: getAIReportCurrent
+      summary: En güncel AI analist raporu (LLM özetli)
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AIReport"
+
+  /api/v1/paper-trading/state:
+    get:
+      operationId: getPaperTradingState
+      summary: Açık pozisyonlar + son tick PnL (read-only)
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaperTradingState"
+
+  /api/v1/paper-trading/tick:
+    post:
+      operationId: postPaperTradingTick
+      summary: Manuel tick (yan etkili — açma/kapatma yapabilir)
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TickResult"
+
+  /api/v1/learning/summary:
+    get:
+      operationId: getLearningSummary
+      summary: Walk-forward + kalibrasyon özeti
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LearningSummary"
+
+components:
+  schemas:
+    Health:
+      type: object
+      required: [status, version, uptime_sec]
+      properties:
+        status: { type: string, enum: [ok, degraded, down] }
+        version: { type: string }
+        uptime_sec: { type: number }
+
+    SnapshotMeta:
+      type: object
+      required: [snapshot_id, generated_at]
+      properties:
+        snapshot_id: { type: string }
+        generated_at: { type: string, format: date-time }
+        dqs_score: { type: number, minimum: 0, maximum: 100 }
+        fallback_used: { type: boolean }
+
+    RegimeLayer:
+      type: object
+      required: [name, score, direction]
+      properties:
+        name: { type: string }
+        score: { type: number }
+        direction: { type: string, enum: [bullish, bearish, neutral] }
+        evidence:
+          type: array
+          items: { type: string }
+
+    AssetSignal:
+      type: object
+      required: [symbol, score, direction, status]
+      properties:
+        symbol: { type: string }
+        score: { type: number, minimum: 0, maximum: 100 }
+        direction: { type: string, enum: [bullish, bearish, neutral] }
+        status: { type: string, enum: [BLOCKING, PENDING, CONFIRMED] }
+        confluence_aligned: { type: boolean }
+        dominant_module: { type: string }
+        win_rate_signal: { type: string, enum: [AVOID, NORMAL, BOOST, INSUFFICIENT_DATA] }
+
+    RegimeReport:
+      type: object
+      required: [meta, regime_label, layers, assets]
+      properties:
+        meta: { $ref: "#/components/schemas/SnapshotMeta" }
+        regime_label: { type: string, enum: [OFFENSIVE, NEUTRAL, DEFENSIVE, CRISIS] }
+        layers:
+          type: array
+          items: { $ref: "#/components/schemas/RegimeLayer" }
+        assets:
+          type: array
+          items: { $ref: "#/components/schemas/AssetSignal" }
+        headlines:
+          type: array
+          items: { $ref: "#/components/schemas/NewsHeadline" }
+        catalysts:
+          type: array
+          items: { $ref: "#/components/schemas/Catalyst" }
+
+    NewsHeadline:
+      type: object
+      required: [id, source, ts, title]
+      properties:
+        id: { type: string }
+        source: { type: string }
+        region: { type: string }
+        ts: { type: string, format: date-time }
+        title: { type: string }
+        title_tr: { type: string }
+        sentiment: { type: string, enum: [bullish, bearish, neutral] }
+        asset_impact:
+          type: object
+          additionalProperties: { type: number }
+
+    Catalyst:
+      type: object
+      required: [id, ts, title]
+      properties:
+        id: { type: string }
+        ts: { type: string, format: date-time }
+        title: { type: string }
+        importance: { type: string, enum: [low, medium, high] }
+        region: { type: string }
+
+    RiskGate:
+      type: object
+      required: [action, reason]
+      properties:
+        action: { type: string, enum: [HOLD, WATCH, HEDGE_INCREASE, NO_POSITION_INCREASE, RISK_REDUCE, KILL_SWITCH] }
+        reason: { type: string }
+        evidence:
+          type: array
+          items: { type: string }
+
+    AgentVote:
+      type: object
+      required: [persona, direction, confidence]
+      properties:
+        persona: { type: string, enum: [analyst, risk_officer, macro_strategist] }
+        direction: { type: string, enum: [bullish, bearish, neutral] }
+        confidence: { type: number, minimum: 0, maximum: 1 }
+        narrative: { type: string }
+
+    ModuleHealth:
+      type: object
+      additionalProperties:
+        type: object
+        properties:
+          status: { type: string, enum: [ok, degraded, down] }
+          last_success_at: { type: string, format: date-time }
+          notes: { type: string }
+
+    DashboardState:
+      type: object
+      required: [meta, risk_gate, agent_votes, module_health]
+      properties:
+        meta: { $ref: "#/components/schemas/SnapshotMeta" }
+        risk_gate: { $ref: "#/components/schemas/RiskGate" }
+        agent_votes:
+          type: array
+          items: { $ref: "#/components/schemas/AgentVote" }
+        quorum_reached: { type: boolean }
+        module_health: { $ref: "#/components/schemas/ModuleHealth" }
+        warnings:
+          type: array
+          items: { type: string }
+
+    AIReport:
+      type: object
+      required: [meta, verdict, narrative]
+      properties:
+        meta: { $ref: "#/components/schemas/SnapshotMeta" }
+        verdict: { type: string, enum: [bullish, bearish, neutral, no_trade] }
+        narrative: { type: string }
+        key_signals:
+          type: array
+          items: { type: string }
+        token_usage:
+          type: object
+          properties:
+            input: { type: integer }
+            output: { type: integer }
+            cached: { type: boolean }
+
+    Position:
+      type: object
+      required: [id, symbol, side, entry_price, size_usd, opened_at]
+      properties:
+        id: { type: string }
+        symbol: { type: string }
+        side: { type: string, enum: [long, short] }
+        entry_price: { type: number }
+        current_price: { type: number }
+        size_usd: { type: number }
+        unrealized_pnl_usd: { type: number }
+        sl: { type: number }
+        tp: { type: number }
+        opened_at: { type: string, format: date-time }
+
+    Trade:
+      type: object
+      required: [id, symbol, side, entry_price, exit_price, pnl_usd, opened_at, closed_at, close_reason]
+      properties:
+        id: { type: string }
+        symbol: { type: string }
+        side: { type: string, enum: [long, short] }
+        entry_price: { type: number }
+        exit_price: { type: number }
+        pnl_usd: { type: number }
+        opened_at: { type: string, format: date-time }
+        closed_at: { type: string, format: date-time }
+        close_reason: { type: string, enum: [SL_HIT, TP_HIT, SIGNAL_REVERSAL, RISK_REDUCE, MANUAL] }
+        fingerprint: { type: string }
+
+    PaperTradingState:
+      type: object
+      required: [equity_usd, realized_pnl_usd, open_positions, recent_trades]
+      properties:
+        equity_usd: { type: number }
+        realized_pnl_usd: { type: number }
+        unrealized_pnl_usd: { type: number }
+        max_drawdown_pct: { type: number }
+        sharpe_30d: { type: number }
+        open_positions:
+          type: array
+          items: { $ref: "#/components/schemas/Position" }
+        recent_trades:
+          type: array
+          items: { $ref: "#/components/schemas/Trade" }
+
+    TickResult:
+      type: object
+      required: [tick_at, signals_processed, actions]
+      properties:
+        tick_at: { type: string, format: date-time }
+        signals_processed: { type: integer }
+        actions:
+          type: array
+          items:
+            type: object
+            properties:
+              symbol: { type: string }
+              action: { type: string, enum: [open, close, hold, blocked] }
+              reason: { type: string }
+
+    CalibrationBin:
+      type: object
+      required: [bin_lo, bin_hi, predicted, observed, count]
+      properties:
+        bin_lo: { type: number }
+        bin_hi: { type: number }
+        predicted: { type: number }
+        observed: { type: number }
+        count: { type: integer }
+
+    LearningSummary:
+      type: object
+      required: [total_trades, win_rate, calibration]
+      properties:
+        total_trades: { type: integer }
+        win_rate: { type: number }
+        sharpe: { type: number }
+        sortino: { type: number }
+        max_dd_pct: { type: number }
+        walk_forward:
+          type: object
+          properties:
+            train_window: { type: integer }
+            test_window: { type: integer }
+            test_sharpe: { type: number }
+            test_win_rate: { type: number }
+        calibration:
+          type: array
+          items: { $ref: "#/components/schemas/CalibrationBin" }
+        module_skew:
+          type: object
+          additionalProperties: { type: number }
+        weights_version: { type: string }

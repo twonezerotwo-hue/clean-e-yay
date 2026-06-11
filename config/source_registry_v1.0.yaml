@@ -1,0 +1,75 @@
+version: "1.0.0"
+created_at: "2026-06-11"
+description: |
+  Veri kaynakları kaydı. Her kaynak `decision_usage` ile etiketlenir:
+  - verified_required: stratejik karar için zorunlu
+  - simulation_only: paper trading için yeterli, gerçek kararda gate
+  - analytics_only: sadece raporlama
+
+sources:
+  - id: btcusd_yfinance
+    kind: price
+    asset: BTCUSD
+    fetcher: yfinance
+    cadence_sec: 180
+    decision_usage: verified_required
+    fallback_to_mock: false
+
+  - id: ethusd_yfinance
+    kind: price
+    asset: ETHUSD
+    fetcher: yfinance
+    cadence_sec: 180
+    decision_usage: verified_required
+    fallback_to_mock: false
+
+  - id: xauusd_yfinance
+    kind: price
+    asset: XAUUSD
+    fetcher: yfinance
+    cadence_sec: 180
+    decision_usage: verified_required
+    fallback_to_mock: false
+
+  - id: dxy_fred
+    kind: macro
+    asset: DXY
+    fetcher: fred
+    cadence_sec: 3600
+    decision_usage: verified_required
+    fallback_to_mock: false
+
+  - id: us10y_fred
+    kind: macro
+    asset: US10Y
+    fetcher: fred
+    cadence_sec: 3600
+    decision_usage: verified_required
+    fallback_to_mock: false
+
+  - id: vix_yfinance
+    kind: macro
+    asset: VIX
+    fetcher: yfinance
+    cadence_sec: 180
+    decision_usage: verified_required
+    fallback_to_mock: false
+
+  - id: news_general_rss
+    kind: news
+    fetcher: rss
+    cadence_sec: 60
+    decision_usage: analytics_only
+    feeds:
+      - https://www.cnbc.com/id/100003114/device/rss/rss.html
+      - https://www.investing.com/rss/news_25.rss
+      - https://www.coindesk.com/arc/outboundfeeds/rss/
+
+  - id: news_geo_rss
+    kind: news_geo
+    fetcher: rss
+    cadence_sec: 60
+    decision_usage: analytics_only
+    feeds:
+      - https://feeds.reuters.com/reuters/topNews
+      - https://www.aljazeera.com/xml/rss/all.xml

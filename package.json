@@ -1,0 +1,13 @@
+{
+  "name": "clean-e-yay",
+  "version": "2.0.0",
+  "private": true,
+  "description": "Clean rewrite of E_YAY CODEX — workspace root",
+  "workspaces": ["apps/web"],
+  "scripts": {
+    "dev": "pnpm --filter web dev",
+    "build": "pnpm --filter web build",
+    "codegen": "make codegen"
+  },
+  "packageManager": "pnpm@9.0.0"
+}
