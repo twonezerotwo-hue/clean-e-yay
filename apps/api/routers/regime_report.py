@@ -5,6 +5,7 @@ from fastapi import APIRouter
 
 from packages.consensus.engine import build as build_consensus
 from packages.data.ingestion.pipeline import DEFAULT_SYMBOLS, get_cached_snapshot
+from packages.data.provenance import data_provenance
 from packages.regime.classifier import classify
 
 router = APIRouter(tags=["regime"])
@@ -44,6 +45,7 @@ def get_regime_report_current() -> dict:
             "dqs_score": snap.quality.score,
             "fallback_used": snap.quality.fallback_used,
         },
+        "mode": data_provenance(snap),
         "regime_label": regime.label,
         "layers": [
             {

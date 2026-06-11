@@ -9,7 +9,7 @@ from __future__ import annotations
 from fastapi import APIRouter
 
 from packages.data.ingestion.pipeline import DEFAULT_SYMBOLS, get_cached_snapshot
-from packages.data.providers import price as price_provider
+from packages.data.provenance import data_provenance
 
 router = APIRouter(tags=["data"])
 
@@ -24,11 +24,7 @@ def get_snapshot() -> dict:
             "generated_at": snap.generated_at.isoformat(),
             "symbols": DEFAULT_SYMBOLS,
         },
-        "mode": {
-            "mock_mode": price_provider.is_mock_mode(),
-            "mock_warning": price_provider.is_runtime_mock_explicit(),
-            "test_mock": price_provider.is_test_mock_allowed(),
-        },
+        "mode": data_provenance(snap),
         "prices": [
             {
                 "symbol": p.symbol,
