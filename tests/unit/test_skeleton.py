@@ -1,4 +1,4 @@
-"""Skeleton smoke test — paketlerin import edilebildiğini doğrular."""
+"""Skeleton smoke testleri — paketler import edilir, /health yanıt verir."""
 from __future__ import annotations
 
 
