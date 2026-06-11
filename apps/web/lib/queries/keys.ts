@@ -10,4 +10,5 @@ export const qk = {
   calibration: ["learning", "calibration"] as const,
   mistakes: ["learning", "mistakes"] as const,
   riskCorrelation: ["risk", "correlation"] as const,
+  riskHalts: ["risk", "halts"] as const,
 };

@@ -363,3 +363,42 @@ export type CorrelationState = {
   equity_usd: number;
   insufficient_pairs: string[];
 };
+
+export type HaltType = "DAILY_LOSS" | "MAX_DRAWDOWN";
+export type HaltLevel = "KILL_SWITCH" | "RISK_REDUCE";
+
+export type HaltEvent = {
+  id: string;
+  type: HaltType;
+  level: HaltLevel;
+  started_at: string;
+  reason: string;
+  evidence: string[];
+  active: boolean;
+  cleared_at: string | null;
+  cleared_by: string | null;
+};
+
+export type HaltMetrics = {
+  equity_usd: number;
+  peak_equity_usd: number;
+  daily_pnl_usd: number;
+  daily_loss_limit_usd: number;
+  daily_loss_ratio: number;
+  drawdown_pct: number;
+  max_drawdown_pct: number;
+  drawdown_ratio: number;
+};
+
+export type HaltsState = {
+  halt_active: boolean;
+  active: HaltEvent[];
+  timeline: HaltEvent[];
+  metrics: HaltMetrics;
+  reset_hint: string;
+};
+
+export type HaltResetResult = {
+  cleared_count: number;
+  cleared: HaltEvent[];
+};

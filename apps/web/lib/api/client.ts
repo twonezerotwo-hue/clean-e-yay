@@ -7,6 +7,8 @@ import type {
   CalibrationState,
   CorrelationState,
   DashboardState,
+  HaltResetResult,
+  HaltsState,
   DataSnapshot,
   Health,
   LearningSummary,
@@ -55,4 +57,7 @@ export const api = {
   mistakes: () => fetchJSON<MistakesState>("/api/v1/learning/mistakes"),
   riskCorrelation: () =>
     fetchJSON<CorrelationState>("/api/v1/risk/correlation"),
+  riskHalts: () => fetchJSON<HaltsState>("/api/v1/risk/halts"),
+  riskHaltsReset: () =>
+    fetchJSON<HaltResetResult>("/api/v1/risk/halts/reset", { method: "POST" }),
 };

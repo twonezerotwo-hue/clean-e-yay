@@ -5,13 +5,20 @@ import { PanelHeader } from "@/components/shell/PanelHeader";
 import { LoadingState } from "@/components/shell/LoadingState";
 import { EmptyState } from "@/components/shell/EmptyState";
 import { SparkLine } from "@/components/charts/SparkLine";
-import { usePaperTradingState, useRiskCorrelation } from "@/lib/queries/hooks";
+import {
+  usePaperTradingState,
+  useRiskCorrelation,
+  useRiskHalts,
+} from "@/lib/queries/hooks";
 import { selectFlaggedClusters, selectLimits } from "@/lib/selectors/correlation";
+import { selectHaltLevel } from "@/lib/selectors/halts";
 import { fmtUSD, fmtPct, fmtNum } from "@/lib/format";
 
 export function TradingPanel() {
   const { data, isLoading } = usePaperTradingState();
   const { data: corr } = useRiskCorrelation();
+  const { data: halts } = useRiskHalts();
+  const haltLevel = selectHaltLevel(halts);
   if (isLoading) {
     return (
       <PanelFrame id="trading">
@@ -42,6 +49,19 @@ export function TradingPanel() {
       <PanelHeader
         title="Paper Trading"
         subtitle={`${data.open_positions.length} açık · ${data.recent_trades.length} kapanmış`}
+        actions={
+          haltLevel ? (
+            <span
+              className={`rounded px-1.5 py-0.5 uppercase tracking-wide text-[10px] ${
+                haltLevel === "KILL_SWITCH"
+                  ? "bg-signal-down/20 text-signal-down"
+                  : "bg-amber-400/20 text-amber-400"
+              }`}
+            >
+              RISK FREEZE · {haltLevel}
+            </span>
+          ) : undefined
+        }
       />
       <div className="grid grid-cols-3 gap-3 text-xs mb-3">
         <Stat label="Equity" value={fmtUSD(data.equity_usd)} />

@@ -1,6 +1,6 @@
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { api } from "@/lib/api/client";
 import { qk } from "./keys";
@@ -86,3 +86,23 @@ export const useRiskCorrelation = () =>
     staleTime: 60_000,
     refetchInterval: 2 * 60_000,
   });
+
+export const useRiskHalts = () =>
+  useQuery({
+    queryKey: qk.riskHalts,
+    queryFn: api.riskHalts,
+    staleTime: 15_000,
+    refetchInterval: 30_000,
+  });
+
+/** G5 — owner reset (tek manuel çıkış yolu; otomatik reset yok). */
+export const useHaltReset = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: api.riskHaltsReset,
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: qk.riskHalts });
+      void queryClient.invalidateQueries({ queryKey: qk.dashboardState });
+    },
+  });
+};
