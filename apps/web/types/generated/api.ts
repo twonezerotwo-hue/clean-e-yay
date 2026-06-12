@@ -367,6 +367,49 @@ export type DataSnapshot = {
   provider_status: Record<string, ProviderStatus>;
   warnings: string[];
   technicals_by_tf?: Record<string, Partial<Record<Timeframe, TechnicalTf>>>;
+  // v2.7 D2 — kripto türev zekâsı (symbol → DerivativesSnapshot). Crypto-only.
+  derivatives?: Record<string, DerivativesSnapshot>;
+};
+
+// v2.7 D2 — Crypto Derivatives Intelligence (funding / OI / squeeze proxy).
+// squeeze_proxy GERÇEK liquidation değildir (is_proxy=true). Karar zincirinde
+// yalnızca kısıtlayıcı; asla size artırmaz.
+export type SqueezeLevel = "NONE" | "LOW" | "ELEVATED" | "HIGH";
+export type FundingBias = "crowded_long" | "crowded_short" | "neutral";
+export type DerivativesStatus = "OK" | "DEGRADED";
+
+export type DerivativesSnapshot = {
+  symbol: string;
+  funding_rate: number | null;
+  funding_annualized: number | null;
+  open_interest_usd: number | null;
+  oi_change_pct: number | null;
+  price_momentum_pct: number | null;
+  volatility_pct: number | null;
+  squeeze_proxy: number;
+  squeeze_level: SqueezeLevel;
+  funding_bias: FundingBias;
+  is_proxy: boolean;
+  status: DerivativesStatus;
+  source: string;
+  verified: boolean;
+  freshness?: "FRESH" | "RECENT" | "STALE" | null;
+  dqs: number;
+  ts: string;
+  evidence?: string[];
+  error?: string | null;
+};
+
+// Matrix banner için per-symbol özet (yalnızca status=OK).
+export type DerivativesSummary = {
+  symbol: string;
+  squeeze_level: SqueezeLevel;
+  squeeze_proxy: number;
+  funding_bias: FundingBias;
+  funding_rate?: number | null;
+  is_proxy: boolean;
+  status: DerivativesStatus;
+  verified: boolean;
 };
 
 export type WeightDelta = {
@@ -593,6 +636,9 @@ export type DecisionMatrix = {
   dqs_status?: DqsStatus;
   suspended?: boolean;
   event_risk?: EventRiskView;
+  // v2.7 D2 — per-symbol türev özeti (banner). Etkilenen hücreler
+  // blocked_by="derivatives_risk:*" + reason ile zaten görünür.
+  derivatives?: DerivativesSummary[];
   mode?: ProvenanceMode;
   cells: TimeframeDecision[];
 };

@@ -151,6 +151,51 @@ class CatalystImpact(BaseModel):
     confidence: float = 0.0         # 0..1 (kaynak doğrulaması)
 
 
+# v2.7 D2 — Crypto Derivatives Intelligence (funding / OI / squeeze proxy).
+DerivativesStatus = Literal["OK", "DEGRADED"]
+SqueezeLevel = Literal["NONE", "LOW", "ELEVATED", "HIGH"]
+FundingBias = Literal["crowded_long", "crowded_short", "neutral"]
+
+
+class DerivativesSnapshot(BaseModel):
+    """Tek kripto sembol için türev (derivatives) zekâsı.
+
+    v2.7 D2: funding rate + open interest + squeeze proxy. **Yalnızca kripto
+    sembolleri** için üretilir ve karar zincirinde **yalnızca kısıtlayıcı**
+    (CAUTION / size-reduce) veya bağlam etkisi yapar — asla size artırmaz,
+    asla RiskGate/DQS/halt'ı bypass etmez.
+
+    `squeeze_proxy` GERÇEK liquidation API'si DEĞİLDİR — funding + OI değişimi +
+    fiyat momentumu + volatiliteden türetilen bir vekildir (`is_proxy=True`,
+    açıkça "proxy" etiketli; gerçek liquidation diye sunulmaz).
+
+    DATA_POLICY: runtime'da yalnızca gerçek (live) veri `verified=True` taşır.
+    Live provider başarısız olursa `status="DEGRADED"`, alanlar None — mock
+    üretilmez, crash olmaz. Fixture verisi `verified=False` damgalıdır ve
+    karar zincirine GİRMEZ (yalnızca dashboard bağlamı).
+    """
+
+    symbol: str
+    funding_rate: float | None = None          # 8s interval, ondalık (0.0001 = %0.01)
+    funding_annualized: float | None = None     # bağlam (≈ funding_rate × 3 × 365)
+    open_interest_usd: float | None = None
+    oi_change_pct: float | None = None          # önceki gözleme göre OI değişimi
+    price_momentum_pct: float | None = None     # kısa vadeli (1h) fiyat momentumu
+    volatility_pct: float | None = None         # ATR/fiyat (normalize)
+    squeeze_proxy: float = 0.0                   # 0..100 (PROXY — gerçek liq değil)
+    squeeze_level: SqueezeLevel = "NONE"
+    funding_bias: FundingBias = "neutral"
+    is_proxy: bool = True                        # squeeze her zaman proxy
+    status: DerivativesStatus = "DEGRADED"
+    source: str = "unknown"
+    verified: bool = False
+    freshness: NewsFreshness | None = None       # FRESH / RECENT / STALE
+    dqs: float = 0.0                             # bu sembolün türev veri kalitesi (0..100)
+    ts: datetime = Field(default_factory=utcnow)
+    evidence: list[str] = Field(default_factory=list)
+    error: str | None = None
+
+
 RotationStatus = Literal["OK", "UNAVAILABLE"]
 
 

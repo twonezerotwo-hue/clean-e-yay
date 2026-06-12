@@ -4,6 +4,30 @@ _Bu dosya kısa ve güncel tutulur. Her görev sonunda güncellenir._
 
 ## Last known status
 
+- **v2.7 D2 — Crypto Derivatives Intelligence tamamlandı** (2026-06-12): kripto
+  türev zekâsı (funding / OI / squeeze proxy) karar zincirine **yalnızca
+  kısıtlayıcı** eklendi. Yeni provider `packages/data/providers/derivatives/`
+  (Binance public futures + deterministik squeeze proxy engine + fixtures +
+  orchestrator; crypto-only BTCUSD/ETHUSD, runtime mock yok, live fail →
+  DEGRADED). `squeeze_proxy` is_proxy=true — GERÇEK liquidation API'si değil.
+  - **Gate** (`packages/risk/derivatives_risk.py`): yalnızca verified+OK; HIGH→
+    NO_POSITION_INCREASE, ELEVATED→CAUTION ×0.5, funding-chase→CAUTION,
+    contrarian→NONE. size_factor ≤ 1.0 (asla artırmaz). RiskGate hard gate'inden
+    SONRA, yalnızca açılış adayına. Timeframe ağırlıklı (15m/1h tam, 1d softens,
+    1w off).
+  - **Entegrasyon**: pipeline `MarketSnapshot.derivatives`; decision engine
+    `derivatives_report` + blocked_by `derivatives_risk:*`; matrix `derivatives`
+    özeti; `/data/snapshot` derivatives alanı; thresholds `derivatives.*`.
+  - **Sözleşme** additive: openapi `DerivativesSnapshot`/`DerivativesSummary`/
+    `SqueezeLevel`/`FundingBias` + TS api.ts senkron (codegen drift yeşil).
+  - **Frontend**: `CryptoDerivativesPanel` (selector+registry, page.tsx
+    büyümedi) + TimeframeMatrixPanel türev banner + hücre "TÜREV" rozeti.
+  - **238/238 pytest** (+29 D2; live network yok), CI-scope ruff + tsc + pnpm
+    build yeşil. Live smoke OK. PAPER_SAFE/NO_EXECUTION; RiskGate/DQS/KillSwitch/
+    halt sıfır diff, bypass yok.
+  - Açık (NEXT): D2 kalan slice'ları (options IV/skew Deribit, realized vol,
+    gerçek haber feed + catalyst half-life) ve/veya gerçek replay/backtest motoru.
+
 - **OPS tamamlandı**: contract/replay testleri + codegen drift güvencesi +
   operasyonel sağlamlaştırma. Yeni trading feature YOK; karar zinciri sıfır diff.
   - **Contract testleri** (`tests/contract/`, eskiden boştu): OpenAPI'deki her

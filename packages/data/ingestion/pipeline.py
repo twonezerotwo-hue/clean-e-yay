@@ -11,6 +11,7 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 
 from packages.data.providers import calendar as cal_provider
+from packages.data.providers import derivatives as deriv_provider
 from packages.data.providers import news as news_provider
 from packages.data.providers import ohlcv as ohlcv_provider
 from packages.data.providers import price as price_provider
@@ -21,6 +22,7 @@ from packages.data.quality.dqs import compute as compute_dqs
 from packages.data.types import (
     TIMEFRAMES,
     Catalyst,
+    DerivativesSnapshot,
     NewsHeadline,
     PriceQuote,
     RotationView,
@@ -49,6 +51,9 @@ class MarketSnapshot:
     # T0 contract seed — T1'de OHLCV bazlı multi-TF technicals doldurur.
     # None → yalnızca legacy `technicals` (1d) mevcut. Anahtar: symbol → tf.
     technicals_by_tf: dict[str, dict[str, TechnicalSnapshot]] | None = None
+    # v2.7 D2 — kripto türev zekâsı (funding/OI/squeeze proxy). Anahtar: symbol.
+    # Yalnızca kripto sembolleri; karar zincirinde yalnızca kısıtlayıcı.
+    derivatives: dict[str, DerivativesSnapshot] = field(default_factory=dict)
 
 
 def _make_id(now: datetime) -> str:
@@ -77,6 +82,10 @@ def build_snapshot(symbols: list[str] | None = None) -> MarketSnapshot:
     headlines = news_provider.list_headlines(14)
     catalysts = cal_provider.list_catalysts(8)
     rotation = rot_provider.get_rotation()
+    # v2.7 D2 — kripto türev zekâsı (yalnızca crypto sembolleri için).
+    derivatives = deriv_provider.get_derivatives(
+        [s for s in syms if s in deriv_provider.CRYPTO_SYMBOLS]
+    )
     quality = compute_dqs(prices, syms)
     warnings = list(quality.notes)
     degraded_tfs = [
@@ -94,12 +103,16 @@ def build_snapshot(symbols: list[str] | None = None) -> MarketSnapshot:
         warnings.append("calendar_unavailable")
     if rotation.status == "UNAVAILABLE":
         warnings.append("rotation_unavailable: " + (rotation.error or "data insufficient"))
+    degraded_deriv = [s for s, d in derivatives.items() if d.status == "DEGRADED"]
+    if degraded_deriv:
+        warnings.append("derivatives_degraded: " + ", ".join(sorted(degraded_deriv)))
     provider_status = {
         **price_provider.get_provider_status(),
         **ohlcv_provider.get_provider_status(),
         **news_provider.get_provider_status(),
         **cal_provider.get_provider_status(),
         **rot_provider.get_provider_status(),
+        **deriv_provider.get_provider_status(),
     }
     if price_provider.is_runtime_mock_explicit():
         warnings.insert(0, "PRICE_USE_MOCK=true — TEST/MOCK MODE")
@@ -115,6 +128,7 @@ def build_snapshot(symbols: list[str] | None = None) -> MarketSnapshot:
         warnings=warnings,
         provider_status=provider_status,
         technicals_by_tf=technicals_by_tf or None,
+        derivatives=derivatives,
     )
 
 

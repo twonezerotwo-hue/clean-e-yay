@@ -31,6 +31,7 @@ import { CalibrationPanel } from "@/components/panels/CalibrationPanel";
 import { MistakeMemoryPanel } from "@/components/panels/MistakeMemoryPanel";
 import { CorrelationPanel } from "@/components/panels/CorrelationPanel";
 import { DrawdownGuardPanel } from "@/components/panels/DrawdownGuardPanel";
+import { CryptoDerivativesPanel } from "@/components/panels/CryptoDerivativesPanel";
 import { TimeframeMatrixPanel } from "@/components/panels/TimeframeMatrixPanel";
 
 import { useKeyboardShortcuts } from "@/hooks/useKeyboardShortcuts";
@@ -76,6 +77,8 @@ export default function HomePage() {
 
         <GridCell span="2"><CorrelationPanel /></GridCell>
         <GridCell span="1"><DrawdownGuardPanel /></GridCell>
+
+        <GridCell span="1"><CryptoDerivativesPanel /></GridCell>
 
         <GridCell span="3"><PositionChecksPanel /></GridCell>
 

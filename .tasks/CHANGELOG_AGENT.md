@@ -1,5 +1,25 @@
 # Agent Changelog
 
+## 2026-06-12 — v2.7 D2 Crypto Derivatives Intelligence
+- Yeni provider `packages/data/providers/derivatives/` (binance public futures
+  funding/OI + deterministik squeeze proxy engine + offline fixtures +
+  orchestrator). Crypto-only (BTCUSD/ETHUSD); runtime mock yok, live fail →
+  DEGRADED. squeeze_proxy is_proxy=true (gerçek liquidation değil).
+- `packages/risk/derivatives_risk.py`: yalnızca kısıtlayıcı gate (HIGH→
+  NO_POSITION_INCREASE, ELEVATED→CAUTION ×0.5, funding-chase→CAUTION,
+  contrarian→NONE). verified-only. size_factor ≤ 1.0. Timeframe ağırlıklı
+  (15m/1h tam, 1d softens block, 1w off).
+- Entegrasyon: pipeline `MarketSnapshot.derivatives`; decision engine gate
+  RiskGate'ten SONRA + `derivatives_report` + blocked_by; matrix `derivatives`
+  özeti; thresholds `derivatives.*`; `/data/snapshot` derivatives alanı.
+- Sözleşme additive: openapi `DerivativesSnapshot`/`DerivativesSummary`/
+  `SqueezeLevel`/`FundingBias` + TS api.ts senkron (codegen drift yeşil).
+- Frontend: `CryptoDerivativesPanel` (selector+registry, page.tsx büyümedi) +
+  TimeframeMatrixPanel türev banner + hücre "TÜREV" rozeti.
+- Testler: +29 (`tests/unit/test_derivatives.py`). 238/238 pytest, CI-scope ruff
+  + tsc + pnpm build yeşil. Live smoke OK. PAPER_SAFE/NO_EXECUTION; karar
+  zincirinde RiskGate/DQS/halt bypass yok.
+
 ## 2026-06-11
 - Initialized persistent context protocol.
 - Added docs for architecture, safety, roadmap, dashboard rules.

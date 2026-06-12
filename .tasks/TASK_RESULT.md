@@ -1,115 +1,80 @@
 # TASK RESULT
 
 Date: 2026-06-12
-Task: OPS — contract/replay testleri + codegen drift güvencesi + operasyonel
-      sağlamlaştırma (yeni trading feature YOK)
+Task: v2.7 D2 — Crypto Derivatives Intelligence (funding / OI / squeeze proxy)
 Status: completed
 
 ## Prensip
 
-Bu tur sistemin temelini sağlamlaştırdı; karar zincirine dokunulmadı.
-PAPER_SAFE / NO_EXECUTION; RiskGate/DQS/KillSwitch/halt sıfır diff.
-OpenAPI = tek doğruluk kaynağı; tüm eklemeler additive.
+Yeni veri yüzeyi (kripto türevleri) karar zincirine **yalnızca kısıtlayıcı**
+girer. ASLA size artırmaz; ASLA RiskGate/DQS/KillSwitch/halt'ı bypass etmez.
+`squeeze_proxy` GERÇEK liquidation API'si DEĞİLDİR — funding + OI değişimi +
+momentum + volatiliteden türetilen bir vekildir (`is_proxy=true`). Runtime'da
+mock yok; live başarısız → DEGRADED. Fixture verisi `verified=false` damgalı ve
+karar zincirine girmez (yalnızca dashboard bağlamı). PAPER_SAFE / NO_EXECUTION.
 
 ## Ne yapıldı
 
-### 1. Contract testleri (`tests/contract/`, daha önce boştu)
-- `test_openapi_contract.py`: `contracts/openapi.yaml`'daki **her side-effect'siz
-  GET** endpoint'i TestClient ile çağrılır, response şemaya göre doğrulanır
-  (required alanlar + enum üyeleri + `$ref`/`oneOf` recursive; additive alanlara
-  izin verilir). Self-maintaining: endpoint listesi spec'ten türetilir.
-  - Kapsam: health, regime-report/current, dashboard/state, ai-report/current,
-    paper-trading/state, learning/{summary,calibration,mistakes,rebalance/proposal},
-    risk/{correlation,halts}, decision/matrix, data/snapshot, replay/status.
-  - `test_all_documented_paths_have_router`: openapi'deki her path app'te kayıtlı
-    (path drift guard).
-  - **Yakaladığı gerçek drift**: `LLMMeta.mode` enum'unda bare `off` → YAML onu
-    `False` boolean'ına çeviriyordu; `"off"` olarak tırnaklandı.
+### 1. Provider (yalnızca kripto: BTCUSD / ETHUSD)
+- `packages/data/providers/derivatives/binance.py`: Binance USDⓈ-M public
+  futures adapter — `premiumIndex` (funding) + `openInterestHist` (OI + Δ%).
+  Anahtarsız, salt-okuma; hata/timeout → None (mock yok, crash yok).
+- `engine.py`: deterministik squeeze proxy (0..100) — funding/OI/momentum/
+  volatilite ağırlıklı; funding_bias + freshness + DQS. Essential alan yoksa
+  DEGRADED.
+- `fixtures.py`: offline test/dev verisi (`verified=false`).
+- `__init__.py`: orchestrator — momentum/volatilite mevcut 1h OHLCV cache'inden
+  (ekstra ağ yok); crypto-only filtre; provider_status; DEGRADED fallback.
 
-### 2. Codegen drift güvencesi (`tests/contract/test_codegen_drift.py`)
-- `apps/web/types/generated/api.ts` el-senkron; bu test driftini CI'da yakalar:
-  - Her OpenAPI component schema adının bir TS `export type` karşılığı var
-    (alias: `TechnicalSnapshotTF→TechnicalTf`).
-  - Her OpenAPI enum üyesi TS'te string-literal olarak mevcut.
-  - **Yakaladığı gerçek drift**: TS `Trade.close_reason`'da `TIME_STOP_EXIT` ve
-    `KILL_SWITCH_EXIT` eksikti → eklendi.
-- Bu testler `testpaths=["tests"]` altında CI `pytest`'inde otomatik koşar →
-  drift CI'ı kırar.
+### 2. Risk gate (`packages/risk/derivatives_risk.py`)
+- `assess()`: yalnızca `verified=True` + `status=OK` snapshot sayılır. Squeeze
+  HIGH → NO_POSITION_INCREASE (block); ELEVATED → CAUTION ×0.5; LOW → WATCH;
+  funding-chase (aday yön kalabalıkla aynı) → CAUTION; contrarian → NONE (boost
+  yok). size_factor ≤ 1.0 garanti.
+- `timeframe_weight()` / `apply_timeframe()`: 15m/1h tam etki, 1d düşük ağırlık
+  (block CAUTION'a yumuşar), 1w etki yok.
 
-### 3. Snapshot / replay foundation (dürüst iskelet)
-- Disk snapshot store YOK; snapshot'lar in-memory `_CACHE`. Sahte replay/backtest
-  üretmedik. Bunun yerine **dürüst rezerve** endpoint'i:
-  - `apps/api/routers/replay.py`: `GET /replay/status` (en son okunabilir snapshot
-    id + `status: reserved_not_active`, `available: false`) ve
-    `GET /replay/{snapshot_id}` (matches_latest döner, replay ÇALIŞTIRMAZ).
-  - Web: `ReplayStatusPanel` artık dashboard meta yerine bu endpoint'e bağlı;
-    "REZERVE · AKTİF DEĞİL" rozeti + dürüst reason gösterir (selector/hook üzerinden).
+### 3. Entegrasyon
+- `pipeline.py`: `MarketSnapshot.derivatives` (crypto-only); DEGRADED → warning;
+  provider_status birleştirildi.
+- `decision/engine.py`: derivatives gate RiskGate hard gate'lerinden **SONRA**,
+  yalnızca açılış adayına uygulanır (`derivatives_report` + blocked_by). matrix
+  banner için `derivatives` özeti.
+- `config/thresholds_v1.0.yaml`: `derivatives` eşikleri + ağırlık + timeframe.
+- `apps/api/routers/data.py`: `/data/snapshot` `derivatives` alanını döner.
 
-### 4. Dashboard/API consistency audit
-- Tüm dokümante GET endpoint'leri 200 (contract test). Panel registry'deki her
-  data hook'u bu endpoint'lerden birine bağlı; eksik/bozuk endpoint yok.
-- page.tsx büyümedi; frontend hesap yapmıyor; selector + generated types.
+### 4. Sözleşme + tipler (additive)
+- `contracts/openapi.yaml`: `DerivativesSnapshot` + `DerivativesSummary` +
+  `SqueezeLevel`/`FundingBias` enum; DataSnapshot.derivatives + DecisionMatrix.
+  derivatives. `apps/web/types/generated/api.ts` el-senkron. Codegen drift +
+  OpenAPI contract testleri yeşil.
 
-### 5. OpenAPI ↔ runtime uyumu (additive reconciliation)
-- API'de olup openapi'de eksik path'ler eklendi (response şemaları TS'te zaten
-  vardı): `/data/snapshot`→DataSnapshot, `/learning/calibration`→CalibrationState,
-  `/learning/calibration/retrain`, `/learning/mistakes`→MistakesState,
-  `/learning/rebalance/proposal`→RebalanceState, `/paper-trading/reset`,
-  `/replay/status`→ReplayStatus, `/replay/{snapshot_id}`→ReplaySnapshotStatus.
-- Yeni component şemalar eklendi (TS ile birebir): ProviderStatus, DqsBreakdown,
-  LivePrice, ProvenanceMode, DataSnapshot, CalibrationParams, CalibrationState,
-  MistakeRecord, MistakeVerdict, MistakesState, WeightDelta, ModulePerf,
-  RebalanceProposalRecord, RebalanceState, ReplayStatus, ReplaySnapshotStatus.
-- TS tarafı: `OHLCVBar` + replay tipleri eklendi; `DataSnapshot.mode` gerçek
-  runtime şekline (`ProvenanceMode`, 7 alan) düzeltildi (eski `SnapshotMode` subset'ti).
+### 5. Frontend (selector + panel-registry; page.tsx büyümedi → 1 GridCell)
+- `CryptoDerivativesPanel`: BTC/ETH funding + OI + ΔOI + squeeze proxy/level +
+  funding_bias + source + freshness + DQS + status + karar etkisi rozeti +
+  doğrulanmamış/DEGRADED durumları. "gerçek liq değil" açıkça etiketli.
+- `TimeframeMatrixPanel`: türev sıkışma banner'ı + hücre `blocked_by` rozeti
+  ("TÜREV"). Selector: `selectDerivatives`, `selectMatrixDerivatives`.
 
-### 6. Dev reliability
-- README: eski `E_YAY CODEX` LaunchAgent port çakışması (`com.eyay.backend` →
-  `0.0.0.0:8000`) için troubleshooting bölümü + `launchctl bootout` çözümü;
-  smoke listesine `decision/matrix` + `replay/status` eklendi.
-- SSL_CERT_FILE/certifi zaten dokümante (`make api-dev`/`scripts/dev.sh` otomatik).
+### 6. Testler (`tests/unit/test_derivatives.py`, 29 yeni)
+- engine parse + DEGRADED + squeeze/bias eşikleri + determinism.
+- binance adapter parse (ağsız monkeypatch) + fail→None.
+- orchestrator crypto-only + fixture unverified + provider-fail DEGRADED +
+  no-network.
+- gate taksonomi (HIGH block / ELEVATED CAUTION / chase / contrarian / never
+  boost) + timeframe ağırlığı (1w off / 1d softens / 1.0 keeps block).
+- decide_matrix uçtan uca: verified HIGH → hücre durur; CAUTION → size küçülür
+  (açılış korunur); unverified → bloklamaz (yalnızca bağlam).
 
-## Files changed
+## Sonuçlar
+- **pytest: 238/238** (209 baseline + 29 D2). Live network yok.
+- ruff (CI scope: packages + apps/api + workers + tests/contract): temiz.
+- `pnpm tsc --noEmit` + `pnpm build`: yeşil.
+- Live smoke: API health/snapshot/matrix/dashboard 200; `/data/snapshot` ve
+  `/decision/matrix` derivatives alanı dönüyor; web SSR 200, "Kripto Türevleri"
+  paneli + mevcut paneller (Haberler/Rotasyon/Olay/Matris) bozulmadı; log temiz.
 
-- `apps/api/routers/replay.py` — yeni (dürüst rezerve replay endpoint'i).
-- `apps/api/main.py` — replay router register.
-- `contracts/openapi.yaml` — eksik path'ler + 16 yeni component schema; `off`→`"off"`.
-- `apps/web/types/generated/api.ts` — OHLCVBar + replay tipleri; DataSnapshot.mode→
-  ProvenanceMode; Trade.close_reason enum tamamlandı.
-- `apps/web/lib/api/client.ts`, `lib/queries/{keys,hooks}.ts` — replayStatus wiring.
-- `apps/web/components/panels/ReplayStatusPanel/index.tsx` — dürüst rezerve görünüm.
-- `tests/contract/{__init__.py,test_openapi_contract.py,test_codegen_drift.py}` — yeni.
-- `README.md` — port çakışması + smoke.
-
-## Tests run
-
-- `pytest` → **209 passed** (191 → +18 contract/drift). Live network yok.
-- `ruff check packages apps/api apps/tick_worker apps/learning_worker` + `tests/contract`
-  → **All checks passed**.
-- web `tsc --noEmit` → **exit 0**; `pnpm build` → **✓ Compiled successfully**.
-
-## Live dashboard smoke
-
-- Clean E-yAy API `127.0.0.1:8000` (eski `0.0.0.0:8000` agent'ın yanında, SSL_CERT_FILE
-  ile, live network): health `version 2.0.0`; data/snapshot, dashboard/state,
-  decision/matrix, regime-report/current, risk/correlation, risk/halts,
-  learning/{summary,calibration,mistakes} → **hepsi 200**.
-- `replay/status` → `reserved_not_active`, `available:false`, latest snapshot id;
-  `replay/{id}` → matches_latest false, replay çalıştırmaz.
-- Web `127.0.0.1:3000` (next dev): SSR **200**, **28 panel** (Replay Durumu dahil),
-  HeroScene canvas + PAPER banner korunuyor.
-
-## PAPER_SAFE check
-
-- broker: none · real order: none · live execution: none · replay: rezerve (sahte yok).
-- RiskGate/DQS/KillSwitch/halt: sıfır diff. LLM karar motoruna dokunulmadı.
-- Frontend hesap yapmıyor; page.tsx büyümedi; tüm şema değişiklikleri additive.
-
-## SKIPPED / NEXT (bilinçli)
-
-- Gerçek replay/backtest motoru YAPILMADI (sahte replay yasak; rezerve dürüstçe
-  raporlandı). Gerçek deterministik replay → disk snapshot store + replay engine
-  gerektirir; ayrı slice.
-- `openapi-typescript` ile gerçek codegen otomasyonu kurulmadı; drift guard testi
-  bu boşluğu CI'da kapatıyor (manuel sync güvenli).
-- NEXT: v2.6 LLM persona derinleştirme **veya** v2.7 deep data — bkz. NEXT_TASK.md.
+## PAPER_SAFE
+- broker: yok · gerçek emir: yok · live execution: yok.
+- RiskGate/DQS/KillSwitch/halt: sıfır diff, bypass yok.
+- derivatives: yalnızca kısıtlayıcı; asla size artırmaz; verified-only karar.

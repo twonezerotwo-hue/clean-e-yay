@@ -836,6 +836,12 @@ components:
           type: boolean
           description: KILL_SWITCH / RISK_REDUCE / NO_POSITION_INCREASE / DQS BLOCKED → tüm hücreler SUSPENDED.
         event_risk: { $ref: "#/components/schemas/EventRiskView" }
+        derivatives:
+          type: array
+          description: >
+            v2.7 D2 — per-symbol türev özeti (banner). Etkilenen hücreler
+            cell.blocked_by="derivatives_risk:*" + reason ile zaten görünür.
+          items: { $ref: "#/components/schemas/DerivativesSummary" }
         cells:
           type: array
           items: { $ref: "#/components/schemas/TimeframeDecision" }
@@ -968,6 +974,72 @@ components:
           additionalProperties:
             type: object
             additionalProperties: { $ref: "#/components/schemas/TechnicalSnapshotTF" }
+        derivatives:
+          type: object
+          description: >
+            v2.7 D2 — kripto türev zekâsı (symbol → DerivativesSnapshot).
+            Yalnızca kripto sembolleri. squeeze_proxy GERÇEK liquidation değil.
+          additionalProperties: { $ref: "#/components/schemas/DerivativesSnapshot" }
+
+    # ---------------- v2.7 D2 — Crypto Derivatives Intelligence ----------------
+
+    SqueezeLevel:
+      type: string
+      enum: [NONE, LOW, ELEVATED, HIGH]
+      description: squeeze_proxy (0..100) seviyesi — PROXY, gerçek liquidation değil.
+
+    FundingBias:
+      type: string
+      enum: [crowded_long, crowded_short, neutral]
+
+    DerivativesSnapshot:
+      type: object
+      description: >
+        v2.7 D2 — tek kripto sembol için türev zekâsı (funding / OI / squeeze
+        proxy). Karar zincirinde YALNIZCA kısıtlayıcı (CAUTION / size-reduce /
+        NO_POSITION_INCREASE) veya bağlam etkisi yapar — asla size artırmaz,
+        asla RiskGate/DQS/halt'ı bypass etmez. squeeze_proxy GERÇEK liquidation
+        API'si DEĞİLDİR (is_proxy=true). Live başarısız → status=DEGRADED, alanlar
+        null (mock yok). Fixture verisi verified=false (karar zincirine girmez).
+      required: [symbol, squeeze_proxy, squeeze_level, funding_bias, is_proxy, status, source, verified, dqs, ts]
+      properties:
+        symbol: { type: string }
+        funding_rate: { type: number, nullable: true, description: "8s interval, ondalık (0.0001 = %0.01)" }
+        funding_annualized: { type: number, nullable: true }
+        open_interest_usd: { type: number, nullable: true }
+        oi_change_pct: { type: number, nullable: true }
+        price_momentum_pct: { type: number, nullable: true }
+        volatility_pct: { type: number, nullable: true }
+        squeeze_proxy: { type: number, description: "0..100 — PROXY, gerçek liq değil" }
+        squeeze_level: { $ref: "#/components/schemas/SqueezeLevel" }
+        funding_bias: { $ref: "#/components/schemas/FundingBias" }
+        is_proxy: { type: boolean }
+        status: { type: string, enum: [OK, DEGRADED] }
+        source: { type: string }
+        verified: { type: boolean }
+        freshness: { type: string, enum: [FRESH, RECENT, STALE], nullable: true }
+        dqs: { type: number }
+        ts: { type: string, format: date-time }
+        evidence:
+          type: array
+          items: { type: string }
+        error: { type: string, nullable: true }
+
+    DerivativesSummary:
+      type: object
+      description: >
+        v2.7 D2 — matrix banner için per-symbol türev özeti (yalnızca status=OK).
+        Etkilenen hücreler ayrıca cell.blocked_by="derivatives_risk:*" taşır.
+      required: [symbol, squeeze_level, squeeze_proxy, funding_bias, is_proxy, status, verified]
+      properties:
+        symbol: { type: string }
+        squeeze_level: { $ref: "#/components/schemas/SqueezeLevel" }
+        squeeze_proxy: { type: number }
+        funding_bias: { $ref: "#/components/schemas/FundingBias" }
+        funding_rate: { type: number, nullable: true }
+        is_proxy: { type: boolean }
+        status: { type: string, enum: [OK, DEGRADED] }
+        verified: { type: boolean }
 
     # ---------------- OPS — /learning/* yüzeyi (read-only) ----------------
 

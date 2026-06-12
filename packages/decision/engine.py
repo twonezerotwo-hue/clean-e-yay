@@ -39,7 +39,7 @@ from packages.learning.calibration_store import (
 from packages.learning.fingerprint import make as make_fingerprint
 from packages.learning.mistake_memory import MistakeVerdict
 from packages.regime.classifier import RegimeOutput, classify
-from packages.risk import correlation, event_risk
+from packages.risk import correlation, derivatives_risk, event_risk
 from packages.risk.engine import RiskDecision, RiskInput
 from packages.risk.engine import evaluate as evaluate_risk
 
@@ -60,6 +60,8 @@ class TradeDecision:
     fingerprint: str | None = None
     mistake_verdict: dict = field(default_factory=dict)
     cluster_report: dict = field(default_factory=dict)
+    # v2.7 D2 — kripto türev riski (yalnızca kısıtlayıcı; crypto sembolleri).
+    derivatives_report: dict = field(default_factory=dict)
     timeframe: str = "1d"  # T2 — (symbol, timeframe) karar uzayı aktif
     # T2 additive — candidate (consensus niyeti) vs final (gate'ler sonrası)
     # ayrımı görünür olsun; blocked_by hangi kapının kararı kestiğini söyler.
@@ -265,6 +267,51 @@ def decide_for_symbol(
     size *= min(1.0, cluster.size_factor)
     size = max(0.0, min(1.5, size))
 
+    # ----- v2.7 D2: kripto türev riski (RiskGate'ten SONRA; yalnızca kısıtlayıcı) -----
+    # Yalnızca crypto sembolleri + verified/OK snapshot karar zincirine girer.
+    # 15m/1h reaksiyon için derivatives daha önemli (timeframe ağırlığı); asla
+    # size artırmaz, asla RiskGate/DQS/halt'ı bypass etmez (bu kod yalnızca
+    # RiskGate açıkken çalışır — hard gate'ler yukarıda zaten dönmüş olur).
+    derivatives_dict: dict = {}
+    deriv_snap = (snap.derivatives or {}).get(symbol)
+    deriv_weight = derivatives_risk.timeframe_weight(timeframe)
+    if deriv_snap is not None and deriv_weight > 0.0:
+        dv = derivatives_risk.apply_timeframe(
+            derivatives_risk.assess(deriv_snap, action), deriv_weight
+        )
+        derivatives_dict = {
+            "level": dv.level,
+            "size_factor": dv.size_factor,
+            "block": dv.block,
+            "reason": dv.reason,
+            "evidence": list(dv.evidence),
+            "squeeze_level": deriv_snap.squeeze_level,
+            "squeeze_proxy": deriv_snap.squeeze_proxy,
+            "funding_bias": deriv_snap.funding_bias,
+            "is_proxy": deriv_snap.is_proxy,
+        }
+        if dv.block:
+            return TradeDecision(
+                symbol=symbol,
+                action="hold",
+                confidence=round(cal_conf, 3),
+                size_multiplier=0.0,
+                consensus=cons,
+                risk=risk,
+                reason=f"derivatives_risk: {dv.reason}",
+                raw_confidence=round(raw_conf, 4),
+                confidence_source=conf_source,
+                fingerprint=fp,
+                mistake_verdict=_verdict_to_dict(verdict),
+                cluster_report=cluster_dict,
+                derivatives_report=derivatives_dict,
+                timeframe=timeframe,
+                candidate_action=candidate,
+                blocked_by=[f"derivatives_risk:{dv.level}"],
+            )
+        size *= dv.size_factor
+        size = max(0.0, min(1.5, size))
+
     # ----- T2: timeframe politikası EN SON (RiskGate'ten sonra; sadece azaltır) -----
     blocked_by: list[str] = []
     if not pol["paper_execution"]:
@@ -283,6 +330,7 @@ def decide_for_symbol(
             fingerprint=fp,
             mistake_verdict=_verdict_to_dict(verdict),
             cluster_report=cluster_dict,
+            derivatives_report=derivatives_dict,
             timeframe=timeframe,
             candidate_action=candidate,
             blocked_by=["timeframe_policy:no_paper_execution"],
@@ -302,6 +350,11 @@ def decide_for_symbol(
             f"{cons.direction} signal · dominant={cons.dominant_module}"
             + (f" · mistake:{verdict.action.lower()}" if verdict.action != "NEUTRAL" else "")
             + (f" · correlation:{cluster.status.lower()}" if cluster.status != "OK" else "")
+            + (
+                f" · deriv:{derivatives_dict['level'].lower()}"
+                if derivatives_dict and derivatives_dict.get("level") not in (None, "NONE")
+                else ""
+            )
             + (f" · tf:{timeframe}×{pol['risk_multiplier']}" if pol["risk_multiplier"] < 1.0 else "")
         ),
         raw_confidence=round(raw_conf, 4),
@@ -309,6 +362,7 @@ def decide_for_symbol(
         fingerprint=fp,
         mistake_verdict=_verdict_to_dict(verdict),
         cluster_report=cluster_dict,
+        derivatives_report=derivatives_dict,
         timeframe=timeframe,
         candidate_action=candidate,
         blocked_by=blocked_by,
@@ -430,6 +484,23 @@ def matrix_view(
     # hücreleri kıstığını dashboard'da göstermek için). Restrictive olduğunda
     # zaten yukarıdaki `risk` içine NO_POSITION_INCREASE candidate olarak girmiş.
     ev = event_risk.assess(snap.catalysts)
+    # v2.7 D2 — kripto türev özeti (yalnızca kısıtlayıcı; etkilenen hücreler
+    # cell.blocked_by="derivatives_risk:*" ile zaten görünür). Bu blok panel
+    # banner'ı için per-symbol squeeze/funding durumunu taşır.
+    derivatives_summary = [
+        {
+            "symbol": d.symbol,
+            "squeeze_level": d.squeeze_level,
+            "squeeze_proxy": d.squeeze_proxy,
+            "funding_bias": d.funding_bias,
+            "funding_rate": d.funding_rate,
+            "is_proxy": d.is_proxy,
+            "status": d.status,
+            "verified": d.verified,
+        }
+        for d in (snap.derivatives or {}).values()
+        if d.status == "OK"
+    ]
     cells = []
     for d in decisions:
         actionable = bool(d.actionable) and not suspended
@@ -486,5 +557,6 @@ def matrix_view(
                 for t in ev.triggers
             ],
         },
+        "derivatives": derivatives_summary,
         "cells": cells,
     }

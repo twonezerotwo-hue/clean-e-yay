@@ -12,6 +12,7 @@ import {
   selectMatrixRiskGate,
   selectMatrixDqsStatus,
   selectMatrixEventRisk,
+  selectMatrixDerivatives,
   cellBlockedLabel,
 } from "@/lib/selectors/decision";
 import type { TimeframeDecision } from "@/types/generated/api";
@@ -114,6 +115,7 @@ export function TimeframeMatrixPanel() {
   const riskGate = selectMatrixRiskGate(data);
   const dqs = selectMatrixDqsStatus(data);
   const eventRisk = selectMatrixEventRisk(data);
+  const derivatives = selectMatrixDerivatives(data);
   return (
     <PanelFrame id="timeframe_matrix">
       <PanelHeader
@@ -142,6 +144,17 @@ export function TimeframeMatrixPanel() {
           }`}
         >
           ⚑ {eventRisk.reason}
+        </p>
+      ) : null}
+      {/* v2.7 D2 — kripto türev sıkışma uyarısı (yalnızca doğrulanmış + riskli).
+          Hücre etkisi blocked_by="derivatives_risk:*" rozetiyle ayrıca görünür. */}
+      {derivatives.length ? (
+        <p className="mb-2 text-[11px] text-orange-300/90">
+          ⚠ Türev sıkışma (proxy):{" "}
+          {derivatives
+            .map((d) => `${d.symbol} ${d.squeeze_level} · ${d.funding_bias}`)
+            .join(" · ")}{" "}
+          — yalnızca kısıtlayıcı (gerçek liq değil).
         </p>
       ) : null}
       <table className="w-full border-collapse text-xs">

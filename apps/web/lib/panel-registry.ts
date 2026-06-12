@@ -30,6 +30,7 @@ export type PanelKey =
   | "mistake_memory"
   | "correlation"
   | "drawdown_guard"
+  | "crypto_derivatives"
   | "timeframe_matrix";
 
 export type PanelMeta = {
@@ -68,5 +69,6 @@ export const PANEL_REGISTRY: PanelMeta[] = [
   { id: "mistake_memory",   title: "Mistake Memory",       defaultVisible: true,  span: "1",    group: "learning" },
   { id: "correlation",      title: "Korelasyon",           defaultVisible: true,  span: "2",    group: "decision" },
   { id: "drawdown_guard",   title: "Drawdown Guard",       defaultVisible: true,  span: "1",    group: "decision" },
+  { id: "crypto_derivatives", title: "Kripto Türevleri",   defaultVisible: true,  span: "1",    group: "data" },
   { id: "timeframe_matrix", title: "Timeframe Matrisi",    defaultVisible: true,  span: "3",    group: "decision" },
 ];

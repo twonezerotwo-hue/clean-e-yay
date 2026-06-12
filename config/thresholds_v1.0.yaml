@@ -45,6 +45,35 @@ event_risk:
   watch_window_hours: 72
   high_importance: [high, critical]
 
+# v2.7 D2 — Crypto Derivatives Intelligence. Funding rate / open interest /
+# squeeze proxy YALNIZCA kripto sembolleri için ve YALNIZCA kısıtlayıcı
+# (CAUTION / size-reduce / NO_POSITION_INCREASE) veya bağlam etkisi yapar;
+# ASLA size artırmaz, ASLA RiskGate/DQS/KillSwitch/halt'ı bypass etmez.
+# squeeze_proxy GERÇEK liquidation API'si DEĞİLDİR — açıkça "proxy" etiketlidir.
+#   funding_crowded_long/short : |funding| bu eşikleri aşarsa kalabalık pozisyon
+#   funding_extreme            : squeeze proxy'ye güçlü funding katkısı eşiği
+#   oi_surge_pct               : OI artışı squeeze baskısı katkı referansı
+#   squeeze_low/elevated/high  : squeeze_proxy (0..100) seviye eşikleri
+#   weights                    : squeeze proxy bileşen ağırlıkları (toplam 1.0)
+#   max_age_sec                : bunun üstü STALE → DEGRADED (karar dışı)
+#   timeframe_weight           : 15m/1h reaksiyon için yüksek, 1d düşük, 1w yok
+derivatives:
+  funding_crowded_long: 0.0005
+  funding_crowded_short: -0.0005
+  funding_extreme: 0.0010
+  oi_surge_pct: 0.05
+  squeeze_low: 35
+  squeeze_elevated: 55
+  squeeze_high: 75
+  weights: { funding: 0.35, oi_change: 0.30, momentum: 0.20, volatility: 0.15 }
+  max_age_sec: 900
+  timeframe_weight:
+    "15m": 1.0
+    "1h": 1.0
+    "4h": 0.75
+    "1d": 0.5
+    "1w": 0.0
+
 # G4 — trade PnL verisi yetersizken kullanılan deterministik korelasyon
 # baseline'ı. Çiftler simetrik okunur; listede olmayan çift → neutral (rho=0,
 # insufficient_correlation_data uyarısı, size adjustment yok).

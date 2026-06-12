@@ -31,12 +31,20 @@ export const selectMatrixRiskGate = (m: DecisionMatrix | undefined) =>
 export const selectMatrixEventRisk = (m: DecisionMatrix | undefined) =>
   m?.event_risk;
 
+/** v2.7 D2 — matris türev özeti (banner). Yalnızca doğrulanmış + sıkışma riski
+ * olanlar dikkat çeker; hücre etkisi cell.blocked_by="derivatives_risk:*". */
+export const selectMatrixDerivatives = (m: DecisionMatrix | undefined) =>
+  (m?.derivatives ?? []).filter(
+    (d) => d.verified && d.squeeze_level !== "NONE",
+  );
+
 /** Bir hücreyi hangi kapı kısıtlıyor → kısa, okunur etiket. */
 export const cellBlockedLabel = (c: TimeframeDecision): string | undefined => {
   const tag = (c.blocked_by ?? [])[0];
   if (!tag) return undefined;
   if (tag.startsWith("risk_gate:")) return tag.replace("risk_gate:", "RISK ");
   if (tag.startsWith("mistake_memory")) return "MISTAKE";
+  if (tag.startsWith("derivatives_risk")) return "TÜREV";
   if (tag.startsWith("correlation")) return "KORELASYON";
   if (tag.startsWith("timeframe_policy")) return "TF BIAS";
   if (tag.includes("1w_bias")) return "1W BIAS";

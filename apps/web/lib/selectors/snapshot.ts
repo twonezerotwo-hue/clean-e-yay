@@ -1,11 +1,22 @@
 import type {
   DataSnapshot,
+  DerivativesSnapshot,
   ProviderStatus,
   TechnicalTf,
   Timeframe,
 } from "@/types/generated/api";
 
 export const TF_ORDER: Timeframe[] = ["15m", "1h", "4h", "1d", "1w"];
+
+// v2.7 D2 — kripto türev snapshot'ları (symbol sırasına dizili). squeeze_proxy
+// GERÇEK liquidation değildir (is_proxy). Frontend hesap yapmaz; backend
+// ViewModel'ini gösterir.
+export const selectDerivatives = (
+  s: DataSnapshot | undefined,
+): DerivativesSnapshot[] =>
+  Object.values(s?.derivatives ?? {}).sort((a, b) =>
+    a.symbol.localeCompare(b.symbol),
+  );
 
 export const selectPrices = (s: DataSnapshot | undefined) => s?.prices ?? [];
 

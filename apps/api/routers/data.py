@@ -51,6 +51,32 @@ def get_snapshot() -> dict:
         },
         "provider_status": snap.provider_status,
         "warnings": list(snap.warnings),
+        # v2.7 D2 — kripto türev zekâsı (funding/OI/squeeze proxy). symbol → snapshot.
+        # squeeze_proxy GERÇEK liquidation değildir (is_proxy=true).
+        "derivatives": {
+            sym: {
+                "symbol": d.symbol,
+                "funding_rate": d.funding_rate,
+                "funding_annualized": d.funding_annualized,
+                "open_interest_usd": d.open_interest_usd,
+                "oi_change_pct": d.oi_change_pct,
+                "price_momentum_pct": d.price_momentum_pct,
+                "volatility_pct": d.volatility_pct,
+                "squeeze_proxy": d.squeeze_proxy,
+                "squeeze_level": d.squeeze_level,
+                "funding_bias": d.funding_bias,
+                "is_proxy": d.is_proxy,
+                "status": d.status,
+                "source": d.source,
+                "verified": d.verified,
+                "freshness": d.freshness,
+                "dqs": d.dqs,
+                "ts": d.ts.isoformat(),
+                "evidence": list(d.evidence),
+                "error": d.error,
+            }
+            for sym, d in (snap.derivatives or {}).items()
+        },
         # T1 — gerçek OHLCV'den multi-TF teknikler (symbol → tf → özet).
         "technicals_by_tf": {
             sym: {
