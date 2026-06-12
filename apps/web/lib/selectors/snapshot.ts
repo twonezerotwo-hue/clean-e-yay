@@ -4,9 +4,27 @@ import type {
   ProviderStatus,
   TechnicalTf,
   Timeframe,
+  VolatilitySnapshot,
 } from "@/types/generated/api";
 
 export const TF_ORDER: Timeframe[] = ["15m", "1h", "4h", "1d", "1w"];
+
+// v2.7 D4 — realized volatility (symbol → TF sırasına dizilmiş hücreler).
+// Frontend hesap yapmaz; backend snapshot'ını gösterir.
+export const selectVolatility = (
+  s: DataSnapshot | undefined,
+): { symbol: string; cells: VolatilitySnapshot[] }[] => {
+  const m = s?.volatility ?? {};
+  return Object.entries(m)
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([symbol, byTf]) => ({
+      symbol,
+      cells: TF_ORDER.flatMap((tf) => {
+        const v = byTf[tf];
+        return v ? [v] : [];
+      }),
+    }));
+};
 
 // v2.7 D2 — kripto türev snapshot'ları (symbol sırasına dizili). squeeze_proxy
 // GERÇEK liquidation değildir (is_proxy). Frontend hesap yapmaz; backend

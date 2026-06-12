@@ -369,6 +369,8 @@ export type DataSnapshot = {
   technicals_by_tf?: Record<string, Partial<Record<Timeframe, TechnicalTf>>>;
   // v2.7 D2 — kripto türev zekâsı (symbol → DerivativesSnapshot). Crypto-only.
   derivatives?: Record<string, DerivativesSnapshot>;
+  // v2.7 D4 — realized volatility / rejim (symbol → timeframe → snapshot).
+  volatility?: Record<string, Partial<Record<Timeframe, VolatilitySnapshot>>>;
 };
 
 // v2.7 D2 — Crypto Derivatives Intelligence (funding / OI / squeeze proxy).
@@ -409,6 +411,45 @@ export type DerivativesSummary = {
   funding_rate?: number | null;
   is_proxy: boolean;
   status: DerivativesStatus;
+  verified: boolean;
+};
+
+// v2.7 D4 — Realized Volatility / Volatility Regime Intelligence. Mevcut OHLCV
+// cache'inden; karar zincirinde YALNIZCA kısıtlayıcı (asla size artırmaz).
+export type VolatilityRegime = "LOW" | "NORMAL" | "ELEVATED" | "EXTREME";
+export type VolState = "normal" | "squeeze" | "expansion" | "shock";
+export type VolatilityStatus = "OK" | "DEGRADED";
+
+export type VolatilitySnapshot = {
+  symbol: string;
+  timeframe: Timeframe;
+  realized_vol: number | null;
+  rv_short: number | null;
+  rv_medium: number | null;
+  rv_long: number | null;
+  vol_zscore: number | null;
+  regime: VolatilityRegime;
+  vol_state: VolState;
+  status: VolatilityStatus;
+  source: string;
+  verified: boolean;
+  freshness?: "FRESH" | "RECENT" | "STALE" | null;
+  dqs: number;
+  bars_used: number;
+  ts: string;
+  evidence?: string[];
+  error?: string | null;
+};
+
+// Matrix banner için per (symbol, timeframe) özet (yalnızca status=OK).
+export type VolatilitySummary = {
+  symbol: string;
+  timeframe: Timeframe;
+  regime: VolatilityRegime;
+  vol_state: VolState;
+  realized_vol?: number | null;
+  vol_zscore?: number | null;
+  status: VolatilityStatus;
   verified: boolean;
 };
 
@@ -639,6 +680,9 @@ export type DecisionMatrix = {
   // v2.7 D2 — per-symbol türev özeti (banner). Etkilenen hücreler
   // blocked_by="derivatives_risk:*" + reason ile zaten görünür.
   derivatives?: DerivativesSummary[];
+  // v2.7 D4 — per (symbol, timeframe) realized vol özeti (banner). Etkilenen
+  // hücreler blocked_by="volatility_risk:*" ile görünür.
+  volatility?: VolatilitySummary[];
   mode?: ProvenanceMode;
   cells: TimeframeDecision[];
 };

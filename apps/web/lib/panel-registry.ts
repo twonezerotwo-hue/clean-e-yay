@@ -31,6 +31,7 @@ export type PanelKey =
   | "correlation"
   | "drawdown_guard"
   | "crypto_derivatives"
+  | "volatility"
   | "timeframe_matrix";
 
 export type PanelMeta = {
@@ -70,5 +71,6 @@ export const PANEL_REGISTRY: PanelMeta[] = [
   { id: "correlation",      title: "Korelasyon",           defaultVisible: true,  span: "2",    group: "decision" },
   { id: "drawdown_guard",   title: "Drawdown Guard",       defaultVisible: true,  span: "1",    group: "decision" },
   { id: "crypto_derivatives", title: "Kripto Türevleri",   defaultVisible: true,  span: "1",    group: "data" },
+  { id: "volatility",       title: "Volatilite Rejimi",    defaultVisible: true,  span: "1",    group: "data" },
   { id: "timeframe_matrix", title: "Timeframe Matrisi",    defaultVisible: true,  span: "3",    group: "decision" },
 ];

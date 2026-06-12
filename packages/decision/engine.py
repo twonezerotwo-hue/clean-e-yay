@@ -39,7 +39,7 @@ from packages.learning.calibration_store import (
 from packages.learning.fingerprint import make as make_fingerprint
 from packages.learning.mistake_memory import MistakeVerdict
 from packages.regime.classifier import RegimeOutput, classify
-from packages.risk import correlation, derivatives_risk, event_risk
+from packages.risk import correlation, derivatives_risk, event_risk, volatility_risk
 from packages.risk.engine import RiskDecision, RiskInput
 from packages.risk.engine import evaluate as evaluate_risk
 
@@ -62,6 +62,8 @@ class TradeDecision:
     cluster_report: dict = field(default_factory=dict)
     # v2.7 D2 — kripto türev riski (yalnızca kısıtlayıcı; crypto sembolleri).
     derivatives_report: dict = field(default_factory=dict)
+    # v2.7 D4 — realized volatility riski (yalnızca kısıtlayıcı; per (symbol, tf)).
+    volatility_report: dict = field(default_factory=dict)
     timeframe: str = "1d"  # T2 — (symbol, timeframe) karar uzayı aktif
     # T2 additive — candidate (consensus niyeti) vs final (gate'ler sonrası)
     # ayrımı görünür olsun; blocked_by hangi kapının kararı kestiğini söyler.
@@ -312,6 +314,52 @@ def decide_for_symbol(
         size *= dv.size_factor
         size = max(0.0, min(1.5, size))
 
+    # ----- v2.7 D4: realized volatility riski (RiskGate'ten SONRA; yalnızca kısıtlayıcı) -----
+    # Yalnızca verified/OK (symbol, tf) snapshot karar zincirine girer. 15m/1h'de
+    # vol shock daha etkili (timeframe ağırlığı); 1d/1w'de rejim bağlamı (block
+    # CAUTION'a yumuşar). Asla size artırmaz, asla RiskGate/DQS/halt'ı bypass
+    # etmez (bu kod yalnızca RiskGate açıkken çalışır).
+    volatility_dict: dict = {}
+    vol_snap = (snap.volatility or {}).get(symbol, {}).get(timeframe)
+    vol_weight = volatility_risk.timeframe_weight(timeframe)
+    if vol_snap is not None and vol_weight > 0.0:
+        vv = volatility_risk.apply_timeframe(
+            volatility_risk.assess(vol_snap, action), vol_weight
+        )
+        volatility_dict = {
+            "level": vv.level,
+            "size_factor": vv.size_factor,
+            "block": vv.block,
+            "reason": vv.reason,
+            "evidence": list(vv.evidence),
+            "regime": vol_snap.regime,
+            "vol_state": vol_snap.vol_state,
+            "realized_vol": vol_snap.realized_vol,
+            "vol_zscore": vol_snap.vol_zscore,
+        }
+        if vv.block:
+            return TradeDecision(
+                symbol=symbol,
+                action="hold",
+                confidence=round(cal_conf, 3),
+                size_multiplier=0.0,
+                consensus=cons,
+                risk=risk,
+                reason=f"volatility_risk: {vv.reason}",
+                raw_confidence=round(raw_conf, 4),
+                confidence_source=conf_source,
+                fingerprint=fp,
+                mistake_verdict=_verdict_to_dict(verdict),
+                cluster_report=cluster_dict,
+                derivatives_report=derivatives_dict,
+                volatility_report=volatility_dict,
+                timeframe=timeframe,
+                candidate_action=candidate,
+                blocked_by=[f"volatility_risk:{vv.level}"],
+            )
+        size *= vv.size_factor
+        size = max(0.0, min(1.5, size))
+
     # ----- T2: timeframe politikası EN SON (RiskGate'ten sonra; sadece azaltır) -----
     blocked_by: list[str] = []
     if not pol["paper_execution"]:
@@ -331,6 +379,7 @@ def decide_for_symbol(
             mistake_verdict=_verdict_to_dict(verdict),
             cluster_report=cluster_dict,
             derivatives_report=derivatives_dict,
+            volatility_report=volatility_dict,
             timeframe=timeframe,
             candidate_action=candidate,
             blocked_by=["timeframe_policy:no_paper_execution"],
@@ -355,6 +404,11 @@ def decide_for_symbol(
                 if derivatives_dict and derivatives_dict.get("level") not in (None, "NONE")
                 else ""
             )
+            + (
+                f" · vol:{volatility_dict['level'].lower()}"
+                if volatility_dict and volatility_dict.get("level") not in (None, "NONE")
+                else ""
+            )
             + (f" · tf:{timeframe}×{pol['risk_multiplier']}" if pol["risk_multiplier"] < 1.0 else "")
         ),
         raw_confidence=round(raw_conf, 4),
@@ -363,6 +417,7 @@ def decide_for_symbol(
         mistake_verdict=_verdict_to_dict(verdict),
         cluster_report=cluster_dict,
         derivatives_report=derivatives_dict,
+        volatility_report=volatility_dict,
         timeframe=timeframe,
         candidate_action=candidate,
         blocked_by=blocked_by,
@@ -501,6 +556,24 @@ def matrix_view(
         for d in (snap.derivatives or {}).values()
         if d.status == "OK"
     ]
+    # v2.7 D4 — realized volatility özeti (banner). Yalnızca status=OK + dikkat
+    # çeken hücreler (ELEVATED/EXTREME rejim veya shock/expansion/squeeze).
+    # Etkilenen hücreler ayrıca cell.blocked_by="volatility_risk:*" taşır.
+    volatility_summary = [
+        {
+            "symbol": v.symbol,
+            "timeframe": v.timeframe,
+            "regime": v.regime,
+            "vol_state": v.vol_state,
+            "realized_vol": v.realized_vol,
+            "vol_zscore": v.vol_zscore,
+            "status": v.status,
+            "verified": v.verified,
+        }
+        for by_tf in (snap.volatility or {}).values()
+        for v in by_tf.values()
+        if v.status == "OK" and (v.regime in ("ELEVATED", "EXTREME") or v.vol_state != "normal")
+    ]
     cells = []
     for d in decisions:
         actionable = bool(d.actionable) and not suspended
@@ -558,5 +631,6 @@ def matrix_view(
             ],
         },
         "derivatives": derivatives_summary,
+        "volatility": volatility_summary,
         "cells": cells,
     }

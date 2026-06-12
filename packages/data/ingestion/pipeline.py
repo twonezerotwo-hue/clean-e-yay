@@ -17,6 +17,7 @@ from packages.data.providers import ohlcv as ohlcv_provider
 from packages.data.providers import price as price_provider
 from packages.data.providers import rotation as rot_provider
 from packages.data.providers import technical as tech_provider
+from packages.data.providers import volatility as vol_provider
 from packages.data.quality.dqs import QualityReport
 from packages.data.quality.dqs import compute as compute_dqs
 from packages.data.types import (
@@ -27,6 +28,7 @@ from packages.data.types import (
     PriceQuote,
     RotationView,
     TechnicalSnapshot,
+    VolatilitySnapshot,
 )
 
 DEFAULT_SYMBOLS = ["BTCUSD", "ETHUSD", "XAUUSD", "XAGUSD", "DXY", "US10Y", "VIX"]
@@ -54,6 +56,9 @@ class MarketSnapshot:
     # v2.7 D2 — kripto türev zekâsı (funding/OI/squeeze proxy). Anahtar: symbol.
     # Yalnızca kripto sembolleri; karar zincirinde yalnızca kısıtlayıcı.
     derivatives: dict[str, DerivativesSnapshot] = field(default_factory=dict)
+    # v2.7 D4 — realized volatility / rejim zekâsı. Anahtar: symbol → timeframe.
+    # Karar zincirinde yalnızca kısıtlayıcı (asla size artırmaz).
+    volatility: dict[str, dict[str, VolatilitySnapshot]] = field(default_factory=dict)
 
 
 def _make_id(now: datetime) -> str:
@@ -86,6 +91,9 @@ def build_snapshot(symbols: list[str] | None = None) -> MarketSnapshot:
     derivatives = deriv_provider.get_derivatives(
         [s for s in syms if s in deriv_provider.CRYPTO_SYMBOLS]
     )
+    # v2.7 D4 — realized volatility / rejim (mevcut OHLCV cache'inden, ekstra ağ
+    # yok). Multi-TF teknikleriyle aynı semboller × tüm timeframe'ler.
+    volatility = vol_provider.get_volatility(tf_syms, list(TIMEFRAMES))
     quality = compute_dqs(prices, syms)
     warnings = list(quality.notes)
     degraded_tfs = [
@@ -106,6 +114,14 @@ def build_snapshot(symbols: list[str] | None = None) -> MarketSnapshot:
     degraded_deriv = [s for s, d in derivatives.items() if d.status == "DEGRADED"]
     if degraded_deriv:
         warnings.append("derivatives_degraded: " + ", ".join(sorted(degraded_deriv)))
+    degraded_vol = [
+        f"{s}:{tf}"
+        for s, by_tf in volatility.items()
+        for tf, v in by_tf.items()
+        if v.status == "DEGRADED"
+    ]
+    if degraded_vol:
+        warnings.append("volatility_degraded: " + ", ".join(sorted(degraded_vol)))
     provider_status = {
         **price_provider.get_provider_status(),
         **ohlcv_provider.get_provider_status(),
@@ -113,6 +129,7 @@ def build_snapshot(symbols: list[str] | None = None) -> MarketSnapshot:
         **cal_provider.get_provider_status(),
         **rot_provider.get_provider_status(),
         **deriv_provider.get_provider_status(),
+        **vol_provider.get_provider_status(),
     }
     if price_provider.is_runtime_mock_explicit():
         warnings.insert(0, "PRICE_USE_MOCK=true — TEST/MOCK MODE")
@@ -129,6 +146,7 @@ def build_snapshot(symbols: list[str] | None = None) -> MarketSnapshot:
         provider_status=provider_status,
         technicals_by_tf=technicals_by_tf or None,
         derivatives=derivatives,
+        volatility=volatility,
     )
 
 

@@ -77,6 +77,34 @@ def get_snapshot() -> dict:
             }
             for sym, d in (snap.derivatives or {}).items()
         },
+        # v2.7 D4 — realized volatility / rejim (symbol → tf → snapshot).
+        # Mevcut OHLCV cache'inden; karar zincirinde yalnızca kısıtlayıcı.
+        "volatility": {
+            sym: {
+                tf: {
+                    "symbol": v.symbol,
+                    "timeframe": v.timeframe,
+                    "realized_vol": v.realized_vol,
+                    "rv_short": v.rv_short,
+                    "rv_medium": v.rv_medium,
+                    "rv_long": v.rv_long,
+                    "vol_zscore": v.vol_zscore,
+                    "regime": v.regime,
+                    "vol_state": v.vol_state,
+                    "status": v.status,
+                    "source": v.source,
+                    "verified": v.verified,
+                    "freshness": v.freshness,
+                    "dqs": v.dqs,
+                    "bars_used": v.bars_used,
+                    "ts": v.ts.isoformat(),
+                    "evidence": list(v.evidence),
+                    "error": v.error,
+                }
+                for tf, v in by_tf.items()
+            }
+            for sym, by_tf in (snap.volatility or {}).items()
+        },
         # T1 — gerçek OHLCV'den multi-TF teknikler (symbol → tf → özet).
         "technicals_by_tf": {
             sym: {

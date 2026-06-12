@@ -4,6 +4,34 @@ _Bu dosya kısa ve güncel tutulur. Her görev sonunda güncellenir._
 
 ## Last known status
 
+- **v2.7 D4 — Realized Volatility / Volatility Regime Intelligence tamamlandı**
+  (2026-06-12): realized vol + rejim + squeeze/expansion/shock karar zincirine
+  **yalnızca kısıtlayıcı** eklendi. Yeni provider `packages/data/providers/
+  volatility/` (saf-python engine + orchestrator; mevcut OHLCV cache'inden, EKSTRA
+  AĞ YOK; log-getiri annualize realized vol short/medium/long + z-skoru + rejim
+  LOW/NORMAL/ELEVATED/EXTREME + squeeze/expansion/shock; bar yetersiz →
+  DEGRADED/`insufficient_bars`; runtime mock yok; fixture barlar verified=false).
+  - **Gate** (`packages/risk/volatility_risk.py`): yalnızca verified+OK; EXTREME→
+    NO_POSITION_INCREASE, ELEVATED→CAUTION ×0.5, shock→en az CAUTION (rejim
+    yüksekse block), LOW/squeeze→WATCH (yalnızca bağlam, boost yok). Yön bağımsız.
+    size_factor ≤ 1.0 (asla artırmaz). RiskGate hard gate'inden SONRA, yalnızca
+    açılış adayına. Timeframe ağırlıklı (15m/1h tam → shock daha etkili; 1d/1w
+    block CAUTION'a yumuşar = rejim bağlamı; 1w off).
+  - **Entegrasyon**: pipeline `MarketSnapshot.volatility` (symbol→tf); decision
+    engine `volatility_report` + blocked_by `volatility_risk:*`; matrix
+    `volatility` özeti; `/data/snapshot` volatility alanı; thresholds `volatility.*`.
+  - **Sözleşme** additive: openapi `VolatilitySnapshot`/`VolatilitySummary`/
+    `VolatilityRegime`/`VolState` + DataSnapshot/DecisionMatrix.volatility + TS
+    api.ts senkron (codegen drift yeşil).
+  - **Frontend**: `VolatilityPanel` (selector+registry, page.tsx tek GridCell) +
+    TimeframeMatrixPanel vol rejim banner + hücre "VOLATİLİTE" rozeti.
+  - **266/266 pytest** (+28 D4; live network yok), CI-scope ruff + tsc + pnpm
+    build yeşil. Live smoke OK (gerçek OHLCV → verified vol; BTC 1d EXTREME/
+    expansion z=2.53). PAPER_SAFE/NO_EXECUTION; RiskGate/DQS/KillSwitch/halt sıfır
+    diff, bypass yok.
+  - Açık (NEXT): D3 (options IV/skew Deribit), D5 (gerçek haber feed + T3 catalyst
+    half-life) ve/veya gerçek replay/backtest motoru.
+
 - **v2.7 D2 — Crypto Derivatives Intelligence tamamlandı** (2026-06-12): kripto
   türev zekâsı (funding / OI / squeeze proxy) karar zincirine **yalnızca
   kısıtlayıcı** eklendi. Yeni provider `packages/data/providers/derivatives/`
@@ -265,10 +293,11 @@ _Bu dosya kısa ve güncel tutulur. Her görev sonunda güncellenir._
 
 ## Next task
 
-- OPS bitti (contract/replay/codegen drift + dev reliability). Sıradaki için
-  iki net seçenek `.tasks/NEXT_TASK.md`'de:
-  - **v2.7 deep data** (funding/OI/options IV/ETF flow + gerçek haber feed +
-    T3 catalyst half-life motoru) — her veri için ÖNCE karar rolü tasarla.
-  - **Asset universe 2. slice** (JNK/IWM/SMH/XLF/FXI + dominance + FRED spread'leri)
-    — yalnızca engine rolü tasarlandıktan sonra (ölü veri yasak).
+- D2 (türev) + D4 (realized vol) bitti. Kalan deep-data slice'ları
+  `.tasks/NEXT_TASK.md`'de (her biri ÖNCE karar rolü tasarlanır — ölü veri yasak):
+  - **D3 — Options IV / skew (Deribit)**: ATM IV + 25Δ skew → yalnızca kısıtlayıcı
+    size kısıtı/contrarian bağlam.
+  - **D5 — Gerçek haber feed + T3 catalyst half-life**: RSS → gerçek feed; T0
+    `CatalystImpact` contract'ını yarı-ömür motoruyla doldur (haber decay → TF bias).
+  - Alternatif: gerçek deterministik replay/backtest motoru (disk snapshot store).
 - `.tasks/NEXT_TASK.md` güncellendi.

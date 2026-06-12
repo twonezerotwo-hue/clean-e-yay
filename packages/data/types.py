@@ -196,6 +196,52 @@ class DerivativesSnapshot(BaseModel):
     error: str | None = None
 
 
+# v2.7 D4 — Realized Volatility / Volatility Regime Intelligence.
+VolatilityStatus = Literal["OK", "DEGRADED"]
+VolatilityRegime = Literal["LOW", "NORMAL", "ELEVATED", "EXTREME"]
+# Vol squeeze / expansion / shock bağlam bayrağı (normal = sıradan rejim).
+VolState = Literal["normal", "squeeze", "expansion", "shock"]
+
+
+class VolatilitySnapshot(BaseModel):
+    """Tek (symbol, timeframe) için realized volatility + rejim zekâsı.
+
+    v2.7 D4: mevcut OHLCV cache'inden (ekstra ağ yok) log-getiri tabanlı
+    annualize realized volatility, rolling pencereler (short/medium/long),
+    volatilite z-score'u, rejim (LOW/NORMAL/ELEVATED/EXTREME) ve
+    squeeze/expansion/shock bağlam bayrağı hesaplanır.
+
+    Karar zincirinde **yalnızca kısıtlayıcı** (CAUTION / size-reduce /
+    NO_POSITION_INCREASE) veya bağlam etkisi yapar — asla size artırmaz,
+    asla RiskGate/DQS/halt'ı bypass etmez. 15m/1h için vol shock daha etkili;
+    1d/1w için rejim bağlamı.
+
+    DATA_POLICY: runtime'da yalnızca gerçek (live) OHLCV `verified=True` taşır.
+    Bar yetersiz → `status="DEGRADED"`, alanlar None (mock yok, crash yok).
+    Fixture barlar `verified=False` damgalıdır ve karar zincirine GİRMEZ
+    (yalnızca dashboard bağlamı).
+    """
+
+    symbol: str
+    timeframe: Timeframe = "1d"
+    realized_vol: float | None = None        # annualize medium-pencere realized vol (0.65 = %65)
+    rv_short: float | None = None            # kısa pencere annualize realized vol
+    rv_medium: float | None = None
+    rv_long: float | None = None             # uzun pencere (baseline) annualize realized vol
+    vol_zscore: float | None = None          # rv_short'un kendi geçmişine göre z-skoru
+    regime: VolatilityRegime = "NORMAL"
+    vol_state: VolState = "normal"
+    status: VolatilityStatus = "DEGRADED"
+    source: str = "unknown"
+    verified: bool = False
+    freshness: NewsFreshness | None = None   # FRESH / RECENT / STALE
+    dqs: float = 0.0                         # bu hücrenin vol veri kalitesi (0..100)
+    bars_used: int = 0
+    ts: datetime = Field(default_factory=utcnow)
+    evidence: list[str] = Field(default_factory=list)
+    error: str | None = None
+
+
 RotationStatus = Literal["OK", "UNAVAILABLE"]
 
 

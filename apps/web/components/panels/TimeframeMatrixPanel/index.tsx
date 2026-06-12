@@ -13,6 +13,7 @@ import {
   selectMatrixDqsStatus,
   selectMatrixEventRisk,
   selectMatrixDerivatives,
+  selectMatrixVolatility,
   cellBlockedLabel,
 } from "@/lib/selectors/decision";
 import type { TimeframeDecision } from "@/types/generated/api";
@@ -116,6 +117,7 @@ export function TimeframeMatrixPanel() {
   const dqs = selectMatrixDqsStatus(data);
   const eventRisk = selectMatrixEventRisk(data);
   const derivatives = selectMatrixDerivatives(data);
+  const volatility = selectMatrixVolatility(data);
   return (
     <PanelFrame id="timeframe_matrix">
       <PanelHeader
@@ -155,6 +157,21 @@ export function TimeframeMatrixPanel() {
             .map((d) => `${d.symbol} ${d.squeeze_level} · ${d.funding_bias}`)
             .join(" · ")}{" "}
           — yalnızca kısıtlayıcı (gerçek liq değil).
+        </p>
+      ) : null}
+      {/* v2.7 D4 — realized vol rejimi (yalnızca doğrulanmış + dikkat çeken).
+          Hücre etkisi blocked_by="volatility_risk:*" rozetiyle ayrıca görünür. */}
+      {volatility.length ? (
+        <p className="mb-2 text-[11px] text-orange-300/90">
+          ⚠ Volatilite rejimi:{" "}
+          {volatility
+            .map(
+              (v) =>
+                `${v.symbol} ${v.timeframe} ${v.regime}` +
+                (v.vol_state !== "normal" ? ` · ${v.vol_state}` : ""),
+            )
+            .join(" · ")}{" "}
+          — yalnızca kısıtlayıcı (asla size artırmaz).
         </p>
       ) : null}
       <table className="w-full border-collapse text-xs">

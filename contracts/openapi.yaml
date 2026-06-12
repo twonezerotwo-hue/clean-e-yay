@@ -842,6 +842,12 @@ components:
             v2.7 D2 — per-symbol türev özeti (banner). Etkilenen hücreler
             cell.blocked_by="derivatives_risk:*" + reason ile zaten görünür.
           items: { $ref: "#/components/schemas/DerivativesSummary" }
+        volatility:
+          type: array
+          description: >
+            v2.7 D4 — per (symbol, timeframe) realized vol özeti (banner).
+            Etkilenen hücreler cell.blocked_by="volatility_risk:*" ile görünür.
+          items: { $ref: "#/components/schemas/VolatilitySummary" }
         cells:
           type: array
           items: { $ref: "#/components/schemas/TimeframeDecision" }
@@ -980,6 +986,14 @@ components:
             v2.7 D2 — kripto türev zekâsı (symbol → DerivativesSnapshot).
             Yalnızca kripto sembolleri. squeeze_proxy GERÇEK liquidation değil.
           additionalProperties: { $ref: "#/components/schemas/DerivativesSnapshot" }
+        volatility:
+          type: object
+          description: >
+            v2.7 D4 — realized volatility / rejim (symbol → timeframe →
+            VolatilitySnapshot). Mevcut OHLCV cache'inden; yalnızca kısıtlayıcı.
+          additionalProperties:
+            type: object
+            additionalProperties: { $ref: "#/components/schemas/VolatilitySnapshot" }
 
     # ---------------- v2.7 D2 — Crypto Derivatives Intelligence ----------------
 
@@ -1038,6 +1052,68 @@ components:
         funding_bias: { $ref: "#/components/schemas/FundingBias" }
         funding_rate: { type: number, nullable: true }
         is_proxy: { type: boolean }
+        status: { type: string, enum: [OK, DEGRADED] }
+        verified: { type: boolean }
+
+    # ---------------- v2.7 D4 — Realized Volatility / Volatility Regime ----------------
+
+    VolatilityRegime:
+      type: string
+      enum: [LOW, NORMAL, ELEVATED, EXTREME]
+      description: realized vol z-skoru rejimi (yalnızca kısıtlayıcı bağlam).
+
+    VolState:
+      type: string
+      enum: [normal, squeeze, expansion, shock]
+      description: vol squeeze / expansion / shock bağlam bayrağı.
+
+    VolatilitySnapshot:
+      type: object
+      description: >
+        v2.7 D4 — tek (symbol, timeframe) için realized volatility + rejim
+        zekâsı. Mevcut OHLCV cache'inden log-getiri tabanlı annualize realized
+        vol, rejim ve squeeze/expansion/shock bağlamı. Karar zincirinde YALNIZCA
+        kısıtlayıcı (CAUTION / size-reduce / NO_POSITION_INCREASE) veya bağlam
+        etkisi yapar — asla size artırmaz, asla RiskGate/DQS/halt'ı bypass etmez.
+        Bar yetersiz → status=DEGRADED, alanlar null (mock yok). Fixture barlar
+        verified=false (karar zincirine girmez).
+      required: [symbol, timeframe, regime, vol_state, status, source, verified, dqs, bars_used, ts]
+      properties:
+        symbol: { type: string }
+        timeframe: { $ref: "#/components/schemas/Timeframe" }
+        realized_vol: { type: number, nullable: true, description: "annualize medium-pencere realized vol (0.65 = %65)" }
+        rv_short: { type: number, nullable: true }
+        rv_medium: { type: number, nullable: true }
+        rv_long: { type: number, nullable: true }
+        vol_zscore: { type: number, nullable: true }
+        regime: { $ref: "#/components/schemas/VolatilityRegime" }
+        vol_state: { $ref: "#/components/schemas/VolState" }
+        status: { type: string, enum: [OK, DEGRADED] }
+        source: { type: string }
+        verified: { type: boolean }
+        freshness: { type: string, enum: [FRESH, RECENT, STALE], nullable: true }
+        dqs: { type: number }
+        bars_used: { type: integer }
+        ts: { type: string, format: date-time }
+        evidence:
+          type: array
+          items: { type: string }
+        error: { type: string, nullable: true }
+
+    VolatilitySummary:
+      type: object
+      description: >
+        v2.7 D4 — matrix banner için per (symbol, timeframe) vol özeti (yalnızca
+        status=OK + dikkat çeken hücreler). Etkilenen hücreler ayrıca
+        cell.blocked_by="volatility_risk:*" taşır.
+      required: [symbol, timeframe, regime, vol_state, status, verified]
+      properties:
+        symbol: { type: string }
+        timeframe: { $ref: "#/components/schemas/Timeframe" }
+        regime: { $ref: "#/components/schemas/VolatilityRegime" }
+        vol_state: { $ref: "#/components/schemas/VolState" }
+        realized_vol: { type: number, nullable: true }
+        vol_zscore: { type: number, nullable: true }
         status: { type: string, enum: [OK, DEGRADED] }
         verified: { type: boolean }
 

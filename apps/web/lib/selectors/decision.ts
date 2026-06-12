@@ -38,6 +38,16 @@ export const selectMatrixDerivatives = (m: DecisionMatrix | undefined) =>
     (d) => d.verified && d.squeeze_level !== "NONE",
   );
 
+/** v2.7 D4 — matris realized vol özeti (banner). Yalnızca doğrulanmış + dikkat
+ * çeken (ELEVATED/EXTREME rejim veya non-normal vol_state); hücre etkisi
+ * cell.blocked_by="volatility_risk:*". */
+export const selectMatrixVolatility = (m: DecisionMatrix | undefined) =>
+  (m?.volatility ?? []).filter(
+    (v) =>
+      v.verified &&
+      (v.regime === "ELEVATED" || v.regime === "EXTREME" || v.vol_state !== "normal"),
+  );
+
 /** Bir hücreyi hangi kapı kısıtlıyor → kısa, okunur etiket. */
 export const cellBlockedLabel = (c: TimeframeDecision): string | undefined => {
   const tag = (c.blocked_by ?? [])[0];
@@ -45,6 +55,7 @@ export const cellBlockedLabel = (c: TimeframeDecision): string | undefined => {
   if (tag.startsWith("risk_gate:")) return tag.replace("risk_gate:", "RISK ");
   if (tag.startsWith("mistake_memory")) return "MISTAKE";
   if (tag.startsWith("derivatives_risk")) return "TÜREV";
+  if (tag.startsWith("volatility_risk")) return "VOLATİLİTE";
   if (tag.startsWith("correlation")) return "KORELASYON";
   if (tag.startsWith("timeframe_policy")) return "TF BIAS";
   if (tag.includes("1w_bias")) return "1W BIAS";

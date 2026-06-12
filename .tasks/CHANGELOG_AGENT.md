@@ -1,5 +1,29 @@
 # Agent Changelog
 
+## 2026-06-12 — v2.7 D4 Realized Volatility / Volatility Regime Intelligence
+- Yeni provider `packages/data/providers/volatility/` (saf-python engine +
+  orchestrator). Mevcut OHLCV cache'inden (ekstra ağ YOK) log-getiri tabanlı
+  annualize realized vol (short/medium/long pencere) + z-skoru + rejim
+  (LOW/NORMAL/ELEVATED/EXTREME) + squeeze/expansion/shock bayrağı. Bar yetersiz
+  → DEGRADED (`insufficient_bars`); runtime mock yok; fixture barlar verified=false.
+- `packages/risk/volatility_risk.py`: yalnızca kısıtlayıcı gate (EXTREME→
+  NO_POSITION_INCREASE, ELEVATED→CAUTION ×0.5, shock→en az CAUTION (rejim yüksekse
+  block), LOW/squeeze→WATCH yalnızca bağlam). verified-only, yön bağımsız.
+  size_factor ≤ 1.0. Timeframe ağırlıklı (15m/1h tam → shock daha etkili; 1d/1w
+  block CAUTION'a yumuşar = rejim bağlamı; 1w off).
+- Entegrasyon: pipeline `MarketSnapshot.volatility` (symbol→tf); decision engine
+  gate RiskGate'ten SONRA + `volatility_report` + blocked_by `volatility_risk:*`;
+  matrix `volatility` özeti; thresholds `volatility.*`; `/data/snapshot`
+  volatility alanı.
+- Sözleşme additive: openapi `VolatilitySnapshot`/`VolatilitySummary`/
+  `VolatilityRegime`/`VolState` + DataSnapshot.volatility + DecisionMatrix.
+  volatility; TS api.ts senkron (codegen drift yeşil).
+- Frontend: `VolatilityPanel` (selector+registry, page.tsx tek GridCell) +
+  TimeframeMatrixPanel vol rejim banner + hücre "VOLATİLİTE" rozeti.
+- Testler: +28 (`tests/unit/test_volatility.py`). 266/266 pytest, CI-scope ruff
+  + tsc + pnpm build yeşil. Live smoke OK (gerçek OHLCV → verified vol; BTC 1d
+  EXTREME/expansion z=2.53). PAPER_SAFE/NO_EXECUTION; RiskGate/DQS/halt bypass yok.
+
 ## 2026-06-12 — v2.7 D2 Crypto Derivatives Intelligence
 - Yeni provider `packages/data/providers/derivatives/` (binance public futures
   funding/OI + deterministik squeeze proxy engine + offline fixtures +

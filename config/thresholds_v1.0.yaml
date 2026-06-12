@@ -74,6 +74,43 @@ derivatives:
     "1d": 0.5
     "1w": 0.0
 
+# v2.7 D4 — Realized Volatility / Volatility Regime Intelligence. Mevcut OHLCV
+# cache'inden (ekstra ağ yok) log-getiri tabanlı annualize realized volatility,
+# rejim ve squeeze/expansion/shock bağlamı üretilir. YALNIZCA kısıtlayıcı
+# (CAUTION / size-reduce / NO_POSITION_INCREASE) veya bağlam; ASLA size artırmaz,
+# ASLA RiskGate/DQS/KillSwitch/halt'ı bypass etmez.
+#   windows         : rolling realized-vol pencereleri (bar sayısı)
+#   zscore_lookback : rv_short z-skoru dağılımı için örnek penceresi (bar)
+#   min_samples     : z-skoru dağılımı için minimum rv_short örneği (altı → DEGRADED)
+#   regime_z        : z-skoru rejim eşikleri (low / elevated / extreme)
+#   squeeze_ratio   : rv_short/rv_long bunun ALTI → squeeze (sıkışma)
+#   expansion_ratio : rv_short/rv_long bunun ÜSTÜ → expansion (genişleme)
+#   shock_ratio     : rv_short/rv_long bunun ÜSTÜ → shock
+#   shock_sigma     : son bar |log-getiri| ≥ shock_sigma × stdev(medium) → shock
+#   max_age_sec     : TF tazelik (üstü STALE → DEGRADED, dqs düşer)
+#   timeframe_weight: 15m/1h shock daha etkili (tam), 1d/1w rejim bağlamı (düşük)
+volatility:
+  windows: { short: 10, medium: 20, long: 60 }
+  zscore_lookback: 60
+  min_samples: 20
+  regime_z: { low: -1.0, elevated: 1.0, extreme: 2.0 }
+  squeeze_ratio: 0.70
+  expansion_ratio: 1.30
+  shock_ratio: 2.00
+  shock_sigma: 3.0
+  max_age_sec:
+    "15m": 1800
+    "1h": 7200
+    "4h": 28800
+    "1d": 172800
+    "1w": 864000
+  timeframe_weight:
+    "15m": 1.0
+    "1h": 1.0
+    "4h": 0.75
+    "1d": 0.5
+    "1w": 0.0
+
 # G4 — trade PnL verisi yetersizken kullanılan deterministik korelasyon
 # baseline'ı. Çiftler simetrik okunur; listede olmayan çift → neutral (rho=0,
 # insufficient_correlation_data uyarısı, size adjustment yok).
