@@ -132,23 +132,69 @@ class Catalyst(BaseModel):
     verified: bool = False
 
 
-class CatalystImpact(BaseModel):
-    """T0 contract seed — half-life motoru v2.7 deep data ile gelir.
+# v2.7 D5 — Catalyst half-life intelligence. Haber → catalyst sınıflandırması.
+# Kural tabanlı/deterministik (LLM YOK). Yalnızca kısıtlayıcı taksonomi:
+#   CONTEXT_ONLY         → yalnızca bağlam (karar zincirine girmez)
+#   WATCH                → uyarı (size değişmez)
+#   CAUTION              → size ×0.5
+#   NO_POSITION_INCREASE → yeni pozisyon açılışı durur (block)
+CatalystActionability = Literal[
+    "CONTEXT_ONLY", "WATCH", "CAUTION", "NO_POSITION_INCREASE"
+]
 
-    Bu model şimdilik yalnızca sözleşmedir: hiçbir engine üretmez/tüketmez.
-    Haber tipine göre asset × timeframe etki haritası taşır.
+# Kural tabanlı event_type taksonomisi (deterministik; rumor/unknown dâhil).
+CatalystEventType = Literal[
+    "geopolitical_deescalation",
+    "geopolitical_escalation",
+    "inflation_data",
+    "jobs_data",
+    "central_bank",
+    "oil_supply",
+    "oil_inventory",
+    "crypto_etf_flow",
+    "funding_oi_squeeze",
+    "earnings",
+    "exchange_outage",
+    "rumor_unverified",
+    "unknown",
+]
+
+
+class CatalystImpact(BaseModel):
+    """v2.7 D5 — Catalyst half-life intelligence (haber → etki modeli).
+
+    Haber başlığı kural tabanlı (deterministik, LLM YOK) bir `event_type`'a
+    sınıflandırılır ve event_type'a göre asset × timeframe etki haritası +
+    yarı-ömür (half-life) + geçerlilik (valid_until) üretilir.
+
+    Karar zincirinde **yalnızca kısıtlayıcı** (WATCH / CAUTION /
+    NO_POSITION_INCREASE) veya yalnızca bağlam (CONTEXT_ONLY) etkisi yapar —
+    ASLA size artırmaz, ASLA RiskGate/DQS/KillSwitch/halt'ı bypass etmez.
+
+    DATA_POLICY: yalnızca `verified=True` impact karar zincirine girer. Doğrulanmamış
+    haber (fixture) ve **rumor** (`rumor_unverified`) `verified=False` damgalıdır ve
+    yalnızca dashboard bağlamı sağlar — trade'e dönüşmez. Yarı-ömrü dolan
+    (`now > valid_until`) catalyst de karar zincirine girmez (yalnızca bağlam).
     """
 
     catalyst_id: str
-    event_type: str                 # ceasefire | cpi | fomc | opec | etf_flow | ...
-    surprise_level: float = 0.0     # -1..+1 (beklentiden sapma)
+    headline_id: str = ""
+    event_type: CatalystEventType = "unknown"
+    surprise_level: float = 0.0     # -1..+1 (piyasa yönü işaretli; |.| = şiddet)
     affected_assets: list[str] = Field(default_factory=list)
     expected_half_life_minutes: int = 60
     affected_timeframes: list[Timeframe] = Field(default_factory=list)
     timeframe_bias: dict[Timeframe, Direction] = Field(default_factory=dict)
     valid_until: datetime | None = None
     decay_curve: Literal["exponential", "linear", "step"] = "exponential"
-    confidence: float = 0.0         # 0..1 (kaynak doğrulaması)
+    confidence: float = 0.0         # 0..1 (kaynak doğrulaması + tazelik)
+    actionability: CatalystActionability = "CONTEXT_ONLY"
+    verified: bool = False
+    source: str = "unknown"
+    region: str | None = None
+    freshness: NewsFreshness | None = None
+    ts: datetime = Field(default_factory=utcnow)
+    evidence: list[str] = Field(default_factory=list)
 
 
 # v2.7 D2 — Crypto Derivatives Intelligence (funding / OI / squeeze proxy).

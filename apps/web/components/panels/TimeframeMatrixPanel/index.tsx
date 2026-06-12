@@ -14,6 +14,7 @@ import {
   selectMatrixEventRisk,
   selectMatrixDerivatives,
   selectMatrixVolatility,
+  selectMatrixCatalysts,
   cellBlockedLabel,
 } from "@/lib/selectors/decision";
 import type { TimeframeDecision } from "@/types/generated/api";
@@ -118,6 +119,7 @@ export function TimeframeMatrixPanel() {
   const eventRisk = selectMatrixEventRisk(data);
   const derivatives = selectMatrixDerivatives(data);
   const volatility = selectMatrixVolatility(data);
+  const catalysts = selectMatrixCatalysts(data);
   return (
     <PanelFrame id="timeframe_matrix">
       <PanelHeader
@@ -172,6 +174,17 @@ export function TimeframeMatrixPanel() {
             )
             .join(" · ")}{" "}
           — yalnızca kısıtlayıcı (asla size artırmaz).
+        </p>
+      ) : null}
+      {/* v2.7 D5 — haber catalyst (yalnızca verified + yarı-ömrü dolmamış +
+          kısıtlayıcı). Hücre etkisi blocked_by="catalyst_risk:*" rozetiyle görünür. */}
+      {catalysts.length ? (
+        <p className="mb-2 text-[11px] text-orange-300/90">
+          ⚑ Catalyst:{" "}
+          {catalysts
+            .map((c) => `${c.event_type} (${c.actionability})`)
+            .join(" · ")}{" "}
+          — yalnızca kısıtlayıcı (rumor/half-life dışı yalnızca bağlam).
         </p>
       ) : null}
       <table className="w-full border-collapse text-xs">

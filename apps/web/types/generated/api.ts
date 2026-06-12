@@ -371,6 +371,8 @@ export type DataSnapshot = {
   derivatives?: Record<string, DerivativesSnapshot>;
   // v2.7 D4 — realized volatility / rejim (symbol → timeframe → snapshot).
   volatility?: Record<string, Partial<Record<Timeframe, VolatilitySnapshot>>>;
+  // v2.7 D5 — haber → catalyst half-life zekâsı (deterministik; LLM yok).
+  catalyst_impacts?: CatalystImpact[];
 };
 
 // v2.7 D2 — Crypto Derivatives Intelligence (funding / OI / squeeze proxy).
@@ -624,9 +626,32 @@ export type HaltResetResult = {
 
 export type Timeframe = "15m" | "1h" | "4h" | "1d" | "1w";
 
+// v2.7 D5 — Catalyst half-life intelligence (haber → etki modeli).
+export type CatalystEventType =
+  | "geopolitical_deescalation"
+  | "geopolitical_escalation"
+  | "inflation_data"
+  | "jobs_data"
+  | "central_bank"
+  | "oil_supply"
+  | "oil_inventory"
+  | "crypto_etf_flow"
+  | "funding_oi_squeeze"
+  | "earnings"
+  | "exchange_outage"
+  | "rumor_unverified"
+  | "unknown";
+
+export type CatalystActionability =
+  | "CONTEXT_ONLY"
+  | "WATCH"
+  | "CAUTION"
+  | "NO_POSITION_INCREASE";
+
 export type CatalystImpact = {
   catalyst_id: string;
-  event_type: string;
+  headline_id?: string;
+  event_type: CatalystEventType;
   surprise_level?: number;
   affected_assets?: string[];
   expected_half_life_minutes?: number;
@@ -635,6 +660,28 @@ export type CatalystImpact = {
   valid_until?: string | null;
   decay_curve?: "exponential" | "linear" | "step";
   confidence?: number;
+  actionability: CatalystActionability;
+  verified: boolean;
+  source?: string;
+  region?: string | null;
+  freshness?: "FRESH" | "RECENT" | "STALE" | null;
+  ts?: string;
+  evidence?: string[];
+};
+
+// v2.7 D5 — DecisionMatrix banner özeti (verified + yarı-ömrü dolmamış).
+export type CatalystSummary = {
+  catalyst_id: string;
+  headline_id?: string;
+  event_type: CatalystEventType;
+  actionability: CatalystActionability;
+  affected_assets?: string[];
+  affected_timeframes?: Timeframe[];
+  expected_half_life_minutes?: number;
+  valid_until?: string | null;
+  surprise_level?: number;
+  confidence?: number;
+  verified?: boolean;
 };
 
 // Provenance damgası (LIVE / MOCK_MODE / SIMULATION / INSUFFICIENT_DATA).
@@ -683,6 +730,9 @@ export type DecisionMatrix = {
   // v2.7 D4 — per (symbol, timeframe) realized vol özeti (banner). Etkilenen
   // hücreler blocked_by="volatility_risk:*" ile görünür.
   volatility?: VolatilitySummary[];
+  // v2.7 D5 — verified + yarı-ömrü dolmamış catalyst özeti (banner). Etkilenen
+  // hücreler blocked_by="catalyst_risk:*" ile görünür.
+  catalysts?: CatalystSummary[];
   mode?: ProvenanceMode;
   cells: TimeframeDecision[];
 };

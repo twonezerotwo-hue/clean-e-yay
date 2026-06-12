@@ -18,11 +18,13 @@ from packages.data.providers import price as price_provider
 from packages.data.providers import rotation as rot_provider
 from packages.data.providers import technical as tech_provider
 from packages.data.providers import volatility as vol_provider
+from packages.data.providers.news import catalyst as catalyst_engine
 from packages.data.quality.dqs import QualityReport
 from packages.data.quality.dqs import compute as compute_dqs
 from packages.data.types import (
     TIMEFRAMES,
     Catalyst,
+    CatalystImpact,
     DerivativesSnapshot,
     NewsHeadline,
     PriceQuote,
@@ -59,6 +61,9 @@ class MarketSnapshot:
     # v2.7 D4 — realized volatility / rejim zekâsı. Anahtar: symbol → timeframe.
     # Karar zincirinde yalnızca kısıtlayıcı (asla size artırmaz).
     volatility: dict[str, dict[str, VolatilitySnapshot]] = field(default_factory=dict)
+    # v2.7 D5 — haber → catalyst half-life zekâsı (deterministik, LLM yok).
+    # Karar zincirinde yalnızca kısıtlayıcı (verified + yarı-ömrü dolmamış).
+    catalyst_impacts: list[CatalystImpact] = field(default_factory=list)
 
 
 def _make_id(now: datetime) -> str:
@@ -85,6 +90,9 @@ def build_snapshot(symbols: list[str] | None = None) -> MarketSnapshot:
         for s in syms
     }
     headlines = news_provider.list_headlines(14)
+    # v2.7 D5 — başlıkları deterministik catalyst etkilerine çevir (network yok).
+    # Yalnızca verified + yarı-ömrü dolmamış impact karar zincirine girer.
+    catalyst_impacts = catalyst_engine.build_impacts(headlines, now=now)
     catalysts = cal_provider.list_catalysts(8)
     rotation = rot_provider.get_rotation()
     # v2.7 D2 — kripto türev zekâsı (yalnızca crypto sembolleri için).
@@ -147,6 +155,7 @@ def build_snapshot(symbols: list[str] | None = None) -> MarketSnapshot:
         technicals_by_tf=technicals_by_tf or None,
         derivatives=derivatives,
         volatility=volatility,
+        catalyst_impacts=catalyst_impacts,
     )
 
 

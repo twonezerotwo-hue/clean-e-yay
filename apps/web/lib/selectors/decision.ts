@@ -48,6 +48,12 @@ export const selectMatrixVolatility = (m: DecisionMatrix | undefined) =>
       (v.regime === "ELEVATED" || v.regime === "EXTREME" || v.vol_state !== "normal"),
   );
 
+/** v2.7 D5 — matris catalyst özeti (banner). Backend zaten yalnızca verified +
+ * yarı-ömrü dolmamış + kısıtlayıcı catalyst'leri döner; hücre etkisi
+ * cell.blocked_by="catalyst_risk:*". */
+export const selectMatrixCatalysts = (m: DecisionMatrix | undefined) =>
+  m?.catalysts ?? [];
+
 /** Bir hücreyi hangi kapı kısıtlıyor → kısa, okunur etiket. */
 export const cellBlockedLabel = (c: TimeframeDecision): string | undefined => {
   const tag = (c.blocked_by ?? [])[0];
@@ -56,6 +62,7 @@ export const cellBlockedLabel = (c: TimeframeDecision): string | undefined => {
   if (tag.startsWith("mistake_memory")) return "MISTAKE";
   if (tag.startsWith("derivatives_risk")) return "TÜREV";
   if (tag.startsWith("volatility_risk")) return "VOLATİLİTE";
+  if (tag.startsWith("catalyst_risk")) return "CATALYST";
   if (tag.startsWith("correlation")) return "KORELASYON";
   if (tag.startsWith("timeframe_policy")) return "TF BIAS";
   if (tag.includes("1w_bias")) return "1W BIAS";

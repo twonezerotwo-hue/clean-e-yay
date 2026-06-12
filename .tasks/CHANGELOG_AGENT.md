@@ -1,5 +1,32 @@
 # Agent Changelog
 
+## 2026-06-12 — v2.7 D5 Real News Feed + Catalyst Half-Life Intelligence
+- Yeni motor `packages/data/providers/news/catalyst.py` (kural tabanlı,
+  deterministik, LLM/network YOK). Başlık → 13 event_type (geopolitical
+  de/escalation, inflation_data, jobs_data, central_bank, oil_supply/inventory,
+  crypto_etf_flow, funding_oi_squeeze, earnings, exchange_outage,
+  rumor_unverified, unknown). `build_impact` → CatalystImpact (affected_assets =
+  event default ∪ başlık tespiti; surprise_level işaretli; valid_until = ts +
+  half_life×3; confidence = verified+freshness+relevance). Rumor → verified=False
+  (trade'e dönüşmez).
+- `packages/risk/catalyst_risk.py`: yalnızca kısıtlayıcı gate (verified + yarı-ömrü
+  dolmamış + symbol/TF eşleşen; CONTEXT_ONLY→NONE, WATCH→bağlam, CAUTION→×0.5,
+  NO_POSITION_INCREASE→block). Yön bağımsız; size_factor ≤ 1.0.
+- Entegrasyon: pipeline `MarketSnapshot.catalyst_impacts` (başlıklardan, ekstra ağ
+  yok); decision engine gate volatility'den SONRA + `catalyst_report` + blocked_by
+  `catalyst_risk:*`; matrix `catalysts` özeti; `/data/snapshot` catalyst_impacts.
+- Sözleşme additive: openapi CatalystImpact genişletildi + CatalystEventType /
+  CatalystActionability enum + CatalystSummary + DataSnapshot.catalyst_impacts +
+  DecisionMatrix.catalysts; TS api.ts senkron (codegen drift yeşil).
+- Frontend: `CatalystImpactPanel` (selector `lib/selectors/catalyst.ts` + registry,
+  page.tsx tek GridCell) + TimeframeMatrixPanel catalyst banner + hücre "CATALYST"
+  rozeti. NewsPanel (unscheduled) + EventCalendarPanel (scheduled) ayrı.
+- Testler: +21 (`tests/unit/test_catalyst.py`). 287/287 pytest, CI-scope ruff +
+  tsc + pnpm build yeşil. Live smoke OK (gerçek RSS → central_bank/geopolitical/
+  funding_squeeze/etf_flow/rumor; rumor verified=false; matrix catalyst banner;
+  RiskGate suspended iken catalyst bypass yok). PAPER_SAFE/NO_EXECUTION;
+  RiskGate/DQS/KillSwitch/halt sıfır diff, bypass yok.
+
 ## 2026-06-12 — v2.7 D4 Realized Volatility / Volatility Regime Intelligence
 - Yeni provider `packages/data/providers/volatility/` (saf-python engine +
   orchestrator). Mevcut OHLCV cache'inden (ekstra ağ YOK) log-getiri tabanlı

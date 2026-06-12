@@ -105,6 +105,32 @@ def get_snapshot() -> dict:
             }
             for sym, by_tf in (snap.volatility or {}).items()
         },
+        # v2.7 D5 — haber catalyst half-life zekâsı (deterministik; LLM yok).
+        # Yalnızca verified + yarı-ömrü dolmamış impact karar zincirini kısıtlar;
+        # rumor (verified=false) ve CONTEXT_ONLY yalnızca bağlamdır.
+        "catalyst_impacts": [
+            {
+                "catalyst_id": c.catalyst_id,
+                "headline_id": c.headline_id,
+                "event_type": c.event_type,
+                "surprise_level": c.surprise_level,
+                "affected_assets": list(c.affected_assets),
+                "affected_timeframes": list(c.affected_timeframes),
+                "timeframe_bias": c.timeframe_bias,
+                "expected_half_life_minutes": c.expected_half_life_minutes,
+                "valid_until": c.valid_until.isoformat() if c.valid_until else None,
+                "decay_curve": c.decay_curve,
+                "confidence": c.confidence,
+                "actionability": c.actionability,
+                "verified": c.verified,
+                "source": c.source,
+                "region": c.region,
+                "freshness": c.freshness,
+                "ts": c.ts.isoformat(),
+                "evidence": list(c.evidence),
+            }
+            for c in (snap.catalyst_impacts or [])
+        ],
         # T1 — gerçek OHLCV'den multi-TF teknikler (symbol → tf → özet).
         "technicals_by_tf": {
             sym: {

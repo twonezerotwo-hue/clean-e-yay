@@ -1,9 +1,9 @@
 # NEXT TASK — v2.7 deep data, kalan slice'lar (öneri)
 
-v2.7 **D2 — Crypto Derivatives Intelligence** ve **D4 — Realized Volatility /
-Volatility Regime Intelligence** tamamlandı (bkz. `.tasks/TASK_RESULT.md`,
-2026-06-12). Her ikisi de karar zincirine **yalnızca kısıtlayıcı** girer; live
-smoke OK, CI-scope yeşil. 266/266 pytest.
+v2.7 **D2 — Crypto Derivatives**, **D4 — Realized Volatility** ve **D5 — Real News
+Feed + Catalyst Half-Life** tamamlandı (bkz. `.tasks/TASK_RESULT.md`, 2026-06-12).
+Üçü de karar zincirine **yalnızca kısıtlayıcı** girer; live smoke OK, CI-scope
+yeşil. 287/287 pytest.
 
 Kalan deep-data slice'ları (her biri **önce karar rolü** tasarlanıp sonra provider
 eklenir — engine rolü olmadan ölü veri yasak; DATA_POLICY + ARCHITECTURE §18):
@@ -16,10 +16,6 @@ eklenir — engine rolü olmadan ölü veri yasak; DATA_POLICY + ARCHITECTURE §
   (VolatilityPanel'e ek IV satırı veya yeni panel) + matrix etkisi.
 - Not: D4 realized vol ile birlikte "vol surface" bağlamı tamamlanır
   (realized vs implied spread → bağlam).
-
-## Alternatif: D5 — Gerçek haber feed + T3 catalyst half-life
-- RSS fixture/placeholder → gerçek feed; T0'daki `CatalystImpact` contract'ını
-  gerçek yarı-ömür motoruyla doldur (haber decay → TF bias). Yalnızca kısıtlayıcı.
 
 ## Açık teknik borç (opsiyonel)
 - Gerçek `openapi-typescript` codegen otomasyonu (`make codegen`); şu an drift

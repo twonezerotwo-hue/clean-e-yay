@@ -168,16 +168,19 @@ def test_trade_decision_has_timeframe_default_1d() -> None:
 
 
 def test_catalyst_impact_contract_model() -> None:
-    """CatalystImpact sadece contract — motor yok; model valide olmalı."""
+    """CatalystImpact modeli (v2.7 D5 — event_type artık taksonomi Literal'i)."""
     from packages.data.types import CatalystImpact
     ci = CatalystImpact(
         catalyst_id="c1",
-        event_type="ceasefire",
+        event_type="geopolitical_deescalation",
         surprise_level=0.8,
         affected_assets=["BRENT", "XAUUSD", "BTCUSD"],
         expected_half_life_minutes=2880,
         affected_timeframes=["15m", "1h", "4h"],
         timeframe_bias={"15m": "bearish", "1h": "bearish"},
+        actionability="CAUTION",
+        verified=True,
     )
     assert ci.decay_curve == "exponential"
     assert ci.valid_until is None
+    assert ci.actionability == "CAUTION"

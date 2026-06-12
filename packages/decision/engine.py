@@ -39,7 +39,13 @@ from packages.learning.calibration_store import (
 from packages.learning.fingerprint import make as make_fingerprint
 from packages.learning.mistake_memory import MistakeVerdict
 from packages.regime.classifier import RegimeOutput, classify
-from packages.risk import correlation, derivatives_risk, event_risk, volatility_risk
+from packages.risk import (
+    catalyst_risk,
+    correlation,
+    derivatives_risk,
+    event_risk,
+    volatility_risk,
+)
 from packages.risk.engine import RiskDecision, RiskInput
 from packages.risk.engine import evaluate as evaluate_risk
 
@@ -64,6 +70,8 @@ class TradeDecision:
     derivatives_report: dict = field(default_factory=dict)
     # v2.7 D4 — realized volatility riski (yalnızca kısıtlayıcı; per (symbol, tf)).
     volatility_report: dict = field(default_factory=dict)
+    # v2.7 D5 — haber catalyst riski (yalnızca kısıtlayıcı; verified + taze).
+    catalyst_report: dict = field(default_factory=dict)
     timeframe: str = "1d"  # T2 — (symbol, timeframe) karar uzayı aktif
     # T2 additive — candidate (consensus niyeti) vs final (gate'ler sonrası)
     # ayrımı görünür olsun; blocked_by hangi kapının kararı kestiğini söyler.
@@ -360,6 +368,46 @@ def decide_for_symbol(
         size *= vv.size_factor
         size = max(0.0, min(1.5, size))
 
+    # ----- v2.7 D5: haber catalyst riski (RiskGate'ten SONRA; yalnızca kısıtlayıcı) -----
+    # Yalnızca verified + yarı-ömrü dolmamış impact'ler bu (symbol, tf) hücresini
+    # kısar. Rumor (verified=False) ve süresi dolmuş catalyst karar zincirine
+    # girmez (yalnızca bağlam). Yön bağımsız; asla size artırmaz, asla RiskGate/
+    # DQS/halt'ı bypass etmez (bu kod yalnızca RiskGate açıkken çalışır).
+    catalyst_dict: dict = {}
+    cv = catalyst_risk.assess(snap.catalyst_impacts, symbol, timeframe)
+    if cv.level != "NONE":
+        catalyst_dict = {
+            "level": cv.level,
+            "size_factor": cv.size_factor,
+            "block": cv.block,
+            "reason": cv.reason,
+            "evidence": list(cv.evidence),
+            "event_type": cv.event_type,
+        }
+        if cv.block:
+            return TradeDecision(
+                symbol=symbol,
+                action="hold",
+                confidence=round(cal_conf, 3),
+                size_multiplier=0.0,
+                consensus=cons,
+                risk=risk,
+                reason=f"catalyst_risk: {cv.reason}",
+                raw_confidence=round(raw_conf, 4),
+                confidence_source=conf_source,
+                fingerprint=fp,
+                mistake_verdict=_verdict_to_dict(verdict),
+                cluster_report=cluster_dict,
+                derivatives_report=derivatives_dict,
+                volatility_report=volatility_dict,
+                catalyst_report=catalyst_dict,
+                timeframe=timeframe,
+                candidate_action=candidate,
+                blocked_by=[f"catalyst_risk:{cv.level}"],
+            )
+        size *= cv.size_factor
+        size = max(0.0, min(1.5, size))
+
     # ----- T2: timeframe politikası EN SON (RiskGate'ten sonra; sadece azaltır) -----
     blocked_by: list[str] = []
     if not pol["paper_execution"]:
@@ -380,6 +428,7 @@ def decide_for_symbol(
             cluster_report=cluster_dict,
             derivatives_report=derivatives_dict,
             volatility_report=volatility_dict,
+            catalyst_report=catalyst_dict,
             timeframe=timeframe,
             candidate_action=candidate,
             blocked_by=["timeframe_policy:no_paper_execution"],
@@ -409,6 +458,11 @@ def decide_for_symbol(
                 if volatility_dict and volatility_dict.get("level") not in (None, "NONE")
                 else ""
             )
+            + (
+                f" · catalyst:{catalyst_dict['level'].lower()}"
+                if catalyst_dict and catalyst_dict.get("level") not in (None, "NONE")
+                else ""
+            )
             + (f" · tf:{timeframe}×{pol['risk_multiplier']}" if pol["risk_multiplier"] < 1.0 else "")
         ),
         raw_confidence=round(raw_conf, 4),
@@ -418,6 +472,7 @@ def decide_for_symbol(
         cluster_report=cluster_dict,
         derivatives_report=derivatives_dict,
         volatility_report=volatility_dict,
+        catalyst_report=catalyst_dict,
         timeframe=timeframe,
         candidate_action=candidate,
         blocked_by=blocked_by,
@@ -574,6 +629,29 @@ def matrix_view(
         for v in by_tf.values()
         if v.status == "OK" and (v.regime in ("ELEVATED", "EXTREME") or v.vol_state != "normal")
     ]
+    # v2.7 D5 — catalyst özeti (banner). Yalnızca verified + yarı-ömrü dolmamış +
+    # kısıtlayıcı (CONTEXT_ONLY hariç). Etkilenen hücreler ayrıca
+    # cell.blocked_by="catalyst_risk:*" taşır.
+    now_ref = datetime.now(UTC)
+    catalyst_summary = [
+        {
+            "catalyst_id": c.catalyst_id,
+            "headline_id": c.headline_id,
+            "event_type": c.event_type,
+            "actionability": c.actionability,
+            "affected_assets": list(c.affected_assets),
+            "affected_timeframes": list(c.affected_timeframes),
+            "expected_half_life_minutes": c.expected_half_life_minutes,
+            "valid_until": c.valid_until.isoformat() if c.valid_until else None,
+            "surprise_level": c.surprise_level,
+            "confidence": c.confidence,
+            "verified": c.verified,
+        }
+        for c in (snap.catalyst_impacts or [])
+        if c.verified
+        and c.actionability != "CONTEXT_ONLY"
+        and (c.valid_until is None or now_ref <= c.valid_until)
+    ]
     cells = []
     for d in decisions:
         actionable = bool(d.actionable) and not suspended
@@ -632,5 +710,6 @@ def matrix_view(
         },
         "derivatives": derivatives_summary,
         "volatility": volatility_summary,
+        "catalysts": catalyst_summary,
         "cells": cells,
     }

@@ -762,15 +762,45 @@ components:
       default: "1d"
       description: T0 — sinyal uzayı (symbol, timeframe) ile anahtarlanır.
 
+    CatalystEventType:
+      type: string
+      description: v2.7 D5 — kural tabanlı (deterministik) catalyst event tipi.
+      enum:
+        - geopolitical_deescalation
+        - geopolitical_escalation
+        - inflation_data
+        - jobs_data
+        - central_bank
+        - oil_supply
+        - oil_inventory
+        - crypto_etf_flow
+        - funding_oi_squeeze
+        - earnings
+        - exchange_outage
+        - rumor_unverified
+        - unknown
+
+    CatalystActionability:
+      type: string
+      description: >
+        v2.7 D5 — yalnızca kısıtlayıcı taksonomi. CONTEXT_ONLY karar zincirine
+        girmez (yalnızca bağlam); WATCH uyarı; CAUTION size ×0.5;
+        NO_POSITION_INCREASE yeni pozisyon açılışını durdurur.
+      enum: [CONTEXT_ONLY, WATCH, CAUTION, NO_POSITION_INCREASE]
+
     CatalystImpact:
       type: object
       description: >
-        T0 contract seed — half-life motoru v2.7 deep data ile implement
-        edilir. Şimdilik hiçbir endpoint üretmez/tüketmez.
-      required: [catalyst_id, event_type]
+        v2.7 D5 — haber → catalyst half-life etkisi. Başlık kural tabanlı
+        (deterministik, LLM YOK) bir event_type'a sınıflandırılır; event_type'a
+        göre asset × timeframe etki haritası + yarı-ömür + valid_until +
+        actionability üretilir. Karar zincirinde YALNIZCA kısıtlayıcı; rumor
+        (verified=false) ve yarı-ömrü dolmuş catalyst yalnızca bağlamdır.
+      required: [catalyst_id, event_type, actionability, verified]
       properties:
         catalyst_id: { type: string }
-        event_type: { type: string }
+        headline_id: { type: string }
+        event_type: { $ref: "#/components/schemas/CatalystEventType" }
         surprise_level: { type: number, minimum: -1, maximum: 1 }
         affected_assets:
           type: array
@@ -785,6 +815,39 @@ components:
         valid_until: { type: string, format: date-time, nullable: true }
         decay_curve: { type: string, enum: [exponential, linear, step] }
         confidence: { type: number, minimum: 0, maximum: 1 }
+        actionability: { $ref: "#/components/schemas/CatalystActionability" }
+        verified: { type: boolean }
+        source: { type: string }
+        region: { type: string, nullable: true }
+        freshness: { type: string, enum: [FRESH, RECENT, STALE], nullable: true }
+        ts: { type: string, format: date-time }
+        evidence:
+          type: array
+          items: { type: string }
+
+    CatalystSummary:
+      type: object
+      description: >
+        v2.7 D5 — DecisionMatrix banner özeti (yalnızca verified + yarı-ömrü
+        dolmamış + kısıtlayıcı catalyst'ler). Etkilenen hücreler ayrıca
+        cell.blocked_by="catalyst_risk:*" taşır.
+      required: [catalyst_id, event_type, actionability]
+      properties:
+        catalyst_id: { type: string }
+        headline_id: { type: string }
+        event_type: { $ref: "#/components/schemas/CatalystEventType" }
+        actionability: { $ref: "#/components/schemas/CatalystActionability" }
+        affected_assets:
+          type: array
+          items: { type: string }
+        affected_timeframes:
+          type: array
+          items: { $ref: "#/components/schemas/Timeframe" }
+        expected_half_life_minutes: { type: integer }
+        valid_until: { type: string, format: date-time, nullable: true }
+        surprise_level: { type: number }
+        confidence: { type: number }
+        verified: { type: boolean }
 
     TimeframeDecision:
       type: object
@@ -848,6 +911,12 @@ components:
             v2.7 D4 — per (symbol, timeframe) realized vol özeti (banner).
             Etkilenen hücreler cell.blocked_by="volatility_risk:*" ile görünür.
           items: { $ref: "#/components/schemas/VolatilitySummary" }
+        catalysts:
+          type: array
+          description: >
+            v2.7 D5 — verified + yarı-ömrü dolmamış catalyst özeti (banner).
+            Etkilenen hücreler cell.blocked_by="catalyst_risk:*" ile görünür.
+          items: { $ref: "#/components/schemas/CatalystSummary" }
         cells:
           type: array
           items: { $ref: "#/components/schemas/TimeframeDecision" }
@@ -994,6 +1063,12 @@ components:
           additionalProperties:
             type: object
             additionalProperties: { $ref: "#/components/schemas/VolatilitySnapshot" }
+        catalyst_impacts:
+          type: array
+          description: >
+            v2.7 D5 — haber → catalyst half-life zekâsı (deterministik; LLM yok).
+            Yalnızca verified + yarı-ömrü dolmamış impact karar zincirini kısıtlar.
+          items: { $ref: "#/components/schemas/CatalystImpact" }
 
     # ---------------- v2.7 D2 — Crypto Derivatives Intelligence ----------------
 

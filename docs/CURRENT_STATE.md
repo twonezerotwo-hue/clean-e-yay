@@ -4,6 +4,42 @@ _Bu dosya kısa ve güncel tutulur. Her görev sonunda güncellenir._
 
 ## Last known status
 
+- **v2.7 D5 — Real News Feed + Catalyst Half-Life Intelligence tamamlandı**
+  (2026-06-12): mevcut RSS haber feed'i gerçek catalyst zekâ katmanına çevrildi.
+  Her başlık kural tabanlı (deterministik, **LLM YOK**, network YOK) bir
+  `event_type`'a sınıflandırılır ve event_type'a göre asset × timeframe etki
+  haritası + yarı-ömür + `valid_until` + actionability üretir.
+  - **Sınıflandırma + motor** (`packages/data/providers/news/catalyst.py`):
+    13 event_type (geopolitical de/escalation, inflation_data, jobs_data,
+    central_bank, oil_supply/inventory, crypto_etf_flow, funding_oi_squeeze,
+    earnings, exchange_outage, rumor_unverified, unknown). Sıralı kural seti;
+    rumor → `verified=False` (trade'e dönüşmez). `build_impact` → CatalystImpact
+    (affected_assets = event default ∪ başlıktan tespit; surprise_level işaretli;
+    valid_until = ts + half_life×3; confidence = verified+freshness+relevance).
+  - **Gate** (`packages/risk/catalyst_risk.py`): yalnızca `verified` + yarı-ömrü
+    dolmamış + symbol/TF eşleşen impact'ler. CONTEXT_ONLY→NONE, WATCH→bağlam,
+    CAUTION→×0.5, NO_POSITION_INCREASE→block. Yön bağımsız; size_factor ≤ 1.0.
+    RiskGate hard gate'lerinden SONRA, yalnızca açılış adayına.
+  - **Entegrasyon**: pipeline `MarketSnapshot.catalyst_impacts` (başlıklardan,
+    ekstra ağ yok); decision engine catalyst gate (volatility'den sonra) +
+    `catalyst_report` + blocked_by `catalyst_risk:*`; matrix `catalysts` özeti;
+    `/data/snapshot` catalyst_impacts alanı.
+  - **Sözleşme** additive: openapi `CatalystImpact` genişletildi (headline_id /
+    actionability / verified / evidence / …) + `CatalystEventType` /
+    `CatalystActionability` enum + `CatalystSummary` + DataSnapshot.catalyst_impacts
+    + DecisionMatrix.catalysts. TS api.ts senkron (codegen drift yeşil).
+  - **Frontend**: `CatalystImpactPanel` (selector `lib/selectors/catalyst.ts` +
+    registry, page.tsx tek GridCell) — event_type / affected assets+TF / yarı-ömür
+    countdown / valid_until / actionability / evidence / rumor rozeti. NewsPanel
+    (unscheduled news) + EventCalendarPanel (scheduled) ayrı kalır.
+    TimeframeMatrixPanel catalyst banner + hücre "CATALYST" rozeti.
+  - **287/287 pytest** (+21 D5; live network yok), CI-scope ruff + tsc + pnpm
+    build yeşil. Live smoke OK (gerçek RSS → central_bank/geopolitical/
+    funding_squeeze/etf_flow/rumor sınıfları; rumor verified=false; matrix
+    catalyst banner; RiskGate suspended iken catalyst hücreyi bypass etmiyor).
+    PAPER_SAFE/NO_EXECUTION; RiskGate/DQS/KillSwitch/halt sıfır diff, bypass yok.
+  - Açık (NEXT): D3 (options IV/skew Deribit) ve/veya gerçek replay/backtest motoru.
+
 - **v2.7 D4 — Realized Volatility / Volatility Regime Intelligence tamamlandı**
   (2026-06-12): realized vol + rejim + squeeze/expansion/shock karar zincirine
   **yalnızca kısıtlayıcı** eklendi. Yeni provider `packages/data/providers/
@@ -293,11 +329,10 @@ _Bu dosya kısa ve güncel tutulur. Her görev sonunda güncellenir._
 
 ## Next task
 
-- D2 (türev) + D4 (realized vol) bitti. Kalan deep-data slice'ları
-  `.tasks/NEXT_TASK.md`'de (her biri ÖNCE karar rolü tasarlanır — ölü veri yasak):
+- D2 (türev) + D4 (realized vol) + D5 (catalyst half-life) bitti. Kalan deep-data
+  slice'ları `.tasks/NEXT_TASK.md`'de (her biri ÖNCE karar rolü tasarlanır — ölü
+  veri yasak):
   - **D3 — Options IV / skew (Deribit)**: ATM IV + 25Δ skew → yalnızca kısıtlayıcı
-    size kısıtı/contrarian bağlam.
-  - **D5 — Gerçek haber feed + T3 catalyst half-life**: RSS → gerçek feed; T0
-    `CatalystImpact` contract'ını yarı-ömür motoruyla doldur (haber decay → TF bias).
+    size kısıtı/contrarian bağlam. Realized vol (D4) ile vol surface bağlamı tamamlanır.
   - Alternatif: gerçek deterministik replay/backtest motoru (disk snapshot store).
 - `.tasks/NEXT_TASK.md` güncellendi.

@@ -15,6 +15,7 @@ import { EventCalendarPanel } from "@/components/panels/EventCalendarPanel";
 import { ScenarioPanel } from "@/components/panels/ScenarioPanel";
 import { CapitalRotationPanel } from "@/components/panels/CapitalRotationPanel";
 import { NewsPanel } from "@/components/panels/NewsPanel";
+import { CatalystImpactPanel } from "@/components/panels/CatalystImpactPanel";
 import { PatternsPanel } from "@/components/panels/PatternsPanel";
 import { LearningPanel } from "@/components/panels/LearningPanel";
 import { TradingPanel } from "@/components/panels/TradingPanel";
@@ -98,6 +99,8 @@ export default function HomePage() {
 
         <GridCell span="2"><NewsPanel /></GridCell>
         <GridCell span="1"><PanelAuditPanel /></GridCell>
+
+        <GridCell span="2"><CatalystImpactPanel /></GridCell>
 
         <GridCell span="2"><LearningPanel /></GridCell>
         <GridCell span="1"><TradingPanel /></GridCell>
