@@ -57,6 +57,24 @@ paths:
               schema:
                 $ref: "#/components/schemas/AIReport"
 
+  /api/v1/chat:
+    post:
+      operationId: postChat
+      summary: v2.6 — state-grounded soru-cevap (LLM karar vermez, sadece açıklar)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ChatRequest"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ChatResponse"
+
   /api/v1/paper-trading/state:
     get:
       operationId: getPaperTradingState
@@ -286,6 +304,107 @@ components:
             input: { type: integer }
             output: { type: integer }
             cached: { type: boolean }
+        # v2.6 additive — persona katmanı (narrative-only; decision path'e yazmaz)
+        no_actionable_decision: { type: boolean }
+        timeframe_summary: { $ref: "#/components/schemas/TimeframeSummary" }
+        personas:
+          type: array
+          items: { $ref: "#/components/schemas/PersonaSection" }
+        llm: { $ref: "#/components/schemas/LLMMeta" }
+
+    PersonaSection:
+      type: object
+      description: >
+        v2.6 — persona bölümü. evidence_used HER ZAMAN backend'de
+        deterministik doldurulur (LLM kanıt uyduramaz). source=fallback →
+        LLM'siz deterministik narrative.
+      required: [persona, title, summary]
+      properties:
+        persona: { type: string, enum: [analyst, risk_officer, macro_strategist] }
+        title: { type: string }
+        summary: { type: string }
+        concerns:
+          type: array
+          items: { type: string }
+        evidence_used:
+          type: array
+          items: { type: string }
+        missing_data:
+          type: array
+          items: { type: string }
+        actionability: { type: string }
+        what_would_change_my_mind: { type: string }
+        source: { type: string, enum: [llm, fallback] }
+        model: { type: string, nullable: true }
+
+    TimeframeSummary:
+      type: object
+      description: v2.6 — DecisionMatrix'in rapor özeti (TF farkları, candidate vs final, blocked_by, paper_action).
+      properties:
+        suspended: { type: boolean }
+        lines:
+          type: array
+          items: { type: string }
+        candidate_vs_final_diffs:
+          type: array
+          items:
+            type: object
+            properties:
+              symbol: { type: string }
+              timeframe: { $ref: "#/components/schemas/Timeframe" }
+              candidate: { type: string }
+              final: { type: string }
+              blocked_by:
+                type: array
+                items: { type: string }
+              reason: { type: string }
+        blocked_by_reasons:
+          type: array
+          items: { type: string }
+        paper_actions:
+          type: array
+          items:
+            type: object
+            properties:
+              symbol: { type: string }
+              timeframe: { $ref: "#/components/schemas/Timeframe" }
+              paper_action: { type: string }
+
+    LLMMeta:
+      type: object
+      description: v2.6 — LLM çağrı meta'sı; source=fallback → deterministik narrative.
+      properties:
+        mode: { type: string, enum: [off, mock, groq] }
+        model: { type: string, nullable: true }
+        source: { type: string, enum: [llm, fallback, guard] }
+        fallback_reason: { type: string, nullable: true }
+        cached: { type: boolean }
+        tokens_used: { type: integer }
+
+    ChatRequest:
+      type: object
+      required: [message]
+      properties:
+        message: { type: string, minLength: 1, maxLength: 2000 }
+
+    ChatResponse:
+      type: object
+      description: >
+        v2.6 — state-grounded yanıt. refused=true → injection/bypass guard
+        devrede. evidence_used yanıtın dayandığı state kanıtları.
+      required: [answer, refused]
+      properties:
+        answer: { type: string }
+        refused: { type: boolean }
+        evidence_used:
+          type: array
+          items: { type: string }
+        snapshot_id: { type: string }
+        llm: { $ref: "#/components/schemas/LLMMeta" }
+        mode:
+          type: object
+          description: Provenance mode bloğu (LIVE/MOCK_MODE/SIMULATION/INSUFFICIENT_DATA).
+          additionalProperties: true
 
     Position:
       type: object
