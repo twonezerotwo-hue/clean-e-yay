@@ -4,7 +4,36 @@ _Bu dosya kısa ve güncel tutulur. Her görev sonunda güncellenir._
 
 ## Last known status
 
-- **P0 intelligence parity (kısmî) tamamlandı**: gerçek rotation engine +
+- **P0 intelligence parity (kalan kapsam) tamamlandı**: asset universe
+  (rotation bacakları) + news/geo/calendar birim testleri + event risk →
+  RiskGate (yalnızca kısıtlayıcı) + dashboard görünürlüğü.
+  - **Asset universe**: `ohlcv/yfinance` map'ine TLT/HYG/LQD eklendi
+    (source_registry kind: rotation). Rotation motoru artık 9/9 seriyle
+    çalışıyor → TAHVİL sınıfı + GLD/TLT + TLT/SPY savunma + HYG/LQD kredi
+    oranları **canlıda aktif** (smoke'ta TAHVİL & TLT/SPY evidence göründü).
+    DEFAULT_SYMBOLS değişmedi. (JNK/IWM/SMH/XLF/FXI + CoinGecko dominance +
+    FRED spread'leri bilinçli ertelendi — engine rolü yok = ölü veri.)
+  - **Event risk** (`packages/risk/event_risk.py`): yaklaşan **doğrulanmış**
+    yüksek etkili takvim olayı → WATCH / NO_POSITION_INCREASE. `RiskEngine.
+    evaluate(event_candidates=...)` aynı havuzda max-priority → DQS KILL_SWITCH
+    / halt event'i **her zaman ezer** (bypass yok), event riski gate gevşetmez
+    / size artırmaz. `decide_all`/`decide_matrix` `snap.catalysts`'ten besler;
+    `matrix_view`+`regime-report` additive `event_risk` bloğu + per-catalyst
+    `event_level`. thresholds: `event_risk.{block:24h, watch:72h, high:[high,
+    critical]}`.
+  - **Dashboard** (selector+registry, page.tsx büyümedi): EventCalendarPanel
+    actionability rozeti + banner; NewsPanel etkilenen-sembol rozetleri /
+    "yalnızca bağlam" + freshness; CapitalRotationPanel "gerçek 30g momentum +
+    oran" + UNAVAILABLE durumu; TimeframeMatrixPanel event-risk banner + hücre
+    blocked_by rozeti. OpenAPI + TS tipleri additive (`EventRiskView`).
+  - **191/191 pytest** (36 yeni: 17 event_risk + 19 news_calendar; testlerde
+    live network yok), ruff (CI scope) + tsc + `pnpm build` yeşil; canlı smoke
+    OK. RiskGate/DQS/KillSwitch/halt yalnızca kısıtlayıcı yönde; PAPER_SAFE
+    korunuyor.
+  - Açık kalan (NEXT): **OPS** (contract/replay + codegen drift); sonra
+    asset-universe ikinci slice (sektör/EM/kredi modülleri) ve v2.7 deep data.
+
+- **P0 intelligence parity (çekirdek) tamamlandı**: gerçek rotation engine +
   news/calendar pipeline entegrasyonu.
   - Hash-mock rotation kaldırıldı. `packages/data/providers/rotation/engine.py`
     Clean 1d OHLCV cache üstünde 30g momentum + çapraz oran (GLD/TLT, BTC/GLD,

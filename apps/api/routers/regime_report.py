@@ -7,6 +7,7 @@ from packages.consensus.engine import build as build_consensus
 from packages.data.ingestion.pipeline import DEFAULT_SYMBOLS, get_cached_snapshot
 from packages.data.provenance import data_provenance
 from packages.regime.classifier import classify
+from packages.risk import event_risk
 
 router = APIRouter(tags=["regime"])
 
@@ -16,6 +17,11 @@ def get_regime_report_current() -> dict:
     snap = get_cached_snapshot()
     regime = classify(snap)
     cons_list = [build_consensus(s, snap, regime) for s in DEFAULT_SYMBOLS[:6]]
+
+    # P0 — olay riski (yalnızca kısıtlayıcı). Hangi catalyst yeni pozisyonu
+    # kısıyor, dashboard'da görünür olsun.
+    ev = event_risk.assess(snap.catalysts)
+    ev_levels = {t.id: t.level for t in ev.triggers}
 
     assets = []
     for c in cons_list:
@@ -67,6 +73,10 @@ def get_regime_report_current() -> dict:
                 "title_tr": h.title_tr,
                 "sentiment": h.sentiment,
                 "asset_impact": h.asset_impact,
+                # P0 — haber yalnızca bağlam/analytics; deterministik kararı
+                # belirleyen sembol etkisi varsa actionable, yoksa context-only.
+                "actionable": bool(h.asset_impact),
+                "freshness": h.freshness,
             }
             for h in snap.headlines
         ],
@@ -77,7 +87,20 @@ def get_regime_report_current() -> dict:
                 "title": c.title,
                 "importance": c.importance,
                 "region": c.region,
+                "hours_until": c.hours_until,
+                "days_until": c.days_until,
+                # P0 — bu olay event riski tetikliyor mu (NONE/WATCH/
+                # NO_POSITION_INCREASE)? Yalnızca kısıtlayıcı.
+                "event_level": ev_levels.get(c.id, "NONE"),
             }
             for c in snap.catalysts
         ],
+        # P0 — olay riski özeti (yalnızca kısıtlayıcı; RiskGate'i bypass etmez).
+        "event_risk": {
+            "level": ev.level,
+            "action": ev.action,
+            "reason": ev.reason,
+            "evidence": list(ev.evidence),
+            "restrictive": ev.restrictive,
+        },
     }

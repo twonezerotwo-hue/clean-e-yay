@@ -39,7 +39,7 @@ from packages.learning.calibration_store import (
 from packages.learning.fingerprint import make as make_fingerprint
 from packages.learning.mistake_memory import MistakeVerdict
 from packages.regime.classifier import RegimeOutput, classify
-from packages.risk import correlation
+from packages.risk import correlation, event_risk
 from packages.risk.engine import RiskDecision, RiskInput
 from packages.risk.engine import evaluate as evaluate_risk
 
@@ -323,7 +323,11 @@ def decide_all(
     open_positions: list | None = None,
 ) -> tuple[RegimeOutput, RiskDecision, list[TradeDecision]]:
     regime = classify(snap)
-    risk = evaluate_risk(paper_state_input)
+    # P0 — olay riski yalnızca kısıtlayıcı ek candidate; DQS/halt'ı ezemez.
+    risk = evaluate_risk(
+        paper_state_input,
+        event_candidates=event_risk.risk_candidates(snap.catalysts),
+    )
     # Tek pass mistake özeti — tüm semboller için aynı snapshot.
     mems = mistake_memory.summary()
     positions = open_positions or []
@@ -361,7 +365,11 @@ def decide_matrix(
     boyut ×0.5 (asla artırma yok; 1w zaten kendi başına trade açamaz).
     """
     regime = classify(snap)
-    risk = evaluate_risk(paper_state_input)
+    # P0 — olay riski yalnızca kısıtlayıcı ek candidate; DQS/halt'ı ezemez.
+    risk = evaluate_risk(
+        paper_state_input,
+        event_candidates=event_risk.risk_candidates(snap.catalysts),
+    )
     mems = mistake_memory.summary()
     positions = open_positions or []
     corr_entries = correlation.matrix(
@@ -418,6 +426,10 @@ def matrix_view(
         risk.action in {"KILL_SWITCH", "RISK_REDUCE", "NO_POSITION_INCREASE"}
         or snap.quality.status == "BLOCKED"
     )
+    # P0 — olay riski ayrı görünür blok (RiskGate'i bypass etmez; hangi olayın
+    # hücreleri kıstığını dashboard'da göstermek için). Restrictive olduğunda
+    # zaten yukarıdaki `risk` içine NO_POSITION_INCREASE candidate olarak girmiş.
+    ev = event_risk.assess(snap.catalysts)
     cells = []
     for d in decisions:
         actionable = bool(d.actionable) and not suspended
@@ -456,5 +468,23 @@ def matrix_view(
         },
         "dqs_status": snap.quality.status,
         "suspended": suspended,
+        "event_risk": {
+            "level": ev.level,
+            "action": ev.action,
+            "reason": ev.reason,
+            "evidence": list(ev.evidence),
+            "restrictive": ev.restrictive,
+            "triggers": [
+                {
+                    "id": t.id,
+                    "title": t.title,
+                    "importance": t.importance,
+                    "hours_until": t.hours_until,
+                    "days_until": t.days_until,
+                    "level": t.level,
+                }
+                for t in ev.triggers
+            ],
+        },
         "cells": cells,
     }

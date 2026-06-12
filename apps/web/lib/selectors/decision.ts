@@ -27,6 +27,22 @@ export const selectMatrixSuspended = (m: DecisionMatrix | undefined) =>
 export const selectMatrixRiskGate = (m: DecisionMatrix | undefined) =>
   m?.risk_gate;
 
+/** P0 — matris event riski (hangi olay hücreleri kıstı; yalnızca kısıtlayıcı). */
+export const selectMatrixEventRisk = (m: DecisionMatrix | undefined) =>
+  m?.event_risk;
+
+/** Bir hücreyi hangi kapı kısıtlıyor → kısa, okunur etiket. */
+export const cellBlockedLabel = (c: TimeframeDecision): string | undefined => {
+  const tag = (c.blocked_by ?? [])[0];
+  if (!tag) return undefined;
+  if (tag.startsWith("risk_gate:")) return tag.replace("risk_gate:", "RISK ");
+  if (tag.startsWith("mistake_memory")) return "MISTAKE";
+  if (tag.startsWith("correlation")) return "KORELASYON";
+  if (tag.startsWith("timeframe_policy")) return "TF BIAS";
+  if (tag.includes("1w_bias")) return "1W BIAS";
+  return tag;
+};
+
 export const selectMatrixDqsStatus = (m: DecisionMatrix | undefined) =>
   m?.dqs_status;
 

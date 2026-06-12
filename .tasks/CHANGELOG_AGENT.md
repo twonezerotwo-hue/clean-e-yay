@@ -136,3 +136,27 @@
   CoinGecko dominance + FRED HY spread/real yield/M2/PPI); news/geo/calendar
   birim testleri (RSS fixture parse / geo classification / YAML load); event
   risk RiskGate bağı (kısıtlayıcı WATCH/NO_POSITION_INCREASE).
+- P0 intelligence parity (kalan kapsam) tamamlandı: (1) **Asset universe** —
+  `ohlcv/yfinance` map'ine TLT/HYG/LQD eklendi (source_registry kind:rotation,
+  fallback_to_mock:false); rotation 9/9 seriyle çalışıyor → TAHVİL sınıfı +
+  GLD/TLT + TLT/SPY + HYG/LQD oranları canlıda aktif (smoke doğruladı).
+  JNK/IWM/SMH/XLF/FXI + CoinGecko dominance + FRED bilinçli ertelendi (engine
+  rolü yok = ölü veri). (2) **Event risk** — yeni `packages/risk/event_risk.py`:
+  yaklaşan doğrulanmış yüksek-etkili olay → WATCH/NO_POSITION_INCREASE.
+  `RiskEngine.evaluate(event_candidates=...)` aynı havuzda max-priority → DQS
+  KILL_SWITCH/halt event'i her zaman ezer (bypass yok), event riski gate
+  gevşetmez/size artırmaz. decide_all/decide_matrix snap.catalysts'ten besler;
+  matrix_view+regime-report additive event_risk bloğu + per-catalyst
+  event_level. thresholds.event_risk {block:24h,watch:72h,high:[high,critical]}.
+  (3) **Birim testleri** — test_event_risk.py (17) + test_news_calendar.py (19):
+  RSS fixture parse/geo/asset-impact, YAML load+bozuk dosya DEGRADED, event-risk
+  taksonomisi, DQS/halt bypass yok, decide_matrix uçtan uca; testlerde live
+  network yok. (4) **Dashboard** (selector+registry, page.tsx büyümedi):
+  EventCalendarPanel actionability rozeti+banner; NewsPanel etkilenen-sembol
+  rozetleri / "yalnızca bağlam" + freshness; CapitalRotationPanel gerçek
+  evidence + UNAVAILABLE; TimeframeMatrixPanel event-risk banner + hücre
+  blocked_by rozeti. OpenAPI + TS tipleri additive (EventRiskView). 191/191
+  pytest (36 yeni), ruff (CI scope) + tsc + pnpm build yeşil; canlı smoke OK
+  (regime-report/matrix 200, event_risk serialize, rotation TAHVİL/TLT-SPY
+  evidence, web SSR 200). PAPER_SAFE/NO_EXECUTION; RiskGate/DQS/KillSwitch/halt
+  yalnızca kısıtlayıcı yönde.

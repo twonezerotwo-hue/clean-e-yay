@@ -43,14 +43,46 @@ export type NewsHeadline = {
   title_tr?: string;
   sentiment?: Direction;
   asset_impact?: Record<string, number>;
+  // P0 — haber yalnızca bağlam; sembol etkisi varsa actionable, yoksa context-only.
+  actionable?: boolean;
+  freshness?: "FRESH" | "RECENT" | "STALE";
 };
+
+export type EventRiskLevel = "NONE" | "WATCH" | "NO_POSITION_INCREASE";
 
 export type Catalyst = {
   id: string;
   ts: string;
   title: string;
-  importance?: "low" | "medium" | "high";
+  importance?: "low" | "medium" | "high" | "critical";
   region?: string;
+  hours_until?: number;
+  days_until?: number;
+  // P0 — bu olayın tetiklediği event riski seviyesi (yalnızca kısıtlayıcı).
+  event_level?: EventRiskLevel;
+};
+
+export type EventRiskTrigger = {
+  id: string;
+  title: string;
+  importance: string;
+  hours_until?: number;
+  days_until?: number | null;
+  level: "WATCH" | "NO_POSITION_INCREASE";
+};
+
+/**
+ * P0 — Olay riski özeti. YALNIZCA kısıtlayıcı: yaklaşan doğrulanmış yüksek
+ * etkili takvim olayı yeni pozisyon açılışını kısar. RiskGate/DQS/KillSwitch/
+ * halt gate'lerini bypass etmez, size artırmaz.
+ */
+export type EventRiskView = {
+  level: EventRiskLevel;
+  action?: "WATCH" | "NO_POSITION_INCREASE" | null;
+  reason?: string;
+  evidence?: string[];
+  restrictive: boolean;
+  triggers?: EventRiskTrigger[];
 };
 
 export type RegimeReport = {
@@ -60,6 +92,7 @@ export type RegimeReport = {
   assets: AssetSignal[];
   headlines?: NewsHeadline[];
   catalysts?: Catalyst[];
+  event_risk?: EventRiskView;
 };
 
 export type RiskAction =
@@ -536,6 +569,7 @@ export type DecisionMatrix = {
   risk_gate?: { action: string; reason: string; evidence?: string[] };
   dqs_status?: DqsStatus;
   suspended?: boolean;
+  event_risk?: EventRiskView;
   mode?: ProvenanceMode;
   cells: TimeframeDecision[];
 };

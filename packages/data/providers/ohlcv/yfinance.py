@@ -26,6 +26,12 @@ _SYMBOL_MAP = {
     "VIX":    "^VIX",
     "SP500":  "^GSPC",
     "QQQ":    "QQQ",
+    # P0 — rotasyon motorunun beklediği ETF bacakları (Yahoo ticker = sembol).
+    # Eklenince rotation 9/9 seriyle çalışır: HYG/LQD kredi spread'i ve
+    # TLT/SPY savunma rotasyonu canlıda aktif olur.
+    "TLT":    "TLT",        # 20+ yıl ABD Hazine (savunma/faiz)
+    "HYG":    "HYG",        # Yüksek getirili (HY) kredi
+    "LQD":    "LQD",        # Yatırım yapılabilir (IG) kredi
 }
 
 SUPPORTED = frozenset(_SYMBOL_MAP.keys())

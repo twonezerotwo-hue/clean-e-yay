@@ -11,6 +11,8 @@ import {
   selectMatrixSuspended,
   selectMatrixRiskGate,
   selectMatrixDqsStatus,
+  selectMatrixEventRisk,
+  cellBlockedLabel,
 } from "@/lib/selectors/decision";
 import type { TimeframeDecision } from "@/types/generated/api";
 
@@ -77,6 +79,13 @@ function MatrixCell({ c }: { c: TimeframeDecision }) {
               ? "ACTIONABLE"
               : "NOT ACT."}
         </div>
+        {/* P0/T2 — bir hücreyi hangi kapı kıstı (event riski, risk gate,
+            mistake, korelasyon, 1w bias) kısa rozette görünür. */}
+        {cellBlockedLabel(c) ? (
+          <div className="mt-0.5 truncate text-[7px] uppercase tracking-wider opacity-60">
+            {cellBlockedLabel(c)}
+          </div>
+        ) : null}
       </div>
     </td>
   );
@@ -104,6 +113,7 @@ export function TimeframeMatrixPanel() {
   const suspended = selectMatrixSuspended(data);
   const riskGate = selectMatrixRiskGate(data);
   const dqs = selectMatrixDqsStatus(data);
+  const eventRisk = selectMatrixEventRisk(data);
   return (
     <PanelFrame id="timeframe_matrix">
       <PanelHeader
@@ -121,6 +131,17 @@ export function TimeframeMatrixPanel() {
         <p className="mb-2 text-[11px] text-signal-down/90">
           Risk kapısı: {riskGate.action} — {riskGate.reason}. Tüm
           timeframe&apos;lerde yeni işlem yok.
+        </p>
+      ) : null}
+      {/* P0 — olay riski yaklaşan yüksek etkili takvim olayını ve hücreleri
+          neden kıstığını gösterir (RiskGate'i bypass etmez; yalnızca kısıtlar). */}
+      {eventRisk && eventRisk.level !== "NONE" ? (
+        <p
+          className={`mb-2 text-[11px] ${
+            eventRisk.restrictive ? "text-signal-down/90" : "text-amber-300/90"
+          }`}
+        >
+          ⚑ {eventRisk.reason}
         </p>
       ) : null}
       <table className="w-full border-collapse text-xs">

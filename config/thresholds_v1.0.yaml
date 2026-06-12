@@ -32,6 +32,19 @@ timeframe_risk:
   "1d":  { role: swing,        risk_multiplier: 1.00, paper_execution: true,  time_stop_hours: 672 }
   "1w":  { role: strategic,    risk_multiplier: 0.00, paper_execution: false, time_stop_hours: 0 }
 
+# P0 — Olay riski (event risk) yalnızca KISITLAYICIDIR. Yaklaşan, doğrulanmış
+# (verified) yüksek etkili takvim olayı varsa yeni pozisyon açılışını kısar;
+# ASLA size artırmaz, ASLA RiskGate/DQS/KillSwitch/halt gate'lerini gevşetmez.
+# RiskEngine'e ek kısıtlayıcı candidate olarak girer (max-priority seçilir),
+# yani DQS KILL_SWITCH / halt her zaman event riskini ezer (bypass yok).
+#   block_window_hours : critical/high olay bu pencere içindeyse → NO_POSITION_INCREASE
+#   watch_window_hours : high bu pencerede VEYA medium block penceresinde → WATCH
+#   high_importance    : "yüksek etkili" sayılan importance seviyeleri
+event_risk:
+  block_window_hours: 24
+  watch_window_hours: 72
+  high_importance: [high, critical]
+
 # G4 — trade PnL verisi yetersizken kullanılan deterministik korelasyon
 # baseline'ı. Çiftler simetrik okunur; listede olmayan çift → neutral (rho=0,
 # insufficient_correlation_data uyarısı, size adjustment yok).

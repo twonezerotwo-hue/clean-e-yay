@@ -219,6 +219,7 @@ components:
         catalysts:
           type: array
           items: { $ref: "#/components/schemas/Catalyst" }
+        event_risk: { $ref: "#/components/schemas/EventRiskView" }
 
     NewsHeadline:
       type: object
@@ -234,6 +235,9 @@ components:
         asset_impact:
           type: object
           additionalProperties: { type: number }
+        # P0 — haber yalnızca bağlam; sembol etkisi varsa actionable, yoksa context-only.
+        actionable: { type: boolean }
+        freshness: { type: string, enum: [FRESH, RECENT, STALE] }
 
     Catalyst:
       type: object
@@ -242,8 +246,42 @@ components:
         id: { type: string }
         ts: { type: string, format: date-time }
         title: { type: string }
-        importance: { type: string, enum: [low, medium, high] }
+        importance: { type: string, enum: [low, medium, high, critical] }
         region: { type: string }
+        hours_until: { type: number }
+        days_until: { type: integer }
+        # P0 — bu olayın tetiklediği event riski seviyesi (yalnızca kısıtlayıcı).
+        event_level: { type: string, enum: [NONE, WATCH, NO_POSITION_INCREASE] }
+
+    EventRiskView:
+      type: object
+      description: >
+        P0 — Olay riski özeti. YALNIZCA kısıtlayıcı: yaklaşan doğrulanmış yüksek
+        etkili takvim olayı yeni pozisyon açılışını kısar. RiskGate/DQS/KillSwitch/
+        halt gate'lerini bypass etmez, size artırmaz.
+      required: [level, restrictive]
+      properties:
+        level: { type: string, enum: [NONE, WATCH, NO_POSITION_INCREASE] }
+        action: { type: string, enum: [WATCH, NO_POSITION_INCREASE], nullable: true }
+        reason: { type: string }
+        evidence:
+          type: array
+          items: { type: string }
+        restrictive: { type: boolean }
+        triggers:
+          type: array
+          items: { $ref: "#/components/schemas/EventRiskTrigger" }
+
+    EventRiskTrigger:
+      type: object
+      required: [id, title, importance, level]
+      properties:
+        id: { type: string }
+        title: { type: string }
+        importance: { type: string }
+        hours_until: { type: number }
+        days_until: { type: integer, nullable: true }
+        level: { type: string, enum: [WATCH, NO_POSITION_INCREASE] }
 
     RiskGate:
       type: object
@@ -694,6 +732,7 @@ components:
         suspended:
           type: boolean
           description: KILL_SWITCH / RISK_REDUCE / NO_POSITION_INCREASE / DQS BLOCKED → tüm hücreler SUSPENDED.
+        event_risk: { $ref: "#/components/schemas/EventRiskView" }
         cells:
           type: array
           items: { $ref: "#/components/schemas/TimeframeDecision" }

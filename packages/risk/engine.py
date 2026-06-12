@@ -52,7 +52,17 @@ class RiskDecision:
     evidence: list[str]
 
 
-def evaluate(inp: RiskInput) -> RiskDecision:
+def evaluate(
+    inp: RiskInput,
+    event_candidates: list[tuple[RiskAction, str, list[str]]] | None = None,
+) -> RiskDecision:
+    """Risk gate kararı.
+
+    `event_candidates` (P0 — olay riski) yalnızca **kısıtlayıcı** ek aday
+    listesidir (packages.risk.event_risk üretir). Diğer adaylarla aynı havuza
+    girer ve max-priority seçilir; yani DQS KILL_SWITCH / halt her zaman event
+    riskini ezer (bypass yok), event riski de hiçbir gate'i gevşetemez.
+    """
     th = load_thresholds()["risk_gates"]
     candidates: list[tuple[RiskAction, str, list[str]]] = []
 
@@ -109,6 +119,11 @@ def evaluate(inp: RiskInput) -> RiskDecision:
                 [h.reason, *h.evidence],
             )
         )
+
+    # 7) P0 — Olay riski (event_risk). Yalnızca kısıtlayıcı; aynı havuza eklenir,
+    #    max-priority seçimi DQS/halt KILL_SWITCH'i asla ezdirmez.
+    for action, reason, evidence in event_candidates or []:
+        candidates.append((action, reason, list(evidence)))
 
     if not candidates:
         return RiskDecision(action="HOLD", reason="Risk kapısı açık.", evidence=[])

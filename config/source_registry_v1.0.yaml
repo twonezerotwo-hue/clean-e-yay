@@ -55,6 +55,35 @@ sources:
     decision_usage: verified_required
     fallback_to_mock: false
 
+  # ─── Rotasyon bacakları (P0) ─────────────────────────────────
+  # Sermaye rotasyonu motorunun çapraz-oran/sınıf akışı bacakları. Karar
+  # zincirine consensus "quantum" modülü üzerinden girer (rotation skoru).
+  # simulation_only: rotation evidence'ı sağlar ama tek başına stratejik karar
+  # vermez; veri yoksa rotation UNAVAILABLE + redistribute (mock yok).
+  - id: tlt_yfinance
+    kind: rotation
+    asset: TLT
+    fetcher: yfinance
+    cadence_sec: 3600
+    decision_usage: simulation_only
+    fallback_to_mock: false
+
+  - id: hyg_yfinance
+    kind: rotation
+    asset: HYG
+    fetcher: yfinance
+    cadence_sec: 3600
+    decision_usage: simulation_only
+    fallback_to_mock: false
+
+  - id: lqd_yfinance
+    kind: rotation
+    asset: LQD
+    fetcher: yfinance
+    cadence_sec: 3600
+    decision_usage: simulation_only
+    fallback_to_mock: false
+
   - id: news_general_rss
     kind: news
     fetcher: rss
