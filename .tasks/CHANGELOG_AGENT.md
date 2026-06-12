@@ -69,3 +69,19 @@
   web'de sadece types. Runtime logic sıfır diff. 94/94 pytest, ruff +
   tsc + build yeşil.
 - Next task → T1 OHLCV provider + gerçek multi-TF technicals.
+
+## 2026-06-12
+- T1 completed: OHLCV provider + gerçek multi-TF technicals. Hash-mock
+  teknik üretim kaldırıldı; CoinGecko market_chart + Yahoo chart
+  adapter'ları, disk cache (TF orantılı TTL, stale-cache fallback),
+  resample (4h=1h bucket, 1w=1d ISO hafta, source="resampled:<base>"),
+  gerçek RSI/MACD/ATR/EMA-stack (yetersiz bar → None + DEGRADED, mock
+  yok), TF bazlı freshness (15m>30dk ... 1w>10g), technicals_by_tf
+  5 TF × 4 sembol dolu, legacy technicals 1d'den beslenir.
+  /data/snapshot additive technicals_by_tf; OpenAPI'ye OHLCVBar +
+  TechnicalSnapshotTF. Web: MarketDataPanel TF chip satırı +
+  SnapshotPanel TF kapsama (selector'larla). RiskGate/DQS/halt sıfır
+  diff; consensus/decision hâlâ 1d (T2). 113/113 pytest (19 yeni),
+  ruff + tsc + build yeşil.
+- Next task → T2 timeframe consensus + decision + paper (time-stop) +
+  TimeframeMatrixPanel.

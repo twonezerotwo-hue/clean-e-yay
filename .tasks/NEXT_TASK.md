@@ -1,37 +1,48 @@
-# NEXT TASK — T1 OHLCV Provider + Gerçek Multi-Timeframe Technicals
+# NEXT TASK — T2 Timeframe Consensus + Decision + Paper (time-stop) + TimeframeMatrixPanel
 
-T0 contract'ları kodla doldur: gerçek mum verisi + gerçek indikatörler.
-Mevcut hash-mock teknik sağlayıcı yerini OHLCV bazlı hesaba bırakır.
+T1'in doldurduğu `technicals_by_tf`'i karar katmanına bağla: sinyal uzayı
+(symbol, timeframe) çifti olur. Risk kapsamı GLOBAL kalır.
 
 ## Scope
 
-- `packages/data/types.py` — `OHLCVBar` modeli (symbol, timeframe, o/h/l/c,
-  volume, ts, source, verified).
-- `packages/data/providers/ohlcv/` (yeni):
-  - CoinGecko (BTC/ETH: günlük + saatlik OHLC), yfinance chart API
-    (XAU/XAG/endeks: 15m/1h/1d/1wk) — mevcut provider error-handling +
-    provider_status desenini izle.
-  - 15m/1h/4h/1w: kaynak desteklemiyorsa üst/alt TF'ten **resample**
-    (4h = 1h×4); resample edilen barlar `source: "resampled:<base>"`.
-  - Disk cache (`data/runtime/ohlcv/`) — tekrar eden çağrıları azalt;
-    cache TTL TF'e orantılı (15m→5dk, 1d→6sa).
-- `packages/data/providers/technical/` — RSI(14), MACD(12/26/9), ATR(14),
-  EMA stack (20/50/200) **gerçek OHLCV'den** hesapla; bar yetersizse
-  `TechnicalSnapshot` alanları None + DEGRADED işareti (mock değer YOK —
-  DATA_POLICY).
-- `packages/data/ingestion/pipeline.py` — `technicals_by_tf` doldur
-  (5 TF × DEFAULT_SYMBOLS[:4]); legacy `technicals` alanı 1d'den beslenmeye
-  devam eder (geriye uyum). DQS: TF bazlı freshness kuralı (15m>30dk eski
-  → DEGRADED; 1d>48sa → DEGRADED).
-- Test offline: fixture OHLCV barlarıyla indikatör doğruluğu (bilinen
-  seriye bilinen RSI), resample doğruluğu, bar yetersiz → None/DEGRADED,
-  legacy `technicals` değişmedi, network yok (provider mock'lanır).
+- `packages/consensus` — TF-aware consensus: `build(symbol, snap, regime,
+  timeframe="1d")`; touche modülü `technicals_by_tf[symbol][tf]`'ten okur
+  (yoksa legacy 1d fallback). DEGRADED teknik → o TF'te touche nötr (50)
+  + uyarı.
+- `packages/decision/engine.py` — `decide_matrix(symbols, snap, risk_in,
+  open_positions)`: her (symbol, tf) için TradeDecision; OpenAPI'deki
+  `TimeframeDecision`/`DecisionMatrix` şemalarını doldur.
+  - `thresholds.timeframe_risk` ÇARPANLARI uygula (≤1.0, sadece
+    küçültür): 15m ×0.25, 1h ×0.5, 4h/1d ×1.0.
+  - **1w `paper_execution: false`** → asla open kararı üretmez; yalnızca
+    bias/filtre (üst TF veto: 1w bearish ise alt TF long'ları scale-down
+    veya WATCH — asla scale-up).
+  - Fingerprint v2'ye gerçek TF segmenti geçir (artık default "1d" değil).
+- `packages/paper` — TF bazlı **time-stop**: `thresholds.timeframe_risk.
+  time_stop_hours` dolan pozisyon TIME_STOP_EXIT ile kapanır (tick
+  yolunda); `Position.timeframe` artık açılışta gerçek TF taşır.
+- `apps/api` — `GET /api/v1/decision/matrix` endpoint'i (DecisionMatrix
+  döner); paper tick TF'li kararlarla çalışır.
+- Frontend — **TimeframeMatrixPanel**: symbol × TF grid (skor/aksiyon/
+  DEGRADED işareti), selector + panel-registry girişi + tek GridCell;
+  page.tsx büyütülmez. TradingPanel pozisyon satırına TF rozeti.
 
 ## Rules
 
-- `PAPER_SAFE / NO_EXECUTION`; RiskGate/halt/DQS davranışı değişmez.
-- Consensus/decision henüz multi-TF OKUMAZ (o T2) — bu görev sadece veri.
-- Runtime'da mock bar yok; veri yoksa None + DEGRADED (DATA_POLICY).
-- `technicals_by_tf` dolduğunda dashboard `SnapshotPanel`/`MarketDataPanel`
-  içinde minimum görünürlük: TF başına teknik özet satırı (büyük panel yok
-  — TimeframeMatrixPanel T2'de).
+- `PAPER_SAFE / NO_EXECUTION`; RiskGate / DQS veto / KillSwitch / halt
+  **global** kalır — halt aktifse 5 TF'in 5'inde de trade yok; hiçbir TF
+  RiskGate'i bypass edemez/gevşetemez.
+- timeframe_risk çarpanları yalnızca azaltır; scale-up yok.
+- DEGRADED/None teknik olan TF'te yeni pozisyon açılmaz (WATCH/hold).
+- Legacy davranış: decide_all (1d) çalışmaya devam eder; mevcut endpoint
+  path/alan isimleri değişmez (matrix additive).
+
+## Tests
+
+- (symbol, tf) kararlarında risk çarpanı uygulanıyor (15m size ×0.25).
+- 1w hiçbir koşulda open üretmiyor; 1w bearish → alt TF veto/scale-down.
+- KILL_SWITCH/halt aktifken tüm TF'lerde blocked.
+- DEGRADED TF → open yok.
+- Time-stop: süresi dolan pozisyon TIME_STOP_EXIT ile kapanıyor.
+- Fingerprint v2 gerçek TF segmenti taşıyor; legacy lookup kırılmıyor.
+- pytest + ruff + tsc + build yeşil; live network yok (fixture barlar).

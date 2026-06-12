@@ -4,6 +4,29 @@ _Bu dosya kısa ve güncel tutulur. Her görev sonunda güncellenir._
 
 ## Last known status
 
+- **T1 tamamlandı**: OHLCV provider + gerçek multi-timeframe technicals.
+  - `packages/data/providers/ohlcv/` — CoinGecko market_chart (BTC/ETH) +
+    Yahoo chart (XAU/XAG/DXY/VIX/...) adapter'ları; disk cache
+    (`data/runtime/ohlcv/`, TTL: 15m→5dk ... 1d→6sa); live fail → stale
+    cache → boş liste (runtime'da mock/fixture bar ASLA yok).
+  - Resample: **4h = 1h bucket**, **1w = 1d ISO hafta** (kripto; yfinance
+    1w native); resampled barlar `source="resampled:<base>"`.
+  - Gerçek indikatörler: RSI(14)/ATR(14) Wilder, MACD(12/26/9) histogram
+    normalize (hist/close×100), EMA stack 20/50/200. Yetersiz bar →
+    alanlar None + `TechnicalSnapshot.status="DEGRADED"`, score nötr 50.
+  - TF bazlı freshness: 15m>30dk, 1h>2sa, 4h>8sa, 1d>48sa, 1w>10g →
+    DEGRADED. Global DQS (fiyat bazlı) ve RiskGate davranışı değişmedi.
+  - `MarketSnapshot.technicals_by_tf` dolu (5 TF × DEFAULT_SYMBOLS[:4]);
+    legacy `technicals` = 1d snapshot'ın kendisi (geriye uyum).
+    `/data/snapshot` additive `technicals_by_tf` döner; OpenAPI'ye
+    `OHLCVBar` + `TechnicalSnapshotTF` eklendi.
+  - Frontend minimum görünürlük: `MarketDataPanel` TF chip satırı,
+    `SnapshotPanel` "TF teknikleri x/y OK"; selector'lar
+    `lib/selectors/snapshot.ts`. Panel/page.tsx büyümedi
+    (TimeframeMatrixPanel T2'de).
+  - Consensus/decision hâlâ yalnızca legacy 1d okur — multi-TF karar T2.
+  - Pytest **113/113** (19 yeni T1); ruff + tsc + build yeşil.
+
 - **T0 tamamlandı**: timeframe-first contracts + schema seeding (runtime
   davranış değişmedi, tamamı additive/backward-compatible).
   - `Timeframe = Literal["15m","1h","4h","1d","1w"]` (`data/types.py`);
@@ -85,5 +108,6 @@ _Bu dosya kısa ve güncel tutulur. Her görev sonunda güncellenir._
 
 ## Next task
 
-- **T1** — OHLCV provider + gerçek multi-timeframe technicals.
-- `.tasks/NEXT_TASK.md` T1 için hazır.
+- **T2** — timeframe consensus + decision + paper (time-stop) +
+  TimeframeMatrixPanel.
+- `.tasks/NEXT_TASK.md` T2 için hazır.
