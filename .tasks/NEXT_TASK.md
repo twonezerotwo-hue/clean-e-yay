@@ -1,43 +1,32 @@
-# NEXT TASK — v2.6 LLM Persona (Groq, narrative-only)
+# NEXT TASK — OPS: contract/replay testleri + operasyonel sağlamlaştırma
 
-Önerilen sıra (T2 sonrası): **v2.6 önce**, T3 sonra.
-Gerekçe: TimeframeMatrix + risk evidence zinciri artık zengin — LLM
-personaların anlatacağı gerçek state var. T3 catalyst half-life motoru
-gerçek haber feed'i gerektirir → **v2.7 deep data ile birlikte** yapılır
-(CatalystImpact contract'ı T0'dan beri hazır bekliyor).
+Önerilen sıra (v2.6 sonrası): **OPS önce**, v2.7 deep data sonra.
+Gerekçe: 16+ endpoint var ve `apps/web/types/generated/api.ts` elle
+senkronize ediliyor (`make codegen` "not yet implemented") — OpenAPI ↔
+backend ↔ frontend drift'ini hiçbir test yakalamıyor. v2.7 provider
+yüzeyini (funding/OI/options IV/gerçek haber) büyütmeden önce sözleşme
+güvencesi kurulmalı.
 
 ## Scope
 
-- `packages/agent/llm/` — Groq client (env `GROQ_API_KEY`; anahtar yoksa
-  graceful degrade: panel "LLM yok" gösterir, sistem çalışmaya devam eder).
-- Token budget guard: günlük bütçe dosyası (`data/runtime/llm_budget.json`),
-  aşılırsa LLM çağrısı yapılmaz (deterministik fallback narrative).
-- Personalar: analyst / risk_officer / macro_strategist — girdi olarak
-  YALNIZCA doğrulanmış snapshot + decision matrix + risk evidence alır;
-  çıktı narrative-only.
-- `/api/v1/ai-report/current` gerçek LLM narrative'i (cache'li, bütçeli);
-  `/api/v1/chat` basit soru-cevap (aynı evidence bağlamı).
-- AIReportPanel/ChatPanel mevcut — backend'i gerçek kaynağa bağla;
-  provenance damgası (LLM_GENERATED + model adı) ekle.
-- Timeframe bağlamı: rapor DecisionMatrix'ten TF özetini anlatır
-  (örn. "1d swing long, 15m scout suspended").
+- **Contract tests** (`tests/contract/` — şu an boş): her OpenAPI path'i
+  için response'un şemayla uyumunu doğrula (required alanlar, enum
+  değerleri, tip uyumu). OpenAPI'de olmayan endpoint CI'da fail etsin.
+- **Codegen**: `make codegen` gerçek implementasyon (openapi-typescript
+  veya eşdeğeri) VEYA minimum: TS tipleriyle OpenAPI şemasını karşılaştıran
+  drift testi.
+- **Snapshot replay**: `data/snapshots/`'tan diskten replay akışını test
+  altına al (`GET /api/v1/replay/{snapshot_id}` contract'ta vardı —
+  mevcut durumla hizala veya kapsam dışıysa belgele).
+- **Telemetry**: `POST /api/v1/telemetry/panel-error` hattını doğrula
+  (frontend panel crash → backend log).
+- CI: contract job eklenir; pytest + ruff + tsc + build yeşil kalır.
 
-## Hard rules (SAFETY_RULES + ARCHITECTURE §2)
+## Hard rules
 
-- **LLM karar vermez** — hiçbir LLM çıktısı decision/risk/paper akışına
-  geri yazılmaz; sadece açıklar/eleştirir/raporlar.
-- RiskGate / DQS / KillSwitch / halt / timeframe politikası sıfır diff.
-- API anahtarı yokken ve testlerde network ÇAĞRISI YOK (client mock'lanır);
-  CI'da live LLM yok.
-- PAPER_SAFE / NO_EXECUTION.
-
-## Tests
-
-- LLM client mock'lu: rapor üretimi, bütçe aşımı → fallback, anahtar yok →
-  graceful degrade.
-- LLM çıktısının decision path'ine yazılmadığının testi (decision matrix
-  LLM'siz/LLM'li birebir aynı).
-- pytest + ruff + tsc + pnpm build yeşil; live network yok.
+- PAPER_SAFE / NO_EXECUTION; RiskGate/DQS/KillSwitch/halt sıfır diff.
+- Endpoint path'leri ve response alan adları DEĞİŞMEZ (additive olabilir).
+- Testlerde live network yok.
 
 ## Sonra
 

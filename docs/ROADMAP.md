@@ -23,7 +23,9 @@
 - ~~**T1** — OHLCV provider + gerçek multi-timeframe technicals~~ ✓
 - ~~**T2** — timeframe consensus + decision + paper (time-stop) +
   TimeframeMatrixPanel~~ ✓
-- **v2.6** — LLM persona (Groq, narrative-only)
+- ~~**v2.6** — LLM persona (Groq, narrative-only)~~ ✓
+- **OPS** — contract/replay testleri + operasyonel sağlamlaştırma
+  (öneri: v2.7'den önce — TS tipleri elle senkron, drift riski)
 - **v2.7** — deep data (funding rate, options IV, realized vol, gerçek
   haber feed'i + **T3 catalyst half-life motoru**)
 - **operations** — runbook, monitoring, alerting

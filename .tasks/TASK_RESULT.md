@@ -1,132 +1,113 @@
 # TASK RESULT
 
 Date: 2026-06-12
-Task: T2 — Timeframe consensus + decision + paper time-stop + TimeframeMatrixPanel
+Task: v2.6 — LLM persona (Groq, narrative-only)
 Status: completed
 
 ## Ne yapıldı
 
-Sinyal uzayı artık (symbol, timeframe): 15m scout / 1h confirmation /
-4h tactical / 1d swing / 1w strategic (paper açmaz). Risk kapsamı GLOBAL
-kaldı.
+LLM, karar vermeyen bir anlatı/persona katmanı olarak eklendi: agent'ın
+beynini açıklar, eleştirir, özetler ve kullanıcı sorularını mevcut state'e
+göre yanıtlar. Hiçbir LLM çıktısı decision/risk/paper akışına geri yazılmaz.
 
-### Consensus (`packages/consensus/engine.py`)
+### `packages/agent/llm/` (yeni paket)
 
-- `build(symbol, snap, regime, timeframe="1d")` — default'la mevcut
-  asset-level davranış birebir korunur (testli).
-- `_touche` `technicals_by_tf[symbol][tf]`'ten okur; yoksa legacy
-  `technicals[symbol]` fallback; **DEGRADED teknik → nötr 50 + uyarı**
-  (doğrulanmamış sinyalle yön üretilmez).
-- `ConsensusResult.timeframe` + `warnings` additive alanları.
-
-### Decision (`packages/decision/engine.py`)
-
-- `TradeDecision` additive: `candidate_action` (consensus niyeti),
-  `blocked_by` (hangi kapı kesti), `actionable`; `timeframe` artık aktif.
-- Sıra: **RiskGate önce** (KILL_SWITCH→blocked, RISK_REDUCE/
-  NO_POSITION_INCREASE→hold; tüm TF'lerde) → consensus eşikleri →
-  mistake gate → correlation cap → **timeframe politikası en son**:
-  - `timeframe_risk` çarpanı ≤1.0 clamp'li uygulanır (15m ×0.25, 1h ×0.5)
-    — hiçbir TF boyut artıramaz.
-  - 1w `paper_execution=false` → final hold + 
-    `blocked_by=["timeframe_policy:no_paper_execution"]` (sadece bias).
-- `decide_matrix(symbols, snap, risk_in, open_positions, timeframes)` —
-  5 TF × symbol kararları; **1w bias çelişkisi** (1w bearish ↔ alt TF
-  long) → alt TF size ×0.5 + `1w_bias_conflict:scale_down` (asla artırma).
-- `matrix_view(...)` — backend ViewModel: hücre başına candidate/final/
-  blocked_by/reason/actionable + rozet (`ACTIONABLE / NOT_ACTIONABLE /
-  SUSPENDED`); `suspended` = risk gate kısıtlayıcı VEYA DQS BLOCKED.
-- `decide_all` (legacy 1d) aynen çalışıyor — davranış sıfır diff.
-
-### Paper (`packages/paper`)
-
-- `Position.valid_until` additive; `open_position(timeframe=...)` →
-  `timeframe_risk.time_stop_hours`'tan hesaplar (15m→6sa, 1h→48sa,
-  4h→168sa, 1d→672sa; 0 → time-stop yok). Pozisyon id'si artık
-  symbol|timeframe tohumlu (aynı sembol farklı TF çakışmaz).
-- `tick(state, prices, now=None)` — SL/TP sonrası **time-stop**:
-  `valid_until` dolan pozisyon `TIME_STOP_EXIT` ile kapanır; fiyatı
-  olmayan pozisyon kapatılmaz (mock fiyat yok — DATA_POLICY).
-- `close_position` Trade'e `timeframe` taşır (önceden default'a
-  düşüyordu).
-- Legacy kayıtlar: timeframe yoksa "1d", valid_until yoksa None —
-  time-stop hiç tetiklenmez (testli).
-
-### Risk
-
-- RiskGate hard gate'leri sıfır diff. Halt (G5) tüm TF'leri durdurur
-  (global RiskInput → tek RiskDecision, tüm hücrelere uygulanır) — testli.
-- Correlation: aynı sembol farklı TF pozisyonları rho=1.0 ile aynı
-  cluster'da sayılır (mevcut davranış doğrulandı + test eklendi).
-
-### Learning
-
-- Fingerprint v2 artık **gerçek TF segmenti** taşır (decide_for_symbol +
-  paper açılışı `d.fingerprint`'i kullanır; router/worker'daki duplicate
-  fingerprint üretimi kaldırıldı). 15m hatası 1d'yi cezalandırmaz (testli).
-- Position/Trade kayıtları gerçek timeframe taşır; trainer/calibration
-  rewrite YOK (T2 kapsamı dışı — kayıtlar TF-aware, global calibration
-  sürüyor).
+- **client.py** — `LLM_MODE=off|mock|groq` (set değilse: anahtar varsa groq,
+  yoksa off). Groq OpenAI-uyumlu chat completions adapter'ı (urllib);
+  **anahtar yoksa network çağrısı YAPMADAN None** döner; network/API
+  hatasında exception kaçırılmaz → None → deterministik fallback.
+- **budget.py** — günlük token bütçesi `data/runtime/llm_budget.json`
+  (env `LLM_DAILY_TOKEN_BUDGET`, default 100k; `LLM_MAX_TOKENS_PER_REQUEST`
+  default 600). Bütçe aşılırsa LLM çağrısı yapılmaz.
+- **cache.py** — 2 saatlik file-backed yanıt cache'i
+  (`data/runtime/llm_cache.json`, env `LLM_CACHE_TTL_SEC`). Anahtar İÇERİK
+  bazlı (context digest — snapshot_id/generated_at hariç) → state aynı
+  kaldıkça cache vurur.
+- **context.py** — prompt'a giren KOMPAKT state bağlamı: snapshot_id, DQS
+  özeti, provider sorunları, decision matrix top hücreleri, candidate vs
+  final farkları, blocked_by nedenleri, RiskGate, halt, korelasyon
+  cluster'ları, paper state, learning uyarıları, haber/katalizör başlıkları.
+  **Full raw market data prompt'a gömülmez.**
+- **guard.py** — prompt injection / bypass kalıpları (TR+EN) LLM'e
+  ulaşmadan güvenli ret; LLM sistem prompt'u sert kurallar taşır
+  (karar verme yok, bağlam dışı uydurma yok, PAPER_SAFE).
+- **report.py** — 3 persona: Market Analyst / Risk Officer / Macro
+  Strategist. Çıktı: summary, concerns, **evidence_used (her zaman
+  backend'de deterministik üretilir — LLM kanıt uyduramaz)**, missing_data,
+  actionability, what_would_change_my_mind. LLM yoksa/bütçe dolu/hata →
+  deterministik fallback bölümleri.
+- **chat.py** — state-grounded soru-cevap: guard → deterministik grounded
+  yanıt (her zaman üretilir; sembol/TF/intent algılama: "neden açmadın",
+  "riskgate", "hangi veri eksik", "ne bekliyor") → LLM varsa aynı bağlam +
+  grounded yanıtla anlatımı akıcılaştırır.
 
 ### API
 
-- Yeni `GET /api/v1/decision/matrix` (`apps/api/routers/decision.py`) —
-  DecisionMatrix ViewModel + provenance `mode` bloğu.
-- `POST /paper-trading/tick` → `decide_matrix` (4 sembol × 5 TF);
-  aksiyonlar `timeframe` taşır; (symbol, tf) bazlı "zaten açık" kontrolü;
-  açılışta `timeframe` + `valid_until` yazılır. tick_worker aynı akışa
-  geçti.
-- OpenAPI: `/decision/matrix` path; TimeframeDecision/DecisionMatrix
-  şemaları dolduruldu (candidate_action, blocked_by, actionable, status,
-  paper_action, risk_gate, suspended); Position.valid_until; Trade
-  close_reason enum'una TIME_STOP_EXIT/KILL_SWITCH_EXIT.
+- `GET /api/v1/ai-report/current` additive zenginleşti: `personas[]`,
+  `llm` meta (mode/model/source/fallback_reason/cached/tokens), 
+  `timeframe_summary` (TF satırları, candidate vs final diffs, blocked_by,
+  paper_actions), `no_actionable_decision`. DQS BLOCKED veya kısıtlayıcı
+  risk gate → verdict `no_trade` + "NO ACTIONABLE DECISION" narrative modu.
+- **Yeni `POST /api/v1/chat`** (`apps/api/routers/chat.py`) — ChatRequest
+  {message ≤2000}; yanıt: answer, refused, evidence_used, snapshot_id,
+  llm meta, provenance mode bloğu.
+- OpenAPI: `/chat` path + PersonaSection/TimeframeSummary/LLMMeta/
+  ChatRequest/ChatResponse şemaları; AIReport additive alanlar.
 
 ### Dashboard
 
-- **TimeframeMatrixPanel** (yeni): satır=symbol, sütun=15m/1h/4h/1d/1w;
-  hücre = candidate→final aksiyon (farklıysa üstü çizili candidate),
-  skor, ACTIONABLE/NOT ACT./SUSPENDED rozeti; tooltip'te blocked_by +
-  reason + paper_action. SUSPENDED durumda panel başlığında risk gate
-  banner'ı. Registry `timeframe_matrix` (span 3, decision group);
-  page.tsx'e tek GridCell.
-- **DecisionPanel**: BTCUSD mini TF strip (candidate→final tooltip).
-- **TradingPanel**: açık pozisyon satırları — TF rozeti + valid_until
-  (time-stop) görünür.
-- Selector'lar `lib/selectors/decision.ts`; hook `useDecisionMatrix`;
-  frontend hesap yapmaz (rozetler backend'den).
-
-### Environment
-
-- T1'deki SSL certifi gereksinimi kalıcılaştı: `make api-dev` ve
-  `scripts/dev.sh` certifi kuruluysa `SSL_CERT_FILE`'ı otomatik ayarlar
-  (env'de set ise dokunmaz); README'ye "SSL sertifikaları" bölümü eklendi.
+- **AIReportPanel** — persona bölümleri (başlık + summary + concerns +
+  actionability + "fikrimi değiştirir" + eksik veri), `LLM_GENERATED ·
+  <model>` / `DETERMINISTIC` provenance rozeti, NO ACTIONABLE DECISION
+  banner'ı, timeframe özeti satırları.
+- **ChatPanel** — gerçek `/api/v1/chat`'e bağlı: öneri soruları, mesaj
+  geçmişi, kanıt satırı (evidence_used), GUARD/DETERMINISTIC/LLM_GENERATED
+  damgası. Registry'de `chat` artık defaultVisible.
+- Selector'lar `lib/selectors/ai.ts`; hook `useChat`; client `api.chat`;
+  tipler `types/generated/api.ts`. page.tsx büyümedi (ChatPanel zaten
+  GridCell'deydi).
 
 ## Güvenlik garantileri
 
+- **LLM karar vermez** — `packages/agent/llm` hiçbir decision/risk/paper
+  modülüne yazmaz; decision matrix LLM'li/LLM'siz birebir aynı (testli).
+- RiskGate / DQS veto / KillSwitch / halt / timeframe politikası sıfır diff.
+- DQS BLOCKED → "no actionable decision" modu (testli).
+- "RiskGate'i bypass et" → güvenli ret (testli, TR+EN kalıplar).
+- Anahtar yokken ve testlerde network çağrısı yok (urlopen bekçi fixture).
 - PAPER_SAFE / NO_EXECUTION — broker/emir/live execution yok.
-- RiskGate / DQS veto / KillSwitch / halt **bypass edilmedi**; timeframe
-  katmanı RiskGate'ten SONRA ve sadece küçültücü (çarpan ≤1.0 clamp).
-- DQS BLOCKED → tüm TF'ler blocked + matrix SUSPENDED (testli).
-- Halt aktif → tüm TF'ler blocked (testli).
-- 1w hiçbir koşulda paper open üretmez (testli).
 
 ## Tests run
 
-- `pytest -q` → **132/132 passed** (19 yeni T2 testi:
-  test_timeframe_decisions.py — TF consensus farklılaşması + default 1d
-  uyumu + DEGRADED nötr; matrix 5 TF / 1w asla open / ×0.25-×0.5 çarpan /
-  1w bias scale-down; DQS BLOCKED + halt → tüm TF blocked/SUSPENDED;
-  fingerprint TF izolasyonu; time-stop TIME_STOP_EXIT + fiyatsız kapanmaz
-  + legacy default; aynı sembol farklı TF cluster; matrix + tick endpoint).
-- `ruff check` (CI scope) → yeşil.
+- `pytest -q` → **150/150 passed** (18 yeni: mode off→fallback, groq
+  anahtarsız→network'süz degrade, Groq adapter mock parse + network error,
+  budget guard + bütçe aşımı→fallback, persona fallback bölümleri, mock LLM
+  + cache (2. çağrı cached, bütçe harcamaz), evidence backend'den, AI report
+  endpoint personas+tf_summary, DQS BLOCKED→no_actionable, decision matrix
+  LLM'li/LLM'siz aynı, chat BTC blocked_by + riskgate + missing data +
+  injection refusal ×3 + LLM hata→grounded fallback, cache TTL).
+- `ruff check packages apps/api apps/tick_worker apps/learning_worker` → yeşil.
 - `pnpm exec tsc --noEmit` + `pnpm build` → yeşil.
+
+## Live smoke
+
+- API: `/api/v1/health` 200, `/api/v1/ai-report/current` 200 (3 persona +
+  timeframe_summary + llm meta), `POST /api/v1/chat` 200 ("Neden BTC
+  açmadın?" → risk gate gerekçeli grounded yanıt; bypass → refused=true).
+- Web: SSR 200, **28 panel**, ChatPanel yeni UI ("state-grounded · LLM
+  karar vermez" + öneri soruları), HeroScene + PAPER_ONLY korunuyor.
+- LLM mode `off` (GROQ_API_KEY yok) → deterministik fallback ile tam
+  fonksiyonel; anahtar eklenince ek deploy gerekmez.
 
 ## Result
 
 passed
 
-## Next
+## Next (öneri)
 
-- **v2.6 — LLM persona** (önerilen sıra: ROADMAP gereği T2 → v2.6;
-  T3 catalyst half-life motoru gerçek haber feed'i gerektirdiği için
-  v2.7 deep data ile birlikte). `.tasks/NEXT_TASK.md` hazır.
+**OPS — contract/replay testleri + operasyonel sağlamlaştırma** (v2.7'den
+ÖNCE öneriyorum): 16 endpoint'in TS tipleri elle senkronize ediliyor
+(codegen "not yet implemented") ve OpenAPI drift'ini hiçbir test yakalamıyor.
+v2.7 deep data (funding/OI/options IV + gerçek haber feed'i + T3 catalyst
+half-life motoru) provider yüzeyini büyütmeden önce sözleşme testleri +
+snapshot replay + telemetry hattı riski düşürür. v2.7 ondan sonra.

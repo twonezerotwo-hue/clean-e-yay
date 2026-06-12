@@ -4,6 +4,32 @@ _Bu dosya kısa ve güncel tutulur. Her görev sonunda güncellenir._
 
 ## Last known status
 
+- **v2.6 tamamlandı**: LLM persona katmanı (Groq, narrative-only).
+  LLM karar VERMEZ — sadece state'i açıklar/eleştirir/özetler.
+  - `packages/agent/llm/` — client (`LLM_MODE=off|mock|groq`; anahtar
+    yoksa network'süz fallback), budget (`data/runtime/llm_budget.json`,
+    günlük token bütçesi + per-request limit), cache (2 saat, içerik-digest
+    anahtarlı), context (kompakt state — raw market data prompt'a girmez),
+    guard (injection/bypass → güvenli ret), report (3 persona: analyst /
+    risk_officer / macro_strategist; summary/concerns/evidence_used/
+    missing_data/actionability/what_would_change_my_mind; evidence_used
+    HER ZAMAN backend'den), chat (state-grounded; sembol/TF/intent algılı
+    deterministik grounded yanıt; LLM sadece anlatımı akıcılaştırır).
+  - API: `/ai-report/current` additive — personas + llm meta +
+    timeframe_summary (TF farkları, candidate vs final, blocked_by,
+    paper_actions) + no_actionable_decision (DQS BLOCKED / kısıtlayıcı
+    risk gate → verdict no_trade). Yeni **`POST /api/v1/chat`**.
+  - Web: AIReportPanel persona bölümleri + LLM_GENERATED/DETERMINISTIC
+    rozeti + NO ACTIONABLE banner; ChatPanel gerçek endpoint'e bağlı
+    (öneri soruları, evidence satırı, GUARD damgası). Selector
+    `lib/selectors/ai.ts`, hook `useChat`; page.tsx büyümedi.
+  - Hard kurallar testli: decision matrix LLM'li/LLM'siz birebir aynı;
+    bypass talebi → refusal; DQS BLOCKED → no actionable; testlerde
+    network çağrısı yok (urlopen bekçi).
+  - Pytest **150/150** (18 yeni); ruff (CI scope) + tsc + build yeşil.
+  - Not: GROQ_API_KEY env'de yoksa sistem deterministik fallback ile tam
+    çalışır; anahtar eklenince kod değişikliği gerekmez.
+
 - **T2 tamamlandı**: timeframe consensus + decision matrix + paper
   time-stop + TimeframeMatrixPanel. Sinyal uzayı (symbol, timeframe).
   - Consensus `build(..., timeframe="1d")` — touche `technicals_by_tf`
@@ -135,6 +161,8 @@ _Bu dosya kısa ve güncel tutulur. Her görev sonunda güncellenir._
 
 ## Next task
 
-- **v2.6 — LLM persona** (Groq, narrative-only). T3 catalyst half-life
-  motoru v2.7 deep data ile (gerçek haber feed'i şart).
-- `.tasks/NEXT_TASK.md` v2.6 için hazır.
+- **Öneri: OPS — contract/replay testleri + operasyonel sağlamlaştırma**
+  (TS tipleri elle senkron; OpenAPI drift'ini test yakalamıyor — v2.7
+  provider yüzeyini büyütmeden önce). Sonra **v2.7 deep data** (funding,
+  OI, options IV, gerçek haber feed'i + T3 catalyst half-life motoru).
+- `.tasks/NEXT_TASK.md` OPS için hazırlandı.

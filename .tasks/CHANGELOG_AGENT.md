@@ -100,3 +100,18 @@
   132/132 pytest (19 yeni), ruff + tsc + build yeşil.
 - Next task → v2.6 LLM persona (Groq, narrative-only); T3 catalyst
   half-life → v2.7 deep data ile.
+- v2.6 completed: LLM persona katmanı (narrative-only, karar vermez).
+  packages/agent/llm — LLM_MODE=off|mock|groq, Groq adapter (anahtarsız/
+  hatada network'süz deterministik fallback), günlük token budget +
+  per-request limit, 2 saatlik içerik-digest cache, kompakt state context
+  (raw data prompt'a girmez), injection guard (TR+EN, bypass → ret),
+  3 persona (analyst/risk_officer/macro_strategist; evidence_used hep
+  backend'den), state-grounded chat. /ai-report/current additive
+  (personas, llm meta, timeframe_summary, no_actionable_decision);
+  yeni POST /api/v1/chat. Web: AIReportPanel persona bölümleri +
+  provenance rozeti + NO ACTIONABLE banner; ChatPanel canlı endpoint'e
+  bağlı. Decision matrix LLM'li/LLM'siz birebir aynı (testli); RiskGate/
+  DQS/KillSwitch/halt sıfır diff. 150/150 pytest (18 yeni), ruff + tsc +
+  build yeşil; canlı smoke OK (28 panel SSR, PAPER_ONLY korunuyor).
+- Next task önerisi → OPS (contract/replay testleri; TS tip drift riski)
+  → sonra v2.7 deep data + T3 catalyst half-life.
