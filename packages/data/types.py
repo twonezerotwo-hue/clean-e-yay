@@ -84,7 +84,19 @@ class TechnicalSnapshot(BaseModel):
     bars_used: int = 0
 
 
+# P0 parity — başlık tazeliği yayın yaşına göre damgalanır (UI hesap yapmaz).
+NewsFreshness = Literal["FRESH", "RECENT", "STALE"]
+
+
 class NewsHeadline(BaseModel):
+    """Tek haber başlığı.
+
+    P0 parity: runtime'da yalnızca gerçek RSS'ten gelen başlıklar
+    `verified=True` taşır. `verified=False` başlıklar (fixture/test)
+    consensus news skoruna GİRMEZ (DATA_POLICY).
+    `asset_impact`: sembol → yön (-1.0 bearish / 0.0 nötr / +1.0 bullish).
+    """
+
     id: str
     source: str
     region: str | None = None
@@ -93,14 +105,31 @@ class NewsHeadline(BaseModel):
     title_tr: str | None = None
     sentiment: Sentiment | None = None
     asset_impact: dict[str, float] = Field(default_factory=dict)
+    url: str | None = None
+    verified: bool = False
+    freshness: NewsFreshness | None = None
+    error: str | None = None
 
 
 class Catalyst(BaseModel):
+    """Takvim olayı (event calendar).
+
+    P0 parity: runtime'da yalnızca `config/event_calendar.yaml`'dan okunan
+    olaylar `verified=True` taşır. Event risk gate'i sadece verified +
+    high/critical olayları sayar ve yalnızca kısıtlayıcıdır.
+    """
+
     id: str
     ts: datetime
     title: str
-    importance: Literal["low", "medium", "high"] = "low"
+    importance: Literal["low", "medium", "high", "critical"] = "low"
     region: str | None = None
+    category: str | None = None
+    market_impact: str | None = None
+    days_until: int | None = None
+    hours_until: float | None = None
+    source: str = "unknown"
+    verified: bool = False
 
 
 class CatalystImpact(BaseModel):
@@ -122,8 +151,22 @@ class CatalystImpact(BaseModel):
     confidence: float = 0.0         # 0..1 (kaynak doğrulaması)
 
 
+RotationStatus = Literal["OK", "UNAVAILABLE"]
+
+
 class RotationView(BaseModel):
+    """Sermaye rotasyonu görünümü.
+
+    P0 parity: skor gerçek OHLCV (1d) momentum + çapraz oran analizinden
+    gelir. Veri yetersizse `status="UNAVAILABLE"` — consensus quantum
+    modülü düşer ve ağırlık redistribute edilir; mock skor üretilmez.
+    """
+
     name: str = "Sermaye Rotasyonu"
     score: float = 50.0
     direction: Direction = "neutral"
     evidence: list[str] = Field(default_factory=list)
+    status: RotationStatus = "OK"
+    source: str = "unknown"
+    verified: bool = False
+    error: str | None = None

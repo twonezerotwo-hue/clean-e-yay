@@ -1,34 +1,42 @@
-# NEXT TASK — OPS: contract/replay testleri + operasyonel sağlamlaştırma
+# NEXT TASK — P0 Intelligence Parity (kalan kapsam)
 
-Önerilen sıra (v2.6 sonrası): **OPS önce**, v2.7 deep data sonra.
-Gerekçe: 16+ endpoint var ve `apps/web/types/generated/api.ts` elle
-senkronize ediliyor (`make codegen` "not yet implemented") — OpenAPI ↔
-backend ↔ frontend drift'ini hiçbir test yakalamıyor. v2.7 provider
-yüzeyini (funding/OI/options IV/gerçek haber) büyütmeden önce sözleşme
-güvencesi kurulmalı.
+P0'ın çekirdeği tamamlandı (bkz. `.tasks/TASK_RESULT.md`, 2026-06-12):
+- ✅ Gerçek RSS/geo news provider + event calendar YAML provider (pipeline'a
+  `provider_status` + unavailable warning'leriyle bağlı).
+- ✅ Gerçek rotation engine (1d OHLCV momentum + çapraz oran), hash-mock
+  kaldırıldı; veri yoksa UNAVAILABLE + redistribute (mock karar vermez).
+- ✅ Consensus rotation UNAVAILABLE → quantum redistribute; news skoru sadece
+  verified headlines'tan.
 
-## Scope
+Aşağıdakiler bilinçli olarak ertelendi (SKIPPED → bu fazda yap):
 
-- **Contract tests** (`tests/contract/` — şu an boş): her OpenAPI path'i
-  için response'un şemayla uyumunu doğrula (required alanlar, enum
-  değerleri, tip uyumu). OpenAPI'de olmayan endpoint CI'da fail etsin.
-- **Codegen**: `make codegen` gerçek implementasyon (openapi-typescript
-  veya eşdeğeri) VEYA minimum: TS tipleriyle OpenAPI şemasını karşılaştıran
-  drift testi.
-- **Snapshot replay**: `data/snapshots/`'tan diskten replay akışını test
-  altına al (`GET /api/v1/replay/{snapshot_id}` contract'ta vardı —
-  mevcut durumla hizala veya kapsam dışıysa belgele).
-- **Telemetry**: `POST /api/v1/telemetry/panel-error` hattını doğrula
-  (frontend panel crash → backend log).
-- CI: contract job eklenir; pytest + ruff + tsc + build yeşil kalır.
+## 1. Asset universe expansion
+- Provider registry'ye temiz ekleme: TLT, HYG, LQD, JNK, IWM, SMH, XLF, FXI
+  (yfinance) — rotation engine bunları zaten ROTATION_SYMBOLS/_RATIO_DEFS'te
+  bekliyor; eklenince HYG/LQD kredi spread'i ve TLT/SPY savunma rotasyonu
+  canlıda aktif olur (şu an 6/9 seri ile çalışıyor).
+- CoinGecko global'den BTC dominance / USDT dominance / TOTAL / TOTAL2.
+- FRED'den HY spread, real yield, M2, PPI (CPI var).
+- Kurallar: provider fail → crash yok; API key yoksa açık DEGRADED; mock
+  fallback yok; DQS/provenance açık. DEFAULT_SYMBOLS davranışı DEĞİŞMEZ.
+
+## 2. News/geo/calendar birim testleri
+- RSS fixture parse (offline); network fail → no mock + DEGRADED + nötr 50.
+- Geo headline bölge sınıflandırması (USA/Iran/Israel/China/Russia/Europe/
+  ME-energy) fixture testi.
+- Calendar YAML load; unavailable → no mock + warning. High-impact event
+  yakın → WATCH/NO_POSITION_INCREASE (bypass yok).
+
+## 3. Event risk → RiskGate (yalnızca kısıtlayıcı)
+- `packages/risk/event_risk.py`: yüksek etkili verified event yakınsa
+  WATCH / NO_POSITION_INCREASE. Asla size artırmaz, asla gate gevşetmez.
 
 ## Hard rules
-
-- PAPER_SAFE / NO_EXECUTION; RiskGate/DQS/KillSwitch/halt sıfır diff.
-- Endpoint path'leri ve response alan adları DEĞİŞMEZ (additive olabilir).
-- Testlerde live network yok.
+- PAPER_SAFE / NO_EXECUTION; RiskGate/DQS/KillSwitch/halt zayıflatılamaz.
+- Endpoint path'leri ve response alan adları DEĞİŞMEZ (additive ok).
+- Runtime'da mock veri yok (DATA_POLICY). Testlerde live network yok.
 
 ## Sonra
-
-- **v2.7 deep data** + **T3 catalyst half-life motoru** (funding, OI,
-  options IV, gerçek haber feed'i + CatalystImpact engine).
+- **OPS** — contract/replay testleri + codegen drift güvencesi.
+- **v2.7 deep data** — funding/OI/options IV/ETF flow + T3 catalyst
+  half-life real engine.

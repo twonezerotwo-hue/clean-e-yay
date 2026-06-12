@@ -4,6 +4,26 @@ _Bu dosya kısa ve güncel tutulur. Her görev sonunda güncellenir._
 
 ## Last known status
 
+- **P0 intelligence parity (kısmî) tamamlandı**: gerçek rotation engine +
+  news/calendar pipeline entegrasyonu.
+  - Hash-mock rotation kaldırıldı. `packages/data/providers/rotation/engine.py`
+    Clean 1d OHLCV cache üstünde 30g momentum + çapraz oran (GLD/TLT, BTC/GLD,
+    TLT/SPY, HYG/LQD, BTC/DXY, GLD/DXY) + sınıf para-akışı (legacy _FLOW_SIGNALS
+    parity) hesaplar (deterministik, pure python). `rotation/__init__.
+    get_rotation()` motoru OHLCV'ye bağlar: veri yetersiz → RotationView.status=
+    UNAVAILABLE + nötr 50 + provider DEGRADED (mock yok). "SPY" slotu registry'deki
+    SP500'e (^GSPC) eşli — hisse bacağı canlıda aktif.
+  - Pipeline `provider_status`'a news/geo_news/calendar/rotation eklendi;
+    news_unavailable / calendar_unavailable / rotation_unavailable warning'leri.
+  - Consensus: rotation UNAVAILABLE → quantum modülü düşer, ağırlık
+    `_redistribute` ile dağılır (mock skor karar zincirine giremez).
+  - 155/155 pytest (5 yeni rotation testi), ruff (CI scope) + tsc yeşil;
+    canlı smoke OK (API 200, rotation gerçek momentum/oran evidence; web SSR
+    200). RiskGate/DQS/KillSwitch/halt sıfır diff; PAPER_SAFE korunuyor.
+  - Açık kalanlar (NEXT): asset universe expansion (TLT/HYG/LQD/JNK/IWM/SMH/
+    XLF/FXI + CoinGecko dominance + FRED HY spread/real yield/M2/PPI);
+    news/geo/calendar birim testleri; event risk RiskGate bağı.
+
 - **v2.6 tamamlandı**: LLM persona katmanı (Groq, narrative-only).
   LLM karar VERMEZ — sadece state'i açıklar/eleştirir/özetler.
   - `packages/agent/llm/` — client (`LLM_MODE=off|mock|groq`; anahtar

@@ -132,9 +132,12 @@ def build(
         "fundamental": _fundamental(regime),
         "news": _news(snap),
         "sentinel": _sentinel(regime),
-        "quantum": _quantum(snap),
         # chart_pattern: şimdilik yok — ağırlığı redistribute edilir
     }
+    # Rotasyon UNAVAILABLE ise quantum modülü düşer; ağırlığı _redistribute
+    # ile diğer modüllere dağıtılır (mock skor karar zincirine girmez).
+    if snap.rotation.status != "UNAVAILABLE":
+        raw["quantum"] = _quantum(snap)
     weights_cfg = load_active_weights()
     base = weights_cfg["regimes"].get(regime.label, weights_cfg["regimes"]["NEUTRAL"])
     available = set(raw.keys())

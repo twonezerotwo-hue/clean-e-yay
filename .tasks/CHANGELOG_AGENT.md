@@ -115,3 +115,24 @@
   build yeşil; canlı smoke OK (28 panel SSR, PAPER_ONLY korunuyor).
 - Next task önerisi → OPS (contract/replay testleri; TS tip drift riski)
   → sonra v2.7 deep data + T3 catalyst half-life.
+- P0 intelligence parity (kısmî) — gerçek RSS/geo news + event calendar
+  YAML + **gerçek rotation engine**. Hash-mock rotation kaldırıldı:
+  `providers/rotation/engine.py` Clean 1d OHLCV cache üstünde 30g momentum +
+  çapraz oran (GLD/TLT, BTC/GLD, TLT/SPY, HYG/LQD, BTC/DXY, GLD/DXY) + sınıf
+  para-akışı (legacy _FLOW_SIGNALS parity) hesaplar; deterministik, pure
+  python. `providers/rotation/__init__.get_rotation()` motoru OHLCV'ye bağlar:
+  veri yetersiz → RotationView.status=UNAVAILABLE, nötr 50, provider DEGRADED
+  (mock yok). SPY slotu Clean registry'deki SP500'e (^GSPC) eşlendi → hisse
+  bacağı canlıda aktif. Pipeline: provider_status'a news/geo_news/calendar/
+  rotation eklendi; news_unavailable / calendar_unavailable / rotation_
+  unavailable warning'leri. Consensus: rotation UNAVAILABLE → quantum modülü
+  düşer, ağırlık _redistribute ile dağıtılır (mock skor karar zincirine
+  girmez). RiskGate/DQS/KillSwitch/halt sıfır diff; PAPER_SAFE/NO_EXECUTION.
+  155/155 pytest (5 yeni rotation testi), ruff (CI scope) + tsc yeşil; canlı
+  smoke OK (API 200, gerçek fiyatlarla rotation OK + gerçek momentum/oran
+  evidence; web SSR 200, paneller mevcut). pnpm build atlandı (frontend sıfır
+  diff + canlı Clean dev sunucusunu bozmamak için; tsc temiz).
+- SKIPPED/NEXT → asset universe expansion (TLT/HYG/LQD/JNK/IWM/SMH/XLF/FXI +
+  CoinGecko dominance + FRED HY spread/real yield/M2/PPI); news/geo/calendar
+  birim testleri (RSS fixture parse / geo classification / YAML load); event
+  risk RiskGate bağı (kısıtlayıcı WATCH/NO_POSITION_INCREASE).

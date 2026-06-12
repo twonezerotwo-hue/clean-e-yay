@@ -87,9 +87,19 @@ def build_snapshot(symbols: list[str] | None = None) -> MarketSnapshot:
     ]
     if degraded_tfs:
         warnings.append("technicals DEGRADED: " + ", ".join(degraded_tfs))
+    # DATA_POLICY: veri yoksa mock üretilmez — açık warning + DEGRADED status.
+    if not headlines:
+        warnings.append("news_unavailable")
+    if not catalysts:
+        warnings.append("calendar_unavailable")
+    if rotation.status == "UNAVAILABLE":
+        warnings.append("rotation_unavailable: " + (rotation.error or "data insufficient"))
     provider_status = {
         **price_provider.get_provider_status(),
         **ohlcv_provider.get_provider_status(),
+        **news_provider.get_provider_status(),
+        **cal_provider.get_provider_status(),
+        **rot_provider.get_provider_status(),
     }
     if price_provider.is_runtime_mock_explicit():
         warnings.insert(0, "PRICE_USE_MOCK=true — TEST/MOCK MODE")

@@ -1,113 +1,91 @@
 # TASK RESULT
 
 Date: 2026-06-12
-Task: v2.6 — LLM persona (Groq, narrative-only)
-Status: completed
+Task: P0 intelligence parity (kısmî) — gerçek rotation engine + news/calendar
+      sağlayıcılarının pipeline'a entegrasyonu (WIP recovery)
+Status: completed (core); kalan kapsam SKIPPED/NEXT olarak işaretlendi
+
+## WIP recovery
+
+Önceki session token bitince yarım kalmıştı. Bulunan durum:
+- `providers/rotation/engine.py` yazılmış (legacy momentum/oran portu) ve
+  derlenebilir; **provider'a bağlı değildi** — `rotation/__init__.py` hâlâ
+  eski hash-mock `get_rotation()` kullanıyordu. Kaldığı tam nokta buydu.
+- News (`__init__/rss/classify/fixtures`) ve calendar (`__init__` + YAML)
+  sağlayıcıları tamamdı ve derleniyordu, fakat pipeline `provider_status`'a
+  ve unavailable-warning'lerine bağlı değildi.
 
 ## Ne yapıldı
 
-LLM, karar vermeyen bir anlatı/persona katmanı olarak eklendi: agent'ın
-beynini açıklar, eleştirir, özetler ve kullanıcı sorularını mevcut state'e
-göre yanıtlar. Hiçbir LLM çıktısı decision/risk/paper akışına geri yazılmaz.
+1. **Rotation engine → provider wiring** (kaldığı yer): `get_rotation()`
+   yeniden yazıldı; Clean OHLCV cache'inden (1d) rotasyon sembollerinin
+   kapanış serilerini toplar, `engine.compute()` çağırır, `RotationView`
+   üretir. Veri yetersiz → `status="UNAVAILABLE"`, nötr 50, provider DEGRADED;
+   mock skor YOK. News/calendar pattern'iyle aynı provider status tracker.
+2. **SPY → SP500 eşlemesi**: engine'in "SPY" slotu Clean registry'sinde
+   zaten var olan `SP500` (^GSPC) OHLCV'sine eşlendi → hisse (risk-on) bacağı
+   canlıda aktif (universe expansion değil, mevcut veriyi doğru bağlama).
+3. **Pipeline entegrasyonu**: `provider_status`'a news/geo_news/calendar/
+   rotation eklendi; `news_unavailable` / `calendar_unavailable` /
+   `rotation_unavailable` warning'leri (DATA_POLICY — veri yoksa mock değil
+   açık uyarı).
+4. **Consensus safety**: rotation `UNAVAILABLE` ise `quantum` modülü `raw`'dan
+   düşürülür; ağırlığı mevcut `_redistribute` ile diğer modüllere dağıtılır
+   (chart_pattern ile aynı desen). Mock rotasyon skoru artık karar zincirine
+   giremez.
+5. **Testler**: `tests/unit/test_rotation.py` (5 test) — deterministik skor,
+   yetersiz veri → UNAVAILABLE, identical-returns guard, fixture provider OK,
+   consensus quantum redistribute.
 
-### `packages/agent/llm/` (yeni paket)
+## Files changed
 
-- **client.py** — `LLM_MODE=off|mock|groq` (set değilse: anahtar varsa groq,
-  yoksa off). Groq OpenAI-uyumlu chat completions adapter'ı (urllib);
-  **anahtar yoksa network çağrısı YAPMADAN None** döner; network/API
-  hatasında exception kaçırılmaz → None → deterministik fallback.
-- **budget.py** — günlük token bütçesi `data/runtime/llm_budget.json`
-  (env `LLM_DAILY_TOKEN_BUDGET`, default 100k; `LLM_MAX_TOKENS_PER_REQUEST`
-  default 600). Bütçe aşılırsa LLM çağrısı yapılmaz.
-- **cache.py** — 2 saatlik file-backed yanıt cache'i
-  (`data/runtime/llm_cache.json`, env `LLM_CACHE_TTL_SEC`). Anahtar İÇERİK
-  bazlı (context digest — snapshot_id/generated_at hariç) → state aynı
-  kaldıkça cache vurur.
-- **context.py** — prompt'a giren KOMPAKT state bağlamı: snapshot_id, DQS
-  özeti, provider sorunları, decision matrix top hücreleri, candidate vs
-  final farkları, blocked_by nedenleri, RiskGate, halt, korelasyon
-  cluster'ları, paper state, learning uyarıları, haber/katalizör başlıkları.
-  **Full raw market data prompt'a gömülmez.**
-- **guard.py** — prompt injection / bypass kalıpları (TR+EN) LLM'e
-  ulaşmadan güvenli ret; LLM sistem prompt'u sert kurallar taşır
-  (karar verme yok, bağlam dışı uydurma yok, PAPER_SAFE).
-- **report.py** — 3 persona: Market Analyst / Risk Officer / Macro
-  Strategist. Çıktı: summary, concerns, **evidence_used (her zaman
-  backend'de deterministik üretilir — LLM kanıt uyduramaz)**, missing_data,
-  actionability, what_would_change_my_mind. LLM yoksa/bütçe dolu/hata →
-  deterministik fallback bölümleri.
-- **chat.py** — state-grounded soru-cevap: guard → deterministik grounded
-  yanıt (her zaman üretilir; sembol/TF/intent algılama: "neden açmadın",
-  "riskgate", "hangi veri eksik", "ne bekliyor") → LLM varsa aynı bağlam +
-  grounded yanıtla anlatımı akıcılaştırır.
-
-### API
-
-- `GET /api/v1/ai-report/current` additive zenginleşti: `personas[]`,
-  `llm` meta (mode/model/source/fallback_reason/cached/tokens), 
-  `timeframe_summary` (TF satırları, candidate vs final diffs, blocked_by,
-  paper_actions), `no_actionable_decision`. DQS BLOCKED veya kısıtlayıcı
-  risk gate → verdict `no_trade` + "NO ACTIONABLE DECISION" narrative modu.
-- **Yeni `POST /api/v1/chat`** (`apps/api/routers/chat.py`) — ChatRequest
-  {message ≤2000}; yanıt: answer, refused, evidence_used, snapshot_id,
-  llm meta, provenance mode bloğu.
-- OpenAPI: `/chat` path + PersonaSection/TimeframeSummary/LLMMeta/
-  ChatRequest/ChatResponse şemaları; AIReport additive alanlar.
-
-### Dashboard
-
-- **AIReportPanel** — persona bölümleri (başlık + summary + concerns +
-  actionability + "fikrimi değiştirir" + eksik veri), `LLM_GENERATED ·
-  <model>` / `DETERMINISTIC` provenance rozeti, NO ACTIONABLE DECISION
-  banner'ı, timeframe özeti satırları.
-- **ChatPanel** — gerçek `/api/v1/chat`'e bağlı: öneri soruları, mesaj
-  geçmişi, kanıt satırı (evidence_used), GUARD/DETERMINISTIC/LLM_GENERATED
-  damgası. Registry'de `chat` artık defaultVisible.
-- Selector'lar `lib/selectors/ai.ts`; hook `useChat`; client `api.chat`;
-  tipler `types/generated/api.ts`. page.tsx büyümedi (ChatPanel zaten
-  GridCell'deydi).
-
-## Güvenlik garantileri
-
-- **LLM karar vermez** — `packages/agent/llm` hiçbir decision/risk/paper
-  modülüne yazmaz; decision matrix LLM'li/LLM'siz birebir aynı (testli).
-- RiskGate / DQS veto / KillSwitch / halt / timeframe politikası sıfır diff.
-- DQS BLOCKED → "no actionable decision" modu (testli).
-- "RiskGate'i bypass et" → güvenli ret (testli, TR+EN kalıplar).
-- Anahtar yokken ve testlerde network çağrısı yok (urlopen bekçi fixture).
-- PAPER_SAFE / NO_EXECUTION — broker/emir/live execution yok.
+- `packages/data/providers/rotation/__init__.py` — hash-mock → gerçek engine
+  wiring + provider status tracker (rewrite).
+- `packages/data/providers/rotation/engine.py` — WIP'ten gelen motor;
+  ROTATION_SYMBOLS "SPY"→"SP500" düzeltmesi.
+- `packages/data/ingestion/pipeline.py` — provider_status (news/geo_news/
+  calendar/rotation) + unavailable warning'leri.
+- `packages/consensus/engine.py` — rotation UNAVAILABLE → quantum redistribute.
+- `packages/data/providers/news/{__init__,rss,classify,fixtures}.py`,
+  `packages/data/providers/calendar/__init__.py`, `config/event_calendar.yaml`,
+  `packages/data/types.py` — önceki session WIP'i (compile-safe doğrulandı;
+  ruff RUF100 kullanılmayan noqa temizlendi).
+- `tests/unit/test_rotation.py` — yeni.
 
 ## Tests run
 
-- `pytest -q` → **150/150 passed** (18 yeni: mode off→fallback, groq
-  anahtarsız→network'süz degrade, Groq adapter mock parse + network error,
-  budget guard + bütçe aşımı→fallback, persona fallback bölümleri, mock LLM
-  + cache (2. çağrı cached, bütçe harcamaz), evidence backend'den, AI report
-  endpoint personas+tf_summary, DQS BLOCKED→no_actionable, decision matrix
-  LLM'li/LLM'siz aynı, chat BTC blocked_by + riskgate + missing data +
-  injection refusal ×3 + LLM hata→grounded fallback, cache TTL).
-- `ruff check packages apps/api apps/tick_worker apps/learning_worker` → yeşil.
-- `pnpm exec tsc --noEmit` + `pnpm build` → yeşil.
+- `pytest` → **155 passed** (5 yeni).
+- `ruff check packages apps/api apps/tick_worker apps/learning_worker`
+  (CI scope) → **All checks passed**.
+- `apps/web: pnpm tsc --noEmit` → **exit 0** (tip temiz).
+- `pnpm build` → **atlandı**: frontend sıfır diff + canlı Clean dev sunucusu
+  (3000) aynı `.next`'i kullanıyor, build onu 500'e düşürürdü. tsc gate yeterli.
 
-## Live smoke
+## Live dashboard smoke
 
-- API: `/api/v1/health` 200, `/api/v1/ai-report/current` 200 (3 persona +
-  timeframe_summary + llm meta), `POST /api/v1/chat` 200 ("Neden BTC
-  açmadın?" → risk gate gerekçeli grounded yanıt; bypass → refused=true).
-- Web: SSR 200, **28 panel**, ChatPanel yeni UI ("state-grounded · LLM
-  karar vermez" + öneri soruları), HeroScene + PAPER_ONLY korunuyor.
-- LLM mode `off` (GROQ_API_KEY yok) → deterministik fallback ile tam
-  fonksiyonel; anahtar eklenince ek deploy gerekmez.
+- API (127.0.0.1:8000): `/health` 200; `/data/snapshot` 200 (gerçek
+  fiyatlar — SSL cert ile live); `provider_status` rotation/news/geo_news/
+  calendar = ok.
+- Rotation (regime-report layer "Sermaye Rotasyonu"): gerçek skor + evidence
+  (DOLAR_GÜCÜ/HİSSE/ALTIN akışı, 30g momentum %, BTC/GLD·BTC/DXY·GLD/DXY oran
+  sinyalleri). Hash-mock kayboldu.
+- Web (127.0.0.1:3000): SSR 200, paneller mevcut (Sermaye Rotasyonu /
+  capital_rotation / news / PAPER), title "Clean E-yAy".
 
-## Result
+## PAPER_SAFE check
 
-passed
+- broker: none · real order: none · live execution: none
+- RiskGate/DQS/KillSwitch/halt: sıfır diff (değişmedi)
+- LLM karar motoruna sokulmadı; frontend hesap yapmıyor; page.tsx büyümedi.
 
-## Next (öneri)
+## SKIPPED / NEXT
 
-**OPS — contract/replay testleri + operasyonel sağlamlaştırma** (v2.7'den
-ÖNCE öneriyorum): 16 endpoint'in TS tipleri elle senkronize ediliyor
-(codegen "not yet implemented") ve OpenAPI drift'ini hiçbir test yakalamıyor.
-v2.7 deep data (funding/OI/options IV + gerçek haber feed'i + T3 catalyst
-half-life motoru) provider yüzeyini büyütmeden önce sözleşme testleri +
-snapshot replay + telemetry hattı riski düşürür. v2.7 ondan sonra.
+- Asset universe expansion: TLT/HYG/LQD/JNK/IWM/SMH/XLF/FXI provider'a
+  eklenmedi → rotation canlıda 6/9 seri ile çalışıyor (BTC/GLD/XAG/DXY/OIL/
+  SP500). Engine bu semboller eklenince otomatik kullanır. CoinGecko
+  dominance + FRED HY spread/real yield/M2/PPI de bu fazda yok.
+- news/geo/calendar birim testleri (RSS fixture parse, geo classification,
+  YAML load, high-impact event → WATCH) yazılmadı — sağlayıcılar canlı
+  smoke ile doğrulandı, unit coverage NEXT.
+- Event risk RiskGate bağı (`packages/risk/event_risk.py` kısıtlayıcı
+  WATCH/NO_POSITION_INCREASE) bu fazda bağlanmadı.

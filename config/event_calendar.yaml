@@ -1,0 +1,243 @@
+# ---------------------------------------------------------------------------
+# Clean E-yAy — Olay Takvimi (Catalyst Calendar)
+# Eski Codex'ten port (P0 legacy parity). Son senkron: 2026-06-12.
+# Tarihler resmi takvimlerden HARDCODED:
+#   BLS (NFP/CPI/PPI): bls.gov/schedule/2026/
+#   FOMC: federalreserve.gov/monetarypolicy/fomccalendars.htm
+# Güncelleme şimdilik manuel — otomatik updater OPS/v2.7 adayı.
+# Geçmiş tarihli event'ler provider tarafından filtrelenir.
+# ---------------------------------------------------------------------------
+
+events:
+
+  # ─── 2026-06 ──────────────────────────────────────────────────
+
+  - id: "nfp_2026_06"
+    date: "2026-06-05"
+    name: "ABD İstihdam / NFP (Mayıs 2026)"
+    category: "MACRO"
+    importance: "HIGH"
+    expectation: "08:30 ET — BLS resmi takvim"
+    market_impact: "Güçlü → Fed kesmez DXY↑ | Zayıf → resesyon korkusu risk-off"
+
+  - id: "cpi_2026_06"
+    date: "2026-06-10"
+    name: "ABD CPI (Mayıs 2026)"
+    category: "MACRO"
+    importance: "CRITICAL"
+    expectation: "08:30 ET — BLS resmi takvim"
+    market_impact: "Yüksek → DXY↑ BTC↓ Altın↓ | Düşük → BTC↑ Altın↑ hisse↑"
+
+  - id: "ppi_2026_06"
+    date: "2026-06-11"
+    name: "ABD PPI (Mayıs 2026)"
+    category: "MACRO"
+    importance: "MEDIUM"
+    expectation: "08:30 ET — BLS resmi takvim"
+    market_impact: "Yüksek gelirse enflasyon beklentileri yükselir"
+
+  - id: "fomc_2026_06"
+    date: "2026-06-17"
+    name: "FOMC Faiz Kararı (Haziran 2026)"
+    category: "FED"
+    importance: "CRITICAL"
+    expectation: "14:00 ET — basın toplantısı 14:30 ET"
+    market_impact: "Hawkish sürpriz → DXY↑ BTC↓ | Dovish pivot → BTC↑ Altın↑"
+
+  # ─── 2026-07 ──────────────────────────────────────────────────
+
+  - id: "nfp_2026_07"
+    date: "2026-07-02"
+    name: "ABD İstihdam / NFP (Haziran 2026)"
+    category: "MACRO"
+    importance: "HIGH"
+    expectation: "08:30 ET — BLS resmi takvim"
+    market_impact: "Güçlü → Fed kesmez DXY↑ | Zayıf → resesyon korkusu risk-off"
+
+  - id: "fomc_minutes_2026_06"
+    date: "2026-07-08"
+    name: "FOMC Tutanakları (Haziran 2026 kararı)"
+    category: "FED"
+    importance: "MEDIUM"
+    expectation: "2026-06-17 kararı detayları (karar+21g)"
+    market_impact: "Şahin ton → DXY↑ | Güvercin ipuçları → risk iştahı açılır"
+
+  - id: "cpi_2026_07"
+    date: "2026-07-14"
+    name: "ABD CPI (Haziran 2026)"
+    category: "MACRO"
+    importance: "CRITICAL"
+    expectation: "08:30 ET — BLS resmi takvim"
+    market_impact: "Yüksek → DXY↑ BTC↓ Altın↓ | Düşük → BTC↑ Altın↑ hisse↑"
+
+  - id: "ppi_2026_07"
+    date: "2026-07-15"
+    name: "ABD PPI (Haziran 2026)"
+    category: "MACRO"
+    importance: "MEDIUM"
+    expectation: "08:30 ET — BLS resmi takvim"
+    market_impact: "Yüksek gelirse enflasyon beklentileri yükselir"
+
+  - id: "fomc_2026_07"
+    date: "2026-07-29"
+    name: "FOMC Faiz Kararı (Temmuz 2026)"
+    category: "FED"
+    importance: "CRITICAL"
+    expectation: "14:00 ET — basın toplantısı 14:30 ET"
+    market_impact: "Hawkish sürpriz → DXY↑ BTC↓ | Dovish pivot → BTC↑ Altın↑"
+
+  # ─── 2026-08 ──────────────────────────────────────────────────
+
+  - id: "nfp_2026_08"
+    date: "2026-08-07"
+    name: "ABD İstihdam / NFP (Temmuz 2026)"
+    category: "MACRO"
+    importance: "HIGH"
+    expectation: "08:30 ET — BLS resmi takvim"
+    market_impact: "Güçlü → Fed kesmez DXY↑ | Zayıf → resesyon korkusu risk-off"
+
+  - id: "cpi_2026_08"
+    date: "2026-08-12"
+    name: "ABD CPI (Temmuz 2026)"
+    category: "MACRO"
+    importance: "CRITICAL"
+    expectation: "08:30 ET — BLS resmi takvim"
+    market_impact: "Yüksek → DXY↑ BTC↓ Altın↓ | Düşük → BTC↑ Altın↑ hisse↑"
+
+  - id: "ppi_2026_08"
+    date: "2026-08-13"
+    name: "ABD PPI (Temmuz 2026)"
+    category: "MACRO"
+    importance: "MEDIUM"
+    expectation: "08:30 ET — BLS resmi takvim"
+    market_impact: "Yüksek gelirse enflasyon beklentileri yükselir"
+
+  - id: "fomc_minutes_2026_07"
+    date: "2026-08-19"
+    name: "FOMC Tutanakları (Temmuz 2026 kararı)"
+    category: "FED"
+    importance: "MEDIUM"
+    expectation: "2026-07-29 kararı detayları (karar+21g)"
+    market_impact: "Şahin ton → DXY↑ | Güvercin ipuçları → risk iştahı açılır"
+
+  - id: "jackson_hole_2026"
+    date: "2026-08-21"
+    name: "Jackson Hole — Powell Konuşması (2026)"
+    category: "FED"
+    importance: "CRITICAL"
+    expectation: "~10:00 ET Cuma — Powell yıllık politika konuşması (sempozyum 3 gün)"
+    market_impact: "Pivot ipucu → tüm riskli varlıklar↑ | Şahin ton → geneli↓ DXY↑"
+
+  # ─── 2026-09 ──────────────────────────────────────────────────
+
+  - id: "nfp_2026_09"
+    date: "2026-09-04"
+    name: "ABD İstihdam / NFP (Ağustos 2026)"
+    category: "MACRO"
+    importance: "HIGH"
+    expectation: "08:30 ET — BLS resmi takvim"
+    market_impact: "Güçlü → Fed kesmez DXY↑ | Zayıf → resesyon korkusu risk-off"
+
+  - id: "ppi_2026_09"
+    date: "2026-09-10"
+    name: "ABD PPI (Ağustos 2026)"
+    category: "MACRO"
+    importance: "MEDIUM"
+    expectation: "08:30 ET — BLS resmi takvim"
+    market_impact: "Yüksek gelirse enflasyon beklentileri yükselir"
+
+  - id: "cpi_2026_09"
+    date: "2026-09-11"
+    name: "ABD CPI (Ağustos 2026)"
+    category: "MACRO"
+    importance: "CRITICAL"
+    expectation: "08:30 ET — BLS resmi takvim"
+    market_impact: "Yüksek → DXY↑ BTC↓ Altın↓ | Düşük → BTC↑ Altın↑ hisse↑"
+
+  - id: "fomc_2026_09"
+    date: "2026-09-16"
+    name: "FOMC Faiz Kararı (Eylül 2026)"
+    category: "FED"
+    importance: "CRITICAL"
+    expectation: "14:00 ET — basın toplantısı 14:30 ET"
+    market_impact: "Hawkish sürpriz → DXY↑ BTC↓ | Dovish pivot → BTC↑ Altın↑"
+
+  # ─── 2026-10 ──────────────────────────────────────────────────
+
+  - id: "nfp_2026_10"
+    date: "2026-10-02"
+    name: "ABD İstihdam / NFP (Eylül 2026)"
+    category: "MACRO"
+    importance: "HIGH"
+    expectation: "08:30 ET — BLS resmi takvim"
+    market_impact: "Güçlü → Fed kesmez DXY↑ | Zayıf → resesyon korkusu risk-off"
+
+  - id: "cpi_2026_10"
+    date: "2026-10-07"
+    name: "ABD CPI (Eylül 2026)"
+    category: "MACRO"
+    importance: "CRITICAL"
+    expectation: "08:30 ET — BLS resmi takvim"
+    market_impact: "Yüksek → DXY↑ BTC↓ Altın↓ | Düşük → BTC↑ Altın↑ hisse↑"
+
+  - id: "fomc_minutes_2026_09"
+    date: "2026-10-07"
+    name: "FOMC Tutanakları (Eylül 2026 kararı)"
+    category: "FED"
+    importance: "MEDIUM"
+    expectation: "2026-09-16 kararı detayları (karar+21g)"
+    market_impact: "Şahin ton → DXY↑ | Güvercin ipuçları → risk iştahı açılır"
+
+  - id: "ppi_2026_10"
+    date: "2026-10-08"
+    name: "ABD PPI (Eylül 2026)"
+    category: "MACRO"
+    importance: "MEDIUM"
+    expectation: "08:30 ET — BLS resmi takvim"
+    market_impact: "Yüksek gelirse enflasyon beklentileri yükselir"
+
+  # ─── 2026-11 ──────────────────────────────────────────────────
+
+  - id: "nfp_2026_11"
+    date: "2026-11-06"
+    name: "ABD İstihdam / NFP (Ekim 2026)"
+    category: "MACRO"
+    importance: "HIGH"
+    expectation: "08:30 ET — BLS resmi takvim"
+    market_impact: "Güçlü → Fed kesmez DXY↑ | Zayıf → resesyon korkusu risk-off"
+
+  - id: "cpi_2026_11"
+    date: "2026-11-12"
+    name: "ABD CPI (Ekim 2026)"
+    category: "MACRO"
+    importance: "CRITICAL"
+    expectation: "08:30 ET — BLS resmi takvim"
+    market_impact: "Yüksek → DXY↑ BTC↓ Altın↓ | Düşük → BTC↑ Altın↑ hisse↑"
+
+  - id: "ppi_2026_11"
+    date: "2026-11-13"
+    name: "ABD PPI (Ekim 2026)"
+    category: "MACRO"
+    importance: "MEDIUM"
+    expectation: "08:30 ET — BLS resmi takvim"
+    market_impact: "Yüksek gelirse enflasyon beklentileri yükselir"
+
+  # ─── 2026-12 ──────────────────────────────────────────────────
+
+  - id: "nfp_2026_12"
+    date: "2026-12-04"
+    name: "ABD İstihdam / NFP (Kasım 2026)"
+    category: "MACRO"
+    importance: "HIGH"
+    expectation: "08:30 ET — BLS resmi takvim"
+    market_impact: "Güçlü → Fed kesmez DXY↑ | Zayıf → resesyon korkusu risk-off"
+
+  # ─── 2027-08 ──────────────────────────────────────────────────
+
+  - id: "jackson_hole_2027"
+    date: "2027-08-20"
+    name: "Jackson Hole — Powell Konuşması (2027)"
+    category: "FED"
+    importance: "CRITICAL"
+    expectation: "~10:00 ET Cuma — Powell yıllık politika konuşması (sempozyum 3 gün)"
+    market_impact: "Pivot ipucu → tüm riskli varlıklar↑ | Şahin ton → geneli↓ DXY↑"
