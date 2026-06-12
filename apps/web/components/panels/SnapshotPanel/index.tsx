@@ -5,7 +5,11 @@ import { PanelHeader } from "@/components/shell/PanelHeader";
 import { LoadingState } from "@/components/shell/LoadingState";
 import { EmptyState } from "@/components/shell/EmptyState";
 import { useDataSnapshot } from "@/lib/queries/hooks";
-import { selectSnapshotMeta, selectDqs } from "@/lib/selectors/snapshot";
+import {
+  selectSnapshotMeta,
+  selectDqs,
+  selectTfCoverage,
+} from "@/lib/selectors/snapshot";
 import { fmtRelative, fmtTime } from "@/lib/format";
 
 export function SnapshotPanel() {
@@ -20,6 +24,7 @@ export function SnapshotPanel() {
   }
   const meta = selectSnapshotMeta(data);
   const dqs = selectDqs(data);
+  const tfCoverage = selectTfCoverage(data);
   if (!meta) {
     return (
       <PanelFrame id="snapshot">
@@ -49,6 +54,23 @@ export function SnapshotPanel() {
             <span className="text-signal-up">hayır</span>
           )}
         </dd>
+
+        {tfCoverage ? (
+          <>
+            <dt className="text-white/50">TF teknikleri</dt>
+            <dd className="text-right tabular-nums">
+              <span
+                className={
+                  tfCoverage.ok === tfCoverage.total
+                    ? "text-signal-up"
+                    : "text-amber-400"
+                }
+              >
+                {tfCoverage.ok}/{tfCoverage.total} OK
+              </span>
+            </dd>
+          </>
+        ) : null}
       </dl>
       {data?.warnings?.length ? (
         <ul className="mt-3 space-y-0.5 text-[11px] text-amber-400/80">

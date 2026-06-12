@@ -225,6 +225,23 @@ export type SnapshotMode = {
   test_mock: boolean;
 };
 
+export type TechnicalStatus = "OK" | "DEGRADED";
+
+// T1 — gerçek OHLCV'den hesaplanan TF teknik özeti.
+// Bar yetersiz/stale ise alanlar null + status DEGRADED.
+export type TechnicalTf = {
+  timeframe: Timeframe;
+  rsi: number | null;
+  macd: number | null;
+  atr: number | null;
+  ema_stack: "bullish" | "bearish" | "mixed" | null;
+  score: number;
+  status: TechnicalStatus;
+  source: string;
+  bars_used: number;
+  ts: string;
+};
+
 export type DataSnapshot = {
   meta: {
     snapshot_id: string;
@@ -236,6 +253,7 @@ export type DataSnapshot = {
   dqs: DqsBreakdown;
   provider_status: Record<string, ProviderStatus>;
   warnings: string[];
+  technicals_by_tf?: Record<string, Partial<Record<Timeframe, TechnicalTf>>>;
 };
 
 export type WeightDelta = {
