@@ -12,12 +12,14 @@ from datetime import UTC, datetime
 
 from packages.data.providers import calendar as cal_provider
 from packages.data.providers import news as news_provider
+from packages.data.providers import ohlcv as ohlcv_provider
 from packages.data.providers import price as price_provider
 from packages.data.providers import rotation as rot_provider
 from packages.data.providers import technical as tech_provider
 from packages.data.quality.dqs import QualityReport
 from packages.data.quality.dqs import compute as compute_dqs
 from packages.data.types import (
+    TIMEFRAMES,
     Catalyst,
     NewsHeadline,
     PriceQuote,
@@ -26,6 +28,10 @@ from packages.data.types import (
 )
 
 DEFAULT_SYMBOLS = ["BTCUSD", "ETHUSD", "XAUUSD", "XAGUSD", "DXY", "US10Y", "VIX"]
+
+# T1 — multi-TF technicals yalnızca ana 4 sembol için üretilir (payload ve
+# rate-limit dengesi); kalan semboller legacy 1d teknik alır.
+MULTI_TF_SYMBOLS = frozenset(DEFAULT_SYMBOLS[:4])
 
 
 @dataclass
@@ -53,13 +59,38 @@ def build_snapshot(symbols: list[str] | None = None) -> MarketSnapshot:
     syms = symbols or DEFAULT_SYMBOLS
     now = datetime.now(UTC)
     prices = price_provider.get_quotes(syms)
-    technicals = {s: tech_provider.get_snapshot(s, "1d") for s in syms}
+    # T1 — gerçek OHLCV'den multi-TF technicals; legacy `technicals` 1d'den
+    # beslenmeye devam eder (geriye uyum).
+    tf_syms = [s for s in syms if s in MULTI_TF_SYMBOLS]
+    technicals_by_tf = {
+        s: {tf: tech_provider.get_snapshot(s, tf) for tf in TIMEFRAMES}
+        for s in tf_syms
+    }
+    technicals = {
+        s: (
+            technicals_by_tf[s]["1d"]
+            if s in technicals_by_tf
+            else tech_provider.get_snapshot(s, "1d")
+        )
+        for s in syms
+    }
     headlines = news_provider.list_headlines(14)
     catalysts = cal_provider.list_catalysts(8)
     rotation = rot_provider.get_rotation()
     quality = compute_dqs(prices, syms)
     warnings = list(quality.notes)
-    provider_status = price_provider.get_provider_status()
+    degraded_tfs = [
+        f"{s}:{tf}"
+        for s, by_tf in technicals_by_tf.items()
+        for tf in TIMEFRAMES
+        if by_tf[tf].status == "DEGRADED"
+    ]
+    if degraded_tfs:
+        warnings.append("technicals DEGRADED: " + ", ".join(degraded_tfs))
+    provider_status = {
+        **price_provider.get_provider_status(),
+        **ohlcv_provider.get_provider_status(),
+    }
     if price_provider.is_runtime_mock_explicit():
         warnings.insert(0, "PRICE_USE_MOCK=true — TEST/MOCK MODE")
     return MarketSnapshot(
@@ -73,6 +104,7 @@ def build_snapshot(symbols: list[str] | None = None) -> MarketSnapshot:
         quality=quality,
         warnings=warnings,
         provider_status=provider_status,
+        technicals_by_tf=technicals_by_tf or None,
     )
 
 

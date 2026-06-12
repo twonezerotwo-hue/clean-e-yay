@@ -75,10 +75,12 @@ def test_technical_provider_passthrough_all_timeframes() -> None:
     assert technical.get_snapshot("BTCUSD", "3m").timeframe == "1d"
 
 
-def test_market_snapshot_technicals_by_tf_default_none() -> None:
+def test_market_snapshot_technicals_by_tf_filled() -> None:
+    # T0'da None idi; T1 ile gerçek (test modunda fixture) OHLCV'den dolar.
     from packages.data.ingestion.pipeline import build_snapshot
     snap = build_snapshot(["BTCUSD"])
-    assert snap.technicals_by_tf is None  # T1'e kadar doldurulmaz
+    assert snap.technicals_by_tf is not None
+    assert set(snap.technicals_by_tf["BTCUSD"].keys()) == {"15m", "1h", "4h", "1d", "1w"}
     assert snap.technicals["BTCUSD"].timeframe == "1d"  # legacy alan değişmedi
 
 

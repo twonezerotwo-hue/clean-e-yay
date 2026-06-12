@@ -51,4 +51,23 @@ def get_snapshot() -> dict:
         },
         "provider_status": snap.provider_status,
         "warnings": list(snap.warnings),
+        # T1 — gerçek OHLCV'den multi-TF teknikler (symbol → tf → özet).
+        "technicals_by_tf": {
+            sym: {
+                tf: {
+                    "timeframe": t.timeframe,
+                    "rsi": t.rsi,
+                    "macd": t.macd,
+                    "atr": t.atr,
+                    "ema_stack": t.ema_stack,
+                    "score": t.score,
+                    "status": t.status,
+                    "source": t.source,
+                    "bars_used": t.bars_used,
+                    "ts": t.ts.isoformat(),
+                }
+                for tf, t in by_tf.items()
+            }
+            for sym, by_tf in (snap.technicals_by_tf or {}).items()
+        },
     }

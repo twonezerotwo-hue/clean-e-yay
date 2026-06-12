@@ -536,3 +536,43 @@ components:
         cells:
           type: array
           items: { $ref: "#/components/schemas/TimeframeDecision" }
+
+    OHLCVBar:
+      type: object
+      description: T1 — tek mum; ts = bar açılış zamanı (UTC).
+      required: [symbol, timeframe, ts, open, high, low, close]
+      properties:
+        symbol: { type: string }
+        timeframe: { $ref: "#/components/schemas/Timeframe" }
+        ts: { type: string, format: date-time }
+        open: { type: number }
+        high: { type: number }
+        low: { type: number }
+        close: { type: number }
+        volume: { type: number, nullable: true }
+        source: { type: string, description: "resample edilen barlarda resampled:<base_tf>" }
+        verified: { type: boolean }
+
+    TechnicalSnapshotTF:
+      type: object
+      description: >
+        T1 — gerçek OHLCV'den hesaplanan TF teknik özeti.
+        Bar yetersiz/stale ise alanlar null + status DEGRADED.
+      required: [timeframe, score, status]
+      properties:
+        timeframe: { $ref: "#/components/schemas/Timeframe" }
+        rsi: { type: number, nullable: true }
+        macd:
+          type: number
+          nullable: true
+          description: MACD(12/26/9) histogramı / close × 100 (normalize).
+        atr: { type: number, nullable: true }
+        ema_stack:
+          type: string
+          enum: [bullish, bearish, mixed]
+          nullable: true
+        score: { type: number }
+        status: { type: string, enum: [OK, DEGRADED] }
+        source: { type: string }
+        bars_used: { type: integer }
+        ts: { type: string, format: date-time }
