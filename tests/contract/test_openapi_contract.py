@@ -1,0 +1,149 @@
+"""OPS — OpenAPI ↔ runtime response sözleşme testleri.
+
+`contracts/openapi.yaml` tek doğruluk kaynağıdır. Bu test, dokümante edilmiş
+her **side-effect'siz GET** endpoint'ini FastAPI TestClient ile çağırır ve
+gerçek response'u şemaya göre doğrular:
+
+- `required` alanlar mevcut mu,
+- `enum` üyeleri tutuyor mu,
+- `$ref` / `oneOf` recursive çözülür.
+
+Additive alanlara izin verilir (şemada olmayan ekstra alan hata DEĞİL — bkz.
+ARCHITECTURE §15 additive kuralı). El-senkron TS tipleri + openapi.yaml
+drift'i burada yakalanır. Live network yok (conftest `TEST_USE_MOCK=true`).
+"""
+from __future__ import annotations
+
+from pathlib import Path
+
+import pytest
+import yaml
+from fastapi.testclient import TestClient
+
+from apps.api.main import app
+
+ROOT = Path(__file__).resolve().parents[2]
+SPEC = yaml.safe_load((ROOT / "contracts" / "openapi.yaml").read_text(encoding="utf-8"))
+
+client = TestClient(app)
+
+
+def _resolve(ref: str, spec: dict) -> dict:
+    node = spec
+    for part in ref.lstrip("#/").split("/"):
+        node = node[part]
+    return node
+
+
+def _validate(instance, schema, spec, path, errors) -> None:
+    if schema is None:
+        return
+    if "$ref" in schema:
+        schema = _resolve(schema["$ref"], spec)
+
+    # oneOf / anyOf: en az bir dal geçerse OK.
+    for key in ("oneOf", "anyOf"):
+        if key in schema:
+            for branch in schema[key]:
+                sub: list[str] = []
+                _validate(instance, branch, spec, path, sub)
+                if not sub:
+                    return
+            errors.append(f"{path}: {instance!r} hiçbir {key} dalıyla eşleşmedi")
+            return
+
+    stype = schema.get("type")
+    if stype == "null":
+        if instance is not None:
+            errors.append(f"{path}: null bekleniyordu, {type(instance).__name__} geldi")
+        return
+
+    # null değer: nullable veya opsiyonel — tolere et (required kontrolü key
+    # varlığına bakar, değerine değil).
+    if instance is None:
+        return
+
+    if "enum" in schema and instance not in schema["enum"]:
+        errors.append(f"{path}: {instance!r} enum {schema['enum']} içinde değil")
+
+    if stype == "object" or "properties" in schema or "additionalProperties" in schema:
+        if not isinstance(instance, dict):
+            errors.append(f"{path}: object bekleniyordu, {type(instance).__name__} geldi")
+            return
+        for req in schema.get("required", []):
+            if req not in instance:
+                errors.append(f"{path}: zorunlu alan '{req}' eksik")
+        props = schema.get("properties", {})
+        for k, sub_schema in props.items():
+            if k in instance:
+                _validate(instance[k], sub_schema, spec, f"{path}.{k}", errors)
+        ap = schema.get("additionalProperties")
+        if isinstance(ap, dict):
+            for k, v in instance.items():
+                if k not in props:
+                    _validate(v, ap, spec, f"{path}.{k}", errors)
+    elif stype == "array":
+        if not isinstance(instance, list):
+            errors.append(f"{path}: array bekleniyordu, {type(instance).__name__} geldi")
+            return
+        items = schema.get("items")
+        for i, el in enumerate(instance):
+            _validate(el, items, spec, f"{path}[{i}]", errors)
+    # primitive (string/number/integer/boolean): tolerant — date-time vs string,
+    # int vs number gibi nüanslar drift sinyali değil; required + enum yeterli.
+
+
+def _documented_get_endpoints():
+    out = []
+    for p, item in SPEC["paths"].items():
+        if "get" not in item or "{" in p:  # path-param'lı GET ayrı test edilir
+            continue
+        schema = (
+            item["get"]
+            .get("responses", {})
+            .get("200", {})
+            .get("content", {})
+            .get("application/json", {})
+            .get("schema")
+        )
+        out.append((p, schema))
+    return out
+
+
+GET_ENDPOINTS = _documented_get_endpoints()
+
+
+@pytest.mark.parametrize("path,schema", GET_ENDPOINTS, ids=[p for p, _ in GET_ENDPOINTS])
+def test_get_endpoint_matches_contract(path, schema):
+    """Her dokümante GET endpoint'i 200 döner ve şemaya uyar (drift → fail)."""
+    r = client.get(path)
+    assert r.status_code == 200, f"{path} → {r.status_code}: {r.text[:200]}"
+    if schema is None:
+        return
+    errors: list[str] = []
+    _validate(r.json(), schema, SPEC, path, errors)
+    assert not errors, f"{path} sözleşme ihlali:\n" + "\n".join(errors)
+
+
+def test_replay_snapshot_path_param_matches_contract():
+    """GET /api/v1/replay/{snapshot_id} dürüstçe rezerve döner + şemaya uyar."""
+    schema = (
+        SPEC["paths"]["/api/v1/replay/{snapshot_id}"]["get"]["responses"]["200"]
+        ["content"]["application/json"]["schema"]
+    )
+    r = client.get("/api/v1/replay/contract-test-id")
+    assert r.status_code == 200
+    body = r.json()
+    assert body["status"] == "reserved_not_active"
+    assert body["available"] is False  # sahte replay yok
+    errors: list[str] = []
+    _validate(body, schema, SPEC, "/api/v1/replay/{snapshot_id}", errors)
+    assert not errors, "\n".join(errors)
+
+
+def test_all_documented_paths_have_router():
+    """openapi.yaml'daki her path FastAPI uygulamasında kayıtlı (path drift guard)."""
+    documented = set(SPEC["paths"].keys())
+    registered = {r.path for r in app.routes if hasattr(r, "path")}
+    missing = sorted(p for p in documented if p not in registered)
+    assert not missing, f"openapi.yaml'da olup app'te olmayan path'ler: {missing}"

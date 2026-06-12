@@ -1,109 +1,115 @@
 # TASK RESULT
 
 Date: 2026-06-12
-Task: P0 intelligence parity (kalan kapsam) — asset universe (rotation
-      bacakları) + news/geo/calendar birim testleri + event risk → RiskGate
-      (yalnızca kısıtlayıcı) + dashboard görünürlüğü
-Status: completed (asset universe kısmı bilinçli olarak daraltıldı — aşağıda)
+Task: OPS — contract/replay testleri + codegen drift güvencesi + operasyonel
+      sağlamlaştırma (yeni trading feature YOK)
+Status: completed
 
 ## Prensip
 
-"Yeni veri eklemek tek başına amaç değil." Her eklenen veri için karar
-zincirine etkisi + dashboard görünürlüğü birlikte teslim edildi:
-- TLT/HYG/LQD → rotation motoru artık 9/9 seriyle çalışıyor; TAHVİL sınıfı +
-  TLT/SPY savunma + HYG/LQD kredi oranları **canlıda aktif** (smoke'ta
-  TAHVİL sınıfı ve TLT/SPY oranı evidence'ta göründü).
-- Event riski → RiskGate'e kısıtlayıcı candidate; matrix/regime-report'ta
-  görünür; EventCalendarPanel'da actionability rozeti.
-- Haber etkisi → NewsPanel'da etkilenen sembol rozetleri / "yalnızca bağlam".
+Bu tur sistemin temelini sağlamlaştırdı; karar zincirine dokunulmadı.
+PAPER_SAFE / NO_EXECUTION; RiskGate/DQS/KillSwitch/halt sıfır diff.
+OpenAPI = tek doğruluk kaynağı; tüm eklemeler additive.
 
 ## Ne yapıldı
 
-1. **Asset universe (rotation bacakları)**: `ohlcv/yfinance._SYMBOL_MAP`'e
-   TLT/HYG/LQD eklendi (Yahoo ticker = sembol). `source_registry`'ye
-   `tlt/hyg/lqd_yfinance` (kind: rotation, decision_usage: simulation_only,
-   fallback_to_mock: false). Engine bunları zaten bekliyordu → TAHVİL sınıfı,
-   GLD/TLT, TLT/SPY, HYG/LQD oranları canlandı. DEFAULT_SYMBOLS DEĞİŞMEDİ.
-2. **Event risk → RiskGate (yalnızca kısıtlayıcı)**: yeni
-   `packages/risk/event_risk.py`. Yaklaşan **doğrulanmış** yüksek etkili
-   takvim olayı → WATCH veya NO_POSITION_INCREASE. `RiskEngine.evaluate()`
-   opsiyonel `event_candidates` alır; aynı havuza girip max-priority seçilir
-   → DQS KILL_SWITCH / halt event riskini **her zaman ezer** (bypass yok),
-   event riski hiçbir gate'i gevşetmez, size artırmaz. `decide_all` /
-   `decide_matrix` `snap.catalysts`'ten candidate üretir. `matrix_view` +
-   `regime-report` additive `event_risk` bloğu + per-catalyst `event_level`.
-   thresholds: `event_risk.{block_window_hours:24, watch_window_hours:72,
-   high_importance:[high,critical]}`.
-3. **News/geo/calendar birim testleri** (`tests/unit/test_news_calendar.py`,
-   19 test): RSS fixture parse (offline, urlopen bekçi), stale/dateless/
-   irrelevant eleme, geo bölge zorunluluğu, `detect_region` 6 bölge,
-   asset-impact yön, YAML calendar load + geçmiş filtre + bozuk dosya →
-   DEGRADED (mock yok), calendar→event-risk köprüsü.
-4. **Event risk testleri** (`tests/unit/test_event_risk.py`, 17 test):
-   high→NO_POSITION_INCREASE, mid→WATCH, low→NONE, unverified ignore,
-   en-kısıtlayıcı kazanır, DQS BLOCKED & daily-loss halt event'i ezer,
-   candidate yalnızca WATCH/NO_POSITION_INCREASE, no-network bekçi,
-   decide_matrix uçtan uca SUSPENDED + event_risk bloğu.
-5. **Dashboard görünürlüğü** (selector + registry, page.tsx büyümedi):
-   - EventCalendarPanel: event-risk özet banner + per-olay actionability rozeti.
-   - NewsPanel: etkilenen sembol rozetleri (↑/↓) / "yalnızca bağlam" rozeti +
-     freshness.
-   - CapitalRotationPanel: "gerçek 30g momentum + çapraz oran" + UNAVAILABLE
-     (veri yetersiz · nötr) durumu.
-   - TimeframeMatrixPanel: event-risk banner + hücre `blocked_by` rozeti.
-   - selectors: `selectEventRisk`/`headlineImpactBadges` (regime),
-     `selectMatrixEventRisk`/`cellBlockedLabel` (decision).
-   - OpenAPI + hand-synced TS tipleri additive: `EventRiskView`/
-     `EventRiskTrigger` + NewsHeadline/Catalyst/RegimeReport/DecisionMatrix.
+### 1. Contract testleri (`tests/contract/`, daha önce boştu)
+- `test_openapi_contract.py`: `contracts/openapi.yaml`'daki **her side-effect'siz
+  GET** endpoint'i TestClient ile çağrılır, response şemaya göre doğrulanır
+  (required alanlar + enum üyeleri + `$ref`/`oneOf` recursive; additive alanlara
+  izin verilir). Self-maintaining: endpoint listesi spec'ten türetilir.
+  - Kapsam: health, regime-report/current, dashboard/state, ai-report/current,
+    paper-trading/state, learning/{summary,calibration,mistakes,rebalance/proposal},
+    risk/{correlation,halts}, decision/matrix, data/snapshot, replay/status.
+  - `test_all_documented_paths_have_router`: openapi'deki her path app'te kayıtlı
+    (path drift guard).
+  - **Yakaladığı gerçek drift**: `LLMMeta.mode` enum'unda bare `off` → YAML onu
+    `False` boolean'ına çeviriyordu; `"off"` olarak tırnaklandı.
+
+### 2. Codegen drift güvencesi (`tests/contract/test_codegen_drift.py`)
+- `apps/web/types/generated/api.ts` el-senkron; bu test driftini CI'da yakalar:
+  - Her OpenAPI component schema adının bir TS `export type` karşılığı var
+    (alias: `TechnicalSnapshotTF→TechnicalTf`).
+  - Her OpenAPI enum üyesi TS'te string-literal olarak mevcut.
+  - **Yakaladığı gerçek drift**: TS `Trade.close_reason`'da `TIME_STOP_EXIT` ve
+    `KILL_SWITCH_EXIT` eksikti → eklendi.
+- Bu testler `testpaths=["tests"]` altında CI `pytest`'inde otomatik koşar →
+  drift CI'ı kırar.
+
+### 3. Snapshot / replay foundation (dürüst iskelet)
+- Disk snapshot store YOK; snapshot'lar in-memory `_CACHE`. Sahte replay/backtest
+  üretmedik. Bunun yerine **dürüst rezerve** endpoint'i:
+  - `apps/api/routers/replay.py`: `GET /replay/status` (en son okunabilir snapshot
+    id + `status: reserved_not_active`, `available: false`) ve
+    `GET /replay/{snapshot_id}` (matches_latest döner, replay ÇALIŞTIRMAZ).
+  - Web: `ReplayStatusPanel` artık dashboard meta yerine bu endpoint'e bağlı;
+    "REZERVE · AKTİF DEĞİL" rozeti + dürüst reason gösterir (selector/hook üzerinden).
+
+### 4. Dashboard/API consistency audit
+- Tüm dokümante GET endpoint'leri 200 (contract test). Panel registry'deki her
+  data hook'u bu endpoint'lerden birine bağlı; eksik/bozuk endpoint yok.
+- page.tsx büyümedi; frontend hesap yapmıyor; selector + generated types.
+
+### 5. OpenAPI ↔ runtime uyumu (additive reconciliation)
+- API'de olup openapi'de eksik path'ler eklendi (response şemaları TS'te zaten
+  vardı): `/data/snapshot`→DataSnapshot, `/learning/calibration`→CalibrationState,
+  `/learning/calibration/retrain`, `/learning/mistakes`→MistakesState,
+  `/learning/rebalance/proposal`→RebalanceState, `/paper-trading/reset`,
+  `/replay/status`→ReplayStatus, `/replay/{snapshot_id}`→ReplaySnapshotStatus.
+- Yeni component şemalar eklendi (TS ile birebir): ProviderStatus, DqsBreakdown,
+  LivePrice, ProvenanceMode, DataSnapshot, CalibrationParams, CalibrationState,
+  MistakeRecord, MistakeVerdict, MistakesState, WeightDelta, ModulePerf,
+  RebalanceProposalRecord, RebalanceState, ReplayStatus, ReplaySnapshotStatus.
+- TS tarafı: `OHLCVBar` + replay tipleri eklendi; `DataSnapshot.mode` gerçek
+  runtime şekline (`ProvenanceMode`, 7 alan) düzeltildi (eski `SnapshotMode` subset'ti).
+
+### 6. Dev reliability
+- README: eski `E_YAY CODEX` LaunchAgent port çakışması (`com.eyay.backend` →
+  `0.0.0.0:8000`) için troubleshooting bölümü + `launchctl bootout` çözümü;
+  smoke listesine `decision/matrix` + `replay/status` eklendi.
+- SSL_CERT_FILE/certifi zaten dokümante (`make api-dev`/`scripts/dev.sh` otomatik).
 
 ## Files changed
 
-- `config/thresholds_v1.0.yaml` — `event_risk` bloğu.
-- `config/source_registry_v1.0.yaml` — tlt/hyg/lqd_yfinance (kind: rotation).
-- `packages/data/providers/ohlcv/yfinance.py` — TLT/HYG/LQD ticker map.
-- `packages/risk/event_risk.py` — yeni (kısıtlayıcı event-risk gate).
-- `packages/risk/engine.py` — `evaluate(..., event_candidates=...)`.
-- `packages/decision/engine.py` — event candidates wiring + matrix_view event_risk.
-- `apps/api/routers/regime_report.py` — additive event_risk + catalyst/headline alanları.
-- `contracts/openapi.yaml` — EventRiskView/EventRiskTrigger + additive alanlar.
-- `apps/web/types/generated/api.ts` — TS tipleri (additive).
-- `apps/web/lib/selectors/{regime,decision}.ts` — yeni selector'lar.
-- `apps/web/components/panels/{EventCalendar,News,CapitalRotation,TimeframeMatrix}Panel/index.tsx`.
-- `tests/unit/test_event_risk.py`, `tests/unit/test_news_calendar.py` — yeni.
+- `apps/api/routers/replay.py` — yeni (dürüst rezerve replay endpoint'i).
+- `apps/api/main.py` — replay router register.
+- `contracts/openapi.yaml` — eksik path'ler + 16 yeni component schema; `off`→`"off"`.
+- `apps/web/types/generated/api.ts` — OHLCVBar + replay tipleri; DataSnapshot.mode→
+  ProvenanceMode; Trade.close_reason enum tamamlandı.
+- `apps/web/lib/api/client.ts`, `lib/queries/{keys,hooks}.ts` — replayStatus wiring.
+- `apps/web/components/panels/ReplayStatusPanel/index.tsx` — dürüst rezerve görünüm.
+- `tests/contract/{__init__.py,test_openapi_contract.py,test_codegen_drift.py}` — yeni.
+- `README.md` — port çakışması + smoke.
 
 ## Tests run
 
-- `pytest` → **191 passed** (36 yeni: 17 event_risk + 19 news_calendar).
-- `ruff check packages apps/api apps/tick_worker apps/learning_worker`
-  (CI scope) → **All checks passed**.
-- `apps/web: tsc --noEmit` → **exit 0**.
-- `pnpm build` → **✓ Compiled successfully** (lint + type check dahil).
+- `pytest` → **209 passed** (191 → +18 contract/drift). Live network yok.
+- `ruff check packages apps/api apps/tick_worker apps/learning_worker` + `tests/contract`
+  → **All checks passed**.
+- web `tsc --noEmit` → **exit 0**; `pnpm build` → **✓ Compiled successfully**.
 
 ## Live dashboard smoke
 
-- API (127.0.0.1:8000): `/regime-report/current` 200, `/decision/matrix` 200.
-- regime-report: `event_risk={level:NONE,...}` (yakın yüksek-etkili olay yok —
-  en yakın CRITICAL FOMC 2026-06-17, ~120h > 72h penceresi, doğru davranış);
-  catalyst[0] `event_level:NONE importance:critical`; headline[0]
-  `actionable:true freshness:FRESH`.
-- decision/matrix: `event_risk.level=NONE`; `risk_gate=NO_POSITION_INCREASE`
-  ("6 açık pozisyon" — mevcut paper state davranışı, event'ten bağımsız).
-- Rotation (layer "Sermaye Rotasyonu"): score 41 + gerçek evidence —
-  **TAHVİL sınıfı ve TLT/SPY oranı artık görünüyor** (TLT/HYG/LQD canlı).
-- Web (127.0.0.1:3001, prod build): SSR 200; Olay Takvimi / Haberler /
-  Sermaye Rotasyonu / Timeframe Matrisi panelleri render.
+- Clean E-yAy API `127.0.0.1:8000` (eski `0.0.0.0:8000` agent'ın yanında, SSL_CERT_FILE
+  ile, live network): health `version 2.0.0`; data/snapshot, dashboard/state,
+  decision/matrix, regime-report/current, risk/correlation, risk/halts,
+  learning/{summary,calibration,mistakes} → **hepsi 200**.
+- `replay/status` → `reserved_not_active`, `available:false`, latest snapshot id;
+  `replay/{id}` → matches_latest false, replay çalıştırmaz.
+- Web `127.0.0.1:3000` (next dev): SSR **200**, **28 panel** (Replay Durumu dahil),
+  HeroScene canvas + PAPER banner korunuyor.
 
 ## PAPER_SAFE check
 
-- broker: none · real order: none · live execution: none
-- RiskGate/DQS/KillSwitch/halt: event riski **yalnızca kısıtlayıcı** —
-  max-priority havuzunda; DQS/halt KILL_SWITCH her zaman ezer; size artmaz.
-- LLM karar motoruna girmedi; frontend hesap yapmıyor; page.tsx büyümedi.
+- broker: none · real order: none · live execution: none · replay: rezerve (sahte yok).
+- RiskGate/DQS/KillSwitch/halt: sıfır diff. LLM karar motoruna dokunulmadı.
+- Frontend hesap yapmıyor; page.tsx büyümedi; tüm şema değişiklikleri additive.
 
 ## SKIPPED / NEXT (bilinçli)
 
-- Asset universe'in kalanı (JNK/IWM/SMH/XLF/FXI + CoinGecko dominance + FRED
-  HY spread/real yield/M2/PPI) **eklenmedi**: bunların rotation/consensus'ta
-  bir karar rolü yok — yfinance map'e eklemek "ölü veri" üretirdi (prensibe
-  aykırı). Bunlar için önce engine rolü (sektör genişliği / EM riski / kredi
-  teyidi / makro spread modülü) tasarlanmalı → ayrı NEXT slice.
+- Gerçek replay/backtest motoru YAPILMADI (sahte replay yasak; rezerve dürüstçe
+  raporlandı). Gerçek deterministik replay → disk snapshot store + replay engine
+  gerektirir; ayrı slice.
+- `openapi-typescript` ile gerçek codegen otomasyonu kurulmadı; drift guard testi
+  bu boşluğu CI'da kapatıyor (manuel sync güvenli).
+- NEXT: v2.6 LLM persona derinleştirme **veya** v2.7 deep data — bkz. NEXT_TASK.md.

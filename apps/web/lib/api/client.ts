@@ -18,6 +18,7 @@ import type {
   PaperTradingState,
   RebalanceState,
   RegimeReport,
+  ReplayStatus,
   TickResult,
 } from "@/types/generated/api";
 
@@ -64,6 +65,7 @@ export const api = {
     fetchJSON<HaltResetResult>("/api/v1/risk/halts/reset", { method: "POST" }),
   decisionMatrix: () =>
     fetchJSON<DecisionMatrix>("/api/v1/decision/matrix"),
+  replayStatus: () => fetchJSON<ReplayStatus>("/api/v1/replay/status"),
   chat: (message: string) =>
     fetchJSON<ChatResponse>("/api/v1/chat", {
       method: "POST",

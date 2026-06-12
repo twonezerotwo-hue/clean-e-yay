@@ -104,6 +104,15 @@ export const useRiskHalts = () =>
     refetchInterval: 30_000,
   });
 
+/** OPS — replay altyapı durumu (rezerve, aktif değil; sahte replay yok). */
+export const useReplayStatus = () =>
+  useQuery({
+    queryKey: qk.replayStatus,
+    queryFn: api.replayStatus,
+    staleTime: 60_000,
+    refetchInterval: 60_000,
+  });
+
 /** v2.6 — state-grounded chat (LLM karar vermez; backend guard'lı). */
 export const useChat = () =>
   useMutation({ mutationFn: (message: string) => api.chat(message) });

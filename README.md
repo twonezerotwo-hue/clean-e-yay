@@ -112,6 +112,21 @@ pip install certifi
 SSL_CERT_FILE="$(python -m certifi)" PYTHONPATH=. uvicorn apps.api.main:app --port 8000
 ```
 
+### Port çakışması (eski E_YAY CODEX LaunchAgent'ları)
+
+Bu makinede eski `E_YAY CODEX` projesinden kalma LaunchAgent'lar (örn.
+`com.eyay.backend` → `0.0.0.0:8000`, `com.eyay.frontend` → `:3000`)
+KeepAlive ile çalışıyor olabilir; `kill` yetmez, login'de geri gelirler.
+
+- Clean E-yAy API'sini `--host 127.0.0.1 --port 8000` ile başlat: eski agent
+  `0.0.0.0:8000`'de dinlese bile `127.0.0.1` istekleri Clean E-yAy'e gider.
+  `lsof -nP -iTCP:8000 -sTCP:LISTEN` iki dinleyici gösterebilir — kafa
+  karıştırıcı ama çalışır. Doğrulama: `curl …/api/v1/health` → `version 2.0.0`
+  (Clean E-yAy). Başka bir sürüm dönerse eski backend yanıtlıyordur.
+- Oturum bazlı kapatma (plist'i silmeden):
+  `launchctl bootout gui/$(id -u)/com.eyay.backend`
+  (login'de geri gelir; kalıcı kaldırma kullanıcının kararı).
+
 ### Docker (node/pnpm lokalde yoksa)
 
 ```bash
@@ -130,6 +145,8 @@ curl http://127.0.0.1:8000/api/v1/learning/mistakes
 curl http://127.0.0.1:8000/api/v1/learning/calibration
 curl http://127.0.0.1:8000/api/v1/learning/rebalance/proposal
 curl http://127.0.0.1:8000/api/v1/data/snapshot
+curl http://127.0.0.1:8000/api/v1/decision/matrix
+curl http://127.0.0.1:8000/api/v1/replay/status   # OPS — rezerve (aktif değil)
 
 # Web (HTML)
 curl -I http://127.0.0.1:3000

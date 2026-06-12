@@ -1,40 +1,46 @@
-# NEXT TASK — OPS (contract/replay + codegen drift güvencesi)
+# NEXT TASK — v2.7 deep data (öneri) / asset universe 2. slice (alternatif)
 
-P0 intelligence parity **tamamen** tamamlandı (bkz. `.tasks/TASK_RESULT.md`,
-2026-06-12): rotation engine + news/calendar pipeline, asset universe (rotation
-bacakları TLT/HYG/LQD), news/geo/calendar birim testleri, event risk → RiskGate
-(yalnızca kısıtlayıcı) + dashboard görünürlüğü.
+OPS **tamamlandı** (bkz. `.tasks/TASK_RESULT.md`, 2026-06-12): contract testleri
+(`tests/contract/`), codegen drift guard (CI'da fail eder), dürüst replay
+foundation (`reserved_not_active`, sahte replay yok), OpenAPI↔runtime additive
+reconciliation, dev reliability (LaunchAgent port çakışması dokümante).
 
-ROADMAP sırası: **OPS**, sonra v2.7 deep data.
+Artık contract/codegen/replay/dev temeli sağlam → provider yüzeyini büyütmek
+güvenli.
 
-## OPS kapsamı
+## Öneri: v2.7 — deep data (sıradaki ana faz)
 
-1. **Contract testleri** (`tests/contract/` şu an boş):
-   - `contracts/openapi.yaml` ↔ FastAPI runtime response uyumu. En azından
-     `/regime-report/current`, `/decision/matrix`, `/data/snapshot`,
-     `/ai-report/current` için: required alanlar mevcut, enum'lar tutuyor,
-     additive alanlar (event_risk, event_level, actionable/freshness) şemada.
-   - Amaç: el-senkron TS tipleri + openapi.yaml drift'ini yakalamak.
+ROADMAP'in bir sonraki ana adımı. **Kural (DATA_POLICY + ARCHITECTURE §18):**
+her yeni veri için ÖNCE karar zincirindeki rolünü tasarla; engine rolü olmadan
+provider'a ekleme (ölü veri yasak).
 
-2. **Codegen drift güvencesi**:
-   - `apps/web/types/generated/api.ts` openapi.yaml'dan türetiliyor (el ile).
-   - Bir drift testi/script: openapi şemasındaki tip adları TS'te var mı,
-     enum üyeleri eşleşiyor mu (en azından isim düzeyinde).
+1. **Funding rate / OI** (Binance/Bybit) → RiskAgent/FlowAgent girdisi:
+   aşırı funding = kalabalık pozisyon → yalnızca **kısıtlayıcı** CAUTION sinyali.
+2. **Options IV / skew** (Deribit) → regime/risk: yüksek IV → size kısıtı (≤1.0).
+3. **Realized vol** → sizing/ATR teyidi.
+4. **Gerçek haber feed'i** (şu an RSS fixture/placeholder) → CatalystImpact motoru.
+5. **T3 catalyst half-life motoru**: T0'da tanımlı `CatalystImpact` contract'ını
+   gerçek motorla doldur (haber yarı-ömrü → TF bias decay). Yalnızca kısıtlayıcı.
 
-3. **Replay testleri** (`tests/replay/`): deterministik snapshot → karar →
-   paper akışının regresyon kilidi (aynı girdi = aynı çıktı).
+Her biri için: provider + DQS + karar rolü + dashboard görünürlüğü birlikte;
+RiskGate/DQS/KillSwitch/halt bypass YOK; testlerde live network YOK.
 
-## Hard rules
+## Alternatif: asset universe — 2. slice
 
-- PAPER_SAFE / NO_EXECUTION; RiskGate/DQS/KillSwitch/halt zayıflatılamaz.
-- Endpoint path'leri ve response alan adları DEĞİŞMEZ (additive ok).
-- Runtime'da mock veri yok. Testlerde live network yok.
+JNK/IWM/SMH/XLF/FXI + CoinGecko dominance + FRED HY spread/real yield/M2/PPI.
+ÖNCE her veri için karar rolü (sektör genişliği / EM riski / kredi teyidi /
+makro spread modülü) tasarla; sonra provider'a ekle.
 
-## Sonra (sıra ile)
+## Hard rules (değişmez)
 
-- **Asset universe — 2. slice**: JNK/IWM/SMH/XLF/FXI + CoinGecko dominance +
-  FRED HY spread/real yield/M2/PPI. ÖNCE her veri için bir karar rolü tasarla
-  (sektör genişliği / EM riski / kredi teyidi / makro spread modülü) — engine
-  rolü olmadan provider'a ekleme (ölü veri yasak, DATA_POLICY + prensip).
-- **v2.7 deep data** — funding/OI/options IV/ETF flow + T3 catalyst half-life
-  real engine.
+- PAPER_SAFE / NO_EXECUTION; broker yok, gerçek emir yok, live execution yok.
+- RiskGate/DQS/KillSwitch/halt yalnızca kısıtlayıcı; bypass/gevşetme yok.
+- LLM karar vermez. Endpoint path + response alan adları sabit (additive ok).
+- Runtime'da mock yok; testlerde live network yok.
+- Yeni state → dashboard'da minimum görünürlük (selector + registry; page.tsx büyümez).
+
+## Açık teknik borç (opsiyonel, küçük)
+
+- Gerçek `openapi-typescript` codegen otomasyonu (`make codegen`); şu an drift
+  guard testi manuel sync'i koruyor.
+- Gerçek deterministik replay/backtest motoru (disk snapshot store gerektirir).

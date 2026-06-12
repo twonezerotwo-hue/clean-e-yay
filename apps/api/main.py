@@ -23,6 +23,7 @@ from apps.api.routers import (
     paper_trading,
     rebalance,
     regime_report,
+    replay,
     risk,
 )
 
@@ -73,6 +74,7 @@ def create_app() -> FastAPI:
     app.include_router(decision.router, prefix=prefix)
     app.include_router(rebalance.router, prefix=prefix)
     app.include_router(risk.router, prefix=prefix)
+    app.include_router(replay.router, prefix=prefix)
     return app
 
 

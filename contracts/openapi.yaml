@@ -159,6 +159,109 @@ paths:
               schema:
                 $ref: "#/components/schemas/DecisionMatrix"
 
+  /api/v1/data/snapshot:
+    get:
+      operationId: getDataSnapshot
+      summary: Anlık piyasa snapshot'ı + provider durumu + DQS (read-only, mock fallback yok)
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DataSnapshot"
+
+  /api/v1/learning/calibration:
+    get:
+      operationId: getLearningCalibration
+      summary: G6 — Platt kalibrasyon parametreleri + reliability bins (read-only)
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CalibrationState"
+
+  /api/v1/learning/calibration/retrain:
+    post:
+      operationId: postLearningCalibrationRetrain
+      summary: G6 — kalibrasyonu yeniden fit et (verified+predicted trade'lerden)
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                description: calibration_trainer.train() sonucu (additive).
+
+  /api/v1/learning/mistakes:
+    get:
+      operationId: getLearningMistakes
+      summary: G3 — mistake memory kayıtları + per-fingerprint verdict (read-only)
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MistakesState"
+
+  /api/v1/learning/rebalance/proposal:
+    get:
+      operationId: getLearningRebalanceProposal
+      summary: G2 — bekleyen rebalance önerisi + geçmiş (read-only)
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RebalanceState"
+
+  /api/v1/paper-trading/reset:
+    post:
+      operationId: postPaperTradingReset
+      summary: Paper state'i sıfırla (yalnızca paper; broker yok)
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                description: Reset sonucu (additive).
+
+  /api/v1/replay/status:
+    get:
+      operationId: getReplayStatus
+      summary: OPS — replay altyapı durumu + en son okunabilir snapshot (rezerve, aktif değil)
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReplayStatus"
+
+  /api/v1/replay/{snapshot_id}:
+    get:
+      operationId: getReplaySnapshot
+      summary: OPS — snapshot için replay isteği; dürüstçe rezerve döner (çalıştırmaz)
+      parameters:
+        - name: snapshot_id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReplaySnapshotStatus"
+
 components:
   schemas:
     Health:
@@ -412,7 +515,7 @@ components:
       type: object
       description: v2.6 — LLM çağrı meta'sı; source=fallback → deterministik narrative.
       properties:
-        mode: { type: string, enum: [off, mock, groq] }
+        mode: { type: string, enum: ["off", mock, groq] }
         model: { type: string, nullable: true }
         source: { type: string, enum: [llm, fallback, guard] }
         fallback_reason: { type: string, nullable: true }
@@ -776,3 +879,234 @@ components:
         source: { type: string }
         bars_used: { type: integer }
         ts: { type: string, format: date-time }
+
+    # ---------------- OPS — /data/snapshot yüzeyi (read-only) ----------------
+
+    ProviderStatus:
+      type: object
+      required: [status, calls, fallbacks]
+      properties:
+        status: { type: string, enum: [ok, degraded, down, unknown] }
+        last_success_at: { type: string, format: date-time, nullable: true }
+        last_error: { type: string, nullable: true }
+        calls: { type: integer }
+        fallbacks: { type: integer }
+
+    DqsBreakdown:
+      type: object
+      required: [score, status, freshness, completeness, drift, reconciliation, decision_usage, fallback_used, notes]
+      properties:
+        score: { type: number }
+        status: { type: string, enum: [OK, DEGRADED, BLOCKED] }
+        freshness: { type: number }
+        completeness: { type: number }
+        drift: { type: number }
+        reconciliation: { type: number }
+        decision_usage: { type: number }
+        fallback_used: { type: boolean }
+        notes:
+          type: array
+          items: { type: string }
+
+    LivePrice:
+      type: object
+      description: >
+        Tek sembol fiyatı. Politika: runtime'da mock fallback yok — live
+        başarısız → price=null, verified=false, status=DATA_UNAVAILABLE.
+        (status=MOCK yalnızca test fixture modunda.)
+      required: [symbol, ts, source, verified, status, fallback]
+      properties:
+        symbol: { type: string }
+        price: { type: number, nullable: true }
+        ts: { type: string, format: date-time }
+        source: { type: string }
+        verified: { type: boolean }
+        status: { type: string, enum: [OK, DATA_UNAVAILABLE, MOCK] }
+        error: { type: string, nullable: true }
+        fallback: { type: boolean }
+
+    ProvenanceMode:
+      type: object
+      description: Provenance damgası (LIVE / MOCK_MODE / SIMULATION / INSUFFICIENT_DATA).
+      required: [mock_mode, mock_warning, test_mock, label]
+      properties:
+        live_data: { type: boolean }
+        mock_mode: { type: boolean }
+        mock_warning: { type: boolean }
+        test_mock: { type: boolean }
+        dqs_status: { type: string }
+        label: { type: string }
+        advisory: { type: string }
+
+    DataSnapshot:
+      type: object
+      required: [meta, mode, prices, dqs, provider_status, warnings]
+      properties:
+        meta:
+          type: object
+          required: [snapshot_id, generated_at, symbols]
+          properties:
+            snapshot_id: { type: string }
+            generated_at: { type: string, format: date-time }
+            symbols:
+              type: array
+              items: { type: string }
+        mode: { $ref: "#/components/schemas/ProvenanceMode" }
+        prices:
+          type: array
+          items: { $ref: "#/components/schemas/LivePrice" }
+        dqs: { $ref: "#/components/schemas/DqsBreakdown" }
+        provider_status:
+          type: object
+          additionalProperties: { $ref: "#/components/schemas/ProviderStatus" }
+        warnings:
+          type: array
+          items: { type: string }
+        technicals_by_tf:
+          type: object
+          description: symbol → timeframe → TechnicalSnapshotTF.
+          additionalProperties:
+            type: object
+            additionalProperties: { $ref: "#/components/schemas/TechnicalSnapshotTF" }
+
+    # ---------------- OPS — /learning/* yüzeyi (read-only) ----------------
+
+    CalibrationParams:
+      type: object
+      required: [a, b, samples, status]
+      properties:
+        a: { type: number }
+        b: { type: number }
+        samples: { type: integer }
+        fitted_at: { type: string, format: date-time, nullable: true }
+        status: { type: string, enum: [identity, fitted, insufficient] }
+
+    CalibrationState:
+      type: object
+      required: [params, min_required, samples_in_state, bins]
+      properties:
+        params: { $ref: "#/components/schemas/CalibrationParams" }
+        min_required: { type: integer }
+        samples_in_state: { type: integer }
+        bins:
+          type: array
+          items: { $ref: "#/components/schemas/CalibrationBin" }
+
+    MistakeRecord:
+      type: object
+      required: [fingerprint, trades, wins, losses, win_rate, total_pnl, streak_losses]
+      properties:
+        fingerprint: { type: string }
+        trades: { type: integer }
+        wins: { type: integer }
+        losses: { type: integer }
+        win_rate: { type: number }
+        total_pnl: { type: number }
+        last_seen_at: { type: string, format: date-time, nullable: true }
+        streak_losses: { type: integer }
+
+    MistakeVerdict:
+      type: object
+      required: [fingerprint, action, reason, size_factor, evidence]
+      properties:
+        fingerprint: { type: string }
+        action: { type: string, enum: [NEUTRAL, AVOID, BOOST, WARNING] }
+        reason: { type: string }
+        size_factor: { type: number }
+        evidence:
+          type: array
+          items: { type: string }
+
+    MistakesState:
+      type: object
+      required: [thresholds, records, verdicts, flagged_count, total_fingerprints]
+      properties:
+        thresholds:
+          type: object
+          additionalProperties: { type: number }
+        records:
+          type: array
+          items: { $ref: "#/components/schemas/MistakeRecord" }
+        verdicts:
+          type: array
+          items: { $ref: "#/components/schemas/MistakeVerdict" }
+        flagged_count: { type: integer }
+        total_fingerprints: { type: integer }
+
+    WeightDelta:
+      type: object
+      required: [module, old, new, delta]
+      properties:
+        module: { type: string }
+        old: { type: number }
+        new: { type: number }
+        delta: { type: number }
+
+    ModulePerf:
+      type: object
+      required: [module, trades, win_rate]
+      properties:
+        module: { type: string }
+        trades: { type: integer }
+        wins: { type: integer }
+        win_rate: { type: number }
+        avg_pnl: { type: number }
+        total_pnl: { type: number }
+        score: { type: number }
+
+    RebalanceProposalRecord:
+      type: object
+      description: G2 — owner onayı bekleyen / geçmiş ağırlık önerisi (additive alanlı).
+      required: [status]
+      properties:
+        status: { type: string, enum: [PENDING, APPROVED, REJECTED] }
+        from_version: { type: string }
+        to_version: { type: string }
+        generated_at: { type: string, format: date-time }
+        regime: { type: string }
+        deltas:
+          type: array
+          items: { $ref: "#/components/schemas/WeightDelta" }
+        evidence:
+          type: array
+          items: { $ref: "#/components/schemas/ModulePerf" }
+
+    RebalanceState:
+      type: object
+      required: [active_version, history]
+      properties:
+        active_version: { type: string }
+        current:
+          oneOf:
+            - { $ref: "#/components/schemas/RebalanceProposalRecord" }
+            - { type: "null" }
+        history:
+          type: array
+          items: { $ref: "#/components/schemas/RebalanceProposalRecord" }
+
+    # ---------------- OPS — replay foundation (rezerve, aktif değil) ----------------
+
+    ReplayStatus:
+      type: object
+      description: >
+        OPS — replay altyapı durumu. Deterministik replay/backtest motoru
+        REZERVE; bu sürümde AKTİF DEĞİL. Sahte replay üretilmez (PAPER_SAFE).
+      required: [status, available]
+      properties:
+        status: { type: string, enum: [reserved_not_active] }
+        available: { type: boolean }
+        latest_snapshot_id: { type: string }
+        generated_at: { type: string, format: date-time }
+        reason: { type: string }
+
+    ReplaySnapshotStatus:
+      type: object
+      description: OPS — belirli snapshot için replay isteği; dürüstçe rezerve döner.
+      required: [snapshot_id, status, available]
+      properties:
+        snapshot_id: { type: string }
+        status: { type: string, enum: [reserved_not_active] }
+        available: { type: boolean }
+        matches_latest: { type: boolean }
+        latest_snapshot_id: { type: string }
+        reason: { type: string }

@@ -4,6 +4,37 @@ _Bu dosya kısa ve güncel tutulur. Her görev sonunda güncellenir._
 
 ## Last known status
 
+- **OPS tamamlandı**: contract/replay testleri + codegen drift güvencesi +
+  operasyonel sağlamlaştırma. Yeni trading feature YOK; karar zinciri sıfır diff.
+  - **Contract testleri** (`tests/contract/`, eskiden boştu): OpenAPI'deki her
+    side-effect'siz GET endpoint'i TestClient ile çağrılıp şemaya doğrulanıyor
+    (required + enum + `$ref`/`oneOf` recursive; additive serbest). Path drift
+    guard (openapi↔router). **Gerçek drift yakaladı**: `LLMMeta.mode` enum'unda
+    bare `off`'u YAML `False`'a çeviriyordu → `"off"` tırnaklandı.
+  - **Codegen drift guard**: openapi component şema adları + enum üyeleri
+    `apps/web/types/generated/api.ts` ile eşleşiyor mu (el-senkron). **Gerçek
+    drift yakaladı**: TS `Trade.close_reason`'da `TIME_STOP_EXIT`/`KILL_SWITCH_EXIT`
+    eksikti → eklendi. CI `pytest`'i bu testleri otomatik koşar → drift CI'ı kırar.
+  - **Replay foundation (dürüst)**: disk snapshot store yok (in-memory `_CACHE`);
+    sahte replay üretmedik. `apps/api/routers/replay.py`: `GET /replay/status` +
+    `GET /replay/{snapshot_id}` → `status: reserved_not_active`, `available:false`,
+    en son okunabilir snapshot id. `ReplayStatusPanel` bu endpoint'e bağlandı
+    ("REZERVE · AKTİF DEĞİL" rozeti, dürüst reason).
+  - **OpenAPI ↔ runtime reconciliation (additive)**: API'de olup openapi'de eksik
+    path'ler + 16 component schema eklendi (TS ile birebir): /data/snapshot,
+    /learning/{calibration,calibration/retrain,mistakes,rebalance/proposal},
+    /paper-trading/reset, /replay/*. TS: OHLCVBar + replay tipleri; DataSnapshot.mode
+    → gerçek `ProvenanceMode` (7 alan).
+  - **Dev reliability**: README'ye eski `com.eyay.backend` LaunchAgent (0.0.0.0:8000)
+    port çakışması troubleshooting'i + `launchctl bootout`; smoke listesine
+    decision/matrix + replay/status. SSL_CERT_FILE/certifi zaten dokümante.
+  - **209/209 pytest** (+18 contract/drift; live network yok), ruff (CI scope +
+    tests/contract) + tsc + `pnpm build` yeşil. Canlı smoke: Clean API 127.0.0.1:8000
+    tüm endpoint 200 (replay reserved), web SSR 200 / 28 panel.
+  - PAPER_SAFE/NO_EXECUTION; RiskGate/DQS/KillSwitch/halt sıfır diff.
+  - Açık (NEXT): gerçek replay/backtest motoru (disk snapshot store gerekli) ve/veya
+    asset-universe 2. slice + v2.7 deep data.
+
 - **P0 intelligence parity (kalan kapsam) tamamlandı**: asset universe
   (rotation bacakları) + news/geo/calendar birim testleri + event risk →
   RiskGate (yalnızca kısıtlayıcı) + dashboard görünürlüğü.
@@ -210,8 +241,10 @@ _Bu dosya kısa ve güncel tutulur. Her görev sonunda güncellenir._
 
 ## Next task
 
-- **Öneri: OPS — contract/replay testleri + operasyonel sağlamlaştırma**
-  (TS tipleri elle senkron; OpenAPI drift'ini test yakalamıyor — v2.7
-  provider yüzeyini büyütmeden önce). Sonra **v2.7 deep data** (funding,
-  OI, options IV, gerçek haber feed'i + T3 catalyst half-life motoru).
-- `.tasks/NEXT_TASK.md` OPS için hazırlandı.
+- OPS bitti (contract/replay/codegen drift + dev reliability). Sıradaki için
+  iki net seçenek `.tasks/NEXT_TASK.md`'de:
+  - **v2.7 deep data** (funding/OI/options IV/ETF flow + gerçek haber feed +
+    T3 catalyst half-life motoru) — her veri için ÖNCE karar rolü tasarla.
+  - **Asset universe 2. slice** (JNK/IWM/SMH/XLF/FXI + dominance + FRED spread'leri)
+    — yalnızca engine rolü tasarlandıktan sonra (ölü veri yasak).
+- `.tasks/NEXT_TASK.md` güncellendi.

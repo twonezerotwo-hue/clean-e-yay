@@ -160,3 +160,24 @@
   (regime-report/matrix 200, event_risk serialize, rotation TAHVİL/TLT-SPY
   evidence, web SSR 200). PAPER_SAFE/NO_EXECUTION; RiskGate/DQS/KillSwitch/halt
   yalnızca kısıtlayıcı yönde.
+- OPS completed: contract/replay testleri + codegen drift güvencesi + dev
+  reliability. (1) **Contract** (`tests/contract/`, eskiden boş): openapi'deki
+  her side-effect'siz GET TestClient'la şemaya doğrulanıyor (required+enum+
+  $ref/oneOf recursive, additive serbest) + path drift guard. (2) **Codegen
+  drift guard**: openapi şema adları + enum üyeleri api.ts ile eşleşiyor mu;
+  CI pytest'inde koşar → drift CI'ı kırar. İki gerçek drift yakalandı &
+  düzeltildi: openapi `LLMMeta.mode` bare `off` → YAML False'a dönüyordu
+  (→`"off"`); TS `Trade.close_reason`'da TIME_STOP_EXIT/KILL_SWITCH_EXIT eksikti.
+  (3) **Replay foundation (dürüst)**: disk snapshot store yok → sahte replay
+  üretmedik; `routers/replay.py` `GET /replay/status` + `/replay/{id}` →
+  reserved_not_active + en son okunabilir snapshot; ReplayStatusPanel bağlandı.
+  (4) **OpenAPI↔runtime additive reconciliation**: eksik path'ler (/data/snapshot,
+  /learning/{calibration,calibration/retrain,mistakes,rebalance/proposal},
+  /paper-trading/reset, /replay/*) + 16 component schema eklendi (TS ile birebir);
+  TS OHLCVBar + replay tipleri + DataSnapshot.mode→ProvenanceMode. (5) **Dev
+  reliability**: README eski com.eyay.backend LaunchAgent (0.0.0.0:8000) port
+  çakışması + launchctl bootout; smoke listesi genişledi. 209/209 pytest (+18),
+  ruff + tsc + pnpm build yeşil; canlı smoke OK (Clean API 127.0.0.1:8000 tüm
+  endpoint 200 + replay reserved, web SSR 200 / 28 panel). RiskGate/DQS/KillSwitch/
+  halt sıfır diff; PAPER_SAFE korunuyor.
+- Next task → v2.7 deep data (karar rolü önce) VEYA asset universe 2. slice.

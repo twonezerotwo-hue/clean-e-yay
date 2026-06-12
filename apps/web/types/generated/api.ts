@@ -217,7 +217,14 @@ export type Trade = {
   pnl_usd: number;
   opened_at: string;
   closed_at: string;
-  close_reason: "SL_HIT" | "TP_HIT" | "SIGNAL_REVERSAL" | "RISK_REDUCE" | "MANUAL";
+  close_reason:
+    | "SL_HIT"
+    | "TP_HIT"
+    | "SIGNAL_REVERSAL"
+    | "RISK_REDUCE"
+    | "MANUAL"
+    | "TIME_STOP_EXIT"
+    | "KILL_SWITCH_EXIT";
   fingerprint?: string;
   timeframe?: Timeframe;
 };
@@ -332,13 +339,29 @@ export type TechnicalTf = {
   ts: string;
 };
 
+// T1 — tek mum; ts = bar açılış zamanı (UTC). resample edilen barlarda
+// source = "resampled:<base_tf>".
+export type OHLCVBar = {
+  symbol: string;
+  timeframe: Timeframe;
+  ts: string;
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+  volume?: number | null;
+  source?: string;
+  verified?: boolean;
+};
+
 export type DataSnapshot = {
   meta: {
     snapshot_id: string;
     generated_at: string;
     symbols: string[];
   };
-  mode: SnapshotMode;
+  // /data/snapshot runtime'da provenance damgası döner (7 alan) — SnapshotMode değil.
+  mode: ProvenanceMode;
   prices: LivePrice[];
   dqs: DqsBreakdown;
   provider_status: Record<string, ProviderStatus>;
@@ -572,4 +595,27 @@ export type DecisionMatrix = {
   event_risk?: EventRiskView;
   mode?: ProvenanceMode;
   cells: TimeframeDecision[];
+};
+
+// ---------------- OPS — replay foundation (rezerve, aktif değil) ----------------
+
+// Deterministik replay/backtest motoru REZERVE; bu sürümde AKTİF DEĞİL.
+// Sahte replay üretilmez (PAPER_SAFE).
+export type ReplayLifecycle = "reserved_not_active";
+
+export type ReplayStatus = {
+  status: ReplayLifecycle;
+  available: boolean;
+  latest_snapshot_id?: string;
+  generated_at?: string;
+  reason?: string;
+};
+
+export type ReplaySnapshotStatus = {
+  snapshot_id: string;
+  status: ReplayLifecycle;
+  available: boolean;
+  matches_latest?: boolean;
+  latest_snapshot_id?: string;
+  reason?: string;
 };
