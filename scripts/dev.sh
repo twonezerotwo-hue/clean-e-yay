@@ -41,6 +41,20 @@ choose_python() {
 
 PY="$(choose_python)"
 echo "[dev] python=$PY"
+
+# SSL sertifika zinciri: bazı Python kurulumlarında sistem CA'ları yok →
+# live provider çağrıları CERTIFICATE_VERIFY_FAILED alır. certifi kuruluysa
+# SSL_CERT_FILE'ı otomatik ayarla (env'de zaten set ise dokunma).
+if [ -z "${SSL_CERT_FILE:-}" ]; then
+  CERT="$("$PY" -m certifi 2>/dev/null || true)"
+  if [ -n "$CERT" ]; then
+    export SSL_CERT_FILE="$CERT"
+    echo "[dev] SSL_CERT_FILE=$SSL_CERT_FILE"
+  else
+    echo "[dev] uyarı: certifi yok — live provider'lar SSL hatası verebilir" >&2
+  fi
+fi
+
 echo "[dev] api  → http://127.0.0.1:$API_PORT"
 echo "[dev] web  → http://127.0.0.1:$WEB_PORT"
 

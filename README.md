@@ -100,6 +100,18 @@ make api-dev
 make web-dev
 ```
 
+### SSL sertifikaları (live provider'lar)
+
+Bazı Python kurulumlarında sistem CA zinciri eksiktir; CoinGecko/Yahoo
+çağrıları `CERTIFICATE_VERIFY_FAILED` ile düşer ve dashboard "VERİ YOK"
+gösterir. `make api-dev` ve `scripts/dev.sh`, venv'de `certifi` kuruluysa
+`SSL_CERT_FILE`'ı otomatik ayarlar. Elle çalıştırıyorsan:
+
+```bash
+pip install certifi
+SSL_CERT_FILE="$(python -m certifi)" PYTHONPATH=. uvicorn apps.api.main:app --port 8000
+```
+
 ### Docker (node/pnpm lokalde yoksa)
 
 ```bash

@@ -4,6 +4,33 @@ _Bu dosya kısa ve güncel tutulur. Her görev sonunda güncellenir._
 
 ## Last known status
 
+- **T2 tamamlandı**: timeframe consensus + decision matrix + paper
+  time-stop + TimeframeMatrixPanel. Sinyal uzayı (symbol, timeframe).
+  - Consensus `build(..., timeframe="1d")` — touche `technicals_by_tf`
+    okur (DEGRADED → nötr 50); default'la legacy davranış birebir.
+  - Decision: `decide_matrix` 5 TF × symbol; `TradeDecision` candidate_action/
+    blocked_by/actionable taşır. **RiskGate önce, timeframe sonra**:
+    çarpanlar ≤1.0 clamp (15m ×0.25, 1h ×0.5), 1w paper_execution=false →
+    asla open (sadece bias); 1w bias çelişkisi alt TF'i ×0.5 küçültür.
+    `matrix_view` ViewModel: hücre rozeti ACTIONABLE/NOT_ACTIONABLE/
+    SUSPENDED backend'de; DQS BLOCKED veya kısıtlayıcı risk gate →
+    `suspended=true`, tüm hücreler SUSPENDED.
+  - Paper: `Position.valid_until` (TF time_stop_hours; 15m→6sa);
+    tick'te `TIME_STOP_EXIT` (fiyatsız kapanmaz); Trade timeframe taşır;
+    (symbol, tf) bazlı açık-pozisyon dedup; legacy kayıtlar "1d"/None.
+  - Learning: fingerprint v2 gerçek TF segmenti — 15m hatası 1d'yi
+    cezalandırmaz; router/worker duplicate fingerprint üretimi kaldırıldı
+    (d.fingerprint kullanılır). Trainer/calibration global kaldı (bilinçli).
+  - API: yeni `GET /api/v1/decision/matrix`; paper tick decide_matrix'e
+    geçti (aksiyonlar timeframe taşır). OpenAPI dolduruldu.
+  - Web: **TimeframeMatrixPanel** (registry `timeframe_matrix`, span 3) —
+    candidate→final, blocked_by tooltip, SUSPENDED banner; DecisionPanel
+    mini TF strip; TradingPanel pozisyon TF rozeti + valid_until.
+    Selector `lib/selectors/decision.ts`; page.tsx tek GridCell.
+  - Env: `make api-dev` + `scripts/dev.sh` certifi varsa `SSL_CERT_FILE`
+    otomatik; README'de bölüm.
+  - Pytest **132/132** (19 yeni T2); ruff + tsc + build yeşil.
+
 - **T1 tamamlandı**: OHLCV provider + gerçek multi-timeframe technicals.
   - `packages/data/providers/ohlcv/` — CoinGecko market_chart (BTC/ETH) +
     Yahoo chart (XAU/XAG/DXY/VIX/...) adapter'ları; disk cache
@@ -108,6 +135,6 @@ _Bu dosya kısa ve güncel tutulur. Her görev sonunda güncellenir._
 
 ## Next task
 
-- **T2** — timeframe consensus + decision + paper (time-stop) +
-  TimeframeMatrixPanel.
-- `.tasks/NEXT_TASK.md` T2 için hazır.
+- **v2.6 — LLM persona** (Groq, narrative-only). T3 catalyst half-life
+  motoru v2.7 deep data ile (gerçek haber feed'i şart).
+- `.tasks/NEXT_TASK.md` v2.6 için hazır.

@@ -85,3 +85,18 @@
   ruff + tsc + build yeşil.
 - Next task → T2 timeframe consensus + decision + paper (time-stop) +
   TimeframeMatrixPanel.
+- T2 completed: sinyal uzayı (symbol, timeframe). Consensus build TF
+  parametresi (touche technicals_by_tf'ten, DEGRADED→nötr); decide_matrix
+  5 TF × symbol + matrix_view ViewModel (candidate/final/blocked_by/
+  ACTIONABLE-NOT_ACTIONABLE-SUSPENDED rozetleri backend'de); RiskGate
+  önce, timeframe sonra (çarpan ≤1.0: 15m×0.25 1h×0.5; 1w paper açmaz,
+  bias çelişkisi alt TF ×0.5); paper valid_until + TIME_STOP_EXIT
+  (fiyatsız kapanmaz, legacy "1d"/None); fingerprint v2 gerçek TF —
+  15m hatası 1d'yi cezalandırmaz; aynı sembol farklı TF cluster'da
+  birlikte (rho=1, testli). Yeni GET /decision/matrix; paper tick +
+  tick_worker decide_matrix'e geçti. Web: TimeframeMatrixPanel +
+  DecisionPanel TF strip + TradingPanel TF/valid_until. make api-dev +
+  dev.sh SSL_CERT_FILE'ı certifi'den otomatik ayarlar (README bölümü).
+  132/132 pytest (19 yeni), ruff + tsc + build yeşil.
+- Next task → v2.6 LLM persona (Groq, narrative-only); T3 catalyst
+  half-life → v2.7 deep data ile.

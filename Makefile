@@ -20,8 +20,12 @@ lint:
 test:
 	pytest
 
+# SSL_CERT_FILE: bazı Python kurulumlarında sistem CA zinciri yok →
+# live provider'lar CERTIFICATE_VERIFY_FAILED alır. certifi kuruluysa
+# otomatik kullan; env'de zaten set ise ona dokunma.
 api-dev:
-	PYTHONPATH=. uvicorn apps.api.main:app --reload --host 127.0.0.1 --port 8000
+	PYTHONPATH=. SSL_CERT_FILE="$${SSL_CERT_FILE:-$$(python3 -m certifi 2>/dev/null || python -m certifi 2>/dev/null || true)}" \
+		uvicorn apps.api.main:app --reload --host 127.0.0.1 --port 8000
 
 web-dev:
 	cd apps/web && pnpm dev
