@@ -7,8 +7,7 @@ from datetime import UTC, datetime
 from fastapi import APIRouter
 
 from packages.data.ingestion.pipeline import DEFAULT_SYMBOLS, get_cached_snapshot
-from packages.decision.engine import decide_all
-from packages.learning.fingerprint import make as make_fingerprint
+from packages.decision.engine import decide_matrix
 from packages.paper import state as paper_state
 from packages.paper.lifecycle import (
     flatten_all,
@@ -83,51 +82,54 @@ def post_paper_tick() -> dict:
             open_position_count=len(ps.open_positions),
         )
 
-    regime, _risk, decisions = decide_all(
+    # T2 — (symbol, timeframe) karar uzayı. 1w decide_matrix içinde zaten
+    # paper_execution=false ile hold'a düşer; fingerprint TF segmenti taşır.
+    _regime, _risk, decisions = decide_matrix(
         DEFAULT_SYMBOLS[:4], snap, risk_in, open_positions=ps.open_positions
     )
 
     for cls in closed:
-        actions.append({"symbol": cls.symbol, "action": "close", "reason": cls.close_reason})
+        actions.append(
+            {
+                "symbol": cls.symbol,
+                "action": "close",
+                "reason": cls.close_reason,
+                "timeframe": cls.timeframe,
+            }
+        )
 
-    open_symbols = {p.symbol for p in ps.open_positions}
+    open_keys = {(p.symbol, p.timeframe) for p in ps.open_positions}
     for d in decisions:
+        entry = {"symbol": d.symbol, "timeframe": d.timeframe}
         if d.action == "blocked":
-            actions.append({"symbol": d.symbol, "action": "blocked", "reason": d.reason})
+            actions.append({**entry, "action": "blocked", "reason": d.reason})
             continue
         if d.action == "hold":
-            actions.append({"symbol": d.symbol, "action": "hold", "reason": d.reason})
+            actions.append({**entry, "action": "hold", "reason": d.reason})
             continue
-        if d.symbol in open_symbols:
-            actions.append({"symbol": d.symbol, "action": "hold", "reason": "zaten açık"})
+        if (d.symbol, d.timeframe) in open_keys:
+            actions.append({**entry, "action": "hold", "reason": "zaten açık (aynı TF)"})
             continue
         # Açma
         price = prices.get(d.symbol)
         if price is None or price <= 0:
-            actions.append({"symbol": d.symbol, "action": "blocked", "reason": "fiyat yok"})
+            actions.append({**entry, "action": "blocked", "reason": "fiyat yok"})
             continue
         side = "long" if d.action == "open_long" else "short"
-        fp = make_fingerprint(
-            symbol=d.symbol,
-            regime=regime.label,
-            direction=d.consensus.direction,
-            score=d.consensus.score,
-            confluence=d.consensus.confluence_aligned,
-            dominant_module=d.consensus.dominant_module,
-        )
         open_position(
             ps,
             symbol=d.symbol,
             side=side,
             entry_price=price,
             size_multiplier=d.size_multiplier,
-            fingerprint=fp,
+            fingerprint=d.fingerprint,
             data_verified=verified_flags.get(d.symbol, False),
             predicted_confidence=d.confidence,
             raw_confidence=d.raw_confidence,
             confidence_source=d.confidence_source,
+            timeframe=d.timeframe,
         )
-        actions.append({"symbol": d.symbol, "action": "open", "reason": d.reason})
+        actions.append({**entry, "action": "open", "reason": d.reason})
 
     paper_state.save(ps)
 

@@ -13,7 +13,7 @@ ağırlık otomatik yeniden dağıtılır.
 """
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from packages.data.ingestion.pipeline import MarketSnapshot
 from packages.data.registry.loader import load_active_weights
@@ -36,6 +36,8 @@ class ConsensusResult:
     modules: list[ModuleScore]
     confluence_aligned: bool
     dominant_module: str
+    timeframe: str = "1d"               # T2 — (symbol, timeframe) sinyal uzayı
+    warnings: list[str] = field(default_factory=list)  # T2 additive
 
 
 def _direction(s: float) -> str:
@@ -55,9 +57,32 @@ def _redistribute(weights: dict[str, float], available: set[str]) -> dict[str, f
     return {k: v / total for k, v in keep.items()}
 
 
-def _touche(symbol: str, snap: MarketSnapshot) -> float:
-    t = snap.technicals.get(symbol)
-    return t.score if t else 50.0
+def _touche(
+    symbol: str,
+    snap: MarketSnapshot,
+    timeframe: str = "1d",
+) -> tuple[float, list[str]]:
+    """Teknik modül skoru — T2: (symbol, timeframe) çiftinden okur.
+
+    Öncelik: technicals_by_tf[symbol][timeframe] → legacy technicals[symbol].
+    DEGRADED teknik → nötr 50 + uyarı (doğrulanmamış sinyalle yön üretme —
+    DATA_POLICY).
+    """
+    warnings: list[str] = []
+    t = None
+    if snap.technicals_by_tf and symbol in snap.technicals_by_tf:
+        t = snap.technicals_by_tf[symbol].get(timeframe)
+    if t is None:
+        t = snap.technicals.get(symbol)
+        if t is not None and timeframe != t.timeframe:
+            warnings.append(f"touche_fallback_legacy:{symbol}:{timeframe}")
+    if t is None:
+        warnings.append(f"touche_no_technicals:{symbol}:{timeframe}")
+        return 50.0, warnings
+    if getattr(t, "status", "OK") == "DEGRADED":
+        warnings.append(f"touche_degraded_neutral:{symbol}:{t.timeframe}")
+        return 50.0, warnings
+    return t.score, warnings
 
 
 def _fundamental(regime: RegimeOutput) -> float:
@@ -96,9 +121,14 @@ def build(
     symbol: str,
     snap: MarketSnapshot,
     regime: RegimeOutput,
+    timeframe: str = "1d",
 ) -> ConsensusResult:
+    # T2 — timeframe yalnızca teknik (touche) modülünü farklılaştırır;
+    # makro/haber/rotasyon katmanları asset-level kalır. Default "1d" ile
+    # mevcut asset-level davranış birebir korunur.
+    touche_score, tf_warnings = _touche(symbol, snap, timeframe)
     raw = {
-        "touche": _touche(symbol, snap),
+        "touche": touche_score,
         "fundamental": _fundamental(regime),
         "news": _news(snap),
         "sentinel": _sentinel(regime),
@@ -132,4 +162,6 @@ def build(
         modules=modules,
         confluence_aligned=confluence,
         dominant_module=dominant,
+        timeframe=timeframe,
+        warnings=tf_warnings,
     )

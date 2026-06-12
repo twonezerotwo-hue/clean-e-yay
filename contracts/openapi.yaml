@@ -129,6 +129,18 @@ paths:
               schema:
                 $ref: "#/components/schemas/HaltResetResult"
 
+  /api/v1/decision/matrix:
+    get:
+      operationId: getDecisionMatrix
+      summary: T2 — (symbol × timeframe) karar matrisi; hücre rozetleri backend'de
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DecisionMatrix"
+
 components:
   schemas:
     Health:
@@ -290,6 +302,11 @@ components:
         tp: { type: number }
         opened_at: { type: string, format: date-time }
         timeframe: { $ref: "#/components/schemas/Timeframe" }
+        valid_until:
+          type: string
+          format: date-time
+          nullable: true
+          description: T2 — TF time-stop; dolunca TIME_STOP_EXIT. null → time-stop yok.
 
     Trade:
       type: object
@@ -303,7 +320,9 @@ components:
         pnl_usd: { type: number }
         opened_at: { type: string, format: date-time }
         closed_at: { type: string, format: date-time }
-        close_reason: { type: string, enum: [SL_HIT, TP_HIT, SIGNAL_REVERSAL, RISK_REDUCE, MANUAL] }
+        close_reason:
+          type: string
+          enum: [SL_HIT, TP_HIT, SIGNAL_REVERSAL, RISK_REDUCE, MANUAL, TIME_STOP_EXIT, KILL_SWITCH_EXIT]
         fingerprint: { type: string }
         timeframe: { $ref: "#/components/schemas/Timeframe" }
 
@@ -509,21 +528,31 @@ components:
 
     TimeframeDecision:
       type: object
-      description: T0 taslak — T2'de /api/v1/decision/matrix bunu döner.
+      description: >
+        T2 — matrix hücresi. candidate_action = consensus niyeti
+        (gate'lerden önce); action = final karar; blocked_by hangi kapının
+        kestiğini söyler. Rozet (status) backend'de hesaplanır.
       required: [symbol, timeframe, action]
       properties:
         symbol: { type: string }
         timeframe: { $ref: "#/components/schemas/Timeframe" }
         action: { type: string, enum: [open_long, open_short, hold, blocked, watch] }
+        candidate_action: { type: string, enum: [open_long, open_short, hold, blocked, watch] }
         score: { type: number }
         direction: { type: string, enum: [bullish, bearish, neutral] }
         confidence: { type: number }
         size_multiplier: { type: number }
         reason: { type: string }
+        blocked_by:
+          type: array
+          items: { type: string }
+        actionable: { type: boolean }
+        status: { type: string, enum: [ACTIONABLE, NOT_ACTIONABLE, SUSPENDED] }
+        paper_action: { type: string, enum: [open_long, open_short, none] }
 
     DecisionMatrix:
       type: object
-      description: T0 taslak — symbol × timeframe karar matrisi (T2).
+      description: T2 — symbol × timeframe karar matrisi ViewModel.
       required: [generated_at, symbols, timeframes, cells]
       properties:
         generated_at: { type: string, format: date-time }
@@ -533,6 +562,19 @@ components:
         timeframes:
           type: array
           items: { $ref: "#/components/schemas/Timeframe" }
+        regime: { type: string }
+        risk_gate:
+          type: object
+          properties:
+            action: { type: string }
+            reason: { type: string }
+            evidence:
+              type: array
+              items: { type: string }
+        dqs_status: { type: string, enum: [OK, DEGRADED, BLOCKED] }
+        suspended:
+          type: boolean
+          description: KILL_SWITCH / RISK_REDUCE / NO_POSITION_INCREASE / DQS BLOCKED → tüm hücreler SUSPENDED.
         cells:
           type: array
           items: { $ref: "#/components/schemas/TimeframeDecision" }

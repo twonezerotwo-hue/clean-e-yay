@@ -33,6 +33,9 @@ class Position:
     raw_confidence: float | None = None        # pre-calibration p(win)
     confidence_source: str | None = None       # identity | fitted | insufficient
     timeframe: str = "1d"  # T0 additive — legacy kayıtlar default "1d" yüklenir
+    # T2 — TF time-stop: dolunca TIME_STOP_EXIT. None → time-stop yok
+    # (legacy kayıtlar None ile yüklenir; davranış değişmez).
+    valid_until: str | None = None
 
     @property
     def unrealized_pnl_usd(self) -> float:

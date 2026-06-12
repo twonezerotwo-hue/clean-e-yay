@@ -17,8 +17,7 @@ import signal
 # httpx üzerinden API'yi çağırmak yerine paketleri doğrudan çağırıyoruz —
 # böylece worker API'ye bağımlı değil.
 from packages.data.ingestion.pipeline import DEFAULT_SYMBOLS, get_cached_snapshot
-from packages.decision.engine import decide_all
-from packages.learning.fingerprint import make as make_fingerprint
+from packages.decision.engine import decide_matrix
 from packages.paper import state as paper_state
 from packages.paper.lifecycle import flatten_all, open_position
 from packages.paper.lifecycle import tick as price_tick
@@ -76,24 +75,18 @@ async def run_once() -> None:
     if halts:
         log.warning("active halts: %s", [h.type for h in halts])
 
-    regime, _risk, decisions = decide_all(
+    # T2 — (symbol, timeframe) karar uzayı; fingerprint TF segmenti taşır,
+    # 1w decide_matrix içinde paper_execution=false ile hold'a düşer.
+    _regime, _risk, decisions = decide_matrix(
         DEFAULT_SYMBOLS[:4], snap, risk_in, open_positions=ps.open_positions
     )
-    open_symbols = {p.symbol for p in ps.open_positions}
+    open_keys = {(p.symbol, p.timeframe) for p in ps.open_positions}
     for d in decisions:
-        if d.action in {"blocked", "hold"} or d.symbol in open_symbols:
+        if d.action in {"blocked", "hold"} or (d.symbol, d.timeframe) in open_keys:
             continue
         price = prices.get(d.symbol)
         if price is None or price <= 0:
             continue
-        fp = make_fingerprint(
-            symbol=d.symbol,
-            regime=regime.label,
-            direction=d.consensus.direction,
-            score=d.consensus.score,
-            confluence=d.consensus.confluence_aligned,
-            dominant_module=d.consensus.dominant_module,
-        )
         side = "long" if d.action == "open_long" else "short"
         pos = open_position(
             ps,
@@ -101,13 +94,18 @@ async def run_once() -> None:
             side=side,
             entry_price=price,
             size_multiplier=d.size_multiplier,
-            fingerprint=fp,
+            fingerprint=d.fingerprint,
             data_verified=verified_flags.get(d.symbol, False),
             predicted_confidence=d.confidence,
             raw_confidence=d.raw_confidence,
             confidence_source=d.confidence_source,
+            timeframe=d.timeframe,
         )
-        log.info("open: %s %s @ %.4f size=%.0f", pos.symbol, pos.side, pos.entry_price, pos.size_usd)
+        log.info(
+            "open: %s %s %s @ %.4f size=%.0f valid_until=%s",
+            pos.symbol, pos.timeframe, pos.side, pos.entry_price, pos.size_usd,
+            pos.valid_until,
+        )
 
     paper_state.save(ps)
 
