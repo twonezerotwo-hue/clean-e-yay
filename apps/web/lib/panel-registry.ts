@@ -46,7 +46,7 @@ export const PANEL_REGISTRY: PanelMeta[] = [
   { id: "agent_votes",      title: "Agent Oyları",        defaultVisible: true,  span: "1",    group: "evidence" },
   { id: "position_checks",  title: "Pozisyon Kontrolleri",defaultVisible: true,  span: "3",    group: "evidence" },
   { id: "ai_report",        title: "AI Analist Raporu",   defaultVisible: true,  span: "2",    group: "decision" },
-  { id: "chat",             title: "Sohbet",              defaultVisible: false, span: "1",    group: "ops" },
+  { id: "chat",             title: "Sohbet",              defaultVisible: true,  span: "1",    group: "ops" },
   { id: "command_signals",  title: "Komuta Sinyalleri",   defaultVisible: true,  span: "2",    group: "data" },
   { id: "event_calendar",   title: "Olay Takvimi",        defaultVisible: true,  span: "1",    group: "data" },
   { id: "scenario",         title: "Senaryo",             defaultVisible: true,  span: "1",    group: "data" },

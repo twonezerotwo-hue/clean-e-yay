@@ -104,6 +104,10 @@ export const useRiskHalts = () =>
     refetchInterval: 30_000,
   });
 
+/** v2.6 — state-grounded chat (LLM karar vermez; backend guard'lı). */
+export const useChat = () =>
+  useMutation({ mutationFn: (message: string) => api.chat(message) });
+
 /** G5 — owner reset (tek manuel çıkış yolu; otomatik reset yok). */
 export const useHaltReset = () => {
   const queryClient = useQueryClient();

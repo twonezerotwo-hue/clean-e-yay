@@ -97,12 +97,66 @@ export type DashboardState = {
   warnings?: string[];
 };
 
+// v2.6 — persona katmanı (narrative-only; decision path'e yazmaz).
+export type PersonaSection = {
+  persona: "analyst" | "risk_officer" | "macro_strategist";
+  title: string;
+  summary: string;
+  concerns?: string[];
+  evidence_used?: string[];
+  missing_data?: string[];
+  actionability?: string;
+  what_would_change_my_mind?: string;
+  source?: "llm" | "fallback";
+  model?: string | null;
+};
+
+export type TimeframeSummary = {
+  suspended?: boolean;
+  lines?: string[];
+  candidate_vs_final_diffs?: {
+    symbol?: string;
+    timeframe?: Timeframe;
+    candidate?: string;
+    final?: string;
+    blocked_by?: string[];
+    reason?: string;
+  }[];
+  blocked_by_reasons?: string[];
+  paper_actions?: { symbol?: string; timeframe?: Timeframe; paper_action?: string }[];
+};
+
+export type LLMMeta = {
+  mode?: "off" | "mock" | "groq";
+  model?: string | null;
+  source?: "llm" | "fallback" | "guard";
+  fallback_reason?: string | null;
+  cached?: boolean;
+  tokens_used?: number;
+};
+
 export type AIReport = {
   meta: SnapshotMeta;
   verdict: "bullish" | "bearish" | "neutral" | "no_trade";
   narrative: string;
   key_signals?: string[];
   token_usage?: { input?: number; output?: number; cached?: boolean };
+  // v2.6 additive
+  no_actionable_decision?: boolean;
+  timeframe_summary?: TimeframeSummary;
+  personas?: PersonaSection[];
+  llm?: LLMMeta;
+};
+
+export type ChatRequest = { message: string };
+
+export type ChatResponse = {
+  answer: string;
+  refused: boolean;
+  evidence_used?: string[];
+  snapshot_id?: string;
+  llm?: LLMMeta;
+  mode?: Record<string, unknown>;
 };
 
 export type Position = {

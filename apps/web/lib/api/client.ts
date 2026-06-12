@@ -4,6 +4,7 @@
  */
 import type {
   AIReport,
+  ChatResponse,
   DecisionMatrix,
   CalibrationState,
   CorrelationState,
@@ -63,4 +64,9 @@ export const api = {
     fetchJSON<HaltResetResult>("/api/v1/risk/halts/reset", { method: "POST" }),
   decisionMatrix: () =>
     fetchJSON<DecisionMatrix>("/api/v1/decision/matrix"),
+  chat: (message: string) =>
+    fetchJSON<ChatResponse>("/api/v1/chat", {
+      method: "POST",
+      body: JSON.stringify({ message }),
+    }),
 };
