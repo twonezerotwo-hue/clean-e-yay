@@ -11,4 +11,5 @@ export const qk = {
   mistakes: ["learning", "mistakes"] as const,
   riskCorrelation: ["risk", "correlation"] as const,
   riskHalts: ["risk", "halts"] as const,
+  decisionMatrix: ["decision", "matrix"] as const,
 };

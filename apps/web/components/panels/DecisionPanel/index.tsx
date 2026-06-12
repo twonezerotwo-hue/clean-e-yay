@@ -5,8 +5,55 @@ import { PanelHeader } from "@/components/shell/PanelHeader";
 import { LoadingState } from "@/components/shell/LoadingState";
 import { EmptyState } from "@/components/shell/EmptyState";
 import { DataQualityBadge } from "@/components/shell/DataQualityBadge";
-import { useAIReport, useDashboardState } from "@/lib/queries/hooks";
+import { useAIReport, useDashboardState, useDecisionMatrix } from "@/lib/queries/hooks";
+import {
+  selectMatrixFirstSymbol,
+  selectMatrixSuspended,
+  selectTfStripFor,
+} from "@/lib/selectors/decision";
 import { RISK_ACTION_COLOR, DIRECTION_COLOR } from "@/lib/constants";
+import type { TimeframeDecision } from "@/types/generated/api";
+
+// T2 — mini TF strip: candidate→final + blocked_by tooltip'te; rozetler
+// backend ViewModel'inden gelir.
+function TfStrip() {
+  const { data } = useDecisionMatrix();
+  const symbol = selectMatrixFirstSymbol(data);
+  const cells = symbol ? selectTfStripFor(data, symbol) : [];
+  if (!cells.length) return null;
+  const suspended = selectMatrixSuspended(data);
+  return (
+    <div className="mt-3 flex items-center gap-1.5 text-[10px]">
+      <span className="uppercase tracking-widest text-white/40 mr-1">
+        {symbol} TF
+      </span>
+      {cells.map((c: TimeframeDecision) => (
+        <span
+          key={c.timeframe}
+          className={`rounded border px-1.5 py-0.5 tabular-nums ${
+            c.status === "SUSPENDED"
+              ? "border-signal-down/40 text-signal-down/80"
+              : c.status === "ACTIONABLE"
+                ? c.action === "open_long"
+                  ? "border-signal-up/50 text-signal-up"
+                  : "border-accent-magenta/50 text-accent-magenta"
+                : "border-white/10 text-white/45"
+          }`}
+          title={`${c.candidate_action ?? "?"} → ${c.action} · ${
+            c.blocked_by?.join(", ") || "açık"
+          } · ${c.reason ?? ""}`}
+        >
+          {c.timeframe} {Math.round(c.score ?? 0)}
+        </span>
+      ))}
+      {suspended ? (
+        <span className="text-signal-down uppercase tracking-wide">
+          SUSPENDED
+        </span>
+      ) : null}
+    </div>
+  );
+}
 
 export function DecisionPanel() {
   const ai = useAIReport();
@@ -59,6 +106,7 @@ export function DecisionPanel() {
             <p className="text-sm text-white/70 mt-2">
               {dash.data.risk_gate.reason}
             </p>
+            <TfStrip />
           </div>
         </div>
       )}

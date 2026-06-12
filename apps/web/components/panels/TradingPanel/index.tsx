@@ -12,7 +12,42 @@ import {
 } from "@/lib/queries/hooks";
 import { selectFlaggedClusters, selectLimits } from "@/lib/selectors/correlation";
 import { selectHaltLevel } from "@/lib/selectors/halts";
-import { fmtUSD, fmtPct, fmtNum } from "@/lib/format";
+import { fmtUSD, fmtPct, fmtNum, fmtRelative } from "@/lib/format";
+import type { Position } from "@/types/generated/api";
+
+// T2 — açık pozisyon satırı: TF rozeti + time-stop (valid_until).
+function OpenPositions({ positions }: { positions: Position[] }) {
+  if (!positions.length) return null;
+  return (
+    <ul className="mt-3 space-y-1 text-[11px]">
+      {positions.map((p) => (
+        <li
+          key={p.id}
+          className="flex items-center justify-between border-b border-white/5 pb-0.5"
+        >
+          <span className="flex items-center gap-1.5">
+            <span className="font-medium">{p.symbol}</span>
+            <span className="rounded border border-accent-cyan/40 px-1 py-px text-[9px] uppercase text-accent-cyan">
+              {p.timeframe ?? "1d"}
+            </span>
+            <span
+              className={
+                p.side === "long" ? "text-signal-up" : "text-signal-down"
+              }
+            >
+              {p.side}
+            </span>
+          </span>
+          <span className="text-white/45 tabular-nums">
+            {p.valid_until
+              ? `time-stop ${fmtRelative(p.valid_until)}`
+              : "time-stop yok"}
+          </span>
+        </li>
+      ))}
+    </ul>
+  );
+}
 
 export function TradingPanel() {
   const { data, isLoading } = usePaperTradingState();
@@ -78,6 +113,7 @@ export function TradingPanel() {
       <div className="text-[10px] uppercase tracking-widest text-white/40 mt-2">
         Sharpe 30g: {fmtNum(data.sharpe_30d)}
       </div>
+      <OpenPositions positions={data.open_positions} />
       <ClusterExposure corr={corr} />
     </PanelFrame>
   );

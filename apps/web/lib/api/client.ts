@@ -4,6 +4,7 @@
  */
 import type {
   AIReport,
+  DecisionMatrix,
   CalibrationState,
   CorrelationState,
   DashboardState,
@@ -60,4 +61,6 @@ export const api = {
   riskHalts: () => fetchJSON<HaltsState>("/api/v1/risk/halts"),
   riskHaltsReset: () =>
     fetchJSON<HaltResetResult>("/api/v1/risk/halts/reset", { method: "POST" }),
+  decisionMatrix: () =>
+    fetchJSON<DecisionMatrix>("/api/v1/decision/matrix"),
 };

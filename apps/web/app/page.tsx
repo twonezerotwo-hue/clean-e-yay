@@ -31,6 +31,7 @@ import { CalibrationPanel } from "@/components/panels/CalibrationPanel";
 import { MistakeMemoryPanel } from "@/components/panels/MistakeMemoryPanel";
 import { CorrelationPanel } from "@/components/panels/CorrelationPanel";
 import { DrawdownGuardPanel } from "@/components/panels/DrawdownGuardPanel";
+import { TimeframeMatrixPanel } from "@/components/panels/TimeframeMatrixPanel";
 
 import { useKeyboardShortcuts } from "@/hooks/useKeyboardShortcuts";
 
@@ -67,6 +68,8 @@ export default function HomePage() {
 
         <GridCell span="1"><SnapshotPanel /></GridCell>
         <GridCell span="2"><MarketDataPanel /></GridCell>
+
+        <GridCell span="3"><TimeframeMatrixPanel /></GridCell>
 
         <GridCell span="2"><RiskGatePanel /></GridCell>
         <GridCell span="1"><AgentVotesPanel /></GridCell>

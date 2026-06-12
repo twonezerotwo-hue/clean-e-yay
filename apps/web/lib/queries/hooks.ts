@@ -87,6 +87,15 @@ export const useRiskCorrelation = () =>
     refetchInterval: 2 * 60_000,
   });
 
+/** T2 — (symbol × timeframe) karar matrisi. */
+export const useDecisionMatrix = () =>
+  useQuery({
+    queryKey: qk.decisionMatrix,
+    queryFn: api.decisionMatrix,
+    staleTime: 15_000,
+    refetchInterval: 30_000,
+  });
+
 export const useRiskHalts = () =>
   useQuery({
     queryKey: qk.riskHalts,

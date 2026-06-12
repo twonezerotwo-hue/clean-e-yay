@@ -117,6 +117,8 @@ export type Position = {
   tp?: number;
   opened_at: string;
   timeframe?: Timeframe;
+  // T2 — TF time-stop; dolunca TIME_STOP_EXIT. null → time-stop yok.
+  valid_until?: string | null;
 };
 
 export type Trade = {
@@ -150,6 +152,7 @@ export type TickResult = {
     symbol: string;
     action: "open" | "close" | "hold" | "blocked";
     reason?: string;
+    timeframe?: Timeframe;
   }[];
 };
 
@@ -440,20 +443,45 @@ export type CatalystImpact = {
   confidence?: number;
 };
 
+// Provenance damgası (LIVE / MOCK_MODE / SIMULATION / INSUFFICIENT_DATA).
+export type ProvenanceMode = {
+  live_data: boolean;
+  mock_mode: boolean;
+  mock_warning: boolean;
+  test_mock: boolean;
+  dqs_status: string;
+  label: string;
+  advisory: string;
+};
+
+// T2 — matrix hücresi: candidate (consensus niyeti) vs final (action) ayrımı,
+// blocked_by + rozet backend'de hesaplanır (frontend hesap yapmaz).
+export type MatrixCellStatus = "ACTIONABLE" | "NOT_ACTIONABLE" | "SUSPENDED";
+
 export type TimeframeDecision = {
   symbol: string;
   timeframe: Timeframe;
   action: "open_long" | "open_short" | "hold" | "blocked" | "watch";
+  candidate_action?: "open_long" | "open_short" | "hold" | "blocked" | "watch";
   score?: number;
   direction?: "bullish" | "bearish" | "neutral";
   confidence?: number;
   size_multiplier?: number;
   reason?: string;
+  blocked_by?: string[];
+  actionable?: boolean;
+  status?: MatrixCellStatus;
+  paper_action?: "open_long" | "open_short" | "none";
 };
 
 export type DecisionMatrix = {
   generated_at: string;
   symbols: string[];
   timeframes: Timeframe[];
+  regime?: string;
+  risk_gate?: { action: string; reason: string; evidence?: string[] };
+  dqs_status?: DqsStatus;
+  suspended?: boolean;
+  mode?: ProvenanceMode;
   cells: TimeframeDecision[];
 };
