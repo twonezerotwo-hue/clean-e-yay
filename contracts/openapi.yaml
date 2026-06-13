@@ -236,7 +236,7 @@ paths:
   /api/v1/replay/status:
     get:
       operationId: getReplayStatus
-      summary: OPS — replay altyapı durumu + en son okunabilir snapshot (rezerve, aktif değil)
+      summary: R1 — replay store durumu (active/empty); kayıtlı snapshot sayısı + en son id
       responses:
         "200":
           description: OK
@@ -248,7 +248,7 @@ paths:
   /api/v1/replay/{snapshot_id}:
     get:
       operationId: getReplaySnapshot
-      summary: OPS — snapshot için replay isteği; dürüstçe rezerve döner (çalıştırmaz)
+      summary: R1 — kayıtlı snapshot'ı döndürür (stored state inspection; live refetch yok)
       parameters:
         - name: snapshot_id
           in: path
@@ -260,7 +260,28 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ReplaySnapshotStatus"
+                $ref: "#/components/schemas/ReplaySnapshot"
+        "404":
+          description: snapshot store'da yok (not_found)
+
+  /api/v1/replay/{snapshot_id}/decision-trace:
+    get:
+      operationId: getReplayDecisionTrace
+      summary: R1 — kayıtlı decision_matrix'ten karar izi (yeni karar hesaplamaz)
+      parameters:
+        - name: snapshot_id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReplayDecisionTrace"
+        "404":
+          description: snapshot store'da yok (not_found)
 
 components:
   schemas:
@@ -1401,29 +1422,99 @@ components:
           type: array
           items: { $ref: "#/components/schemas/RebalanceProposalRecord" }
 
-    # ---------------- OPS — replay foundation (rezerve, aktif değil) ----------------
+    # ---------------- R1 — gerçek snapshot replay foundation ----------------
+    # Replay = kaydedilmiş gerçek state'in incelenmesi. Sahte backtest / uydurma
+    # geçmiş performans YOK. PAPER_SAFE / NO_EXECUTION: replay emir üretmez,
+    # paper pozisyon açmaz, RiskGate'i bypass etmez, live provider çağırmaz.
 
     ReplayStatus:
       type: object
       description: >
-        OPS — replay altyapı durumu. Deterministik replay/backtest motoru
-        REZERVE; bu sürümde AKTİF DEĞİL. Sahte replay üretilmez (PAPER_SAFE).
-      required: [status, available]
+        R1 — replay store durumu. status=active (kayıt var) / empty (kayıt yok).
+        mode=active_snapshot_replay / insufficient_snapshots /
+        reserved_not_active. Rolling backtest motoru aktif değil.
+      required: [status, available, mode, snapshot_count]
       properties:
-        status: { type: string, enum: [reserved_not_active] }
+        status: { type: string, enum: [active, empty, reserved_not_active] }
         available: { type: boolean }
-        latest_snapshot_id: { type: string }
-        generated_at: { type: string, format: date-time }
+        mode:
+          type: string
+          enum: [active_snapshot_replay, insufficient_snapshots, reserved_not_active]
+        snapshot_count: { type: integer }
+        latest_snapshot_id: { type: string, nullable: true }
+        latest_generated_at: { type: string, format: date-time, nullable: true }
+        schema_version: { type: integer }
         reason: { type: string }
+        execution: { type: string, enum: [no_live_execution] }
 
-    ReplaySnapshotStatus:
+    ReplaySnapshot:
       type: object
-      description: OPS — belirli snapshot için replay isteği; dürüstçe rezerve döner.
-      required: [snapshot_id, status, available]
+      description: >
+        R1 — kayıtlı snapshot zarfı. `snapshot` alanı diske yazılmış gerçek
+        state'tir (data_snapshot / decision_matrix / risk_state /
+        paper_state_summary / provider_status / dqs / mode / schema_version).
+      required: [snapshot_id, status, available, snapshot]
       properties:
         snapshot_id: { type: string }
-        status: { type: string, enum: [reserved_not_active] }
+        status: { type: string, enum: [active] }
         available: { type: boolean }
-        matches_latest: { type: boolean }
-        latest_snapshot_id: { type: string }
-        reason: { type: string }
+        execution: { type: string, enum: [no_live_execution] }
+        snapshot:
+          type: object
+          additionalProperties: true
+
+    ReplayDecisionTrace:
+      type: object
+      description: >
+        R1 — kayıtlı decision_matrix'ten projekte edilen karar izi. Yalnızca
+        stored state'i açıklar; yeni karar hesaplamaz, live provider çağırmaz.
+      required: [snapshot_id, available, top_candidates, final_decisions]
+      properties:
+        snapshot_id: { type: string }
+        generated_at: { type: string, format: date-time, nullable: true }
+        schema_version: { type: integer }
+        available: { type: boolean }
+        execution: { type: string, enum: [no_live_execution] }
+        note: { type: string }
+        mode:
+          type: object
+          additionalProperties: true
+          nullable: true
+        dqs:
+          type: object
+          additionalProperties: true
+          nullable: true
+        regime: { type: string, nullable: true }
+        suspended: { type: boolean }
+        risk_gate:
+          type: object
+          additionalProperties: true
+          nullable: true
+        top_candidates:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+        final_decisions:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+        blocked_by_reasons:
+          type: array
+          items: { type: string }
+        paper_actions:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+        paper_state_summary:
+          type: object
+          additionalProperties: true
+          nullable: true
+        provider_issues:
+          type: object
+          additionalProperties: true
+        deep_data:
+          type: object
+          additionalProperties: true

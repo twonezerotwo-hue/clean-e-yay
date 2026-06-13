@@ -1,94 +1,119 @@
 # TASK RESULT
 
 Date: 2026-06-13
-Task: v2.6.1 — LLM Persona / Agent Brain Explainability (deep-data derinleşme)
+Task: R1 — Real Snapshot Replay / Backtest Foundation
 Status: completed
 
 ## Prensip
 
-v2.6 LLM persona katmanı (off|mock|groq client, budget guard, 2 saat cache,
-injection guard, 3 persona, state-grounded chat) zaten mevcuttu. Ancak v2.6'dan
-SONRA eklenen v2.7 deep-data dimensiyonları (D2 türev / D3 options / D4 volatilite
-/ D5 catalyst half-life + event riski + rotation) LLM kompakt bağlamına
-GİRMİYORDU — persona ve chat bunları açıklayamıyordu. Bu görev o boşluğu kapattı:
-persona/chat/AI-report artık tüm karar zinciri özetini state-grounded okur.
+Replay önceden `reserved_not_active` olarak dürüstçe duruyordu (disk store yoktu).
+R1 bunu **sahte backtest yapmadan**, gerçek kaydedilmiş snapshot/decision state
+üzerinden çalışan minimal ve güvenilir replay foundation'a çevirdi. Replay =
+**kaydedilmiş gerçek state'in incelenmesi** (stored state inspection). Uydurma
+geçmiş performans YOK; yeterli snapshot yoksa dürüstçe `empty` /
+`insufficient_snapshots` der.
 
-LLM hâlâ karar VERMEZ; yalnızca mevcut deterministic state'i açıklar. evidence_used
-HER ZAMAN koddan gelir (LLM kanıt uyduramaz); state'te olmayan dimensiyon için
-"kısıt üretmiyor / state'te yok" denir, uydurma yapılmaz. RiskGate / DQS /
-KillSwitch / halt sıfır diff; PAPER_SAFE / NO_EXECUTION korunur.
+PAPER_SAFE / NO_EXECUTION: replay hiçbir emir üretmez, yeni paper pozisyon açmaz,
+RiskGate'i bypass etmez, LLM karar motoruna bağlanmaz, **live provider çağırmaz**
+(yalnızca store'dan okur). Yeni mimari katman / yeni veri kaynağı / yeni dashboard
+redesign / yeni intelligence module EKLENMEDİ.
 
-## Kök neden
+## REPLAY BASELINE (önce)
 
-`packages/decision/engine.py::matrix_view` derivatives/volatility/options/catalysts/
-event_risk özetlerini zaten üretiyor (yalnızca dikkat-çeken, status OK + kısıtlayıcı
-rejim filtreli). Fakat `packages/agent/llm/context.py::build_compact_context`
-yalnızca matrix top cells / risk_gate / eski `snap.catalysts` (scheduled calendar)
-+ news okuyordu; deep-data DROP ediliyordu. v2.6 bu dimensiyonlardan önce yazılmıştı.
+- `apps/api/routers/replay.py`: status hardcode `reserved_not_active`,
+  `available=False`; iki endpoint de `get_cached_snapshot()` (live) çağırıp yalnızca
+  en son in-memory snapshot id'yi yansıtıyordu.
+- Snapshot yalnızca in-memory (`pipeline._CACHE`, 30s TTL). Disk store YOK,
+  `data/runtime/snapshots/` YOK, `snapshot_store.py` YOK (ARCHITECTURE §3'te tanımlı
+  ama hiç yazılmamış).
+- ReplayStatusPanel "REZERVE · AKTİF DEĞİL" + latest id + reason gösteriyordu.
+- OpenAPI: `ReplayStatus` (enum reserved_not_active) + `ReplaySnapshotStatus`.
 
-## Ne yapıldı
+## IMPLEMENTED
 
-### 1. Kompakt bağlam (`packages/agent/llm/context.py`)
-- Yeni `_deep_data_summary(view, snap)` → kompakt `deep_data` bloğu: options
-  (symbol/regime/atm_iv/iv_rv_spread/skew_25d/is_proxy), volatility (symbol/tf/
-  regime/vol_state/vol_zscore), derivatives (symbol/squeeze_level/funding_bias/
-  is_proxy), catalysts (event_type/actionability/affected_assets+tf/half_life/
-  surprise), event_risk (level/action/restrictive/triggers≤3), rotation (status/
-  score/direction/evidence≤2). `build_compact_context` çıktısına eklendi.
-- Digest stabil tutuldu: yalnızca snapshot_id/generated_at volatil; deep_data'da
-  hours_until gibi sürekli değişen alan YOK → 2 saat cache güvenli.
+### 1. Disk snapshot store (`packages/data/snapshot_store.py`, yeni)
+- Atomik write: temp dosya + `os.replace` (yarım dosya asla görünmez).
+- Bozuk/okunamaz dosya → crash yok (`_read` None döner, atlanır).
+- `record(payload)` (aynı id en güncelse duplicate yazmaz; başarısızsa None),
+  `latest()` (en yeni okunabilir), `get(id)`, `count()`, `list_ids()`, `status()`.
+- Zaman-sıralı dosya adı `<ts>__<safe_id>.json` (path-traversal güvenli sanitize).
+- Ring-buffer prune (`SNAPSHOT_STORE_MAX`, default 500). Dir env
+  `SNAPSHOT_STORE_PATH` (default `data/runtime/snapshots/`; testte temp dir).
+- Store SAF: decision/risk import etmez (cycle yok); yalnızca dict yazar/okur.
 
-### 2. Persona (`packages/agent/llm/report.py`)
-- `_deep_evidence(persona, ctx)` + `_deep_concerns(persona, ctx)` (her ikisi
-  deterministik). Risk Officer: options stresi (PUT_SKEW/CALL_SKEW/TERM_STRESS/
-  RICH_VOL), volatilite (ELEVATED/EXTREME/shock/expansion), türev squeeze (HIGH/
-  ELEVATED), catalyst (NO_POSITION_INCREASE/CAUTION) kanıt+itiraz. Macro Strategist:
-  rotation + volatilite rejimi + options downside stresi + event riski senaryo.
-- `_evidence_for` deep evidence'ı ekler; `_fallback_concerns` deep concerns'i ekler;
-  macro fallback summary'sine volatilite + rotation eklendi. Persona briefleri
-  deep-data'ya atıf yapar (LLM yolu da bağlamı görür). evidence_used HÂLÂ koddan.
+### 2. Producer (`apps/tick_worker/main.py`)
+- `run_once()` sonunda matrix_view + state'i `snapshot_store.record(...)` ile yazar.
+- Store yazımı try/except + log ile sarıldı — ASLA tick'i patlatmaz.
+- Kayıt alanları: schema_version, snapshot_id, generated_at, mode (provenance),
+  dqs, provider_status, data_snapshot (compact), decision_matrix (matrix_view tam),
+  risk_state, paper_state_summary.
 
-### 3. Chat (`packages/agent/llm/chat.py`)
-- Yeni grounded handler'lar: `_options_answer` / `_volatility_answer` /
-  `_derivatives_answer` / `_rotation_answer` / `_catalyst_answer`. proxy
-  dimensiyonları (skew_25d, squeeze) açıkça "proxy — gerçek greeks/liquidation
-  değil" der. Veri yoksa "kısıt üretmiyor", uydurma yok.
-- `_grounded_answer` intent sırası: missing → deep-data (options/vol/türev/
-  rotation/catalyst) → risk_gate → symbol-why → waiting → overview. "RiskGate neyi
-  engelledi?" deep-data değil risk_gate'e gider (yanlış yönlenme testli).
+### 3. Replay endpoint'leri (`apps/api/routers/replay.py`, store'a bağlı)
+- `GET /replay/status` → status (active/empty), available, mode
+  (active_snapshot_replay / insufficient_snapshots / reserved_not_active),
+  snapshot_count, latest_snapshot_id, latest_generated_at, schema_version, reason,
+  execution=no_live_execution.
+- `GET /replay/{id}` → kayıtlı snapshot zarfı; store'da yoksa **404 not_found**.
+- `GET /replay/{id}/decision-trace` → kayıtlı decision_matrix'ten karar izi:
+  snapshot_id, generated_at, mode, dqs, regime, suspended, risk_gate,
+  top_candidates, final_decisions, blocked_by_reasons, paper_actions,
+  paper_state_summary, provider_issues, deep_data (options/vol/türev/catalyst/
+  event_risk). Yeni karar HESAPLAMAZ, live provider çağırmaz.
 
-### 4. Frontend (additive, şema değişmedi)
-- `AIReportPanel`: persona blokunda `evidence_used` satırı (≤6) + "Açıklayıcı
-  katman · yürütme yetkisi yok — final karar deterministik engine + RiskGate" rozeti.
-- `ChatPanel`: öneri sorularına "Options risk ne diyor?", "Volatility neden
-  kısıtladı?", "Funding / türev ne diyor?" eklendi.
-- Persona/chat response şekli değişmedi → openapi/TS api.ts SIFIR diff → codegen
-  drift testi otomatik yeşil.
+### 4. Sözleşme (additive + drift-safe)
+- openapi: `ReplayStatus` güncellendi; `ReplaySnapshot` + `ReplayDecisionTrace`
+  eklendi; `/replay/{id}/decision-trace` path; `ReplaySnapshotStatus` kaldırıldı.
+- TS api.ts senkron: `ReplayStoreStatus`/`ReplayMode`/`ReplayExecution` enum
+  literalleri + `ReplayStatus`/`ReplaySnapshot`/`ReplayDecisionTrace` tipleri.
 
-### 5. Tests (`tests/unit/test_llm_persona.py`, +11)
-- deep_data summary filtre/taşıma; persona fallback deep-data grounding (RO kanıt+
-  itiraz, macro rotation/vol); boş-state'te kanıt UYDURMAMA; 5 chat intent grounded
-  + proxy disclaimer; "RiskGate neyi engelledi?" yanlış yönlenme yok; endpoint
-  state-grounded. Testlerde live network yok (urlopen bekçi korunur).
+### 5. Frontend (selector + mevcut panel pattern; page.tsx büyümedi)
+- `lib/selectors/replay.ts`: active/count/mode rozeti.
+- `ReplayStatusPanel`: store status + mode rozeti + snapshot_count + latest id/zaman
+  + "NO LIVE EXECUTION" rozeti + "Replay does not execute trades" notu.
 
-## Sonuç
+### 6. Tests
+- `tests/unit/test_snapshot_replay.py` (+13): atomik+latest, by-id+missing,
+  corrupted-skip (crash yok), dedup, prune, status empty/active, endpoint
+  empty/active, found+404, decision-trace stored-matrix, "replay live refetch
+  yapmaz" (pipeline boom guard), tick_worker producer (offline), corrupted-only
+  store status, json roundtrip.
+- `tests/contract/`: eski reserved 200 testi → 404 not_found testi + decision-trace
+  404 testi. Contract + codegen drift yeşil.
 
-- **pytest: 334/334** (323 baseline + 11 yeni); live network yok.
-- **ruff (CI-scope): temiz**; **tsc --noEmit: temiz**; **pnpm build: yeşil**
-  (✓ Compiled successfully, SSR prerender 4/4).
-- **Live smoke** (izole API 127.0.0.1:8011, gerçek Deribit, LLM_MODE=off):
-  - `/ai-report/current`: risk_officer deep-evidence `options:BTCUSD CHEAP_VOL`,
-    `options:ETHUSD PUT_SKEW_STRESS`, `volatility:*`, `derivatives:*`, `catalyst:*`;
-    concern "options stresi ETHUSD: PUT_SKEW_STRESS (skew proxy)". macro
-    `rotation:bearish 39.0` + volatilite + options.
-  - `/chat`: 5 deep-data intent gerçek değerlerle grounded (BTC ATM IV 0.4096
-    CHEAP_VOL, proxy uyarısı); rotation/catalyst gerçek; bypass → guard refusal.
-  - Web SSR (izole 127.0.0.1:3100): 200, 32 panel + HeroScene canvas + PAPER_ONLY.
-  - İzole smoke server'ları (8011/3100) sonra kapatıldı; kullanıcının 3000/8000
-    ortamı bozulmadı (eski E_YAY CODEX launch agent'ları ayrı dizinde).
+## TESTS RUN
+- `pytest -q`
+- `ruff check packages apps/api apps/tick_worker apps/learning_worker tests/contract`
+- `cd apps/web && tsc --noEmit && pnpm build`
 
-## PAPER_SAFE check
-- broker: none · real order: none · live execution: none
-- LLM karar vermez; decision/risk/paper akışına geri yazım yok
-- RiskGate/DQS/KillSwitch/halt: sıfır diff, bypass yok (injection guard değişmedi)
-- deep-data persona/chat'te yalnızca AÇIKLANIR; karar zincirinde yalnızca kısıtlayıcı
+## RESULTS
+- **pytest: 349/349 passed** (334 baseline + 15 net yeni); live network yok.
+- **ruff (CI-scope): temiz** (RUF022 `__all__` sort auto-fix).
+- **tsc --noEmit: temiz**; **pnpm build: ✓ Compiled** (SSR prerender 4/4).
+
+## LIVE DASHBOARD SMOKE (izole API 8011, gerçek veri + 1 gerçek snapshot seed)
+- API: /health /data/snapshot /decision/matrix /dashboard/state → 200.
+- Replay status: active · mode=active_snapshot_replay · count=1 ·
+  latest=snap::4c0c1468aa28 · execution=no_live_execution.
+  /replay/{id} 200 (decision_matrix dahil); /replay/{id}/decision-trace 200
+  (regime NEUTRAL, risk_gate NO_POSITION_INCREASE, 8 top candidate, 20 final,
+  blocked_by risk_gate:NO_POSITION_INCREASE, deep_data 5 anahtar); missing → 404.
+- Web: SSR 200 (izole 3100), 32 panel + HeroScene canvas + PAPER_ONLY.
+- Replay panel: replay_status paneli SSR'da mevcut (store status + mode + count).
+- İzole server'lar kapatıldı; `data/runtime/` gitignore'lu (snapshot commit'lenmez).
+
+## PAPER_SAFE CHECK
+- broker: none
+- real order: none
+- live execution: none
+- replay execution: none (replay yalnızca stored state okur; emir/karar üretmez)
+- RiskGate/DQS/KillSwitch/halt: sıfır diff, bypass yok
+
+## SKIPPED / NEXT
+- Rolling/historical backtest runner BİLİNÇLİ yapılmadı (sahte geçmiş üretme yasağı).
+  Replay foundation gerçek çalışıyor; yeni veri kaynağı gerekmez.
+- NEXT: **UX1 Agent Operating Cockpit** veya **R2 deterministic rolling replay/
+  backtest runner** (stored snapshot serisi üzerinde deterministik yeniden-üretim +
+  drift tespiti; yeni live veri yok).
+
+## COMMITS
+- `feat(replay): add real snapshot replay foundation`

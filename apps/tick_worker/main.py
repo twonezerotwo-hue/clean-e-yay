@@ -16,13 +16,63 @@ import signal
 
 # httpx üzerinden API'yi çağırmak yerine paketleri doğrudan çağırıyoruz —
 # böylece worker API'ye bağımlı değil.
+from packages.data import snapshot_store
 from packages.data.ingestion.pipeline import DEFAULT_SYMBOLS, get_cached_snapshot
-from packages.decision.engine import decide_matrix
+from packages.data.provenance import data_provenance
+from packages.decision.engine import decide_matrix, matrix_view
 from packages.paper import state as paper_state
 from packages.paper.lifecycle import flatten_all, open_position
 from packages.paper.lifecycle import tick as price_tick
 from packages.risk import halt as halt_store
 from packages.risk.engine import RiskInput
+
+MATRIX_SYMBOLS = DEFAULT_SYMBOLS[:4]
+
+
+def _snapshot_record(snap, view: dict, risk, ps) -> dict:
+    """R1 — disk snapshot store payload'u (gerçek state; sahte backtest yok)."""
+    return {
+        "schema_version": snapshot_store.SCHEMA_VERSION,
+        "snapshot_id": snap.snapshot_id,
+        "generated_at": snap.generated_at.isoformat(),
+        "mode": data_provenance(snap),
+        "dqs": {"score": snap.quality.score, "status": snap.quality.status},
+        "provider_status": snap.provider_status or {},
+        "data_snapshot": {
+            "prices": [
+                {
+                    "symbol": q.symbol,
+                    "price": q.price,
+                    "verified": q.verified,
+                    "status": getattr(q, "status", None),
+                }
+                for q in snap.prices
+            ],
+            "warnings": list(snap.warnings)[:8],
+        },
+        "decision_matrix": view,
+        "risk_state": {
+            "action": risk.action,
+            "reason": risk.reason,
+            "evidence": list(risk.evidence),
+        },
+        "paper_state_summary": {
+            "equity_usd": round(ps.equity_usd, 2),
+            "peak_equity_usd": round(ps.peak_equity_usd, 2),
+            "daily_pnl_usd": round(ps.daily_pnl_usd, 2),
+            "realized_pnl_usd": round(ps.realized_pnl_usd, 2),
+            "open_position_count": len(ps.open_positions),
+            "open_positions": [
+                {
+                    "symbol": p.symbol,
+                    "side": p.side,
+                    "timeframe": getattr(p, "timeframe", "1d"),
+                    "size_usd": round(p.size_usd, 2),
+                }
+                for p in ps.open_positions
+            ],
+        },
+    }
 
 log = logging.getLogger("tick_worker")
 
@@ -78,7 +128,7 @@ async def run_once() -> None:
     # T2 — (symbol, timeframe) karar uzayı; fingerprint TF segmenti taşır,
     # 1w decide_matrix içinde paper_execution=false ile hold'a düşer.
     _regime, _risk, decisions = decide_matrix(
-        DEFAULT_SYMBOLS[:4], snap, risk_in, open_positions=ps.open_positions
+        MATRIX_SYMBOLS, snap, risk_in, open_positions=ps.open_positions
     )
     open_keys = {(p.symbol, p.timeframe) for p in ps.open_positions}
     for d in decisions:
@@ -108,6 +158,17 @@ async def run_once() -> None:
         )
 
     paper_state.save(ps)
+
+    # R1 — kararı disk snapshot store'a kaydet (replay temeli). Store yazımı
+    # ASLA tick'i patlatmaz; başarısızsa loglanır ve döngü devam eder.
+    try:
+        view = matrix_view(_regime, _risk, decisions, snap, MATRIX_SYMBOLS)
+        view["mode"] = data_provenance(snap)
+        sid = snapshot_store.record(_snapshot_record(snap, view, _risk, ps))
+        if sid:
+            log.info("snapshot stored: %s (count=%d)", sid, snapshot_store.count())
+    except Exception:
+        log.exception("snapshot store record failed (tick devam ediyor)")
 
 
 async def run() -> None:

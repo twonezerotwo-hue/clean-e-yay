@@ -125,20 +125,20 @@ def test_get_endpoint_matches_contract(path, schema):
     assert not errors, f"{path} sözleşme ihlali:\n" + "\n".join(errors)
 
 
-def test_replay_snapshot_path_param_matches_contract():
-    """GET /api/v1/replay/{snapshot_id} dürüstçe rezerve döner + şemaya uyar."""
-    schema = (
-        SPEC["paths"]["/api/v1/replay/{snapshot_id}"]["get"]["responses"]["200"]
-        ["content"]["application/json"]["schema"]
-    )
-    r = client.get("/api/v1/replay/contract-test-id")
-    assert r.status_code == 200
-    body = r.json()
-    assert body["status"] == "reserved_not_active"
-    assert body["available"] is False  # sahte replay yok
-    errors: list[str] = []
-    _validate(body, schema, SPEC, "/api/v1/replay/{snapshot_id}", errors)
-    assert not errors, "\n".join(errors)
+def test_replay_snapshot_path_param_missing_returns_404():
+    """R1 — store'da olmayan snapshot_id → 404 (sahte replay/refetch yok)."""
+    r = client.get("/api/v1/replay/no-such-snapshot-id-xyz")
+    assert r.status_code == 404
+    detail = r.json()["detail"]
+    assert detail["status"] == "not_found"
+    assert detail["available"] is False
+
+
+def test_replay_decision_trace_missing_returns_404():
+    """R1 — olmayan snapshot için decision-trace → 404."""
+    r = client.get("/api/v1/replay/no-such-snapshot-id-xyz/decision-trace")
+    assert r.status_code == 404
+    assert r.json()["detail"]["status"] == "not_found"
 
 
 def test_all_documented_paths_have_router():

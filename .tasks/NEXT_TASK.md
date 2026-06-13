@@ -1,33 +1,39 @@
-# NEXT TASK — gerçek replay/backtest motoru veya kalan deep-data (öneri)
+# NEXT TASK — UX1 Agent Operating Cockpit veya R2 rolling replay runner (öneri)
 
-v2.7 **D2/D3/D4/D5** deep-data + **v2.6.1 LLM Persona deep-data derinleşme**
-tamamlandı (bkz. `.tasks/TASK_RESULT.md`). Persona/chat/AI-report artık tüm karar
-zinciri özetini (options/volatilite/türev/catalyst/rotation) state-grounded
-açıklar; LLM hâlâ karar vermez. Tüm deep-data karar zincirine **yalnızca
-kısıtlayıcı** girer; live smoke OK, CI-scope yeşil. **334/334 pytest**.
+**R1 — Real Snapshot Replay Foundation** tamamlandı (bkz. `.tasks/TASK_RESULT.md`):
+disk snapshot store (`packages/data/snapshot_store.py`, atomik + corruption-safe),
+tick_worker producer, `/replay/status` + `/replay/{id}` + `/replay/{id}/decision-trace`
+endpoint'leri gerçek store'dan okur (live refetch yok), ReplayStatusPanel store
+durumunu gösterir. Sahte backtest YOK. **349/349 pytest**, CI-scope yeşil, live smoke OK.
 
-> Not: Öneri B (v2.6 LLM persona derinleşme) BU oturumda tamamlandı — listeden
-> düşürüldü.
+> Replay foundation GERÇEKTEN çalışıyor (store + endpoint + panel + producer). Yeni
+> veri kaynağı önermeden önce: foundation hazır — sıradaki iş onu kullanmak/cilalamak.
 
-Sıradaki adaylar (her biri **önce karar rolü** tasarlanıp sonra provider eklenir —
-engine rolü olmadan ölü veri yasak; DATA_POLICY + ARCHITECTURE §18):
+Sıradaki adaylar (her biri **önce karar rolü** tasarlanır — ölü veri yasak;
+DATA_POLICY + ARCHITECTURE §18):
 
-## Öneri A: Gerçek deterministik replay / backtest motoru
-- Disk snapshot store (build_snapshot çıktısını dök) → kayıttan deterministik
-  replay; `/replay/{snapshot_id}` şu an `reserved_not_active` döndürüyor.
-- Karar rolü: geçmiş kararı yeniden üret + drift tespit; PAPER/REPLAY_ONLY,
-  yeni live veri yok.
+## Öneri A: UX1 — Agent Operating Cockpit
+- Mevcut paneller + replay/decision-trace'i tek "operating cockpit" akışında
+  birleştir: snapshot seç → decision-trace incele → blocked_by/risk gate kanıt
+  zinciri. Yeni veri/intelligence YOK; mevcut state'in operatör UX'i.
+- page.tsx büyümez; selector + mevcut panel pattern; 3D/R3F ruhu korunur.
 
-## Öneri B: Asset universe genişletme / kalan deep-data
-- Yeni sembol/asset sınıfı veya ek deep-data slice (önce karar rolü tasarımı).
+## Öneri B: R2 — Deterministic rolling replay / backtest runner
+- Stored snapshot serisi üzerinde deterministik yeniden-üretim + karar **drift
+  tespiti** (kayıtlı karar vs yeniden hesaplanan karar). PAPER/REPLAY_ONLY,
+  yeni live veri YOK, sahte performans YOK.
+- Snapshot store zaten var; runner store'u okur, decide_matrix'i stored snapshot'a
+  uygular, farkı raporlar (RiskGate/DQS bypass yok).
 
 ## Açık teknik borç (opsiyonel)
 - Gerçek `openapi-typescript` codegen otomasyonu (`make codegen`); şu an drift
   guard testi manuel sync'i koruyor.
-- Gerçek deterministik replay/backtest motoru (disk snapshot store gerektirir).
+- snapshot_store `count()` bozuk dosyaları da sayar (latest=None ile sinyallenir);
+  istenirse readable-only count'a çevrilebilir.
 
 ## Hard rules (değişmez)
 - PAPER_SAFE / NO_EXECUTION; broker yok, gerçek emir yok, live execution yok.
+- Replay emir/karar üretmez, paper açmaz, RiskGate'i bypass etmez, live çağırmaz.
 - RiskGate/DQS/KillSwitch/halt yalnızca kısıtlayıcı; bypass/gevşetme yok.
 - LLM karar vermez. Endpoint path + response alan adları sabit (additive ok).
 - Runtime'da mock yok; testlerde live network yok.

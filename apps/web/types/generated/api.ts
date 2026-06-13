@@ -803,25 +803,54 @@ export type DecisionMatrix = {
   cells: TimeframeDecision[];
 };
 
-// ---------------- OPS — replay foundation (rezerve, aktif değil) ----------------
+// ---------------- R1 — gerçek snapshot replay foundation ----------------
+// Replay = kaydedilmiş gerçek state'in incelenmesi. Sahte backtest / uydurma
+// geçmiş performans YOK. PAPER_SAFE / NO_EXECUTION.
 
-// Deterministik replay/backtest motoru REZERVE; bu sürümde AKTİF DEĞİL.
-// Sahte replay üretilmez (PAPER_SAFE).
-export type ReplayLifecycle = "reserved_not_active";
+export type ReplayStoreStatus = "active" | "empty" | "reserved_not_active";
+export type ReplayMode =
+  | "active_snapshot_replay"
+  | "insufficient_snapshots"
+  | "reserved_not_active";
+export type ReplayExecution = "no_live_execution";
 
 export type ReplayStatus = {
-  status: ReplayLifecycle;
+  status: ReplayStoreStatus;
   available: boolean;
-  latest_snapshot_id?: string;
-  generated_at?: string;
+  mode: ReplayMode;
+  snapshot_count: number;
+  latest_snapshot_id?: string | null;
+  latest_generated_at?: string | null;
+  schema_version?: number;
   reason?: string;
+  execution?: ReplayExecution;
 };
 
-export type ReplaySnapshotStatus = {
+export type ReplaySnapshot = {
   snapshot_id: string;
-  status: ReplayLifecycle;
+  status: "active";
   available: boolean;
-  matches_latest?: boolean;
-  latest_snapshot_id?: string;
-  reason?: string;
+  execution?: ReplayExecution;
+  snapshot: Record<string, unknown>;
+};
+
+export type ReplayDecisionTrace = {
+  snapshot_id: string;
+  generated_at?: string | null;
+  schema_version?: number;
+  available: boolean;
+  execution?: ReplayExecution;
+  note?: string;
+  mode?: Record<string, unknown> | null;
+  dqs?: Record<string, unknown> | null;
+  regime?: string | null;
+  suspended?: boolean;
+  risk_gate?: Record<string, unknown> | null;
+  top_candidates: Array<Record<string, unknown>>;
+  final_decisions: Array<Record<string, unknown>>;
+  blocked_by_reasons?: string[];
+  paper_actions?: Array<Record<string, unknown>>;
+  paper_state_summary?: Record<string, unknown> | null;
+  provider_issues?: Record<string, unknown>;
+  deep_data?: Record<string, unknown>;
 };

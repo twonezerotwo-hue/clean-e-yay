@@ -1,5 +1,40 @@
 # Agent Changelog
 
+## 2026-06-13 — R1 Real Snapshot Replay / Backtest Foundation
+- Replay `reserved_not_active`'ten gerçek disk snapshot store'a geçti. Sahte
+  backtest / uydurma geçmiş YOK. PAPER_SAFE/NO_EXECUTION: replay emir/karar
+  üretmez, paper açmaz, RiskGate bypass etmez, live provider çağırmaz.
+- Yeni `packages/data/snapshot_store.py` (ARCHITECTURE §3'te tanımlı dosya):
+  atomik write (temp + os.replace), bozuk dosya → crash yok, latest/get(id)/
+  status/count, zaman-sıralı dosya adı, ring-buffer prune (SNAPSHOT_STORE_MAX),
+  aynı id en güncelse duplicate yazmaz. Dir env SNAPSHOT_STORE_PATH
+  (default data/runtime/snapshots/; testte temp).
+- Producer: tick_worker run_once() her tick'te matrix_view + state'i store'a
+  yazar (try/except + log; tick'i patlatmaz). Kayıt: schema_version/snapshot_id/
+  generated_at/mode/dqs/provider_status/data_snapshot/decision_matrix/risk_state/
+  paper_state_summary.
+- Endpoint'ler (apps/api/routers/replay.py, live refetch YOK): /replay/status
+  (active/empty + mode active_snapshot_replay/insufficient_snapshots/
+  reserved_not_active + snapshot_count + latest), /replay/{id} (kayıtlı snapshot;
+  yoksa 404), /replay/{id}/decision-trace (stored decision_matrix'ten karar izi:
+  DQS/RiskGate/top candidates/final/blocked_by/paper actions/provider issues/
+  catalyst+options+vol+türev özetleri). Yeni karar hesaplamaz.
+- Sözleşme additive: openapi ReplayStatus güncellendi + ReplaySnapshot/
+  ReplayDecisionTrace + decision-trace path; ReplaySnapshotStatus kaldırıldı.
+  TS api.ts senkron (ReplayStoreStatus/ReplayMode/ReplayExecution + tipler).
+  Contract/codegen drift yeşil (eski reserved testi → 404 not_found testi).
+- Frontend: ReplayStatusPanel store status + mode rozeti + snapshot_count +
+  latest id/zaman + "NO LIVE EXECUTION" rozeti + "Replay does not execute trades"
+  notu. Selector lib/selectors/replay.ts; page.tsx büyümedi.
+- Testler +15 (tests/unit/test_snapshot_replay.py + 2 contract 404): atomik/
+  latest/by-id/missing/corrupted/dedup/prune/status, endpoint empty+active,
+  found+404, decision-trace stored-matrix, replay live refetch yapmaz (pipeline
+  boom guard), tick_worker producer offline. pytest 349/349; CI-scope ruff + tsc +
+  pnpm build yeşil. Live smoke (izole API 8011 + 1 gerçek snapshot seed): replay
+  status active/count=1, /replay/{id} + decision-trace 200, missing 404; web SSR
+  (izole 3100) 200 / 32 panel + replay_status + HeroScene + PAPER_ONLY.
+  RiskGate/DQS/KillSwitch/halt sıfır diff.
+
 ## 2026-06-13 — v2.6.1 LLM Persona deep-data derinleşme
 - v2.6 persona/chat/AI-report katmanı, v2.6'dan SONRA eklenen deep-data
   dimensiyonlarına (D2 türev / D3 options / D4 volatilite / D5 catalyst half-life +

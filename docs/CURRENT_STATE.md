@@ -4,6 +4,56 @@ _Bu dosya kısa ve güncel tutulur. Her görev sonunda güncellenir._
 
 ## Last known status
 
+- **R1 — Real Snapshot Replay / Backtest Foundation tamamlandı** (2026-06-13):
+  replay artık `reserved_not_active` değil — gerçek **disk snapshot store**
+  üzerinden çalışan minimal, dürüst replay foundation. Sahte backtest / uydurma
+  geçmiş performans YOK. PAPER_SAFE / NO_EXECUTION: replay emir üretmez, paper
+  pozisyon açmaz, RiskGate'i bypass etmez, LLM'e bağlanmaz, live provider çağırmaz.
+  - **Store** (`packages/data/snapshot_store.py` — ARCHITECTURE §3'te zaten tanımlı
+    olan dosya; yeni katman değil): atomik write (temp + `os.replace`), bozuk dosya
+    → crash yok (okunurken atlanır), `latest()`/`get(id)`/`status()`/`count()`,
+    zaman-sıralı dosya adı (`<ts>__<safe_id>.json`), ring-buffer prune
+    (`SNAPSHOT_STORE_MAX`, default 500), aynı id en güncelse duplicate yazmaz.
+    Path: `data/runtime/snapshots/` (env `SNAPSHOT_STORE_PATH`; testte temp dir).
+    Kayıt alanları: schema_version, snapshot_id, generated_at, mode (provenance),
+    dqs, provider_status, data_snapshot (compact prices+warnings), decision_matrix
+    (matrix_view tam çıktısı — risk_gate + cells + options/vol/türev/catalyst/
+    event_risk özetleri), risk_state, paper_state_summary.
+  - **Producer**: `apps/tick_worker/main.py::run_once()` her tick'te matrix_view'i
+    store'a kaydeder (store yazımı ASLA tick'i patlatmaz — try/except + log).
+  - **Endpoint'ler** (`apps/api/routers/replay.py`, live refetch YOK):
+    `GET /replay/status` → active/empty + mode (active_snapshot_replay /
+    insufficient_snapshots / reserved_not_active) + snapshot_count + latest id/zaman;
+    `GET /replay/{id}` → kayıtlı snapshot zarfı (yoksa 404 not_found);
+    `GET /replay/{id}/decision-trace` → kayıtlı decision_matrix'ten karar izi
+    (snapshot_id/generated_at/mode/DQS/RiskGate/top candidates/final decisions/
+    blocked_by/paper actions/provider issues/catalyst+options+vol+türev özetleri).
+    Hepsi yalnızca store'dan okur; yeni karar HESAPLAMAZ.
+  - **Sözleşme** (additive + drift-safe): openapi `ReplayStatus` güncellendi +
+    yeni `ReplaySnapshot` / `ReplayDecisionTrace` + `/replay/{id}/decision-trace`
+    path; `ReplaySnapshotStatus` kaldırıldı. TS api.ts senkron (`ReplayStoreStatus`/
+    `ReplayMode`/`ReplayExecution` enum literalleri + tipler). Codegen drift + contract
+    testleri yeşil (eski reserved testi → 404 not_found testine güncellendi).
+  - **Frontend**: ReplayStatusPanel artık store status + mode rozeti +
+    snapshot_count + latest id/zaman + "NO LIVE EXECUTION" rozeti + "Replay does
+    not execute trades" notu gösterir. Selector `lib/selectors/replay.ts`; page.tsx
+    büyümedi (mevcut GridCell).
+  - **349/349 pytest** (+15: store atomik/latest/by-id/missing/corrupted/dedup/
+    prune/status, endpoint empty+active, found+404, decision-trace stored-matrix,
+    "replay live refetch yapmaz" (pipeline boom guard), tick_worker producer
+    offline; +2 contract 404 testi). CI-scope ruff + tsc + pnpm build yeşil.
+    **Live smoke** (izole API 8011, gerçek veri + bir gerçek snapshot seed'lendi):
+    /health /data/snapshot /decision/matrix /dashboard/state 200; /replay/status
+    active (count=1, active_snapshot_replay); /replay/{id} 200 (decision_matrix
+    dahil); /replay/{id}/decision-trace 200 (regime NEUTRAL, risk_gate
+    NO_POSITION_INCREASE, 8 top candidate, 20 final, deep_data 5 anahtar); missing →
+    404. Web SSR (izole 3100) 200 / 32 panel + replay_status paneli + HeroScene +
+    PAPER_ONLY. İzole server'lar kapatıldı; data/runtime gitignore'lu (snapshot
+    diske yazıldı ama commit'lenmez). RiskGate/DQS/KillSwitch/halt sıfır diff.
+  - Açık (NEXT): UX1 Agent Operating Cockpit veya R2 deterministic rolling
+    replay/backtest runner (replay foundation gerçek çalışıyor — yeni veri kaynağı
+    gerekmez).
+
 - **v2.6.1 — LLM Persona deep-data derinleşme tamamlandı** (2026-06-13): v2.6
   persona/chat/AI-report katmanı, v2.6'dan SONRA eklenen v2.7 deep-data
   dimensiyonlarına (D2 türev / D3 options / D4 volatilite / D5 catalyst
