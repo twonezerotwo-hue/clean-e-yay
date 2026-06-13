@@ -182,6 +182,53 @@ make codegen   # OpenAPI → Pydantic + TS (TODO: codegen pipeline)
 Backend Release Candidate — gerçek 7/24 local/production-like çalıştırma için
 checklist. (Backend FREEZE: yalnızca P0 hotfix; yeni feature/data source yok.)
 
+### Local production runbook (REL1)
+
+Günlük kullanım için tek komutla, arka planda, tekrar edilebilir çalıştırma.
+`prod_up` API + web (`next start`, prod build) + tick daemon'ını **arka planda**
+başlatır (pid+log `data/runtime/` altında) ve learning'i bir kez seed eder.
+
+```bash
+# İlk kurulum (bir kez): bağımlılıklar + prod build + opsiyonel env
+cd apps/web && pnpm install && cd ../..      # node/pnpm gerekli
+cp .env.example .env                          # düzenle (GROQ/FRED ops.; .env varsa prod_up yükler)
+
+make prod-up        # API(8000)+web(3000)+tick başlat (arka plan) + learning seed
+make prod-status    # süreç + port + system/health (paper_safe) durumu
+make prod-smoke     # health smoke (8/8: API + web SSR + paper_safe)
+make prod-down      # supervised süreçleri (api/web/tick) nazikçe durdur
+
+# Port çakışması varsa izole port:
+API_PORT=8060 WEB_PORT=3060 make prod-up
+API_PORT=8060 WEB_PORT=3060 make prod-smoke
+```
+
+- **first run**: `pnpm install` (web), ilk `prod-up` `.next` yoksa `next build`
+  yapar. `.env` varsa `prod_up` yükler (yoksa shell env / default).
+- **start/stop/status/smoke**: yukarıdaki dört `make` hedefi (veya
+  `scripts/prod_{up,down,status}.sh`).
+- **logs**: `data/runtime/logs/{api,web,tick,learning}.log`. pid:
+  `data/runtime/run/{api,web,tick}.pid` (ikisi de gitignored).
+- **learning**: `prod-up` bir kez seed eder; 7/24 için zamanlayıcıyla çağır
+  (cron/launchd `StartCalendarInterval`/systemd timer) — **restart-always DEĞİL**
+  (spin-loop). tick daemon SIGTERM-aware; api/web restart-safe.
+- **common failures**:
+  - *Port meşgul* → `prod_up` açık hata + meşgul pid verir, başlatmaz; izole
+    port'la dene. **Eski E_YAY CODEX LaunchAgent** (`com.eyay.backend` → `*:8000`,
+    `com.eyay.frontend` → `:3000`) tespit edilirse uyarır:
+    `launchctl bootout gui/$(id -u)/com.eyay.backend` (oturum bazlı; login'de
+    geri gelir — kalıcı kaldırma kullanıcının kararı).
+  - *SSL `CERTIFICATE_VERIFY_FAILED`* → `prod_up` certifi'den `SSL_CERT_FILE`'ı
+    otomatik ayarlar; gerekirse `pip install certifi`.
+  - *Worker stale* → `make prod-status` / `/system/health` `warnings` içinde
+    `worker_stale` / `learning_worker_no_data` görünür (rapor; alarm değil).
+  - *node yok* → `apps/web` build/start için node gerekir (`~/.local/node/bin`
+    otomatik denenir).
+- **data/runtime cleanup**: durdurduktan sonra tüm runtime durumunu sıfırlamak
+  için `rm -rf data/runtime/` (snapshots/paper/heartbeat/halt/audit/log/pid +
+  llm cache/budget; hepsi gitignored, yeniden üretilir). Kalıcı kurulumda
+  `data/runtime/`'ı bir volume'a mount et.
+
 ### Süreçler ve restart politikası
 
 | Süreç | Tip | Restart |
@@ -224,8 +271,10 @@ make workers   # learning one-shot seed + tick daemon (ayrı terminal)
 
 ### Logs
 
-Worker'lar stdout'a `logging` yazar (heartbeat cycle, FAILED istisnalar). Supervisor
-stdout/stderr'i topla (compose logs / journald / pm2 logs). Paper olay izi ayrıca
+`make prod-up` her süreci kendi dosyasına yazar:
+`data/runtime/logs/{api,web,tick,learning}.log`. Süreçler stdout'a `logging`
+yazar (heartbeat cycle, FAILED istisnalar). Süpervizör altında (compose/journald/
+pm2) bunun yerine supervisor stdout/stderr'i topla. Paper olay izi ayrıca
 append-only `data/runtime/paper_audit.jsonl`.
 
 ### Runtime dizinleri (kalıcılık)

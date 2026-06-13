@@ -1,91 +1,94 @@
 # TASK RESULT
 
 Date: 2026-06-13
-Task: UX2 — Dashboard Polish / Usability Pass
-Status: completed (frontend-only; backend FREEZE korundu — packages/ + apps/api + worker sıfır diff)
+Task: REL1 — Release Packaging / Local Production Run Checklist
+Status: completed (devops/scripts/docs; backend FREEZE korundu — packages/ + apps/* runtime kodu sıfır diff)
 
-## UX POLISH SUMMARY (ne düzeldi?)
+## RELEASE PACKAGING SUMMARY (ne hazırlandı?)
 
-- **Uzman bölümü artık gruplu** — eski düz ~30 panel grid'i okunur 6 başlık altına
-  ayrıldı: **Karar & Analiz · Risk · Piyasa Yapısı · Veri · Öğrenme · Ops** (her
-  grubun kısa hint'i + ayraç). "Kalabalık" hissi kalktı; expert hâlâ default
-  collapsed.
-- **Belirsiz copy temizlendi** — AIReportPanel'deki "NO ACTIONABLE DECISION — DQS
-  BLOCKED **veya** risk gate kısıtlayıcı" (UX1'de report.py + DecisionPanel'den
-  silinmişti ama burada kalmıştı) → backend'in **tek** `main_blocker`'ını yazan net
-  copy: "YENİ İŞLEM YOK — ana engel: <label> (<detail>)". Frontend hesap yapmaz;
-  cockpit brief'ten okur.
-- **AgentBrief ilk-ekran çıkarımı netleşti** — "Önerilen duruş" artık satır-içi
-  vurgulu callout (cyan pill); özet leading-relaxed + biraz daha okunur tipografi.
-- **Chat daha kullanışlı** — başlık "Ask the Agent" → **"Agent'a Sor"** (TR UI ile
-  tutarlı); öneri sorusu "Neden BTC açmadın?" → backend intent'ine net yönlenen
-  **"BTC 1h neden hold?"** (symbol+why handler). Diğer öneriler backend intent
-  eşleşmesi korunarak bırakıldı (RiskGate/options/volatility/funding/eksik-veri).
-- **Responsive sağlamlaştırma** — TimeframeMatrix tablosu `overflow-x-auto` +
-  `min-w` ile sarıldı; dar ekranda layout taşması yerine yatay kaydırma.
+Clean E-yAy artık **tek komutla, arka planda, tekrar edilebilir** local production
+çalıştırılabiliyor. `prod_up` API + web (next start, prod build) + tick daemon'ı
+background başlatır (pid+log `data/runtime/` altında), learning'i bir kez seed eder;
+`prod_status` süreç/port/system-health raporlar; `prod_down` nazikçe durdurur. Port
+çakışması ve **eski E_YAY CODEX LaunchAgent**'ları açıkça tespit edilir.
+
+### Readiness audit (önce)
+- **Vardı**: `make dev` (foreground API+web), `make workers` (foreground tick+
+  learning seed), `make smoke`, `docker-compose.dev.yml`, tam `.env.example`,
+  README "Deployment / 7-24 readiness".
+- **Eksikti**: arka planda tek-komut prod kalkışı (pid/log yönetimli), stop/status,
+  port-conflict + LaunchAgent tespiti, "Local production runbook" doküman bölümü.
+- **Port riski gerçekti**: `com.eyay.backend` LaunchAgent `*:8000`'de aktif +
+  :3000'de node — default portlar meşgul (scriptler bunu yakalıyor).
 
 ## FILES CHANGED
 
-- `apps/web/app/page.tsx` — uzman bölümü `ExpertGroup` başlıklarına ayrıldı
-  (yeni yerel helper; `ReactNode` import). Simple layout + collapsed `<details>`
-  korundu.
-- `apps/web/components/panels/AIReportPanel/index.tsx` — vague copy → tek
-  main_blocker (useCockpitBrief read-only).
-- `apps/web/components/panels/AgentBriefPanel/index.tsx` — recommended stance
-  callout + tipografi.
-- `apps/web/components/panels/ChatPanel/index.tsx` — başlık "Agent'a Sor" +
-  öneri sorusu.
-- `apps/web/components/panels/TimeframeMatrixPanel/index.tsx` — tablo
-  overflow-x-auto wrapper (responsive).
-- `apps/web/lib/panel-registry.ts` — chat title "Agent'a Sor" (senkron).
+- `scripts/_prod_common.sh` (yeni) — ortak helper (pid/port/agent-detect/python/
+  node/SSL); `.env` varsa yükler.
+- `scripts/prod_up.sh` (yeni, +x) — API+web+tick background + learning one-shot;
+  preflight port-conflict + LaunchAgent uyarısı; pid/log `data/runtime/`.
+- `scripts/prod_down.sh` (yeni, +x) — SIGTERM→(gerekirse SIGKILL) + pid temizliği.
+- `scripts/prod_status.sh` (yeni, +x) — süreç/port/system-health (paper_safe) raporu.
+- `Makefile` (+`prod-up`/`prod-down`/`prod-status`/`prod-smoke` + help; mevcut
+  hedefler bozulmadı).
+- `README.md` ("Local production runbook (REL1)" bölümü: first run/start/stop/
+  status/smoke/common failures/port conflict/SSL/stale/cleanup; Logs prod dosyaları).
 - docs/CURRENT_STATE.md · .tasks/{TASK_RESULT,CHANGELOG_AGENT,NEXT_TASK}.md
+- `scripts/smoke.sh`: **dokunulmadı** (task-#6 listesini zaten karşılıyor).
 
-## VISUAL / UX GUARANTEES
+## RUNBOOK GUARANTEES
 
-- **simple layout**: AgentBrief (hero) + DecisionTrace + Watch + TimeframeMatrix +
-  PaperAction + Chat ilk ekranda — değişmedi.
-- **expert collapsed**: tüm uzman panelleri tek `<details>` (default kapalı) içinde;
-  SSR'da `open` attribute YOK (doğrulandı).
-- **main blocker clarity**: tek cümle, tek ana engel; "X veya Y" copy kalmadı.
-- **no backend logic touched**: packages/ + apps/api + worker'lar sıfır diff;
-  openapi/TS şeması değişmedi (codegen drift otomatik yeşil).
-- **PAPER_ONLY visible**: header rozeti + PaperAction "PAPER_ONLY · NO_EXECUTION" +
-  AIReport "yürütme yetkisi yok" rozeti korundu.
+- **start**: `make prod-up` → API+web+tick background (pid+log), learning seed.
+  İzole port: `API_PORT=8060 WEB_PORT=3060 make prod-up`.
+- **stop**: `make prod-down` → api/web/tick SIGTERM (gerekirse SIGKILL), pid temizliği.
+- **status**: `make prod-status` → RUNNING/stopped + pid + port + system/health
+  (paper_safe + stale_workers + warnings).
+- **logs**: `data/runtime/logs/{api,web,tick,learning}.log` · pid `data/runtime/run/`
+  (ikisi de gitignored).
+- **smoke**: `make prod-smoke` → 8/8 (7 API + web SSR + paper_safe).
+- **safety**: PAPER_ONLY · NO_EXECUTION · broker yok · gerçek emir yok · replay
+  execution yok · LLM açıklayıcı · weights owner-approval (README PAPER_SAFE checklist).
+- **learning**: tek-seferlik seed; 7/24 için zamanlayıcı — restart-always DEĞİL
+  (spin-loop). tick SIGTERM-aware; api/web restart-safe.
+- **port conflict**: açık hata + meşgul pid + eski `com.eyay.*` LaunchAgent tespiti
+  + `launchctl bootout` ipucu.
 
 ## TESTS RUN
 
-- `tsc --noEmit` (frontend asıl gate)
-- `next build`
-- Canlı SSR smoke (izole API 8050 + web 3050, TEST_USE_MOCK offline) + `scripts/smoke.sh`
-- Backend: **çalıştırılmadı (gerekmez)** — backend dosyası değişmedi (freeze).
+- `bash -n scripts/*.sh` (7/7 ✓)
+- Canlı prod lifecycle (izole port 8060/3060, TEST_USE_MOCK, izole state):
+  `prod_up` → `prod_status` → `prod-smoke` → `prod_down` → post-down status
+- `tsc --noEmit` + `next build` (frontend regresyon)
+- `pytest -q` (backend regresyon — backend kodu değişmedi, yine de doğrulandı)
 
 ## RESULTS
 
-- **passed.** tsc temiz · next build ✓ (`/` 334 kB, static prerender) · smoke 8/8.
+- **passed.** scripts syntax 7/7 ✓ · prod lifecycle ✓ · smoke 8/8 ✓ · tsc temiz ·
+  next build ✓ · **pytest 419/419**.
 
-## LIVE WEB SMOKE (izole API 8050 + web 3050, TEST_USE_MOCK)
+## LIVE SMOKE (izole port 8060/3060, TEST_USE_MOCK; eski :8000/:3000 LaunchAgent çakışmasından kaçınıldı)
 
-- **SSR:** `/` → 200 (smoke.sh 8/8 PASS).
-- **AgentBrief:** "Agent Brief" SSR'da görünür (loading skeleton + header).
-- **Expert collapsed:** `<details>` `open` attribute YOK; gruplu başlıklar
-  (Karar & Analiz / Piyasa Yapısı / Veri / Öğrenme / Ops) prerendered HTML'de.
-- **HeroScene:** `<canvas>` SSR'da mevcut (neon tema korundu).
-- **PAPER_ONLY:** header rozeti SSR'da mevcut.
-- Ek: chat başlığı `Agent&#x27;a Sor` prerendered; eski "BLOCKED veya risk gate"
-  copy **kaldırıldı** (doğrulandı). İzole server'lar kapatıldı.
+- **API**: prod_up api başladı (pid), 7 endpoint 200 (health/system-health/cockpit/
+  snapshot/decision-matrix/replay-status/learning-summary), paper_safe=true.
+- **Web**: next start (prod build) → SSR `/` 200.
+- **Workers**: tick daemon RUNNING (cycle); learning one-shot seed bitti (NO_DATA).
+- **System health**: prod_status → paper_safe=true, stale_workers=[], warnings=
+  [learning_worker_no_data]. prod_down → 3 süreç temiz durdu, pid temizlendi.
+- Port-conflict/LaunchAgent tespiti canlı doğrulandı (com.eyay.backend uyarısı bastı).
 
 ## BACKEND FREEZE CHECK
 
-- backend files changed: **no** (yalnızca apps/web/* + docs/task).
+- backend logic changed: **no** (packages/ + apps/api + worker'lar sıfır diff —
+  scriptler yalnızca mevcut süreçleri başlatır).
 - trading logic changed: **no**.
 - RiskGate changed: **no** (DQS/KillSwitch/halt/paper/learning/replay sıfır diff).
+- PAPER_SAFE intact: **yes** (paper_safe=true canlı doğrulandı; broker/emir/execution yok).
 
 ## NEXT
 
-- Öneri: **UX3 — live user feedback polish** VEYA **Release packaging / local
-  production run checklist** VEYA **only P0 backend hotfix mode**.
-  `.tasks/NEXT_TASK.md` güncellendi.
+- Öneri: **Production dry-run / long-running soak test** VEYA **UX3 live feedback
+  polish** VEYA **P0 hotfix only mode**. `.tasks/NEXT_TASK.md` güncellendi.
 
 ## COMMITS
 
-- `feat(web): polish agent cockpit usability`
+- `chore(release): add local production runbook`

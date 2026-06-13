@@ -4,6 +4,23 @@ _Bu dosya kısa ve güncel tutulur. Her görev sonunda güncellenir._
 
 ## Last known status
 
+- **REL1 — Release Packaging / Local Production Runbook tamamlandı** (2026-06-13):
+  tek komutla, arka planda, tekrar edilebilir local production. **Devops/scripts/
+  docs**; backend FREEZE korundu (packages/ + apps/* runtime kodu SIFIR diff;
+  scriptler yalnızca mevcut süreçleri başlatır). PAPER_SAFE/NO_EXECUTION; canlı
+  paper_safe=true doğrulandı.
+  - Yeni `scripts/_prod_common.sh` + `prod_up.sh` / `prod_down.sh` /
+    `prod_status.sh` (+ Makefile `prod-up`/`prod-down`/`prod-status`/`prod-smoke`).
+    prod_up API+web (next start, prod build)+tick daemon'ı background başlatır
+    (pid `data/runtime/run/`, log `data/runtime/logs/`) + learning one-shot seed.
+    Port-conflict → açık hata + **eski E_YAY CODEX LaunchAgent tespiti**
+    (`com.eyay.backend → *:8000`) + bootout ipucu. learning restart-always DEĞİL.
+  - README "Local production runbook (REL1)" bölümü (first run/start/stop/status/
+    smoke/common failures/port conflict/SSL certifi/stale/cleanup). smoke.sh aynı.
+  - Validation: bash -n 7/7 ✓; canlı prod lifecycle (izole 8060/3060, TEST_USE_MOCK):
+    prod_up→status→smoke(8/8)→down temiz; tsc temiz; next build ✓; pytest 419/419.
+  - Commit: `chore(release): add local production runbook`.
+
 - **UX2 — Dashboard Polish / Usability Pass tamamlandı** (2026-06-13): Agent
   Operating Cockpit okunabilirlik cilası. **Frontend-only**; backend FREEZE
   korundu (packages/ + apps/api + worker SIFIR diff; openapi/TS değişmedi → codegen
@@ -679,10 +696,10 @@ _Bu dosya kısa ve güncel tutulur. Her görev sonunda güncellenir._
 
 ## Next task
 
-- A1 (audit) + DEP1 (deploy) + UX2 (cockpit polish) bitti. Backend RC + 7/24 deploy
-  hazır + cockpit okunur; backend FREEZE (yalnızca P0 hotfix).
-- Sıradaki (öneri, bkz. `.tasks/NEXT_TASK.md`): **UX3 live user feedback polish**
-  VEYA **Release packaging / local production run checklist** VEYA **only P0 backend
-  hotfix mode**. Yeni data source / dashboard redesign / intelligence / trading
-  logic YOK. Opsiyonel: A1 P1 hardening (H1–H5).
+- A1 (audit) + DEP1 (deploy) + UX2 (polish) + REL1 (prod runbook) bitti. Backend RC
+  + tek-komut local production + okunur cockpit; backend FREEZE (yalnızca P0 hotfix).
+- Sıradaki (öneri, bkz. `.tasks/NEXT_TASK.md`): **Production dry-run / long-running
+  soak test** VEYA **UX3 live feedback polish** VEYA **only P0 backend hotfix mode**.
+  Yeni data source / dashboard redesign / intelligence / trading logic YOK.
+  Opsiyonel: A1 P1 hardening (H1–H5).
 - `.tasks/NEXT_TASK.md` güncellendi.

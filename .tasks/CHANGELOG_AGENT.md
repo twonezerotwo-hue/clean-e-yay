@@ -1,5 +1,32 @@
 # Agent Changelog
 
+## 2026-06-13 — REL1 Release Packaging / Local Production Runbook
+- Tek komutla, arka planda, tekrar edilebilir local production. **Devops/scripts/
+  docs**; backend FREEZE korundu (packages/ + apps/* runtime kodu SIFIR diff —
+  scriptler yalnızca mevcut süreçleri başlatır). PAPER_SAFE/NO_EXECUTION; canlı
+  paper_safe=true doğrulandı.
+- Yeni `scripts/_prod_common.sh` (ortak helper: pid/port/python/node/SSL +
+  `.env` yükleme + **eski E_YAY CODEX LaunchAgent tespiti**).
+- Yeni `scripts/prod_up.sh`: API+web (next start, prod build)+tick daemon'ı
+  **background** başlatır (pid `data/runtime/run/`, log `data/runtime/logs/`),
+  learning'i **bir kez** seed eder. Preflight port-conflict → açık hata + meşgul
+  pid + LaunchAgent uyarısı (`com.eyay.backend → *:8000`) + bootout ipucu.
+- Yeni `scripts/prod_down.sh`: api/web/tick SIGTERM→(gerekirse SIGKILL) + pid
+  temizliği. learning supervise edilmez (tek-seferlik).
+- Yeni `scripts/prod_status.sh`: süreç (RUNNING/stopped+pid) + port + (API ayaktaysa)
+  system/health özeti (paper_safe + stale_workers + warnings). Salt-okur.
+- `Makefile`: +`prod-up`/`prod-down`/`prod-status`/`prod-smoke` (mevcut dev/workers/
+  smoke bozulmadı). `prod-smoke` = smoke.sh API_PORT/WEB_PORT'a göre.
+- `README.md`: "Local production runbook (REL1)" bölümü (first run/start/stop/
+  status/smoke/common failures/port conflict + LaunchAgent/SSL certifi/worker stale/
+  data/runtime cleanup); Logs bölümü prod log dosyalarını işaret eder. PAPER_SAFE
+  deploy checklist (DEP1) korundu.
+- `scripts/smoke.sh` dokunulmadı (task-#6 endpoint listesini + PAPER_ONLY marker'ı
+  zaten karşılıyor).
+- Validation: `bash -n` 7/7 ✓; canlı prod lifecycle (izole 8060/3060, TEST_USE_MOCK):
+  prod_up→status→smoke(8/8)→down temiz; tsc temiz; next build ✓; pytest **419/419**
+  (backend regresyon — kod değişmedi). Commit: `chore(release): add local production runbook`.
+
 ## 2026-06-13 — UX2 Dashboard Polish / Usability Pass
 - Agent Operating Cockpit okunabilirlik cilası. **Frontend-only**; backend FREEZE
   korundu (packages/ + apps/api + worker SIFIR diff; openapi/TS şeması değişmedi →

@@ -1,17 +1,22 @@
-.PHONY: help codegen lint test web-dev api-dev dev workers smoke compose-up compose-down
+.PHONY: help codegen lint test web-dev api-dev dev workers smoke \
+        prod-up prod-down prod-status prod-smoke compose-up compose-down
 
 help:
 	@echo "Clean E-yAy — make targets"
-	@echo "  dev         Start API (8000) + web (3000) together (Ctrl+C kapatır)"
-	@echo "  api-dev     FastAPI --reload (8000)"
-	@echo "  web-dev     Next.js dev (3000)"
-	@echo "  workers     tick_worker daemon + learning_worker one-shot (scripts/workers.sh)"
-	@echo "  smoke       Health smoke (API + web SSR; scripts/smoke.sh)"
-	@echo "  compose-up  docker-compose dev (api+web+workers)"
+	@echo "  dev          Start API (8000) + web (3000) together (Ctrl+C kapatır)"
+	@echo "  api-dev      FastAPI --reload (8000)"
+	@echo "  web-dev      Next.js dev (3000)"
+	@echo "  workers      tick_worker daemon + learning_worker one-shot (scripts/workers.sh)"
+	@echo "  smoke        Health smoke (API + web SSR; scripts/smoke.sh)"
+	@echo "  prod-up      Local production: API+web+tick (background) + learning seed"
+	@echo "  prod-down    Stop supervised prod processes"
+	@echo "  prod-status  Prod process + port + system/health durumu"
+	@echo "  prod-smoke   Health smoke against prod ports (API_PORT/WEB_PORT)"
+	@echo "  compose-up   docker-compose dev (api+web+workers)"
 	@echo "  compose-down"
-	@echo "  codegen     OpenAPI → Pydantic + TS"
-	@echo "  lint        ruff packages + apps"
-	@echo "  test        pytest"
+	@echo "  codegen      OpenAPI → Pydantic + TS"
+	@echo "  lint         ruff packages + apps"
+	@echo "  test         pytest"
 
 codegen:
 	@echo "[codegen] OpenAPI → Pydantic + TS (not yet implemented)"
@@ -43,6 +48,20 @@ workers:
 # Health smoke — çalışan API (+web) gerekir. İzole port: API_BASE/WEB_BASE override.
 smoke:
 	./scripts/smoke.sh
+
+# Local production runbook (background pid+log data/runtime/ altında).
+# İzole port: API_PORT=8060 WEB_PORT=3060 make prod-up
+prod-up:
+	./scripts/prod_up.sh
+
+prod-down:
+	./scripts/prod_down.sh
+
+prod-status:
+	./scripts/prod_status.sh
+
+prod-smoke:
+	API_BASE="http://127.0.0.1:$${API_PORT:-8000}" WEB_BASE="http://127.0.0.1:$${WEB_PORT:-3000}" ./scripts/smoke.sh
 
 compose-up:
 	docker compose -f docker-compose.dev.yml up --build
