@@ -66,7 +66,8 @@ export default function HomePage() {
 
       <MockModeBanner />
 
-      {/* Ana karar kartı: agent'ın beyni, tek bakışta. */}
+      {/* Agent Command Center — agent'ın beyni, tek bakışta (status / can_act /
+          ana engel / aday / izleme). */}
       <section className="relative overflow-hidden rounded-2xl border border-ink-700/60 bg-ink-800/70 backdrop-blur min-h-[14rem]">
         <div className="absolute inset-0 -z-10 opacity-70">
           <HeroScene />
@@ -76,18 +77,38 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* Simple Mode — ilk ekranda yalnızca operasyonel cockpit panelleri. */}
-      <DashboardGrid>
-        <GridCell span="2"><DecisionTracePanel /></GridCell>
-        <GridCell span="1"><WatchConditionsPanel /></GridCell>
+      {/* SIMPLE — operasyonel cockpit, önem sırasına göre gruplu IA.
+          Agent Command Center (hero) → Risk & Execution → Karar İzi → Watch → Chat. */}
+      <PanelGroup title="Komuta Merkezi" hint="deterministik karar + analist özeti (neden)">
+        <GridCell span="2"><DecisionPanel /></GridCell>
+        <GridCell span="1"><AIReportPanel /></GridCell>
+      </PanelGroup>
 
-        <GridCell span="3"><TimeframeMatrixPanel /></GridCell>
-
+      {/* KILL_SWITCH / HALT varsa: işlem açılamıyorsa ana sebep matristen ÖNCE. */}
+      <PanelGroup title="Risk & Yürütme Donması" hint="açamıyorsa ana sebep — matristen önce">
+        <GridCell span="2"><RiskGatePanel /></GridCell>
+        <GridCell span="1"><DrawdownGuardPanel /></GridCell>
         <GridCell span="2"><PaperActionPanel /></GridCell>
-        <GridCell span="1"><ChatPanel /></GridCell>
-      </DashboardGrid>
+        <GridCell span="1"><PositionChecksPanel /></GridCell>
+      </PanelGroup>
 
-      {/* Expert / Details — ikinci plan, varsayılan kapalı. */}
+      <PanelGroup title="Karar İzi / Aday Matrisi" hint="candidate → final · global gate tek banner">
+        <GridCell span="full"><TimeframeMatrixPanel /></GridCell>
+        <GridCell span="2"><DecisionTracePanel /></GridCell>
+        <GridCell span="1"><AgentVotesPanel /></GridCell>
+        <GridCell span="full"><CommandSignalsPanel /></GridCell>
+      </PanelGroup>
+
+      <PanelGroup title="İzlenecek Koşullar" hint="ne olursa karar değişir">
+        <GridCell span="full"><WatchConditionsPanel /></GridCell>
+      </PanelGroup>
+
+      <PanelGroup title="Agent'a Sor" hint="state-grounded · LLM karar vermez">
+        <GridCell span="full"><ChatPanel /></GridCell>
+      </PanelGroup>
+
+      {/* EXPERT — gruplu detay, varsayılan kapalı. Yalnızca frontend IA düzeni;
+          backend/selector/karar mantığı değişmez. */}
       <details className="group rounded-2xl border border-ink-700/60 bg-ink-800/40">
         <summary className="cursor-pointer select-none list-none px-5 py-3 flex items-center justify-between">
           <span className="text-sm font-medium tracking-wide text-white/80">
@@ -100,68 +121,62 @@ export default function HomePage() {
             gizle ▴
           </span>
         </summary>
-        {/* Gruplu başlıklarla okunur uzman düzeni — yalnızca frontend düzeni,
-            backend/selector/karar mantığı değişmez. */}
         <div className="px-5 pb-5 pt-1 space-y-7">
-          <ExpertGroup title="Karar & Analiz" hint="deterministik karar + açıklayıcı katman">
-            <GridCell span="full"><DecisionPanel /></GridCell>
-            <GridCell span="2"><AIReportPanel /></GridCell>
-            <GridCell span="1"><AgentVotesPanel /></GridCell>
-            <GridCell span="3"><PositionChecksPanel /></GridCell>
-            <GridCell span="2"><CommandSignalsPanel /></GridCell>
-            <GridCell span="1"><ScenarioPanel /></GridCell>
-          </ExpertGroup>
-
-          <ExpertGroup title="Risk" hint="RiskGate finaldir — yalnızca kısıtlar">
-            <GridCell span="2"><RiskGatePanel /></GridCell>
-            <GridCell span="1"><DrawdownGuardPanel /></GridCell>
-            <GridCell span="2"><CorrelationPanel /></GridCell>
-          </ExpertGroup>
-
-          <ExpertGroup title="Piyasa Yapısı" hint="volatilite · türev · options · catalyst (yalnızca kısıtlayıcı)">
-            <GridCell span="1"><VolatilityPanel /></GridCell>
-            <GridCell span="1"><CryptoDerivativesPanel /></GridCell>
-            <GridCell span="1"><OptionsVolPanel /></GridCell>
-            <GridCell span="2"><CatalystImpactPanel /></GridCell>
-            <GridCell span="1"><PatternsPanel /></GridCell>
-          </ExpertGroup>
-
-          <ExpertGroup title="Veri" hint="provider · DQS · snapshot · haber · rotasyon">
+          <PanelGroup title="Data Quality & Providers" hint="veri kalitesi · sağlayıcı · snapshot · denetim">
             <GridCell span="2"><DataQualityPanel /></GridCell>
             <GridCell span="1"><ProviderStatusPanel /></GridCell>
             <GridCell span="1"><SnapshotPanel /></GridCell>
             <GridCell span="2"><MarketDataPanel /></GridCell>
-            <GridCell span="3"><CapitalRotationPanel /></GridCell>
-            <GridCell span="2"><NewsPanel /></GridCell>
-            <GridCell span="1"><EventCalendarPanel /></GridCell>
-          </ExpertGroup>
+            <GridCell span="1"><PanelAuditPanel /></GridCell>
+          </PanelGroup>
 
-          <ExpertGroup title="Öğrenme" hint="kalibrasyon · mistake memory · ağırlık önerisi (owner onayı)">
-            <GridCell span="2"><LearningPanel /></GridCell>
-            <GridCell span="1"><TradingPanel /></GridCell>
+          <PanelGroup title="Market Structure" hint="türev · volatilite · options · korelasyon · rotasyon">
+            <GridCell span="1"><CryptoDerivativesPanel /></GridCell>
+            <GridCell span="1"><VolatilityPanel /></GridCell>
+            <GridCell span="1"><OptionsVolPanel /></GridCell>
+            <GridCell span="2"><CorrelationPanel /></GridCell>
+            <GridCell span="1"><PatternsPanel /></GridCell>
+            <GridCell span="full"><CapitalRotationPanel /></GridCell>
+          </PanelGroup>
+
+          <PanelGroup title="Macro / Catalyst" hint="catalyst etkisi önce · takvim · ham haber · senaryo">
+            <GridCell span="2"><CatalystImpactPanel /></GridCell>
+            <GridCell span="1"><EventCalendarPanel /></GridCell>
+            <GridCell span="2"><NewsPanel /></GridCell>
+            <GridCell span="1"><ScenarioPanel /></GridCell>
+          </PanelGroup>
+
+          <PanelGroup title="Paper & Learning" hint="paper trading · öğrenme · ağırlık · kalibrasyon (owner onayı)">
+            <GridCell span="2"><TradingPanel /></GridCell>
+            <GridCell span="1"><LearningPanel /></GridCell>
             <GridCell span="2"><WeightProposalPanel /></GridCell>
             <GridCell span="1"><WeightHistoryPanel /></GridCell>
             <GridCell span="2"><CalibrationPanel /></GridCell>
             <GridCell span="1"><MistakeMemoryPanel /></GridCell>
-          </ExpertGroup>
+          </PanelGroup>
 
-          <ExpertGroup title="Ops" hint="replay · pano denetimi · sistem sağlığı">
+          <PanelGroup title="Ops / System" hint="replay · sistem sağlığı · sözleşme">
             <GridCell span="1"><ReplayStatusPanel /></GridCell>
-            <GridCell span="1"><PanelAuditPanel /></GridCell>
             <GridCell span="full"><SystemHealthBar /></GridCell>
-          </ExpertGroup>
+            <GridCell span="full">
+              <p className="text-[10px] text-white/35">
+                Sözleşme: <code>contracts/openapi.yaml</code> — tipler codegen ile
+                üretilir (tek doğruluk kaynağı).
+              </p>
+            </GridCell>
+          </PanelGroup>
         </div>
       </details>
 
       <footer className="text-xs text-white/40 pt-8">
-        Sözleşme: <code>contracts/openapi.yaml</code> · Tipler codegen ile üretilir.
+        PAPER_ONLY · NO_EXECUTION — karar-destek; final karar deterministik engine + RiskGate.
       </footer>
     </main>
   );
 }
 
-// Uzman bölümünde panelleri okunur alt gruplara ayırır (yalnızca görsel düzen).
-function ExpertGroup({
+// Panelleri okunur IA gruplarına ayıran başlık + grid (simple ve expert ortak).
+function PanelGroup({
   title,
   hint,
   children,

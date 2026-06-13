@@ -44,8 +44,9 @@ export function LearningPanel() {
       />
       {insufficient ? (
         <p className="mb-3 rounded border border-amber-400/30 bg-amber-400/10 px-2 py-1 text-[11px] text-amber-200/90">
-          INSUFFICIENT SAMPLE — metrics not statistically reliable
-          {data.min_sample ? ` (${data.total_trades}/${data.min_sample} işlem)` : ""}.
+          Learning inactive — insufficient verified closed trades
+          {data.min_sample ? ` (${data.total_trades}/${data.min_sample})` : ""}.
+          Metrikler istatistiksel olarak güvenilir değil.
         </p>
       ) : null}
       <div

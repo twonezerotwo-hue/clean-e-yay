@@ -1,5 +1,33 @@
 # Agent Changelog
 
+## 2026-06-13 — UX3 Dashboard Information Architecture
+- Dashboard "veri çöplüğü"nden önem sırasına göre **gruplu IA**'ya. **Frontend-only**;
+  backend FREEZE korundu (packages/ + apps/* SIFIR diff; openapi/TS değişmedi →
+  codegen drift otomatik yeşil). Frontend hesap yapmaz; selector/brief korundu.
+- `app/page.tsx`: düz panel grid'i kalktı. **Simple** 5 önem-sıralı bölüm: Agent
+  Command Center (AgentBrief hero + Karar Merkezi + AI Analist) → Risk & Yürütme
+  Donması (RiskGate+Drawdown+Paper+PositionChecks; KILL_SWITCH/HALT matristen ÖNCE)
+  → Karar İzi/Aday Matrisi (TimeframeMatrix+DecisionTrace+AgentVotes+CommandSignals)
+  → İzlenecek Koşullar → Agent'a Sor. **Expert** (collapsed) 5 grup: Data Quality &
+  Providers · Market Structure · Macro/Catalyst · Paper & Learning · Ops/System.
+  Ortak `PanelGroup` helper (eski `ExpertGroup` yeniden adlandırıldı); page.tsx
+  şişmedi.
+- `lib/panel-registry.ts`: yeni `PanelGroupId` (command/risk/decision/watch/chat +
+  data/market/macro/learning/ops); her panel doğru gruba + IA sırası (group/tier
+  metadata; layout elle). Replay/Provider/MarketData/Snapshot/PanelAudit/Learning
+  paneller ana ekrandan expert gruplara taşındı; Macro'da Catalyst önce, ham haber
+  geri planda.
+- `components/panels/LearningPanel/index.tsx`: yetersiz örnekte tek satır
+  "Learning inactive — insufficient verified closed trades (n/min)".
+- Copy/replay zaten temizdi (UX1/UX2 + R1/R2): AIReport/DecisionPanel tek
+  main_blocker; ReplayStatus active/insufficient (REZERVE copy yok) → Ops/System'e
+  alındı. Responsive: TimeframeMatrix overflow-x-auto korundu, grup gridleri
+  mobil tek sütun.
+- Validation: tsc temiz; next build ✓; SSR (prerendered + live izole 3061) HTTP 200,
+  AgentBrief görünür, expert `<details>` collapsed (open yok), 5 grup başlığı görünür,
+  PAPER_ONLY + HeroScene canvas korundu, sıralama doğru. Backend testleri
+  çalıştırılmadı (gerekmez). Commit: `feat(web): reorganize dashboard information architecture`.
+
 ## 2026-06-13 — REL1 Release Packaging / Local Production Runbook
 - Tek komutla, arka planda, tekrar edilebilir local production. **Devops/scripts/
   docs**; backend FREEZE korundu (packages/ + apps/* runtime kodu SIFIR diff —

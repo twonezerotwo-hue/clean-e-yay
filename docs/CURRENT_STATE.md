@@ -4,6 +4,23 @@ _Bu dosya kısa ve güncel tutulur. Her görev sonunda güncellenir._
 
 ## Last known status
 
+- **UX3 — Dashboard Information Architecture tamamlandı** (2026-06-13): dashboard
+  önem sırasına göre **gruplu IA**'ya geçti. **Frontend-only**; backend FREEZE
+  korundu (packages/ + apps/* SIFIR diff; openapi/TS değişmedi → codegen drift
+  otomatik yeşil). Frontend hesap yapmaz; selector/brief korundu.
+  - Simple 5 önem-sıralı bölüm: Agent Command Center (AgentBrief hero + Karar
+    Merkezi + AI Analist) → Risk & Yürütme Donması (KILL_SWITCH/HALT matristen
+    ÖNCE) → Karar İzi/Aday Matrisi → İzlenecek Koşullar → Agent'a Sor. Expert
+    (collapsed) 5 grup: Data Quality & Providers · Market Structure · Macro/Catalyst ·
+    Paper & Learning · Ops/System. Ortak `PanelGroup` helper; page.tsx şişmedi.
+  - `panel-registry.ts` yeni `PanelGroupId` + her panel doğru gruba. Replay/
+    Provider/MarketData/Snapshot/Learning ana ekrandan expert'e; Macro'da Catalyst
+    önce, ham haber geri planda. LearningPanel yetersiz örnekte tek satır.
+  - tsc temiz; next build ✓; SSR (prerendered + live izole 3061) HTTP 200,
+    AgentBrief görünür, expert `<details>` collapsed, 5 grup başlığı görünür,
+    PAPER_ONLY + HeroScene canvas korundu. Backend testleri çalıştırılmadı (gerekmez).
+  - Commit: `feat(web): reorganize dashboard information architecture`.
+
 - **REL1 — Release Packaging / Local Production Runbook tamamlandı** (2026-06-13):
   tek komutla, arka planda, tekrar edilebilir local production. **Devops/scripts/
   docs**; backend FREEZE korundu (packages/ + apps/* runtime kodu SIFIR diff;
@@ -696,10 +713,11 @@ _Bu dosya kısa ve güncel tutulur. Her görev sonunda güncellenir._
 
 ## Next task
 
-- A1 (audit) + DEP1 (deploy) + UX2 (polish) + REL1 (prod runbook) bitti. Backend RC
-  + tek-komut local production + okunur cockpit; backend FREEZE (yalnızca P0 hotfix).
-- Sıradaki (öneri, bkz. `.tasks/NEXT_TASK.md`): **Production dry-run / long-running
-  soak test** VEYA **UX3 live feedback polish** VEYA **only P0 backend hotfix mode**.
+- A1 (audit) + DEP1 (deploy) + UX2 (polish) + REL1 (prod runbook) + UX3 (IA) bitti.
+  Backend RC + tek-komut local production + önem-sıralı gruplu cockpit; backend
+  FREEZE (yalnızca P0 hotfix).
+- Sıradaki (öneri, bkz. `.tasks/NEXT_TASK.md`): **UX4 live feedback polish** VEYA
+  **Production dry-run / long-running soak test** VEYA **only P0 backend hotfix mode**.
   Yeni data source / dashboard redesign / intelligence / trading logic YOK.
   Opsiyonel: A1 P1 hardening (H1–H5).
 - `.tasks/NEXT_TASK.md` güncellendi.
