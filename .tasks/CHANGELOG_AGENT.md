@@ -1,5 +1,24 @@
 # Agent Changelog
 
+## 2026-06-13 — R2 Deterministic Rolling Backtest Runner
+- Kayıtlı snapshot serisi üzerinde deterministik replay/backtest. Live refetch
+  YOK, sahte geçmiş YOK, look-ahead YOK (outcome yalnızca GERÇEK gelecek
+  snapshot'larla, karar zamanından sonraki İLK gözlemle ölçülür). PAPER_SAFE /
+  NO_EXECUTION: paper açmaz, RiskGate bypass yok, decide_matrix yeniden çalışmaz.
+- `packages/data/snapshot_store.py`: `all_docs()` kronolojik okuma helper'ı.
+- Yeni `packages/data/backtest.py` (saf fonksiyon `run_backtest()`): 15m/1h/4h/1d
+  horizon; metrikler hit_rate / false_positive / false_negative / avg_return /
+  max_drawdown / blocked_decision_accuracy + per_timeframe / per_symbol /
+  per_horizon; bloklanmış aday-açılışlar counterfactual; yetersiz örnekte oran
+  null. `run_id` = snapshot kümesi + horizon + algo versiyonu SHA-256.
+- Yeni endpoint `GET /api/v1/replay/backtest` + `GET /api/v1/replay/backtest/{run_id}`
+  (apps/api/routers/replay.py); literal route `{snapshot_id}` catch-all'undan
+  ÖNCE. Boş store → insufficient_snapshots, gelecek yok → insufficient_future_data
+  (ikisi de 200, dürüst). run_id eşleşmezse 404 + current_run_id.
+- Sözleşme additive: openapi /replay/backtest(/{run_id}) + ReplayBacktest /
+  ReplayBacktestMetrics; TS api.ts senkron (codegen drift yeşil).
+- 375 pytest yeşil (+9), ruff CI-scope + tsc + pnpm build yeşil, live smoke OK.
+
 ## 2026-06-13 — UX1 Agent Operating Cockpit
 - Dashboard "veri çöplüğü"nden operating cockpit'e: ilk ekranda agent'ın beyni
   (ne yapabilir / neden / ne izliyor). Yeni trading feature / data provider /

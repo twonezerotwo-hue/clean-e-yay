@@ -257,6 +257,37 @@ paths:
               schema:
                 $ref: "#/components/schemas/ReplayStatus"
 
+  /api/v1/replay/backtest:
+    get:
+      operationId: getReplayBacktest
+      summary: R2 — deterministik rolling backtest (stored snapshot serisi; live refetch yok)
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReplayBacktest"
+
+  /api/v1/replay/backtest/{run_id}:
+    get:
+      operationId: getReplayBacktestRun
+      summary: R2 — belirli run_id için backtest; store değiştiyse 404 (sahte run saklanmaz)
+      parameters:
+        - name: run_id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReplayBacktest"
+        "404":
+          description: run_id mevcut store ile eşleşmiyor (not_found)
+
   /api/v1/replay/{snapshot_id}:
     get:
       operationId: getReplaySnapshot
@@ -1657,5 +1688,73 @@ components:
           type: object
           additionalProperties: true
         deep_data:
+          type: object
+          additionalProperties: true
+
+    # ---------------- R2 — deterministic rolling backtest ----------------
+    # Stored snapshot serisi üzerinde outcome ölçümü. Live refetch / sahte geçmiş
+    # YOK; look-ahead yok (yalnızca GERÇEK gelecek snapshot'larla ölçer).
+    # PAPER_SAFE / NO_EXECUTION: paper açmaz, decide_matrix yeniden çalışmaz.
+
+    ReplayBacktestMetrics:
+      type: object
+      description: >
+        R2 — bir küme (genel / per-timeframe / per-symbol / per-horizon) için
+        outcome metrikleri. Yetersiz örnekte oranlar null (uydurma 0 değil).
+      required: [signals_evaluated, suppressed_evaluated]
+      properties:
+        signals_evaluated: { type: integer }
+        hits: { type: integer }
+        hit_rate: { type: number, nullable: true }
+        false_positive: { type: integer }
+        false_positive_rate: { type: number, nullable: true }
+        false_negative: { type: integer }
+        false_negative_rate: { type: number, nullable: true }
+        suppressed_evaluated: { type: integer }
+        avg_return: { type: number, nullable: true }
+        max_drawdown: { type: number, nullable: true }
+        blocked_decision_accuracy: { type: number, nullable: true }
+
+    ReplayBacktest:
+      type: object
+      description: >
+        R2 — deterministik rolling backtest sonucu. status=ok /
+        insufficient_snapshots (store boş) / insufficient_future_data (ölçülebilir
+        gelecek yok). run_id store üzerinde deterministiktir; sahte geçmiş run
+        saklanmaz. execution=no_live_execution.
+      required: [run_id, status, available, execution, snapshot_count, metrics]
+      properties:
+        run_id: { type: string }
+        algo_version: { type: integer }
+        status:
+          type: string
+          enum: [ok, insufficient_snapshots, insufficient_future_data]
+        available: { type: boolean }
+        execution: { type: string, enum: [no_live_execution] }
+        reason: { type: string }
+        snapshot_count: { type: integer }
+        usable_snapshot_count: { type: integer }
+        evaluated_snapshots: { type: integer }
+        horizons:
+          type: array
+          items: { type: string }
+        window:
+          type: object
+          additionalProperties: true
+          nullable: true
+        metrics: { $ref: "#/components/schemas/ReplayBacktestMetrics" }
+        per_timeframe:
+          type: object
+          additionalProperties:
+            $ref: "#/components/schemas/ReplayBacktestMetrics"
+        per_symbol:
+          type: object
+          additionalProperties:
+            $ref: "#/components/schemas/ReplayBacktestMetrics"
+        per_horizon:
+          type: object
+          additionalProperties:
+            $ref: "#/components/schemas/ReplayBacktestMetrics"
+        coverage:
           type: object
           additionalProperties: true

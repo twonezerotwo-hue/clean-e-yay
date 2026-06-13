@@ -4,6 +4,28 @@ _Bu dosya kısa ve güncel tutulur. Her görev sonunda güncellenir._
 
 ## Last known status
 
+- **R2 — Deterministic Rolling Backtest Runner tamamlandı** (2026-06-13): kayıtlı
+  snapshot serisi (`packages/data/snapshot_store.py`) üzerinde **deterministik**
+  outcome ölçümü. Live provider refetch YOK, sahte geçmiş YOK, look-ahead YOK
+  (outcome yalnızca GERÇEK gelecek snapshot'larla; karar zamanından sonraki İLK
+  gözlemle ölçülür). PAPER_SAFE / NO_EXECUTION: backtest emir üretmez, paper
+  açmaz, RiskGate bypass etmez, decide_matrix'i yeniden çalıştırmaz.
+  - **Runner** (`packages/data/backtest.py`, saf fonksiyon): 15m/1h/4h/1d horizon;
+    metrikler `hit_rate / false_positive / false_negative / avg_return /
+    max_drawdown / blocked_decision_accuracy`, `per_timeframe / per_symbol /
+    per_horizon`; bloklanmış aday-açılışlar counterfactual (blok doğru muydu?).
+    Yetersiz örnekte oran null (uydurma 0 değil). `snapshot_store.all_docs()`
+    kronolojik okuma helper'ı eklendi.
+  - **Endpoint**: `GET /api/v1/replay/backtest` + `GET /api/v1/replay/backtest/{run_id}`
+    (literal route, `{snapshot_id}` catch-all'undan ÖNCE). Dürüst durum: boş store
+    → `insufficient_snapshots`, ölçülebilir gelecek yok → `insufficient_future_data`
+    (ikisi de 200). `run_id` store üzerinde deterministik; sahte geçmiş run
+    saklanmaz (eşleşmezse 404 + current_run_id).
+  - **Sözleşme additive**: openapi `/replay/backtest(/{run_id})` +
+    `ReplayBacktest`/`ReplayBacktestMetrics`; TS api.ts senkron (codegen drift
+    yeşil). **375 pytest**, ruff CI-scope + tsc + pnpm build yeşil, live smoke
+    (`/replay/status`, `/replay/backtest`, `/dashboard/state`) OK.
+
 - **UX1 — Agent Operating Cockpit tamamlandı** (2026-06-13): dashboard "veri
   çöplüğü"nden operating cockpit'e çevrildi — ilk ekranda agent'ın beyni okunur
   (işlem açabilir mi, açamıyorsa **tek** ana sebep ne, ne yapmak istedi, neden

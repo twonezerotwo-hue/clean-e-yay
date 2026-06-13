@@ -1,40 +1,41 @@
-# NEXT TASK — R2 rolling replay runner veya cockpit cilası (öneri)
+# NEXT TASK — P1 Paper Lifecycle Finalization
 
-**UX1 — Agent Operating Cockpit** tamamlandı (bkz. `.tasks/TASK_RESULT.md`):
-backend ViewModel (`packages/decision/cockpit.py`) + `GET /api/v1/cockpit/brief`
-(AgentBrief + DecisionTrace), tek ana engel (no "veya"), data_mode, watch/trigger
-koşulları; yeni cockpit panelleri (AgentBrief üstte tek ana kart + DecisionTrace +
-WatchConditions + PaperAction) + Simple/Expert grouping (page.tsx `<details>`).
-Mevcut paneller sadeleşti (matrix tek banner, paper time-stop EXPIRED, agent
-evidence chain, candidate signals, learning insufficient sample). **366/366
-pytest**, CI-scope ruff + tsc + pnpm build yeşil, live smoke OK. RiskGate/DQS/
-KillSwitch/halt sıfır diff.
+**R2 — Deterministic Rolling Backtest Runner** tamamlandı (bkz.
+`.tasks/TASK_RESULT.md`): `packages/data/backtest.py` (saf `run_backtest()`),
+`snapshot_store.all_docs()`, `GET /api/v1/replay/backtest(/{run_id})`; 15m/1h/4h/1d
+horizon, hit_rate / false_positive / false_negative / avg_return / max_drawdown /
+blocked_decision_accuracy + per_timeframe/per_symbol/per_horizon; look-ahead yok,
+live refetch yok, paper açmaz. **375 pytest**, ruff CI-scope + tsc + pnpm build
+yeşil, live smoke (`/replay/status`, `/replay/backtest`, `/dashboard/state`) OK.
 
-> Backend yeterince güçlü — **yeni veri kaynağı / intelligence module EKLENMEZ.**
+> Backend bitirme modu — **yeni veri kaynağı / dashboard redesign / mimari katman
+> EKLENMEZ.** Mevcut state'i doğru ve dürüst göster.
 
-Sıradaki adaylar (her biri **önce karar/kullanım rolü** tasarlanır — ölü veri
-yasak; DATA_POLICY + ARCHITECTURE §18):
+## P1 — Paper lifecycle finalization
 
-## Öneri A: R2 — Deterministic rolling replay / backtest runner
-- Stored snapshot serisi (`packages/data/snapshot_store.py`) üzerinde
-  deterministik yeniden-üretim + karar **drift tespiti** (kayıtlı karar vs
-  yeniden hesaplanan). PAPER/REPLAY_ONLY, yeni live veri YOK, sahte performans YOK.
-- Runner store'u okur, decide_matrix'i stored snapshot'a uygular, farkı raporlar
-  (RiskGate/DQS bypass yok). Cockpit DecisionTrace ile aynı dilde rapor.
+Paper pozisyon yaşam döngüsünü deterministik olarak **kapat/sonlandır** ve
+state'i dürüst raporla (PAPER_ONLY / NO_EXECUTION; broker yok, gerçek emir yok).
 
-## Öneri B: Cockpit cilası (yeni veri yok — UX devamı)
-- Panel drag-drop düzeni + görünürlük tercihi kalıcılığı (usePanelVisibility
-  zaten var; Simple/Expert toggle butonu).
-- AgentBrief'e küçük "son N tick" trend mini-göstergesi (stored snapshot'tan).
-
-## Açık teknik borç (opsiyonel)
-- Gerçek `openapi-typescript` codegen otomasyonu (`make codegen`); şu an drift
-  guard testi manuel sync'i koruyor.
+Amaç (kapsam taslağı — görev başında netleştir):
+- Açık paper pozisyonların lifecycle durumu tek yerden okunur: open → time-stop
+  ACTIVE/EXPIRED → close (realized PnL) — negatif geri sayım yok, çift kapanış yok.
+- Kapanış nedenleri sınıflandırılır (time_stop / risk_flatten / kill_switch /
+  manual) ve `paper_state_summary` + ilgili endpoint'lerde dürüst yüzeye çıkar.
+- Equity/PnL/drawdown muhasebesi deterministik; replay/backtest ile tutarlı dil.
+- Halt/kill-switch flatten yolu lifecycle ile çelişmemeli (RiskGate yalnızca
+  kısıtlayıcı; bypass/gevşetme yok).
 
 ## Hard rules (değişmez)
 - PAPER_SAFE / NO_EXECUTION; broker yok, gerçek emir yok, live execution yok.
-- RiskGate/DQS/KillSwitch/halt yalnızca kısıtlayıcı; bypass/gevşetme yok.
+- RiskGate / DQS / KillSwitch / halt yalnızca kısıtlayıcı; bypass/gevşetme yok.
 - LLM karar vermez. Endpoint path + response alan adları sabit (additive ok).
-- Runtime'da mock yok; testlerde live network yok.
+- Runtime'da mock yok; testlerde live network yok. Look-ahead / sahte geçmiş yok.
 - Yeni state → dashboard'da minimum görünürlük (selector + registry; page.tsx
-  şişmez). 3D/R3F/Framer Motion ruhu + HeroScene + PAPER_ONLY korunur.
+  şişmez). PAPER_ONLY ruhu korunur.
+
+## Validation
+- `pytest -q` (narrow → full)
+- ruff CI scope: `ruff check packages apps/api apps/tick_worker apps/learning_worker`
+- `cd apps/web && tsc --noEmit && pnpm build`
+- live smoke: `/paper-trading/state`, `/dashboard/state`, `/replay/backtest`
+- codegen/contract drift yeşil

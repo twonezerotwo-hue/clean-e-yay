@@ -9,14 +9,21 @@ PAPER_SAFE / NO_EXECUTION: replay hiçbir emir üretmez, paper pozisyon açmaz,
 RiskGate'i bypass etmez, LLM karar motoruna bağlanmaz.
 
 - GET /replay/status                       → store durumu (active/empty)
+- GET /replay/backtest                      → R2 deterministik rolling backtest
+- GET /replay/backtest/{run_id}             → aynı run (store değiştiyse 404)
 - GET /replay/{snapshot_id}                → kayıtlı snapshot (yoksa 404)
 - GET /replay/{snapshot_id}/decision-trace → kayıtlı matristen karar izi (yoksa 404)
+
+R2 backtest: stored snapshot serisi üzerinde outcome ölçer (hit_rate / false
+positive/negative / avg_return / max_drawdown / blocked_decision_accuracy,
+per-timeframe & per-symbol). Yalnızca GERÇEK gelecek snapshot'larla ölçer →
+look-ahead yok; eksikse dürüstçe insufficient_future_data der.
 """
 from __future__ import annotations
 
 from fastapi import APIRouter, HTTPException
 
-from packages.data import snapshot_store
+from packages.data import backtest, snapshot_store
 
 router = APIRouter(tags=["replay"])
 
@@ -51,6 +58,44 @@ def get_replay_status() -> dict:
         "reason": _REASON_ACTIVE if active else _REASON_EMPTY,
         "execution": _NO_EXEC,
     }
+
+
+# NOT: bu iki route, `/replay/{snapshot_id}` catch-all'undan ÖNCE tanımlanır;
+# aksi halde "backtest" snapshot_id sanılır (FastAPI kayıt sırasıyla eşler).
+@router.get("/replay/backtest")
+def get_replay_backtest() -> dict:
+    """R2 — deterministik rolling backtest (stored snapshot serisi).
+
+    Live provider refetch YOK, decide_matrix yeniden çalışmaz, paper açılmaz,
+    RiskGate bypass yok. Boş store → insufficient_snapshots; ölçülebilir gelecek
+    yoksa insufficient_future_data (her ikisi de 200, dürüst body).
+    """
+    return backtest.run_backtest()
+
+
+@router.get("/replay/backtest/{run_id}")
+def get_replay_backtest_run(run_id: str) -> dict:
+    """Belirli bir run_id için backtest sonucu.
+
+    Backtest store üzerinde deterministiktir; sahte geçmiş run saklanmaz. İstenen
+    run_id mevcut store'un deterministik id'siyle eşleşmiyorsa (store değişmiş)
+    404 — bayat/uydurma sonuç döndürmek yerine dürüstçe reddeder.
+    """
+    result = backtest.run_backtest()
+    if result.get("run_id") != run_id:
+        raise HTTPException(
+            status_code=404,
+            detail={
+                "run_id": run_id,
+                "status": "not_found",
+                "available": False,
+                "current_run_id": result.get("run_id"),
+                "reason": "Bu run_id mevcut snapshot store ile eşleşmiyor. "
+                "Backtest store üzerinde deterministiktir; geçmiş run "
+                "saklanmaz. Güncel sonuç için current_run_id kullanın.",
+            },
+        )
+    return result
 
 
 @router.get("/replay/{snapshot_id}")

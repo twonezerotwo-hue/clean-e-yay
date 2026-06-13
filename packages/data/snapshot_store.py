@@ -150,6 +150,21 @@ def count() -> int:
     return len(_files())
 
 
+def all_docs() -> list[dict]:
+    """Tüm OKUNABİLİR snapshot'lar kronolojik (dosya adı = ts) sırada.
+
+    R2 replay/backtest runner buradan okur; bozuk dosyalar atlanır. Live data
+    refetch YOK — yalnızca diskten. Çağıran sırayı garanti olarak kullanabilir
+    (en eski → en yeni).
+    """
+    out: list[dict] = []
+    for p in _files():
+        data = _read(p)
+        if data is not None:
+            out.append(data)
+    return out
+
+
 def list_ids() -> list[str]:
     ids: list[str] = []
     for p in _files():
@@ -173,6 +188,7 @@ def status() -> dict:
 
 __all__ = [
     "SCHEMA_VERSION",
+    "all_docs",
     "count",
     "get",
     "latest",

@@ -861,6 +861,48 @@ export type ReplayDecisionTrace = {
   deep_data?: Record<string, unknown>;
 };
 
+// ---------------- R2 — deterministic rolling backtest ----------------
+// Stored snapshot serisi üzerinde outcome ölçümü. Live refetch / sahte geçmiş
+// YOK; look-ahead yok. PAPER_SAFE / NO_EXECUTION.
+
+export type ReplayBacktestStatus =
+  | "ok"
+  | "insufficient_snapshots"
+  | "insufficient_future_data";
+
+export type ReplayBacktestMetrics = {
+  signals_evaluated: number;
+  suppressed_evaluated: number;
+  hits?: number;
+  hit_rate?: number | null;
+  false_positive?: number;
+  false_positive_rate?: number | null;
+  false_negative?: number;
+  false_negative_rate?: number | null;
+  avg_return?: number | null;
+  max_drawdown?: number | null;
+  blocked_decision_accuracy?: number | null;
+};
+
+export type ReplayBacktest = {
+  run_id: string;
+  algo_version?: number;
+  status: ReplayBacktestStatus;
+  available: boolean;
+  execution: ReplayExecution;
+  reason?: string;
+  snapshot_count: number;
+  usable_snapshot_count?: number;
+  evaluated_snapshots?: number;
+  horizons?: string[];
+  window?: Record<string, unknown> | null;
+  metrics: ReplayBacktestMetrics;
+  per_timeframe?: Record<string, ReplayBacktestMetrics>;
+  per_symbol?: Record<string, ReplayBacktestMetrics>;
+  per_horizon?: Record<string, ReplayBacktestMetrics>;
+  coverage?: Record<string, unknown>;
+};
+
 // ---------------- UX1 — Agent Operating Cockpit ----------------
 // Tüm türetilmiş alanlar backend ViewModel'inden gelir (frontend hesap
 // yapmaz). Read-only; yeni karar/emir/live çağrı YOK. PAPER_SAFE.
