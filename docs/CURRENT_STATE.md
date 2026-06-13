@@ -4,6 +4,47 @@ _Bu dosya kısa ve güncel tutulur. Her görev sonunda güncellenir._
 
 ## Last known status
 
+- **UX1 — Agent Operating Cockpit tamamlandı** (2026-06-13): dashboard "veri
+  çöplüğü"nden operating cockpit'e çevrildi — ilk ekranda agent'ın beyni okunur
+  (işlem açabilir mi, açamıyorsa **tek** ana sebep ne, ne yapmak istedi, neden
+  değişti, ne izliyor). Yeni trading feature / data provider / intelligence
+  module YOK; RiskGate/DQS/KillSwitch/halt SIFIR diff. Frontend hesap yapmaz —
+  tüm türetilmiş alanlar backend ViewModel'inden. PAPER_SAFE / NO_EXECUTION.
+  - **Backend ViewModel** (`packages/decision/cockpit.py`, saf fonksiyonlar):
+    `compute_main_blocker` TEK ana engel ("veya" YOK; öncelik DQS_BLOCKED/
+    PROVIDER_DOWN > HALT/kill-switch > RISK_GATE > NONE), `compute_data_mode`
+    (LIVE_VERIFIED/LIVE_DEGRADED/PARTIAL_FALLBACK/SIMULATION/BLOCKED),
+    `compute_status` (ACTIONABLE/NO_ACTION/WATCHING/FROZEN/BLOCKED),
+    `agent_brief_view` (status/can_act/main_blocker/summary/data_mode/dqs/risk/
+    top_blockers/top_candidates/next_watch_conditions/recommended_stance/
+    paper_state_summary), `decision_trace_view` (candidate→final/blocked_by/
+    restrictive_gates/paper_action/evidence_refs), `next_watch_conditions`.
+  - **Endpoint**: `GET /api/v1/cockpit/brief` → {agent_brief, decision_trace}
+    (decide_matrix+matrix_view'i diğerleriyle aynı okur, yalnızca ÖZET üretir).
+  - **Tek ana engel**: report.py no_actionable/change_mind + DecisionPanel artık
+    tek main_blocker yazar ("DQS BLOCKED veya risk gate kısıtlayıcı" silindi).
+  - **Paper time-stop**: paper_trading `_time_stop_status` (NONE/ACTIVE/EXPIRED +
+    remaining ≥0) — additive serileştirme, negatif geri sayım YOK (logic değişmedi).
+  - **Learning**: summary `min_sample=20`/`sample_sufficient` → INSUFFICIENT SAMPLE.
+  - **Sözleşme additive**: openapi /cockpit/brief + CockpitBrief/AgentBrief/
+    DecisionTrace/MainBlocker/WatchCondition + enum'lar; Position time_stop_*;
+    LearningSummary min_sample/sample_sufficient. TS api.ts senkron (drift yeşil).
+  - **Frontend**: lib/selectors/cockpit.ts + useCockpitBrief. Yeni paneller
+    AgentBriefPanel (üstte tek ana kart, HeroScene üzerinde) / DecisionTracePanel /
+    WatchConditionsPanel / PaperActionPanel; Ask the Agent = ChatPanel. page.tsx
+    Simple grid + "Uzman / Detaylar" `<details>` collapsed; registry tier
+    simple|expert. TimeframeMatrix global-suspended tek banner + sade hücre;
+    AgentVotes → evidence chain; CommandSignals → "Aday Sinyalleri" +
+    NOT_ACTIONABLE; Replay → Uzman/Detaylar.
+  - **366/366 pytest** (+16 cockpit), CI-scope ruff + tsc + pnpm build yeşil.
+    **Live smoke** (izole API 8011 gerçek veri + web SSR 3100 prod build):
+    cockpit/brief WATCHING/RiskGate tek engel (no "veya"); ai-report no_actionable
+    tek engel; learning INSUFFICIENT SAMPLE; matrix 20/20 suspended; SSR 200
+    "Agent Brief" üstte + HeroScene + PAPER_ONLY + Uzman/Detaylar + 36 panel.
+    RiskGate/DQS/KillSwitch/halt sıfır diff, bypass yok.
+  - Açık (NEXT): R2 deterministic rolling replay/backtest runner VEYA cockpit
+    cilası (panel drag-drop düzeni, görünürlük tercih kalıcılığı).
+
 - **R1 — Real Snapshot Replay / Backtest Foundation tamamlandı** (2026-06-13):
   replay artık `reserved_not_active` değil — gerçek **disk snapshot store**
   üzerinden çalışan minimal, dürüst replay foundation. Sahte backtest / uydurma
@@ -461,10 +502,11 @@ _Bu dosya kısa ve güncel tutulur. Her görev sonunda güncellenir._
 
 ## Next task
 
-- D2 (türev) + D4 (realized vol) + D5 (catalyst half-life) bitti. Kalan deep-data
-  slice'ları `.tasks/NEXT_TASK.md`'de (her biri ÖNCE karar rolü tasarlanır — ölü
-  veri yasak):
-  - **D3 — Options IV / skew (Deribit)**: ATM IV + 25Δ skew → yalnızca kısıtlayıcı
-    size kısıtı/contrarian bağlam. Realized vol (D4) ile vol surface bağlamı tamamlanır.
-  - Alternatif: gerçek deterministik replay/backtest motoru (disk snapshot store).
+- UX1 Agent Operating Cockpit bitti. Backend yeterince güçlü; yeni veri kaynağı
+  eklenmez. Sıradaki adaylar (bkz. `.tasks/NEXT_TASK.md`):
+  - **R2 — Deterministic rolling replay / backtest runner**: stored snapshot
+    serisi üzerinde deterministik yeniden-üretim + karar drift tespiti
+    (PAPER/REPLAY_ONLY, sahte performans YOK, yeni live veri YOK).
+  - **Cockpit cilası**: panel drag-drop düzeni, görünürlük tercihi kalıcılığı,
+    Simple/Expert toggle (yeni veri yok; UX devamı).
 - `.tasks/NEXT_TASK.md` güncellendi.

@@ -1,5 +1,48 @@
 # Agent Changelog
 
+## 2026-06-13 — UX1 Agent Operating Cockpit
+- Dashboard "veri çöplüğü"nden operating cockpit'e: ilk ekranda agent'ın beyni
+  (ne yapabilir / neden / ne izliyor). Yeni trading feature / data provider /
+  intelligence YOK; RiskGate/DQS/KillSwitch/halt sıfır diff. Frontend hesap
+  yapmaz — türetilmiş alanlar backend ViewModel'inden. PAPER_SAFE/NO_EXECUTION.
+- Yeni `packages/decision/cockpit.py` (saf fonksiyonlar): compute_main_blocker
+  (**TEK** ana engel, "veya" YOK; öncelik DQS/provider > halt > RiskGate),
+  compute_data_mode (LIVE_VERIFIED/LIVE_DEGRADED/PARTIAL_FALLBACK/SIMULATION/
+  BLOCKED), compute_status (ACTIONABLE/NO_ACTION/WATCHING/FROZEN/BLOCKED),
+  agent_brief_view, decision_trace_view, next_watch_conditions (deterministik
+  tetik koşulları).
+- Yeni endpoint `GET /api/v1/cockpit/brief` (apps/api/routers/cockpit.py) →
+  {agent_brief, decision_trace}; decide_matrix+matrix_view'i diğerleriyle aynı
+  okur, yalnızca ÖZET üretir.
+- report.py: no_actionable/change_mind artık tek ana engeli yazar ("DQS BLOCKED
+  veya risk gate kısıtlayıcı" silindi). DecisionPanel risk tarafı tek main_blocker.
+- paper_trading.py: `_time_stop_status` (NONE/ACTIVE/EXPIRED + remaining ≥0) —
+  serileştirmeye additive; negatif geri sayım YOK (paper logic değişmedi).
+- summary.py: MIN_RELIABLE_TRADES=20 + min_sample/sample_sufficient (additive) →
+  LearningPanel INSUFFICIENT SAMPLE uyarısı.
+- Sözleşme additive: openapi /cockpit/brief + CockpitBrief/AgentBrief/
+  DecisionTrace/MainBlocker/WatchCondition + enum'lar; Position time_stop_*;
+  LearningSummary min_sample/sample_sufficient. TS api.ts senkron (codegen drift
+  + contract yeşil).
+- Frontend: lib/selectors/cockpit.ts + useCockpitBrief + api/keys. Yeni paneller
+  AgentBriefPanel (üstte tek ana kart, HeroScene üzerinde) / DecisionTracePanel /
+  WatchConditionsPanel / PaperActionPanel; Ask the Agent = ChatPanel. page.tsx:
+  Simple grid (AgentBrief→DecisionTrace+Watch→TimeframeMatrix→PaperAction+Chat) +
+  "Uzman / Detaylar" `<details>` collapsed (diğer tüm paneller). Registry tier
+  simple|expert + 4 yeni panel.
+- Panel iyileştirmeleri: TimeframeMatrix global-suspended tek banner + sade
+  hücre (gate tekrarı yok, candidate→final korunur); AgentVotes → evidence chain
+  (verdict/reason/evidence_used/missing_data/actionability); CommandSignals →
+  "Aday Sinyalleri" + NOT_ACTIONABLE rozeti; Replay → Uzman/Detaylar (ikinci plan).
+- Testler +16 (`tests/unit/test_cockpit.py`): main_blocker tek-engel/no-veya/
+  öncelik, data_mode/status eşleme, agent_brief DQS-OK+RiskGate, watch conditions,
+  decision_trace, time-stop EXPIRED negatif değil, endpoint, all-suspended.
+  pytest 366/366; CI-scope ruff + tsc + pnpm build yeşil. Live smoke (izole API
+  8011 gerçek veri + web SSR 3100 prod): cockpit/brief WATCHING/RiskGate tek
+  engel; ai-report no_actionable "veya" yok; learning INSUFFICIENT SAMPLE; matrix
+  20/20 suspended; SSR 200 "Agent Brief" üstte + HeroScene + PAPER_ONLY + Uzman/
+  Detaylar + 36 panel. RiskGate/DQS/KillSwitch/halt sıfır diff, bypass yok.
+
 ## 2026-06-13 — R1 Real Snapshot Replay / Backtest Foundation
 - Replay `reserved_not_active`'ten gerçek disk snapshot store'a geçti. Sahte
   backtest / uydurma geçmiş YOK. PAPER_SAFE/NO_EXECUTION: replay emir/karar

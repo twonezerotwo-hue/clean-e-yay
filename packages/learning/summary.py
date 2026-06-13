@@ -7,6 +7,11 @@ from packages.learning.calibration import reliability_bins
 from packages.learning.walkforward import summarize as wf_summarize
 from packages.paper import state as paper_state
 
+# UX1 — Sharpe / win-rate gibi metrikler bu eşiğin altında istatistiksel
+# olarak anlamlı değildir; frontend bunları büyük göstermez (LearningPanel
+# "INSUFFICIENT SAMPLE" uyarısı). Frontend hesap yapmaz: karar backend'de.
+MIN_RELIABLE_TRADES = 20
+
 
 def build_summary() -> dict:
     s = paper_state.load()
@@ -39,6 +44,8 @@ def build_summary() -> dict:
 
     return {
         "total_trades": total,
+        "min_sample": MIN_RELIABLE_TRADES,
+        "sample_sufficient": total >= MIN_RELIABLE_TRADES,
         "win_rate": win_rate,
         "sharpe": sharpe,
         "sortino": sharpe,

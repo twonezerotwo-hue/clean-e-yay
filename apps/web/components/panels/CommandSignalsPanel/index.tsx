@@ -4,8 +4,9 @@ import { PanelFrame } from "@/components/shell/PanelFrame";
 import { PanelHeader } from "@/components/shell/PanelHeader";
 import { LoadingState } from "@/components/shell/LoadingState";
 import { EmptyState } from "@/components/shell/EmptyState";
-import { useRegimeReport } from "@/lib/queries/hooks";
+import { useCockpitBrief, useRegimeReport } from "@/lib/queries/hooks";
 import { selectTopAssets } from "@/lib/selectors/regime";
+import { selectAgentBrief } from "@/lib/selectors/cockpit";
 import { DIRECTION_COLOR } from "@/lib/constants";
 
 const STATUS_COLOR: Record<string, string> = {
@@ -14,12 +15,16 @@ const STATUS_COLOR: Record<string, string> = {
   BLOCKING: "text-signal-down",
 };
 
+// UX1 — bunlar HAM aday sinyaller (raw candidate), final karar DEĞİL. Final
+// karar RiskGate'ten geçer; agent act edemiyorsa NOT_ACTIONABLE rozeti.
 export function CommandSignalsPanel() {
   const { data, isLoading } = useRegimeReport();
+  const brief = selectAgentBrief(useCockpitBrief().data);
+  const notActionable = brief ? !brief.can_act : false;
   if (isLoading) {
     return (
       <PanelFrame id="command_signals">
-        <PanelHeader title="Komuta Sinyalleri" />
+        <PanelHeader title="Aday Sinyalleri" />
         <LoadingState />
       </PanelFrame>
     );
@@ -28,14 +33,28 @@ export function CommandSignalsPanel() {
   if (!assets.length) {
     return (
       <PanelFrame id="command_signals">
-        <PanelHeader title="Komuta Sinyalleri" />
+        <PanelHeader title="Aday Sinyalleri" />
         <EmptyState />
       </PanelFrame>
     );
   }
   return (
     <PanelFrame id="command_signals">
-      <PanelHeader title="Komuta Sinyalleri" subtitle={`${assets.length} varlık`} />
+      <PanelHeader
+        title="Aday Sinyalleri"
+        subtitle={`${assets.length} varlık · ham candidate (final değil)`}
+        actions={
+          notActionable ? (
+            <span className="rounded px-1.5 py-0.5 bg-accent-magenta/20 text-accent-magenta uppercase tracking-wide text-[10px]">
+              NOT_ACTIONABLE
+            </span>
+          ) : undefined
+        }
+      />
+      <p className="mb-2 text-[10px] text-white/40">
+        Ham aday sinyal — final karar RiskGate sonrası belirlenir
+        {notActionable ? " (şu an aksiyon kapalı)" : ""}.
+      </p>
       <ul className="space-y-1.5 text-sm">
         {assets.map((a) => (
           <li

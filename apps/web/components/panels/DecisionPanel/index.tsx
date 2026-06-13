@@ -5,12 +5,18 @@ import { PanelHeader } from "@/components/shell/PanelHeader";
 import { LoadingState } from "@/components/shell/LoadingState";
 import { EmptyState } from "@/components/shell/EmptyState";
 import { DataQualityBadge } from "@/components/shell/DataQualityBadge";
-import { useAIReport, useDashboardState, useDecisionMatrix } from "@/lib/queries/hooks";
+import {
+  useAIReport,
+  useCockpitBrief,
+  useDashboardState,
+  useDecisionMatrix,
+} from "@/lib/queries/hooks";
 import {
   selectMatrixFirstSymbol,
   selectMatrixSuspended,
   selectTfStripFor,
 } from "@/lib/selectors/decision";
+import { selectAgentBrief, BLOCKER_TONE } from "@/lib/selectors/cockpit";
 import { RISK_ACTION_COLOR, DIRECTION_COLOR } from "@/lib/constants";
 import type { TimeframeDecision } from "@/types/generated/api";
 
@@ -58,6 +64,8 @@ function TfStrip() {
 export function DecisionPanel() {
   const ai = useAIReport();
   const dash = useDashboardState();
+  const cockpit = useCockpitBrief();
+  const brief = selectAgentBrief(cockpit.data);
   return (
     <PanelFrame id="decision">
       <PanelHeader
@@ -94,7 +102,7 @@ export function DecisionPanel() {
           </div>
           <div>
             <div className="text-xs uppercase tracking-widest text-white/40">
-              Risk Kapısı
+              Risk Kapısı · Ana Engel
             </div>
             <div
               className={`text-2xl font-display mt-1 ${
@@ -103,9 +111,26 @@ export function DecisionPanel() {
             >
               {dash.data.risk_gate.action}
             </div>
-            <p className="text-sm text-white/70 mt-2">
-              {dash.data.risk_gate.reason}
-            </p>
+            {/* UX1 — tek ana engel (no "veya"); backend ViewModel'inden. */}
+            {brief ? (
+              brief.main_blocker.code === "NONE" ? (
+                <p className="text-sm text-signal-up mt-2">
+                  Risk kapısı açık — yeni girişe engel yok.
+                </p>
+              ) : (
+                <p className="text-sm mt-2">
+                  <span className={BLOCKER_TONE[brief.main_blocker.code]}>
+                    {brief.can_act ? "" : "NO NEW POSITION — "}
+                    main blocker: {brief.main_blocker.label}
+                  </span>
+                  {brief.main_blocker.detail ? (
+                    <span className="text-white/60">, reason: {brief.main_blocker.detail}</span>
+                  ) : null}
+                </p>
+              )
+            ) : (
+              <p className="text-sm text-white/70 mt-2">{dash.data.risk_gate.reason}</p>
+            )}
             <TfStrip />
           </div>
         </div>

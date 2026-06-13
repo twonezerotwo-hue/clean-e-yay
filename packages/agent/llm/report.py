@@ -17,6 +17,19 @@ from packages.agent.llm import budget, cache
 from packages.agent.llm import client as llm_client
 from packages.agent.llm import context as ctx_mod
 from packages.agent.llm.guard import SYSTEM_RULES
+from packages.decision.cockpit import compute_main_blocker
+
+
+def _main_blocker(ctx: dict) -> dict:
+    """UX1 — tek ana engel (no "veya"); cockpit ile aynı mantık."""
+    rg = ctx["matrix"].get("risk_gate") or {}
+    return compute_main_blocker(
+        dqs_status=ctx["dqs"]["status"],
+        risk_action=rg.get("action"),
+        risk_reason=rg.get("reason"),
+        halt_active=bool(ctx["halt"]["active"]),
+        provider_down=bool(ctx.get("provider_issues")),
+    )
 
 PERSONAS = ("analyst", "risk_officer", "macro_strategist")
 
@@ -130,8 +143,10 @@ def _missing_for(ctx: dict) -> list[str]:
 
 def _actionability(ctx: dict) -> str:
     if ctx_mod.no_actionable_decision(ctx):
+        blocker = _main_blocker(ctx)
+        detail = f" ({blocker['detail']})" if blocker["detail"] else ""
         return (
-            "no_actionable_decision — DQS BLOCKED veya risk gate kısıtlayıcı; "
+            f"no_actionable_decision — ana engel: {blocker['label']}{detail}; "
             "hiçbir timeframe'de yeni paper aksiyonu yok."
         )
     actions = ctx["matrix"]["paper_actions"]
@@ -244,7 +259,12 @@ def _fallback_concerns(persona: str, ctx: dict) -> list[str]:
 
 def _fallback_change_mind(persona: str, ctx: dict) -> str:
     if ctx_mod.no_actionable_decision(ctx):
-        return "DQS'in OK'e dönmesi ve risk gate kısıtlarının kalkması."
+        blocker = _main_blocker(ctx)
+        if blocker["code"] in ("DQS_BLOCKED", "PROVIDER_DOWN"):
+            return "DQS'in OK'e dönmesi (yeterli doğrulanmış veri)."
+        if blocker["code"] == "HALT":
+            return "Aktif halt'ın owner reset ile kalkması."
+        return f"{blocker['label']} kısıtının kalkması."
     if persona == "analyst":
         return "Timeframe'ler arası yön uyumunun bozulması veya skorların 50'ye gerilemesi."
     if persona == "risk_officer":

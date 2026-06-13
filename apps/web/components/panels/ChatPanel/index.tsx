@@ -41,7 +41,7 @@ export function ChatPanel() {
 
   return (
     <PanelFrame id="chat">
-      <PanelHeader title="Sohbet" subtitle="state-grounded · LLM karar vermez" />
+      <PanelHeader title="Ask the Agent" subtitle="state-grounded · LLM karar vermez" />
       <div className="space-y-2">
         <div className="max-h-64 overflow-y-auto space-y-2 pr-1">
           {items.length === 0 ? (

@@ -53,13 +53,24 @@ function cellTitle(c: TimeframeDecision): string {
   return lines.join("\n");
 }
 
-function MatrixCell({ c }: { c: TimeframeDecision }) {
+function MatrixCell({
+  c,
+  globalSuspended,
+}: {
+  c: TimeframeDecision;
+  globalSuspended: boolean;
+}) {
   const candidateDiffers =
     c.candidate_action != null && c.candidate_action !== c.action;
+  // UX1 — tüm hücreler aynı global gate ile suspended ise hücrede gate'i
+  // tekrar tekrar yazma; üstteki tek banner yeterli. Ham aday skoru/aksiyonu
+  // sade görünür, candidate→final ayrımı korunur.
   return (
     <td className="p-1">
       <div
-        className={`rounded border px-1.5 py-1 text-center text-[10px] leading-tight ${cellTone(c)}`}
+        className={`rounded border px-1.5 py-1 text-center text-[10px] leading-tight ${
+          globalSuspended ? "border-white/10 text-white/45" : cellTone(c)
+        }`}
         title={cellTitle(c)}
         data-status={c.status}
       >
@@ -72,24 +83,26 @@ function MatrixCell({ c }: { c: TimeframeDecision }) {
               {ACTION_LABEL[c.action] ?? c.action}
             </>
           ) : (
-            ACTION_LABEL[c.action] ?? c.action
+            ACTION_LABEL[
+              globalSuspended ? (c.candidate_action ?? c.action) : c.action
+            ] ?? c.action
           )}
         </div>
         <div className="tabular-nums opacity-80">{Math.round(c.score ?? 0)}</div>
-        <div className="text-[8px] uppercase tracking-wider opacity-70">
-          {c.status === "SUSPENDED"
-            ? "SUSPENDED"
-            : c.actionable
-              ? "ACTIONABLE"
-              : "NOT ACT."}
-        </div>
-        {/* P0/T2 — bir hücreyi hangi kapı kıstı (event riski, risk gate,
-            mistake, korelasyon, 1w bias) kısa rozette görünür. */}
-        {cellBlockedLabel(c) ? (
-          <div className="mt-0.5 truncate text-[7px] uppercase tracking-wider opacity-60">
-            {cellBlockedLabel(c)}
-          </div>
-        ) : null}
+        {globalSuspended ? null : (
+          <>
+            <div className="text-[8px] uppercase tracking-wider opacity-70">
+              {c.actionable ? "ACTIONABLE" : "NOT ACT."}
+            </div>
+            {/* P0/T2 — bir hücreyi hangi kapı kıstı (event riski, risk gate,
+                mistake, korelasyon, 1w bias) kısa rozette görünür. */}
+            {cellBlockedLabel(c) ? (
+              <div className="mt-0.5 truncate text-[7px] uppercase tracking-wider opacity-60">
+                {cellBlockedLabel(c)}
+              </div>
+            ) : null}
+          </>
+        )}
       </div>
     </td>
   );
@@ -135,10 +148,12 @@ export function TimeframeMatrixPanel() {
           ) : undefined
         }
       />
-      {suspended && riskGate ? (
-        <p className="mb-2 text-[11px] text-signal-down/90">
-          Risk kapısı: {riskGate.action} — {riskGate.reason}. Tüm
-          timeframe&apos;lerde yeni işlem yok.
+      {suspended ? (
+        <p className="mb-2 rounded border border-signal-down/30 bg-signal-down/10 px-2 py-1 text-[11px] text-signal-down/90">
+          ⛔ All timeframes suspended by{" "}
+          {riskGate ? `RiskGate: ${riskGate.action}` : `DQS ${dqs}`}
+          {riskGate?.reason ? ` — ${riskGate.reason}` : ""}. Tüm
+          timeframe&apos;lerde yeni işlem yok (hücrelerde ham aday skoru gösteriliyor).
         </p>
       ) : null}
       {/* P0 — olay riski yaklaşan yüksek etkili takvim olayını ve hücreleri
@@ -221,7 +236,7 @@ export function TimeframeMatrixPanel() {
             <tr key={r.symbol} className="border-t border-white/5">
               <td className="p-1 font-medium">{r.symbol}</td>
               {r.cells.map((c) => (
-                <MatrixCell key={c.timeframe} c={c} />
+                <MatrixCell key={c.timeframe} c={c} globalSuspended={suspended} />
               ))}
             </tr>
           ))}

@@ -159,6 +159,18 @@ paths:
               schema:
                 $ref: "#/components/schemas/DecisionMatrix"
 
+  /api/v1/cockpit/brief:
+    get:
+      operationId: getCockpitBrief
+      summary: UX1 — Agent Operating Cockpit özeti (AgentBrief + DecisionTrace; read-only)
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CockpitBrief"
+
   /api/v1/data/snapshot:
     get:
       operationId: getDataSnapshot
@@ -588,6 +600,16 @@ components:
           format: date-time
           nullable: true
           description: T2 — TF time-stop; dolunca TIME_STOP_EXIT. null → time-stop yok.
+        time_stop_status:
+          type: string
+          enum: [NONE, ACTIVE, EXPIRED]
+          description: >
+            UX1 — time-stop durumu backend'de; negatif geri sayım YOK. EXPIRED →
+            exit pending (fiyatla TIME_STOP_EXIT'te kapanır).
+        time_stop_seconds_remaining:
+          type: integer
+          nullable: true
+          description: UX1 — kalan saniye (≥0; EXPIRED'da 0, time-stop yoksa null).
 
     Trade:
       type: object
@@ -653,6 +675,12 @@ components:
       required: [total_trades, win_rate, calibration]
       properties:
         total_trades: { type: integer }
+        min_sample:
+          type: integer
+          description: UX1 — Sharpe/win-rate'in istatistiksel anlam eşiği.
+        sample_sufficient:
+          type: boolean
+          description: UX1 — total_trades ≥ min_sample (false → INSUFFICIENT SAMPLE).
         win_rate: { type: number }
         sharpe: { type: number }
         sortino: { type: number }
@@ -1426,6 +1454,119 @@ components:
     # Replay = kaydedilmiş gerçek state'in incelenmesi. Sahte backtest / uydurma
     # geçmiş performans YOK. PAPER_SAFE / NO_EXECUTION: replay emir üretmez,
     # paper pozisyon açmaz, RiskGate'i bypass etmez, live provider çağırmaz.
+
+    MainBlocker:
+      type: object
+      description: >
+        UX1 — agent'ın TEK ana engeli ("veya" yok). Öncelik DQS/provider >
+        halt/kill-switch > RiskGate kısıtı.
+      required: [code, label, detail]
+      properties:
+        code:
+          type: string
+          enum: [DQS_BLOCKED, HALT, PROVIDER_DOWN, RISK_GATE, NONE]
+        label: { type: string }
+        detail: { type: string }
+
+    WatchCondition:
+      type: object
+      description: UX1 — agent'ın izlediği bir sonraki tetik koşulu (deterministik).
+      required: [key, label]
+      properties:
+        key: { type: string }
+        label: { type: string }
+        detail: { type: string }
+
+    AgentBrief:
+      type: object
+      description: >
+        UX1 — ilk-ekran tek ana kart: agent şu an ne yapabilir, ana engel ne,
+        ne izliyor. Tüm türetilmiş alanlar backend'de (frontend hesap yapmaz).
+      required: [status, can_act, main_blocker, data_mode, summary, recommended_stance]
+      properties:
+        status:
+          type: string
+          enum: [ACTIONABLE, NO_ACTION, WATCHING, FROZEN, BLOCKED]
+        can_act: { type: boolean }
+        main_blocker: { $ref: "#/components/schemas/MainBlocker" }
+        summary: { type: string }
+        data_mode:
+          type: string
+          enum: [LIVE_VERIFIED, LIVE_DEGRADED, PARTIAL_FALLBACK, SIMULATION, BLOCKED]
+        regime: { type: string, nullable: true }
+        dqs:
+          type: object
+          additionalProperties: true
+        risk:
+          type: object
+          additionalProperties: true
+        open_paper_positions: { type: integer }
+        top_blockers:
+          type: array
+          items: { type: string }
+        top_candidates:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+        next_watch_conditions:
+          type: array
+          items: { $ref: "#/components/schemas/WatchCondition" }
+        recommended_stance: { type: string }
+        paper_state_summary:
+          type: object
+          additionalProperties: true
+        generated_at: { type: string, format: date-time }
+
+    DecisionTrace:
+      type: object
+      description: >
+        UX1 — candidate→final karar izi: ne istendi, neye düştü, hangi kapı
+        kesti, kanıt referansları. Stored/live state'i açıklar; karar üretmez.
+      required: [candidate_decisions, final_decisions, blocked_by]
+      properties:
+        candidate_decisions:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+        final_decisions:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+        blocked_by:
+          type: array
+          items: { type: string }
+        risk_gate:
+          type: object
+          additionalProperties: true
+          nullable: true
+        restrictive_gates:
+          type: array
+          items: { type: string }
+        paper_action:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+        evidence_refs:
+          type: array
+          items: { type: string }
+
+    CockpitBrief:
+      type: object
+      description: >
+        UX1 — Agent Operating Cockpit özeti (tek çağrı). AgentBrief + DecisionTrace
+        ilk-ekranı besler. Read-only; yeni karar/emir/live çağrı YOK. PAPER_SAFE.
+      required: [agent_brief, decision_trace]
+      properties:
+        generated_at: { type: string, format: date-time }
+        mode:
+          type: object
+          additionalProperties: true
+        agent_brief: { $ref: "#/components/schemas/AgentBrief" }
+        decision_trace: { $ref: "#/components/schemas/DecisionTrace" }
 
     ReplayStatus:
       type: object

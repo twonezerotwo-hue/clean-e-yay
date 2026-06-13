@@ -38,10 +38,16 @@ function OpenPositions({ positions }: { positions: Position[] }) {
               {p.side}
             </span>
           </span>
-          <span className="text-white/45 tabular-nums">
-            {p.valid_until
-              ? `time-stop ${fmtRelative(p.valid_until)}`
-              : "time-stop yok"}
+          {/* UX1 — time-stop durumu backend'de; negatif/yanıltıcı geri sayım YOK. */}
+          <span className="tabular-nums">
+            {(p.time_stop_status ?? (p.valid_until ? "ACTIVE" : "NONE")) ===
+            "EXPIRED" ? (
+              <span className="text-amber-400">TIME_STOP_EXPIRED</span>
+            ) : p.valid_until ? (
+              <span className="text-white/45">time-stop {fmtRelative(p.valid_until)}</span>
+            ) : (
+              <span className="text-white/45">time-stop yok</span>
+            )}
           </span>
         </li>
       ))}

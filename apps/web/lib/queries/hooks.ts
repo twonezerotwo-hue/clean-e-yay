@@ -96,6 +96,15 @@ export const useDecisionMatrix = () =>
     refetchInterval: 30_000,
   });
 
+/** UX1 — Agent Operating Cockpit özeti (AgentBrief + DecisionTrace). */
+export const useCockpitBrief = () =>
+  useQuery({
+    queryKey: qk.cockpitBrief,
+    queryFn: api.cockpitBrief,
+    staleTime: 15_000,
+    refetchInterval: 30_000,
+  });
+
 export const useRiskHalts = () =>
   useQuery({
     queryKey: qk.riskHalts,

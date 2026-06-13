@@ -206,6 +206,9 @@ export type Position = {
   timeframe?: Timeframe;
   // T2 — TF time-stop; dolunca TIME_STOP_EXIT. null → time-stop yok.
   valid_until?: string | null;
+  // UX1 — time-stop durumu backend'de; negatif geri sayım YOK.
+  time_stop_status?: "NONE" | "ACTIVE" | "EXPIRED";
+  time_stop_seconds_remaining?: number | null;
 };
 
 export type Trade = {
@@ -260,6 +263,9 @@ export type CalibrationBin = {
 
 export type LearningSummary = {
   total_trades: number;
+  // UX1 — istatistiksel anlam eşiği + yeterlilik (frontend hesap yapmaz).
+  min_sample?: number;
+  sample_sufficient?: boolean;
   win_rate: number;
   sharpe?: number;
   sortino?: number;
@@ -853,4 +859,93 @@ export type ReplayDecisionTrace = {
   paper_state_summary?: Record<string, unknown> | null;
   provider_issues?: Record<string, unknown>;
   deep_data?: Record<string, unknown>;
+};
+
+// ---------------- UX1 — Agent Operating Cockpit ----------------
+// Tüm türetilmiş alanlar backend ViewModel'inden gelir (frontend hesap
+// yapmaz). Read-only; yeni karar/emir/live çağrı YOK. PAPER_SAFE.
+
+export type AgentStatus =
+  | "ACTIONABLE"
+  | "NO_ACTION"
+  | "WATCHING"
+  | "FROZEN"
+  | "BLOCKED";
+
+export type MainBlockerCode =
+  | "DQS_BLOCKED"
+  | "HALT"
+  | "PROVIDER_DOWN"
+  | "RISK_GATE"
+  | "NONE";
+
+export type DataMode =
+  | "LIVE_VERIFIED"
+  | "LIVE_DEGRADED"
+  | "PARTIAL_FALLBACK"
+  | "SIMULATION"
+  | "BLOCKED";
+
+export type MainBlocker = {
+  code: MainBlockerCode;
+  label: string;
+  detail: string;
+};
+
+export type WatchCondition = {
+  key: string;
+  label: string;
+  detail?: string;
+};
+
+export type AgentBriefCandidate = {
+  symbol?: string;
+  timeframe?: Timeframe;
+  direction?: "bullish" | "bearish" | "neutral";
+  score?: number;
+  candidate_action?: string;
+  final_action?: string;
+  actionable?: boolean;
+  status?: MatrixCellStatus;
+};
+
+export type AgentBrief = {
+  status: AgentStatus;
+  can_act: boolean;
+  main_blocker: MainBlocker;
+  summary: string;
+  data_mode: DataMode;
+  regime?: string | null;
+  dqs?: { status?: DqsStatus | null; score?: number | null };
+  risk?: { action?: string | null; reason?: string | null };
+  open_paper_positions?: number;
+  top_blockers?: string[];
+  top_candidates?: AgentBriefCandidate[];
+  next_watch_conditions?: WatchCondition[];
+  recommended_stance: string;
+  paper_state_summary?: {
+    open_positions?: number;
+    expired_time_stops?: number;
+    new_entries_disabled?: boolean;
+    frozen?: boolean;
+    current_paper_actions?: Array<Record<string, unknown>>;
+  };
+  generated_at?: string;
+};
+
+export type DecisionTrace = {
+  candidate_decisions: Array<Record<string, unknown>>;
+  final_decisions: Array<Record<string, unknown>>;
+  blocked_by: string[];
+  risk_gate?: { action?: string; reason?: string; evidence?: string[] } | null;
+  restrictive_gates?: string[];
+  paper_action?: Array<Record<string, unknown>>;
+  evidence_refs?: string[];
+};
+
+export type CockpitBrief = {
+  generated_at?: string;
+  mode?: ProvenanceMode;
+  agent_brief: AgentBrief;
+  decision_trace: DecisionTrace;
 };

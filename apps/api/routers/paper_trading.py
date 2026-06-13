@@ -23,12 +23,35 @@ from packages.risk.engine import RiskInput
 router = APIRouter(tags=["paper-trading"])
 
 
+def _time_stop_status(p: paper_state.Position, now: datetime) -> tuple[str, int | None]:
+    """UX1 — time-stop durumu backend'de; negatif geri sayım ÜRETİLMEZ.
+
+    NONE → time-stop yok; ACTIVE → kalan saniye (>0); EXPIRED → süre geçti,
+    kalan 0 (exit pending — fiyatla TIME_STOP_EXIT'te kapanır).
+    """
+    vu = getattr(p, "valid_until", None)
+    if not vu:
+        return "NONE", None
+    try:
+        deadline = datetime.fromisoformat(vu)
+    except (ValueError, TypeError):
+        return "NONE", None
+    remaining = (deadline - now).total_seconds()
+    if remaining <= 0:
+        return "EXPIRED", 0
+    return "ACTIVE", int(remaining)
+
+
 def _serialize_state(ps: paper_state.PaperState) -> dict:
+    now = datetime.now(UTC)
     open_pos = []
     unreal_total = 0.0
     for p in ps.open_positions:
         d = asdict(p)
         d["unrealized_pnl_usd"] = round(p.unrealized_pnl_usd, 2)
+        ts_status, ts_remaining = _time_stop_status(p, now)
+        d["time_stop_status"] = ts_status
+        d["time_stop_seconds_remaining"] = ts_remaining
         unreal_total += d["unrealized_pnl_usd"]
         open_pos.append(d)
     return {
