@@ -1,26 +1,28 @@
-# NEXT TASK — seç (UX3 sonrası)
+# NEXT TASK — seç (UX4 sonrası)
 
-**UX3 — Dashboard Information Architecture** tamamlandı (bkz. `.tasks/TASK_RESULT.md`
-+ `docs/CURRENT_STATE.md`): simple 5 önem-sıralı bölüm + expert 5 grup (Data Quality
-& Providers / Market Structure / Macro-Catalyst / Paper & Learning / Ops-System),
-ortak `PanelGroup` helper, registry IA grupları. Frontend-only; backend SIFIR diff.
-tsc/build temiz, SSR 200 + grup başlıkları + collapsed expert + PAPER_ONLY + HeroScene.
-Commit: `feat(web): reorganize dashboard information architecture`.
+**UX4 — Live Feedback Polish** tamamlandı (bkz. `.tasks/TASK_RESULT.md` +
+`docs/CURRENT_STATE.md`): market-structure 3 panel impact-first ("karar etkisi" üstte,
+sayılar altta, duplicate rozet kaldırıldı), TimeframeMatrix banner top-3 + tek gate
+banner, News ilk-6 + collapsed, Catalyst expired/context-only muted + aktif vurgu,
+AgentBrief hard-stop ⛔ banner. Copy/Learning zaten temizdi. Frontend-only; backend
+SIFIR diff. tsc/build temiz, SSR 200 + collapsed expert + PAPER_ONLY + HeroScene.
+Commit: `feat(web): polish live dashboard readability`.
 
-A1 + DEP1 + UX2 + REL1 + UX3 bitti. **Backend FREEZE** — yalnızca P0 hotfix.
+A1 + DEP1 + UX2 + REL1 + UX3 + UX4 bitti. **Backend FREEZE** — yalnızca P0 hotfix.
 Aşağıdaki üç yönden biri seçilir:
 
-## Seçenek A — UX4 live user feedback polish (önerilen)
-Yeni IA hazır; gerçek oturumla cockpit'i izle ve son cilaları yap: panel görünürlük
-tercih kalıcılığı (localStorage; backend state değil), simple bölümlerde aşırı
-yükseklik/yoğunluk (örn. AIReport compact mod), boş/yükleniyor/hata tutarlılığı,
-mobil/tablet kırılma, dark-neon kontrast/erişilebilirlik. Frontend-only; backend
-SIFIR diff; openapi/TS şeması değişmez.
-
-## Seçenek B — Production dry-run / long-running soak test
+## Seçenek A — Production dry-run / long-running soak test (önerilen)
 `make prod-up` ile saatlerce/günlerce çalıştır, `prod-status` + `/system/health` ile
 heartbeat/stale/warnings izle, tick cycle + snapshot ring-buffer + learning scheduled
 + paper lifecycle akışını gözle. Gözlem + dokümantasyon ağırlıklı; backend FREEZE.
+UX1–UX4 cilası bitti; gerçek soak çıktısı bir sonraki UX dalgasının girdisi olur.
+
+## Seçenek B — UX5 after real user feedback
+Soak/gerçek oturumdan somut geri bildirim topla, sonra hedefli cila yap: panel
+görünürlük tercih kalıcılığı (localStorage; backend state değil), simple bölümlerde
+yoğunluk (AIReport compact mod), boş/yükleniyor/hata tutarlılığı, mobil/tablet
+kırılma, kontrast/erişilebilirlik. Frontend-only; backend SIFIR diff; openapi/TS
+şeması değişmez. Spekülatif değil — yalnızca gözlemlenen sorun varsa.
 
 ## Seçenek C — only P0 backend hotfix mode
 Yeni iş açma; backend dondurulmuş RC. Yalnızca gerçek P0 bug → minimal + testli

@@ -68,7 +68,13 @@ function DerivRow({ d }: { d: DerivativesSnapshot }) {
           squeeze {d.squeeze_level} · {Math.round(d.squeeze_proxy)}
         </span>
       </div>
-      <div className="mt-1 grid grid-cols-2 gap-x-3 gap-y-0.5 text-[11px] text-white/70 tabular-nums">
+      {/* UX4 — önce karar etkisi (kısa cümle); teknik sayılar altta. */}
+      <div className="mt-1">
+        <span className={`inline-block rounded border px-1.5 py-0.5 text-[10px] font-semibold ${impact.tone}`}>
+          karar etkisi: {impact.label}
+        </span>
+      </div>
+      <div className="mt-1.5 grid grid-cols-2 gap-x-3 gap-y-0.5 text-[11px] text-white/60 tabular-nums">
         <span>
           funding{" "}
           <span className={d.funding_bias === "neutral" ? "text-white/60" : "text-accent-cyan"}>
@@ -82,7 +88,6 @@ function DerivRow({ d }: { d: DerivativesSnapshot }) {
         </span>
       </div>
       <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[9px] uppercase tracking-wider">
-        <span className={`rounded border px-1 py-px ${impact.tone}`}>{impact.label}</span>
         <span className="text-white/35">{d.source}</span>
         {d.freshness ? (
           <span className={FRESH_TONE[d.freshness] ?? "text-white/40"}>{d.freshness}</span>

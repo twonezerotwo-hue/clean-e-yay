@@ -4,6 +4,34 @@ _Bu dosya kısa ve güncel tutulur. Her görev sonunda güncellenir._
 
 ## Last known status
 
+- **UX4 — Live Feedback Polish tamamlandı** (2026-06-14): canlı cockpit
+  okunabilirlik cilası — yeni panel/veri yok, mevcut componentler sadeleştirildi.
+  **Frontend-only**; backend FREEZE korundu (packages/ + apps/* SIFIR diff;
+  openapi/TS değişmedi → codegen drift otomatik yeşil). Frontend hesap yapmaz;
+  selector/brief korundu. 7 panel dokunuldu:
+  - **Market structure impact-first** (OptionsVol · Volatilite · Kripto Türevleri):
+    kartın üstünde tek belirgin "karar etkisi: …" satırı; teknik sayılar (ATM IV /
+    rv / funding-OI / skew / term) altta + daha küçük (white/60). Alttaki **duplicate
+    impact rozeti kaldırıldı** (önce yalnızca OptionsVol'deydi → 3 panele yayıldı).
+  - **TimeframeMatrix**: market-structure banner özetleri `capList` ile ilk 3 etki +
+    "+K" (detay expert panelde); global gate'te hücreler gate'i tekrar etmez (üstte
+    tek banner; UX1 davranışı korundu).
+  - **News**: ilk 6 başlık görünür, kalanlar `<details>` altında collapsed; ham
+    haber Macro/Catalyst expert grubunda kalır; uzun başlık `break-words`.
+  - **Catalyst**: expired / unknown / context-only (rumor dahil) muted (opacity-50);
+    aktif CAUTION / NO_POSITION_INCREASE sol kenar renkli vurgu ile daha belirgin.
+  - **AgentBrief**: hard-stop (HALT/DQS_BLOCKED/PROVIDER_DOWN) ilk ekranda
+    yüksek-görünür ⛔ banner ("YENİ İŞLEM YOK — {main_blocker.label}"); soft RISK_GATE
+    ⚠ magenta. `main_blocker` backend cockpit'ten (frontend hesap yok).
+  - Copy/Learning zaten temizdi (UX1/UX2): AIReport/DecisionPanel tek `main_blocker`
+    (stale "DQS BLOCKED veya risk gate" yok), LearningPanel insufficient tek satır +
+    muted metrik → **dokunulmadı**.
+  - tsc temiz; next build ✓; SSR (prerendered + live izole 3100) HTTP 200, AgentBrief
+    görünür, expert `<details>` collapsed, grup başlıkları (Karar/Risk/Uzman) görünür,
+    PAPER_ONLY + NO_EXECUTION + HeroScene canvas korundu, "karar etkisi" client
+    bundle'da. Backend dosyası değişmedi; backend testleri çalıştırılmadı (gerekmez).
+  - Commit: `feat(web): polish live dashboard readability`.
+
 - **UX3 — Dashboard Information Architecture tamamlandı** (2026-06-13): dashboard
   önem sırasına göre **gruplu IA**'ya geçti. **Frontend-only**; backend FREEZE
   korundu (packages/ + apps/* SIFIR diff; openapi/TS değişmedi → codegen drift

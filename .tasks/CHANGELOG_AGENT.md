@@ -1,5 +1,37 @@
 # Agent Changelog
 
+## 2026-06-14 — UX4 Live Feedback Polish
+- Canlı cockpit okunabilirlik cilası — yeni panel/veri/backend logic yok, mevcut
+  componentler sadeleştirildi. **Frontend-only**; backend FREEZE korundu (packages/ +
+  apps/* SIFIR diff; openapi/TS değişmedi → codegen drift otomatik yeşil). Frontend
+  hesap yapmaz; selector/brief korundu. Önceki oturumun commit edilmemiş WIP'i
+  kurtarıldı (AgentBrief banner / Matrix capList / News collapse / Catalyst muted /
+  OptionsVol impact-first + duplicate rozet zaten kalkmıştı), üzerine eksik parçalar
+  tamamlandı.
+- **Market structure impact-first** (`OptionsVolPanel` · `VolatilityPanel` ·
+  `CryptoDerivativesPanel`): kartın üstünde tek belirgin "karar etkisi: …" satırı;
+  teknik sayılar (ATM IV / rv / funding-OI / 25Δ skew / term) altta + daha küçük
+  (white/60). Alttaki **duplicate impact rozeti** üç panelde de kaldırıldı.
+- `TimeframeMatrixPanel`: market-structure banner özetleri `capList` ile ilk 3 etki +
+  "+K" (detay expert panelde); global gate'te hücreler gate'i tekrar etmez (üstte tek
+  banner; UX1 davranışı korundu).
+- `NewsPanel`: ilk 6 başlık görünür, kalanlar `<details>` collapsed; ham haber Macro/
+  Catalyst expert'te; uzun başlık `break-words`.
+- `CatalystImpactPanel`: expired / unknown / context-only (rumor unverified dahil)
+  muted (opacity-50); aktif CAUTION / NO_POSITION_INCREASE sol kenar renkli vurgu.
+- `AgentBriefPanel`: hard-stop (HALT/DQS_BLOCKED/PROVIDER_DOWN) ilk ekranda ⛔ kırmızı
+  banner ("YENİ İŞLEM YOK — {main_blocker.label}" + detail); soft RISK_GATE ⚠ magenta.
+  `main_blocker` backend cockpit'ten (frontend hesap yok).
+- Copy/Learning zaten temizdi (UX1/UX2): AIReport/DecisionPanel tek `main_blocker`
+  (stale "DQS BLOCKED veya risk gate" grep 0), LearningPanel insufficient tek satır +
+  muted metrik → dokunulmadı.
+- Validation: tsc temiz; next build ✓ (4/4 static prerender); SSR (prerendered + live
+  izole 3100) HTTP 200, AgentBrief görünür, expert `<details>` collapsed, grup
+  başlıkları (Karar/Risk/Uzman), PAPER_ONLY + NO_EXECUTION + HeroScene canvas korundu,
+  "karar etkisi" client bundle'da. Backend testleri çalıştırılmadı (gerekmez —
+  yalnızca apps/web/components/panels/*.tsx + docs değişti). Commit:
+  `feat(web): polish live dashboard readability`.
+
 ## 2026-06-13 — UX3 Dashboard Information Architecture
 - Dashboard "veri çöplüğü"nden önem sırasına göre **gruplu IA**'ya. **Frontend-only**;
   backend FREEZE korundu (packages/ + apps/* SIFIR diff; openapi/TS değişmedi →

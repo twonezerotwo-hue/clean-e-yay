@@ -64,8 +64,22 @@ function CatalystRow({ c }: { c: CatalystImpact }) {
   const action = ACTION_TONE[c.actionability];
   const remaining = catalystRemainingMinutes(c);
   const expired = remaining !== null && remaining <= 0;
+  // UX4 — süresi dolmuş / bilinmeyen / yalnızca-bağlam (rumor dahil) catalyst
+  // görsel olarak muted; karar zincirine girmez. Aktif CAUTION / NO_POS_INC ise
+  // sol kenarda renkli vurguyla daha belirgin durur.
+  const muted =
+    expired || c.event_type === "unknown" || c.actionability === "CONTEXT_ONLY";
+  const activeAccent = muted
+    ? ""
+    : c.actionability === "NO_POSITION_INCREASE"
+      ? "border-l-2 border-l-signal-down/70 pl-2"
+      : c.actionability === "CAUTION"
+        ? "border-l-2 border-l-orange-400/70 pl-2"
+        : "";
   return (
-    <li className="border-b border-white/5 pb-2">
+    <li
+      className={`border-b border-white/5 pb-2 ${muted ? "opacity-50" : ""} ${activeAccent}`}
+    >
       <div className="flex items-center justify-between gap-2">
         <span className="text-[11px] font-medium text-white/85">
           {EVENT_LABEL[c.event_type]}

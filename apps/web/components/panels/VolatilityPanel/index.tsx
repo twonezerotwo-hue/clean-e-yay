@@ -65,6 +65,12 @@ function VolCell({ v }: { v: VolatilitySnapshot }) {
           {v.vol_zscore != null ? ` · z${v.vol_zscore >= 0 ? "+" : ""}${v.vol_zscore.toFixed(1)}` : ""}
         </span>
       </div>
+      {/* UX4 — önce karar etkisi; teknik sayılar (rv, vol_state) altta/daha küçük. */}
+      <div className="mt-0.5">
+        <span className={`inline-block rounded border px-1.5 py-0.5 text-[9px] font-semibold ${impact.tone}`}>
+          karar etkisi: {impact.label}
+        </span>
+      </div>
       <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[10px] text-white/60 tabular-nums">
         <span>
           rv <span className="text-white/80">{fmtPct(v.realized_vol)}</span>
@@ -74,9 +80,6 @@ function VolCell({ v }: { v: VolatilitySnapshot }) {
             {v.vol_state}
           </span>
         ) : null}
-        <span className={`rounded border px-1 py-px text-[8px] uppercase tracking-wider ${impact.tone}`}>
-          {impact.label}
-        </span>
         {v.freshness ? (
           <span className={`text-[8px] uppercase ${FRESH_TONE[v.freshness] ?? "text-white/40"}`}>
             {v.freshness}

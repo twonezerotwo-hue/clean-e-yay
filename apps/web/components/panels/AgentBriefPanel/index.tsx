@@ -48,6 +48,11 @@ export function AgentBriefPanel() {
     );
   }
   const canAct = b.can_act;
+  // UX4 — sert durdurucu (KILL_SWITCH/HALT/DQS/provider) ilk ekranda çok net
+  // bir banner olarak görünür; ana engel backend main_blocker'dan (hesap yok).
+  const isHardStop = ["HALT", "DQS_BLOCKED", "PROVIDER_DOWN"].includes(
+    b.main_blocker.code,
+  );
   return (
     <PanelFrame id="agent_brief">
       <PanelHeader
@@ -63,6 +68,33 @@ export function AgentBriefPanel() {
           </div>
         }
       />
+
+      {/* UX4 — sert durdurucuda ilk ekranda yüksek-görünür uyarı bandı. */}
+      {!canAct && b.main_blocker.code !== "NONE" ? (
+        <div
+          className={`mb-3 flex items-start gap-2 rounded-lg border px-3 py-2 ${
+            isHardStop
+              ? "border-signal-down/60 bg-signal-down/15"
+              : "border-accent-magenta/50 bg-accent-magenta/10"
+          }`}
+        >
+          <span className="text-base leading-none">{isHardStop ? "⛔" : "⚠"}</span>
+          <div className="min-w-0">
+            <div
+              className={`text-sm font-semibold ${
+                isHardStop ? "text-signal-down" : "text-accent-magenta"
+              }`}
+            >
+              YENİ İŞLEM YOK — {b.main_blocker.label}
+            </div>
+            {b.main_blocker.detail ? (
+              <div className="text-[11px] text-white/65 break-words">
+                {b.main_blocker.detail}
+              </div>
+            ) : null}
+          </div>
+        </div>
+      ) : null}
 
       {/* Üst satır: agent durumu + ana engel */}
       <div className="flex flex-wrap items-end gap-x-6 gap-y-2">

@@ -53,6 +53,12 @@ function cellTitle(c: TimeframeDecision): string {
   return lines.join("\n");
 }
 
+// UX4 — banner özeti: yalnızca ilk N en önemli etki + "+K" (detay expert panelde).
+function capList(parts: string[], n = 3): string {
+  if (parts.length <= n) return parts.join(" · ");
+  return `${parts.slice(0, n).join(" · ")} +${parts.length - n}`;
+}
+
 function MatrixCell({
   c,
   globalSuspended,
@@ -172,9 +178,7 @@ export function TimeframeMatrixPanel() {
       {derivatives.length ? (
         <p className="mb-2 text-[11px] text-orange-300/90">
           ⚠ Türev sıkışma (proxy):{" "}
-          {derivatives
-            .map((d) => `${d.symbol} ${d.squeeze_level} · ${d.funding_bias}`)
-            .join(" · ")}{" "}
+          {capList(derivatives.map((d) => `${d.symbol} ${d.squeeze_level}`))}{" "}
           — yalnızca kısıtlayıcı (gerçek liq değil).
         </p>
       ) : null}
@@ -183,13 +187,13 @@ export function TimeframeMatrixPanel() {
       {volatility.length ? (
         <p className="mb-2 text-[11px] text-orange-300/90">
           ⚠ Volatilite rejimi:{" "}
-          {volatility
-            .map(
+          {capList(
+            volatility.map(
               (v) =>
                 `${v.symbol} ${v.timeframe} ${v.regime}` +
-                (v.vol_state !== "normal" ? ` · ${v.vol_state}` : ""),
-            )
-            .join(" · ")}{" "}
+                (v.vol_state !== "normal" ? ` ${v.vol_state}` : ""),
+            ),
+          )}{" "}
           — yalnızca kısıtlayıcı (asla size artırmaz).
         </p>
       ) : null}
@@ -198,9 +202,7 @@ export function TimeframeMatrixPanel() {
       {catalysts.length ? (
         <p className="mb-2 text-[11px] text-orange-300/90">
           ⚑ Catalyst:{" "}
-          {catalysts
-            .map((c) => `${c.event_type} (${c.actionability})`)
-            .join(" · ")}{" "}
+          {capList(catalysts.map((c) => `${c.event_type} (${c.actionability})`))}{" "}
           — yalnızca kısıtlayıcı (rumor/half-life dışı yalnızca bağlam).
         </p>
       ) : null}
@@ -209,17 +211,8 @@ export function TimeframeMatrixPanel() {
           skew_25d proxy (gerçek greeks değil). */}
       {options.length ? (
         <p className="mb-2 text-[11px] text-orange-300/90">
-          ⚠ Options:{" "}
-          {options
-            .map(
-              (o) =>
-                `${o.symbol} ${o.regime}` +
-                (o.skew_25d != null
-                  ? ` · skew ${(o.skew_25d * 100).toFixed(1)}vp (proxy)`
-                  : ""),
-            )
-            .join(" · ")}{" "}
-          — yalnızca kısıtlayıcı (asla size artırmaz).
+          ⚠ Options: {capList(options.map((o) => `${o.symbol} ${o.regime}`))} —
+          yalnızca kısıtlayıcı (asla size artırmaz).
         </p>
       ) : null}
       <div className="overflow-x-auto">

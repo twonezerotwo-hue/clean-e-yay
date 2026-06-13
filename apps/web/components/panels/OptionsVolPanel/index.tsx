@@ -83,7 +83,13 @@ function OptRow({ o }: { o: OptionsSnapshot }) {
           {r.label}
         </span>
       </div>
-      <div className="mt-1 grid grid-cols-2 gap-x-3 gap-y-0.5 text-[11px] text-white/70 tabular-nums">
+      {/* UX4 — önce karar etkisi (kısa cümle); teknik sayılar altta. */}
+      <div className="mt-1">
+        <span className={`inline-block rounded border px-1.5 py-0.5 text-[10px] font-semibold ${r.tone}`}>
+          karar etkisi: {r.impact}
+        </span>
+      </div>
+      <div className="mt-1.5 grid grid-cols-2 gap-x-3 gap-y-0.5 text-[11px] text-white/60 tabular-nums">
         <span>
           ATM IV <span className="text-accent-cyan">{fmtPct(o.atm_iv)}</span>
         </span>
@@ -108,7 +114,6 @@ function OptRow({ o }: { o: OptionsSnapshot }) {
         {fmtPct(o.term_next_iv)} → {o.long_expiry ?? "—"} {fmtPct(o.term_long_iv)}
       </div>
       <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[9px] uppercase tracking-wider">
-        <span className={`rounded border px-1 py-px ${r.tone}`}>{r.impact}</span>
         <span className="text-white/35">{o.source}</span>
         {o.freshness ? (
           <span className={FRESH_TONE[o.freshness] ?? "text-white/40"}>{o.freshness}</span>
