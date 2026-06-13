@@ -1,5 +1,38 @@
 # Agent Changelog
 
+## 2026-06-13 — DEP1 Deployment / DevOps Checklist
+- Backend RC'yi gerçek 7/24 çalıştırmaya hazırladı: yalnızca **docs/devops**;
+  packages/ + apps/ runtime kodu **SIFIR diff**. Backend FREEZE korundu (yeni
+  feature/data source/intelligence yok; RiskGate/DQS/KillSwitch/halt/paper/
+  learning/replay dokunulmadı).
+- **`.env.example` yeniden yazıldı** (doğru + tam). Phantom var fix: kod
+  `LLM_DAILY_TOKEN_BUDGET` okuyor (`.env` `GROQ_DAILY_BUDGET_TOKENS` yazıyordu);
+  `ANTHROPIC_API_KEY`/`API_HOST`/`API_PORT`/`YFINANCE_CACHE_TTL_SEC`/
+  `NEWS_CACHE_TTL_SEC` kod tarafından OKUNMUYOR → kaldırıldı. Eklendi: `LLM_MODE`,
+  `PRICE_USE_MOCK`, `DEV_CORS`/`CORS_EXTRA_ORIGINS`, `TICK_INTERVAL_SEC`,
+  `SSL_CERT_FILE`, tüm runtime `*_PATH` override'ları + default'lar. `.env`
+  otomatik yüklenmiyor (dotenv yok) — doc. PAPER_ONLY/NO_EXECUTION YAPISAL
+  (kodda zorlanır; `/system/health` paper_safe/no_execution sabit true).
+- Yeni `scripts/smoke.sh` (+`make smoke`): health/system-health (paper_safe
+  doğrular)/cockpit/snapshot/decision-matrix/replay-status/learning-summary +
+  web SSR; API_BASE/WEB_BASE/SKIP_WEB override; fail → exit 1.
+- Yeni `scripts/workers.sh` (+`make workers`): tick_worker uzun-ömürlü daemon +
+  learning_worker tek-seferlik (run_once) seed. Süreç modeli netleşti: tick =
+  daemon (restart-always), learning = zamanlayıcı (cron/timer, restart-always
+  DEĞİL = spin-loop).
+- README: stale status header ("v2.5-web") → **Backend Release Candidate**; smoke
+  bölümü script tabanlı (eski stale `replay reserved` + eksik endpoint'ler
+  düzeltildi); yeni **"Deployment / 7-24 readiness"** bölümü (süreç tablosu +
+  restart politikası + supervision launchd/systemd/pm2/compose + health check +
+  stale alert + logs + runtime volume) + açık **PAPER_SAFE deploy checklist**.
+- Validation: pytest **419/419** (sıfır diff — regresyon yok), ruff CI-scope temiz,
+  tsc temiz, next build ✓, `bash -n` scripts ✓. Canlı smoke (izole API 8050 + web
+  3050, TEST_USE_MOCK, eski :8000/:3000 agent çakışmasından kaçınıldı): smoke.sh
+  **8/8 PASS** (paper_safe=true + web SSR 200); learning one-shot exit 0;
+  tick daemon cycle OK + SIGTERM temiz kapanış. data/runtime sızıntı yok.
+- PAPER_SAFE/NO_EXECUTION: broker yok, gerçek emir yok, live execution yok; kod
+  sıfır diff. Commit: `chore(devops): add deployment readiness checklist`.
+
 ## 2026-06-13 — A1 Final Backend Architecture Audit (Backend Release Candidate)
 - Backend uçtan uca "bitirme kontrolü"nden geçti: **PASS**. Gerçek P0 bug yok,
   gerçek sözleşme/runtime/TS drift yok, kritik test boşluğu yok. **Sıfır runtime

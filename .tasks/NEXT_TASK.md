@@ -1,58 +1,43 @@
-# NEXT TASK — RC Freeze → UX Polish + Deployment/DevOps Checklist
+# NEXT TASK — UX2: Dashboard Polish / Usability Pass
 
-**A1 — Final Backend Architecture Audit** tamamlandı → **BACKEND RELEASE CANDIDATE**
-(bkz. `.tasks/TASK_RESULT.md` + `docs/CURRENT_STATE.md`). Audit: **PASS**, gerçek
-P0 bug yok, sözleşme/runtime/TS drift yok, kritik test boşluğu yok. **Sıfır runtime
-diff.** pytest 419/419, ruff/tsc/build yeşil, in-process smoke (10 GET 200 +
-/chat bypass refusal). Commit: `docs(backend): mark backend release candidate after
-final audit`.
+**DEP1 — Deployment / DevOps Checklist** tamamlandı (bkz. `.tasks/TASK_RESULT.md` +
+`docs/CURRENT_STATE.md`): `.env.example` doğru+tam, `scripts/smoke.sh` +
+`scripts/workers.sh`, README "Deployment / 7-24 readiness" + PAPER_SAFE checklist.
+Kod sıfır diff; pytest 419/419, canlı smoke 8/8 PASS. Commit:
+`chore(devops): add deployment readiness checklist`.
 
-P1 + L1 + O1 + A1 bitti. **Backend artık FREEZE.**
+A1 (RC audit) + DEP1 (deploy) bitti. **Backend FREEZE** — yalnızca P0 hotfix.
 
-## Backend Freeze kuralı
-- Backend'e **yalnızca P0 hotfix** girer (gerçek bug + testle kanıt).
-- Yeni data source / dashboard redesign / intelligence module / trading logic /
-  mimari katman **EKLENMEZ**.
-- Endpoint path + response alan adları sabit (additive ok).
-- PAPER_SAFE / NO_EXECUTION; RiskGate/DQS/KillSwitch/halt yalnızca kısıtlayıcı.
+## UX2 — Dashboard Polish / Usability Pass (FRONTEND ONLY)
 
-## Sıradaki iş (öncelik sırası)
+Amaç: cockpit'i son kullanım cilası. Sadece `apps/web/`; **backend SIFIR diff**
+(yeni endpoint / response alanı / karar mantığı YOK). Frontend hesap YAPMAZ —
+yalnızca mevcut backend ViewModel/selector çıktısını sunar.
 
-### 1. UX Polish only (frontend; backend sıfır diff)
-- Panel görünürlük tercihlerinin kalıcılığı (localStorage; backend state değil).
-- Simple/Expert grid düzeni + collapsed `<details>` cilası; page.tsx büyütülmez.
-- Boş/yükleniyor/hata durumları + "VERİ YOK / SIMULATION / NO_EXECUTION"
-  rozetlerinin tutarlılığı. Frontend hesap YAPMAZ — selector kullanır.
-
-### 2. Deployment / DevOps Checklist (gerçek dağıtım hazırlığı)
-- `.env.example` tam mı (GROQ_API_KEY, FRED_API_KEY, *_PATH override'ları,
-  SNAPSHOT_STORE_MAX, CORS, SSL_CERT_FILE).
-- `data/runtime/` + `data/state/` gitignored (✓ doğrulandı) — prod volume mount.
-- CI gate: pytest + ruff (CI scope) + codegen/contract drift + tsc + next build.
-- Smoke runbook: izole port (eski `com.eyay.backend` LaunchAgent :8000 +
-  port 3000 çakışması — `launchctl bootout` / 127.0.0.1).
-- `docker-compose.dev.yml` → prod compose (api + tick_worker + learning_worker +
-  web tek komut); healthcheck `/api/v1/health` + `/api/v1/system/health`.
-
-### 3. (Opsiyonel) A1 P1 hardening — ayrı küçük task
-- H1: `risk/halt.py` + `rebalance_store.py` + `calibration_store.py` +
-  `agent/llm/budget.py` + `agent/llm/cache.py` → atomik temp+`os.replace`
-  (snapshot/paper/run/heartbeat zaten kullanıyor; testle kanıtla).
-- H2: store'lara `schema_version` (forward-uyumlu load zaten var).
-- H3: `ARCHITECTURE.md` §4'ü gerçek (consensus + agent/llm) yapıya hizala —
-  aspirasyonel çok-agent şemasını "gelecek vizyon" olarak işaretle.
-- H4: gerçek `openapi-typescript` codegen'e geçiş (el-senkron drift'i kaldırır).
-- H5: `decide_all` legacy tek-TF yoluna docstring notu (production decide_matrix).
+Kapsam (öneri, küçük diff'ler):
+- Panel görünürlük + layout tercihlerinin kalıcılığı (localStorage; backend state
+  değil) — `usePanelVisibility` zaten var, tutarlılaştır.
+- Simple/Expert grid + collapsed `<details>` okunabilirlik cilası; `page.tsx`
+  büyütülmez (registry + GridCell).
+- Boş / yükleniyor / hata durumları + "VERİ YOK / SIMULATION / NO_EXECUTION /
+  PAPER_ONLY" rozetlerinin tutarlılığı (tüm panellerde aynı dil).
+- Erişilebilirlik/responsive küçük düzeltmeler (kontrast, mobil grid).
 
 ## Hard rules (değişmez)
-- PAPER_SAFE / NO_EXECUTION; broker yok, gerçek emir yok, live execution yok.
-- RiskGate / DQS / KillSwitch / halt yalnızca kısıtlayıcı; bypass/gevşetme yok.
-- LLM karar vermez. Runtime'da mock yok; testlerde live network yok.
+- Backend FREEZE: packages/ + apps/api + worker'lar SIFIR diff (P0 hotfix hariç).
+- PAPER_SAFE / NO_EXECUTION; RiskGate/DQS/KillSwitch/halt dokunulmaz.
+- Frontend hesap yapmaz; selector kullanır; openapi/TS şeması değişmez (codegen
+  drift yeşil kalır).
+- Yeni data source / dashboard redesign / intelligence / trading logic YOK.
 
-## Validation (her değişiklikte)
-- `pytest -q` (runtime state izole: RISK_HALT_PATH / PAPER_STATE_PATH /
-  PAPER_AUDIT_PATH / SNAPSHOT_STORE_PATH / LEARNING_RUN_PATH / LEARNING_OUT_PATH /
-  WORKER_HEARTBEAT_PATH temp dizine al).
+## Validation
+- `cd apps/web && pnpm tsc --noEmit && pnpm build` (frontend asıl gate).
+- `pytest -q` (backend regresyon yok — sıfır diff; izole runtime path env'leri).
 - `ruff check packages apps/api apps/tick_worker apps/learning_worker tests/contract`
-- `cd apps/web && pnpm tsc --noEmit && pnpm build`
 - codegen/contract drift yeşil.
+- `make smoke` (çalışan API+web) — UX değişikliği SSR'ı bozmamalı.
+
+## Opsiyonel (ayrı küçük task)
+- A1 P1 hardening (H1–H5): 5 düşük-churn store atomik write · schema_version yay ·
+  ARCHITECTURE.md çok-agent şemasını "vizyon" olarak işaretle · gerçek
+  `openapi-typescript` codegen · `decide_all` test-only docstring notu.

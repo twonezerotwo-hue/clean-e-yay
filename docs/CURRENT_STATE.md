@@ -4,6 +4,29 @@ _Bu dosya kısa ve güncel tutulur. Her görev sonunda güncellenir._
 
 ## Last known status
 
+- **DEP1 — Deployment / DevOps Checklist tamamlandı** (2026-06-13): backend RC
+  gerçek 7/24 local/production-like çalıştırmaya hazır. Yalnızca **docs/devops**;
+  packages/ + apps/ runtime kodu **SIFIR diff** (backend FREEZE korundu).
+  - **`.env.example`** doğru + tam yeniden yazıldı: phantom var fix
+    (`GROQ_DAILY_BUDGET_TOKENS`→`LLM_DAILY_TOKEN_BUDGET`; `ANTHROPIC_API_KEY`/
+    `API_HOST`/`API_PORT`/`*_CACHE_TTL_SEC` kod okumuyor → kaldırıldı); eklendi
+    `LLM_MODE`/`PRICE_USE_MOCK`/`DEV_CORS`/`TICK_INTERVAL_SEC`/`SSL_CERT_FILE` +
+    tüm runtime `*_PATH`. `.env` otomatik yüklenmez (doc); PAPER_ONLY/NO_EXECUTION
+    yapısal.
+  - **`scripts/smoke.sh`** (+`make smoke`): health/system-health/cockpit/snapshot/
+    decision-matrix/replay-status/learning-summary + web SSR; fail→exit 1.
+    **`scripts/workers.sh`** (+`make workers`): tick daemon + learning one-shot.
+  - **README**: stale "v2.5-web" → Backend RC; script tabanlı smoke; yeni
+    "Deployment / 7-24 readiness" (süreç tablosu: api/tick restart-always,
+    learning **zamanlayıcı** — restart-always değil = spin-loop; supervision
+    launchd/systemd/pm2/compose; health check + stale alert + logs + volume) +
+    açık PAPER_SAFE deploy checklist.
+  - Validation: pytest **419/419** (regresyon yok), ruff/tsc/build temiz, scripts
+    syntax ✓. Canlı smoke (izole API 8050 + web 3050, TEST_USE_MOCK): smoke.sh
+    **8/8 PASS** (paper_safe=true + web SSR 200); learning one-shot exit 0; tick
+    daemon cycle OK + SIGTERM temiz. PAPER_SAFE/NO_EXECUTION; kod sıfır diff.
+  - Commit: `chore(devops): add deployment readiness checklist`.
+
 - **A1 — Final Backend Architecture Audit tamamlandı → BACKEND RELEASE CANDIDATE**
   (2026-06-13): backend uçtan uca "bitirme kontrolü"nden **PASS** ile geçti.
   Gerçek **P0 bug yok**, gerçek sözleşme/runtime/TS drift yok, kritik test boşluğu
@@ -638,11 +661,10 @@ _Bu dosya kısa ve güncel tutulur. Her görev sonunda güncellenir._
 
 ## Next task
 
-- A1 Final Backend Architecture Audit bitti → **backend Release Candidate**
-  (PASS, P0 yok, sıfır runtime diff). Backend artık freeze.
-- Sıradaki: **RC Freeze → UX Polish + Deployment/DevOps Checklist** (bkz.
-  `.tasks/NEXT_TASK.md`): backend dondurulur (yalnızca P0 hotfix); iş UX cilası
-  (panel görünürlük kalıcılığı, layout) + gerçek deployment hazırlığı (env/secrets,
-  CI gate, smoke runbook) tarafına geçer. Opsiyonel: A1 P1 hardening (H1–H5).
+- A1 (audit) + DEP1 (deployment checklist) bitti. Backend RC + 7/24 deploy hazır;
+  backend FREEZE (yalnızca P0 hotfix).
+- Sıradaki: **UX2 — Dashboard polish / usability pass** (bkz. `.tasks/NEXT_TASK.md`):
+  frontend cila (panel görünürlük/layout kalıcılığı, boş/yükleniyor/hata tutarlılığı,
+  okunabilirlik) — backend SIFIR diff. Opsiyonel: A1 P1 hardening (H1–H5).
   Yeni data source / dashboard redesign / intelligence / trading logic YOK.
-- `.tasks/NEXT_TASK.md` RC freeze ile güncellendi.
+- `.tasks/NEXT_TASK.md` UX2 ile güncellendi.

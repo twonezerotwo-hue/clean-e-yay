@@ -4,7 +4,11 @@ Clean rewrite of **E_YAY CODEX** — a paper-trading decision-support system tha
 
 > **Nihai mimari için → [ARCHITECTURE.md](ARCHITECTURE.md).** Yeni iş başlamadan önce o belge okunur.
 >
-> Status: **v2.5-web** — dikey dilim canlı (mock veriyle uçtan uca yeşil, 8/8 test, CI yeşil). Sıradaki: v2.1 gerçek data hunter + validator.
+> Status: **Backend Release Candidate** (A1 final audit PASS; P0 yok). Veri →
+> DQS → consensus/decision → RiskGate → paper → learning → replay/LLM zinciri
+> canlı; gerçek provider'lar + v2.7 deep data (türev/options/volatilite/catalyst)
+> + LLM persona + 7/24 worker reliability. pytest 419/419, ruff/tsc/build/CI yeşil.
+> Backend FREEZE — yalnızca P0 hotfix. Sıradaki: UX2 dashboard polish.
 
 ## Felsefe
 
@@ -137,21 +141,23 @@ docker compose -f docker-compose.dev.yml --profile workers up --build
 
 ### Smoke testleri
 
+Tek komut (çalışan API + opsiyonel web gerekir):
+
 ```bash
-# Backend
-curl http://127.0.0.1:8000/api/v1/health
-curl http://127.0.0.1:8000/api/v1/dashboard/state
-curl http://127.0.0.1:8000/api/v1/learning/mistakes
-curl http://127.0.0.1:8000/api/v1/learning/calibration
-curl http://127.0.0.1:8000/api/v1/learning/rebalance/proposal
-curl http://127.0.0.1:8000/api/v1/data/snapshot
-curl http://127.0.0.1:8000/api/v1/decision/matrix
-curl http://127.0.0.1:8000/api/v1/replay/status   # OPS — rezerve (aktif değil)
+make smoke
+# veya izole port:
+API_BASE=http://127.0.0.1:8050 WEB_BASE=http://127.0.0.1:3050 ./scripts/smoke.sh
+# yalnızca API:
+SKIP_WEB=true ./scripts/smoke.sh
+```
 
-# Web (HTML)
-curl -I http://127.0.0.1:3000
+`scripts/smoke.sh` şunları 200 bekler: `/api/v1/health`, `/api/v1/system/health`
+(+ `paper_safe=true` doğrular), `/api/v1/cockpit/brief`, `/api/v1/data/snapshot`,
+`/api/v1/decision/matrix`, `/api/v1/replay/status`, `/api/v1/learning/summary` ve
+web SSR `/`. Herhangi biri düşerse exit 1.
 
-# Tests
+```bash
+# Birim/sözleşme testleri + lint
 make test
 make lint
 ```
@@ -170,6 +176,89 @@ NEXT_PUBLIC_API_BASE_URL=http://127.0.0.1:8000
 ```bash
 make codegen   # OpenAPI → Pydantic + TS (TODO: codegen pipeline)
 ```
+
+## Deployment / 7-24 readiness (DEP1)
+
+Backend Release Candidate — gerçek 7/24 local/production-like çalıştırma için
+checklist. (Backend FREEZE: yalnızca P0 hotfix; yeni feature/data source yok.)
+
+### Süreçler ve restart politikası
+
+| Süreç | Tip | Restart |
+|---|---|---|
+| `apps.api.main:app` (uvicorn) | uzun-ömürlü HTTP | restart-always |
+| `apps.tick_worker.main` | uzun-ömürlü daemon (`TICK_INTERVAL_SEC`, SIGTERM-aware) | restart-always |
+| `apps.learning_worker.main` | **tek-seferlik** (`run_once`) | **zamanlayıcı** (cron/timer) — restart-always **YOK** (spin-loop yapar) |
+| `apps/web` (next) | uzun-ömürlü SSR | restart-always |
+
+Üç süreç birbirinden bağımsız (biri çökerse diğerleri etkilenmez); paylaşılan
+state `data/runtime/` dosyaları. Local hepsi:
+
+```bash
+make dev       # API + web
+make workers   # learning one-shot seed + tick daemon (ayrı terminal)
+```
+
+### Process supervision (öneri — minimal)
+
+- **Docker compose** (en basit): `docker compose -f docker-compose.dev.yml --profile workers up --build`.
+  learning_worker bir kez koşar ve çıkar — günlük için `restart: "no"` + dış
+  scheduler ya da ayrı bir cron servisi.
+- **macOS launchd**: `com.cleaneyay.api` / `com.cleaneyay.tick` → `KeepAlive=true`;
+  `com.cleaneyay.learning` → `StartCalendarInterval` (günlük), `KeepAlive=false`.
+  (Eski `com.eyay.*` agent'larıyla port çakışması için aşağıdaki bölüm.)
+- **systemd**: api/tick → `Restart=always`; learning → `.timer` unit + `Restart=no`.
+- **pm2**: api/tick → normal; learning → `pm2 start … --cron "0 0 * * *" --no-autorestart`.
+
+### Health check & stale worker alert
+
+- Liveness: `GET /api/v1/health` (uptime/version).
+- Readiness/ops: `GET /api/v1/system/health` → `workers`, `stale_workers`,
+  `last_successful_tick`, `last_learning_run`, `provider_summary`, `dqs_status`,
+  `snapshot_store_status`, `risk_halt_status`, `warnings`. **Network-free** —
+  STALE/UNKNOWN türetilir (tick > 120s, learning > 3600s eşik).
+- Stale alert: `warnings` içinde `worker_stale` / `learning_worker_no_data` /
+  `provider_degraded` / `dqs_blocked` / `snapshot_store_empty` / `active_halt`
+  varsa owner'a bildir (rapor — yürütme alarmı değil).
+- Smoke: `make smoke` (yukarı).
+
+### Logs
+
+Worker'lar stdout'a `logging` yazar (heartbeat cycle, FAILED istisnalar). Supervisor
+stdout/stderr'i topla (compose logs / journald / pm2 logs). Paper olay izi ayrıca
+append-only `data/runtime/paper_audit.jsonl`.
+
+### Runtime dizinleri (kalıcılık)
+
+Tümü `data/runtime/` altında ve **gitignored** (`data/runtime/`, `data/state/`):
+snapshots, `paper_state.json`, `paper_audit.jsonl`, `risk_halts.json`,
+`worker_heartbeats.json`, `learning_run.json`, `learning_summary.json`,
+`calibration.json`, `rebalance.json`, `llm_budget.json`, `llm_cache.json`,
+`ohlcv/`. **Prod**: `data/runtime/` kalıcı bir volume'a mount et (compose
+`.:/app` bind-mount host'ta tutar). Tek tek yollar `.env.example`'daki `*_PATH`
+ile override edilebilir.
+
+### Environment
+
+Tüm değişkenler + default'lar: [.env.example](.env.example). Uygulama `.env`'i
+**otomatik yüklemez** — shell/compose/launchd/systemd ile export et. Kritikler:
+`LLM_MODE`/`GROQ_API_KEY` (opsiyonel; yoksa deterministik fallback),
+`FRED_API_KEY` (yoksa o quote'lar BLOCKED, mock yok), `PRICE_USE_MOCK=false`
+(prod), `SSL_CERT_FILE` (certifi), `TICK_INTERVAL_SEC`, `*_PATH` (kalıcı volume),
+`NEXT_PUBLIC_API_BASE_URL` (web).
+
+### Güvenlik / PAPER_SAFE deploy checklist
+
+Deploy etmeden önce doğrula (hepsi kodda yapısal — env ile gevşetilemez):
+
+- [ ] **broker yok** — entegrasyon yok; tek "broker" tokeni LLM injection blocklist.
+- [ ] **gerçek emir yok** — `place_order`/`submit_order`/`execute_order`/`ccxt` yok.
+- [ ] **live execution yok** — replay/backtest emir üretmez, paper açmaz, refetch/look-ahead yok.
+- [ ] **PAPER_ONLY / NO_EXECUTION** — `/system/health` `paper_safe=true`, `no_execution=true` (sabit).
+- [ ] **RiskGate final** — DQS<55 → KILL_SWITCH; tüm gate'ler yalnızca kısıtlayıcı, bypass yok.
+- [ ] **LLM yalnızca açıklayıcı** — karar yazmaz; injection/bypass → guard refusal.
+- [ ] **runtime mock yok** — `PRICE_USE_MOCK=false`; provider fail → `DATA_UNAVAILABLE`.
+- [ ] **owner approval** — weights yalnızca owner approve ile değişir.
 
 ## Agent Development Protocol
 
