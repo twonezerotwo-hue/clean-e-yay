@@ -21,7 +21,7 @@ from packages.data.ingestion.pipeline import DEFAULT_SYMBOLS, get_cached_snapsho
 from packages.data.provenance import data_provenance
 from packages.decision.engine import decide_matrix, matrix_view
 from packages.paper import state as paper_state
-from packages.paper.lifecycle import flatten_all, open_position
+from packages.paper.lifecycle import attempt_open, flatten_all
 from packages.paper.lifecycle import tick as price_tick
 from packages.risk import halt as halt_store
 from packages.risk.engine import RiskInput
@@ -130,32 +130,33 @@ async def run_once() -> None:
     _regime, _risk, decisions = decide_matrix(
         MATRIX_SYMBOLS, snap, risk_in, open_positions=ps.open_positions
     )
-    open_keys = {(p.symbol, p.timeframe) for p in ps.open_positions}
     for d in decisions:
-        if d.action in {"blocked", "hold"} or (d.symbol, d.timeframe) in open_keys:
-            continue
-        price = prices.get(d.symbol)
-        if price is None or price <= 0:
+        if d.action in {"blocked", "hold"}:
             continue
         side = "long" if d.action == "open_long" else "short"
-        pos = open_position(
+        # P1 — açılış tek yoldan (attempt_open): duplicate/scale-in politikası +
+        # fiyat denetimi + audit ortak. (symbol, timeframe) duplicate bloklanır.
+        pos, _decision = attempt_open(
             ps,
             symbol=d.symbol,
             side=side,
-            entry_price=price,
+            entry_price=prices.get(d.symbol),
             size_multiplier=d.size_multiplier,
+            timeframe=d.timeframe,
+            open_reason=d.reason,
+            snapshot_id=snap.snapshot_id,
             fingerprint=d.fingerprint,
             data_verified=verified_flags.get(d.symbol, False),
             predicted_confidence=d.confidence,
             raw_confidence=d.raw_confidence,
             confidence_source=d.confidence_source,
-            timeframe=d.timeframe,
         )
-        log.info(
-            "open: %s %s %s @ %.4f size=%.0f valid_until=%s",
-            pos.symbol, pos.timeframe, pos.side, pos.entry_price, pos.size_usd,
-            pos.valid_until,
-        )
+        if pos is not None:
+            log.info(
+                "open: %s %s %s @ %.4f size=%.0f valid_until=%s",
+                pos.symbol, pos.timeframe, pos.side, pos.entry_price, pos.size_usd,
+                pos.valid_until,
+            )
 
     paper_state.save(ps)
 

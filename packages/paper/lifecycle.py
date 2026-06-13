@@ -1,11 +1,29 @@
-"""Paper trading lifecycle: open / tick (price update + SL/TP + time-stop) / close."""
+"""Paper trading lifecycle: open / tick (price update + SL/TP + time-stop) / close.
+
+P1 — lifecycle state machine + audit trail. Pozisyon durumları:
+OPEN → (EXPIRED_PENDING_PRICE | EXIT_PENDING | ERROR_STATE) → terminal Trade
+(CLOSED | FORCE_CLOSED). Fiyat yoksa **fake fiyat uydurulmaz** (DATA_POLICY):
+exit beklemeye alınır, sonraki tick'te fiyat gelince kapanır. Her open/close/
+blocked/expired olayı `packages/paper/audit.py` ile audit log'a yazılır.
+
+PAPER_SAFE / NO_EXECUTION: gerçek emir yok; RiskGate/halt yalnızca kısıtlayıcı.
+"""
 from __future__ import annotations
 
 import hashlib
 from datetime import UTC, date, datetime, timedelta
 
 from packages.data.registry.loader import load_thresholds
+from packages.paper import audit
 from packages.paper.state import PaperState, Position, Trade, utc_iso
+
+# Zorla kapanış nedenleri → terminal lifecycle_status=FORCE_CLOSED + ayrı audit
+# aksiyonu (KILL_SWITCH_EXIT / RISK_REDUCE_EXIT). Diğerleri normal CLOSED.
+_FORCE_CLOSE_REASONS = {"KILL_SWITCH_EXIT", "RISK_REDUCE_EXIT", "MANUAL"}
+_FORCE_AUDIT_ACTION = {
+    "KILL_SWITCH_EXIT": "KILL_SWITCH_EXIT",
+    "RISK_REDUCE_EXIT": "RISK_REDUCE_EXIT",
+}
 
 
 def _timeframe_time_stop_hours(timeframe: str) -> int:
@@ -52,6 +70,9 @@ def open_position(
     raw_confidence: float | None = None,
     confidence_source: str | None = None,
     timeframe: str = "1d",
+    open_reason: str | None = None,
+    snapshot_id: str | None = None,
+    scale_in: bool = False,
 ) -> Position:
     sl_pct = _sl_pct_for(symbol)
     tp_pct = sl_pct * _tp_rr()
@@ -83,9 +104,118 @@ def open_position(
         confidence_source=confidence_source,
         timeframe=timeframe,
         valid_until=valid_until,
+        lifecycle_status="OPEN",
+        time_stop_expired=False,
+        pending_exit_reason=None,
+        open_reason=open_reason,
+        snapshot_id=snapshot_id,
+        scale_in=bool(scale_in),
     )
     state.open_positions.append(pos)
+    audit.record(
+        "OPENED",
+        position_id=pos.id,
+        symbol=symbol,
+        timeframe=timeframe,
+        side=side,
+        price_used=pos.entry_price,
+        size=pos.size_usd,
+        reason=open_reason,
+        fingerprint=fingerprint,
+        snapshot_id=snapshot_id,
+        scale_in=bool(scale_in),
+    )
     return pos
+
+
+def find_open(state: PaperState, symbol: str, timeframe: str) -> Position | None:
+    """Aynı (symbol, timeframe) için açık pozisyon (yön fark etmez); yoksa None."""
+    for p in state.open_positions:
+        if p.symbol == symbol and p.timeframe == timeframe:
+            return p
+    return None
+
+
+def evaluate_open(
+    state: PaperState, *, symbol: str, timeframe: str, side: str, scale_in: bool = False
+) -> dict:
+    """P1 — duplicate / scale-in politikası (saf, yan etkisiz).
+
+    Aynı (symbol, timeframe) için **yön fark etmeksizin** ikinci pozisyon
+    AÇILMAZ — `scale_in=True` explicit verilmedikçe. Bu, hedge/flip'i bilinçli
+    olarak engeller (en güvenli politika). Farklı timeframe serbest.
+    """
+    existing = find_open(state, symbol, timeframe)
+    if existing is None:
+        return {"allowed": True, "duplicate": False, "reason": None}
+    if scale_in:
+        return {
+            "allowed": True, "duplicate": True, "reason": "scale_in",
+            "existing_side": existing.side,
+        }
+    reason = (
+        "duplicate_same_tf" if existing.side == side
+        else "opposite_dir_same_tf_no_hedge"
+    )
+    return {
+        "allowed": False, "duplicate": True, "reason": reason,
+        "existing_side": existing.side,
+    }
+
+
+def attempt_open(
+    state: PaperState,
+    *,
+    symbol: str,
+    side: str,
+    entry_price: float | None,
+    size_multiplier: float,
+    timeframe: str = "1d",
+    scale_in: bool = False,
+    open_reason: str | None = None,
+    snapshot_id: str | None = None,
+    fingerprint: str | None = None,
+    data_verified: bool = False,
+    predicted_confidence: float | None = None,
+    raw_confidence: float | None = None,
+    confidence_source: str | None = None,
+) -> tuple[Position | None, dict]:
+    """P1 — tek açılış giriş noktası: denetim → blocked/opened + audit.
+
+    Fiyat yok/≤0 → OPEN_BLOCKED(no_price) (fake fiyat YOK). Duplicate (scale_in
+    değilse) → OPEN_BLOCKED. Aksi halde `open_position`. tick_worker ve paper
+    router AYNI yoldan açar (drift yok). Döner: (Position|None, decision).
+    """
+    audit.record(
+        "OPEN_ATTEMPT", symbol=symbol, timeframe=timeframe, side=side,
+        price_used=entry_price, reason=open_reason, snapshot_id=snapshot_id,
+        scale_in=bool(scale_in),
+    )
+    if entry_price is None or entry_price <= 0:
+        decision = {"allowed": False, "duplicate": False, "reason": "no_price"}
+        audit.record(
+            "OPEN_BLOCKED", symbol=symbol, timeframe=timeframe, side=side,
+            reason="no_price", snapshot_id=snapshot_id,
+        )
+        return None, decision
+    decision = evaluate_open(
+        state, symbol=symbol, timeframe=timeframe, side=side, scale_in=scale_in
+    )
+    if not decision["allowed"]:
+        audit.record(
+            "OPEN_BLOCKED", symbol=symbol, timeframe=timeframe, side=side,
+            reason=decision["reason"], snapshot_id=snapshot_id, duplicate=True,
+        )
+        return None, decision
+    pos = open_position(
+        state, symbol=symbol, side=side, entry_price=entry_price,
+        size_multiplier=size_multiplier, fingerprint=fingerprint,
+        data_verified=data_verified, predicted_confidence=predicted_confidence,
+        raw_confidence=raw_confidence, confidence_source=confidence_source,
+        timeframe=timeframe, open_reason=open_reason, snapshot_id=snapshot_id,
+        scale_in=scale_in,
+    )
+    return pos, decision
 
 
 def close_position(state: PaperState, pos: Position, *, exit_price: float, reason: str) -> Trade:
@@ -94,6 +224,7 @@ def close_position(state: PaperState, pos: Position, *, exit_price: float, reaso
         if pos.side == "long"
         else (pos.entry_price - exit_price) / pos.entry_price * pos.size_usd
     )
+    lifecycle_status = "FORCE_CLOSED" if reason in _FORCE_CLOSE_REASONS else "CLOSED"
     trade = Trade(
         id=pos.id,
         symbol=pos.symbol,
@@ -110,6 +241,9 @@ def close_position(state: PaperState, pos: Position, *, exit_price: float, reaso
         raw_confidence=pos.raw_confidence,
         confidence_source=pos.confidence_source,
         timeframe=pos.timeframe,
+        lifecycle_status=lifecycle_status,
+        open_reason=pos.open_reason,
+        snapshot_id=pos.snapshot_id,
     )
     state.recent_trades.append(trade)
     state.open_positions = [p for p in state.open_positions if p.id != pos.id]
@@ -119,7 +253,38 @@ def close_position(state: PaperState, pos: Position, *, exit_price: float, reaso
     state.equity_usd = round(state.equity_usd + trade.pnl_usd, 2)
     if state.equity_usd > state.peak_equity_usd:
         state.peak_equity_usd = state.equity_usd
+    audit.record(
+        _FORCE_AUDIT_ACTION.get(reason, "CLOSED"),
+        position_id=pos.id,
+        symbol=pos.symbol,
+        timeframe=pos.timeframe,
+        side=pos.side,
+        reason=reason,
+        price_used=round(exit_price, 4),
+        size=pos.size_usd,
+        pnl=trade.pnl_usd,
+        lifecycle_status=lifecycle_status,
+        snapshot_id=pos.snapshot_id,
+        open_reason=pos.open_reason,
+    )
     return trade
+
+
+def _valid_position(pos: Position) -> bool:
+    """Pozisyon alanları tutarlı mı (ERROR_STATE guard'ı)."""
+    try:
+        return (
+            pos.entry_price is not None and pos.entry_price > 0
+            and pos.size_usd is not None and pos.size_usd > 0
+            and pos.side in ("long", "short")
+        )
+    except (TypeError, ValueError):
+        return False
+
+
+def _set_status(pos: Position, status: str, pending_reason: str | None = None) -> None:
+    pos.lifecycle_status = status
+    pos.pending_exit_reason = pending_reason
 
 
 def _time_stop_due(pos: Position, now: datetime) -> bool:
@@ -146,8 +311,31 @@ def tick(
     now = now or datetime.now(UTC)
     closed: list[Trade] = []
     for pos in list(state.open_positions):
+        # P1 — bozuk pozisyon → ERROR_STATE; kapatma denenmez (fake fiyat YOK).
+        if not _valid_position(pos):
+            if pos.lifecycle_status != "ERROR_STATE":
+                _set_status(pos, "ERROR_STATE")
+                audit.record(
+                    "ERROR", position_id=pos.id, symbol=pos.symbol,
+                    timeframe=pos.timeframe, reason="invalid_position_fields",
+                )
+            continue
+        due = _time_stop_due(pos, now)
+        pos.time_stop_expired = due
         price = prices.get(pos.symbol)
-        if price is None:
+        if price is None or price <= 0:
+            # Fiyat yok: time-stop dolduysa EXPIRED_PENDING_PRICE — fake fiyatla
+            # kapatma YOK (DATA_POLICY). Geçişte bir kez audit (spam yok).
+            if due and pos.lifecycle_status != "EXPIRED_PENDING_PRICE":
+                _set_status(pos, "EXPIRED_PENDING_PRICE", "TIME_STOP_EXIT")
+                audit.record(
+                    "TIME_STOP_EXPIRED", position_id=pos.id, symbol=pos.symbol,
+                    timeframe=pos.timeframe, reason="no_price_exit_pending",
+                )
+                audit.record(
+                    "EXIT_PENDING", position_id=pos.id, symbol=pos.symbol,
+                    timeframe=pos.timeframe, reason="TIME_STOP_EXIT",
+                )
             continue
         pos.current_price = price
         # SL/TP kontrol
@@ -163,27 +351,38 @@ def tick(
         ):
             closed.append(close_position(state, pos, exit_price=price, reason="TP_HIT"))
             continue
-        if _time_stop_due(pos, now):
+        if due:
+            # Fiyat geldi → bekleyen time-stop'u şimdi kapat (EXPIRED→CLOSED).
             closed.append(
                 close_position(state, pos, exit_price=price, reason="TIME_STOP_EXIT")
             )
+            continue
+        # Normal aktif — bekleyen exit varsa temizle (OPEN'a dön).
+        if pos.lifecycle_status != "OPEN":
+            _set_status(pos, "OPEN")
     return closed
 
 
-def flatten_all(state: PaperState, prices: dict[str, float]) -> list[Trade]:
+def flatten_all(
+    state: PaperState, prices: dict[str, float], *, reason: str = "KILL_SWITCH_EXIT"
+) -> list[Trade]:
     """G5 — KILL_SWITCH halt: tüm açık pozisyonları kapat (KILL_SWITCH_EXIT).
 
-    Sadece risk azaltıcı; fiyatı olmayan pozisyon açık kalır (mock fiyat
-    uydurulmaz — DATA_POLICY), bir sonraki tick'te tekrar denenir.
+    Sadece risk azaltıcı; fiyatı olmayan pozisyon **EXIT_PENDING**'e alınır
+    (mock fiyat uydurulmaz — DATA_POLICY), bir sonraki tick'te tekrar denenir.
     """
     closed: list[Trade] = []
     for pos in list(state.open_positions):
         price = prices.get(pos.symbol)
         if price is None or price <= 0:
+            if pos.lifecycle_status != "EXIT_PENDING":
+                _set_status(pos, "EXIT_PENDING", reason)
+                audit.record(
+                    "EXIT_PENDING", position_id=pos.id, symbol=pos.symbol,
+                    timeframe=pos.timeframe, reason=reason,
+                )
             continue
-        closed.append(
-            close_position(state, pos, exit_price=price, reason="KILL_SWITCH_EXIT")
-        )
+        closed.append(close_position(state, pos, exit_price=price, reason=reason))
     return closed
 
 

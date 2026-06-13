@@ -641,6 +641,56 @@ components:
           type: integer
           nullable: true
           description: UX1 — kalan saniye (≥0; EXPIRED'da 0, time-stop yoksa null).
+        lifecycle_status:
+          $ref: "#/components/schemas/PaperLifecycleStatus"
+        time_stop_expired:
+          type: boolean
+          description: P1 — valid_until geçti mi (fiyat gelince TIME_STOP_EXIT).
+        pending_exit_reason:
+          type: string
+          nullable: true
+          description: P1 — exit neden bekliyor (fiyat yoksa); ör. TIME_STOP_EXIT / KILL_SWITCH_EXIT.
+        open_reason:
+          type: string
+          nullable: true
+          description: P1 — learning handoff; açılış karar gerekçesi.
+        snapshot_id:
+          type: string
+          nullable: true
+          description: P1 — learning handoff; açılışın kaynak snapshot'ı.
+        scale_in:
+          type: boolean
+          description: P1 — explicit scale-in pozisyonu (default false).
+
+    PaperLifecycleStatus:
+      type: string
+      description: >
+        P1 — paper pozisyon yaşam döngüsü durumu. Canlı: OPEN /
+        EXPIRED_PENDING_PRICE / EXIT_PENDING / ERROR_STATE. Terminal (Trade):
+        CLOSED / FORCE_CLOSED.
+      enum: [OPEN, EXIT_PENDING, EXPIRED_PENDING_PRICE, CLOSED, FORCE_CLOSED, ERROR_STATE]
+
+    PaperAuditEvent:
+      type: object
+      description: >
+        P1 — paper lifecycle audit olayı (append-only JSONL'den). action bilinen
+        değerlerden biri (OPEN_ATTEMPT / OPENED / OPEN_BLOCKED / SIZE_REDUCED /
+        TIME_STOP_EXPIRED / EXIT_PENDING / CLOSED / KILL_SWITCH_EXIT /
+        RISK_REDUCE_EXIT / STATE_REPAIRED / ERROR). Alanlar additive.
+      required: [event_id, timestamp, action]
+      additionalProperties: true
+      properties:
+        event_id: { type: string }
+        timestamp: { type: string, format: date-time }
+        action: { type: string }
+        position_id: { type: string }
+        symbol: { type: string }
+        timeframe: { type: string }
+        reason: { type: string }
+        price_used: { type: number }
+        size: { type: number }
+        pnl: { type: number }
+        snapshot_id: { type: string }
 
     Trade:
       type: object
@@ -659,6 +709,16 @@ components:
           enum: [SL_HIT, TP_HIT, SIGNAL_REVERSAL, RISK_REDUCE, MANUAL, TIME_STOP_EXIT, KILL_SWITCH_EXIT]
         fingerprint: { type: string }
         timeframe: { $ref: "#/components/schemas/Timeframe" }
+        lifecycle_status:
+          $ref: "#/components/schemas/PaperLifecycleStatus"
+        open_reason:
+          type: string
+          nullable: true
+          description: P1 — learning handoff; açılış gerekçesi.
+        snapshot_id:
+          type: string
+          nullable: true
+          description: P1 — learning handoff; kaynak snapshot.
 
     PaperTradingState:
       type: object
@@ -675,6 +735,22 @@ components:
         recent_trades:
           type: array
           items: { $ref: "#/components/schemas/Trade" }
+        new_entries_disabled:
+          type: boolean
+          description: P1 — aktif halt (KILL_SWITCH/RISK_REDUCE) varsa yeni giriş kapalı.
+        duplicate_warning:
+          type: array
+          description: P1 — aynı (symbol, timeframe) birden fazla açık (normalde boş).
+          items:
+            type: object
+            additionalProperties: true
+        audit_summary:
+          type: object
+          additionalProperties: true
+          description: P1 — son audit penceresi özeti (action sayıları).
+        recent_audit_events:
+          type: array
+          items: { $ref: "#/components/schemas/PaperAuditEvent" }
 
     TickResult:
       type: object

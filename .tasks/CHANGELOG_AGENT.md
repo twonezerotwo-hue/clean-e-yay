@@ -1,5 +1,31 @@
 # Agent Changelog
 
+## 2026-06-13 — P1 Paper Lifecycle Finalization
+- Paper lifecycle backend'de net + güvenli + audit edilebilir + öğrenmeye hazır.
+  Yeni veri/dashboard/intelligence/mimari YOK. PAPER_SAFE/NO_EXECUTION sıfır diff;
+  fiyat yoksa fake kapanış yok; RiskGate/DQS/KillSwitch/halt bypass yok.
+- `packages/paper/state.py`: Position lifecycle alanları (lifecycle_status,
+  time_stop_expired, pending_exit_reason, open_reason, snapshot_id, scale_in);
+  Trade (lifecycle_status, open_reason, snapshot_id); schema_version; atomik
+  yazım; corrupt → yedek + temiz default (crash yok); legacy/forward-uyumlu load.
+- `packages/paper/lifecycle.py`: state machine (OPEN → EXPIRED_PENDING_PRICE /
+  EXIT_PENDING / ERROR_STATE → CLOSED / FORCE_CLOSED); time-stop fiyat varsa
+  TIME_STOP_EXIT, yoksa EXPIRED_PENDING_PRICE (sonra fiyatla kapanır); tek açılış
+  yolu `attempt_open` + duplicate/scale-in politikası (aynı symbol+tf yön fark
+  etmeksizin bloklu, farklı TF serbest, scale_in explicit); her olay audit.
+- Yeni `packages/paper/audit.py`: append-only data/runtime/paper_audit.jsonl
+  (OPEN_ATTEMPT/OPENED/OPEN_BLOCKED/TIME_STOP_EXPIRED/EXIT_PENDING/CLOSED/
+  KILL_SWITCH_EXIT/RISK_REDUCE_EXIT/STATE_REPAIRED/ERROR); best-effort, bozuk
+  satır okumada atlanır.
+- `apps/api/routers/paper_trading.py` + `apps/tick_worker/main.py`: açılış
+  attempt_open'a taşındı (drift yok). /paper-trading/state additive:
+  new_entries_disabled, duplicate_warning, audit_summary, recent_audit_events.
+- Sözleşme additive: openapi PaperLifecycleStatus + PaperAuditEvent + Position/
+  Trade/PaperTradingState alanları; TS api.ts senkron (codegen drift yeşil).
+  PaperActionPanel: EXPIRED/EXIT_PENDING "fiyat bekleniyor" + duplicate uyarısı.
+- 393 pytest (+18), ruff CI-scope + tsc + pnpm build yeşil, live smoke (health/
+  tick/paper-state/dashboard/cockpit + web SSR 200) OK.
+
 ## 2026-06-13 — R2 Deterministic Rolling Backtest Runner
 - Kayıtlı snapshot serisi üzerinde deterministik replay/backtest. Live refetch
   YOK, sahte geçmiş YOK, look-ahead YOK (outcome yalnızca GERÇEK gelecek

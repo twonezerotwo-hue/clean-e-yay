@@ -4,6 +4,35 @@ _Bu dosya kısa ve güncel tutulur. Her görev sonunda güncellenir._
 
 ## Last known status
 
+- **P1 — Paper Lifecycle Finalization tamamlandı** (2026-06-13): paper trading
+  yaşam döngüsü backend'de net, güvenli, **audit edilebilir** ve öğrenmeye hazır.
+  PAPER_SAFE / NO_EXECUTION sıfır diff; fiyat yoksa **fake kapanış yok**;
+  RiskGate/DQS/KillSwitch/halt bypass yok.
+  - **Lifecycle state machine** (`packages/paper/`): Position `lifecycle_status`
+    OPEN → EXPIRED_PENDING_PRICE / EXIT_PENDING / ERROR_STATE → terminal Trade
+    (CLOSED / FORCE_CLOSED). `time_stop_expired`, `pending_exit_reason` additive.
+    Time-stop: fiyat varsa TIME_STOP_EXIT, yoksa EXPIRED_PENDING_PRICE (sonraki
+    tick'te fiyat gelince kapanır; negatif geri sayım yok).
+  - **Tek açılış yolu** `lifecycle.attempt_open` (tick_worker + paper router ortak,
+    drift yok): duplicate/scale-in politikası — aynı (symbol, timeframe) yön fark
+    etmeksizin bloklanır (no hedge/flip); farklı TF serbest; `scale_in=True`
+    explicit'te açılır.
+  - **Audit trail** (yeni `packages/paper/audit.py`, append-only
+    `data/runtime/paper_audit.jsonl`): OPEN_ATTEMPT/OPENED/OPEN_BLOCKED/
+    TIME_STOP_EXPIRED/EXIT_PENDING/CLOSED/KILL_SWITCH_EXIT/STATE_REPAIRED;
+    best-effort (lifecycle'ı patlatmaz), bozuk satır okumada atlanır.
+  - **State robustness** (`packages/paper/state.py`): `schema_version`, atomik
+    yazım (temp+os.replace), corrupt → yedek + temiz default (crash yok),
+    legacy/forward-uyumlu yükleme (bilinmeyen alan atlanır, eksik default'a düşer).
+  - **Learning handoff**: Trade'e `open_reason`/`snapshot_id`/`lifecycle_status`
+    additive (mevcut learning okuyucuları bozulmadı).
+  - **API additive**: `/paper-trading/state` → `new_entries_disabled`,
+    `duplicate_warning`, `audit_summary`, `recent_audit_events`; Position/Trade
+    lifecycle alanları. openapi + TS api.ts senkron (codegen drift yeşil).
+    PaperActionPanel: EXPIRED/EXIT_PENDING "fiyat bekleniyor" + duplicate uyarısı.
+  - **393 pytest** (+18), ruff CI-scope + tsc + pnpm build yeşil, live smoke
+    (health/tick/paper-state/dashboard/cockpit + web SSR 200) OK.
+
 - **R2 — Deterministic Rolling Backtest Runner tamamlandı** (2026-06-13): kayıtlı
   snapshot serisi (`packages/data/snapshot_store.py`) üzerinde **deterministik**
   outcome ölçümü. Live provider refetch YOK, sahte geçmiş YOK, look-ahead YOK
@@ -524,11 +553,13 @@ _Bu dosya kısa ve güncel tutulur. Her görev sonunda güncellenir._
 
 ## Next task
 
-- UX1 Agent Operating Cockpit bitti. Backend yeterince güçlü; yeni veri kaynağı
-  eklenmez. Sıradaki adaylar (bkz. `.tasks/NEXT_TASK.md`):
-  - **R2 — Deterministic rolling replay / backtest runner**: stored snapshot
-    serisi üzerinde deterministik yeniden-üretim + karar drift tespiti
-    (PAPER/REPLAY_ONLY, sahte performans YOK, yeni live veri YOK).
-  - **Cockpit cilası**: panel drag-drop düzeni, görünürlük tercihi kalıcılığı,
-    Simple/Expert toggle (yeni veri yok; UX devamı).
-- `.tasks/NEXT_TASK.md` güncellendi.
+- P1 Paper Lifecycle Finalization bitti (commit `feat(paper): finalize lifecycle
+  and audit trail`). Backend yeterince güçlü; yeni veri kaynağı eklenmez.
+- Sıradaki: **L1 — Learning Loop Finalization** (bkz. `.tasks/NEXT_TASK.md`).
+  Paper lifecycle artık sağlam + audit edilebilir; learning loop'u gerçek paper
+  outcome'dan dürüst öğrenmeye hazırla: canonical outcome record normalization,
+  timeframe-aware learning (15m hatası 1d'yi cezalandırmaz), mistake memory /
+  calibration / auto-weight trainer yalnızca verified outcomes + owner approval,
+  learning worker reliability, API/dashboard additive. PAPER_SAFE / NO_EXECUTION;
+  active weights owner approval olmadan değişmez.
+- `.tasks/NEXT_TASK.md` L1 ile güncellendi.

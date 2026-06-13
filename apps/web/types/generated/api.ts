@@ -209,6 +209,38 @@ export type Position = {
   // UX1 — time-stop durumu backend'de; negatif geri sayım YOK.
   time_stop_status?: "NONE" | "ACTIVE" | "EXPIRED";
   time_stop_seconds_remaining?: number | null;
+  // P1 — lifecycle state machine + learning handoff (additive).
+  lifecycle_status?: PaperLifecycleStatus;
+  time_stop_expired?: boolean;
+  pending_exit_reason?: string | null;
+  open_reason?: string | null;
+  snapshot_id?: string | null;
+  scale_in?: boolean;
+};
+
+// P1 — paper pozisyon yaşam döngüsü durumu (canlı + terminal).
+export type PaperLifecycleStatus =
+  | "OPEN"
+  | "EXIT_PENDING"
+  | "EXPIRED_PENDING_PRICE"
+  | "CLOSED"
+  | "FORCE_CLOSED"
+  | "ERROR_STATE";
+
+// P1 — paper lifecycle audit olayı (append-only JSONL); alanlar additive.
+export type PaperAuditEvent = {
+  event_id: string;
+  timestamp: string;
+  action: string;
+  position_id?: string;
+  symbol?: string;
+  timeframe?: string;
+  reason?: string;
+  price_used?: number;
+  size?: number;
+  pnl?: number;
+  snapshot_id?: string;
+  [key: string]: unknown;
 };
 
 export type Trade = {
@@ -230,6 +262,10 @@ export type Trade = {
     | "KILL_SWITCH_EXIT";
   fingerprint?: string;
   timeframe?: Timeframe;
+  // P1 — terminal lifecycle + learning handoff (additive).
+  lifecycle_status?: PaperLifecycleStatus;
+  open_reason?: string | null;
+  snapshot_id?: string | null;
 };
 
 export type PaperTradingState = {
@@ -240,6 +276,11 @@ export type PaperTradingState = {
   sharpe_30d?: number;
   open_positions: Position[];
   recent_trades: Trade[];
+  // P1 — additive lifecycle/audit yüzeyi.
+  new_entries_disabled?: boolean;
+  duplicate_warning?: Array<Record<string, unknown>>;
+  audit_summary?: Record<string, unknown>;
+  recent_audit_events?: PaperAuditEvent[];
 };
 
 export type TickResult = {

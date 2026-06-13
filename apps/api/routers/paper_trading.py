@@ -8,11 +8,12 @@ from fastapi import APIRouter
 
 from packages.data.ingestion.pipeline import DEFAULT_SYMBOLS, get_cached_snapshot
 from packages.decision.engine import decide_matrix
+from packages.paper import audit as paper_audit
 from packages.paper import state as paper_state
 from packages.paper.lifecycle import (
+    attempt_open,
     flatten_all,
     max_drawdown_pct,
-    open_position,
 )
 from packages.paper.lifecycle import (
     tick as price_tick,
@@ -42,6 +43,19 @@ def _time_stop_status(p: paper_state.Position, now: datetime) -> tuple[str, int 
     return "ACTIVE", int(remaining)
 
 
+def _duplicate_warning(ps: paper_state.PaperState) -> list[dict]:
+    """P1 — savunmacı duplicate tespiti: aynı (symbol, timeframe) için birden
+    fazla açık pozisyon (politika gereği normalde boş). Görünür uyarı için."""
+    seen: dict[tuple[str, str], int] = {}
+    for p in ps.open_positions:
+        seen[(p.symbol, p.timeframe)] = seen.get((p.symbol, p.timeframe), 0) + 1
+    return [
+        {"symbol": sym, "timeframe": tf, "open_count": n}
+        for (sym, tf), n in sorted(seen.items())
+        if n > 1
+    ]
+
+
 def _serialize_state(ps: paper_state.PaperState) -> dict:
     now = datetime.now(UTC)
     open_pos = []
@@ -54,6 +68,9 @@ def _serialize_state(ps: paper_state.PaperState) -> dict:
         d["time_stop_seconds_remaining"] = ts_remaining
         unreal_total += d["unrealized_pnl_usd"]
         open_pos.append(d)
+    # P1 — yeni girişler kapalı mı: aktif halt (KILL_SWITCH/RISK_REDUCE) varsa
+    # yeni pozisyon açılmaz (read-only; risk hesaplamaz, persist halt'i okur).
+    new_entries_disabled = bool(halt_store.active_halts())
     return {
         "equity_usd": round(ps.equity_usd, 2),
         "realized_pnl_usd": round(ps.realized_pnl_usd, 2),
@@ -62,6 +79,11 @@ def _serialize_state(ps: paper_state.PaperState) -> dict:
         "sharpe_30d": 0.0,
         "open_positions": open_pos,
         "recent_trades": [asdict(t) for t in ps.recent_trades[-25:]],
+        # P1 — additive lifecycle/audit yüzeyi (frontend hesap yapmaz).
+        "new_entries_disabled": new_entries_disabled,
+        "duplicate_warning": _duplicate_warning(ps),
+        "audit_summary": paper_audit.summary(),
+        "recent_audit_events": paper_audit.read_recent(20),
     }
 
 
@@ -121,7 +143,6 @@ def post_paper_tick() -> dict:
             }
         )
 
-    open_keys = {(p.symbol, p.timeframe) for p in ps.open_positions}
     for d in decisions:
         entry = {"symbol": d.symbol, "timeframe": d.timeframe}
         if d.action == "blocked":
@@ -130,29 +151,32 @@ def post_paper_tick() -> dict:
         if d.action == "hold":
             actions.append({**entry, "action": "hold", "reason": d.reason})
             continue
-        if (d.symbol, d.timeframe) in open_keys:
-            actions.append({**entry, "action": "hold", "reason": "zaten açık (aynı TF)"})
-            continue
-        # Açma
-        price = prices.get(d.symbol)
-        if price is None or price <= 0:
-            actions.append({**entry, "action": "blocked", "reason": "fiyat yok"})
-            continue
+        # P1 — açılış tek yoldan (attempt_open): duplicate/scale-in politikası +
+        # fiyat denetimi + audit burada. Yanıt etiketleri korunur.
         side = "long" if d.action == "open_long" else "short"
-        open_position(
+        pos, decision = attempt_open(
             ps,
             symbol=d.symbol,
             side=side,
-            entry_price=price,
+            entry_price=prices.get(d.symbol),
             size_multiplier=d.size_multiplier,
+            timeframe=d.timeframe,
+            open_reason=d.reason,
+            snapshot_id=snap.snapshot_id,
             fingerprint=d.fingerprint,
             data_verified=verified_flags.get(d.symbol, False),
             predicted_confidence=d.confidence,
             raw_confidence=d.raw_confidence,
             confidence_source=d.confidence_source,
-            timeframe=d.timeframe,
         )
-        actions.append({**entry, "action": "open", "reason": d.reason})
+        if pos is not None:
+            actions.append({**entry, "action": "open", "reason": d.reason})
+        elif decision["reason"] == "no_price":
+            actions.append({**entry, "action": "blocked", "reason": "fiyat yok"})
+        elif decision.get("duplicate"):
+            actions.append({**entry, "action": "hold", "reason": "zaten açık (aynı TF)"})
+        else:
+            actions.append({**entry, "action": "blocked", "reason": decision["reason"]})
 
     paper_state.save(ps)
 
@@ -170,4 +194,5 @@ def reset() -> dict:
     # SL/TP olmadan sadece son trade ve pozisyonları temizle, equity sıfırlama:
     # gerçek "reset" davranışı için _initial_state yeterli
     paper_state.save(ps)
+    paper_audit.record("STATE_REPAIRED", reason="manual_reset")
     return _serialize_state(ps)

@@ -1,19 +1,37 @@
-"""Paper trading state — JSON dosyası bazlı kalıcılık."""
+"""Paper trading state — JSON dosyası bazlı kalıcılık.
+
+P1 — robustness: atomik yazım (temp + os.replace), `schema_version`, corrupt
+dosya → yedek + default (crash yok), legacy/forward-uyumlu yükleme (bilinmeyen
+alanlar atlanır, eksik alanlar default'a düşer). PAPER_SAFE / NO_EXECUTION.
+"""
 from __future__ import annotations
 
 import json
 import os
 import threading
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass, field, fields
 from datetime import UTC, datetime
 from pathlib import Path
 
 from packages.data.registry.loader import load_thresholds
+from packages.paper import audit
+
+SCHEMA_VERSION = 1
 
 STATE_PATH = Path(
     os.environ.get("PAPER_STATE_PATH", "data/runtime/paper_state.json")
 )
 _LOCK = threading.Lock()
+
+
+def _only_known(cls, d: dict) -> dict:
+    """Yalnızca `cls` dataclass alanlarını süz — legacy/forward uyumlu yükleme.
+
+    Bilinmeyen alanlar atlanır (yeni şemadan gelen ekstra alanlar eski kodu
+    patlatmaz); eksik alanlar dataclass default'una düşer (legacy kayıtlar).
+    """
+    known = {f.name for f in fields(cls)}
+    return {k: v for k, v in d.items() if k in known}
 
 
 @dataclass
@@ -36,6 +54,14 @@ class Position:
     # T2 — TF time-stop: dolunca TIME_STOP_EXIT. None → time-stop yok
     # (legacy kayıtlar None ile yüklenir; davranış değişmez).
     valid_until: str | None = None
+    # P1 — lifecycle state machine (additive; legacy kayıtlar default'a düşer).
+    # OPEN → (EXPIRED_PENDING_PRICE | EXIT_PENDING | ERROR_STATE) → terminal Trade.
+    lifecycle_status: str = "OPEN"
+    time_stop_expired: bool = False
+    pending_exit_reason: str | None = None  # neden exit bekliyor (fiyat yoksa)
+    open_reason: str | None = None          # learning handoff: karar gerekçesi
+    snapshot_id: str | None = None          # learning handoff: kaynak snapshot
+    scale_in: bool = False                  # explicit scale-in (default: yok)
 
     @property
     def unrealized_pnl_usd(self) -> float:
@@ -61,6 +87,10 @@ class Trade:
     raw_confidence: float | None = None
     confidence_source: str | None = None
     timeframe: str = "1d"  # T0 additive — legacy kayıtlar default "1d" yüklenir
+    # P1 — terminal lifecycle + learning handoff (additive).
+    lifecycle_status: str = "CLOSED"   # CLOSED (normal) | FORCE_CLOSED (zorla)
+    open_reason: str | None = None
+    snapshot_id: str | None = None
 
 
 @dataclass
@@ -75,6 +105,7 @@ class PaperState:
 
     def to_dict(self) -> dict:
         return {
+            "schema_version": SCHEMA_VERSION,
             "equity_usd": self.equity_usd,
             "peak_equity_usd": self.peak_equity_usd,
             "realized_pnl_usd": self.realized_pnl_usd,
@@ -86,14 +117,24 @@ class PaperState:
 
     @classmethod
     def from_dict(cls, d: dict) -> PaperState:
+        # P1 — bilinmeyen alanları süz (forward uyumlu), eksikler default'a düşer
+        # (legacy kayıtlar lifecycle/learning alanları olmadan yüklenir).
         return cls(
             equity_usd=float(d.get("equity_usd", 0)),
             peak_equity_usd=float(d.get("peak_equity_usd", 0)),
             realized_pnl_usd=float(d.get("realized_pnl_usd", 0)),
             daily_pnl_usd=float(d.get("daily_pnl_usd", 0)),
             daily_anchor_date=str(d.get("daily_anchor_date", "")),
-            open_positions=[Position(**p) for p in d.get("open_positions", [])],
-            recent_trades=[Trade(**t) for t in d.get("recent_trades", [])],
+            open_positions=[
+                Position(**_only_known(Position, p))
+                for p in d.get("open_positions", [])
+                if isinstance(p, dict)
+            ],
+            recent_trades=[
+                Trade(**_only_known(Trade, t))
+                for t in d.get("recent_trades", [])
+                if isinstance(t, dict)
+            ],
         )
 
 
@@ -103,23 +144,53 @@ def _initial_state() -> PaperState:
     return PaperState(equity_usd=equity, peak_equity_usd=equity)
 
 
+def _write_atomic(path: Path, payload: dict) -> None:
+    """Atomik yazım: temp dosya + os.replace (yarım dosya asla görünmez)."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_name(f"{path.name}.tmp-{os.getpid()}")
+    tmp.write_text(json.dumps(payload, indent=2, default=str), encoding="utf-8")
+    os.replace(tmp, path)
+
+
+def _backup_corrupt(path: Path) -> str | None:
+    """Bozuk state'i kenara al (üzerine yazma) → sonraki save temiz yazar."""
+    try:
+        ts = datetime.now(UTC).strftime("%Y%m%dT%H%M%S")
+        bak = path.with_name(f"{path.stem}.corrupt-{ts}.json")
+        os.replace(path, bak)
+        return str(bak)
+    except OSError:
+        return None
+
+
 def load() -> PaperState:
     with _LOCK:
         if not STATE_PATH.exists():
-            STATE_PATH.parent.mkdir(parents=True, exist_ok=True)
             state = _initial_state()
-            STATE_PATH.write_text(json.dumps(state.to_dict(), indent=2), encoding="utf-8")
+            _write_atomic(STATE_PATH, state.to_dict())
             return state
         try:
-            return PaperState.from_dict(json.loads(STATE_PATH.read_text(encoding="utf-8")))
-        except Exception:
-            return _initial_state()
+            raw = json.loads(STATE_PATH.read_text(encoding="utf-8"))
+            return PaperState.from_dict(raw)
+        except (OSError, json.JSONDecodeError, ValueError, TypeError) as exc:
+            # P1 — corrupt state: yedekle + temiz default yaz (crash YOK).
+            bak = _backup_corrupt(STATE_PATH)
+            state = _initial_state()
+            try:
+                _write_atomic(STATE_PATH, state.to_dict())
+            except OSError:
+                pass
+            audit.record(
+                "STATE_REPAIRED",
+                reason=f"corrupt_paper_state:{type(exc).__name__}",
+                backup=bak,
+            )
+            return state
 
 
 def save(state: PaperState) -> None:
     with _LOCK:
-        STATE_PATH.parent.mkdir(parents=True, exist_ok=True)
-        STATE_PATH.write_text(json.dumps(state.to_dict(), indent=2), encoding="utf-8")
+        _write_atomic(STATE_PATH, state.to_dict())
 
 
 def utc_iso() -> str:

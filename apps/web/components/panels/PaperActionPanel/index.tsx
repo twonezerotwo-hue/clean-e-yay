@@ -21,6 +21,18 @@ function fmtRemaining(sec: number | null | undefined): string {
 }
 
 function TimeStop({ p }: { p: Position }) {
+  // P1 — lifecycle pending durumları önce (fiyat yokken fake kapanış YOK).
+  const lc = p.lifecycle_status;
+  if (lc === "EXPIRED_PENDING_PRICE" || lc === "EXIT_PENDING") {
+    return (
+      <span className="text-amber-400" title="exit pending — fiyat gelince kapanır (fake fiyat yok)">
+        {p.pending_exit_reason ?? "EXIT"} · fiyat bekleniyor
+      </span>
+    );
+  }
+  if (lc === "ERROR_STATE") {
+    return <span className="text-signal-down" title="bozuk pozisyon alanları">ERROR_STATE</span>;
+  }
   const status = p.time_stop_status ?? (p.valid_until ? "ACTIVE" : "NONE");
   if (status === "NONE") {
     return <span className="text-white/35">time-stop yok</span>;
@@ -62,6 +74,7 @@ export function PaperActionPanel() {
     );
   }
   const actions = summary?.current_paper_actions ?? [];
+  const dupWarnings = paper.data?.duplicate_warning ?? [];
   return (
     <PanelFrame id="paper_action">
       <PanelHeader
@@ -87,6 +100,20 @@ export function PaperActionPanel() {
           tone={(summary?.expired_time_stops ?? 0) > 0 ? "text-amber-400" : undefined}
         />
       </div>
+
+      {dupWarnings.length ? (
+        <div className="mb-2 rounded border border-accent-magenta/40 bg-accent-magenta/10 px-2 py-1 text-[10px] text-accent-magenta">
+          DUPLICATE WARNING — aynı symbol+timeframe için birden fazla açık pozisyon
+          {dupWarnings.map((w, i) => {
+            const r = w as Record<string, unknown>;
+            return (
+              <span key={i} className="ml-1">
+                {String(r.symbol)}/{String(r.timeframe)}×{String(r.open_count)}
+              </span>
+            );
+          })}
+        </div>
+      ) : null}
 
       <div className="text-[10px] uppercase tracking-widest text-white/40 mb-1">
         Mevcut paper aksiyonu
