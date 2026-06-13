@@ -4,8 +4,9 @@ import { PanelFrame } from "@/components/shell/PanelFrame";
 import { PanelHeader } from "@/components/shell/PanelHeader";
 import { LoadingState } from "@/components/shell/LoadingState";
 import { EmptyState } from "@/components/shell/EmptyState";
-import { useAIReport } from "@/lib/queries/hooks";
+import { useAIReport, useCockpitBrief } from "@/lib/queries/hooks";
 import { DIRECTION_COLOR } from "@/lib/constants";
+import { selectAgentBrief } from "@/lib/selectors/cockpit";
 import {
   selectLLMBadge,
   selectLLMSubtitle,
@@ -62,6 +63,8 @@ function PersonaBlock({ p }: { p: PersonaSection }) {
 
 export function AIReportPanel() {
   const { data, isLoading } = useAIReport();
+  const cockpit = useCockpitBrief();
+  const mainBlocker = selectAgentBrief(cockpit.data)?.main_blocker;
   const personas = selectPersonaSections(data);
   const noAction = selectNoActionableDecision(data);
   const tfLines = selectTimeframeSummaryLines(data);
@@ -100,8 +103,12 @@ export function AIReportPanel() {
           </div>
           {noAction ? (
             <div className="rounded-md border border-signal-down/50 bg-signal-down/10 px-3 py-2 text-xs text-signal-down">
-              NO ACTIONABLE DECISION — DQS BLOCKED veya risk gate kısıtlayıcı;
-              rapor sadece durumu açıklar.
+              YENİ İŞLEM YOK — ana engel:{" "}
+              <span className="font-semibold">
+                {mainBlocker?.label ?? "risk gate kısıtlayıcı"}
+              </span>
+              {mainBlocker?.detail ? ` (${mainBlocker.detail})` : ""}. Rapor
+              yalnızca durumu açıklar; karar deterministik engine + RiskGate.
             </div>
           ) : null}
           <p className="text-sm text-white/70 leading-relaxed whitespace-pre-line">

@@ -1,92 +1,91 @@
 # TASK RESULT
 
 Date: 2026-06-13
-Task: DEP1 — Deployment / DevOps Checklist
-Status: completed (backend FREEZE korundu — yalnızca docs/devops, runtime kod sıfır diff)
+Task: UX2 — Dashboard Polish / Usability Pass
+Status: completed (frontend-only; backend FREEZE korundu — packages/ + apps/api + worker sıfır diff)
 
-## Prensip
+## UX POLISH SUMMARY (ne düzeldi?)
 
-Backend Release Candidate'i gerçek 7/24 local/production-like çalıştırmaya hazır
-hale getirdik: env netliği + runtime dizin/volume + worker süreç modeli + process
-supervision önerisi + tek-komut health smoke + PAPER_SAFE deploy checklist. **Yeni
-backend feature / data source / intelligence YOK; packages/ + apps/ runtime kodu
-SIFIR diff.** RiskGate/DQS/KillSwitch/halt/paper/learning/replay dokunulmadı.
-
-## DEPLOYMENT READINESS
-
-- **local:** `make dev` (API+web) zaten vardı; `make workers` eklendi
-  (`scripts/workers.sh` — tick daemon + learning one-shot seed). API/SSL/port
-  çakışması README'de. ✓
-- **docker:** `docker-compose.dev.yml` api+web (+`--profile workers` tick+learning)
-  tek komutla kalkıyor; redesign GEREKMEDİ. learning_worker tek-seferlik notu
-  README'ye eklendi (restart-always değil). ✓
-- **env:** `.env.example` doğruluk için yeniden yazıldı — **phantom var'lar
-  düzeltildi** (`GROQ_DAILY_BUDGET_TOKENS`→`LLM_DAILY_TOKEN_BUDGET`,
-  `ANTHROPIC_API_KEY`/`API_HOST`/`API_PORT`/`YFINANCE_CACHE_TTL_SEC`/
-  `NEWS_CACHE_TTL_SEC` kaldırıldı — kod okumuyor). Eklendi: `LLM_MODE`,
-  `PRICE_USE_MOCK`, `DEV_CORS`, `TICK_INTERVAL_SEC`, `SSL_CERT_FILE` + tüm
-  runtime `*_PATH` override'ları. `.env` otomatik yüklenmiyor (doc) notu eklendi.
-  PAPER_ONLY/NO_EXECUTION'ın YAPISAL (env ile gevşetilemez) olduğu işaretlendi. ✓
-- **runtime dirs:** hepsi `data/runtime/` altında + gitignored (`data/runtime/`,
-  `data/state/`) — doğrulandı; prod volume mount README'de. ✓
-- **process supervision:** README tablo + öneri — api/tick **restart-always**
-  (uzun-ömürlü daemon, SIGTERM-aware); learning **zamanlayıcı** (cron/launchd
-  StartCalendarInterval/systemd timer/pm2 --cron, **restart-always değil** =
-  spin-loop). Health check (`/health` + `/system/health`), stale alert
-  (`/system/health` warnings), logs (stdout + paper_audit.jsonl). ✓
-- **smoke:** yeni `scripts/smoke.sh` + `make smoke` — health/system-health
-  (paper_safe doğrular)/cockpit/snapshot/decision-matrix/replay-status/
-  learning-summary + web SSR; fail → exit 1. ✓
-- **safety:** README'de açık PAPER_SAFE deploy checklist (broker yok / gerçek emir
-  yok / live execution yok / PAPER_ONLY / NO_EXECUTION / RiskGate final / LLM
-  açıklayıcı / runtime mock yok / owner approval). ✓
+- **Uzman bölümü artık gruplu** — eski düz ~30 panel grid'i okunur 6 başlık altına
+  ayrıldı: **Karar & Analiz · Risk · Piyasa Yapısı · Veri · Öğrenme · Ops** (her
+  grubun kısa hint'i + ayraç). "Kalabalık" hissi kalktı; expert hâlâ default
+  collapsed.
+- **Belirsiz copy temizlendi** — AIReportPanel'deki "NO ACTIONABLE DECISION — DQS
+  BLOCKED **veya** risk gate kısıtlayıcı" (UX1'de report.py + DecisionPanel'den
+  silinmişti ama burada kalmıştı) → backend'in **tek** `main_blocker`'ını yazan net
+  copy: "YENİ İŞLEM YOK — ana engel: <label> (<detail>)". Frontend hesap yapmaz;
+  cockpit brief'ten okur.
+- **AgentBrief ilk-ekran çıkarımı netleşti** — "Önerilen duruş" artık satır-içi
+  vurgulu callout (cyan pill); özet leading-relaxed + biraz daha okunur tipografi.
+- **Chat daha kullanışlı** — başlık "Ask the Agent" → **"Agent'a Sor"** (TR UI ile
+  tutarlı); öneri sorusu "Neden BTC açmadın?" → backend intent'ine net yönlenen
+  **"BTC 1h neden hold?"** (symbol+why handler). Diğer öneriler backend intent
+  eşleşmesi korunarak bırakıldı (RiskGate/options/volatility/funding/eksik-veri).
+- **Responsive sağlamlaştırma** — TimeframeMatrix tablosu `overflow-x-auto` +
+  `min-w` ile sarıldı; dar ekranda layout taşması yerine yatay kaydırma.
 
 ## FILES CHANGED
 
-- `.env.example` (doğru + tam; phantom var fix)
-- `scripts/smoke.sh` (yeni, +x) — health smoke
-- `scripts/workers.sh` (yeni, +x) — tick daemon + learning one-shot
-- `Makefile` (+`smoke`, +`workers` target + help)
-- `README.md` (stale status header → RC; smoke bölümü script tabanlı;
-  yeni "Deployment / 7-24 readiness" + PAPER_SAFE deploy checklist)
-- docs/CURRENT_STATE.md · .tasks/TASK_RESULT.md · .tasks/CHANGELOG_AGENT.md ·
-  .tasks/NEXT_TASK.md
+- `apps/web/app/page.tsx` — uzman bölümü `ExpertGroup` başlıklarına ayrıldı
+  (yeni yerel helper; `ReactNode` import). Simple layout + collapsed `<details>`
+  korundu.
+- `apps/web/components/panels/AIReportPanel/index.tsx` — vague copy → tek
+  main_blocker (useCockpitBrief read-only).
+- `apps/web/components/panels/AgentBriefPanel/index.tsx` — recommended stance
+  callout + tipografi.
+- `apps/web/components/panels/ChatPanel/index.tsx` — başlık "Agent'a Sor" +
+  öneri sorusu.
+- `apps/web/components/panels/TimeframeMatrixPanel/index.tsx` — tablo
+  overflow-x-auto wrapper (responsive).
+- `apps/web/lib/panel-registry.ts` — chat title "Agent'a Sor" (senkron).
+- docs/CURRENT_STATE.md · .tasks/{TASK_RESULT,CHANGELOG_AGENT,NEXT_TASK}.md
+
+## VISUAL / UX GUARANTEES
+
+- **simple layout**: AgentBrief (hero) + DecisionTrace + Watch + TimeframeMatrix +
+  PaperAction + Chat ilk ekranda — değişmedi.
+- **expert collapsed**: tüm uzman panelleri tek `<details>` (default kapalı) içinde;
+  SSR'da `open` attribute YOK (doğrulandı).
+- **main blocker clarity**: tek cümle, tek ana engel; "X veya Y" copy kalmadı.
+- **no backend logic touched**: packages/ + apps/api + worker'lar sıfır diff;
+  openapi/TS şeması değişmedi (codegen drift otomatik yeşil).
+- **PAPER_ONLY visible**: header rozeti + PaperAction "PAPER_ONLY · NO_EXECUTION" +
+  AIReport "yürütme yetkisi yok" rozeti korundu.
 
 ## TESTS RUN
 
-- `pytest -q` (izole runtime path env'leri)
-- `ruff check packages apps/api apps/tick_worker apps/learning_worker tests/contract`
-- `tsc --noEmit` + `next build`
-- `bash -n scripts/smoke.sh scripts/workers.sh`
-- Canlı: izole port (API 8050 + web 3050, TEST_USE_MOCK offline) smoke script
-- Worker boot: learning_worker one-shot + tick_worker daemon (cycle + SIGTERM)
+- `tsc --noEmit` (frontend asıl gate)
+- `next build`
+- Canlı SSR smoke (izole API 8050 + web 3050, TEST_USE_MOCK offline) + `scripts/smoke.sh`
+- Backend: **çalıştırılmadı (gerekmez)** — backend dosyası değişmedi (freeze).
 
 ## RESULTS
 
-- **passed.** pytest **419/419** · ruff temiz · tsc temiz · next build ✓ · scripts
-  syntax ✓.
+- **passed.** tsc temiz · next build ✓ (`/` 334 kB, static prerender) · smoke 8/8.
 
-## LIVE SMOKE (izole API 8050 + web 3050, TEST_USE_MOCK, eski :8000/:3000 agent çakışmasından kaçınıldı)
+## LIVE WEB SMOKE (izole API 8050 + web 3050, TEST_USE_MOCK)
 
-- `scripts/smoke.sh` → **8/8 PASS** (SMOKE OK, rc=0): health · system/health
-  (**paper_safe=true · no_execution**) · cockpit/brief · data/snapshot ·
-  decision/matrix · replay/status · learning/summary · **web SSR / 200**.
-- **learning_worker** one-shot: exit 0 (NO_DATA/INSUFFICIENT — temiz dönüş).
-- **tick_worker** daemon: cycle 1 status=OK (snapshot yazıldı, last_success set),
-  SIGTERM → "tick_worker stopped" (loop ölmedi, temiz kapanış).
-- İzole server'lar kapatıldı; data/runtime'a sızıntı yok (temp path + gitignore).
+- **SSR:** `/` → 200 (smoke.sh 8/8 PASS).
+- **AgentBrief:** "Agent Brief" SSR'da görünür (loading skeleton + header).
+- **Expert collapsed:** `<details>` `open` attribute YOK; gruplu başlıklar
+  (Karar & Analiz / Piyasa Yapısı / Veri / Öğrenme / Ops) prerendered HTML'de.
+- **HeroScene:** `<canvas>` SSR'da mevcut (neon tema korundu).
+- **PAPER_ONLY:** header rozeti SSR'da mevcut.
+- Ek: chat başlığı `Agent&#x27;a Sor` prerendered; eski "BLOCKED veya risk gate"
+  copy **kaldırıldı** (doğrulandı). İzole server'lar kapatıldı.
 
-## PAPER_SAFE CHECK
+## BACKEND FREEZE CHECK
 
-- **broker none** · **real order none** · **live execution none** — kod sıfır diff;
-  yalnızca env doc + script + README. tick_worker yalnızca paper tick üretir
-  (attempt_open paper-only). RiskGate/DQS/KillSwitch/halt/owner-approval dokunulmadı.
+- backend files changed: **no** (yalnızca apps/web/* + docs/task).
+- trading logic changed: **no**.
+- RiskGate changed: **no** (DQS/KillSwitch/halt/paper/learning/replay sıfır diff).
 
 ## NEXT
 
-- **UX2 — Dashboard polish / usability pass** (frontend; backend sıfır diff).
-  `.tasks/NEXT_TASK.md` UX2 ile güncellendi. Backend FREEZE devam (yalnızca P0 hotfix).
+- Öneri: **UX3 — live user feedback polish** VEYA **Release packaging / local
+  production run checklist** VEYA **only P0 backend hotfix mode**.
+  `.tasks/NEXT_TASK.md` güncellendi.
 
 ## COMMITS
 
-- `chore(devops): add deployment readiness checklist`
+- `feat(web): polish agent cockpit usability`

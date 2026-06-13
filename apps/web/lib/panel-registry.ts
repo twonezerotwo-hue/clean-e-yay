@@ -57,7 +57,7 @@ export const PANEL_REGISTRY: PanelMeta[] = [
   { id: "watch_conditions", title: "Watch / Trigger",     defaultVisible: true,  span: "1",    group: "decision", tier: "simple" },
   { id: "timeframe_matrix", title: "Timeframe Matrisi",   defaultVisible: true,  span: "3",    group: "decision", tier: "simple" },
   { id: "paper_action",     title: "Paper Action State",  defaultVisible: true,  span: "2",    group: "decision", tier: "simple" },
-  { id: "chat",             title: "Ask the Agent",       defaultVisible: true,  span: "1",    group: "ops",      tier: "simple" },
+  { id: "chat",             title: "Agent'a Sor",         defaultVisible: true,  span: "1",    group: "ops",      tier: "simple" },
   { id: "decision",         title: "Karar Merkezi",       defaultVisible: true,  span: "full", group: "decision", tier: "expert" },
   // Uzman / Detaylar (ikinci plan — collapsed).
   { id: "risk_gate",        title: "Risk Kapısı",         defaultVisible: true,  span: "2",    group: "decision",  tier: "expert" },

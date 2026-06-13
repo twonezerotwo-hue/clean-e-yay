@@ -4,6 +4,24 @@ _Bu dosya kısa ve güncel tutulur. Her görev sonunda güncellenir._
 
 ## Last known status
 
+- **UX2 — Dashboard Polish / Usability Pass tamamlandı** (2026-06-13): Agent
+  Operating Cockpit okunabilirlik cilası. **Frontend-only**; backend FREEZE
+  korundu (packages/ + apps/api + worker SIFIR diff; openapi/TS değişmedi → codegen
+  drift otomatik yeşil). RiskGate/DQS/KillSwitch/halt/paper/learning/replay
+  dokunulmadı; PAPER_ONLY/NO_EXECUTION rozetleri korundu.
+  - Uzman bölümü 6 okunur başlığa gruplandı (Karar & Analiz / Risk / Piyasa Yapısı /
+    Veri / Öğrenme / Ops) — `app/page.tsx` + yeni `ExpertGroup` helper; simple
+    layout + collapsed `<details>` aynı.
+  - Vague copy fix: AIReportPanel "DQS BLOCKED **veya** risk gate" → tek
+    `main_blocker` (useCockpitBrief). AgentBrief "Önerilen duruş" callout. Chat
+    başlık "Agent'a Sor" + "BTC 1h neden hold?" önerisi. TimeframeMatrix tablo
+    overflow-x-auto (responsive).
+  - tsc temiz · next build ✓ (`/` 334 kB static) · canlı SSR smoke (izole API 8050 +
+    web 3050, TEST_USE_MOCK): smoke.sh 8/8 PASS; SSR'da Agent Brief + HeroScene canvas +
+    PAPER_ONLY + gruplu başlıklar; `<details>` open YOK; eski "veya" copy kaldırıldı.
+    Backend testleri çalıştırılmadı (gerekmez — backend sıfır diff).
+  - Commit: `feat(web): polish agent cockpit usability`.
+
 - **DEP1 — Deployment / DevOps Checklist tamamlandı** (2026-06-13): backend RC
   gerçek 7/24 local/production-like çalıştırmaya hazır. Yalnızca **docs/devops**;
   packages/ + apps/ runtime kodu **SIFIR diff** (backend FREEZE korundu).
@@ -661,10 +679,10 @@ _Bu dosya kısa ve güncel tutulur. Her görev sonunda güncellenir._
 
 ## Next task
 
-- A1 (audit) + DEP1 (deployment checklist) bitti. Backend RC + 7/24 deploy hazır;
-  backend FREEZE (yalnızca P0 hotfix).
-- Sıradaki: **UX2 — Dashboard polish / usability pass** (bkz. `.tasks/NEXT_TASK.md`):
-  frontend cila (panel görünürlük/layout kalıcılığı, boş/yükleniyor/hata tutarlılığı,
-  okunabilirlik) — backend SIFIR diff. Opsiyonel: A1 P1 hardening (H1–H5).
-  Yeni data source / dashboard redesign / intelligence / trading logic YOK.
-- `.tasks/NEXT_TASK.md` UX2 ile güncellendi.
+- A1 (audit) + DEP1 (deploy) + UX2 (cockpit polish) bitti. Backend RC + 7/24 deploy
+  hazır + cockpit okunur; backend FREEZE (yalnızca P0 hotfix).
+- Sıradaki (öneri, bkz. `.tasks/NEXT_TASK.md`): **UX3 live user feedback polish**
+  VEYA **Release packaging / local production run checklist** VEYA **only P0 backend
+  hotfix mode**. Yeni data source / dashboard redesign / intelligence / trading
+  logic YOK. Opsiyonel: A1 P1 hardening (H1–H5).
+- `.tasks/NEXT_TASK.md` güncellendi.

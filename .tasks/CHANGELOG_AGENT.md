@@ -1,5 +1,31 @@
 # Agent Changelog
 
+## 2026-06-13 — UX2 Dashboard Polish / Usability Pass
+- Agent Operating Cockpit okunabilirlik cilası. **Frontend-only**; backend FREEZE
+  korundu (packages/ + apps/api + worker SIFIR diff; openapi/TS şeması değişmedi →
+  codegen drift otomatik yeşil). RiskGate/DQS/KillSwitch/halt/paper/learning/replay
+  dokunulmadı. PAPER_ONLY/NO_EXECUTION rozetleri korundu.
+- **Uzman bölümü gruplandı** (`app/page.tsx` + yeni yerel `ExpertGroup` helper):
+  düz ~30 panel grid'i 6 okunur başlığa ayrıldı — Karar & Analiz / Risk / Piyasa
+  Yapısı / Veri / Öğrenme / Ops (her grup hint + ayraç). Simple layout + collapsed
+  `<details>` aynı.
+- **Vague copy fix** (`AIReportPanel`): "NO ACTIONABLE — DQS BLOCKED **veya** risk
+  gate" (UX1'de başka yerlerden silinmişti, burada kalmış) → backend'in tek
+  `main_blocker`'ını yazan net copy (useCockpitBrief, read-only). "X veya Y" gitti.
+- **AgentBrief** (`AgentBriefPanel`): "Önerilen duruş" satır-içi vurgulu callout +
+  okunur tipografi (ilk-ekran çıkarımı belirginleşti).
+- **Chat** (`ChatPanel` + `panel-registry`): başlık "Ask the Agent" → "Agent'a Sor";
+  öneri "Neden BTC açmadın?" → "BTC 1h neden hold?" (backend symbol+why intent'ine
+  net yönlenir; diğer öneriler intent eşleşmesi korunarak bırakıldı).
+- **Responsive** (`TimeframeMatrixPanel`): tablo `overflow-x-auto`+`min-w` sarıldı
+  (dar ekran taşma → yatay kaydırma). TimeframeMatrix tek-banner suspended düzeni
+  (UX1) zaten temiz — dokunulmadı.
+- Validation: tsc temiz, next build ✓ (`/` 334 kB static), canlı SSR smoke (izole
+  API 8050 + web 3050, TEST_USE_MOCK): smoke.sh 8/8 PASS; SSR'da Agent Brief +
+  HeroScene canvas + PAPER_ONLY + gruplu başlıklar; `<details>` open YOK (collapsed);
+  eski "BLOCKED veya risk gate" copy kaldırıldı. Backend testleri çalıştırılmadı
+  (gerekmez — backend dosyası değişmedi). Commit: `feat(web): polish agent cockpit usability`.
+
 ## 2026-06-13 — DEP1 Deployment / DevOps Checklist
 - Backend RC'yi gerçek 7/24 çalıştırmaya hazırladı: yalnızca **docs/devops**;
   packages/ + apps/ runtime kodu **SIFIR diff**. Backend FREEZE korundu (yeni

@@ -10,8 +10,8 @@ import type { ChatResponse } from "@/types/generated/api";
 type ChatItem = { role: "user" | "agent"; text: string; meta?: ChatResponse };
 
 const SUGGESTIONS = [
-  "Neden BTC açmadın?",
   "RiskGate neyi engelledi?",
+  "BTC 1h neden hold?",
   "Options risk ne diyor?",
   "Volatility neden kısıtladı?",
   "Funding / türev ne diyor?",
@@ -41,7 +41,7 @@ export function ChatPanel() {
 
   return (
     <PanelFrame id="chat">
-      <PanelHeader title="Ask the Agent" subtitle="state-grounded · LLM karar vermez" />
+      <PanelHeader title="Agent'a Sor" subtitle="state-grounded · LLM karar vermez" />
       <div className="space-y-2">
         <div className="max-h-64 overflow-y-auto space-y-2 pr-1">
           {items.length === 0 ? (

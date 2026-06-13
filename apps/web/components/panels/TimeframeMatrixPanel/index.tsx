@@ -222,26 +222,28 @@ export function TimeframeMatrixPanel() {
           — yalnızca kısıtlayıcı (asla size artırmaz).
         </p>
       ) : null}
-      <table className="w-full border-collapse text-xs">
-        <thead>
-          <tr className="text-[10px] uppercase tracking-widest text-white/40">
-            <th className="p-1 text-left font-normal">Sembol</th>
-            {(data?.timeframes ?? MATRIX_TF_ORDER).map((tf) => (
-              <th key={tf} className="p-1 font-normal">{tf}</th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((r) => (
-            <tr key={r.symbol} className="border-t border-white/5">
-              <td className="p-1 font-medium">{r.symbol}</td>
-              {r.cells.map((c) => (
-                <MatrixCell key={c.timeframe} c={c} globalSuspended={suspended} />
+      <div className="overflow-x-auto">
+        <table className="w-full min-w-[20rem] border-collapse text-xs">
+          <thead>
+            <tr className="text-[10px] uppercase tracking-widest text-white/40">
+              <th className="p-1 text-left font-normal">Sembol</th>
+              {(data?.timeframes ?? MATRIX_TF_ORDER).map((tf) => (
+                <th key={tf} className="p-1 font-normal">{tf}</th>
               ))}
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {rows.map((r) => (
+              <tr key={r.symbol} className="border-t border-white/5">
+                <td className="p-1 font-medium">{r.symbol}</td>
+                {r.cells.map((c) => (
+                  <MatrixCell key={c.timeframe} c={c} globalSuspended={suspended} />
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
       <p className="mt-2 text-[10px] text-white/35">
         1w strategic — paper işlem açmaz (bias/filtre) · 15m ×0.25, 1h ×0.5
         risk çarpanı · RiskGate her TF&apos;te finaldir.

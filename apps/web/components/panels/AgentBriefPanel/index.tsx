@@ -87,11 +87,16 @@ export function AgentBriefPanel() {
         </div>
       </div>
 
-      {/* Plain-language özet + önerilen duruş */}
-      <p className="text-sm text-white/80 mt-3">{b.summary}</p>
-      <p className="text-xs text-accent-cyan/90 mt-1">
-        ↳ Önerilen duruş: {b.recommended_stance}
-      </p>
+      {/* Plain-language özet + önerilen duruş (tek bakışta çıkarım) */}
+      <p className="text-sm text-white/85 leading-relaxed mt-3">{b.summary}</p>
+      <div className="mt-2 inline-flex items-center gap-2 rounded-md border border-accent-cyan/30 bg-accent-cyan/5 px-2.5 py-1">
+        <span className="text-[10px] uppercase tracking-widest text-accent-cyan/60">
+          Önerilen duruş
+        </span>
+        <span className="text-xs font-medium text-accent-cyan/90">
+          {b.recommended_stance}
+        </span>
+      </div>
 
       {/* Alt grid: durum metrikleri + adaylar + izleme */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">

@@ -1,5 +1,7 @@
 "use client";
 
+import type { ReactNode } from "react";
+
 import { HeroScene } from "@/components/visuals/HeroScene";
 import { DashboardGrid, GridCell } from "@/components/shell/DashboardGrid";
 import { MockModeBanner } from "@/components/shell/MockModeBanner";
@@ -98,55 +100,56 @@ export default function HomePage() {
             gizle ▴
           </span>
         </summary>
-        <div className="px-5 pb-5 pt-1">
-          <DashboardGrid>
+        {/* Gruplu başlıklarla okunur uzman düzeni — yalnızca frontend düzeni,
+            backend/selector/karar mantığı değişmez. */}
+        <div className="px-5 pb-5 pt-1 space-y-7">
+          <ExpertGroup title="Karar & Analiz" hint="deterministik karar + açıklayıcı katman">
             <GridCell span="full"><DecisionPanel /></GridCell>
-
-            <GridCell span="2"><RiskGatePanel /></GridCell>
-            <GridCell span="1"><AgentVotesPanel /></GridCell>
-
             <GridCell span="2"><AIReportPanel /></GridCell>
-            <GridCell span="1"><ProviderStatusPanel /></GridCell>
+            <GridCell span="1"><AgentVotesPanel /></GridCell>
+            <GridCell span="3"><PositionChecksPanel /></GridCell>
+            <GridCell span="2"><CommandSignalsPanel /></GridCell>
+            <GridCell span="1"><ScenarioPanel /></GridCell>
+          </ExpertGroup>
 
-            <GridCell span="2"><DataQualityPanel /></GridCell>
-            <GridCell span="1"><SnapshotPanel /></GridCell>
+          <ExpertGroup title="Risk" hint="RiskGate finaldir — yalnızca kısıtlar">
+            <GridCell span="2"><RiskGatePanel /></GridCell>
+            <GridCell span="1"><DrawdownGuardPanel /></GridCell>
+            <GridCell span="2"><CorrelationPanel /></GridCell>
+          </ExpertGroup>
 
-            <GridCell span="2"><MarketDataPanel /></GridCell>
+          <ExpertGroup title="Piyasa Yapısı" hint="volatilite · türev · options · catalyst (yalnızca kısıtlayıcı)">
             <GridCell span="1"><VolatilityPanel /></GridCell>
-
             <GridCell span="1"><CryptoDerivativesPanel /></GridCell>
             <GridCell span="1"><OptionsVolPanel /></GridCell>
-            <GridCell span="1"><PatternsPanel /></GridCell>
-
-            <GridCell span="2"><CorrelationPanel /></GridCell>
-            <GridCell span="1"><DrawdownGuardPanel /></GridCell>
-
-            <GridCell span="3"><PositionChecksPanel /></GridCell>
-
-            <GridCell span="2"><CommandSignalsPanel /></GridCell>
-            <GridCell span="1"><EventCalendarPanel /></GridCell>
-
-            <GridCell span="1"><ScenarioPanel /></GridCell>
             <GridCell span="2"><CatalystImpactPanel /></GridCell>
+            <GridCell span="1"><PatternsPanel /></GridCell>
+          </ExpertGroup>
 
+          <ExpertGroup title="Veri" hint="provider · DQS · snapshot · haber · rotasyon">
+            <GridCell span="2"><DataQualityPanel /></GridCell>
+            <GridCell span="1"><ProviderStatusPanel /></GridCell>
+            <GridCell span="1"><SnapshotPanel /></GridCell>
+            <GridCell span="2"><MarketDataPanel /></GridCell>
             <GridCell span="3"><CapitalRotationPanel /></GridCell>
-
             <GridCell span="2"><NewsPanel /></GridCell>
-            <GridCell span="1"><ReplayStatusPanel /></GridCell>
+            <GridCell span="1"><EventCalendarPanel /></GridCell>
+          </ExpertGroup>
 
+          <ExpertGroup title="Öğrenme" hint="kalibrasyon · mistake memory · ağırlık önerisi (owner onayı)">
             <GridCell span="2"><LearningPanel /></GridCell>
             <GridCell span="1"><TradingPanel /></GridCell>
-
             <GridCell span="2"><WeightProposalPanel /></GridCell>
             <GridCell span="1"><WeightHistoryPanel /></GridCell>
-
             <GridCell span="2"><CalibrationPanel /></GridCell>
             <GridCell span="1"><MistakeMemoryPanel /></GridCell>
+          </ExpertGroup>
 
+          <ExpertGroup title="Ops" hint="replay · pano denetimi · sistem sağlığı">
+            <GridCell span="1"><ReplayStatusPanel /></GridCell>
             <GridCell span="1"><PanelAuditPanel /></GridCell>
-
             <GridCell span="full"><SystemHealthBar /></GridCell>
-          </DashboardGrid>
+          </ExpertGroup>
         </div>
       </details>
 
@@ -154,5 +157,28 @@ export default function HomePage() {
         Sözleşme: <code>contracts/openapi.yaml</code> · Tipler codegen ile üretilir.
       </footer>
     </main>
+  );
+}
+
+// Uzman bölümünde panelleri okunur alt gruplara ayırır (yalnızca görsel düzen).
+function ExpertGroup({
+  title,
+  hint,
+  children,
+}: {
+  title: string;
+  hint?: string;
+  children: ReactNode;
+}) {
+  return (
+    <section className="space-y-3">
+      <div className="flex items-baseline gap-3 border-b border-ink-700/50 pb-1.5">
+        <h3 className="text-xs font-semibold uppercase tracking-[0.2em] text-white/70">
+          {title}
+        </h3>
+        {hint ? <span className="text-[10px] text-white/35">{hint}</span> : null}
+      </div>
+      <DashboardGrid>{children}</DashboardGrid>
+    </section>
   );
 }
