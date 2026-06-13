@@ -4,6 +4,34 @@ _Bu dosya kısa ve güncel tutulur. Her görev sonunda güncellenir._
 
 ## Last known status
 
+- **A1 — Final Backend Architecture Audit tamamlandı → BACKEND RELEASE CANDIDATE**
+  (2026-06-13): backend uçtan uca "bitirme kontrolü"nden **PASS** ile geçti.
+  Gerçek **P0 bug yok**, gerçek sözleşme/runtime/TS drift yok, kritik test boşluğu
+  yok. **Sıfır runtime diff** (kod değiştirilmedi; görev kuralı: P0 yoksa kod yazma,
+  docs + RC işaretle). PAPER_SAFE / NO_EXECUTION her katmanda doğrulandı.
+  - **Module boundaries temiz**: packages→apps / provider→decision-risk-paper /
+    risk→decision importu yok; wildcard yok; service logic api router import
+    etmiyor. LLM katmanı decision/paper state'i yalnızca OKUR (mutasyon yok;
+    `.record()` yalnızca token budget).
+  - **Decision/Risk order doğru**: RiskGate hard gate'leri ÖNCE; sonraki gate'ler
+    yalnızca kısıtlayıcı (size küçültür ≤1.0 / block; asla artırmaz); 1w paper
+    açmaz; candidate↔final ayrımı korunuyor. `risk/engine.py` max-priority havuzu →
+    bypass yapısal imkânsız; DQS<55 → KILL_SWITCH veto.
+  - **PAPER_SAFE doğrulandı**: broker/order/execute/ccxt yürütme tokeni hiçbir yerde
+    yok (tek "broker" = llm injection guard blocklist). Paper fiyatsız fake kapanış
+    yok; backtest look-ahead/refetch/emir yok; weights yalnızca owner approve ile;
+    runtime mock yok (`get_quote` → DATA_UNAVAILABLE).
+  - **Validation**: pytest **419/419**, ruff CI-scope temiz, tsc temiz, next build ✓.
+    In-process smoke (offline): 10 kritik GET 200; /system/health paper_safe=true;
+    /replay empty + backtest insufficient_snapshots (dürüst); POST /chat bypass
+    probe → guard refusal.
+  - **P1 hardening (opsiyonel, freeze sonrası)**: H1 5 düşük-churn store atomik
+    değil (risk/halt, rebalance, calibration, llm budget/cache — güvenlik açığı
+    değil, corrupt→güvenli default); H2 schema_version dağınık; H3 ARCHITECTURE.md
+    çok-agent yapısı aspirasyonel (kod bilinçli consensus+llm sade); H4 codegen
+    drift tek yönlü/gevşek; H5 `decide_all` test-only.
+  - Commit: `docs(backend): mark backend release candidate after final audit`.
+
 - **O1 — 7/24 Worker Reliability tamamlandı** (2026-06-13): Clean E-yAy artık
   gözlemlenebilir 7/24 agent servisi — worker heartbeat + stale tespiti + crash
   raporlama + system health. Yeni data source / dashboard redesign / intelligence
@@ -610,11 +638,11 @@ _Bu dosya kısa ve güncel tutulur. Her görev sonunda güncellenir._
 
 ## Next task
 
-- O1 7/24 Worker Reliability bitti (commit `feat(ops): add worker reliability
-  health`). P1 + L1 + O1 ile paper lifecycle + learning loop + worker gözlem
-  sağlam.
-- Sıradaki: **A1 — Final Backend Architecture Audit** (bkz. `.tasks/NEXT_TASK.md`):
-  uçtan uca tutarlılık / ölü kod / kullanılmayan export / sözleşme-runtime-TS
-  drift / PAPER_SAFE sınır denetimi / test kapsama boşlukları. Yeni veri/feature
-  YOK.
-- `.tasks/NEXT_TASK.md` A1 ile güncellendi.
+- A1 Final Backend Architecture Audit bitti → **backend Release Candidate**
+  (PASS, P0 yok, sıfır runtime diff). Backend artık freeze.
+- Sıradaki: **RC Freeze → UX Polish + Deployment/DevOps Checklist** (bkz.
+  `.tasks/NEXT_TASK.md`): backend dondurulur (yalnızca P0 hotfix); iş UX cilası
+  (panel görünürlük kalıcılığı, layout) + gerçek deployment hazırlığı (env/secrets,
+  CI gate, smoke runbook) tarafına geçer. Opsiyonel: A1 P1 hardening (H1–H5).
+  Yeni data source / dashboard redesign / intelligence / trading logic YOK.
+- `.tasks/NEXT_TASK.md` RC freeze ile güncellendi.

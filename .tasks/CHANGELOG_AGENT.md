@@ -1,5 +1,49 @@
 # Agent Changelog
 
+## 2026-06-13 — A1 Final Backend Architecture Audit (Backend Release Candidate)
+- Backend uçtan uca "bitirme kontrolü"nden geçti: **PASS**. Gerçek P0 bug yok,
+  gerçek sözleşme/runtime/TS drift yok, kritik test boşluğu yok. **Sıfır runtime
+  diff** — kod değiştirilmedi (görev kuralı: P0 yoksa kod yazma, docs + RC işaretle).
+  PAPER_SAFE / NO_EXECUTION her katmanda doğrulandı.
+- **Module boundaries**: temiz. packages→apps importu yok; provider→decision/risk/
+  paper importu yok; risk→decision importu yok; wildcard import yok; service logic
+  api router import etmiyor. LLM katmanı (`agent/llm`) decision/paper state'i
+  yalnızca OKUR (`paper_state.load`, `decide_matrix`/`matrix_view` salt-okur
+  yeniden hesap; tek `.record()` çağrıları token budget'ı — paper/decision değil).
+- **Decision/Risk order**: RiskGate hard gate'leri ÖNCE (KILL_SWITCH→blocked,
+  NO_POSITION_INCREASE/RISK_REDUCE→hold); sonraki tüm gate'ler (mistake/correlation/
+  derivatives/volatility/catalyst/options/timeframe) yalnızca kısıtlayıcı —
+  `size *= factor` (factor ≤1.0, clamp ≤1.5) ya da block; hiçbiri size artırmaz.
+  1w paper_execution=false (doğrudan trade açmaz). candidate vs final ayrımı
+  korunuyor. `risk/engine.py` max-priority candidate havuzu → bypass yapısal
+  olarak imkânsız; DQS<55 → KILL_SWITCH veto.
+- **Provider/DQS/mock**: DATA_POLICY uygulanıyor — `get_quote` runtime'da mock'a
+  düşmez (`DATA_UNAVAILABLE` döner); SIMULATION damgası görünür. Paper fiyat yoksa
+  fake kapanış yok (`EXPIRED_PENDING_PRICE`). Learning yalnızca verified veri.
+- **Paper/Learning/Replay/Worker**: tek açılış yolu `attempt_open` (entry_price
+  None/≤0 → açmaz); append-only audit; backtest look-ahead yok (`_future_price`
+  ilk `epoch ≥ karar+horizon`, cherry-pick yok), live refetch yok, emir yok;
+  trainer yalnızca PROPOSAL, weights yalnızca owner `approve_current` ile; heartbeat
+  atomik.
+- **Contract/API/TS**: `test_openapi_contract` her dokümante GET'i şemaya doğruluyor
+  + path drift guard; `test_codegen_drift` openapi şema/enum ↔ TS api.ts. 11 kritik
+  endpoint kayıtlı + dokümante. (Notlar: codegen drift tek yönlü/gevşek enum eşleme
+  — el-senkron için yeterli.)
+- **State stores**: hepsinde missing/corrupt → güvenli default. Atomik `os.replace`
+  4 yüksek-churn store'da (snapshot/paper/run/heartbeat); 5 düşük-churn store
+  (risk/halt, rebalance, calibration, llm budget, llm cache) doğrudan write_text
+  (P1 hardening — güvenlik açığı değil). `schema_version` snapshot+paper'da.
+- **PAPER_SAFE**: broker/order/execute/ccxt yürütme tokeni HİÇBİR yerde yok (tek
+  "broker" = llm guard blocklist). RiskGate/DQS/KillSwitch/halt yalnızca kısıtlayıcı.
+- **Validation**: pytest **419/419**, ruff CI-scope temiz, tsc temiz, next build ✓
+  (`/` 333 kB). In-process smoke (offline): 10 kritik GET 200; /system/health
+  paper_safe=true; /replay empty+insufficient_snapshots (dürüst); POST /chat bypass
+  probe → guard refusal.
+- **Bulgular (P1, opsiyonel, freeze sonrası)**: H1 5 store atomik değil; H2
+  schema_version dağınık; H3 ARCHITECTURE.md çok-agent yapısı aspirasyonel (kod
+  sade consensus+llm); H4 codegen drift tek yönlü; H5 `decide_all` test-only.
+- Commit: `docs(backend): mark backend release candidate after final audit`.
+
 ## 2026-06-13 — O1 7/24 Worker Reliability
 - Clean E-yAy artık endpoint koleksiyonu değil, gözlemlenebilir 7/24 agent
   servisi: worker heartbeat + stale tespiti + crash raporlama + system health.
