@@ -4,6 +4,48 @@ _Bu dosya kısa ve güncel tutulur. Her görev sonunda güncellenir._
 
 ## Last known status
 
+- **v2.7 D3 — Options IV / Skew / Term Structure Intelligence tamamlandı**
+  (2026-06-13): BTC/ETH options implied volatility, 25Δ skew (proxy), term
+  structure ve realized-vs-implied spread karar zincirine **yalnızca kısıtlayıcı**
+  eklendi. Yeni provider `packages/data/providers/options/` (saf-python engine +
+  Deribit public adapter + offline fixtures + orchestrator). Live Deribit
+  `get_book_summary_by_currency` → ATM IV / OTM call-put IV / OI / underlying;
+  instrument_name parse (strike/expiry/call-put). Live fail → DEGRADED, chain boş
+  → UNAVAILABLE (runtime mock YOK; fixture verified=false, karar dışı).
+  - **Engine** (`options/engine.py`): ATM IV (ön vade, en yakın strike), 25Δ skew
+    **proxy** (`is_proxy=True`; moneyness tabanlı OTM call IV − OTM put IV; gerçek
+    greeks DEĞİL), put/call OI oranı, term structure (front/next/long ATM IV +
+    slope), IV-RV spread (D4 realized vol 1d ile). Rejim: NORMAL / RICH_VOL /
+    CHEAP_VOL / PUT_SKEW_STRESS / CALL_SKEW_EUPHORIA / TERM_STRESS. DQS = tazelik ×
+    bileşen tamlığı.
+  - **Gate** (`packages/risk/options_risk.py`): yalnızca verified+OK + BTC/ETH.
+    PUT_SKEW_STRESS/CALL_SKEW_EUPHORIA + long aday → CAUTION ×0.5 (short/contrarian
+    yalnızca WATCH bağlam); TERM_STRESS → NO_POSITION_INCREASE (block); RICH_VOL →
+    CAUTION; CHEAP_VOL → WATCH (yalnızca bağlam, **boost YOK**). size_factor ≤ 1.0.
+    Timeframe ağırlıklı: options 4h/1d/1w bağlamı (tam etki); 15m/1h düşük (0.25/
+    0.4) → block CAUTION'a yumuşar. RiskGate hard gate'inden SONRA, yalnızca açılış
+    adayına.
+  - **Entegrasyon**: pipeline `MarketSnapshot.options` (Deribit chain + D4 realized
+    vol; ekstra ağ yalnızca Deribit); decision engine options gate (catalyst'ten
+    sonra) + `options_report` + blocked_by `options_risk:*`; matrix `options`
+    özeti (rejim ≠ NORMAL); `/data/snapshot` options alanı.
+  - **Sözleşme** additive: openapi `OptionsSnapshot` / `OptionsSummary` +
+    `OptionsRegime` / `OptionsStatus` enum + DataSnapshot.options +
+    DecisionMatrix.options. TS api.ts senkron (codegen drift yeşil).
+  - **Frontend**: `OptionsVolPanel` (selector `selectOptions` + registry, page.tsx
+    tek GridCell) — symbol / ATM IV / realized karşılaştırma / IV-RV / 25Δ skew
+    (proxy rozeti) / put-call OI / term structure / rejim / source / freshness /
+    status / karar etkisi. TimeframeMatrixPanel options banner + hücre "OPTIONS"
+    rozeti. VolatilityPanel/DerivativesPanel/CatalystPanel bozulmadı.
+  - **323/323 pytest** (+36 D3; live network yok), CI-scope ruff + tsc + pnpm
+    build yeşil. Live smoke OK (gerçek Deribit: BTC ATM IV ~41% CHEAP_VOL, ETH
+    ~23% PUT_SKEW_STRESS, verified=true, FRESH; matrix options banner; RiskGate
+    suspended/DQS BLOCKED iken options hücreyi bypass etmiyor). Eski E_YAY CODEX
+    `com.eyay.backend` launch agent'ı `*:8000`'de duruyor — Clean E-yAy API
+    `127.0.0.1:8000`'de ayrı kalkıyor (127.0.0.1 istekleri Clean'e gider).
+    PAPER_SAFE/NO_EXECUTION; RiskGate/DQS/KillSwitch/halt sıfır diff, bypass yok.
+  - Açık (NEXT): gerçek replay/backtest motoru ve/veya v2.6 LLM persona derinleşme.
+
 - **v2.7 D5 — Real News Feed + Catalyst Half-Life Intelligence tamamlandı**
   (2026-06-12): mevcut RSS haber feed'i gerçek catalyst zekâ katmanına çevrildi.
   Her başlık kural tabanlı (deterministik, **LLM YOK**, network YOK) bir

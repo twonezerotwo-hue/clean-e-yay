@@ -371,6 +371,9 @@ export type DataSnapshot = {
   derivatives?: Record<string, DerivativesSnapshot>;
   // v2.7 D4 — realized volatility / rejim (symbol → timeframe → snapshot).
   volatility?: Record<string, Partial<Record<Timeframe, VolatilitySnapshot>>>;
+  // v2.7 D3 — options IV / skew / term structure (symbol → OptionsSnapshot).
+  // Yalnızca BTC/ETH; skew_25d proxy (gerçek greeks değil).
+  options?: Record<string, OptionsSnapshot>;
   // v2.7 D5 — haber → catalyst half-life zekâsı (deterministik; LLM yok).
   catalyst_impacts?: CatalystImpact[];
 };
@@ -452,6 +455,66 @@ export type VolatilitySummary = {
   realized_vol?: number | null;
   vol_zscore?: number | null;
   status: VolatilityStatus;
+  verified: boolean;
+};
+
+// v2.7 D3 — Options IV / Skew / Term Structure Intelligence (yalnızca BTC/ETH).
+// skew_25d GERÇEK 25Δ greeks değildir (is_proxy=true). Karar zincirinde YALNIZCA
+// kısıtlayıcı (asla size artırmaz; CHEAP_VOL bile yalnızca bağlam).
+export type OptionsRegime =
+  | "NORMAL"
+  | "RICH_VOL"
+  | "CHEAP_VOL"
+  | "PUT_SKEW_STRESS"
+  | "CALL_SKEW_EUPHORIA"
+  | "TERM_STRESS";
+export type OptionsStatus = "OK" | "DEGRADED" | "UNAVAILABLE";
+
+export type OptionsSnapshot = {
+  symbol: string;
+  underlying_price: number | null;
+  atm_iv: number | null;
+  realized_vol: number | null;
+  iv_rv_spread: number | null;
+  skew_25d: number | null;
+  put_call_oi_ratio: number | null;
+  term_front_iv: number | null;
+  term_next_iv: number | null;
+  term_long_iv: number | null;
+  term_slope: number | null;
+  front_expiry: string | null;
+  next_expiry: string | null;
+  long_expiry: string | null;
+  contracts_used: number;
+  regime: OptionsRegime;
+  is_proxy: boolean;
+  status: OptionsStatus;
+  source: string;
+  verified: boolean;
+  freshness?: "FRESH" | "RECENT" | "STALE" | null;
+  dqs: number;
+  ts: string;
+  evidence?: string[];
+  error?: string | null;
+};
+
+// Matrix banner için per-symbol özet (yalnızca status=OK + rejim ≠ NORMAL).
+export type OptionsSummary = {
+  symbol: string;
+  regime: OptionsRegime;
+  atm_iv?: number | null;
+  realized_vol?: number | null;
+  iv_rv_spread?: number | null;
+  skew_25d?: number | null;
+  put_call_oi_ratio?: number | null;
+  term_slope?: number | null;
+  front_expiry?: string | null;
+  next_expiry?: string | null;
+  long_expiry?: string | null;
+  is_proxy: boolean;
+  source: string;
+  freshness?: "FRESH" | "RECENT" | "STALE" | null;
+  status: OptionsStatus;
   verified: boolean;
 };
 
@@ -733,6 +796,9 @@ export type DecisionMatrix = {
   // v2.7 D5 — verified + yarı-ömrü dolmamış catalyst özeti (banner). Etkilenen
   // hücreler blocked_by="catalyst_risk:*" ile görünür.
   catalysts?: CatalystSummary[];
+  // v2.7 D3 — per-symbol options özeti (banner; rejim ≠ NORMAL). Etkilenen
+  // hücreler blocked_by="options_risk:*" + reason ile görünür.
+  options?: OptionsSummary[];
   mode?: ProvenanceMode;
   cells: TimeframeDecision[];
 };

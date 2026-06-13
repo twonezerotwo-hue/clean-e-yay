@@ -44,6 +44,7 @@ from packages.risk import (
     correlation,
     derivatives_risk,
     event_risk,
+    options_risk,
     volatility_risk,
 )
 from packages.risk.engine import RiskDecision, RiskInput
@@ -72,6 +73,8 @@ class TradeDecision:
     volatility_report: dict = field(default_factory=dict)
     # v2.7 D5 — haber catalyst riski (yalnızca kısıtlayıcı; verified + taze).
     catalyst_report: dict = field(default_factory=dict)
+    # v2.7 D3 — options IV/skew/term riski (yalnızca kısıtlayıcı; BTC/ETH).
+    options_report: dict = field(default_factory=dict)
     timeframe: str = "1d"  # T2 — (symbol, timeframe) karar uzayı aktif
     # T2 additive — candidate (consensus niyeti) vs final (gate'ler sonrası)
     # ayrımı görünür olsun; blocked_by hangi kapının kararı kestiğini söyler.
@@ -408,6 +411,57 @@ def decide_for_symbol(
         size *= cv.size_factor
         size = max(0.0, min(1.5, size))
 
+    # ----- v2.7 D3: options IV/skew/term riski (RiskGate'ten SONRA; yalnızca kısıtlayıcı) -----
+    # Yalnızca BTC/ETH + verified/OK snapshot karar zincirine girer. Options daha
+    # çok 4h/1d/1w bağlamıdır (timeframe ağırlığı yüksek); 15m/1h düşük ağırlık.
+    # Asla size artırmaz (CHEAP_VOL bile yalnızca bağlam), asla RiskGate/DQS/halt'ı
+    # bypass etmez (bu kod yalnızca RiskGate açıkken çalışır).
+    options_dict: dict = {}
+    opt_snap = (snap.options or {}).get(symbol)
+    opt_weight = options_risk.timeframe_weight(timeframe)
+    if opt_snap is not None and opt_weight > 0.0:
+        ov = options_risk.apply_timeframe(
+            options_risk.assess(opt_snap, action), opt_weight
+        )
+        if ov.level != "NONE":
+            options_dict = {
+                "level": ov.level,
+                "size_factor": ov.size_factor,
+                "block": ov.block,
+                "reason": ov.reason,
+                "evidence": list(ov.evidence),
+                "regime": opt_snap.regime,
+                "atm_iv": opt_snap.atm_iv,
+                "skew_25d": opt_snap.skew_25d,
+                "iv_rv_spread": opt_snap.iv_rv_spread,
+                "term_slope": opt_snap.term_slope,
+                "is_proxy": opt_snap.is_proxy,
+            }
+            if ov.block:
+                return TradeDecision(
+                    symbol=symbol,
+                    action="hold",
+                    confidence=round(cal_conf, 3),
+                    size_multiplier=0.0,
+                    consensus=cons,
+                    risk=risk,
+                    reason=f"options_risk: {ov.reason}",
+                    raw_confidence=round(raw_conf, 4),
+                    confidence_source=conf_source,
+                    fingerprint=fp,
+                    mistake_verdict=_verdict_to_dict(verdict),
+                    cluster_report=cluster_dict,
+                    derivatives_report=derivatives_dict,
+                    volatility_report=volatility_dict,
+                    catalyst_report=catalyst_dict,
+                    options_report=options_dict,
+                    timeframe=timeframe,
+                    candidate_action=candidate,
+                    blocked_by=[f"options_risk:{ov.level}"],
+                )
+            size *= ov.size_factor
+            size = max(0.0, min(1.5, size))
+
     # ----- T2: timeframe politikası EN SON (RiskGate'ten sonra; sadece azaltır) -----
     blocked_by: list[str] = []
     if not pol["paper_execution"]:
@@ -429,6 +483,7 @@ def decide_for_symbol(
             derivatives_report=derivatives_dict,
             volatility_report=volatility_dict,
             catalyst_report=catalyst_dict,
+            options_report=options_dict,
             timeframe=timeframe,
             candidate_action=candidate,
             blocked_by=["timeframe_policy:no_paper_execution"],
@@ -463,6 +518,11 @@ def decide_for_symbol(
                 if catalyst_dict and catalyst_dict.get("level") not in (None, "NONE")
                 else ""
             )
+            + (
+                f" · opt:{options_dict['level'].lower()}"
+                if options_dict and options_dict.get("level") not in (None, "NONE")
+                else ""
+            )
             + (f" · tf:{timeframe}×{pol['risk_multiplier']}" if pol["risk_multiplier"] < 1.0 else "")
         ),
         raw_confidence=round(raw_conf, 4),
@@ -473,6 +533,7 @@ def decide_for_symbol(
         derivatives_report=derivatives_dict,
         volatility_report=volatility_dict,
         catalyst_report=catalyst_dict,
+        options_report=options_dict,
         timeframe=timeframe,
         candidate_action=candidate,
         blocked_by=blocked_by,
@@ -652,6 +713,31 @@ def matrix_view(
         and c.actionability != "CONTEXT_ONLY"
         and (c.valid_until is None or now_ref <= c.valid_until)
     ]
+    # v2.7 D3 — options özeti (banner). Yalnızca status=OK + dikkat çeken rejim
+    # (NORMAL hariç). Etkilenen hücreler ayrıca cell.blocked_by="options_risk:*"
+    # taşır. Skew GERÇEK greeks değil → is_proxy.
+    options_summary = [
+        {
+            "symbol": o.symbol,
+            "regime": o.regime,
+            "atm_iv": o.atm_iv,
+            "realized_vol": o.realized_vol,
+            "iv_rv_spread": o.iv_rv_spread,
+            "skew_25d": o.skew_25d,
+            "put_call_oi_ratio": o.put_call_oi_ratio,
+            "term_slope": o.term_slope,
+            "front_expiry": o.front_expiry,
+            "next_expiry": o.next_expiry,
+            "long_expiry": o.long_expiry,
+            "is_proxy": o.is_proxy,
+            "source": o.source,
+            "freshness": o.freshness,
+            "status": o.status,
+            "verified": o.verified,
+        }
+        for o in (snap.options or {}).values()
+        if o.status == "OK" and o.regime != "NORMAL"
+    ]
     cells = []
     for d in decisions:
         actionable = bool(d.actionable) and not suspended
@@ -711,5 +797,6 @@ def matrix_view(
         "derivatives": derivatives_summary,
         "volatility": volatility_summary,
         "catalysts": catalyst_summary,
+        "options": options_summary,
         "cells": cells,
     }

@@ -1,5 +1,34 @@
 # Agent Changelog
 
+## 2026-06-13 — v2.7 D3 Options IV / Skew / Term Structure Intelligence
+- Yeni provider `packages/data/providers/options/` — `engine.py` (saf-python,
+  deterministik: ATM IV, 25Δ skew **proxy** = OTM call IV − OTM put IV, put/call
+  OI oranı, term structure front/next/long + slope, IV-RV spread, rejim NORMAL/
+  RICH_VOL/CHEAP_VOL/PUT_SKEW_STRESS/CALL_SKEW_EUPHORIA/TERM_STRESS), `deribit.py`
+  (public `get_book_summary_by_currency` adapter; instrument_name parse; fail →
+  None), `fixtures.py` (offline, verified=false), `__init__.py` (orchestrator;
+  crypto-only; live fail → DEGRADED, mock yok).
+- `packages/risk/options_risk.py`: yalnızca kısıtlayıcı gate (verified+OK +
+  BTC/ETH). PUT_SKEW/CALL_SKEW + long → CAUTION ×0.5; TERM_STRESS → block;
+  RICH_VOL → CAUTION; CHEAP_VOL → WATCH (boost yok). size_factor ≤ 1.0. Timeframe
+  ağırlıklı (4h/1d/1w tam; 15m/1h düşük → block yumuşar). RiskGate'ten SONRA.
+- Pipeline `MarketSnapshot.options` (Deribit chain + D4 realized vol 1d). Decision
+  engine options gate (catalyst'ten sonra) + `TradeDecision.options_report` +
+  blocked_by `options_risk:*`; matrix_view `options` özeti (rejim ≠ NORMAL).
+- API `/data/snapshot` + `/decision/matrix` options alanları. config thresholds
+  `options:` bölümü (eşikler + timeframe_weight).
+- Sözleşme additive: openapi `OptionsSnapshot`/`OptionsSummary` + `OptionsRegime`/
+  `OptionsStatus` enum + DataSnapshot.options + DecisionMatrix.options; TS api.ts
+  senkron (`OptionsSnapshot`/`OptionsSummary`/`OptionsRegime`/`OptionsStatus` +
+  selectors `selectOptions`/`selectMatrixOptions`). Codegen drift yeşil.
+- Frontend `OptionsVolPanel` (selector + registry; page.tsx tek GridCell) +
+  TimeframeMatrixPanel options banner + hücre "OPTIONS" rozeti.
+- Tests `tests/unit/test_options.py` (36): engine metrik/rejim, deribit parse,
+  orchestrator DEGRADED + ağsız, gate kısıtlayıcı + timeframe, decide_matrix
+  uçtan uca (TERM_STRESS block / CHEAP_VOL context / unverified no-block / DQS
+  blocked → options bypass yok). pytest 323/323; CI-scope ruff + tsc + pnpm build
+  yeşil. Live smoke gerçek Deribit verisiyle OK.
+
 ## 2026-06-12 — v2.7 D5 Real News Feed + Catalyst Half-Life Intelligence
 - Yeni motor `packages/data/providers/news/catalyst.py` (kural tabanlı,
   deterministik, LLM/network YOK). Başlık → 13 event_type (geopolitical

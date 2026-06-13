@@ -15,6 +15,7 @@ import {
   selectMatrixDerivatives,
   selectMatrixVolatility,
   selectMatrixCatalysts,
+  selectMatrixOptions,
   cellBlockedLabel,
 } from "@/lib/selectors/decision";
 import type { TimeframeDecision } from "@/types/generated/api";
@@ -120,6 +121,7 @@ export function TimeframeMatrixPanel() {
   const derivatives = selectMatrixDerivatives(data);
   const volatility = selectMatrixVolatility(data);
   const catalysts = selectMatrixCatalysts(data);
+  const options = selectMatrixOptions(data);
   return (
     <PanelFrame id="timeframe_matrix">
       <PanelHeader
@@ -185,6 +187,24 @@ export function TimeframeMatrixPanel() {
             .map((c) => `${c.event_type} (${c.actionability})`)
             .join(" · ")}{" "}
           — yalnızca kısıtlayıcı (rumor/half-life dışı yalnızca bağlam).
+        </p>
+      ) : null}
+      {/* v2.7 D3 — options IV/skew/term stresi (yalnızca doğrulanmış + rejim ≠
+          NORMAL). Hücre etkisi blocked_by="options_risk:*" rozetiyle görünür.
+          skew_25d proxy (gerçek greeks değil). */}
+      {options.length ? (
+        <p className="mb-2 text-[11px] text-orange-300/90">
+          ⚠ Options:{" "}
+          {options
+            .map(
+              (o) =>
+                `${o.symbol} ${o.regime}` +
+                (o.skew_25d != null
+                  ? ` · skew ${(o.skew_25d * 100).toFixed(1)}vp (proxy)`
+                  : ""),
+            )
+            .join(" · ")}{" "}
+          — yalnızca kısıtlayıcı (asla size artırmaz).
         </p>
       ) : null}
       <table className="w-full border-collapse text-xs">

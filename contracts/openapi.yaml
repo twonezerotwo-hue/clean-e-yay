@@ -917,6 +917,12 @@ components:
             v2.7 D5 — verified + yarı-ömrü dolmamış catalyst özeti (banner).
             Etkilenen hücreler cell.blocked_by="catalyst_risk:*" ile görünür.
           items: { $ref: "#/components/schemas/CatalystSummary" }
+        options:
+          type: array
+          description: >
+            v2.7 D3 — per-symbol options özeti (banner; rejim ≠ NORMAL).
+            Etkilenen hücreler cell.blocked_by="options_risk:*" ile görünür.
+          items: { $ref: "#/components/schemas/OptionsSummary" }
         cells:
           type: array
           items: { $ref: "#/components/schemas/TimeframeDecision" }
@@ -1063,6 +1069,13 @@ components:
           additionalProperties:
             type: object
             additionalProperties: { $ref: "#/components/schemas/VolatilitySnapshot" }
+        options:
+          type: object
+          description: >
+            v2.7 D3 — options IV / skew / term structure (symbol →
+            OptionsSnapshot). Yalnızca BTC/ETH; skew_25d proxy (gerçek greeks
+            değil). Karar zincirinde yalnızca kısıtlayıcı.
+          additionalProperties: { $ref: "#/components/schemas/OptionsSnapshot" }
         catalyst_impacts:
           type: array
           description: >
@@ -1190,6 +1203,87 @@ components:
         realized_vol: { type: number, nullable: true }
         vol_zscore: { type: number, nullable: true }
         status: { type: string, enum: [OK, DEGRADED] }
+        verified: { type: boolean }
+
+    # ---------------- v2.7 D3 — Options IV / Skew / Term Structure ----------------
+
+    OptionsRegime:
+      type: string
+      enum: [NORMAL, RICH_VOL, CHEAP_VOL, PUT_SKEW_STRESS, CALL_SKEW_EUPHORIA, TERM_STRESS]
+      description: >
+        Options stress rejimi (yalnızca kısıtlayıcı / bağlam). RICH_VOL/CHEAP_VOL
+        IV-RV spread; PUT_SKEW_STRESS/CALL_SKEW_EUPHORIA 25Δ skew proxy;
+        TERM_STRESS backwardation.
+
+    OptionsStatus:
+      type: string
+      enum: [OK, DEGRADED, UNAVAILABLE]
+
+    OptionsSnapshot:
+      type: object
+      description: >
+        v2.7 D3 — tek kripto sembol için options (IV / skew / term structure)
+        zekâsı. Deribit (veya fixture) chain'inden ATM IV, 25Δ skew proxy,
+        put/call OI oranı, term structure ve realized-vs-implied spread. Karar
+        zincirinde YALNIZCA kripto (BTC/ETH) + YALNIZCA kısıtlayıcı (CAUTION /
+        size-reduce / NO_POSITION_INCREASE) veya bağlam — asla size artırmaz,
+        asla RiskGate/DQS/halt'ı bypass etmez. skew_25d GERÇEK 25Δ greeks
+        DEĞİLDİR (is_proxy=true; moneyness proxy). Live başarısız →
+        status=DEGRADED/UNAVAILABLE, alanlar null (mock yok). Fixture verisi
+        verified=false (karar zincirine girmez).
+      required: [symbol, contracts_used, regime, is_proxy, status, source, verified, dqs, ts]
+      properties:
+        symbol: { type: string }
+        underlying_price: { type: number, nullable: true }
+        atm_iv: { type: number, nullable: true, description: "ön vade ATM IV (annualize ondalık; 0.55 = %55)" }
+        realized_vol: { type: number, nullable: true }
+        iv_rv_spread: { type: number, nullable: true, description: "atm_iv − realized_vol (pozitif = IV pahalı)" }
+        skew_25d: { type: number, nullable: true, description: "risk reversal proxy = call_iv − put_iv (negatif = put skew)" }
+        put_call_oi_ratio: { type: number, nullable: true }
+        term_front_iv: { type: number, nullable: true }
+        term_next_iv: { type: number, nullable: true }
+        term_long_iv: { type: number, nullable: true }
+        term_slope: { type: number, nullable: true, description: "term_long_iv − term_front_iv (negatif = backwardation)" }
+        front_expiry: { type: string, nullable: true }
+        next_expiry: { type: string, nullable: true }
+        long_expiry: { type: string, nullable: true }
+        contracts_used: { type: integer }
+        regime: { $ref: "#/components/schemas/OptionsRegime" }
+        is_proxy: { type: boolean }
+        status: { $ref: "#/components/schemas/OptionsStatus" }
+        source: { type: string }
+        verified: { type: boolean }
+        freshness: { type: string, enum: [FRESH, RECENT, STALE], nullable: true }
+        dqs: { type: number }
+        ts: { type: string, format: date-time }
+        evidence:
+          type: array
+          items: { type: string }
+        error: { type: string, nullable: true }
+
+    OptionsSummary:
+      type: object
+      description: >
+        v2.7 D3 — matrix banner için per-symbol options özeti (yalnızca status=OK
+        + rejim ≠ NORMAL). Etkilenen hücreler ayrıca cell.blocked_by=
+        "options_risk:*" taşır. skew_25d proxy (gerçek greeks değil).
+      required: [symbol, regime, is_proxy, source, status, verified]
+      properties:
+        symbol: { type: string }
+        regime: { $ref: "#/components/schemas/OptionsRegime" }
+        atm_iv: { type: number, nullable: true }
+        realized_vol: { type: number, nullable: true }
+        iv_rv_spread: { type: number, nullable: true }
+        skew_25d: { type: number, nullable: true }
+        put_call_oi_ratio: { type: number, nullable: true }
+        term_slope: { type: number, nullable: true }
+        front_expiry: { type: string, nullable: true }
+        next_expiry: { type: string, nullable: true }
+        long_expiry: { type: string, nullable: true }
+        is_proxy: { type: boolean }
+        source: { type: string }
+        freshness: { type: string, enum: [FRESH, RECENT, STALE], nullable: true }
+        status: { $ref: "#/components/schemas/OptionsStatus" }
         verified: { type: boolean }
 
     # ---------------- OPS — /learning/* yüzeyi (read-only) ----------------

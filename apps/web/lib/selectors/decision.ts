@@ -54,6 +54,11 @@ export const selectMatrixVolatility = (m: DecisionMatrix | undefined) =>
 export const selectMatrixCatalysts = (m: DecisionMatrix | undefined) =>
   m?.catalysts ?? [];
 
+/** v2.7 D3 — matris options özeti (banner). Backend yalnızca status=OK + rejim ≠
+ * NORMAL döner; hücre etkisi cell.blocked_by="options_risk:*". skew_25d proxy. */
+export const selectMatrixOptions = (m: DecisionMatrix | undefined) =>
+  (m?.options ?? []).filter((o) => o.verified && o.regime !== "NORMAL");
+
 /** Bir hücreyi hangi kapı kısıtlıyor → kısa, okunur etiket. */
 export const cellBlockedLabel = (c: TimeframeDecision): string | undefined => {
   const tag = (c.blocked_by ?? [])[0];
@@ -63,6 +68,7 @@ export const cellBlockedLabel = (c: TimeframeDecision): string | undefined => {
   if (tag.startsWith("derivatives_risk")) return "TÜREV";
   if (tag.startsWith("volatility_risk")) return "VOLATİLİTE";
   if (tag.startsWith("catalyst_risk")) return "CATALYST";
+  if (tag.startsWith("options_risk")) return "OPTIONS";
   if (tag.startsWith("correlation")) return "KORELASYON";
   if (tag.startsWith("timeframe_policy")) return "TF BIAS";
   if (tag.includes("1w_bias")) return "1W BIAS";

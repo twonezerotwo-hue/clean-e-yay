@@ -105,6 +105,39 @@ def get_snapshot() -> dict:
             }
             for sym, by_tf in (snap.volatility or {}).items()
         },
+        # v2.7 D3 — options IV / skew / term structure zekâsı (yalnızca BTC/ETH).
+        # skew_25d GERÇEK 25Δ greeks değildir (is_proxy=true); karar zincirinde
+        # yalnızca kısıtlayıcı (verified + status OK).
+        "options": {
+            sym: {
+                "symbol": o.symbol,
+                "underlying_price": o.underlying_price,
+                "atm_iv": o.atm_iv,
+                "realized_vol": o.realized_vol,
+                "iv_rv_spread": o.iv_rv_spread,
+                "skew_25d": o.skew_25d,
+                "put_call_oi_ratio": o.put_call_oi_ratio,
+                "term_front_iv": o.term_front_iv,
+                "term_next_iv": o.term_next_iv,
+                "term_long_iv": o.term_long_iv,
+                "term_slope": o.term_slope,
+                "front_expiry": o.front_expiry,
+                "next_expiry": o.next_expiry,
+                "long_expiry": o.long_expiry,
+                "contracts_used": o.contracts_used,
+                "regime": o.regime,
+                "is_proxy": o.is_proxy,
+                "status": o.status,
+                "source": o.source,
+                "verified": o.verified,
+                "freshness": o.freshness,
+                "dqs": o.dqs,
+                "ts": o.ts.isoformat(),
+                "evidence": list(o.evidence),
+                "error": o.error,
+            }
+            for sym, o in (snap.options or {}).items()
+        },
         # v2.7 D5 — haber catalyst half-life zekâsı (deterministik; LLM yok).
         # Yalnızca verified + yarı-ömrü dolmamış impact karar zincirini kısıtlar;
         # rumor (verified=false) ve CONTEXT_ONLY yalnızca bağlamdır.

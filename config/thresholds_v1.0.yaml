@@ -111,6 +111,32 @@ volatility:
     "1d": 0.5
     "1w": 0.0
 
+# v2.7 D3 — Options IV / Skew / Term Structure Intelligence (yalnızca BTC/ETH).
+# Deribit (veya fixture) options chain'inden ATM IV, 25Δ skew proxy, put/call OI,
+# term structure ve realized-vs-implied spread → options stress rejimi. YALNIZCA
+# kısıtlayıcı (CAUTION / size-reduce / NO_POSITION_INCREASE) veya bağlam; ASLA
+# size artırmaz, ASLA RiskGate/DQS/KillSwitch/halt'ı bypass etmez.
+#   rich_vol_spread   : atm_iv − realized ≥ bunu → RICH_VOL (pahalı vol)
+#   cheap_vol_spread  : atm_iv − realized ≤ bunu (negatif) → CHEAP_VOL (bağlam)
+#   put_skew_stress   : 25Δ skew proxy ≤ bunu (negatif) → PUT_SKEW_STRESS
+#   call_skew_euphoria: 25Δ skew proxy ≥ bunu → CALL_SKEW_EUPHORIA
+#   term_stress_slope : (long − front) IV ≤ bunu (negatif) → TERM_STRESS
+#   max_age_sec       : chain tazelik (üstü STALE → dqs düşer)
+#   timeframe_weight  : options 4h/1d/1w bağlamı (tam); 15m/1h düşük ağırlık
+options:
+  rich_vol_spread: 0.10
+  cheap_vol_spread: -0.05
+  put_skew_stress: -0.03
+  call_skew_euphoria: 0.03
+  term_stress_slope: -0.02
+  max_age_sec: 900
+  timeframe_weight:
+    "15m": 0.25
+    "1h": 0.4
+    "4h": 0.75
+    "1d": 1.0
+    "1w": 1.0
+
 # G4 — trade PnL verisi yetersizken kullanılan deterministik korelasyon
 # baseline'ı. Çiftler simetrik okunur; listede olmayan çift → neutral (rho=0,
 # insufficient_correlation_data uyarısı, size adjustment yok).

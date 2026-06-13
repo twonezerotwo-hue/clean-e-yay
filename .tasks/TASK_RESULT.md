@@ -1,90 +1,82 @@
 # TASK RESULT
 
-Date: 2026-06-12
-Task: v2.7 D5 — Real News Feed + Catalyst Half-Life Intelligence
+Date: 2026-06-13
+Task: v2.7 D3 — Options IV / Skew / Implied Volatility Intelligence
 Status: completed
 
 ## Prensip
 
-Mevcut RSS haber feed'i gerçek catalyst zekâ katmanına çevrildi. Haber artık
-yalnızca panelde görünmüyor; her başlık kural tabanlı (**deterministik, LLM YOK,
-network YOK**) bir `event_type`'a sınıflandırılıyor ve event_type'a göre asset ×
-timeframe etki haritası + yarı-ömür (half-life) + `valid_until` + actionability
-üretiyor. Catalyst impact karar zincirine **yalnızca kısıtlayıcı** girer; ASLA
-size artırmaz; ASLA RiskGate/DQS/KillSwitch/halt'ı bypass etmez. **Rumor**
-(doğrulanmamış söylenti) `verified=False` → trade'e dönüşmez (yalnızca bağlam).
-Yarı-ömrü dolmuş catalyst de karar zincirine girmez. PAPER_SAFE / NO_EXECUTION.
+BTC/ETH options chain'inden implied volatility, 25Δ skew (proxy), term structure
+ve realized-vs-implied spread okunup bir **options stress rejimine** sınıflandırılır
+ve karar zincirine **yalnızca kısıtlayıcı / bağlam** olarak girer. ASLA size
+artırmaz (CHEAP_VOL bile yalnızca bağlam — boost YOK); ASLA RiskGate / DQS /
+KillSwitch / halt'ı bypass etmez (RiskGate hard gate'lerinden SONRA çalışır).
+Yalnızca **verified=True + status=OK** snapshot karar zincirine girer; fixture
+(verified=False) ve DEGRADED/UNAVAILABLE yalnızca dashboard bağlamıdır. skew_25d
+GERÇEK 25Δ greeks DEĞİLDİR — moneyness tabanlı **proxy** (`is_proxy=True`).
+Runtime'da mock yok; testlerde live network yok. PAPER_SAFE / NO_EXECUTION.
+
+## WIP recovery
+
+Önceki session `OptionsSnapshot` modelini `packages/data/types.py`'a ekleyip
+options `engine.py`'ı yazmış (264 satır, syntax + import OK) ama provider'ın geri
+kalanı (deribit/fixtures/__init__), pipeline, gate, contract, frontend, tests
+eksikti. Baştan yazılmadı; engine'den devam edildi.
 
 ## Ne yapıldı
 
-### 1. Sınıflandırma + half-life motoru (`packages/data/providers/news/catalyst.py`)
-- `classify_event_type(title)`: sıralı kural seti → 13 event_type
-  (geopolitical_deescalation/escalation, inflation_data, jobs_data, central_bank,
-  oil_supply, oil_inventory, crypto_etf_flow, funding_oi_squeeze, earnings,
-  exchange_outage, rumor_unverified, unknown). Outage/rumor güvenlik-kritik →
-  önce; makro veri jeopolitikten önce; de-escalation escalation'dan önce.
-- `is_rumor(title)`: rumor/unconfirmed/sources-say/… → `verified=False` zorunlu.
-- `_RULES` tablosu (event_type → half_life_min / timeframes / default_assets /
-  base_action / bias_kind). `build_impact(headline)`:
-  - affected_assets = event default ∪ başlıktan tespit (classify_asset_impact).
-  - surprise_level işaretli (-1..+1): sentiment tabanı + intensity + beat/miss.
-  - valid_until = ts + half_life × 3 (≈ 3 yarı-ömür → ~%12.5 kalan).
-  - actionability surprise yüksekse yükselir (CAUTION→NO_POSITION_INCREASE).
-  - confidence = verified + freshness + relevance.
-- `build_impacts(headlines)`: (event_type, assets) dedup + kısıtlayıcı önce sıralı.
+### 1. Provider (`packages/data/providers/options/`)
+- `engine.py` (WIP'ten): ATM IV (ön vade, underlying'e en yakın strike), 25Δ skew
+  proxy (OTM call IV − OTM put IV), put/call OI oranı, term structure (front/next/
+  long ATM IV + slope), IV-RV spread, rejim sınıflandırma, DQS. Chain boş →
+  UNAVAILABLE; ATM hesaplanamıyor → DEGRADED. Comment typo düzeltildi.
+- `deribit.py`: public `get_book_summary_by_currency?currency=BTC&kind=option`
+  adapter; `instrument_name` (BTC-27JUN25-60000-C) → strike/expiry/call-put parse;
+  mark_iv yüzde puan → ondalık; hata/timeout → None (mock yok, crash yok).
+- `fixtures.py`: offline deterministik chain (3 vade × strike × call/put; put skew
+  + hafif backwardation); verified=false.
+- `__init__.py`: orchestrator; crypto-only; fixture mode (`TEST_USE_MOCK` /
+  `OPTIONS_USE_FIXTURE`); live fail → DEGRADED; provider status + realized_vol
+  (D4 1d) IV-RV spread için beslenir.
 
-### 2. Gate (`packages/risk/catalyst_risk.py`)
-- `assess(impacts, symbol, timeframe)`: yalnızca `verified` + yarı-ömrü dolmamış
-  (`now ≤ valid_until`) + symbol etkilenen + timeframe etkilenen impact'ler.
-  CONTEXT_ONLY→NONE, WATCH→bağlam, CAUTION→×0.5, NO_POSITION_INCREASE→block.
-  Yön bağımsız; size_factor ≤ 1.0 garanti; en kısıtlayıcı seviye belirleyici.
+### 2. Pipeline + decision (`packages/...`)
+- `pipeline.py`: `MarketSnapshot.options` alanı; build_snapshot BTC/ETH options
+  (Deribit chain + D4 realized vol 1d); provider status + `options_degraded` warning.
+- `risk/options_risk.py`: kısıtlayıcı gate (NONE/WATCH/CAUTION/NO_POSITION_INCREASE);
+  PUT_SKEW/CALL_SKEW + long → CAUTION, short/contrarian → WATCH; TERM_STRESS →
+  block; RICH_VOL → CAUTION; CHEAP_VOL → WATCH; timeframe ağırlıklı (4h/1d/1w tam,
+  15m/1h düşük → block yumuşar).
+- `decision/engine.py`: options gate (catalyst'ten sonra) + `TradeDecision.
+  options_report` + blocked_by `options_risk:*`; matrix_view `options` özeti.
+- `config/thresholds_v1.0.yaml`: `options:` bölümü (eşikler + timeframe_weight).
 
-### 3. Entegrasyon
-- `pipeline.py`: `MarketSnapshot.catalyst_impacts` (başlıklardan, ekstra ağ yok).
-- `decision/engine.py`: catalyst gate volatility gate'inden SONRA, RiskGate hard
-  gate'lerinden sonra (yalnızca açılış adayına). `catalyst_report` + blocked_by
-  `catalyst_risk:*`. matrix_view `catalysts` özeti (verified + dolmamış + kısıtlayıcı).
-- `apps/api/routers/data.py`: `/data/snapshot` catalyst_impacts alanı.
+### 3. Sözleşme + frontend
+- `contracts/openapi.yaml`: `OptionsSnapshot`/`OptionsSummary` + `OptionsRegime`/
+  `OptionsStatus` enum + DataSnapshot.options + DecisionMatrix.options.
+- `apps/web/types/generated/api.ts`: aynı tipler + DataSnapshot/DecisionMatrix
+  alanları (codegen drift guard yeşil).
+- `apps/api/routers/data.py`: `/data/snapshot` options serileştirme.
+- `OptionsVolPanel` + selector `selectOptions` + registry + page.tsx tek GridCell;
+  TimeframeMatrixPanel options banner + "OPTIONS" hücre rozeti + `selectMatrixOptions`.
 
-### 4. Sözleşme + tipler (additive)
-- `contracts/openapi.yaml`: `CatalystImpact` genişletildi (headline_id /
-  actionability / verified / source / region / freshness / ts / evidence) +
-  `CatalystEventType` / `CatalystActionability` enum + `CatalystSummary` +
-  DataSnapshot.catalyst_impacts + DecisionMatrix.catalysts. `api.ts` el-senkron;
-  codegen drift + OpenAPI contract testleri yeşil.
+### 4. Tests
+- `tests/unit/test_options.py` (36): engine metrik + 6 rejim, deribit parse/fail,
+  orchestrator crypto-only/DEGRADED/ağsız, gate kısıtlayıcı + timeframe yumuşatma,
+  decide_matrix uçtan uca (TERM_STRESS block / CHEAP_VOL context-only / unverified
+  no-block / DQS BLOCKED → options bypass yok).
 
-### 5. Frontend (selector + panel-registry; page.tsx → 1 GridCell)
-- `lib/selectors/catalyst.ts`: selectCatalystImpacts + catalystRemainingMinutes +
-  catalystIsActive. `lib/selectors/decision.ts`: selectMatrixCatalysts +
-  cellBlockedLabel "CATALYST".
-- `CatalystImpactPanel`: event_type (TR etiket) / affected assets+TF / yarı-ömür
-  countdown / valid_until / actionability rozeti / surprise / evidence / rumor
-  (doğrulanmamış) rozeti. EventCalendarPanel (scheduled) + NewsPanel (unscheduled)
-  ayrı kalır — çakışma yok.
-- `TimeframeMatrixPanel`: catalyst banner + hücre `blocked_by` "CATALYST" rozeti.
+## Sonuç
 
-### 6. Testler (`tests/unit/test_catalyst.py`, 21 yeni)
-- classification: 11 event_type + rumor override.
-- ceasefire → Brent/Gold/BTC + kısa half-life; CPI → CAUTION whipsaw; high-surprise
-  → escalate; build_impacts no-network (urlopen guard); unverified → CONTEXT_ONLY.
-- gate taksonomi (empty/unverified/expired/other-symbol-tf → NONE; CAUTION ×0.5;
-  block; CONTEXT_ONLY no-effect; never-boost; most-restrictive).
-- decide_matrix uçtan uca: CAUTION → size küçülür (açılış korunur); block → hücre
-  durur + matrix catalysts; rumor → bloklamaz; **DQS BLOCKED & KILL_SWITCH her
-  zaman final (catalyst bypass etmez)**.
+- **pytest: 323/323** (287 baseline + 36 D3); live network yok.
+- **ruff (CI-scope): temiz**; **tsc --noEmit: temiz**; **pnpm build: yeşil**.
+- **Live smoke**: gerçek Deribit verisi — BTC ATM IV ~41% (CHEAP_VOL), ETH ~23%
+  (PUT_SKEW_STRESS), verified=true, FRESH; `/health` `/data/snapshot`
+  `/decision/matrix` `/dashboard/state` 200; web SSR'da OptionsVolPanel +
+  Kripto Türevleri + Timeframe Matrisi + PAPER_ONLY görünüyor; log temiz.
+- Eski E_YAY CODEX `com.eyay.backend` launch agent'ı `*:8000`'de; Clean E-yAy API
+  `127.0.0.1:8000`'de ayrı kalktı (127.0.0.1 → Clean).
 
-## Sonuçlar
-- **pytest: 287/287** (266 baseline + 21 D5). Live network yok.
-- ruff (CI scope: packages + apps/api + workers + tests/contract): temiz.
-- `pnpm tsc --noEmit` + `pnpm build`: yeşil.
-- Live smoke: API health/snapshot/matrix 200; `/data/snapshot` gerçek RSS →
-  central_bank/geopolitical/funding_squeeze/etf_flow/rumor sınıfları (rumor
-  verified=false); `/decision/matrix` catalyst banner 4 kayıt; RiskGate suspended
-  iken catalyst hücreyi bypass etmiyor (doğru öncelik); web SSR 200, "Catalyst
-  Etkisi" paneli + mevcut 30 panel bozulmadı.
-
-## PAPER_SAFE
-- broker: yok · gerçek emir: yok · live execution: yok.
-- RiskGate/DQS/KillSwitch/halt: sıfır diff, bypass yok.
-- catalyst: yalnızca kısıtlayıcı; asla size artırmaz; verified-only + yarı-ömrü
-  dolmamış karar; rumor trade'e dönüşmez.
+## PAPER_SAFE check
+- broker: none · real order: none · live execution: none
+- RiskGate/DQS/KillSwitch/halt: sıfır diff, bypass yok
+- options yalnızca kısıtlayıcı; asla size artırmaz; 1w direct paper execution yok

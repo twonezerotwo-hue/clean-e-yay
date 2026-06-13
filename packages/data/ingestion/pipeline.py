@@ -14,6 +14,7 @@ from packages.data.providers import calendar as cal_provider
 from packages.data.providers import derivatives as deriv_provider
 from packages.data.providers import news as news_provider
 from packages.data.providers import ohlcv as ohlcv_provider
+from packages.data.providers import options as options_provider
 from packages.data.providers import price as price_provider
 from packages.data.providers import rotation as rot_provider
 from packages.data.providers import technical as tech_provider
@@ -27,6 +28,7 @@ from packages.data.types import (
     CatalystImpact,
     DerivativesSnapshot,
     NewsHeadline,
+    OptionsSnapshot,
     PriceQuote,
     RotationView,
     TechnicalSnapshot,
@@ -61,6 +63,10 @@ class MarketSnapshot:
     # v2.7 D4 — realized volatility / rejim zekâsı. Anahtar: symbol → timeframe.
     # Karar zincirinde yalnızca kısıtlayıcı (asla size artırmaz).
     volatility: dict[str, dict[str, VolatilitySnapshot]] = field(default_factory=dict)
+    # v2.7 D3 — options IV / skew / term structure zekâsı (yalnızca BTC/ETH).
+    # Karar zincirinde yalnızca kısıtlayıcı (verified + status OK); asla size
+    # artırmaz. Anahtar: symbol → OptionsSnapshot.
+    options: dict[str, OptionsSnapshot] = field(default_factory=dict)
     # v2.7 D5 — haber → catalyst half-life zekâsı (deterministik, LLM yok).
     # Karar zincirinde yalnızca kısıtlayıcı (verified + yarı-ömrü dolmamış).
     catalyst_impacts: list[CatalystImpact] = field(default_factory=list)
@@ -102,6 +108,16 @@ def build_snapshot(symbols: list[str] | None = None) -> MarketSnapshot:
     # v2.7 D4 — realized volatility / rejim (mevcut OHLCV cache'inden, ekstra ağ
     # yok). Multi-TF teknikleriyle aynı semboller × tüm timeframe'ler.
     volatility = vol_provider.get_volatility(tf_syms, list(TIMEFRAMES))
+    # v2.7 D3 — options IV / skew / term structure (yalnızca BTC/ETH). IV-RV
+    # spread için D4 realized vol (1d) beslenir; ekstra ağ sadece Deribit chain.
+    opt_syms = [s for s in syms if s in options_provider.CRYPTO_SYMBOLS]
+    realized_1d = {
+        s: (volatility.get(s, {}).get("1d").realized_vol if volatility.get(s, {}).get("1d") else None)
+        for s in opt_syms
+    }
+    options = options_provider.get_options(
+        opt_syms, realized_vol_by_symbol=realized_1d, now=now
+    )
     quality = compute_dqs(prices, syms)
     warnings = list(quality.notes)
     degraded_tfs = [
@@ -130,6 +146,9 @@ def build_snapshot(symbols: list[str] | None = None) -> MarketSnapshot:
     ]
     if degraded_vol:
         warnings.append("volatility_degraded: " + ", ".join(sorted(degraded_vol)))
+    degraded_opt = [s for s, o in options.items() if o.status != "OK"]
+    if degraded_opt:
+        warnings.append("options_degraded: " + ", ".join(sorted(degraded_opt)))
     provider_status = {
         **price_provider.get_provider_status(),
         **ohlcv_provider.get_provider_status(),
@@ -138,6 +157,7 @@ def build_snapshot(symbols: list[str] | None = None) -> MarketSnapshot:
         **rot_provider.get_provider_status(),
         **deriv_provider.get_provider_status(),
         **vol_provider.get_provider_status(),
+        **options_provider.get_provider_status(),
     }
     if price_provider.is_runtime_mock_explicit():
         warnings.insert(0, "PRICE_USE_MOCK=true — TEST/MOCK MODE")
@@ -155,6 +175,7 @@ def build_snapshot(symbols: list[str] | None = None) -> MarketSnapshot:
         technicals_by_tf=technicals_by_tf or None,
         derivatives=derivatives,
         volatility=volatility,
+        options=options,
         catalyst_impacts=catalyst_impacts,
     )
 

@@ -1,6 +1,7 @@
 import type {
   DataSnapshot,
   DerivativesSnapshot,
+  OptionsSnapshot,
   ProviderStatus,
   TechnicalTf,
   Timeframe,
@@ -33,6 +34,16 @@ export const selectDerivatives = (
   s: DataSnapshot | undefined,
 ): DerivativesSnapshot[] =>
   Object.values(s?.derivatives ?? {}).sort((a, b) =>
+    a.symbol.localeCompare(b.symbol),
+  );
+
+// v2.7 D3 — options IV/skew/term snapshot'ları (symbol sırasına dizili). skew_25d
+// GERÇEK greeks değildir (is_proxy). Frontend hesap yapmaz; backend ViewModel'i
+// gösterir.
+export const selectOptions = (
+  s: DataSnapshot | undefined,
+): OptionsSnapshot[] =>
+  Object.values(s?.options ?? {}).sort((a, b) =>
     a.symbol.localeCompare(b.symbol),
   );
 

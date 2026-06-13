@@ -32,6 +32,7 @@ export type PanelKey =
   | "drawdown_guard"
   | "crypto_derivatives"
   | "volatility"
+  | "options_vol"
   | "catalyst_impact"
   | "timeframe_matrix";
 
@@ -73,6 +74,7 @@ export const PANEL_REGISTRY: PanelMeta[] = [
   { id: "drawdown_guard",   title: "Drawdown Guard",       defaultVisible: true,  span: "1",    group: "decision" },
   { id: "crypto_derivatives", title: "Kripto Türevleri",   defaultVisible: true,  span: "1",    group: "data" },
   { id: "volatility",       title: "Volatilite Rejimi",    defaultVisible: true,  span: "1",    group: "data" },
+  { id: "options_vol",      title: "Options IV / Skew",    defaultVisible: true,  span: "1",    group: "data" },
   { id: "catalyst_impact",  title: "Catalyst Etkisi",      defaultVisible: true,  span: "2",    group: "data" },
   { id: "timeframe_matrix", title: "Timeframe Matrisi",    defaultVisible: true,  span: "3",    group: "decision" },
 ];

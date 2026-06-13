@@ -288,6 +288,71 @@ class VolatilitySnapshot(BaseModel):
     error: str | None = None
 
 
+# v2.7 D3 — Options IV / Skew / Implied Volatility Intelligence (BTC/ETH).
+OptionsStatus = Literal["OK", "DEGRADED", "UNAVAILABLE"]
+# Options stress rejimi (yalnızca kısıtlayıcı / bağlam sınıfı):
+#   NORMAL              → sıradan; etki yok
+#   RICH_VOL            → IV >> realized (pahalı vol; risk primi yüksek → size kısıtı)
+#   CHEAP_VOL           → IV < realized (ucuz vol; yalnızca bağlam, boost YOK)
+#   PUT_SKEW_STRESS     → put'lar call'lardan pahalı (downside korku → long CAUTION)
+#   CALL_SKEW_EUPHORIA  → call'lar put'lardan pahalı (öfori → long chase CAUTION)
+#   TERM_STRESS         → ön vade IV > uzun vade (backwardation; yakın stres → WATCH/block)
+OptionsRegime = Literal[
+    "NORMAL", "RICH_VOL", "CHEAP_VOL",
+    "PUT_SKEW_STRESS", "CALL_SKEW_EUPHORIA", "TERM_STRESS",
+]
+
+
+class OptionsSnapshot(BaseModel):
+    """Tek kripto sembol için options (IV / skew / term structure) zekâsı.
+
+    v2.7 D3: Deribit (veya fixture) options chain'inden ATM implied volatility,
+    25Δ skew / risk-reversal proxy, put/call open-interest oranı, term structure
+    (front/next/long vade IV) ve realized-vs-implied spread (D4 realized vol ile)
+    hesaplanır; bir options stress rejimine sınıflandırılır.
+
+    Karar zincirinde **yalnızca kripto sembolleri** (BTCUSD/ETHUSD) için ve
+    **yalnızca kısıtlayıcı** (CAUTION / size-reduce / NO_POSITION_INCREASE) veya
+    bağlam etkisi yapar — ASLA size artırmaz, ASLA RiskGate/DQS/halt'ı bypass
+    etmez. Options daha çok 4h/1d/1w bağlamıdır (15m/1h düşük ağırlık).
+
+    `skew_25d` GERÇEK delta-greeks DEĞİLDİR — moneyness tabanlı bir **proxy**'dir
+    (`is_proxy=True`): ön vadede OTM call IV − OTM put IV (risk reversal; negatif =
+    put skew / korku).
+
+    DATA_POLICY: runtime'da yalnızca gerçek (live) veri `verified=True` taşır.
+    Live provider başarısız → `status="DEGRADED"`/`"UNAVAILABLE"`, alanlar None
+    (mock yok, crash yok). Fixture verisi `verified=False` (yalnızca dashboard
+    bağlamı; karar zincirine GİRMEZ).
+    """
+
+    symbol: str
+    underlying_price: float | None = None
+    atm_iv: float | None = None              # ön vade ATM implied vol (annualize ondalık; 0.55 = %55)
+    realized_vol: float | None = None        # karşılaştırma için (D4 realized vol, annualize ondalık)
+    iv_rv_spread: float | None = None        # atm_iv − realized_vol (pozitif = IV pahalı)
+    skew_25d: float | None = None            # risk reversal proxy = call_iv − put_iv (negatif = put skew)
+    put_call_oi_ratio: float | None = None   # toplam put OI / toplam call OI
+    term_front_iv: float | None = None       # en yakın vade ATM IV
+    term_next_iv: float | None = None        # bir sonraki vade ATM IV
+    term_long_iv: float | None = None        # uzun vade ATM IV
+    term_slope: float | None = None          # term_long_iv − term_front_iv (negatif = backwardation)
+    front_expiry: str | None = None
+    next_expiry: str | None = None
+    long_expiry: str | None = None
+    contracts_used: int = 0
+    regime: OptionsRegime = "NORMAL"
+    is_proxy: bool = True                    # skew her zaman moneyness proxy (gerçek 25Δ greeks değil)
+    status: OptionsStatus = "DEGRADED"
+    source: str = "unknown"
+    verified: bool = False
+    freshness: NewsFreshness | None = None   # FRESH / RECENT / STALE
+    dqs: float = 0.0                         # bu sembolün options veri kalitesi (0..100)
+    ts: datetime = Field(default_factory=utcnow)
+    evidence: list[str] = Field(default_factory=list)
+    error: str | None = None
+
+
 RotationStatus = Literal["OK", "UNAVAILABLE"]
 
 

@@ -33,6 +33,7 @@ import { MistakeMemoryPanel } from "@/components/panels/MistakeMemoryPanel";
 import { CorrelationPanel } from "@/components/panels/CorrelationPanel";
 import { DrawdownGuardPanel } from "@/components/panels/DrawdownGuardPanel";
 import { CryptoDerivativesPanel } from "@/components/panels/CryptoDerivativesPanel";
+import { OptionsVolPanel } from "@/components/panels/OptionsVolPanel";
 import { VolatilityPanel } from "@/components/panels/VolatilityPanel";
 import { TimeframeMatrixPanel } from "@/components/panels/TimeframeMatrixPanel";
 
@@ -82,6 +83,7 @@ export default function HomePage() {
 
         <GridCell span="1"><CryptoDerivativesPanel /></GridCell>
         <GridCell span="1"><VolatilityPanel /></GridCell>
+        <GridCell span="1"><OptionsVolPanel /></GridCell>
 
         <GridCell span="3"><PositionChecksPanel /></GridCell>
 
