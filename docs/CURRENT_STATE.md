@@ -4,6 +4,38 @@ _Bu dosya kısa ve güncel tutulur. Her görev sonunda güncellenir._
 
 ## Last known status
 
+- **L1 — Learning Loop Finalization tamamlandı** (2026-06-13): learning loop
+  kapalı paper trade outcome'larından **doğru, timeframe-aware, gate-aware ve
+  owner-approval-safe** öğreniyor. Yeni veri kaynağı / dashboard redesign /
+  trading logic YOK; RiskGate/DQS/KillSwitch/halt sıfır diff. PAPER_SAFE/
+  NO_EXECUTION; active weights owner approval olmadan değişmez.
+  - **BUG FIX**: `auto_weight_trainer._parse_dominant_module` artık
+    `fingerprint.dominant_module` (v2→parts[7], legacy→parts[5], malformed→None).
+    Eski kod hep parts[5] → v2'de score_bucket'ı module sanıyordu. Canlı
+    doğrulandı: by_dominant_module=touche (S55 değil).
+  - **Canonical outcome** (yeni `packages/learning/outcomes.py`): `CanonicalOutcome`
+    (trade_id…paper_only) + `build_outcome` (legacy default, crash yok) +
+    timeframe-aware `breakdowns`/`bucketize`/`distribution`.
+  - **Timeframe-aware summary** (`summary.py` additive): outcomes_total/
+    verified_outcomes/by_timeframe/by_symbol/by_regime/by_dominant_module/
+    by_close_reason/worker_last_run/proposal_status. Global metrikler korundu;
+    **15m outcome 1d bucket'ını etkilemez**.
+  - **Worker metadata** (yeni `run_store.py` + `learning_worker/main.py`):
+    run_id/started_at/completed_at/status/skipped_reason/outcomes_seen/
+    proposals_generated/calibration_status/errors. Boş veri → NO_DATA; hata →
+    COMPLETED_WITH_ERRORS (worker patlamaz).
+  - **Trainer** verified canonical outcome timeframe/regime/module dağılımını
+    proposal evidence'ına yazıyor; min sample guard + owner approval korundu.
+    **Mistake memory** full-fingerprint (timeframe içerir) korundu; **calibration**
+    aktif davranışı değişmedi.
+  - **Sözleşme/frontend** additive: openapi LearningSummary L1 alanları; TS api.ts
+    (+OutcomeBucket/LearningWorkerRun); LearningPanel timeframe ayrımı + worker
+    last run + proposal status. codegen drift + contract yeşil.
+  - **407 pytest** (+14), ruff CI-scope + tsc + pnpm build yeşil. Live smoke
+    (izole API 8021 + web 3101): health/learning-summary/rebalance-proposal/
+    cockpit-brief 200; by_timeframe 15m≠1d; module=touche; active_version 1.0.0
+    (owner gate); web SSR 200 "Öğrenme" + PAPER_ONLY.
+
 - **P1 — Paper Lifecycle Finalization tamamlandı** (2026-06-13): paper trading
   yaşam döngüsü backend'de net, güvenli, **audit edilebilir** ve öğrenmeye hazır.
   PAPER_SAFE / NO_EXECUTION sıfır diff; fiyat yoksa **fake kapanış yok**;
@@ -553,13 +585,11 @@ _Bu dosya kısa ve güncel tutulur. Her görev sonunda güncellenir._
 
 ## Next task
 
-- P1 Paper Lifecycle Finalization bitti (commit `feat(paper): finalize lifecycle
-  and audit trail`). Backend yeterince güçlü; yeni veri kaynağı eklenmez.
-- Sıradaki: **L1 — Learning Loop Finalization** (bkz. `.tasks/NEXT_TASK.md`).
-  Paper lifecycle artık sağlam + audit edilebilir; learning loop'u gerçek paper
-  outcome'dan dürüst öğrenmeye hazırla: canonical outcome record normalization,
-  timeframe-aware learning (15m hatası 1d'yi cezalandırmaz), mistake memory /
-  calibration / auto-weight trainer yalnızca verified outcomes + owner approval,
-  learning worker reliability, API/dashboard additive. PAPER_SAFE / NO_EXECUTION;
-  active weights owner approval olmadan değişmez.
-- `.tasks/NEXT_TASK.md` L1 ile güncellendi.
+- L1 Learning Loop Finalization bitti (commit `feat(learning): finalize outcome
+  learning loop`). P1 + L1 ile paper lifecycle + learning loop sağlam.
+- Sıradaki adaylar (bkz. `.tasks/NEXT_TASK.md`):
+  - **O1 — 7/24 worker reliability**: tick_worker + learning_worker'ın kesintisiz
+    çalışması (loop sağlığı, hata toleransı, gözlemlenebilirlik; yeni feature yok).
+  - **A1 — Final backend architecture audit**: uçtan uca tutarlılık / ölü kod /
+    sözleşme denetimi (yeni veri/feature yok).
+- `.tasks/NEXT_TASK.md` O1/A1 ile güncellendi.

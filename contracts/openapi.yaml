@@ -806,6 +806,32 @@ components:
           type: object
           additionalProperties: { type: number }
         weights_version: { type: string }
+        # L1 — timeframe-aware outcome breakdown'lar (additive). Her bucket:
+        # {trades, wins, losses, win_rate, total_pnl, avg_pnl, verified}.
+        outcomes_total: { type: integer }
+        verified_outcomes: { type: integer }
+        by_timeframe:
+          type: object
+          additionalProperties: { type: object }
+        by_symbol:
+          type: object
+          additionalProperties: { type: object }
+        by_regime:
+          type: object
+          additionalProperties: { type: object }
+        by_dominant_module:
+          type: object
+          additionalProperties: { type: object }
+        by_close_reason:
+          type: object
+          additionalProperties: { type: object }
+        worker_last_run:
+          type: object
+          nullable: true
+          description: L1 — son learning worker koşusu metadata'sı (yoksa null).
+        proposal_status:
+          type: string
+          description: L1 — rebalance proposal durumu (PENDING/APPROVED/REJECTED/NONE).
 
     CorrelationEntry:
       type: object

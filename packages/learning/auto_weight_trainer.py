@@ -26,6 +26,8 @@ from packages.data.registry.loader import (
     load_active_weights,
     load_thresholds,
 )
+from packages.learning import fingerprint as fp
+from packages.learning import outcomes as outcomes_mod
 from packages.paper import state as paper_state
 
 MIN_TRADES_PER_MODULE = 3
@@ -74,12 +76,13 @@ class RebalanceProposal:
 
 
 def _parse_dominant_module(fingerprint: str | None) -> str | None:
-    if not fingerprint:
-        return None
-    parts = fingerprint.split("|")
-    if len(parts) < 6:
-        return None
-    return parts[5] or None
+    """L1 FIX — dominant module: v2 (parts[7]) ve legacy (parts[5]).
+
+    Eski sürüm her zaman ``parts[5]`` döndürüyordu → v2 fingerprint'te
+    ``score_bucket``'ı module sanıyor, attribution'ı bozuyordu.
+    `fingerprint.dominant_module` v2/legacy/malformed'ı ayırır.
+    """
+    return fp.dominant_module(fingerprint)
 
 
 def _bump_version(version: str) -> str:
@@ -226,6 +229,15 @@ def train(regime: str = "NEUTRAL") -> RebalanceProposal | dict:
     from_version = active_weights_version()
     to_version = _bump_version(from_version)
 
+    # L1 — timeframe/regime/module attribution kaybolmasın: verified canonical
+    # outcome'lardan kompakt dağılımları proposal evidence'ına ekle.
+    verified_outcomes = [
+        o for o in outcomes_mod.outcomes_from_state(s) if o.data_verified
+    ]
+    tf_dist = outcomes_mod.distribution(verified_outcomes, lambda o: o.timeframe)
+    regime_dist = outcomes_mod.distribution(verified_outcomes, lambda o: o.regime)
+    module_dist = outcomes_mod.distribution(verified_outcomes, lambda o: o.dominant_module)
+
     new_regimes = dict(weights_cfg["regimes"])
     new_regimes[regime] = new_w
     proposed_yaml = {
@@ -241,6 +253,9 @@ def train(regime: str = "NEUTRAL") -> RebalanceProposal | dict:
             "based_on_trades": eligible,
             "rejected_records": rejected,
             "module_performance": [asdict(p) for p in perfs],
+            "timeframe_distribution": tf_dist,
+            "regime_distribution": regime_dist,
+            "module_distribution": module_dist,
         },
     }
 
@@ -248,6 +263,9 @@ def train(regime: str = "NEUTRAL") -> RebalanceProposal | dict:
     notes = [
         f"min_trades_per_module={MIN_TRADES_PER_MODULE}",
         f"thresholds.learning={thresholds}",
+        f"timeframes={tf_dist}",
+        f"regimes={regime_dist}",
+        f"modules={module_dist}",
     ]
 
     return RebalanceProposal(

@@ -320,6 +320,38 @@ export type LearningSummary = {
   calibration: CalibrationBin[];
   module_skew?: Record<string, number>;
   weights_version?: string;
+  // L1 — timeframe-aware outcome breakdown'lar (additive; backend türetir).
+  outcomes_total?: number;
+  verified_outcomes?: number;
+  by_timeframe?: Record<string, OutcomeBucket>;
+  by_symbol?: Record<string, OutcomeBucket>;
+  by_regime?: Record<string, OutcomeBucket>;
+  by_dominant_module?: Record<string, OutcomeBucket>;
+  by_close_reason?: Record<string, OutcomeBucket>;
+  worker_last_run?: LearningWorkerRun | null;
+  proposal_status?: string;
+};
+
+export type OutcomeBucket = {
+  trades: number;
+  wins: number;
+  losses: number;
+  win_rate: number;
+  total_pnl: number;
+  avg_pnl: number;
+  verified: number;
+};
+
+export type LearningWorkerRun = {
+  run_id: string;
+  started_at: string;
+  completed_at: string;
+  status: string;
+  skipped_reason?: string | null;
+  outcomes_seen: number;
+  proposals_generated: number;
+  calibration_status: string;
+  errors: string[];
 };
 
 export type Health = {

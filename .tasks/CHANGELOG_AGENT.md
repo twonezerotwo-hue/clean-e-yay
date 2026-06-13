@@ -1,5 +1,42 @@
 # Agent Changelog
 
+## 2026-06-13 — L1 Learning Loop Finalization
+- Learning loop kapalı paper trade outcome'larından **doğru + timeframe-aware +
+  gate-aware + owner-approval-safe** öğreniyor. Yeni veri kaynağı / dashboard
+  redesign / trading logic YOK; RiskGate/DQS/KillSwitch/halt sıfır diff.
+  PAPER_SAFE/NO_EXECUTION; active weights owner approval olmadan değişmez.
+- **BUG FIX** `packages/learning/auto_weight_trainer.py`: `_parse_dominant_module`
+  artık `fingerprint.dominant_module` kullanıyor — v2 (parts[7]) ve legacy
+  (parts[5]) ayrımı. Eski kod hep parts[5] döndürüp v2'de score_bucket'ı module
+  sanıyordu (yanlış attribution). Canlı doğrulandı: by_dominant_module = touche
+  (S55 değil).
+- `packages/learning/fingerprint.py`: `parse()` (v2/legacy/malformed-safe) +
+  `dominant_module()`.
+- Yeni `packages/learning/outcomes.py`: `CanonicalOutcome` (trade_id/symbol/
+  timeframe/opened/closed/duration/direction/prices/pnl/pnl_pct/open+close_reason/
+  fingerprint/regime/dominant_module/candidate+final_action/blocked_by/
+  gates_applied/snapshot+decision_id/data_verified/source_quality/paper_only) +
+  `build_outcome` (legacy default'lar, asla patlamaz) + timeframe-aware
+  `breakdowns`/`bucketize`/`distribution`.
+- `packages/learning/summary.py` additive: outcomes_total/verified_outcomes/
+  by_timeframe/by_symbol/by_regime/by_dominant_module/by_close_reason/
+  worker_last_run/proposal_status. Global metrikler korundu; 15m outcome 1d
+  bucket'ını etkilemez.
+- Yeni `packages/learning/run_store.py` + `apps/learning_worker/main.py`: run
+  metadata (run_id/started_at/completed_at/status/skipped_reason/outcomes_seen/
+  proposals_generated/calibration_status/errors). Boş veri → NO_DATA, hata →
+  COMPLETED_WITH_ERRORS (worker ASLA patlamaz).
+- auto-weight trainer proposal evidence'ına timeframe/regime/module dağılımı eklendi.
+- Sözleşme additive: openapi LearningSummary L1 alanları; TS api.ts senkron
+  (+OutcomeBucket/LearningWorkerRun). codegen drift + contract yeşil. LearningPanel
+  additive: timeframe ayrımı + worker last run + proposal status.
+- 407 pytest (+14: dominant_module v2/legacy/malformed, canonical outcome legacy+
+  P1-enriched+garbage, 15m≠1d bucket, trainer v2 attribution, mistake memory by
+  tf, worker empty NO_DATA + metadata, summary breakdowns). ruff CI-scope + tsc +
+  pnpm build yeşil. Live smoke (izole API 8021 + web 3101): health/learning-summary/
+  rebalance-proposal/cockpit-brief 200; by_timeframe 15m≠1d; module=touche;
+  active_version 1.0.0 (owner gate); web SSR 200. PAPER_SAFE; RiskGate bypass yok.
+
 ## 2026-06-13 — P1 Paper Lifecycle Finalization
 - Paper lifecycle backend'de net + güvenli + audit edilebilir + öğrenmeye hazır.
   Yeni veri/dashboard/intelligence/mimari YOK. PAPER_SAFE/NO_EXECUTION sıfır diff;

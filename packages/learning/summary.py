@@ -3,6 +3,8 @@ from __future__ import annotations
 
 from dataclasses import asdict
 
+from packages.learning import outcomes as outcomes_mod
+from packages.learning import rebalance_store, run_store
 from packages.learning.calibration import reliability_bins
 from packages.learning.walkforward import summarize as wf_summarize
 from packages.paper import state as paper_state
@@ -11,6 +13,12 @@ from packages.paper import state as paper_state
 # olarak anlamlı değildir; frontend bunları büyük göstermez (LearningPanel
 # "INSUFFICIENT SAMPLE" uyarısı). Frontend hesap yapmaz: karar backend'de.
 MIN_RELIABLE_TRADES = 20
+
+
+def _proposal_status() -> str:
+    """Rebalance proposal durumu (additive yüzey) — PENDING/APPROVED/REJECTED/NONE."""
+    cur = rebalance_store.load().get("current")
+    return str(cur.get("status")) if cur else "NONE"
 
 
 def build_summary() -> dict:
@@ -42,6 +50,13 @@ def build_summary() -> dict:
     wf = wf_summarize(pnls)
     walk = asdict(wf) if wf else None
 
+    # L1 — timeframe-aware breakdown'lar (canonical outcome'lardan).
+    # 15m outcome 1d bucket'ını ETKİLEMEZ (her bucket ayrı). Global metrikler
+    # (win_rate/sharpe) korunur; bunlar additive.
+    outcomes = outcomes_mod.outcomes_from_state(s)
+    bd = outcomes_mod.breakdowns(outcomes)
+    verified_outcomes = sum(1 for o in outcomes if o.data_verified)
+
     return {
         "total_trades": total,
         "min_sample": MIN_RELIABLE_TRADES,
@@ -59,4 +74,14 @@ def build_summary() -> dict:
         "calibration": bins,
         "module_skew": {},
         "weights_version": "1.0.0",
+        # --- L1 additive (frontend hesap yapmaz; backend türetir) ---
+        "outcomes_total": len(outcomes),
+        "verified_outcomes": verified_outcomes,
+        "by_timeframe": bd["by_timeframe"],
+        "by_symbol": bd["by_symbol"],
+        "by_regime": bd["by_regime"],
+        "by_dominant_module": bd["by_dominant_module"],
+        "by_close_reason": bd["by_close_reason"],
+        "worker_last_run": run_store.load(),
+        "proposal_status": _proposal_status(),
     }

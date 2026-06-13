@@ -58,3 +58,57 @@ def is_v2(fingerprint: str | None) -> bool:
         return False
     parts = fingerprint.split("|")
     return len(parts) >= 3 and parts[1] == VERSION_TAG
+
+
+def parse(fingerprint: str | None) -> dict[str, str | None]:
+    """Fingerprint'i bileşenlerine ayır (v2 + legacy + malformed-safe).
+
+    v2     (8 parça): ``asset|v2|tf|regime|direction|score_bucket|confluence|module``
+    legacy (6 parça): ``asset|regime|direction|score_bucket|confluence|module``
+
+    Tanınmayan/malformed fingerprint → tüm alanlar None (crash yok).
+    """
+    out: dict[str, str | None] = {
+        "symbol": None,
+        "version": None,
+        "timeframe": None,
+        "regime": None,
+        "direction": None,
+        "score_bucket": None,
+        "confluence": None,
+        "dominant_module": None,
+    }
+    if not fingerprint:
+        return out
+    parts = fingerprint.split("|")
+    if is_v2(fingerprint) and len(parts) >= 8:
+        out.update(
+            symbol=parts[0],
+            version="v2",
+            timeframe=parts[2],
+            regime=parts[3],
+            direction=parts[4],
+            score_bucket=parts[5],
+            confluence=parts[6],
+            dominant_module=parts[7],
+        )
+    elif not is_v2(fingerprint) and len(parts) >= 6:
+        out.update(
+            symbol=parts[0],
+            version="legacy",
+            regime=parts[1],
+            direction=parts[2],
+            score_bucket=parts[3],
+            confluence=parts[4],
+            dominant_module=parts[5],
+        )
+    return out
+
+
+def dominant_module(fingerprint: str | None) -> str | None:
+    """v2 (parts[7]) ve legacy (parts[5]) fingerprint'ten dominant module.
+
+    Eski koddaki ``parts[5]`` her zaman → v2'de score_bucket'ı module sanıyordu.
+    Bu helper v2/legacy/malformed'ı ayırır.
+    """
+    return parse(fingerprint)["dominant_module"]
