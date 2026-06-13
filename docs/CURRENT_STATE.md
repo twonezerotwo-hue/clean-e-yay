@@ -4,6 +4,31 @@ _Bu dosya kısa ve güncel tutulur. Her görev sonunda güncellenir._
 
 ## Last known status
 
+- **O1 — 7/24 Worker Reliability tamamlandı** (2026-06-13): Clean E-yAy artık
+  gözlemlenebilir 7/24 agent servisi — worker heartbeat + stale tespiti + crash
+  raporlama + system health. Yeni data source / dashboard redesign / intelligence
+  / trading logic YOK; RiskGate/DQS/KillSwitch/halt sıfır diff. PAPER_SAFE/
+  NO_EXECUTION; worker reliability trade iznini artırmaz.
+  - **Heartbeat store** (yeni `packages/ops/heartbeat.py`): file-backed
+    `worker_heartbeats.json` (atomik, corrupt/missing→default). cycle_count
+    terminal'de artar; last_success_at OK/DEGRADED/NO_DATA'da güncellenir,
+    FAILED/RUNNING'de korunur.
+  - **System health VM** (yeni `packages/ops/system_health.py`): network-free —
+    STALE/UNKNOWN türetilir (TICK_STALE_SEC=120 / LEARNING_STALE_SEC=3600),
+    provider_summary / dqs_status / snapshot_store_status / risk_halt_status +
+    owner warning'leri (rapor; execution alert değil).
+  - **Endpoint** (yeni `apps/api/routers/system.py`): `GET /api/v1/system/health`;
+    `/health` korundu.
+  - **tick_worker**: her cycle RUNNING→OK/DEGRADED; istisnada FAILED (loop ölmez).
+    **learning_worker**: L1 run metadata heartbeat'e bağlandı (NO_DATA = alive).
+  - **Sözleşme/frontend** additive: openapi SystemHealth+WorkerHealth+/system/health;
+    TS api.ts + useSystemHealth; SystemHealthBar worker/stale/last-tick/snapshot/
+    warning + NO_EXECUTION. codegen drift + contract yeşil.
+  - **419 pytest** (+11 +1 contract param), ruff CI-scope + tsc + pnpm build yeşil.
+    Live smoke (izole API 8023 + web 3102): system/health tick DEGRADED fresh +
+    learning NO_DATA, provider 8ok/3deg, snapshot 1, halt yok, warnings
+    provider_degraded+learning_worker_no_data; web SSR 200 "Sistem Sağlığı".
+
 - **L1 — Learning Loop Finalization tamamlandı** (2026-06-13): learning loop
   kapalı paper trade outcome'larından **doğru, timeframe-aware, gate-aware ve
   owner-approval-safe** öğreniyor. Yeni veri kaynağı / dashboard redesign /
@@ -585,11 +610,11 @@ _Bu dosya kısa ve güncel tutulur. Her görev sonunda güncellenir._
 
 ## Next task
 
-- L1 Learning Loop Finalization bitti (commit `feat(learning): finalize outcome
-  learning loop`). P1 + L1 ile paper lifecycle + learning loop sağlam.
-- Sıradaki adaylar (bkz. `.tasks/NEXT_TASK.md`):
-  - **O1 — 7/24 worker reliability**: tick_worker + learning_worker'ın kesintisiz
-    çalışması (loop sağlığı, hata toleransı, gözlemlenebilirlik; yeni feature yok).
-  - **A1 — Final backend architecture audit**: uçtan uca tutarlılık / ölü kod /
-    sözleşme denetimi (yeni veri/feature yok).
-- `.tasks/NEXT_TASK.md` O1/A1 ile güncellendi.
+- O1 7/24 Worker Reliability bitti (commit `feat(ops): add worker reliability
+  health`). P1 + L1 + O1 ile paper lifecycle + learning loop + worker gözlem
+  sağlam.
+- Sıradaki: **A1 — Final Backend Architecture Audit** (bkz. `.tasks/NEXT_TASK.md`):
+  uçtan uca tutarlılık / ölü kod / kullanılmayan export / sözleşme-runtime-TS
+  drift / PAPER_SAFE sınır denetimi / test kapsama boşlukları. Yeni veri/feature
+  YOK.
+- `.tasks/NEXT_TASK.md` A1 ile güncellendi.

@@ -1,137 +1,132 @@
 # TASK RESULT
 
 Date: 2026-06-13
-Task: L1 — Learning Loop Finalization
+Task: O1 — 7/24 Worker Reliability
 Status: completed
 
 ## Prensip
 
-Paper lifecycle (P1) sağlam ve audit edilebilir. L1 learning loop'u kapalı paper
-trade outcome'larından **doğru, timeframe-aware, gate-aware ve owner-approval-safe**
-öğrenecek hale getirdi. Yeni veri kaynağı / dashboard redesign / trading logic
-**EKLENMEDİ**; RiskGate/DQS/KillSwitch/halt **sıfır diff**. PAPER_SAFE/NO_EXECUTION;
-LLM karar vermez; active weights owner approval olmadan değişmez.
+Clean E-yAy artık endpoint koleksiyonu değil, **gözlemlenebilir 7/24 agent
+servisi**: worker heartbeat + stale tespiti + crash raporlama + system health.
+Yeni data source / dashboard redesign / intelligence module / trading logic
+**EKLENMEDİ**; RiskGate/DQS/KillSwitch/halt **sıfır diff**. PAPER_SAFE/
+NO_EXECUTION; worker reliability hiçbir şekilde trade iznini artırmaz.
 
-## LEARNING BASELINE (önce)
+## WORKER BASELINE (önce)
 
-- Learning yalnızca `paper_state.Trade.recent_trades`'ten öğreniyordu (outcome=pnl);
-  hepsi `data_verified=True` filtreli (DATA_POLICY).
-- `summary` + `calibration` GLOBAL'di (timeframe ayrımı yok); `mistake_memory`
-  full-fingerprint gruplayarak zaten timeframe-aware idi.
-- Owner approval `rebalance_store.approve_current`'te (doğru); sample guard'lar
-  (trainer MIN_TOTAL_TRADES=10/per_module=3, calibration MIN_SAMPLES, summary
-  MIN_RELIABLE_TRADES=20) mevcuttu.
-- Worker'da run metadata YOKTU.
-
-### BUG
-`auto_weight_trainer._parse_dominant_module` `fingerprint.split("|")[5]`
-döndürüyordu. Legacy 6-parça için doğru (module=parts[5]); ama güncel **v2**
-fingerprint (`asset|v2|tf|regime|dir|bucket|confluence|module`) için parts[5]=
-**score_bucket** ("S55"), gerçek module **parts[7]** ("touche"). Trainer v2
-trade'leri module yerine score bucket'a göre gruplayıp yanlış attribution
-yapıyordu.
+- **tick_worker** (`apps/tick_worker/main.py`): 30sn `run()` döngüsü; `run_once()`
+  her tick'te snapshot al → price_tick → halt sync → decide_matrix → attempt_open
+  → paper save → snapshot_store.record. `run()` istisnayı logluyordu ama
+  **heartbeat/last-tick YOK**; crash dışarıdan görünmüyordu.
+- **learning_worker** (`apps/learning_worker/main.py`): L1'de run metadata
+  (run_store) vardı ama **heartbeat / stale tespiti YOK**.
+- **snapshot_store**: atomik write + count/status mevcut; "yazılıyor mu" izlemi YOK.
+- **health endpoint** (`/health`): yalnızca uptime/version — worker durumunu
+  BİLMİYORDU.
+- provider_status / dqs / halt store mevcut ama tek "system health" yüzeyi yoktu.
 
 ## IMPLEMENTED
 
-### 1. Dominant module fix (`fingerprint.py`, `auto_weight_trainer.py`)
-- `fingerprint.parse()` (v2 8-parça / legacy 6-parça / malformed-safe) +
-  `dominant_module()` (v2→parts[7], legacy→parts[5], tanınmaz→None).
-- `_parse_dominant_module` artık `fingerprint.dominant_module` kullanıyor.
+### 1. Heartbeat store (yeni `packages/ops/heartbeat.py`)
+- File-backed `data/runtime/worker_heartbeats.json` (`{worker: WorkerHeartbeat}`).
+  Atomik write (temp+os.replace); corrupt/missing → default (crash yok); env
+  `WORKER_HEARTBEAT_PATH` (call-time). Fields: worker_name/run_id/started_at/
+  completed_at/status/last_success_at/last_error/cycle_count/snapshots_written/
+  decisions_generated/paper_actions/learning_outcomes_seen/proposals_generated/
+  duration_ms.
+- `record()`: cycle_count yalnızca terminal (OK/DEGRADED/FAILED/NO_DATA) artar;
+  last_success_at OK/DEGRADED/NO_DATA'da güncellenir, FAILED/RUNNING'de korunur.
 
-### 2. Canonical outcome record (yeni `outcomes.py`)
-- `CanonicalOutcome`: trade_id/symbol/timeframe/opened_at/closed_at/
-  duration_seconds/direction/open_price/close_price/pnl/pnl_pct/open_reason/
-  close_reason/fingerprint/regime/dominant_module/candidate_action/final_action/
-  blocked_by/gates_applied/snapshot_id/decision_id/data_verified/source_quality/
-  paper_only=True.
-- `build_outcome(trade)` legacy + P1-enriched trade'den türetir; eksik alan
-  default; bölme/parse hatalarında crash yok. P1 Trade gate attribution
-  taşımadığından blocked_by/gates_applied=[], decision_id=None, candidate=final.
+### 2. System health ViewModel (yeni `packages/ops/system_health.py`)
+- Network-free (heartbeat + snapshot_store + halt + paper_audit). STALE/UNKNOWN
+  **türetilir** (eşik `TICK_STALE_SEC`=120 / `LEARNING_STALE_SEC`=3600; FAILED
+  stale olsa da görünür kalır). provider_summary, dqs_status,
+  snapshot_store_status, risk_halt_status.
+- Owner **warning** modeli (rapor — execution alert DEĞİL): worker_stale /
+  stale_dashboard_state / provider_degraded / dqs_blocked / snapshot_store_empty /
+  learning_worker_no_data / paper_audit_errors / active_halt.
 
-### 3. Timeframe-aware summary (`summary.py` additive)
-- `breakdowns`: by_timeframe / by_symbol / by_regime / by_dominant_module /
-  by_close_reason (bucket: trades/wins/losses/win_rate/total_pnl/avg_pnl/verified).
-- outcomes_total / verified_outcomes / worker_last_run / proposal_status.
-- Global win_rate/sharpe korundu; **15m outcome 1d bucket'ını etkilemez**.
+### 3. System health endpoint (yeni `apps/api/routers/system.py`)
+- `GET /api/v1/system/health` → api_status/paper_safe/no_execution/workers/
+  stale_workers/last_successful_tick/last_learning_run/provider_summary/
+  dqs_status/snapshot_store_status/risk_halt_status/warnings. `/health` korundu.
 
-### 4. Mistake memory + calibration
-- Mistake memory full-fingerprint gruplaması (timeframe içerir) korundu →
-  farklı timeframe = ayrı kayıt (test eklendi). Ağır rewrite yapılmadı.
-- Calibration aktif davranışı (verified+predicted+MIN_SAMPLES → fit; aksi
-  identity) **değişmedi**; mevcut testler korundu.
+### 4. Tick worker reliability (`apps/tick_worker/main.py`)
+- Her cycle: RUNNING heartbeat → iş → OK/DEGRADED (veri/sağlayıcı bozuk ya da
+  aktif halt → DEGRADED). İstisnada **FAILED heartbeat** + log; `run_once` ASLA
+  loop'u öldürmez. snapshots_written/decisions_generated/paper_actions sayılır.
+  Worker gerçek emir üretmez (attempt_open paper-only, drift yok).
 
-### 5. Auto-weight trainer
-- Verified canonical outcome dağılımları (timeframe/regime/module) proposal
-  audit + notes'a eklendi; min sample guard + owner approval korundu.
+### 5. Learning worker reliability (`apps/learning_worker/main.py`)
+- L1 run metadata heartbeat'e bağlandı: COMPLETED→OK / COMPLETED_WITH_ERRORS→
+  DEGRADED / NO_DATA→NO_DATA. Boş veri crash değil (NO_DATA = "alive").
 
-### 6. Learning worker metadata (yeni `run_store.py`, `learning_worker/main.py`)
-- run_id/started_at/completed_at/status/skipped_reason/outcomes_seen/
-  proposals_generated/calibration_status/errors; atomik yazım.
-- Boş veri → NO_DATA (no_closed_outcomes); beklenmedik hata →
-  COMPLETED_WITH_ERRORS. Worker ASLA patlamaz.
-
-### 7. API/sözleşme/frontend (additive)
-- openapi LearningSummary L1 alanları; TS api.ts senkron (+OutcomeBucket/
-  LearningWorkerRun). codegen drift + contract testleri yeşil.
-- LearningPanel: timeframe ayrımı satırları + worker last run + proposal status
-  (frontend hesap yapmaz; backend ViewModel).
+### 6. API/sözleşme/frontend (additive)
+- openapi `SystemHealth` + `WorkerHealth` + `/system/health`; TS api.ts senkron
+  (+useSystemHealth hook/key/client). codegen drift + contract yeşil.
+- SystemHealthBar: worker status + stale + last tick/learning + snapshot count +
+  warning rozetleri + NO_EXECUTION badge (frontend hesap yapmaz; backend ViewModel).
 
 ## FILES CHANGED
-- `packages/learning/fingerprint.py` (parse + dominant_module)
-- `packages/learning/outcomes.py` (yeni)
-- `packages/learning/run_store.py` (yeni)
-- `packages/learning/auto_weight_trainer.py` (module fix + evidence)
-- `packages/learning/summary.py` (additive breakdowns)
-- `apps/learning_worker/main.py` (run metadata)
-- `contracts/openapi.yaml` (LearningSummary additive)
-- `apps/web/types/generated/api.ts` (LearningSummary + OutcomeBucket + LearningWorkerRun)
-- `apps/web/components/panels/LearningPanel/index.tsx` (additive görünürlük)
-- `tests/unit/test_learning_outcomes.py` (yeni, +14)
+- `packages/ops/__init__.py` (yeni)
+- `packages/ops/heartbeat.py` (yeni)
+- `packages/ops/system_health.py` (yeni)
+- `apps/api/routers/system.py` (yeni)
+- `apps/api/main.py` (router register)
+- `apps/tick_worker/main.py` (heartbeat)
+- `apps/learning_worker/main.py` (heartbeat)
+- `contracts/openapi.yaml` (/system/health + SystemHealth + WorkerHealth)
+- `apps/web/types/generated/api.ts` (SystemHealth + WorkerHealth)
+- `apps/web/lib/api/client.ts` + `lib/queries/keys.ts` + `lib/queries/hooks.ts`
+- `apps/web/components/panels/SystemHealthBar/index.tsx`
+- `tests/unit/test_worker_reliability.py` (yeni, +11)
 - docs + task dosyaları
 
-## LEARNING GUARANTEES
-- **verified-only**: trainer + calibration yalnızca data_verified=True closed outcome.
-- **timeframe-aware**: 15m outcome 1d bucket'ını etkilemez (ayrı bucket + ayrı fp).
-- **owner approval**: active weights yalnızca approve_current ile değişir (proposal PENDING).
-- **insufficient sample guard**: trainer MIN_TOTAL_TRADES/per_module; calibration
-  MIN_SAMPLES → identity; summary MIN_RELIABLE_TRADES.
-- **no live execution**: yalnızca okuma/türetme; broker/emir yok; RiskGate bypass yok.
+## RELIABILITY GUARANTEES
+- **heartbeat**: her worker cycle'ı kayıt altında (file-backed, atomik).
+- **stale detection**: tick/learning eşik aşımı → STALE; hiç çalışmadı → UNKNOWN.
+- **crash reporting**: tick istisnası → FAILED heartbeat (loop ölmez), last_error.
+- **snapshot monitoring**: snapshot_store_status + snapshot_store_empty warning.
+- **worker metadata**: cycle_count / last_success_at / duration / sayaçlar.
+- **no execution**: yalnızca gözlem/rapor; broker yok, gerçek emir yok, RiskGate
+  bypass yok.
 
 ## TESTS RUN
-- `pytest -q` (izole runtime path'leri: RISK_HALT/PAPER_STATE/PAPER_AUDIT/
+- `pytest -q` (izole runtime: WORKER_HEARTBEAT/RISK_HALT/PAPER_STATE/PAPER_AUDIT/
   SNAPSHOT_STORE/LEARNING_RUN/LEARNING_OUT)
 - `ruff check packages apps/api apps/tick_worker apps/learning_worker tests/contract`
 - `cd apps/web && pnpm tsc --noEmit && pnpm build`
 
 ## RESULTS
-- **pytest: 407/407 passed** (393 + 14 yeni; live network yok).
+- **pytest: 419/419 passed** (407 + 11 yeni + 1 otomatik /system/health contract
+  parametresi; live network yok).
 - **ruff: temiz** · **tsc: temiz** · **pnpm build: ✓**.
-- Yeni testler: dominant_module v2/legacy/malformed; canonical outcome
-  legacy+P1-enriched+garbage; 15m≠1d bucket; trainer v2 attribution (touche, S55
-  değil); mistake memory by timeframe; worker empty NO_DATA + metadata yazımı;
-  summary breakdowns yüzeyi.
+- Yeni testler: heartbeat write/read/missing/corrupt/cycle_count+last_success,
+  stale detection, fresh not-stale, paper_safe flags, tick success→OK/DEGRADED,
+  tick exception→FAILED (loop ölmez), learning empty→NO_DATA, endpoint worker
+  statüleri.
 
-## LIVE SMOKE (izole API 127.0.0.1:8021 + web SSR 3101 — temp runtime, 12 seed trade)
-- API: /health 200 · /learning/summary 200 · /learning/rebalance/proposal 200 ·
-  /cockpit/brief 200 (bayat 8000 sunucusunda 404'tü → fresh kod doğrulandı).
-- Learning: outcomes_total=12, by_timeframe {15m:4, 1d:8} **ayrı**,
-  by_dominant_module=**touche** (S55 değil — bug fix canlı), worker_last_run
-  COMPLETED (proposals=1, calib=FITTED), proposal_status=PENDING.
-- Rebalance: active_version=**1.0.0** (owner approval YOK → weights değişmedi),
-  current PENDING→1.1.0, audit tf_distribution {15m:4,1d:8} + module {touche:12}.
-- Web: SSR 200, "Öğrenme" paneli + PAPER_ONLY render. İzole server'lar kapatıldı.
+## LIVE SMOKE (izole API 127.0.0.1:8023 + web 3102 — temp runtime, seed: 1 tick + 1 learning run)
+- API: /health · /system/health · /cockpit/brief · /learning/summary → **200**.
+- system/health: tick_worker DEGRADED **stale=false** (cycle 1, age ~21s, 3 sağlayıcı
+  degraded); learning_worker NO_DATA stale=false; last_successful_tick +
+  last_learning_run dolu; dqs_status OK; provider_summary 8 ok/3 degraded/2 unknown;
+  snapshot_count 1; risk_halt_status active=false; warnings
+  [provider_degraded, learning_worker_no_data].
+- Web: SSR 200, "Sistem Sağlığı" paneli + NO_EXECUTION + PAPER_ONLY. İzole
+  server'lar kapatıldı, temp temizlendi.
 
 ## PAPER_SAFE CHECK
 - broker none · real order none · live execution none · LLM karar none
-- owner approval required (active weights değişmez) · RiskGate/DQS/KillSwitch/halt
-  sıfır diff, bypass yok · runtime mock yok · live network yok (testler).
+- worker reliability trade iznini artırmaz · RiskGate/DQS/KillSwitch/halt sıfır
+  diff, bypass yok · system/health yalnızca raporlar.
 
 ## SKIPPED / NEXT
-- Calibration timeframe-aware fit eklenmedi (aktif davranış kırılmasın diye;
-  summary breakdown yeterli). Gate/reason attribution Trade'e yazılmadı (P1 Trade
-  taşımıyor → canonical outcome'da default; ileride paper close enrichment ile
-  doldurulabilir).
-- NEXT: **O1 — 7/24 worker reliability** veya **A1 — Final backend architecture audit**.
+- "dqs_blocked_too_long" süre-takibi yerine son snapshot dqs=BLOCKED (dqs_blocked)
+  ile yaklaşıldı (snapshot geçmişi taraması maliyetli; cheap endpoint tercih edildi).
+- tick_worker RUNNING-stuck detection heartbeat yaşına dayanıyor (ayrı watchdog yok).
+- NEXT: **A1 — Final Backend Architecture Audit** (uçtan uca tutarlılık / ölü kod /
+  sözleşme denetimi; yeni veri/feature yok).
 
 ## COMMITS
-- `feat(learning): finalize outcome learning loop`
+- `feat(ops): add worker reliability health`

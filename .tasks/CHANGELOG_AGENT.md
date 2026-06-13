@@ -1,5 +1,38 @@
 # Agent Changelog
 
+## 2026-06-13 — O1 7/24 Worker Reliability
+- Clean E-yAy artık endpoint koleksiyonu değil, gözlemlenebilir 7/24 agent
+  servisi: worker heartbeat + stale tespiti + crash raporlama + system health.
+  Yeni data source / dashboard redesign / intelligence / trading logic YOK;
+  RiskGate/DQS/KillSwitch/halt sıfır diff. PAPER_SAFE/NO_EXECUTION; worker
+  reliability hiçbir şekilde trade iznini artırmaz.
+- Yeni `packages/ops/heartbeat.py`: file-backed `worker_heartbeats.json` (atomik
+  write, corrupt→default, missing→default). `record()` cycle_count'u terminal
+  statüde artırır; last_success_at OK/DEGRADED/NO_DATA'da güncellenir, FAILED/
+  RUNNING'de korunur.
+- Yeni `packages/ops/system_health.py`: network-free ViewModel — worker view
+  (STALE/UNKNOWN türetilir; eşik TICK_STALE_SEC=120/LEARNING_STALE_SEC=3600),
+  provider_summary, dqs_status, snapshot_store_status, risk_halt_status +
+  owner warning'leri (worker_stale/provider_degraded/dqs_blocked/
+  snapshot_store_empty/learning_worker_no_data/paper_audit_errors/active_halt/
+  stale_dashboard_state).
+- Yeni endpoint `GET /api/v1/system/health` (`apps/api/routers/system.py`); mevcut
+  `/health` korundu.
+- `apps/tick_worker/main.py`: her cycle heartbeat (RUNNING→OK/DEGRADED;
+  istisnada FAILED, loop ölmez). snapshots_written/decisions_generated/
+  paper_actions sayılır. Worker gerçek emir üretmez.
+- `apps/learning_worker/main.py`: L1 run metadata'sı heartbeat'e bağlandı
+  (COMPLETED→OK / COMPLETED_WITH_ERRORS→DEGRADED / NO_DATA→NO_DATA).
+- Sözleşme additive: openapi `SystemHealth` + `WorkerHealth` + `/system/health`;
+  TS api.ts senkron. SystemHealthBar worker status + stale + last tick/learning +
+  snapshot count + warning rozetleri + NO_EXECUTION badge gösterir.
+- 419 pytest (+11 + 1 contract param: heartbeat atomic/missing/corrupt/cycle,
+  stale detection, tick OK + tick exception→FAILED, learning empty→NO_DATA,
+  endpoint). ruff CI-scope + tsc + pnpm build yeşil. Live smoke (izole API 8023 +
+  web 3102): /system/health workers DEGRADED+NO_DATA fresh, provider 8ok/3deg,
+  snapshot_count 1, halt yok, warnings provider_degraded+learning_worker_no_data;
+  cockpit/learning 200; web SSR 200 "Sistem Sağlığı". PAPER_SAFE; RiskGate bypass yok.
+
 ## 2026-06-13 — L1 Learning Loop Finalization
 - Learning loop kapalı paper trade outcome'larından **doğru + timeframe-aware +
   gate-aware + owner-approval-safe** öğreniyor. Yeni veri kaynağı / dashboard

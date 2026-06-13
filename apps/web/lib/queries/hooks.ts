@@ -8,6 +8,15 @@ import { qk } from "./keys";
 export const useHealth = () =>
   useQuery({ queryKey: qk.health, queryFn: api.health, refetchInterval: 30_000 });
 
+/** O1 — 7/24 worker reliability özeti (worker/provider/dqs/snapshot/halt). */
+export const useSystemHealth = () =>
+  useQuery({
+    queryKey: qk.systemHealth,
+    queryFn: api.systemHealth,
+    staleTime: 15_000,
+    refetchInterval: 30_000,
+  });
+
 export const useRegimeReport = () =>
   useQuery({
     queryKey: qk.regimeReport,

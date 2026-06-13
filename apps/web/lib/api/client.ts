@@ -20,6 +20,7 @@ import type {
   RebalanceState,
   RegimeReport,
   ReplayStatus,
+  SystemHealth,
   TickResult,
 } from "@/types/generated/api";
 
@@ -44,6 +45,7 @@ async function fetchJSON<T>(path: string, init?: RequestInit): Promise<T> {
 
 export const api = {
   health: () => fetchJSON<Health>("/api/v1/health"),
+  systemHealth: () => fetchJSON<SystemHealth>("/api/v1/system/health"),
   regimeReport: () => fetchJSON<RegimeReport>("/api/v1/regime-report/current"),
   dashboardState: () => fetchJSON<DashboardState>("/api/v1/dashboard/state"),
   aiReport: () => fetchJSON<AIReport>("/api/v1/ai-report/current"),

@@ -360,6 +360,53 @@ export type Health = {
   uptime_sec: number;
 };
 
+// O1 — worker reliability / system health.
+export type WorkerHealth = {
+  worker_name: string;
+  // RUNNING | OK | DEGRADED | FAILED | NO_DATA | STALE | UNKNOWN
+  status: string;
+  stale: boolean;
+  run_id?: string | null;
+  started_at?: string | null;
+  completed_at?: string | null;
+  last_success_at?: string | null;
+  last_error?: string | null;
+  age_seconds?: number | null;
+  cycle_count: number;
+  snapshots_written: number;
+  decisions_generated: number;
+  paper_actions: number;
+  learning_outcomes_seen: number;
+  proposals_generated: number;
+  duration_ms?: number | null;
+};
+
+export type SystemHealth = {
+  api_status: string;
+  paper_safe: boolean;
+  no_execution: boolean;
+  workers: {
+    tick_worker?: WorkerHealth;
+    learning_worker?: WorkerHealth;
+  };
+  stale_workers?: string[];
+  last_successful_tick?: string | null;
+  last_learning_run?: string | null;
+  provider_summary?: {
+    providers?: Record<string, number>;
+    degraded_count?: number;
+    total?: number;
+  };
+  dqs_status?: string | null;
+  snapshot_store_status?: Record<string, unknown>;
+  risk_halt_status?: {
+    active?: boolean;
+    count?: number;
+    types?: string[];
+  };
+  warnings?: string[];
+};
+
 export type ProviderStatus = {
   status: "ok" | "degraded" | "down" | "unknown";
   last_success_at: string | null;

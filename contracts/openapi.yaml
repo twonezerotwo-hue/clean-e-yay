@@ -21,6 +21,18 @@ paths:
               schema:
                 $ref: "#/components/schemas/Health"
 
+  /api/v1/system/health:
+    get:
+      operationId: getSystemHealth
+      summary: O1 — 7/24 worker reliability özeti (worker/provider/dqs/snapshot/halt)
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SystemHealth"
+
   /api/v1/regime-report/current:
     get:
       operationId: getRegimeReportCurrent
@@ -335,6 +347,56 @@ components:
         status: { type: string, enum: [ok, degraded, down] }
         version: { type: string }
         uptime_sec: { type: number }
+
+    WorkerHealth:
+      type: object
+      description: O1 — tek worker (tick/learning) sağlık görünümü.
+      required: [worker_name, status, stale]
+      properties:
+        worker_name: { type: string }
+        # RUNNING/OK/DEGRADED/FAILED/NO_DATA (stored) + STALE/UNKNOWN (türetilen).
+        # Enum bağlamıyorum: STALE/UNKNOWN runtime'da türetiliyor.
+        status: { type: string }
+        stale: { type: boolean }
+        run_id: { type: string, nullable: true }
+        started_at: { type: string, nullable: true }
+        completed_at: { type: string, nullable: true }
+        last_success_at: { type: string, nullable: true }
+        last_error: { type: string, nullable: true }
+        age_seconds: { type: number, nullable: true }
+        cycle_count: { type: integer }
+        snapshots_written: { type: integer }
+        decisions_generated: { type: integer }
+        paper_actions: { type: integer }
+        learning_outcomes_seen: { type: integer }
+        proposals_generated: { type: integer }
+        duration_ms: { type: integer, nullable: true }
+
+    SystemHealth:
+      type: object
+      description: O1 — 7/24 sistem sağlığı özeti (network-free; owner warning'leri).
+      required: [api_status, paper_safe, no_execution, workers]
+      properties:
+        api_status: { type: string }
+        paper_safe: { type: boolean }
+        no_execution: { type: boolean }
+        workers:
+          type: object
+          properties:
+            tick_worker: { $ref: "#/components/schemas/WorkerHealth" }
+            learning_worker: { $ref: "#/components/schemas/WorkerHealth" }
+        stale_workers:
+          type: array
+          items: { type: string }
+        last_successful_tick: { type: string, nullable: true }
+        last_learning_run: { type: string, nullable: true }
+        provider_summary: { type: object }
+        dqs_status: { type: string, nullable: true }
+        snapshot_store_status: { type: object }
+        risk_halt_status: { type: object }
+        warnings:
+          type: array
+          items: { type: string }
 
     SnapshotMeta:
       type: object

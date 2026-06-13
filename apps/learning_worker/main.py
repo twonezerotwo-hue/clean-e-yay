@@ -13,6 +13,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import time
 import uuid
 from datetime import UTC, datetime
 from pathlib import Path
@@ -27,8 +28,18 @@ from packages.learning import (
     outcomes as outcomes_mod,
 )
 from packages.learning.summary import build_summary
+from packages.ops import heartbeat
 
 log = logging.getLogger("learning_worker")
+
+WORKER_NAME = "learning_worker"
+
+# Learning run status → heartbeat status eşlemesi.
+_HB_STATUS = {
+    "COMPLETED": "OK",
+    "COMPLETED_WITH_ERRORS": "DEGRADED",
+    "NO_DATA": "NO_DATA",
+}
 
 OUT_PATH = Path(os.environ.get("LEARNING_OUT_PATH", "data/runtime/learning_summary.json"))
 
@@ -37,6 +48,7 @@ def run_once() -> dict:
     """Tek learning koşusu; run metadata döner + run_store'a yazar."""
     run_id = uuid.uuid4().hex[:12]
     started_at = datetime.now(UTC).isoformat()
+    t0 = time.monotonic()
     errors: list[str] = []
     proposals_generated = 0
     calibration_status = "UNKNOWN"
@@ -109,6 +121,18 @@ def run_once() -> dict:
         "errors": errors,
     }
     run_store.save(run)
+    # O1 — heartbeat (system/health stale tespiti). Boş veri NO_DATA = "alive".
+    heartbeat.record(
+        WORKER_NAME,
+        status=_HB_STATUS.get(status, "OK"),
+        run_id=run_id,
+        started_at=started_at,
+        completed_at=run["completed_at"],
+        last_error="; ".join(errors) if errors else None,
+        learning_outcomes_seen=outcomes_seen,
+        proposals_generated=proposals_generated,
+        duration_ms=int((time.monotonic() - t0) * 1000),
+    )
     return run
 
 
