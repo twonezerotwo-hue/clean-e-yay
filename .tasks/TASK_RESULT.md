@@ -1,82 +1,94 @@
 # TASK RESULT
 
 Date: 2026-06-13
-Task: v2.7 D3 — Options IV / Skew / Implied Volatility Intelligence
+Task: v2.6.1 — LLM Persona / Agent Brain Explainability (deep-data derinleşme)
 Status: completed
 
 ## Prensip
 
-BTC/ETH options chain'inden implied volatility, 25Δ skew (proxy), term structure
-ve realized-vs-implied spread okunup bir **options stress rejimine** sınıflandırılır
-ve karar zincirine **yalnızca kısıtlayıcı / bağlam** olarak girer. ASLA size
-artırmaz (CHEAP_VOL bile yalnızca bağlam — boost YOK); ASLA RiskGate / DQS /
-KillSwitch / halt'ı bypass etmez (RiskGate hard gate'lerinden SONRA çalışır).
-Yalnızca **verified=True + status=OK** snapshot karar zincirine girer; fixture
-(verified=False) ve DEGRADED/UNAVAILABLE yalnızca dashboard bağlamıdır. skew_25d
-GERÇEK 25Δ greeks DEĞİLDİR — moneyness tabanlı **proxy** (`is_proxy=True`).
-Runtime'da mock yok; testlerde live network yok. PAPER_SAFE / NO_EXECUTION.
+v2.6 LLM persona katmanı (off|mock|groq client, budget guard, 2 saat cache,
+injection guard, 3 persona, state-grounded chat) zaten mevcuttu. Ancak v2.6'dan
+SONRA eklenen v2.7 deep-data dimensiyonları (D2 türev / D3 options / D4 volatilite
+/ D5 catalyst half-life + event riski + rotation) LLM kompakt bağlamına
+GİRMİYORDU — persona ve chat bunları açıklayamıyordu. Bu görev o boşluğu kapattı:
+persona/chat/AI-report artık tüm karar zinciri özetini state-grounded okur.
 
-## WIP recovery
+LLM hâlâ karar VERMEZ; yalnızca mevcut deterministic state'i açıklar. evidence_used
+HER ZAMAN koddan gelir (LLM kanıt uyduramaz); state'te olmayan dimensiyon için
+"kısıt üretmiyor / state'te yok" denir, uydurma yapılmaz. RiskGate / DQS /
+KillSwitch / halt sıfır diff; PAPER_SAFE / NO_EXECUTION korunur.
 
-Önceki session `OptionsSnapshot` modelini `packages/data/types.py`'a ekleyip
-options `engine.py`'ı yazmış (264 satır, syntax + import OK) ama provider'ın geri
-kalanı (deribit/fixtures/__init__), pipeline, gate, contract, frontend, tests
-eksikti. Baştan yazılmadı; engine'den devam edildi.
+## Kök neden
+
+`packages/decision/engine.py::matrix_view` derivatives/volatility/options/catalysts/
+event_risk özetlerini zaten üretiyor (yalnızca dikkat-çeken, status OK + kısıtlayıcı
+rejim filtreli). Fakat `packages/agent/llm/context.py::build_compact_context`
+yalnızca matrix top cells / risk_gate / eski `snap.catalysts` (scheduled calendar)
++ news okuyordu; deep-data DROP ediliyordu. v2.6 bu dimensiyonlardan önce yazılmıştı.
 
 ## Ne yapıldı
 
-### 1. Provider (`packages/data/providers/options/`)
-- `engine.py` (WIP'ten): ATM IV (ön vade, underlying'e en yakın strike), 25Δ skew
-  proxy (OTM call IV − OTM put IV), put/call OI oranı, term structure (front/next/
-  long ATM IV + slope), IV-RV spread, rejim sınıflandırma, DQS. Chain boş →
-  UNAVAILABLE; ATM hesaplanamıyor → DEGRADED. Comment typo düzeltildi.
-- `deribit.py`: public `get_book_summary_by_currency?currency=BTC&kind=option`
-  adapter; `instrument_name` (BTC-27JUN25-60000-C) → strike/expiry/call-put parse;
-  mark_iv yüzde puan → ondalık; hata/timeout → None (mock yok, crash yok).
-- `fixtures.py`: offline deterministik chain (3 vade × strike × call/put; put skew
-  + hafif backwardation); verified=false.
-- `__init__.py`: orchestrator; crypto-only; fixture mode (`TEST_USE_MOCK` /
-  `OPTIONS_USE_FIXTURE`); live fail → DEGRADED; provider status + realized_vol
-  (D4 1d) IV-RV spread için beslenir.
+### 1. Kompakt bağlam (`packages/agent/llm/context.py`)
+- Yeni `_deep_data_summary(view, snap)` → kompakt `deep_data` bloğu: options
+  (symbol/regime/atm_iv/iv_rv_spread/skew_25d/is_proxy), volatility (symbol/tf/
+  regime/vol_state/vol_zscore), derivatives (symbol/squeeze_level/funding_bias/
+  is_proxy), catalysts (event_type/actionability/affected_assets+tf/half_life/
+  surprise), event_risk (level/action/restrictive/triggers≤3), rotation (status/
+  score/direction/evidence≤2). `build_compact_context` çıktısına eklendi.
+- Digest stabil tutuldu: yalnızca snapshot_id/generated_at volatil; deep_data'da
+  hours_until gibi sürekli değişen alan YOK → 2 saat cache güvenli.
 
-### 2. Pipeline + decision (`packages/...`)
-- `pipeline.py`: `MarketSnapshot.options` alanı; build_snapshot BTC/ETH options
-  (Deribit chain + D4 realized vol 1d); provider status + `options_degraded` warning.
-- `risk/options_risk.py`: kısıtlayıcı gate (NONE/WATCH/CAUTION/NO_POSITION_INCREASE);
-  PUT_SKEW/CALL_SKEW + long → CAUTION, short/contrarian → WATCH; TERM_STRESS →
-  block; RICH_VOL → CAUTION; CHEAP_VOL → WATCH; timeframe ağırlıklı (4h/1d/1w tam,
-  15m/1h düşük → block yumuşar).
-- `decision/engine.py`: options gate (catalyst'ten sonra) + `TradeDecision.
-  options_report` + blocked_by `options_risk:*`; matrix_view `options` özeti.
-- `config/thresholds_v1.0.yaml`: `options:` bölümü (eşikler + timeframe_weight).
+### 2. Persona (`packages/agent/llm/report.py`)
+- `_deep_evidence(persona, ctx)` + `_deep_concerns(persona, ctx)` (her ikisi
+  deterministik). Risk Officer: options stresi (PUT_SKEW/CALL_SKEW/TERM_STRESS/
+  RICH_VOL), volatilite (ELEVATED/EXTREME/shock/expansion), türev squeeze (HIGH/
+  ELEVATED), catalyst (NO_POSITION_INCREASE/CAUTION) kanıt+itiraz. Macro Strategist:
+  rotation + volatilite rejimi + options downside stresi + event riski senaryo.
+- `_evidence_for` deep evidence'ı ekler; `_fallback_concerns` deep concerns'i ekler;
+  macro fallback summary'sine volatilite + rotation eklendi. Persona briefleri
+  deep-data'ya atıf yapar (LLM yolu da bağlamı görür). evidence_used HÂLÂ koddan.
 
-### 3. Sözleşme + frontend
-- `contracts/openapi.yaml`: `OptionsSnapshot`/`OptionsSummary` + `OptionsRegime`/
-  `OptionsStatus` enum + DataSnapshot.options + DecisionMatrix.options.
-- `apps/web/types/generated/api.ts`: aynı tipler + DataSnapshot/DecisionMatrix
-  alanları (codegen drift guard yeşil).
-- `apps/api/routers/data.py`: `/data/snapshot` options serileştirme.
-- `OptionsVolPanel` + selector `selectOptions` + registry + page.tsx tek GridCell;
-  TimeframeMatrixPanel options banner + "OPTIONS" hücre rozeti + `selectMatrixOptions`.
+### 3. Chat (`packages/agent/llm/chat.py`)
+- Yeni grounded handler'lar: `_options_answer` / `_volatility_answer` /
+  `_derivatives_answer` / `_rotation_answer` / `_catalyst_answer`. proxy
+  dimensiyonları (skew_25d, squeeze) açıkça "proxy — gerçek greeks/liquidation
+  değil" der. Veri yoksa "kısıt üretmiyor", uydurma yok.
+- `_grounded_answer` intent sırası: missing → deep-data (options/vol/türev/
+  rotation/catalyst) → risk_gate → symbol-why → waiting → overview. "RiskGate neyi
+  engelledi?" deep-data değil risk_gate'e gider (yanlış yönlenme testli).
 
-### 4. Tests
-- `tests/unit/test_options.py` (36): engine metrik + 6 rejim, deribit parse/fail,
-  orchestrator crypto-only/DEGRADED/ağsız, gate kısıtlayıcı + timeframe yumuşatma,
-  decide_matrix uçtan uca (TERM_STRESS block / CHEAP_VOL context-only / unverified
-  no-block / DQS BLOCKED → options bypass yok).
+### 4. Frontend (additive, şema değişmedi)
+- `AIReportPanel`: persona blokunda `evidence_used` satırı (≤6) + "Açıklayıcı
+  katman · yürütme yetkisi yok — final karar deterministik engine + RiskGate" rozeti.
+- `ChatPanel`: öneri sorularına "Options risk ne diyor?", "Volatility neden
+  kısıtladı?", "Funding / türev ne diyor?" eklendi.
+- Persona/chat response şekli değişmedi → openapi/TS api.ts SIFIR diff → codegen
+  drift testi otomatik yeşil.
+
+### 5. Tests (`tests/unit/test_llm_persona.py`, +11)
+- deep_data summary filtre/taşıma; persona fallback deep-data grounding (RO kanıt+
+  itiraz, macro rotation/vol); boş-state'te kanıt UYDURMAMA; 5 chat intent grounded
+  + proxy disclaimer; "RiskGate neyi engelledi?" yanlış yönlenme yok; endpoint
+  state-grounded. Testlerde live network yok (urlopen bekçi korunur).
 
 ## Sonuç
 
-- **pytest: 323/323** (287 baseline + 36 D3); live network yok.
-- **ruff (CI-scope): temiz**; **tsc --noEmit: temiz**; **pnpm build: yeşil**.
-- **Live smoke**: gerçek Deribit verisi — BTC ATM IV ~41% (CHEAP_VOL), ETH ~23%
-  (PUT_SKEW_STRESS), verified=true, FRESH; `/health` `/data/snapshot`
-  `/decision/matrix` `/dashboard/state` 200; web SSR'da OptionsVolPanel +
-  Kripto Türevleri + Timeframe Matrisi + PAPER_ONLY görünüyor; log temiz.
-- Eski E_YAY CODEX `com.eyay.backend` launch agent'ı `*:8000`'de; Clean E-yAy API
-  `127.0.0.1:8000`'de ayrı kalktı (127.0.0.1 → Clean).
+- **pytest: 334/334** (323 baseline + 11 yeni); live network yok.
+- **ruff (CI-scope): temiz**; **tsc --noEmit: temiz**; **pnpm build: yeşil**
+  (✓ Compiled successfully, SSR prerender 4/4).
+- **Live smoke** (izole API 127.0.0.1:8011, gerçek Deribit, LLM_MODE=off):
+  - `/ai-report/current`: risk_officer deep-evidence `options:BTCUSD CHEAP_VOL`,
+    `options:ETHUSD PUT_SKEW_STRESS`, `volatility:*`, `derivatives:*`, `catalyst:*`;
+    concern "options stresi ETHUSD: PUT_SKEW_STRESS (skew proxy)". macro
+    `rotation:bearish 39.0` + volatilite + options.
+  - `/chat`: 5 deep-data intent gerçek değerlerle grounded (BTC ATM IV 0.4096
+    CHEAP_VOL, proxy uyarısı); rotation/catalyst gerçek; bypass → guard refusal.
+  - Web SSR (izole 127.0.0.1:3100): 200, 32 panel + HeroScene canvas + PAPER_ONLY.
+  - İzole smoke server'ları (8011/3100) sonra kapatıldı; kullanıcının 3000/8000
+    ortamı bozulmadı (eski E_YAY CODEX launch agent'ları ayrı dizinde).
 
 ## PAPER_SAFE check
 - broker: none · real order: none · live execution: none
-- RiskGate/DQS/KillSwitch/halt: sıfır diff, bypass yok
-- options yalnızca kısıtlayıcı; asla size artırmaz; 1w direct paper execution yok
+- LLM karar vermez; decision/risk/paper akışına geri yazım yok
+- RiskGate/DQS/KillSwitch/halt: sıfır diff, bypass yok (injection guard değişmedi)
+- deep-data persona/chat'te yalnızca AÇIKLANIR; karar zincirinde yalnızca kısıtlayıcı

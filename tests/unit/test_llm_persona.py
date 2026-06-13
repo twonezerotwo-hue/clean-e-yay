@@ -354,6 +354,204 @@ def test_chat_llm_failure_falls_back_to_grounded(llm_env, monkeypatch) -> None:
     assert body["answer"]
 
 
+# ---------- v2.7 deep-data grounding (options/vol/türev/catalyst/rotation) ----------
+
+
+def _fake_ctx(deep_data: dict | None = None, *, suspended: bool = False,
+              dqs_status: str = "OK") -> dict:
+    """Persona/chat handler'larını izole test etmek için sahte kompakt ctx."""
+    return {
+        "snapshot_id": "snap::test",
+        "dqs": {"status": dqs_status, "score": 80.0, "notes": []},
+        "provider_issues": {},
+        "warnings": [],
+        "matrix": {
+            "suspended": suspended,
+            "regime": "RISK_ON",
+            "risk_gate": {"action": "PASS", "reason": "ok", "evidence": []},
+            "dqs_status": dqs_status,
+            "symbols": ["BTCUSD", "ETHUSD"],
+            "timeframes": ["15m", "1h", "4h", "1d", "1w"],
+            "top_cells": [],
+            "candidate_vs_final_diffs": [],
+            "paper_actions": [],
+            "blocked_by_reasons": [],
+        },
+        "deep_data": deep_data or {
+            "options": [], "volatility": [], "derivatives": [],
+            "catalysts": [], "event_risk": {}, "rotation": {"status": "UNAVAILABLE"},
+        },
+        "halt": {"active": False, "events": []},
+        "correlation_clusters": [],
+        "paper": {"equity_usd": 10000.0, "daily_pnl_usd": 0.0,
+                  "realized_pnl_usd": 0.0, "open_positions": []},
+        "learning": {"mistake_fingerprints": []},
+        "news": [],
+        "catalysts": [],
+    }
+
+
+_RICH_DEEP_DATA = {
+    "options": [
+        {"symbol": "BTCUSD", "regime": "TERM_STRESS", "atm_iv": 0.55,
+         "iv_rv_spread": 0.12, "skew_25d": -0.08, "is_proxy": True},
+    ],
+    "volatility": [
+        {"symbol": "BTCUSD", "timeframe": "1d", "regime": "EXTREME",
+         "vol_state": "expansion", "vol_zscore": 2.5},
+    ],
+    "derivatives": [
+        {"symbol": "BTCUSD", "squeeze_level": "HIGH",
+         "funding_bias": "long_chase", "is_proxy": True},
+    ],
+    "catalysts": [
+        {"event_type": "central_bank", "actionability": "NO_POSITION_INCREASE",
+         "affected_assets": ["BTCUSD"], "affected_timeframes": ["1h", "4h"],
+         "half_life_minutes": 120, "surprise_level": "hawkish"},
+    ],
+    "event_risk": {"level": "high", "action": "NO_POSITION_INCREASE",
+                   "restrictive": True, "triggers": []},
+    "rotation": {"status": "OK", "score": 39.0, "direction": "bearish",
+                 "evidence": ["Akış: DOLAR_GÜCÜ"]},
+}
+
+
+def test_deep_data_summary_filters_and_carries_dimensions() -> None:
+    from types import SimpleNamespace
+
+    from packages.agent.llm import context as ctx_mod
+
+    view = {
+        "options": [{"symbol": "BTCUSD", "regime": "PUT_SKEW_STRESS", "atm_iv": 0.5,
+                     "iv_rv_spread": 0.1, "skew_25d": -0.07, "is_proxy": True}],
+        "volatility": [{"symbol": "ETHUSD", "timeframe": "1h", "regime": "ELEVATED",
+                        "vol_state": "shock", "vol_zscore": 1.9}],
+        "derivatives": [{"symbol": "BTCUSD", "squeeze_level": "ELEVATED",
+                         "funding_bias": "long_chase", "is_proxy": True}],
+        "catalysts": [{"event_type": "inflation_data", "actionability": "CAUTION",
+                       "affected_assets": ["BTCUSD"], "affected_timeframes": ["1h"],
+                       "expected_half_life_minutes": 90, "surprise_level": "hot"}],
+        "event_risk": {"level": "high", "action": "NO_POSITION_INCREASE",
+                       "restrictive": True,
+                       "triggers": [{"title": "FOMC", "level": "block",
+                                     "importance": "high"}]},
+    }
+    snap = SimpleNamespace(
+        rotation=SimpleNamespace(status="OK", score=39.04, direction="bearish",
+                                 evidence=["a", "b", "c"]),
+    )
+    dd = ctx_mod._deep_data_summary(view, snap)
+    assert {d["symbol"] for d in dd["options"]} == {"BTCUSD"}
+    assert dd["options"][0]["is_proxy"] is True
+    assert dd["volatility"][0]["regime"] == "ELEVATED"
+    assert dd["derivatives"][0]["squeeze_level"] == "ELEVATED"
+    assert dd["catalysts"][0]["half_life_minutes"] == 90
+    assert dd["event_risk"]["restrictive"] is True
+    assert dd["rotation"] == {"status": "OK", "score": 39.0, "direction": "bearish",
+                              "evidence": ["a", "b"]}
+
+
+def test_personas_ground_on_deep_data_fallback(llm_env, no_network, monkeypatch) -> None:
+    """LLM_MODE=off → fallback persona bölümleri deep-data'yı kanıt+endişeye katar."""
+    from packages.agent.llm import report
+
+    monkeypatch.setenv("LLM_MODE", "off")
+    sections, _ = report.build_persona_sections(_fake_ctx(_RICH_DEEP_DATA))
+    by = {s["persona"]: s for s in sections}
+
+    ro_ev = " ".join(by["risk_officer"]["evidence_used"])
+    assert "options:BTCUSD TERM_STRESS" in ro_ev
+    assert "derivatives:BTCUSD HIGH/long_chase" in ro_ev
+    ro_concerns = " ".join(by["risk_officer"]["concerns"])
+    assert "options stresi BTCUSD: TERM_STRESS" in ro_concerns
+    assert "volatilite BTCUSD/1d: EXTREME/expansion" in ro_concerns
+    assert "türev squeeze BTCUSD: HIGH" in ro_concerns
+    assert "catalyst central_bank: NO_POSITION_INCREASE" in ro_concerns
+
+    macro_ev = " ".join(by["macro_strategist"]["evidence_used"])
+    assert "rotation:bearish 39.0" in macro_ev
+    assert "volatility:BTCUSD EXTREME" in macro_ev
+
+
+def test_deep_data_evidence_empty_when_state_clean(llm_env, no_network, monkeypatch) -> None:
+    """deep-data yoksa kanıt UYDURULMAZ — sadece base evidence kalır."""
+    from packages.agent.llm import report
+
+    monkeypatch.setenv("LLM_MODE", "off")
+    sections, _ = report.build_persona_sections(_fake_ctx())
+    ro = next(s for s in sections if s["persona"] == "risk_officer")
+    assert not any(e.startswith(("options:", "volatility:", "derivatives:", "catalyst:"))
+                   for e in ro["evidence_used"])
+
+
+def test_chat_options_intent_grounded() -> None:
+    from packages.agent.llm import chat as llm_chat
+
+    ans, ev = llm_chat._grounded_answer("Options risk ne diyor?", _fake_ctx(_RICH_DEEP_DATA))
+    assert "TERM_STRESS" in ans
+    assert "proxy" in ans.casefold()  # 25Δ proxy açıkça belirtilir
+    assert any(e.startswith("options:") for e in ev)
+
+
+def test_chat_volatility_intent_grounded() -> None:
+    from packages.agent.llm import chat as llm_chat
+
+    ans, ev = llm_chat._grounded_answer("Volatility neden kısıtladı?", _fake_ctx(_RICH_DEEP_DATA))
+    assert "EXTREME" in ans
+    assert any(e.startswith("volatility:") for e in ev)
+
+
+def test_chat_derivatives_intent_grounded() -> None:
+    from packages.agent.llm import chat as llm_chat
+
+    ans, ev = llm_chat._grounded_answer("Funding ne diyor?", _fake_ctx(_RICH_DEEP_DATA))
+    assert "HIGH" in ans and "long_chase" in ans
+    assert any(e.startswith("derivatives:") for e in ev)
+
+
+def test_chat_rotation_intent_grounded() -> None:
+    from packages.agent.llm import chat as llm_chat
+
+    ans, ev = llm_chat._grounded_answer("Rotasyon ne durumda?", _fake_ctx(_RICH_DEEP_DATA))
+    assert "bearish" in ans
+    assert any(e.startswith("rotation:") for e in ev)
+
+
+def test_chat_catalyst_intent_grounded() -> None:
+    from packages.agent.llm import chat as llm_chat
+
+    ans, ev = llm_chat._grounded_answer("Catalyst etkisi var mı?", _fake_ctx(_RICH_DEEP_DATA))
+    assert "central_bank" in ans and "NO_POSITION_INCREASE" in ans
+    assert any(e.startswith("catalyst:") for e in ev)
+
+
+def test_chat_options_no_data_does_not_fabricate() -> None:
+    from packages.agent.llm import chat as llm_chat
+
+    ans, ev = llm_chat._grounded_answer("Options ne diyor?", _fake_ctx())
+    assert "kısıt üretmiyor" in ans
+    assert ev == ["deep_data:options:none"]
+
+
+def test_chat_riskgate_question_not_misrouted_to_deep_data() -> None:
+    """'RiskGate neyi engelledi?' deep-data değil risk_gate handler'ına gitmeli."""
+    from packages.agent.llm import chat as llm_chat
+
+    _, ev = llm_chat._grounded_answer("RiskGate neyi engelledi?", _fake_ctx(_RICH_DEEP_DATA))
+    assert any(e.startswith("risk_gate:") for e in ev)
+
+
+def test_chat_deep_data_endpoint_state_grounded(llm_env, no_network, monkeypatch) -> None:
+    """Endpoint üzerinden options sorusu — state-grounded, refused değil."""
+    monkeypatch.setenv("LLM_MODE", "off")
+    r = _client().post("/api/v1/chat", json={"message": "Options risk ne diyor?"})
+    assert r.status_code == 200
+    body = r.json()
+    assert body["refused"] is False
+    assert body["answer"]
+    assert body["llm"]["source"] == "fallback"
+
+
 # ---------- cache ----------
 
 def test_cache_expires_after_ttl(llm_env, monkeypatch) -> None:

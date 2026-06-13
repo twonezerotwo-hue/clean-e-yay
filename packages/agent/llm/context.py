@@ -40,6 +40,84 @@ def _risk_input(ps: paper_state.PaperState, snap: MarketSnapshot) -> RiskInput:
     )
 
 
+def _deep_data_summary(view: dict, snap: MarketSnapshot) -> dict:
+    """v2.7 deep-data (D2 türev / D3 options / D4 volatilite / D5 catalyst
+    half-life / event riski) + rotation'ın KOMPAKT özeti.
+
+    `matrix_view` bu dimensiyonları zaten yalnızca-dikkat-çeken (status OK +
+    rejim/aksiyon kısıtlayıcı) olarak filtreliyor — persona/chat bağlamına
+    olduğu gibi taşınır. LLM bunları yalnızca AÇIKLAR; karar zincirine geri
+    yazılmaz. Etkilenen hücreler ayrıca matrix `blocked_by` ile zaten görünür.
+    """
+    options = [
+        {
+            "symbol": o["symbol"],
+            "regime": o["regime"],
+            "atm_iv": o["atm_iv"],
+            "iv_rv_spread": o["iv_rv_spread"],
+            "skew_25d": o["skew_25d"],
+            "is_proxy": o.get("is_proxy", False),
+        }
+        for o in (view.get("options") or [])
+    ]
+    volatility = [
+        {
+            "symbol": v["symbol"],
+            "timeframe": v["timeframe"],
+            "regime": v["regime"],
+            "vol_state": v["vol_state"],
+            "vol_zscore": v["vol_zscore"],
+        }
+        for v in (view.get("volatility") or [])
+    ]
+    derivatives = [
+        {
+            "symbol": d["symbol"],
+            "squeeze_level": d["squeeze_level"],
+            "funding_bias": d["funding_bias"],
+            "is_proxy": d.get("is_proxy", False),
+        }
+        for d in (view.get("derivatives") or [])
+    ]
+    catalysts = [
+        {
+            "event_type": c["event_type"],
+            "actionability": c["actionability"],
+            "affected_assets": list(c.get("affected_assets") or []),
+            "affected_timeframes": list(c.get("affected_timeframes") or []),
+            "half_life_minutes": c.get("expected_half_life_minutes"),
+            "surprise_level": c.get("surprise_level"),
+        }
+        for c in (view.get("catalysts") or [])
+    ]
+    er = view.get("event_risk") or {}
+    event_risk = {
+        "level": er.get("level"),
+        "action": er.get("action"),
+        "restrictive": bool(er.get("restrictive")),
+        "triggers": [
+            {"title": t.get("title"), "level": t.get("level"),
+             "importance": t.get("importance")}
+            for t in (er.get("triggers") or [])
+        ][:3],
+    }
+    rot = snap.rotation
+    rotation = {
+        "status": rot.status,
+        "score": round(rot.score, 1),
+        "direction": rot.direction,
+        "evidence": list(rot.evidence)[:2],
+    }
+    return {
+        "options": options,
+        "volatility": volatility,
+        "derivatives": derivatives,
+        "catalysts": catalysts,
+        "event_risk": event_risk,
+        "rotation": rotation,
+    }
+
+
 def _matrix_summary(view: dict) -> dict:
     cells = view.get("cells") or []
     top = sorted(cells, key=lambda c: -abs(float(c.get("score", 50)) - 50))[:TOP_CELL_COUNT]
@@ -134,6 +212,7 @@ def build_compact_context() -> dict:
         "provider_issues": provider_issues,
         "warnings": list(snap.warnings)[:6],
         "matrix": _matrix_summary(view),
+        "deep_data": _deep_data_summary(view, snap),
         "halt": {"active": bool(active_halts), "events": active_halts},
         "correlation_clusters": clusters,
         "paper": {

@@ -203,12 +203,124 @@ def _overview_answer(ctx: dict) -> tuple[str, list[str]]:
     return " ".join(parts), [f"snapshot:{ctx['snapshot_id']}", f"dqs:{ctx['dqs']['status']}"]
 
 
+_CONTEXT_ONLY_NOTE = (
+    " Bu dimensiyon karar zincirinde yalnızca kısıtlayıcı/bağlamdır — "
+    "asla pozisyon büyütmez ve RiskGate'i gevşetmez."
+)
+
+
+def _options_answer(ctx: dict) -> tuple[str, list[str]]:
+    opts = (ctx.get("deep_data") or {}).get("options") or []
+    if not opts:
+        return (
+            "Options state'te dikkat çeken bir IV/skew rejimi yok (rejim NORMAL "
+            "ya da veri doğrulanmadı) — options gate şu an kısıt üretmiyor.",
+            ["deep_data:options:none"],
+        )
+    parts, ev = [], []
+    for o in opts[:3]:
+        proxy = " (25Δ skew proxy — gerçek greeks değil)" if o.get("is_proxy") else ""
+        parts.append(
+            f"{o['symbol']}: rejim {o['regime']}, ATM IV {o['atm_iv']}, "
+            f"IV-RV {o['iv_rv_spread']}, skew {o['skew_25d']}{proxy}"
+        )
+        ev.append(f"options:{o['symbol']} {o['regime']}")
+    return "Options zekâsı: " + " | ".join(parts) + "." + _CONTEXT_ONLY_NOTE, ev
+
+
+def _volatility_answer(ctx: dict) -> tuple[str, list[str]]:
+    vol = (ctx.get("deep_data") or {}).get("volatility") or []
+    if not vol:
+        return (
+            "Realized volatilite state'te kısıtlayıcı bir rejim göstermiyor "
+            "(NORMAL/LOW veya veri doğrulanmadı) — volatilite gate kısıt üretmiyor.",
+            ["deep_data:volatility:none"],
+        )
+    parts, ev = [], []
+    for v in vol[:3]:
+        parts.append(
+            f"{v['symbol']}/{v['timeframe']}: rejim {v['regime']}, durum "
+            f"{v['vol_state']}, z-skor {v['vol_zscore']}"
+        )
+        ev.append(f"volatility:{v['symbol']}/{v['timeframe']} {v['regime']}")
+    return (
+        "Volatilite zekâsı: " + " | ".join(parts) + "." + _CONTEXT_ONLY_NOTE,
+        ev,
+    )
+
+
+def _derivatives_answer(ctx: dict) -> tuple[str, list[str]]:
+    derivs = (ctx.get("deep_data") or {}).get("derivatives") or []
+    if not derivs:
+        return (
+            "Kripto türev verisi (funding/OI/squeeze) state'te kısıtlayıcı sinyal "
+            "göstermiyor ya da doğrulanmadı — türev gate kısıt üretmiyor.",
+            ["deep_data:derivatives:none"],
+        )
+    parts, ev = [], []
+    for d in derivs[:3]:
+        proxy = " (squeeze proxy — gerçek liquidation değil)" if d.get("is_proxy") else ""
+        parts.append(
+            f"{d['symbol']}: squeeze {d['squeeze_level']}, funding bias "
+            f"{d['funding_bias']}{proxy}"
+        )
+        ev.append(f"derivatives:{d['symbol']} {d['squeeze_level']}")
+    return "Türev zekâsı: " + " | ".join(parts) + "." + _CONTEXT_ONLY_NOTE, ev
+
+
+def _rotation_answer(ctx: dict) -> tuple[str, list[str]]:
+    rot = (ctx.get("deep_data") or {}).get("rotation") or {}
+    if rot.get("status") != "OK":
+        return (
+            f"Sermaye rotasyonu şu an {rot.get('status', 'UNAVAILABLE')} — "
+            "yeterli doğrulanmış veri yok, mock skor üretilmez.",
+            [f"rotation:{rot.get('status', 'UNAVAILABLE')}"],
+        )
+    ev_lines = "; ".join(rot.get("evidence") or []) or "—"
+    return (
+        f"Sermaye rotasyonu: yön {rot.get('direction')} (skor {rot.get('score')}). "
+        f"Kanıt: {ev_lines}.",
+        [f"rotation:{rot.get('direction')} {rot.get('score')}"],
+    )
+
+
+def _catalyst_answer(ctx: dict) -> tuple[str, list[str]]:
+    cats = (ctx.get("deep_data") or {}).get("catalysts") or []
+    if not cats:
+        return (
+            "Doğrulanmış, yarı-ömrü dolmamış ve kısıtlayıcı bir katalizör (haber "
+            "etkisi) state'te yok — catalyst gate kısıt üretmiyor.",
+            ["deep_data:catalysts:none"],
+        )
+    parts, ev = [], []
+    for c in cats[:3]:
+        assets = ", ".join(c.get("affected_assets") or []) or "genel"
+        parts.append(
+            f"{c['event_type']} → {c['actionability']} ({assets}; yarı-ömür "
+            f"{c.get('half_life_minutes')}dk)"
+        )
+        ev.append(f"catalyst:{c['event_type']} {c['actionability']}")
+    return "Catalyst zekâsı: " + " | ".join(parts) + "." + _CONTEXT_ONLY_NOTE, ev
+
+
 def _grounded_answer(message: str, ctx: dict) -> tuple[str, list[str]]:
     folded = message.casefold()
     symbol = _detect_symbol(folded)
     timeframe = _detect_timeframe(folded)
     if any(k in folded for k in ("eksik", "missing", "hangi veri")):
         return _missing_data_answer(ctx)
+    # v2.7 deep-data niyetleri (RiskGate/why fallback'inden ÖNCE — "volatility
+    # neden kısıtladı?" gibi sorular ilgili dimensiyona gitsin).
+    if any(k in folded for k in ("options", "opsiyon", "skew", "implied", "term structure")):
+        return _options_answer(ctx)
+    if any(k in folded for k in ("volatilite", "volatility", "oynaklık", "realized vol", "vol rejim")):
+        return _volatility_answer(ctx)
+    if any(k in folded for k in ("türev", "turev", "derivative", "funding", "open interest", "squeeze")):
+        return _derivatives_answer(ctx)
+    if any(k in folded for k in ("rotasyon", "rotation", "sermaye akış", "capital rotation")):
+        return _rotation_answer(ctx)
+    if any(k in folded for k in ("katalizör", "katalizor", "catalyst", "haber etkisi", "yarı ömür", "half-life", "half life")):
+        return _catalyst_answer(ctx)
     if any(k in folded for k in ("riskgate", "risk gate", "risk kapısı", "engelledi", "blocked")):
         return _risk_gate_answer(ctx)
     if symbol and any(

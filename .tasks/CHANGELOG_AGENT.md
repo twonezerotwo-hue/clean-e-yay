@@ -1,5 +1,33 @@
 # Agent Changelog
 
+## 2026-06-13 — v2.6.1 LLM Persona deep-data derinleşme
+- v2.6 persona/chat/AI-report katmanı, v2.6'dan SONRA eklenen deep-data
+  dimensiyonlarına (D2 türev / D3 options / D4 volatilite / D5 catalyst half-life +
+  event riski + rotation) state-grounded bağlandı. Kök neden: `matrix_view` bu
+  özetleri üretiyordu ama `llm/context.py` kompakt bağlamı DROP ediyordu.
+- `context.py`: yeni `_deep_data_summary(view, snap)` → kompakt `deep_data` bloğu
+  (options regime/IV/skew+proxy, volatilite regime/state/z, türev squeeze/funding+
+  proxy, catalyst event_type/actionability/half-life, event_risk level/restrictive,
+  rotation status/score/dir/evidence). Digest stabil (cache güvenli).
+- `report.py`: `_deep_evidence` + `_deep_concerns`. Risk Officer options/vol/türev/
+  catalyst kapılarını kanıt+itiraz yapar; Macro Strategist rotation/vol/options'ı
+  senaryoya katar. evidence_used HÂLÂ koddan (LLM uyduramaz); deep-data yoksa boş.
+- `chat.py`: yeni intent handler'ları (options/volatility/türev-funding/rotation/
+  catalyst); proxy dimensiyonları "proxy — gerçek değil" der; veri yoksa "kısıt
+  üretmiyor". "RiskGate neyi engelledi?" hâlâ risk_gate'e gider (testli).
+- Frontend additive (şema değişmedi): AIReportPanel persona evidence satırı +
+  "Açıklayıcı katman · yürütme yetkisi yok" rozeti; ChatPanel deep-data öneri
+  soruları. Persona/chat response şekli değişmedi → openapi/TS sıfır diff →
+  codegen drift otomatik yeşil.
+- Testler +11 (`tests/unit/test_llm_persona.py`): deep_data filtre/taşıma, persona
+  fallback grounding, boş-state'te kanıt uydurmama, 5 chat intent + proxy disclaimer,
+  risk_gate yanlış-yönlenme yok, endpoint state-grounded. Testlerde live network yok.
+- pytest 334/334; CI-scope ruff + tsc + pnpm build yeşil. Live smoke (izole API
+  8011, gerçek Deribit): risk_officer options:ETHUSD PUT_SKEW_STRESS + vol + catalyst;
+  macro rotation:bearish 39.0; chat 5 intent gerçek değerlerle grounded; bypass →
+  guard refusal. Web SSR (izole 3100) 200 / 32 panel + HeroScene + PAPER_ONLY.
+  PAPER_SAFE/NO_EXECUTION; RiskGate/DQS/KillSwitch/halt sıfır diff, bypass yok.
+
 ## 2026-06-13 — v2.7 D3 Options IV / Skew / Term Structure Intelligence
 - Yeni provider `packages/data/providers/options/` — `engine.py` (saf-python,
   deterministik: ATM IV, 25Δ skew **proxy** = OTM call IV − OTM put IV, put/call

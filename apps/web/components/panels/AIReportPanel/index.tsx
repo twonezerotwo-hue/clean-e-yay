@@ -50,6 +50,12 @@ function PersonaBlock({ p }: { p: PersonaSection }) {
           eksik veri: {p.missing_data.slice(0, 3).join("; ")}
         </p>
       ) : null}
+      {p.evidence_used?.length ? (
+        <p className="text-[10px] text-white/35">
+          <span className="text-white/25">kanıt: </span>
+          {p.evidence_used.slice(0, 6).join(" · ")}
+        </p>
+      ) : null}
     </div>
   );
 }
@@ -69,7 +75,7 @@ export function AIReportPanel() {
         <EmptyState />
       ) : (
         <div className="space-y-3">
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between gap-2">
             <div
               className={`text-sm font-medium ${DIRECTION_COLOR[data.verdict] ?? "text-white"}`}
             >
@@ -84,6 +90,13 @@ export function AIReportPanel() {
             >
               {badge.label}
             </span>
+          </div>
+          <div
+            className="text-[10px] px-2 py-1 rounded-md border border-amber-400/30 bg-amber-400/5 text-amber-300/70"
+            title="LLM personaları yalnızca mevcut deterministik state'i açıklar; karar yetkisi yoktur."
+          >
+            Açıklayıcı katman · yürütme yetkisi yok — final karar deterministik
+            engine + RiskGate
           </div>
           {noAction ? (
             <div className="rounded-md border border-signal-down/50 bg-signal-down/10 px-3 py-2 text-xs text-signal-down">

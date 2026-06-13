@@ -4,6 +4,46 @@ _Bu dosya kısa ve güncel tutulur. Her görev sonunda güncellenir._
 
 ## Last known status
 
+- **v2.6.1 — LLM Persona deep-data derinleşme tamamlandı** (2026-06-13): v2.6
+  persona/chat/AI-report katmanı, v2.6'dan SONRA eklenen v2.7 deep-data
+  dimensiyonlarına (D2 türev / D3 options / D4 volatilite / D5 catalyst
+  half-life + event riski + rotation) **state-grounded** olarak bağlandı.
+  LLM hâlâ karar VERMEZ — yalnızca açıklar; karar zinciri sıfır diff.
+  - **Kök neden**: `matrix_view` bu özetleri zaten üretiyordu ama LLM kompakt
+    bağlamı (`packages/agent/llm/context.py`) bunları DROP ediyordu → persona/chat
+    options/vol/türev/catalyst/rotation göremiyordu.
+  - **context.py**: `_deep_data_summary(view, snap)` → kompakt `deep_data` bloğu
+    (options regime/ATM IV/IV-RV/skew+proxy, volatilite regime/state/z-skor, türev
+    squeeze/funding+proxy, catalyst event_type/actionability/half-life, event_risk
+    level/restrictive, rotation status/score/direction/evidence). Digest stabil
+    (cache güvenli — hours_until gibi volatil alan girmez).
+  - **report.py**: Risk Officer kanıt+itirazları options stresi / volatilite
+    rejimi / türev squeeze / catalyst kapılarını içerir; Macro Strategist rotation
+    + volatilite + options stresini senaryoya katar. `evidence_used` HÂLÂ koddan
+    (LLM uyduramaz); deep-data yoksa boş (uydurma yok). Persona briefleri deep-data'ya
+    atıf yapar (LLM yolu da görür).
+  - **chat.py**: yeni intent handler'ları — "Options risk ne diyor?", "Volatility
+    neden kısıtladı?", "Funding/türev ne diyor?", "Rotasyon ne durumda?", "Catalyst
+    etkisi var mı?". RiskGate/why fallback'inden ÖNCE çalışır; "RiskGate neyi
+    engelledi?" hâlâ risk_gate handler'ına gider (yanlış yönlenme testli). Veri
+    yoksa "kısıt üretmiyor" der, uydurmaz. Injection/bypass guard değişmedi.
+  - **Frontend** (additive, şema değişmedi): AIReportPanel persona `evidence_used`
+    satırı + "Açıklayıcı katman · yürütme yetkisi yok — final karar deterministik
+    engine + RiskGate" rozeti; ChatPanel'e options/volatility/türev öneri soruları.
+    Persona/chat response şekli değişmedi → openapi/TS sıfır diff → codegen drift
+    otomatik yeşil.
+  - **334/334 pytest** (+11: deep-data summary filtresi, persona fallback grounding,
+    boş-state'te kanıt uydurmama, 5 chat intent, risk_gate yanlış-yönlenme yok,
+    endpoint state-grounded; testlerde live network yok), CI-scope ruff + tsc +
+    pnpm build yeşil. **Live smoke** (izole API 8011, gerçek Deribit): risk_officer
+    `options:ETHUSD PUT_SKEW_STRESS` + `volatility` + `catalyst`; macro
+    `rotation:bearish 39.0`; chat 5 deep-data intent gerçek değerlerle grounded
+    (BTC ATM IV 0.41 CHEAP_VOL, proxy uyarısı); bypass → guard refusal. Web SSR
+    (izole 3100) 200 / 32 panel + HeroScene + PAPER_ONLY. PAPER_SAFE/NO_EXECUTION;
+    RiskGate/DQS/KillSwitch/halt sıfır diff, bypass yok.
+  - Açık (NEXT): gerçek replay/backtest motoru (disk snapshot store) ve/veya kalan
+    deep-data slice / asset-universe genişletme.
+
 - **v2.7 D3 — Options IV / Skew / Term Structure Intelligence tamamlandı**
   (2026-06-13): BTC/ETH options implied volatility, 25Δ skew (proxy), term
   structure ve realized-vs-implied spread karar zincirine **yalnızca kısıtlayıcı**

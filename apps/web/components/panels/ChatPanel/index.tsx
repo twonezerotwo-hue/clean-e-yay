@@ -12,6 +12,9 @@ type ChatItem = { role: "user" | "agent"; text: string; meta?: ChatResponse };
 const SUGGESTIONS = [
   "Neden BTC açmadın?",
   "RiskGate neyi engelledi?",
+  "Options risk ne diyor?",
+  "Volatility neden kısıtladı?",
+  "Funding / türev ne diyor?",
   "Hangi veri eksik?",
 ];
 

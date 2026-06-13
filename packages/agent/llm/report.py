@@ -35,12 +35,16 @@ _PERSONA_BRIEFS = {
     "risk_officer": (
         "Risk Officer olarak RiskGate, halt, korelasyon cluster'ları ve "
         "blocked_by nedenlerini eleştirel gözle değerlendir; neyin trade'i "
-        "engellediğini açıkla."
+        "engellediğini açıkla. deep_data içindeki options stresi (IV/skew/"
+        "term structure), realized volatilite rejimi, türev funding/squeeze "
+        "ve catalyst half-life kapılarını da itiraz gerekçesi olarak kullan "
+        "— bunlar yalnızca kısıtlayıcıdır, asla pozisyon büyütmez."
     ),
     "macro_strategist": (
         "Macro Strategist olarak rejimi, haber/katalizör bağlamını ve "
         "1w/1d üst-timeframe bias'ının alt timeframe'lere etkisini "
-        "değerlendir."
+        "değerlendir. deep_data içindeki volatilite rejimi, options IV/skew "
+        "stresi, sermaye rotasyonu ve catalyst half-life'ı senaryona kat."
     ),
 }
 
@@ -60,6 +64,34 @@ class PersonaSection:
 
 
 # ---------- ortak kanıt/eksik-veri çıkarımı (her zaman deterministik) ----------
+
+def _deep_evidence(persona: str, ctx: dict) -> list[str]:
+    """v2.7 deep-data kanıtı (options/volatilite/türev/catalyst/rotation).
+
+    Kanıt HER ZAMAN koddan gelir — LLM uyduramaz. Sadece state'te fiilen
+    bulunan (matrix_view tarafından kısıtlayıcı olarak işaretlenmiş) dimensiyonlar
+    eklenir; yoksa boş döner (uydurma yok)."""
+    dd = ctx.get("deep_data") or {}
+    ev: list[str] = []
+    if persona == "risk_officer":
+        for o in dd.get("options", [])[:2]:
+            ev.append(f"options:{o['symbol']} {o['regime']}")
+        for v in dd.get("volatility", [])[:2]:
+            ev.append(f"volatility:{v['symbol']}/{v['timeframe']} {v['regime']}/{v['vol_state']}")
+        for d in dd.get("derivatives", [])[:2]:
+            ev.append(f"derivatives:{d['symbol']} {d['squeeze_level']}/{d['funding_bias']}")
+        for c in dd.get("catalysts", [])[:2]:
+            ev.append(f"catalyst:{c['event_type']} {c['actionability']}")
+    elif persona == "macro_strategist":
+        rot = dd.get("rotation") or {}
+        if rot.get("status") == "OK":
+            ev.append(f"rotation:{rot.get('direction')} {rot.get('score')}")
+        for v in dd.get("volatility", [])[:2]:
+            ev.append(f"volatility:{v['symbol']} {v['regime']}")
+        for o in dd.get("options", [])[:1]:
+            ev.append(f"options:{o['symbol']} {o['regime']}")
+    return ev
+
 
 def _evidence_for(persona: str, ctx: dict) -> list[str]:
     m = ctx["matrix"]
@@ -83,6 +115,7 @@ def _evidence_for(persona: str, ctx: dict) -> list[str]:
         ev.append(f"regime:{m['regime']}")
         ev += [f"news:{t}" for t in ctx["news"][:2]]
         ev += [f"catalyst:{c['title']}" for c in ctx["catalysts"][:2]]
+    ev += _deep_evidence(persona, ctx)
     return ev
 
 
@@ -138,7 +171,46 @@ def _fallback_summary(persona: str, ctx: dict) -> str:
         )
     regime = m["regime"]
     news = "; ".join(ctx["news"][:2]) or "öne çıkan başlık yok"
-    return f"Makro rejim {regime}. Gündem: {news}."
+    dd = ctx.get("deep_data") or {}
+    extra = ""
+    vol = dd.get("volatility") or []
+    if vol:
+        extra += f" Volatilite: {vol[0]['symbol']} {vol[0]['regime']}/{vol[0]['vol_state']}."
+    rot = dd.get("rotation") or {}
+    if rot.get("status") == "OK" and rot.get("direction") not in (None, "neutral"):
+        extra += f" Rotasyon: {rot.get('direction')} (skor {rot.get('score')})."
+    return f"Makro rejim {regime}. Gündem: {news}.{extra}"
+
+
+def _deep_concerns(persona: str, ctx: dict) -> list[str]:
+    """deep-data kaynaklı kısıtlayıcı itirazlar (yalnızca dikkat çeken rejimler)."""
+    dd = ctx.get("deep_data") or {}
+    out: list[str] = []
+    if persona == "risk_officer":
+        for o in dd.get("options", []):
+            if o["regime"] in {"PUT_SKEW_STRESS", "CALL_SKEW_EUPHORIA", "TERM_STRESS", "RICH_VOL"}:
+                proxy = " (skew proxy)" if o.get("is_proxy") else ""
+                out.append(f"options stresi {o['symbol']}: {o['regime']}{proxy}")
+        for v in dd.get("volatility", []):
+            if v["regime"] in {"ELEVATED", "EXTREME"} or v["vol_state"] in {"shock", "expansion"}:
+                out.append(f"volatilite {v['symbol']}/{v['timeframe']}: {v['regime']}/{v['vol_state']}")
+        for d in dd.get("derivatives", []):
+            if d["squeeze_level"] in {"HIGH", "ELEVATED"}:
+                out.append(f"türev squeeze {d['symbol']}: {d['squeeze_level']} (funding {d['funding_bias']})")
+        for c in dd.get("catalysts", []):
+            if c["actionability"] in {"NO_POSITION_INCREASE", "CAUTION"}:
+                out.append(f"catalyst {c['event_type']}: {c['actionability']}")
+    else:  # macro_strategist
+        for v in dd.get("volatility", []):
+            if v["regime"] in {"ELEVATED", "EXTREME"}:
+                out.append(f"yüksek volatilite rejimi {v['symbol']}/{v['timeframe']}: {v['regime']}")
+        for o in dd.get("options", []):
+            if o["regime"] in {"PUT_SKEW_STRESS", "TERM_STRESS"}:
+                out.append(f"options downside stresi {o['symbol']}: {o['regime']}")
+        er = dd.get("event_risk") or {}
+        if er.get("restrictive"):
+            out.append(f"olay riski {er.get('level')} → {er.get('action')}")
+    return out[:4]
 
 
 def _fallback_concerns(persona: str, ctx: dict) -> list[str]:
@@ -157,12 +229,14 @@ def _fallback_concerns(persona: str, ctx: dict) -> list[str]:
                 concerns.append(f"korelasyon cluster {cl.get('status')}: {cl.get('symbols')}")
         if ctx["paper"]["daily_pnl_usd"] < 0:
             concerns.append(f"günlük PnL negatif: {ctx['paper']['daily_pnl_usd']}")
+        concerns += _deep_concerns("risk_officer", ctx)
     else:
         if m["suspended"]:
             concerns.append("Matrix SUSPENDED — makro görüş aksiyona çevrilemez.")
         for c in ctx["catalysts"][:2]:
             if c.get("importance") == "high":
                 concerns.append(f"yüksek önemli katalizör: {c['title']}")
+        concerns += _deep_concerns("macro_strategist", ctx)
     if not concerns:
         concerns.append("Mevcut state'te öne çıkan ek endişe yok.")
     return concerns
