@@ -9,6 +9,7 @@ from fastapi import APIRouter
 from packages.data.ingestion.pipeline import DEFAULT_SYMBOLS, get_cached_snapshot
 from packages.decision.engine import decide_matrix
 from packages.paper import audit as paper_audit
+from packages.paper import manual_queue
 from packages.paper import state as paper_state
 from packages.paper.lifecycle import (
     attempt_open,
@@ -151,9 +152,23 @@ def post_paper_tick() -> dict:
         if d.action == "hold":
             actions.append({**entry, "action": "hold", "reason": d.reason})
             continue
+        side = "long" if d.action == "open_long" else "short"
+        # P2 — DEFENSIVE/CRISIS rejiminde otomatik açılış YOK: aday owner-approval
+        # kuyruğuna düşer (manual_queue). Aynı (symbol, side, tf) tekrarında spam
+        # olmaz (silent block). Owner approve endpoint'i (Phase 2b) açar.
+        if _regime in ("DEFENSIVE", "CRISIS"):
+            queued = manual_queue.route_to_manual_ready(
+                ps, symbol=d.symbol, timeframe=d.timeframe, side=side,
+                size_multiplier=d.size_multiplier, requested_price=prices.get(d.symbol),
+                reason=d.reason, fingerprint=d.fingerprint, snapshot_id=snap.snapshot_id,
+            )
+            if queued is not None:
+                actions.append({**entry, "action": "manual_ready", "reason": d.reason})
+            else:
+                actions.append({**entry, "action": "hold", "reason": "manual_ready_silent_block"})
+            continue
         # P1 — açılış tek yoldan (attempt_open): duplicate/scale-in politikası +
         # fiyat denetimi + audit burada. Yanıt etiketleri korunur.
-        side = "long" if d.action == "open_long" else "short"
         pos, decision = attempt_open(
             ps,
             symbol=d.symbol,

@@ -114,8 +114,26 @@ Design notes / deferred:
 - The **jump guard is unit-tested** but at tick time we rely on the in-bounds OR
   small-jump rule; wiring a per-symbol last-sane-price tracker (true consecutive-tick
   jump rejection within bounds) belongs in `apps/tick_worker` (Phase 5).
-- Still TODO in Phase 2: `manual_queue.py` (manual-ready/pending/rejected), `sizing.py`
-  (strip AI boost), `execution_sim.py`, `maintenance.py`, signal attribution.
+### Phase 2b — manual-ready workflow (core landed)
+
+- `packages/paper/state.py` — additive `ManualReady` + `RejectedSignal` dataclasses,
+  `PaperState.manual_ready` / `rejected_signals` lists (forward-compatible to_dict/from_dict).
+- `packages/paper/manual_queue.py` — `route_to_manual_ready`, `should_silent_block`
+  (fingerprint-independent on symbol+side+tf), `is_recurring_signal`, `reject`
+  (records rejection), `dismiss` (no rejection), `approve` (opens via guarded
+  `attempt_open`, clears queue), `purge_stale_rejection`.
+- `apps/api/routers/paper_trading.py` — tick routes DEFENSIVE/CRISIS open candidates to
+  the manual-ready queue (no auto-open; silent-block on repeat).
+- `tests/unit/test_manual_queue.py` — 12 tests. Suite **448 passed**.
+
+Deferred (next increment — contract-first HTTP layer):
+- OpenAPI schemas for the queue + `GET /paper-trading/manual-ready`,
+  `POST .../{id}/approve|reject|dismiss` endpoints → codegen → router wiring.
+- Surface `manual_ready` in the `/paper-trading/state` response (contract change).
+- Integration test of tick routing under a forced DEFENSIVE regime.
+
+Still TODO in Phase 2: `sizing.py` (strip AI boost), `execution_sim.py`,
+`maintenance.py`, signal attribution.
 - **Pre-existing test-isolation note (not introduced here):** running
   `test_paper_lifecycle` before `test_halt` leaks a monkeypatched pipeline from
   `test_state_endpoint_surfaces_lifecycle_and_audit`, failing the live-pipeline halt

@@ -94,6 +94,32 @@ class Trade:
 
 
 @dataclass
+class ManualReady:
+    """Owner-approval candidate (DEFENSIVE/CRISIS regime → no auto-open)."""
+    id: str
+    symbol: str
+    timeframe: str
+    side: str               # long / short
+    requested_at: str
+    size_multiplier: float
+    requested_price: float | None = None
+    reason: str | None = None
+    fingerprint: str | None = None
+    snapshot_id: str | None = None
+    rejected_at: str | None = None  # set when owner rejected (→ silent block)
+
+
+@dataclass
+class RejectedSignal:
+    """Owner-rejected signal — silent-blocks the same symbol+side+timeframe."""
+    symbol: str
+    timeframe: str
+    side: str
+    rejected_at: str
+    fingerprint: str | None = None
+
+
+@dataclass
 class PaperState:
     equity_usd: float
     peak_equity_usd: float
@@ -102,6 +128,8 @@ class PaperState:
     recent_trades: list[Trade] = field(default_factory=list)
     daily_pnl_usd: float = 0.0
     daily_anchor_date: str = ""
+    manual_ready: list[ManualReady] = field(default_factory=list)
+    rejected_signals: list[RejectedSignal] = field(default_factory=list)
 
     def to_dict(self) -> dict:
         return {
@@ -113,6 +141,8 @@ class PaperState:
             "daily_anchor_date": self.daily_anchor_date,
             "open_positions": [asdict(p) for p in self.open_positions],
             "recent_trades": [asdict(t) for t in self.recent_trades[-200:]],
+            "manual_ready": [asdict(m) for m in self.manual_ready],
+            "rejected_signals": [asdict(r) for r in self.rejected_signals],
         }
 
     @classmethod
@@ -134,6 +164,16 @@ class PaperState:
                 Trade(**_only_known(Trade, t))
                 for t in d.get("recent_trades", [])
                 if isinstance(t, dict)
+            ],
+            manual_ready=[
+                ManualReady(**_only_known(ManualReady, m))
+                for m in d.get("manual_ready", [])
+                if isinstance(m, dict)
+            ],
+            rejected_signals=[
+                RejectedSignal(**_only_known(RejectedSignal, r))
+                for r in d.get("rejected_signals", [])
+                if isinstance(r, dict)
             ],
         )
 
