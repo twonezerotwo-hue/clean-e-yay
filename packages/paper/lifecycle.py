@@ -15,6 +15,7 @@ from datetime import UTC, date, datetime, timedelta
 
 from packages.data.registry.loader import load_thresholds
 from packages.paper import audit
+from packages.paper.guards import price_sanity, state_anomaly
 from packages.paper.state import PaperState, Position, Trade, utc_iso
 
 # Zorla kapanış nedenleri → terminal lifecycle_status=FORCE_CLOSED + ayrı audit
@@ -198,6 +199,31 @@ def attempt_open(
             reason="no_price", snapshot_id=snapshot_id,
         )
         return None, decision
+    # Price sanity (absolute bounds): cross-pair contamination / absurd price must
+    # not open a position. Restrictive-only; never opens.
+    sane_reason = price_sanity.price_sane_reason(symbol, entry_price)
+    if sane_reason is not None:
+        decision = {"allowed": False, "duplicate": False, "reason": "price_insane"}
+        audit.record(
+            "OPEN_BLOCKED", symbol=symbol, timeframe=timeframe, side=side,
+            reason="price_insane", detail=sane_reason, price_used=entry_price,
+            snapshot_id=snapshot_id,
+        )
+        return None, decision
+    # State anomaly: corrupt accounting (equity/realized/daily PnL absurd) blocks
+    # NEW opens only — existing position management/close stays possible.
+    anomaly = state_anomaly.detect_state(state)
+    if anomaly.detected:
+        decision = {
+            "allowed": False, "duplicate": False, "reason": "state_anomaly",
+            "anomaly_reasons": anomaly.reasons,
+        }
+        audit.record(
+            "OPEN_BLOCKED", symbol=symbol, timeframe=timeframe, side=side,
+            reason="state_anomaly", detail="; ".join(anomaly.reasons),
+            snapshot_id=snapshot_id,
+        )
+        return None, decision
     decision = evaluate_open(
         state, symbol=symbol, timeframe=timeframe, side=side, scale_in=scale_in
     )
@@ -323,6 +349,13 @@ def tick(
         due = _time_stop_due(pos, now)
         pos.time_stop_expired = due
         price = prices.get(pos.symbol)
+        # Price sanity: a contaminated tick (out of bounds AND a large jump vs the
+        # last price) is treated as "no usable price" — never close/manage on
+        # garbage. The next in-range tick resumes normal handling.
+        if price is not None and not price_sanity.tick_price_usable(
+            pos.symbol, price, pos.current_price
+        ):
+            price = None
         if price is None or price <= 0:
             # Fiyat yok: time-stop dolduysa EXPIRED_PENDING_PRICE — fake fiyatla
             # kapatma YOK (DATA_POLICY). Geçişte bir kez audit (spam yok).
@@ -374,6 +407,12 @@ def flatten_all(
     closed: list[Trade] = []
     for pos in list(state.open_positions):
         price = prices.get(pos.symbol)
+        # Don't realize PnL at a contaminated price even under KILL_SWITCH — hold
+        # to EXIT_PENDING and retry on the next in-range tick.
+        if price is not None and not price_sanity.tick_price_usable(
+            pos.symbol, price, pos.current_price
+        ):
+            price = None
         if price is None or price <= 0:
             if pos.lifecycle_status != "EXIT_PENDING":
                 _set_status(pos, "EXIT_PENDING", reason)

@@ -164,6 +164,22 @@ paper_trading:
   trailing_stop_enabled: true
   partial_tp1_pct: 0.5
 
+# Price sanity guard — cross-pair contamination + absurd-price protection.
+# Phase 2 port from e-yay-codex paper_trading_service._is_price_sane.
+price_sanity:
+  max_jump_pct: 30.0          # reddet: |Δ| önceki sane fiyata göre > %30
+  bounds:                     # mutlak [lo, hi]; listede olmayan sembol → yalnız pozitiflik
+    BTCUSD: [20000, 500000]
+    XAUUSD: [1500, 7000]
+    XAGUSD: [15, 150]
+    BRENT: [30, 200]
+
+# State anomaly guard — bozuk equity/realized/daily PnL → YENİ açılışı durdur
+# (mevcut pozisyon yönetimi/kapanışı engellenmez). base = paper_trading.initial_equity_usd.
+state_anomaly:
+  equity_multiplier: 3.0      # |realized| veya equity > base*M → anomali
+  daily_pnl_fraction: 0.5     # |daily_pnl| > base*F → anomali
+
 learning:
   min_samples_for_signal: 3
   avoid_win_rate: 0.30

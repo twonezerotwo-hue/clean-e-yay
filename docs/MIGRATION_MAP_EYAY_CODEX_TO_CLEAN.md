@@ -86,6 +86,42 @@
 | OpenAPI contract | none | ALREADY_EXISTS_IN_CLEAN | `contracts/openapi.yaml` | clean is contract-first | drift check | R1 |
 | Real codegen pipeline | none | REWRITE (Phase 1) | `scripts/codegen.py` + `make codegen` | placeholder → real `schema.ts` | `test_openapi_schema_ts_in_sync` | R1 |
 
+## Phase 2 deltas (this branch) — paper guards
+
+Ported the two P0 self-contained guards (price sanity, state anomaly), config-driven:
+
+- `config/thresholds_v1.0.yaml` — new `price_sanity` (bounds + max_jump_pct) and
+  `state_anomaly` (equity_multiplier, daily_pnl_fraction) sections.
+- `packages/data/guards/price_sanity.py` — canonical guard:
+  - `price_sane_reason` / `is_price_sane` — OPEN-time gate (absolute bounds; optional
+    jump check vs a reference).
+  - `tick_price_usable` — manage/close gate: usable if in-bounds **OR** a small jump
+    from the last price; contamination fails both. The OR-rule tolerates a stale
+    `current_price` (real in-bounds price still usable) while rejecting cross-pair
+    contamination (out of bounds AND a large jump).
+- `packages/paper/guards/{__init__,price_sanity,state_anomaly}.py` — paper handles
+  (price_sanity re-exports the canonical guard — single source, no duplication).
+- `packages/paper/lifecycle.py` — `attempt_open` blocks `price_insane` (absolute
+  bounds) and `state_anomaly` (absurd accounting) for NEW opens; `tick`/`flatten_all`
+  drop contaminated prices (never close/manage on garbage).
+- `tests/unit/test_paper_guards.py` — 11 tests (bounds/jump/contamination, anomaly
+  detect, attempt_open rejection, contaminated-tick no-close, anomaly-blocks-open,
+  anomaly-allows-close). Updated 4 `attempt_open` test prices to in-bounds values.
+
+Validation: ruff ✓, `make test` → **436 passed** (425 + 11), codegen-check ✓.
+
+Design notes / deferred:
+- The **jump guard is unit-tested** but at tick time we rely on the in-bounds OR
+  small-jump rule; wiring a per-symbol last-sane-price tracker (true consecutive-tick
+  jump rejection within bounds) belongs in `apps/tick_worker` (Phase 5).
+- Still TODO in Phase 2: `manual_queue.py` (manual-ready/pending/rejected), `sizing.py`
+  (strip AI boost), `execution_sim.py`, `maintenance.py`, signal attribution.
+- **Pre-existing test-isolation note (not introduced here):** running
+  `test_paper_lifecycle` before `test_halt` leaks a monkeypatched pipeline from
+  `test_state_endpoint_surfaces_lifecycle_and_audit`, failing the live-pipeline halt
+  tests. CI/`make test` collect alphabetically (`test_halt` first) so the suite is
+  green; the ordering fragility should be fixed separately.
+
 ## Phase 1 deltas (this branch)
 
 - `scripts/codegen.py` — real `openapi.yaml → apps/web/types/generated/schema.ts`

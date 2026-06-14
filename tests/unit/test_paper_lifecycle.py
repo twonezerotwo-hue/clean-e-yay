@@ -131,7 +131,7 @@ def test_duplicate_same_symbol_tf_blocked(paper_env) -> None:
     ps = paper_env["state"]._initial_state()
     _open(lifecycle, ps, symbol="BTCUSD", tf="1d", side="long")
     pos, decision = lifecycle.attempt_open(
-        ps, symbol="BTCUSD", side="long", entry_price=100.0,
+        ps, symbol="BTCUSD", side="long", entry_price=60000.0,
         size_multiplier=1.0, timeframe="1d",
     )
     assert pos is None
@@ -146,7 +146,7 @@ def test_opposite_direction_same_tf_blocked_no_hedge(paper_env) -> None:
     ps = paper_env["state"]._initial_state()
     _open(lifecycle, ps, symbol="BTCUSD", tf="1d", side="long")
     pos, decision = lifecycle.attempt_open(
-        ps, symbol="BTCUSD", side="short", entry_price=100.0,
+        ps, symbol="BTCUSD", side="short", entry_price=60000.0,
         size_multiplier=1.0, timeframe="1d",
     )
     assert pos is None
@@ -159,7 +159,7 @@ def test_different_timeframe_allowed(paper_env) -> None:
     ps = paper_env["state"]._initial_state()
     _open(lifecycle, ps, symbol="BTCUSD", tf="1d", side="long")
     pos, decision = lifecycle.attempt_open(
-        ps, symbol="BTCUSD", side="long", entry_price=100.0,
+        ps, symbol="BTCUSD", side="long", entry_price=60000.0,
         size_multiplier=1.0, timeframe="4h",
     )
     assert pos is not None and decision["allowed"] is True
@@ -172,7 +172,7 @@ def test_scale_in_explicit_allowed(paper_env) -> None:
     ps = paper_env["state"]._initial_state()
     _open(lifecycle, ps, symbol="BTCUSD", tf="1d", side="long")
     pos, decision = lifecycle.attempt_open(
-        ps, symbol="BTCUSD", side="long", entry_price=100.0,
+        ps, symbol="BTCUSD", side="long", entry_price=60000.0,
         size_multiplier=1.0, timeframe="1d", scale_in=True,
     )
     assert pos is not None
@@ -205,7 +205,7 @@ def test_audit_log_written(paper_env) -> None:
     # duplicate blocked event
     _open(lifecycle, ps, symbol="ETHUSD", tf="1d", side="long")
     lifecycle.attempt_open(
-        ps, symbol="ETHUSD", side="long", entry_price=100.0,
+        ps, symbol="ETHUSD", side="long", entry_price=60000.0,
         size_multiplier=1.0, timeframe="1d",
     )
     actions = [e["action"] for e in audit.read_recent()]
