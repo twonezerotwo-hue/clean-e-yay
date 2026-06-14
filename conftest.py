@@ -23,12 +23,14 @@ os.environ.setdefault("TEST_USE_MOCK", "true")
 
 
 @pytest.fixture(autouse=True, scope="session")
-def _isolate_decision_log(tmp_path_factory: pytest.TempPathFactory) -> None:
-    """Signal-attribution log is local-only: the close path writes a decision_log
-    entry on every trade close. Redirect it to a session tmp file so the suite never
-    appends to the real data/runtime/decision_log.jsonl. Per-test fixtures may still
-    override DECISION_LOG_PATH via monkeypatch to assert on contents.
+def _isolate_runtime_stores(tmp_path_factory: pytest.TempPathFactory) -> None:
+    """Redirect file-backed runtime stores under data/runtime/ to session tmp files so
+    the suite never reads or writes the real on-disk state. Without this, leftover
+    runtime state leaks into unit tests — e.g. an active DAILY_LOSS halt persisted in
+    data/runtime/risk_halts.json makes RiskGate return KILL_SWITCH for otherwise-clean
+    inputs, masking the event-risk gate. Per-test fixtures may still override these
+    paths via monkeypatch to exercise specific contents.
     """
-    os.environ["DECISION_LOG_PATH"] = str(
-        tmp_path_factory.mktemp("decision_log") / "decision_log.jsonl"
-    )
+    runtime = tmp_path_factory.mktemp("runtime")
+    os.environ["DECISION_LOG_PATH"] = str(runtime / "decision_log.jsonl")
+    os.environ["RISK_HALT_PATH"] = str(runtime / "risk_halts.json")
