@@ -4,7 +4,7 @@ from __future__ import annotations
 from dataclasses import asdict
 from datetime import UTC, datetime
 
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException
 
 from packages.data.ingestion.pipeline import DEFAULT_SYMBOLS, get_cached_snapshot
 from packages.decision.engine import decide_matrix
@@ -85,6 +85,7 @@ def _serialize_state(ps: paper_state.PaperState) -> dict:
         "duplicate_warning": _duplicate_warning(ps),
         "audit_summary": paper_audit.summary(),
         "recent_audit_events": paper_audit.read_recent(20),
+        "manual_ready_count": len(ps.manual_ready),
     }
 
 
@@ -200,6 +201,62 @@ def post_paper_tick() -> dict:
         "signals_processed": len(decisions),
         "actions": actions,
     }
+
+
+@router.get("/paper-trading/manual-ready")
+def get_manual_ready() -> dict:
+    """P2 — owner-approval kuyruğu (read-only; frontend hesap yapmaz)."""
+    ps = paper_state.load()
+    return {
+        "manual_ready": [asdict(m) for m in ps.manual_ready],
+        "rejected_count": len(ps.rejected_signals),
+    }
+
+
+@router.post("/paper-trading/manual-ready/{manual_id}/approve")
+def approve_manual_ready(manual_id: str) -> dict:
+    """P2 — owner onayı. Karar/guard mantığı manual_queue'da; RiskGate/DQS/KillSwitch
+    açılış anında YENİDEN kontrol edilir (kuyrukta olmak otomatik güvenli değildir)."""
+    ps = paper_state.load()
+    snap = get_cached_snapshot()
+    prices = {q.symbol: q.price for q in snap.prices if q.price is not None}
+    risk_in = RiskInput(
+        dqs_score=snap.quality.score,
+        equity_usd=ps.equity_usd,
+        peak_equity_usd=ps.peak_equity_usd,
+        daily_pnl_usd=ps.daily_pnl_usd,
+        open_position_count=len(ps.open_positions),
+    )
+    entry = next((m for m in ps.manual_ready if m.id == manual_id), None)
+    result = manual_queue.approve(
+        ps, manual_id,
+        current_price=prices.get(entry.symbol) if entry else None,
+        risk_input=risk_in,
+    )
+    if result["status"] == "not_found":
+        raise HTTPException(status_code=404, detail="not_found")
+    paper_state.save(ps)
+    return result
+
+
+@router.post("/paper-trading/manual-ready/{manual_id}/reject")
+def reject_manual_ready(manual_id: str) -> dict:
+    """P2 — owner reddi: kuyruktan çıkar + anti-spam rejection kaydı (re-queue block)."""
+    ps = paper_state.load()
+    if not manual_queue.reject(ps, manual_id):
+        raise HTTPException(status_code=404, detail="not_found")
+    paper_state.save(ps)
+    return {"status": "rejected"}
+
+
+@router.post("/paper-trading/manual-ready/{manual_id}/dismiss")
+def dismiss_manual_ready(manual_id: str) -> dict:
+    """P2 — kuyruktan çıkar (rejection KAYDETMEZ; sonraki tick'te yeniden düşebilir)."""
+    ps = paper_state.load()
+    if not manual_queue.dismiss(ps, manual_id):
+        raise HTTPException(status_code=404, detail="not_found")
+    paper_state.save(ps)
+    return {"status": "dismissed"}
 
 
 # Test/dev: pozisyonları sıfırla

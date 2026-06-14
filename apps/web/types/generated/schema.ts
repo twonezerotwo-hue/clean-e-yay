@@ -140,6 +140,74 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/paper-trading/manual-ready": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** P2 — owner-approval kuyruğu (DEFENSIVE/CRISIS adayları; read-only) */
+        get: operations["getPaperTradingManualReady"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/paper-trading/manual-ready/{manual_id}/approve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** P2 — owner onayı; paper pozisyon açar (price/state/duplicate guard'ları geçerli) */
+        post: operations["postPaperTradingManualReadyApprove"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/paper-trading/manual-ready/{manual_id}/reject": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** P2 — owner reddi; kuyruktan çıkarır + rejection kaydeder (re-queue silent block) */
+        post: operations["postPaperTradingManualReadyReject"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/paper-trading/manual-ready/{manual_id}/dismiss": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** P2 — kuyruktan çıkar (rejection kaydetmez; sonraki tick'te yeniden düşebilir) */
+        post: operations["postPaperTradingManualReadyDismiss"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/learning/summary": {
         parameters: {
             query?: never;
@@ -770,6 +838,34 @@ export interface components {
                 [key: string]: unknown;
             };
             recent_audit_events?: components["schemas"]["PaperAuditEvent"][];
+            /** @description P2 — owner onayı bekleyen aday sayısı (DEFENSIVE/CRISIS). */
+            manual_ready_count?: number;
+        };
+        ManualReadyTrade: {
+            id: string;
+            symbol: string;
+            timeframe: string;
+            /** @description long | short */
+            side: string;
+            requested_at: string;
+            size_multiplier: number;
+            requested_price?: number;
+            reason?: string;
+            fingerprint?: string;
+            snapshot_id?: string;
+            rejected_at?: string;
+        };
+        ManualReadyQueue: {
+            manual_ready: components["schemas"]["ManualReadyTrade"][];
+            /** @description Silent-block aktif olan reddedilmiş sinyal sayısı. */
+            rejected_count: number;
+        };
+        ManualReadyActionResult: {
+            /** @description opened | not_found | no_price | blocked | dismissed | rejected */
+            status: string;
+            position_id?: string;
+            price?: number;
+            reason?: string;
         };
         TickResult: {
             /** Format: date-time */
@@ -1704,6 +1800,113 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["TickResult"];
                 };
+            };
+        };
+    };
+    getPaperTradingManualReady: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ManualReadyQueue"];
+                };
+            };
+        };
+    };
+    postPaperTradingManualReadyApprove: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                manual_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK (status=opened|no_price|blocked) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ManualReadyActionResult"];
+                };
+            };
+            /** @description manual_id kuyrukta yok (not_found) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    postPaperTradingManualReadyReject: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                manual_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ManualReadyActionResult"];
+                };
+            };
+            /** @description manual_id kuyrukta yok (not_found) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    postPaperTradingManualReadyDismiss: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                manual_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ManualReadyActionResult"];
+                };
+            };
+            /** @description manual_id kuyrukta yok (not_found) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };

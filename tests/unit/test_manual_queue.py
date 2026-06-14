@@ -19,7 +19,16 @@ from packages.paper.state import ManualReady, RejectedSignal
 @pytest.fixture
 def st(tmp_path, monkeypatch):
     monkeypatch.setenv("PAPER_AUDIT_PATH", str(tmp_path / "audit.jsonl"))
+    monkeypatch.setenv("RISK_HALT_PATH", str(tmp_path / "halts.json"))
     return paper_state._initial_state()
+
+
+def _risk(dqs: float = 90.0):
+    from packages.risk.engine import RiskInput
+    return RiskInput(
+        dqs_score=dqs, equity_usd=100_000.0, peak_equity_usd=100_000.0,
+        daily_pnl_usd=0.0, open_position_count=0,
+    )
 
 
 def _queue(st, *, symbol="BTCUSD", side="long", tf="1d", price=60_000.0, fp="fp-a"):
@@ -115,6 +124,23 @@ def test_approve_blocked_by_price_guard(st) -> None:
     assert len(st.manual_ready) == 1  # stays queued
 
 
+def test_approve_reruns_riskgate_and_blocks(st) -> None:
+    """Queue membership is NOT pre-authorization: DQS<55 → RiskGate KILL_SWITCH blocks."""
+    entry = _queue(st, price=60_000.0)
+    res = manual_queue.approve(st, entry.id, current_price=60_000.0, risk_input=_risk(dqs=40.0))
+    assert res["status"] == "blocked"
+    assert res["reason"].startswith("risk_gate:")
+    assert len(st.open_positions) == 0
+    assert len(st.manual_ready) == 1  # stays queued
+
+
+def test_approve_opens_when_riskgate_open(st) -> None:
+    entry = _queue(st, price=60_000.0)
+    res = manual_queue.approve(st, entry.id, current_price=60_000.0, risk_input=_risk(dqs=90.0))
+    assert res["status"] == "opened"
+    assert len(st.open_positions) == 1
+
+
 # ---------- purge ----------
 
 def test_purge_preserves_while_queued(st) -> None:
@@ -142,3 +168,65 @@ def test_state_roundtrip_preserves_queue(st) -> None:
     assert len(restored.manual_ready) == 1
     assert len(restored.rejected_signals) == 1
     assert restored.manual_ready[0].symbol == "BTCUSD"
+
+
+# ---------- HTTP endpoints (thin router; logic lives in manual_queue) ----------
+
+@pytest.fixture
+def api(tmp_path, monkeypatch):
+    from fastapi.testclient import TestClient
+
+    monkeypatch.setattr(paper_state, "STATE_PATH", tmp_path / "state.json")
+    monkeypatch.setenv("PAPER_AUDIT_PATH", str(tmp_path / "audit.jsonl"))
+    monkeypatch.setenv("RISK_HALT_PATH", str(tmp_path / "halts.json"))
+    from apps.api.main import app
+
+    return TestClient(app)
+
+
+def _seed_queue(symbol="BTCUSD", side="long", tf="1d") -> str:
+    s = paper_state.load()
+    manual_queue.route_to_manual_ready(
+        s, symbol=symbol, timeframe=tf, side=side, size_multiplier=1.0,
+        requested_price=60_000.0, reason="defensive",
+    )
+    paper_state.save(s)
+    return s.manual_ready[0].id
+
+
+def test_get_manual_ready_endpoint(api) -> None:
+    mid = _seed_queue()
+    r = api.get("/api/v1/paper-trading/manual-ready")
+    assert r.status_code == 200
+    body = r.json()
+    assert len(body["manual_ready"]) == 1
+    assert body["manual_ready"][0]["id"] == mid
+    assert body["rejected_count"] == 0
+
+
+def test_dismiss_endpoint(api) -> None:
+    mid = _seed_queue()
+    r = api.post(f"/api/v1/paper-trading/manual-ready/{mid}/dismiss")
+    assert r.status_code == 200 and r.json()["status"] == "dismissed"
+    assert paper_state.load().manual_ready == []
+    assert paper_state.load().rejected_signals == []  # dismiss ≠ anti-spam
+
+
+def test_reject_endpoint_records_block(api) -> None:
+    mid = _seed_queue()
+    r = api.post(f"/api/v1/paper-trading/manual-ready/{mid}/reject")
+    assert r.status_code == 200 and r.json()["status"] == "rejected"
+    reloaded = paper_state.load()
+    assert reloaded.manual_ready == [] and len(reloaded.rejected_signals) == 1
+
+
+def test_approve_unknown_id_returns_404(api) -> None:
+    r = api.post("/api/v1/paper-trading/manual-ready/does-not-exist/approve")
+    assert r.status_code == 404
+
+
+def test_state_endpoint_surfaces_manual_ready_count(api) -> None:
+    _seed_queue()
+    r = api.get("/api/v1/paper-trading/state")
+    assert r.status_code == 200
+    assert r.json()["manual_ready_count"] == 1

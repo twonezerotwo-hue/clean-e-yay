@@ -281,6 +281,35 @@ export type PaperTradingState = {
   duplicate_warning?: Array<Record<string, unknown>>;
   audit_summary?: Record<string, unknown>;
   recent_audit_events?: PaperAuditEvent[];
+  // P2 — owner onayı bekleyen aday sayısı (queue listesi ayrı endpoint'ten gelir).
+  manual_ready_count?: number;
+};
+
+// P2 — owner-approval (manual-ready) workflow.
+export type ManualReadyTrade = {
+  id: string;
+  symbol: string;
+  timeframe: string;
+  side: string; // long | short
+  requested_at: string;
+  size_multiplier: number;
+  requested_price?: number;
+  reason?: string;
+  fingerprint?: string;
+  snapshot_id?: string;
+  rejected_at?: string;
+};
+
+export type ManualReadyQueue = {
+  manual_ready: ManualReadyTrade[];
+  rejected_count: number;
+};
+
+export type ManualReadyActionResult = {
+  status: string; // opened | not_found | no_price | blocked | dismissed | rejected
+  position_id?: string;
+  price?: number;
+  reason?: string;
 };
 
 export type TickResult = {

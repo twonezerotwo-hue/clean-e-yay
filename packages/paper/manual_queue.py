@@ -23,6 +23,12 @@ import hashlib
 from packages.paper import audit
 from packages.paper.lifecycle import attempt_open
 from packages.paper.state import ManualReady, PaperState, RejectedSignal, utc_iso
+from packages.risk.engine import RiskInput
+from packages.risk.engine import evaluate as evaluate_risk
+
+# Canonical RiskGate actions that forbid opening a NEW position (mirror of the
+# decision engine: KILL_SWITCH→blocked, RISK_REDUCE/NO_POSITION_INCREASE→hold).
+_RISK_BLOCKS_NEW_OPEN = {"KILL_SWITCH", "RISK_REDUCE", "NO_POSITION_INCREASE"}
 
 
 def _make_id(symbol: str, timeframe: str, side: str, requested_at: str) -> str:
@@ -151,13 +157,34 @@ def _clear_key(state: PaperState, symbol: str, side: str, timeframe: str) -> Non
     ]
 
 
-def approve(state: PaperState, manual_id: str, *, current_price: float | None) -> dict:
-    """Owner approves: open the position via the guarded `attempt_open` (price sanity /
-    state anomaly / duplicate still apply). On success, clear the queued + rejected
-    records for that key. Returns {"status": opened|not_found|no_price|blocked, ...}."""
+def approve(
+    state: PaperState,
+    manual_id: str,
+    *,
+    current_price: float | None,
+    risk_input: RiskInput | None = None,
+) -> dict:
+    """Owner approves: open the position — but queue membership does NOT pre-authorize.
+
+    When `risk_input` is supplied (the API always supplies it), the canonical RiskGate
+    is re-evaluated at approval time: DQS, daily-loss, drawdown and any active
+    KILL_SWITCH halt can still block the open. The open then goes through the guarded
+    `attempt_open` (price sanity / state anomaly / duplicate). On success, clears the
+    queued + rejected records for that key.
+
+    Returns {"status": opened|not_found|no_price|blocked, ...}."""
     entry = _find_ready_by_id(state, manual_id)
     if entry is None:
         return {"status": "not_found"}
+    # Rule: re-run the canonical RiskGate/DQS/KillSwitch before opening.
+    if risk_input is not None:
+        rg = evaluate_risk(risk_input)
+        if rg.action in _RISK_BLOCKS_NEW_OPEN:
+            audit.record(
+                "MANUAL_READY_BLOCKED", position_id=manual_id, symbol=entry.symbol,
+                timeframe=entry.timeframe, side=entry.side, reason=f"risk_gate:{rg.action}",
+            )
+            return {"status": "blocked", "reason": f"risk_gate:{rg.action}"}
     price = current_price if current_price is not None else entry.requested_price
     if price is None or price <= 0:
         return {"status": "no_price"}
