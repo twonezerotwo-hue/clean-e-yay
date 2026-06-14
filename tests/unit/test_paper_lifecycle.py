@@ -308,13 +308,22 @@ def test_state_endpoint_surfaces_lifecycle_and_audit(paper_env, monkeypatch) -> 
     _open(lifecycle, ps)
     paper_env["state"].save(ps)
 
+    # Import the app/router BEFORE patching. The router does
+    # `from ...pipeline import get_cached_snapshot`, copying the value by reference
+    # at import time. If we patched `pl` first and the app were imported here for the
+    # first time, the router would freeze `_boom` into its OWN binding — which
+    # monkeypatch never owns, so it would leak into later tests (e.g. test_halt's
+    # tick). Importing first makes the router bind the real function; we then patch
+    # the router's binding too, and monkeypatch restores every setattr on teardown.
+    from apps.api.main import app
+    from apps.api.routers import paper_trading as pt_router
+
     def _boom(*a, **k):
         raise AssertionError("state read attempted live data refetch")
 
     monkeypatch.setattr(pl, "get_cached_snapshot", _boom)
     monkeypatch.setattr(pl, "build_snapshot", _boom)
-
-    from apps.api.main import app
+    monkeypatch.setattr(pt_router, "get_cached_snapshot", _boom)
 
     r = TestClient(app).get("/api/v1/paper-trading/state")
     assert r.status_code == 200
