@@ -1,4 +1,4 @@
-.PHONY: help codegen lint test web-dev api-dev dev workers smoke \
+.PHONY: help codegen codegen-check lint test web-dev api-dev dev workers smoke \
         prod-up prod-down prod-status prod-smoke compose-up compose-down
 
 help:
@@ -14,12 +14,16 @@ help:
 	@echo "  prod-smoke   Health smoke against prod ports (API_PORT/WEB_PORT)"
 	@echo "  compose-up   docker-compose dev (api+web+workers)"
 	@echo "  compose-down"
-	@echo "  codegen      OpenAPI → Pydantic + TS"
+	@echo "  codegen      OpenAPI → TS contract types (apps/web/types/generated/schema.ts)"
+	@echo "  codegen-check  Fail if generated types are stale vs openapi.yaml"
 	@echo "  lint         ruff packages + apps"
 	@echo "  test         pytest"
 
 codegen:
-	@echo "[codegen] OpenAPI → Pydantic + TS (not yet implemented)"
+	python scripts/codegen.py
+
+codegen-check:
+	python scripts/codegen.py --check
 
 lint:
 	ruff check packages apps/api apps/tick_worker apps/learning_worker
