@@ -14,7 +14,9 @@ import hashlib
 from datetime import UTC, date, datetime, timedelta
 
 from packages.data.registry.loader import load_thresholds
-from packages.paper import audit
+from packages.learning import decision_log
+from packages.paper import audit, execution_sim, sizing
+from packages.paper.guards import price_sanity, state_anomaly
 from packages.paper.state import PaperState, Position, Trade, utc_iso
 
 # Zorla kapanış nedenleri → terminal lifecycle_status=FORCE_CLOSED + ayrı audit
@@ -73,10 +75,14 @@ def open_position(
     open_reason: str | None = None,
     snapshot_id: str | None = None,
     scale_in: bool = False,
+    open_dqs: float | None = None,
+    open_risk_action: str | None = None,
 ) -> Position:
     sl_pct = _sl_pct_for(symbol)
     tp_pct = sl_pct * _tp_rr()
-    size = min(_max_pos_usd() * max(0.0, min(1.5, size_multiplier)), _max_pos_usd() * 1.5)
+    # Canonical sizing: deterministic multiplier → USD (no AI boost; capped). The
+    # multiplier passed in is already deterministic; sizing floors/caps it.
+    size = sizing.compute_size_usd(size_multiplier, max_position_usd=_max_pos_usd())
     opened_at = utc_iso()
     sl = entry_price * (1 - sl_pct) if side == "long" else entry_price * (1 + sl_pct)
     tp = entry_price * (1 + tp_pct) if side == "long" else entry_price * (1 - tp_pct)
@@ -110,6 +116,8 @@ def open_position(
         open_reason=open_reason,
         snapshot_id=snapshot_id,
         scale_in=bool(scale_in),
+        open_dqs=open_dqs,
+        open_risk_action=open_risk_action,
     )
     state.open_positions.append(pos)
     audit.record(
@@ -179,6 +187,8 @@ def attempt_open(
     predicted_confidence: float | None = None,
     raw_confidence: float | None = None,
     confidence_source: str | None = None,
+    open_dqs: float | None = None,
+    open_risk_action: str | None = None,
 ) -> tuple[Position | None, dict]:
     """P1 — tek açılış giriş noktası: denetim → blocked/opened + audit.
 
@@ -198,6 +208,31 @@ def attempt_open(
             reason="no_price", snapshot_id=snapshot_id,
         )
         return None, decision
+    # Price sanity (absolute bounds): cross-pair contamination / absurd price must
+    # not open a position. Restrictive-only; never opens.
+    sane_reason = price_sanity.price_sane_reason(symbol, entry_price)
+    if sane_reason is not None:
+        decision = {"allowed": False, "duplicate": False, "reason": "price_insane"}
+        audit.record(
+            "OPEN_BLOCKED", symbol=symbol, timeframe=timeframe, side=side,
+            reason="price_insane", detail=sane_reason, price_used=entry_price,
+            snapshot_id=snapshot_id,
+        )
+        return None, decision
+    # State anomaly: corrupt accounting (equity/realized/daily PnL absurd) blocks
+    # NEW opens only — existing position management/close stays possible.
+    anomaly = state_anomaly.detect_state(state)
+    if anomaly.detected:
+        decision = {
+            "allowed": False, "duplicate": False, "reason": "state_anomaly",
+            "anomaly_reasons": anomaly.reasons,
+        }
+        audit.record(
+            "OPEN_BLOCKED", symbol=symbol, timeframe=timeframe, side=side,
+            reason="state_anomaly", detail="; ".join(anomaly.reasons),
+            snapshot_id=snapshot_id,
+        )
+        return None, decision
     decision = evaluate_open(
         state, symbol=symbol, timeframe=timeframe, side=side, scale_in=scale_in
     )
@@ -213,17 +248,14 @@ def attempt_open(
         data_verified=data_verified, predicted_confidence=predicted_confidence,
         raw_confidence=raw_confidence, confidence_source=confidence_source,
         timeframe=timeframe, open_reason=open_reason, snapshot_id=snapshot_id,
-        scale_in=scale_in,
+        scale_in=scale_in, open_dqs=open_dqs, open_risk_action=open_risk_action,
     )
     return pos, decision
 
 
 def close_position(state: PaperState, pos: Position, *, exit_price: float, reason: str) -> Trade:
-    pnl = pos.unrealized_pnl_usd if pos.current_price == exit_price else (
-        (exit_price - pos.entry_price) / pos.entry_price * pos.size_usd
-        if pos.side == "long"
-        else (pos.entry_price - exit_price) / pos.entry_price * pos.size_usd
-    )
+    # Realized fill P&L — formalized in execution_sim (no broker; paper fill math).
+    pnl = execution_sim.realized_pnl(pos.side, pos.entry_price, exit_price, pos.size_usd)
     lifecycle_status = "FORCE_CLOSED" if reason in _FORCE_CLOSE_REASONS else "CLOSED"
     trade = Trade(
         id=pos.id,
@@ -244,8 +276,13 @@ def close_position(state: PaperState, pos: Position, *, exit_price: float, reaso
         lifecycle_status=lifecycle_status,
         open_reason=pos.open_reason,
         snapshot_id=pos.snapshot_id,
+        open_dqs=pos.open_dqs,
+        open_risk_action=pos.open_risk_action,
     )
     state.recent_trades.append(trade)
+    # Signal attribution: kapanan trade'in karar izini kalıcı decision_log'a yaz
+    # (best-effort; lifecycle'ı kesmez).
+    decision_log.record_close(trade)
     state.open_positions = [p for p in state.open_positions if p.id != pos.id]
     state.realized_pnl_usd = round(state.realized_pnl_usd + trade.pnl_usd, 2)
     _ensure_daily_anchor(state)
@@ -323,6 +360,13 @@ def tick(
         due = _time_stop_due(pos, now)
         pos.time_stop_expired = due
         price = prices.get(pos.symbol)
+        # Price sanity: a contaminated tick (out of bounds AND a large jump vs the
+        # last price) is treated as "no usable price" — never close/manage on
+        # garbage. The next in-range tick resumes normal handling.
+        if price is not None and not price_sanity.tick_price_usable(
+            pos.symbol, price, pos.current_price
+        ):
+            price = None
         if price is None or price <= 0:
             # Fiyat yok: time-stop dolduysa EXPIRED_PENDING_PRICE — fake fiyatla
             # kapatma YOK (DATA_POLICY). Geçişte bir kez audit (spam yok).
@@ -338,18 +382,15 @@ def tick(
                 )
             continue
         pos.current_price = price
-        # SL/TP kontrol
-        if pos.sl is not None and (
-            (pos.side == "long" and price <= pos.sl)
-            or (pos.side == "short" and price >= pos.sl)
-        ):
-            closed.append(close_position(state, pos, exit_price=price, reason="SL_HIT"))
-            continue
-        if pos.tp is not None and (
-            (pos.side == "long" and price >= pos.tp)
-            or (pos.side == "short" and price <= pos.tp)
-        ):
-            closed.append(close_position(state, pos, exit_price=price, reason="TP_HIT"))
+        # SL/TP kontrol — formalized fill simulation (fill at observed tick price).
+        fill = execution_sim.simulate_exit_fill(
+            side=pos.side, entry_price=pos.entry_price, sl=pos.sl, tp=pos.tp,
+            size_usd=pos.size_usd, price=price,
+        )
+        if fill is not None:
+            closed.append(
+                close_position(state, pos, exit_price=fill.fill_price, reason=fill.reason)
+            )
             continue
         if due:
             # Fiyat geldi → bekleyen time-stop'u şimdi kapat (EXPIRED→CLOSED).
@@ -374,6 +415,12 @@ def flatten_all(
     closed: list[Trade] = []
     for pos in list(state.open_positions):
         price = prices.get(pos.symbol)
+        # Don't realize PnL at a contaminated price even under KILL_SWITCH — hold
+        # to EXIT_PENDING and retry on the next in-range tick.
+        if price is not None and not price_sanity.tick_price_usable(
+            pos.symbol, price, pos.current_price
+        ):
+            price = None
         if price is None or price <= 0:
             if pos.lifecycle_status != "EXIT_PENDING":
                 _set_status(pos, "EXIT_PENDING", reason)

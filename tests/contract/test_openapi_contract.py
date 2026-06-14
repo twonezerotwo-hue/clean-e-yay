@@ -142,8 +142,14 @@ def test_replay_decision_trace_missing_returns_404():
 
 
 def test_all_documented_paths_have_router():
-    """openapi.yaml'daki her path FastAPI uygulamasında kayıtlı (path drift guard)."""
+    """openapi.yaml'daki her path FastAPI uygulamasında kayıtlı (path drift guard).
+
+    Kaynak olarak app'in KENDİ ürettiği OpenAPI path kümesini kullanıyoruz: included
+    router'lar fastapi/starlette sürümüne göre `app.routes` içinde düz `Route` yerine
+    bir `_IncludedRouter` sarmalayıcı olarak görünebilir (path'siz). `app.openapi()`
+    ise sürümden bağımsız olarak gerçekten sunulan tüm endpoint path'lerini kapsar.
+    """
     documented = set(SPEC["paths"].keys())
-    registered = {r.path for r in app.routes if hasattr(r, "path")}
-    missing = sorted(p for p in documented if p not in registered)
+    registered = set(app.openapi()["paths"].keys())
+    missing = sorted(documented - registered)
     assert not missing, f"openapi.yaml'da olup app'te olmayan path'ler: {missing}"

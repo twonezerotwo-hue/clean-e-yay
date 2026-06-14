@@ -4,7 +4,7 @@
   toplar.
 - evaluate(): MIN_TRADES altında NEUTRAL; düşük win_rate → AVOID;
   yüksek → BOOST; streak ≥ STREAK_AVOID → AVOID.
-- decision engine: AVOID → hold; BOOST → size+; WARNING → size-.
+- decision engine: AVOID → hold; BOOST → size-neutral (no boost); WARNING → size-.
 - **RiskGate bypass yok**: KILL_SWITCH/RISK_REDUCE yüksek BOOST'a rağmen
   blocked/hold.
 - DQS BLOCKED + BOOST → trade yok.
@@ -150,7 +150,8 @@ def test_evaluate_boost_high_win_rate(fresh_env) -> None:
     from packages.learning import mistake_memory as mm
     v = mm.evaluate("FP-BOOST")
     assert v.action == "BOOST"
-    assert v.size_factor > 1.0
+    # No-AI-boost policy: BOOST is a positive flag but size-neutral (never > 1.0).
+    assert v.size_factor <= 1.0
 
 
 def test_evaluate_warning_marginal(fresh_env) -> None:

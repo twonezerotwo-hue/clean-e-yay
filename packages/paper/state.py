@@ -14,7 +14,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from packages.data.registry.loader import load_thresholds
-from packages.paper import audit
+from packages.paper import audit, execution_sim
 
 SCHEMA_VERSION = 1
 
@@ -62,12 +62,16 @@ class Position:
     open_reason: str | None = None          # learning handoff: karar gerekçesi
     snapshot_id: str | None = None          # learning handoff: kaynak snapshot
     scale_in: bool = False                  # explicit scale-in (default: yok)
+    # Signal attribution (additive): karar izi açılışta damgalanır.
+    open_dqs: float | None = None           # açılış anındaki DQS
+    open_risk_action: str | None = None     # açılış anındaki RiskGate kararı (izinli)
 
     @property
     def unrealized_pnl_usd(self) -> float:
-        if self.side == "long":
-            return (self.current_price - self.entry_price) / self.entry_price * self.size_usd
-        return (self.entry_price - self.current_price) / self.entry_price * self.size_usd
+        # Mark-to-market is formalized in execution_sim (single source of paper P&L).
+        return execution_sim.unrealized_pnl(
+            self.side, self.entry_price, self.current_price, self.size_usd
+        )
 
 
 @dataclass
@@ -91,6 +95,35 @@ class Trade:
     lifecycle_status: str = "CLOSED"   # CLOSED (normal) | FORCE_CLOSED (zorla)
     open_reason: str | None = None
     snapshot_id: str | None = None
+    # Signal attribution (additive): pozisyondan miras alınan karar izi.
+    open_dqs: float | None = None
+    open_risk_action: str | None = None
+
+
+@dataclass
+class ManualReady:
+    """Owner-approval candidate (DEFENSIVE/CRISIS regime → no auto-open)."""
+    id: str
+    symbol: str
+    timeframe: str
+    side: str               # long / short
+    requested_at: str
+    size_multiplier: float
+    requested_price: float | None = None
+    reason: str | None = None
+    fingerprint: str | None = None
+    snapshot_id: str | None = None
+    rejected_at: str | None = None  # set when owner rejected (→ silent block)
+
+
+@dataclass
+class RejectedSignal:
+    """Owner-rejected signal — silent-blocks the same symbol+side+timeframe."""
+    symbol: str
+    timeframe: str
+    side: str
+    rejected_at: str
+    fingerprint: str | None = None
 
 
 @dataclass
@@ -102,6 +135,8 @@ class PaperState:
     recent_trades: list[Trade] = field(default_factory=list)
     daily_pnl_usd: float = 0.0
     daily_anchor_date: str = ""
+    manual_ready: list[ManualReady] = field(default_factory=list)
+    rejected_signals: list[RejectedSignal] = field(default_factory=list)
 
     def to_dict(self) -> dict:
         return {
@@ -113,6 +148,8 @@ class PaperState:
             "daily_anchor_date": self.daily_anchor_date,
             "open_positions": [asdict(p) for p in self.open_positions],
             "recent_trades": [asdict(t) for t in self.recent_trades[-200:]],
+            "manual_ready": [asdict(m) for m in self.manual_ready],
+            "rejected_signals": [asdict(r) for r in self.rejected_signals],
         }
 
     @classmethod
@@ -134,6 +171,16 @@ class PaperState:
                 Trade(**_only_known(Trade, t))
                 for t in d.get("recent_trades", [])
                 if isinstance(t, dict)
+            ],
+            manual_ready=[
+                ManualReady(**_only_known(ManualReady, m))
+                for m in d.get("manual_ready", [])
+                if isinstance(m, dict)
+            ],
+            rejected_signals=[
+                RejectedSignal(**_only_known(RejectedSignal, r))
+                for r in d.get("rejected_signals", [])
+                if isinstance(r, dict)
             ],
         )
 

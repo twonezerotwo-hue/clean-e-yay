@@ -111,6 +111,75 @@ paths:
               schema:
                 $ref: "#/components/schemas/TickResult"
 
+  /api/v1/paper-trading/manual-ready:
+    get:
+      operationId: getPaperTradingManualReady
+      summary: P2 — owner-approval kuyruğu (DEFENSIVE/CRISIS adayları; read-only)
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ManualReadyQueue"
+
+  /api/v1/paper-trading/manual-ready/{manual_id}/approve:
+    post:
+      operationId: postPaperTradingManualReadyApprove
+      summary: P2 — owner onayı; paper pozisyon açar (price/state/duplicate guard'ları geçerli)
+      parameters:
+        - name: manual_id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: OK (status=opened|no_price|blocked)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ManualReadyActionResult"
+        "404":
+          description: manual_id kuyrukta yok (not_found)
+
+  /api/v1/paper-trading/manual-ready/{manual_id}/reject:
+    post:
+      operationId: postPaperTradingManualReadyReject
+      summary: P2 — owner reddi; kuyruktan çıkarır + rejection kaydeder (re-queue silent block)
+      parameters:
+        - name: manual_id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ManualReadyActionResult"
+        "404":
+          description: manual_id kuyrukta yok (not_found)
+
+  /api/v1/paper-trading/manual-ready/{manual_id}/dismiss:
+    post:
+      operationId: postPaperTradingManualReadyDismiss
+      summary: P2 — kuyruktan çıkar (rejection kaydetmez; sonraki tick'te yeniden düşebilir)
+      parameters:
+        - name: manual_id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ManualReadyActionResult"
+        "404":
+          description: manual_id kuyrukta yok (not_found)
+
   /api/v1/learning/summary:
     get:
       operationId: getLearningSummary
@@ -256,6 +325,64 @@ paths:
               schema:
                 type: object
                 description: Reset sonucu (additive).
+
+  /api/v1/paper-trading/maintenance/archive:
+    post:
+      operationId: postPaperTradingMaintenanceArchive
+      summary: Owner-admin — paper state'i arşivle (read-only kopya; mutasyon yok; paper-safe)
+      parameters:
+        - name: reason
+          in: query
+          required: false
+          schema: { type: string }
+      responses:
+        "200":
+          description: OK (MaintenanceResult; paper_safe/no_execution; additive)
+          content:
+            application/json:
+              schema:
+                type: object
+                description: Maintenance sonucu (archive; additive).
+
+  /api/v1/paper-trading/maintenance/repair:
+    post:
+      operationId: postPaperTradingMaintenanceRepair
+      summary: Owner-admin — paper state tutarsızlıklarını onar (dry_run varsayılan true)
+      parameters:
+        - name: dry_run
+          in: query
+          required: false
+          schema: { type: boolean, default: true }
+      responses:
+        "200":
+          description: OK (MaintenanceResult; dry_run ise yazım yok; non-dry-run önce arşivler)
+          content:
+            application/json:
+              schema:
+                type: object
+                description: Maintenance sonucu (repair; additive).
+
+  /api/v1/paper-trading/maintenance/reset:
+    post:
+      operationId: postPaperTradingMaintenanceReset
+      summary: Owner-admin — paper hesabı sıfırla (önce arşivler; learning/decision log korunur)
+      parameters:
+        - name: reason
+          in: query
+          required: false
+          schema: { type: string }
+        - name: preserve_learning
+          in: query
+          required: false
+          schema: { type: boolean, default: true }
+      responses:
+        "200":
+          description: OK (MaintenanceResult; arşiv + temiz initial state; broker yok)
+          content:
+            application/json:
+              schema:
+                type: object
+                description: Maintenance sonucu (reset; additive).
 
   /api/v1/replay/status:
     get:
@@ -813,6 +940,47 @@ components:
         recent_audit_events:
           type: array
           items: { $ref: "#/components/schemas/PaperAuditEvent" }
+        manual_ready_count:
+          type: integer
+          description: P2 — owner onayı bekleyen aday sayısı (DEFENSIVE/CRISIS).
+
+    ManualReadyTrade:
+      type: object
+      required: [id, symbol, timeframe, side, requested_at, size_multiplier]
+      properties:
+        id: { type: string }
+        symbol: { type: string }
+        timeframe: { type: string }
+        side: { type: string, description: "long | short" }
+        requested_at: { type: string }
+        size_multiplier: { type: number }
+        requested_price: { type: number }
+        reason: { type: string }
+        fingerprint: { type: string }
+        snapshot_id: { type: string }
+        rejected_at: { type: string }
+
+    ManualReadyQueue:
+      type: object
+      required: [manual_ready, rejected_count]
+      properties:
+        manual_ready:
+          type: array
+          items: { $ref: "#/components/schemas/ManualReadyTrade" }
+        rejected_count:
+          type: integer
+          description: Silent-block aktif olan reddedilmiş sinyal sayısı.
+
+    ManualReadyActionResult:
+      type: object
+      required: [status]
+      properties:
+        status:
+          type: string
+          description: "opened | not_found | no_price | blocked | dismissed | rejected"
+        position_id: { type: string }
+        price: { type: number }
+        reason: { type: string }
 
     TickResult:
       type: object

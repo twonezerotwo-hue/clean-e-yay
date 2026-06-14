@@ -27,7 +27,10 @@ STREAK_AVOID = 3
 SIZE_FACTOR_AVOID = 0.0      # AVOID → trade yok (hold)
 SIZE_FACTOR_WARNING = 0.7
 SIZE_FACTOR_NEUTRAL = 1.0
-SIZE_FACTOR_BOOST = 1.2
+# No-AI-boost policy: learning may only REDUCE size. A strong fingerprint is still
+# flagged BOOST (a positive signal for narrative/audit), but it is size-neutral —
+# it never increases the deterministic base. (Was 1.2; clamped to 1.0.)
+SIZE_FACTOR_BOOST = 1.0
 
 MistakeAction = Literal["NEUTRAL", "AVOID", "BOOST", "WARNING"]
 

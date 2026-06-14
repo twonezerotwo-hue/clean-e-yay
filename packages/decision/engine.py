@@ -6,7 +6,8 @@ G6 — Confidence calibration:
 
 G3 — Mistake memory gate:
 - Consensus eşiği aşıldıktan sonra mistake memory `evaluate(fingerprint)`
-  çağrılır. AVOID→hold, BOOST→size_factor×, WARNING→size_factor×.
+  çağrılır. AVOID→hold, WARNING→size küçült. BOOST yalnızca pozitif damga;
+  size_factor ≤1.0'a clamp'lenir → **asla boyut ARTIRMAZ** (no-AI-boost).
 - NEUTRAL/insufficient → no_adjustment (size_factor=1.0).
 
 G4 — Correlation-aware sizing:
@@ -244,7 +245,9 @@ def decide_for_symbol(
             blocked_by=["mistake_memory:AVOID"],
         )
 
-    size *= verdict.size_factor
+    # No-AI-boost invariant: learning/mistake-memory may only REDUCE size. Clamp the
+    # factor to ≤ 1.0 so a BOOST verdict can never increase the deterministic base.
+    size *= min(1.0, verdict.size_factor)
     size = max(0.0, min(1.5, size))
 
     # ----- G4: Correlation cluster cap (sadece küçültür, RiskGate'i bypass etmez) -----
