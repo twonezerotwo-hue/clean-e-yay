@@ -177,8 +177,11 @@ def approve(
     if entry is None:
         return {"status": "not_found"}
     # Rule: re-run the canonical RiskGate/DQS/KillSwitch before opening.
+    open_risk_action: str | None = None
+    open_dqs = risk_input.dqs_score if risk_input is not None else None
     if risk_input is not None:
         rg = evaluate_risk(risk_input)
+        open_risk_action = rg.action
         if rg.action in _RISK_BLOCKS_NEW_OPEN:
             audit.record(
                 "MANUAL_READY_BLOCKED", position_id=manual_id, symbol=entry.symbol,
@@ -198,6 +201,8 @@ def approve(
         open_reason=f"owner_approved:{entry.reason or ''}",
         snapshot_id=entry.snapshot_id,
         fingerprint=entry.fingerprint,
+        open_dqs=open_dqs,
+        open_risk_action=open_risk_action,
     )
     if pos is None:
         return {"status": "blocked", "reason": decision.get("reason")}

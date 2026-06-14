@@ -62,6 +62,9 @@ class Position:
     open_reason: str | None = None          # learning handoff: karar gerekçesi
     snapshot_id: str | None = None          # learning handoff: kaynak snapshot
     scale_in: bool = False                  # explicit scale-in (default: yok)
+    # Signal attribution (additive): karar izi açılışta damgalanır.
+    open_dqs: float | None = None           # açılış anındaki DQS
+    open_risk_action: str | None = None     # açılış anındaki RiskGate kararı (izinli)
 
     @property
     def unrealized_pnl_usd(self) -> float:
@@ -91,6 +94,9 @@ class Trade:
     lifecycle_status: str = "CLOSED"   # CLOSED (normal) | FORCE_CLOSED (zorla)
     open_reason: str | None = None
     snapshot_id: str | None = None
+    # Signal attribution (additive): pozisyondan miras alınan karar izi.
+    open_dqs: float | None = None
+    open_risk_action: str | None = None
 
 
 @dataclass

@@ -14,6 +14,7 @@ import hashlib
 from datetime import UTC, date, datetime, timedelta
 
 from packages.data.registry.loader import load_thresholds
+from packages.learning import decision_log
 from packages.paper import audit, sizing
 from packages.paper.guards import price_sanity, state_anomaly
 from packages.paper.state import PaperState, Position, Trade, utc_iso
@@ -74,6 +75,8 @@ def open_position(
     open_reason: str | None = None,
     snapshot_id: str | None = None,
     scale_in: bool = False,
+    open_dqs: float | None = None,
+    open_risk_action: str | None = None,
 ) -> Position:
     sl_pct = _sl_pct_for(symbol)
     tp_pct = sl_pct * _tp_rr()
@@ -113,6 +116,8 @@ def open_position(
         open_reason=open_reason,
         snapshot_id=snapshot_id,
         scale_in=bool(scale_in),
+        open_dqs=open_dqs,
+        open_risk_action=open_risk_action,
     )
     state.open_positions.append(pos)
     audit.record(
@@ -182,6 +187,8 @@ def attempt_open(
     predicted_confidence: float | None = None,
     raw_confidence: float | None = None,
     confidence_source: str | None = None,
+    open_dqs: float | None = None,
+    open_risk_action: str | None = None,
 ) -> tuple[Position | None, dict]:
     """P1 — tek açılış giriş noktası: denetim → blocked/opened + audit.
 
@@ -241,7 +248,7 @@ def attempt_open(
         data_verified=data_verified, predicted_confidence=predicted_confidence,
         raw_confidence=raw_confidence, confidence_source=confidence_source,
         timeframe=timeframe, open_reason=open_reason, snapshot_id=snapshot_id,
-        scale_in=scale_in,
+        scale_in=scale_in, open_dqs=open_dqs, open_risk_action=open_risk_action,
     )
     return pos, decision
 
@@ -272,8 +279,13 @@ def close_position(state: PaperState, pos: Position, *, exit_price: float, reaso
         lifecycle_status=lifecycle_status,
         open_reason=pos.open_reason,
         snapshot_id=pos.snapshot_id,
+        open_dqs=pos.open_dqs,
+        open_risk_action=pos.open_risk_action,
     )
     state.recent_trades.append(trade)
+    # Signal attribution: kapanan trade'in karar izini kalıcı decision_log'a yaz
+    # (best-effort; lifecycle'ı kesmez).
+    decision_log.record_close(trade)
     state.open_positions = [p for p in state.open_positions if p.id != pos.id]
     state.realized_pnl_usd = round(state.realized_pnl_usd + trade.pnl_usd, 2)
     _ensure_daily_anchor(state)

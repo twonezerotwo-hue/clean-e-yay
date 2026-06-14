@@ -184,6 +184,8 @@ def post_paper_tick() -> dict:
             predicted_confidence=d.confidence,
             raw_confidence=d.raw_confidence,
             confidence_source=d.confidence_source,
+            open_dqs=snap.quality.score,
+            open_risk_action=d.risk.action,
         )
         if pos is not None:
             actions.append({**entry, "action": "open", "reason": d.reason})
