@@ -14,7 +14,7 @@ import hashlib
 from datetime import UTC, date, datetime, timedelta
 
 from packages.data.registry.loader import load_thresholds
-from packages.paper import audit
+from packages.paper import audit, sizing
 from packages.paper.guards import price_sanity, state_anomaly
 from packages.paper.state import PaperState, Position, Trade, utc_iso
 
@@ -77,7 +77,9 @@ def open_position(
 ) -> Position:
     sl_pct = _sl_pct_for(symbol)
     tp_pct = sl_pct * _tp_rr()
-    size = min(_max_pos_usd() * max(0.0, min(1.5, size_multiplier)), _max_pos_usd() * 1.5)
+    # Canonical sizing: deterministic multiplier → USD (no AI boost; capped). The
+    # multiplier passed in is already deterministic; sizing floors/caps it.
+    size = sizing.compute_size_usd(size_multiplier, max_position_usd=_max_pos_usd())
     opened_at = utc_iso()
     sl = entry_price * (1 - sl_pct) if side == "long" else entry_price * (1 + sl_pct)
     tp = entry_price * (1 + tp_pct) if side == "long" else entry_price * (1 - tp_pct)
