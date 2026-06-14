@@ -177,3 +177,59 @@ def test_generated_schema_ts_is_marked_generated() -> None:
     assert WEB_SCHEMA_TS.exists(), "Run `make codegen` to generate schema.ts"
     head = WEB_SCHEMA_TS.read_text(encoding="utf-8")[:300]
     assert "auto-generated" in head.lower(), "schema.ts must carry a generated marker"
+
+
+# ── No-AI-boost: AI/opinion/persona/learning size factors may only REDUCE ─────
+# (Phase 2c invariant made structural — AI must never increase position size.)
+
+PACKAGES = REPO / "packages"
+
+
+def test_no_size_factor_constant_above_one() -> None:
+    """SIZE_FACTOR_* constants must be restrictive-only (≤ 1.0) — blocks a boost
+    constant (e.g. SIZE_FACTOR_BOOST = 1.2) from being reintroduced."""
+    rx = re.compile(r"^\s*(SIZE_FACTOR_\w+)\s*=\s*([0-9]+(?:\.[0-9]+)?)", re.M)
+    offenders: list[str] = []
+    for path in _py_files(PACKAGES):
+        for name, val in rx.findall(path.read_text(encoding="utf-8")):
+            if float(val) > 1.0:
+                offenders.append(f"{path.relative_to(REPO)}: {name}={val}")
+    assert not offenders, (
+        "AI/learning size factors may only reduce (≤ 1.0). Boost constant(s): "
+        + ", ".join(offenders)
+    )
+
+
+def test_learning_size_factor_is_clamped_in_decision_engine() -> None:
+    """The mistake-memory factor must be applied clamped so a BOOST can't grow size."""
+    src = (PACKAGES / "decision" / "engine.py").read_text(encoding="utf-8")
+    assert "min(1.0, verdict.size_factor)" in src, (
+        "decision engine must clamp verdict.size_factor to ≤ 1.0"
+    )
+    assert re.search(r"size\s*\*=\s*verdict\.size_factor\b", src) is None, (
+        "unclamped `size *= verdict.size_factor` reintroduced — AI/learning may not boost"
+    )
+
+
+# An AI/opinion/persona/LLM term being multiplied into a size. "conviction" is
+# intentionally excluded — deterministic consensus conviction is allowed.
+_AI_MULT_TERM = re.compile(r"\*\s*[\w.]*(?:opinion|persona|llm|ai_mult)[\w.]*", re.I)
+
+
+def test_ai_opinion_multipliers_go_through_clamp() -> None:
+    """Any AI/opinion/persona/LLM multiplier applied to a value must be clamped via
+    clamp_ai_multiplier — there is no other sanctioned path for AI to affect size."""
+    offenders: list[str] = []
+    for path in _py_files(PACKAGES):
+        if path.name == "sizing.py":
+            continue  # defines clamp_ai_multiplier / apply_ai_opinion
+        for i, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+            stripped = line.strip()
+            if stripped.startswith("#"):
+                continue
+            if _AI_MULT_TERM.search(line) and "clamp_ai_multiplier" not in line:
+                offenders.append(f"{path.relative_to(REPO)}:{i}: {stripped}")
+    assert not offenders, (
+        "AI/opinion/persona multiplier applied without clamp_ai_multiplier:\n"
+        + "\n".join(offenders)
+    )
