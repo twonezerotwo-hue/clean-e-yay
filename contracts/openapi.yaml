@@ -326,6 +326,64 @@ paths:
                 type: object
                 description: Reset sonucu (additive).
 
+  /api/v1/paper-trading/maintenance/archive:
+    post:
+      operationId: postPaperTradingMaintenanceArchive
+      summary: Owner-admin — paper state'i arşivle (read-only kopya; mutasyon yok; paper-safe)
+      parameters:
+        - name: reason
+          in: query
+          required: false
+          schema: { type: string }
+      responses:
+        "200":
+          description: OK (MaintenanceResult; paper_safe/no_execution; additive)
+          content:
+            application/json:
+              schema:
+                type: object
+                description: Maintenance sonucu (archive; additive).
+
+  /api/v1/paper-trading/maintenance/repair:
+    post:
+      operationId: postPaperTradingMaintenanceRepair
+      summary: Owner-admin — paper state tutarsızlıklarını onar (dry_run varsayılan true)
+      parameters:
+        - name: dry_run
+          in: query
+          required: false
+          schema: { type: boolean, default: true }
+      responses:
+        "200":
+          description: OK (MaintenanceResult; dry_run ise yazım yok; non-dry-run önce arşivler)
+          content:
+            application/json:
+              schema:
+                type: object
+                description: Maintenance sonucu (repair; additive).
+
+  /api/v1/paper-trading/maintenance/reset:
+    post:
+      operationId: postPaperTradingMaintenanceReset
+      summary: Owner-admin — paper hesabı sıfırla (önce arşivler; learning/decision log korunur)
+      parameters:
+        - name: reason
+          in: query
+          required: false
+          schema: { type: string }
+        - name: preserve_learning
+          in: query
+          required: false
+          schema: { type: boolean, default: true }
+      responses:
+        "200":
+          description: OK (MaintenanceResult; arşiv + temiz initial state; broker yok)
+          content:
+            application/json:
+              schema:
+                type: object
+                description: Maintenance sonucu (reset; additive).
+
   /api/v1/replay/status:
     get:
       operationId: getReplayStatus

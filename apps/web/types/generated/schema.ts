@@ -412,6 +412,57 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/paper-trading/maintenance/archive": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Owner-admin — paper state'i arşivle (read-only kopya; mutasyon yok; paper-safe) */
+        post: operations["postPaperTradingMaintenanceArchive"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/paper-trading/maintenance/repair": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Owner-admin — paper state tutarsızlıklarını onar (dry_run varsayılan true) */
+        post: operations["postPaperTradingMaintenanceRepair"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/paper-trading/maintenance/reset": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Owner-admin — paper hesabı sıfırla (önce arşivler; learning/decision log korunur) */
+        post: operations["postPaperTradingMaintenanceReset"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/replay/status": {
         parameters: {
             query?: never;
@@ -2140,6 +2191,73 @@ export interface operations {
         requestBody?: never;
         responses: {
             /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
+                };
+            };
+        };
+    };
+    postPaperTradingMaintenanceArchive: {
+        parameters: {
+            query?: {
+                reason?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK (MaintenanceResult; paper_safe/no_execution; additive) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
+                };
+            };
+        };
+    };
+    postPaperTradingMaintenanceRepair: {
+        parameters: {
+            query?: {
+                dry_run?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK (MaintenanceResult; dry_run ise yazım yok; non-dry-run önce arşivler) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
+                };
+            };
+        };
+    };
+    postPaperTradingMaintenanceReset: {
+        parameters: {
+            query?: {
+                reason?: string;
+                preserve_learning?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK (MaintenanceResult; arşiv + temiz initial state; broker yok) */
             200: {
                 headers: {
                     [name: string]: unknown;

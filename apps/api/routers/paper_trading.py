@@ -9,7 +9,7 @@ from fastapi import APIRouter, HTTPException
 from packages.data.ingestion.pipeline import DEFAULT_SYMBOLS, get_cached_snapshot
 from packages.decision.engine import decide_matrix
 from packages.paper import audit as paper_audit
-from packages.paper import manual_queue
+from packages.paper import maintenance, manual_queue
 from packages.paper import state as paper_state
 from packages.paper.lifecycle import (
     attempt_open,
@@ -270,3 +270,26 @@ def reset() -> dict:
     paper_state.save(ps)
     paper_audit.record("STATE_REPAIRED", reason="manual_reset")
     return _serialize_state(ps)
+
+
+# ── Phase 2e — owner-admin maintenance (archive / repair / reset) ─────────────
+# Thin HTTP layer: all logic lives in packages/paper/maintenance.py. Paper-safe,
+# NO_EXECUTION — these never open/close/resize a trade and never touch a broker.
+
+
+@router.post("/paper-trading/maintenance/archive")
+def post_maintenance_archive(reason: str = "manual") -> dict:
+    """Owner-admin — arşivle: mevcut paper state'in zaman damgalı kopyası (mutasyon yok)."""
+    return maintenance.archive_state(reason).to_dict()
+
+
+@router.post("/paper-trading/maintenance/repair")
+def post_maintenance_repair(dry_run: bool = True) -> dict:
+    """Owner-admin — onar: dry_run=true rapor (yazım yok); false önce arşivler, sonra yazar."""
+    return maintenance.repair_state(dry_run=dry_run).to_dict()
+
+
+@router.post("/paper-trading/maintenance/reset")
+def post_maintenance_reset(reason: str = "owner_reset", preserve_learning: bool = True) -> dict:
+    """Owner-admin — sıfırla: önce arşivler, sonra temiz initial state (learning/decision log korunur)."""
+    return maintenance.reset_state(reason, preserve_learning=preserve_learning).to_dict()
