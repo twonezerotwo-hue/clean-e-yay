@@ -4,6 +4,30 @@ _Bu dosya kısa ve güncel tutulur. Her görev sonunda güncellenir._
 
 ## Last known status
 
+- **SOAK1 + FULL SYSTEM AUDIT tamamlandı** (2026-06-14): production-like local
+  dry-run + uçtan uca sistem denetimi. **Çalıştırma/gözlem/audit — KOD SIFIR DİFF**
+  (docs hariç). Stack izole portlarda (`API 8060` / `Web 3060`); eski `E_YAY CODEX`
+  LaunchAgent (`com.eyay.backend → *:8000`) tespit + **dokunulmadı**.
+  - **SOAK1** (~25 dk izlenen / ~28 dk uptime, 11 sample): snapshot_count **8→53**
+    (ring buffer cap 500), tick cycle **6→51**, **stale yok**, dqs **OK** sabit,
+    api/web http **200** sabit, halt persistent (seeded 2026-06-13). Loglarda **0
+    error/traceback**; tek tekrarlı uyarı `active halts` (beklenen). Disk 3.9M
+    (sınırlı). Smoke **8/8** ×2. learning one-shot startup seed (restart-always
+    değil; >1h için zamanlayıcı gerekir).
+  - **AUDIT** (13 başlık): Git `main`/HEAD `dfe6c0f`/origin sync/clean. Safety:
+    broker/exec grep **0**; `paper_safe`/`no_execution` yapısal `True`; replay
+    stored-only (refetch yok, paper açmaz); LLM explanatory-only (state-write 0,
+    injection guard); weights owner-gated; 1w paper kapalı. RiskGate: matrix
+    **20/20 hücre `risk_gate` KILL_SWITCH ile blocked** (global uniform, aday ham
+    sinyal korunur). Modül sınırları temiz (data↛decision/risk/paper, risk↛decision,
+    service↛apps.api, wildcard yok). Validation: pytest **419/419**, ruff/tsc
+    **clean**, next build **✓** (`/` 334 kB), contract+codegen drift **yeşil**.
+  - **Sonuç: release-ready. P0 yok · P1 yok · P2 = gözlem** (provider degraded
+    coingecko/fred [FRED_API_KEY yok + BTCUSD/ETHUSD veri yok, mock'a düşmez];
+    aktif halt taze baseline için owner reset ister; learning 7/24 scheduler;
+    eski LaunchAgent port çakışması). Backend FREEZE korundu.
+  - Commit: `docs(release): record full system audit results`.
+
 - **UX4 — Live Feedback Polish tamamlandı** (2026-06-14): canlı cockpit
   okunabilirlik cilası — yeni panel/veri yok, mevcut componentler sadeleştirildi.
   **Frontend-only**; backend FREEZE korundu (packages/ + apps/* SIFIR diff;

@@ -1,5 +1,36 @@
 # Agent Changelog
 
+## 2026-06-14 — SOAK1 + FULL SYSTEM AUDIT (no code change)
+- **Çalıştırma/gözlem/audit task'ı — kod SIFIR diff.** Production-like local stack
+  izole portlarda (`API 8060` / `Web 3060`) çalıştırıldı; eski `E_YAY CODEX`
+  LaunchAgent (`com.eyay.backend → *:8000`) tespit edildi, **dokunulmadı**.
+- **SOAK1 (~25 dk izlenen pencere, ~28 dk uptime):** 11 sample. snapshot_count
+  8→53 (ring buffer cap 500), tick cycle 6→51, **stale yok**, dqs **OK** sabit,
+  http api/web **200** sabit, halt persistent (seeded 2026-06-13 paper state).
+  Tüm loglarda (api/tick/learning/web) **0 error/traceback/exception**; tek
+  tekrarlı uyarı `active halts` (her cycle, beklenen gözlem). Disk 3.9M, sınırlı.
+  Smoke **8/8** (iki kez). learning_worker one-shot startup seed (restart-always
+  DEĞİL; >1h için zamanlayıcı gerekir).
+- **FULL SYSTEM AUDIT — 13 başlık yeşil:**
+  - Git: `main`, HEAD `dfe6c0f`, origin sync (0/0), working tree clean, local-only
+    commit yok, repo path doğru (`clean-e-yay`).
+  - Safety/PAPER_SAFE: broker/`place_order`/`ccxt` grep **0**; `paper_safe`/
+    `no_execution` yapısal `True` (`packages/ops/system_health.py`); replay
+    stored-only (`backtest.py` yalnızca `snapshot_store`, `_NO_EXEC`, refetch yok,
+    paper açmaz); LLM state-write **0** (explanatory-only, injection guard);
+    weights owner-approval gated; 1w paper execution kapalı (bias/scale-down).
+  - Decision/RiskGate: matrix 4 sym × 5 TF = 20 hücre, **20/20 `risk_gate` ile
+    blocked** (global KILL_SWITCH uniform), aday ham sinyal korunur, `suspended`.
+  - Modül sınırları: `data/` decision/risk/paper import etmez; `risk/` decision'a
+    bağımlı değil; service paketleri `apps.api` import etmez; wildcard import yok.
+  - Validation: pytest **419/419**, ruff **clean**, tsc **clean**, next build
+    **✓** (`/` 334 kB), contract+codegen drift testleri **yeşil**.
+- **Issues: P0 yok · P1 yok · P2 = gözlem** (provider degraded coingecko/fred —
+  FRED_API_KEY yok + BTCUSD/ETHUSD veri yok, mock'a düşmez/DQS OK; aktif halt
+  taze baseline için owner reset ister; learning 7/24 için scheduler; eski
+  `E_YAY CODEX` LaunchAgent port çakışması — kalıcı silme owner kararı).
+- Commit: `docs(release): record full system audit results` (yalnızca docs).
+
 ## 2026-06-14 — UX4 Live Feedback Polish
 - Canlı cockpit okunabilirlik cilası — yeni panel/veri/backend logic yok, mevcut
   componentler sadeleştirildi. **Frontend-only**; backend FREEZE korundu (packages/ +

@@ -1,108 +1,106 @@
 # TASK RESULT
 
 Date: 2026-06-14
-Task: UX4 — Live Feedback Polish
-Status: completed (frontend-only readability cilası; backend FREEZE korundu — packages/ + apps/* sıfır diff)
+Task: SOAK1 — Production Dry-run/Soak + FULL SYSTEM AUDIT
+Status: completed (çalıştırma + gözlem + uçtan uca denetim; **KOD SIFIR DİFF**, yalnızca docs)
 
-## WIP RECOVERY (önceki oturum nerede kalmıştı?)
+## ÖZET
 
-Önceki UX4 oturumu token/kredi bitince yarıda kaldı; WIP commit edilmemişti. Bu
-oturum baştan başlamadı — mevcut working-tree diff'i kurtardı, okudu, kaldığı
-yerden devam etti.
+Production-like local stack izole portlarda çalıştırıldı, ~25 dk soak izlendi ve
+13 başlıkta uçtan uca audit yapıldı. **Backend FREEZE korundu; PAPER_SAFE /
+NO_EXECUTION yapısal.** P0 yok, P1 yok; bulgular yalnızca beklenen P2 gözlemleri.
 
-- Kurtarılan WIP (commit edilmemiş, coherent): AgentBriefPanel hard-stop banner,
-  TimeframeMatrix `capList` + top-3 banner, NewsPanel ilk-6 + collapsed, Catalyst
-  expired/unknown muted, OptionsVol impact-first + **duplicate impact rozeti zaten
-  kaldırılmıştı** (önceki oturumun "yarım kaldı" sandığı edit aslında tamamlanmış).
-- Yarım kalan iş yoktu; eksik olan **henüz başlanmamış** parçalardı: Volatilite +
-  Kripto Türevleri impact-first ve Catalyst aktif/context-only ince ayarı.
-- Kurtarılan WIP `tsc --noEmit` temiz geçti (regresyon yok).
+## SOAK1 (production dry-run)
 
-## UX4 LIVE FEEDBACK POLISH SUMMARY (ne düzeldi?)
+- **Mode**: production-like local (`prod_up.sh`, supervised pid+log). API+web+tick
+  daemon background; learning_worker one-shot startup seed (restart-always DEĞİL).
+- **Ports (izole)**: API `127.0.0.1:8060`, Web `127.0.0.1:3060`.
+- **Duration**: ~25 dk izlenen pencere (11 sample @ ~150s) / ~28 dk stack uptime.
+- **Trajectory**: snapshot_count **8 → 53** (ring buffer cap `SNAPSHOT_STORE_MAX=500`),
+  tick cycle **6 → 51**, **stale hiç olmadı**, dqs **OK** sabit, api/web http **200**
+  sabit, tüm proclar up.
+- **Logs**: api/tick/learning/web → **0 error/traceback/exception**. Tek tekrarlı
+  uyarı: `WARNING tick_worker active halts` (her cycle; beklenen gözlem, fault değil).
+- **Disk**: `data/runtime/` 3.9M (52 snapshot, cap 500) — sınırlı, anormal büyüme yok.
+- **Smoke**: 8/8 PASS (başlangıç + final).
+- **Halt**: DAILY_LOSS (KILL_SWITCH) + MAX_DRAWDOWN — **seeded 2026-06-13 paper
+  state** kaynaklı (equity 126.893 / peak 153.171 → DD %17.9 ≥ %8; daily pnl −26.278
+  ≤ −2.538). Güvenlik sisteminin doğru çalıştığının kanıtı, crash değil.
 
-Canlı cockpit daha okunur — yeni panel/veri/backend logic yok, mevcut componentler
-sadeleştirildi. Frontend hesap yapmaz; selector/brief korundu.
+## FULL SYSTEM AUDIT (13 başlık)
 
-- **Market structure impact-first** (OptionsVol · Volatilite · Kripto Türevleri):
-  kartın en üstünde tek belirgin "karar etkisi: …" satırı; teknik sayılar (ATM IV,
-  realized vol, funding/OI, 25Δ skew, term) altta + daha küçük (white/60). Alttaki
-  **duplicate impact rozeti kaldırıldı** (3 panelde de tek sefer görünür).
-- **TimeframeMatrix**: market-structure banner özetleri `capList` ile ilk 3 en
-  önemli etki + "+K" (detay expert panelde); global gate'te hücreler gate yazısını
-  tekrar etmez — üstte tek banner (UX1 davranışı korundu, hücrelerde ham aday skoru).
-- **News**: ilk 6 başlık görünür, kalanlar `<details>` altında collapsed; ham haber
-  Macro/Catalyst expert grubunda kalır; uzun başlık `break-words` (layout bozulmaz).
-- **Catalyst**: expired / unknown / context-only (rumor unverified dahil) muted
-  (opacity-50, yalnızca bağlam); aktif CAUTION / NO_POSITION_INCREASE sol kenar
-  renkli vurguyla (orange / signal-down) daha belirgin.
-- **AgentBrief**: hard-stop (HALT / DQS_BLOCKED / PROVIDER_DOWN) ilk ekranda
-  yüksek-görünür ⛔ kırmızı banner ("YENİ İŞLEM YOK — {main_blocker.label}" + detail);
-  soft RISK_GATE ise ⚠ magenta. Banner yalnızca `!can_act && code != NONE` iken.
-  `main_blocker` backend cockpit'ten gelir (KILL_SWITCH/DAILY_LOSS backend'de HALT
-  koduna düşer; frontend kontratında ayrı kod yok — hesap yapılmadı).
+1. **Git/CI**: `main`, HEAD `dfe6c0f`, origin/main sync (0 ahead / 0 behind),
+   working tree clean, local-only commit yok, repo path doğru (`clean-e-yay`).
+2. **Architecture**: planlanan Data→DQS→Consensus/Decision→RiskGate→Paper→Learning→
+   Replay/LLM korunuyor. `packages/ops` (worker health) dokümante geç ekleme.
+   decision 1209 LOC — şişkin değil.
+3. **Safety/PAPER_SAFE**: broker/`place_order`/`submit_order`/`ccxt` grep **0**;
+   `paper_safe`/`no_execution` yapısal `True` (`packages/ops/system_health.py:163`);
+   replay stored-only (`backtest.py` yalnızca `snapshot_store`; `_NO_EXEC`; refetch
+   yok, paper açmaz, RiskGate bypass yok); LLM state-write **0** (explanatory-only +
+   injection guard `agent/llm/guard.py`); weights owner-approval gated
+   (`rebalance_store.approve_current`); 1w paper execution kapalı (bias/scale-down).
+4. **Data/Providers/DQS**: 13 provider — 10 ok / 2 degraded / 0 down / 1 unknown.
+   degraded = `coingecko` (BTCUSD/ETHUSD veri yok) + `fred` (FRED_API_KEY yok →
+   US10Y BLOCKED). **mock_mode=false** → eksik veri "veri yok"/DATA_UNAVAILABLE,
+   uydurulmaz. DQS score 76.2 **OK** (graceful fallback). Mode label `SIMULATION`.
+5. **Decision/RiskGate/Matrix**: 4 sym × 5 TF = **20 hücre, 20/20 `risk_gate`
+   KILL_SWITCH ile blocked** (global uniform), aday ham sinyal korunur, `suspended`,
+   regime NEUTRAL. cockpit `status=FROZEN`, `can_act=false`, 6 candidate izleniyor.
+6. **Paper lifecycle**: open_positions 0, recent_trades 9, audit jsonl yazılıyor,
+   corrupt-state guard (schema_version + eksik alan default). Halt → yeni giriş yok.
+7. **Learning**: outcomes 9, calibration INSUFFICIENT (n=5 < min 10) → proposal 0
+   (insufficient guard çalışıyor); owner approval olmadan active weight değişmez;
+   empty data'da crash yok (NO_DATA path).
+8. **Replay/Backtest**: `replay/status` mode `active_snapshot_replay`, snapshot_count
+   53, "yeni karar hesaplanmaz, live provider çağrılmaz, rolling backtest motoru
+   AKTİF DEĞİL — sahte performans üretilmez". Look-ahead/refetch yok.
+9. **Workers/7-24**: tick heartbeat fresh (stale yok), learning one-shot age ~1753s
+   (< 3600s eşik; >1h için scheduler şart). `/system/health` warnings = provider_
+   degraded + active_halt (rapor, alarm değil).
+10. **Deployment/DevOps**: `make dev/smoke/workers/prod-{up,down,status,smoke}` var;
+    port-conflict açık rapor + eski LaunchAgent tespiti; learning restart-always değil;
+    log `data/runtime/logs/`, pid `data/runtime/run/`, runtime gitignored; certifi SSL.
+11. **Frontend/UX**: 36 panel (AgentBrief/Decision/AIReport/TimeframeMatrix/RiskGate/
+    PaperAction…) + HeroScene; SSR 200, `PAPER_ONLY`×2 / `NO_EXECUTION`×3 / "Agent
+    FROZEN" hard-stop banner görünür. UX2/3/4 IA + impact-first + collapsed expert.
+12. **Contract/OpenAPI/TS**: openapi 25 endpoint; generated `api.ts`; `test_codegen_
+    drift.py` + `test_openapi_contract.py` pytest içinde **yeşil** (drift yok).
+13. **Validation**: pytest **419/419** (91s), ruff **clean**, tsc **clean**, next
+    build **✓** (`/` 241 kB / 334 kB First Load), smoke **8/8** ×2, live endpoints 200.
 
-## ZATEN TEMİZDİ (dokunulmadı)
+## ISSUES
 
-- **#7 copy**: AIReportPanel + DecisionPanel zaten tek `main_blocker` kullanıyor
-  (UX1/UX2). Stale "DQS BLOCKED veya risk gate" copy repo'da hiç yok (grep 0). DQS OK
-  + hard-stop iken ana sebep backend cockpit önceliğinden gelir.
-- **#8 learning**: LearningPanel insufficient tek satır ("Learning inactive —
-  insufficient verified closed trades (n/min)") + muted metrik + "—" değerler →
-  UX1'de temizdi, dokunulmadı.
-
-## FILES CHANGED
-
-- `apps/web/components/panels/OptionsVolPanel/index.tsx` — impact-first + duplicate
-  rozet kaldırıldı (WIP'ten).
-- `apps/web/components/panels/VolatilityPanel/index.tsx` — impact-first; impact
-  meta satırından üstte belirgin satıra taşındı.
-- `apps/web/components/panels/CryptoDerivativesPanel/index.tsx` — impact-first +
-  alttaki duplicate impact rozeti kaldırıldı.
-- `apps/web/components/panels/CatalystImpactPanel/index.tsx` — context-only/rumor
-  muted; aktif CAUTION/NO_POS sol kenar vurgu.
-- `apps/web/components/panels/TimeframeMatrixPanel/index.tsx` — `capList` top-3
-  banner (WIP'ten).
-- `apps/web/components/panels/NewsPanel/index.tsx` — ilk-6 + collapsed details
-  (WIP'ten).
-- `apps/web/components/panels/AgentBriefPanel/index.tsx` — hard-stop banner (WIP'ten).
-- docs/CURRENT_STATE.md · .tasks/{TASK_RESULT,CHANGELOG_AGENT,NEXT_TASK}.md
-
-## READABILITY GUARANTEES
-
-- KILL_SWITCH/HALT clear: AgentBrief ⛔ banner ilk ekranda; yeni giriş yok net.
-- no vague DQS/risk copy: "DQS BLOCKED veya risk gate" repo'da yok (grep 0).
-- matrix not repetitive: global gate tek banner; hücreler gate'i tekrarlamaz; banner
-  özetleri ilk 3 + "+K".
-- raw news reduced: ilk 6 görünür, kalanı collapsed; ham haber expert'te.
-- expired catalysts muted: expired/unknown/context-only opacity-50; aktif belirgin.
-- market structure impact-first: 3 panelde "karar etkisi" üstte, sayılar altta.
-- expert groups preserved: `<details>` collapsed; grup başlıkları korundu.
-- PAPER_ONLY visible: PAPER_ONLY + NO_EXECUTION SSR'da görünür; HeroScene canvas korundu.
-
-## VALIDATION
-
-- **tsc**: `pnpm exec tsc --noEmit` temiz (exit 0, 0 satır).
-- **build**: `pnpm build` (`next build`) ✓ — Compiled successfully, lint+type ✓,
-  4/4 static page prerender, `/` 334 kB First Load.
-- **SSR smoke**: prerendered HTML + live (izole `next start -p 3100`) → HTTP **200**;
-  AgentBrief görünür; expert `<details>` collapsed; grup başlıkları (Karar/Risk/
-  Uzman) görünür; PAPER_ONLY + NO_EXECUTION görünür; HeroScene `<canvas>` korundu;
-  stale "veya risk gate" copy 0; "karar etkisi" client bundle'da (page-*.js).
-- Backend testleri çalıştırılmadı (gerekmez — backend dosyası değişmedi).
+- **P0**: yok.
+- **P1**: yok.
+- **P2 (gözlem, defect değil)**:
+  - Provider degraded `coingecko`+`fred`: FRED_API_KEY yok → US10Y BLOCKED; coingecko
+    BTCUSD/ETHUSD veri yok (rate-limit/SSL muhtemel). mock'a düşmez, DQS OK. Daha tam
+    live veri için `FRED_API_KEY` set + coingecko erişimi incele.
+  - Aktif halt seeded state'ten persist; taze soak baseline için owner reset
+    (`/api/v1/risk/halts/reset` + `/api/v1/paper-trading/reset`). MAX_DRAWDOWN manuel
+    reset by design; daily anchor 2026-06-13 (yeni gün tick'inde döner).
+  - learning_worker one-shot — 7/24'te >1h sonra `learning_worker_no_data` stale
+    uyarısı çıkar; cron/launchd timer ile zamanla (README'de dokümante).
+  - Bu makinede eski `E_YAY CODEX` LaunchAgent (`com.eyay.backend → *:8000`) +
+    ayrı bir Clean E-yAy instance (127.0.0.1:8000 / next :3000) zaten çalışıyor;
+    kalıcı kaldırma owner kararı.
 
 ## BACKEND FREEZE CHECK
 
-- backend files changed: **no** (yalnızca apps/web/components/panels/*.tsx + docs).
+- backend files changed: **no** (packages/ + apps/api + worker SIFIR diff).
 - trading logic changed: **no**.
-- RiskGate changed: **no** (DQS/KillSwitch/halt/paper/learning/replay sıfır diff;
-  openapi/TS şeması değişmedi → codegen drift otomatik yeşil).
-- PAPER_SAFE intact: **yes** (PAPER_ONLY/NO_EXECUTION rozetleri korundu).
+- RiskGate/DQS/KillSwitch/halt changed: **no**.
+- paper/learning/replay changed: **no**.
+- files changed: **yalnızca docs** (`docs/CURRENT_STATE.md`, `.tasks/TASK_RESULT.md`,
+  `.tasks/CHANGELOG_AGENT.md`, `.tasks/NEXT_TASK.md`).
 
 ## NEXT
 
-- Öneri: **production dry-run / soak test** VEYA **UX5 after real user feedback**
-  VEYA **P0 hotfix only mode**. `.tasks/NEXT_TASK.md` güncellendi.
+- Öneri: **UX5 after real user feedback** VEYA **P0 hotfix only mode** VEYA **longer
+  soak / overnight run** (owner halt reset sonrası taze paper baseline ile, learning
+  scheduler bağlı). `.tasks/NEXT_TASK.md` güncellendi.
 
 ## COMMITS
 
-- `feat(web): polish live dashboard readability`
+- `docs(release): record full system audit results` (docs-only).
