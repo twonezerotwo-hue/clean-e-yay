@@ -15,7 +15,7 @@ from datetime import UTC, date, datetime, timedelta
 
 from packages.data.registry.loader import load_thresholds
 from packages.learning import decision_log
-from packages.paper import audit, sizing
+from packages.paper import audit, execution_sim, sizing
 from packages.paper.guards import price_sanity, state_anomaly
 from packages.paper.state import PaperState, Position, Trade, utc_iso
 
@@ -254,11 +254,8 @@ def attempt_open(
 
 
 def close_position(state: PaperState, pos: Position, *, exit_price: float, reason: str) -> Trade:
-    pnl = pos.unrealized_pnl_usd if pos.current_price == exit_price else (
-        (exit_price - pos.entry_price) / pos.entry_price * pos.size_usd
-        if pos.side == "long"
-        else (pos.entry_price - exit_price) / pos.entry_price * pos.size_usd
-    )
+    # Realized fill P&L — formalized in execution_sim (no broker; paper fill math).
+    pnl = execution_sim.realized_pnl(pos.side, pos.entry_price, exit_price, pos.size_usd)
     lifecycle_status = "FORCE_CLOSED" if reason in _FORCE_CLOSE_REASONS else "CLOSED"
     trade = Trade(
         id=pos.id,
@@ -385,18 +382,15 @@ def tick(
                 )
             continue
         pos.current_price = price
-        # SL/TP kontrol
-        if pos.sl is not None and (
-            (pos.side == "long" and price <= pos.sl)
-            or (pos.side == "short" and price >= pos.sl)
-        ):
-            closed.append(close_position(state, pos, exit_price=price, reason="SL_HIT"))
-            continue
-        if pos.tp is not None and (
-            (pos.side == "long" and price >= pos.tp)
-            or (pos.side == "short" and price <= pos.tp)
-        ):
-            closed.append(close_position(state, pos, exit_price=price, reason="TP_HIT"))
+        # SL/TP kontrol — formalized fill simulation (fill at observed tick price).
+        fill = execution_sim.simulate_exit_fill(
+            side=pos.side, entry_price=pos.entry_price, sl=pos.sl, tp=pos.tp,
+            size_usd=pos.size_usd, price=price,
+        )
+        if fill is not None:
+            closed.append(
+                close_position(state, pos, exit_price=fill.fill_price, reason=fill.reason)
+            )
             continue
         if due:
             # Fiyat geldi → bekleyen time-stop'u şimdi kapat (EXPIRED→CLOSED).

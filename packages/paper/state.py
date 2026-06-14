@@ -14,7 +14,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from packages.data.registry.loader import load_thresholds
-from packages.paper import audit
+from packages.paper import audit, execution_sim
 
 SCHEMA_VERSION = 1
 
@@ -68,9 +68,10 @@ class Position:
 
     @property
     def unrealized_pnl_usd(self) -> float:
-        if self.side == "long":
-            return (self.current_price - self.entry_price) / self.entry_price * self.size_usd
-        return (self.entry_price - self.current_price) / self.entry_price * self.size_usd
+        # Mark-to-market is formalized in execution_sim (single source of paper P&L).
+        return execution_sim.unrealized_pnl(
+            self.side, self.entry_price, self.current_price, self.size_usd
+        )
 
 
 @dataclass
