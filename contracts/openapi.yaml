@@ -465,6 +465,35 @@ paths:
         "404":
           description: snapshot store'da yok (not_found)
 
+  /api/v1/market-sessions/current:
+    get:
+      operationId: getMarketSessionsCurrent
+      summary: Global market-session statuses (open/opening/closing) — read-only, paper-safe
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MarketSessionsCurrentResponse"
+
+  /api/v1/market-sessions/asset/{asset_code}:
+    get:
+      operationId: getMarketSessionAsset
+      summary: Per-asset session context + restrictive gate decision — read-only, paper-safe
+      parameters:
+        - name: asset_code
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MarketSessionAssetResponse"
+
 components:
   schemas:
     Health:
@@ -2155,3 +2184,107 @@ components:
         coverage:
           type: object
           additionalProperties: true
+
+    # ── Market sessions (read-only, paper-safe) — backend owns session meaning ──
+    MarketSessionStatusView:
+      type: object
+      description: >
+        One market's session status at generated_at. Backend-derived (timezone /
+        DST / holidays); the frontend renders these fields and computes nothing.
+      required:
+        [market_id, label, exchange, timezone, is_open, session_phase,
+         liquidity_tone, volatility_window, holiday_verified, diagnostics]
+      properties:
+        market_id: { type: string }
+        label: { type: string }
+        exchange: { type: string }
+        timezone: { type: string }
+        is_open: { type: boolean }
+        is_holiday: { type: boolean, nullable: true }
+        open_time_utc: { type: string, format: date-time, nullable: true }
+        close_time_utc: { type: string, format: date-time, nullable: true }
+        minutes_to_open: { type: integer, nullable: true }
+        minutes_to_close: { type: integer, nullable: true }
+        session_phase:
+          type: string
+          enum: [closed, pre_open, opening_window, mid_session, closing_window, after_close, unknown]
+        liquidity_tone:
+          type: string
+          enum: [high, normal, thin, closed, unknown]
+        volatility_window: { type: boolean }
+        holiday_verified:
+          type: boolean
+          description: false → holidays/early-closes unverified (calendar lib absent); see diagnostics.
+        diagnostics:
+          type: array
+          items: { type: string }
+
+    AssetSessionContextView:
+      type: object
+      required:
+        [asset_code, relevant_markets, any_relevant_market_open, session_risk,
+         reason, diagnostics]
+      properties:
+        asset_code: { type: string }
+        relevant_markets:
+          type: array
+          items: { $ref: "#/components/schemas/MarketSessionStatusView" }
+        any_relevant_market_open: { type: boolean }
+        primary_market_open: { type: boolean, nullable: true }
+        session_risk:
+          type: string
+          enum: [normal, caution, manual_review, block, unknown]
+        reason: { type: string }
+        diagnostics:
+          type: array
+          items: { type: string }
+
+    MarketSessionDecisionView:
+      type: object
+      description: >
+        Restrictive session gate decision. size_multiplier is always ≤ 1.0 —
+        market sessions can only reduce size, never boost. RiskGate stays final.
+      required: [action, size_multiplier, reason, evidence, diagnostics]
+      properties:
+        action:
+          type: string
+          enum: [allow, caution, manual_ready, block]
+        size_multiplier: { type: number }
+        reason: { type: string }
+        reason_code: { type: string, nullable: true }
+        evidence:
+          type: array
+          items: { type: string }
+        diagnostics:
+          type: array
+          items: { type: string }
+
+    MarketSessionsCurrentResponse:
+      type: object
+      required: [generated_at, markets, diagnostics, paper_safe, no_execution]
+      properties:
+        generated_at: { type: string, format: date-time }
+        markets:
+          type: array
+          items: { $ref: "#/components/schemas/MarketSessionStatusView" }
+        diagnostics:
+          type: array
+          items: { type: string }
+        paper_safe: { type: boolean }
+        no_execution: { type: boolean }
+
+    MarketSessionAssetResponse:
+      type: object
+      required:
+        [generated_at, asset_code, asset_context, decision, diagnostics,
+         paper_safe, no_execution]
+      properties:
+        generated_at: { type: string, format: date-time }
+        asset_code: { type: string }
+        asset_context: { $ref: "#/components/schemas/AssetSessionContextView" }
+        decision: { $ref: "#/components/schemas/MarketSessionDecisionView" }
+        diagnostics:
+          type: array
+          items: { type: string }
+        paper_safe: { type: boolean }
+        no_execution: { type: boolean }

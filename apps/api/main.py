@@ -21,6 +21,7 @@ from apps.api.routers import (
     decision,
     health,
     learning,
+    market_sessions,
     paper_trading,
     rebalance,
     regime_report,
@@ -71,6 +72,7 @@ def create_app() -> FastAPI:
     app.include_router(ai_report.router, prefix=prefix)
     app.include_router(chat.router, prefix=prefix)
     app.include_router(paper_trading.router, prefix=prefix)
+    app.include_router(market_sessions.router, prefix=prefix)
     app.include_router(learning.router, prefix=prefix)
     app.include_router(data.router, prefix=prefix)
     app.include_router(decision.router, prefix=prefix)

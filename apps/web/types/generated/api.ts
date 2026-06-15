@@ -1138,3 +1138,76 @@ export type CockpitBrief = {
   agent_brief: AgentBrief;
   decision_trace: DecisionTrace;
 };
+
+// ── Market sessions (read-only, paper-safe) — backend owns session meaning ────
+export type SessionPhase =
+  | "closed"
+  | "pre_open"
+  | "opening_window"
+  | "mid_session"
+  | "closing_window"
+  | "after_close"
+  | "unknown";
+export type LiquidityTone = "high" | "normal" | "thin" | "closed" | "unknown";
+export type SessionRisk =
+  | "normal"
+  | "caution"
+  | "manual_review"
+  | "block"
+  | "unknown";
+export type SessionAction = "allow" | "caution" | "manual_ready" | "block";
+
+export type MarketSessionStatusView = {
+  market_id: string;
+  label: string;
+  exchange: string;
+  timezone: string;
+  is_open: boolean;
+  is_holiday?: boolean | null;
+  open_time_utc?: string | null;
+  close_time_utc?: string | null;
+  minutes_to_open?: number | null;
+  minutes_to_close?: number | null;
+  session_phase: SessionPhase;
+  liquidity_tone: LiquidityTone;
+  volatility_window: boolean;
+  holiday_verified: boolean;
+  diagnostics: string[];
+};
+
+export type AssetSessionContextView = {
+  asset_code: string;
+  relevant_markets: MarketSessionStatusView[];
+  any_relevant_market_open: boolean;
+  primary_market_open?: boolean | null;
+  session_risk: SessionRisk;
+  reason: string;
+  diagnostics: string[];
+};
+
+export type MarketSessionDecisionView = {
+  action: SessionAction;
+  size_multiplier: number;
+  reason: string;
+  reason_code?: string | null;
+  evidence: string[];
+  diagnostics: string[];
+};
+
+export type MarketSessionsCurrentResponse = {
+  generated_at: string;
+  markets: MarketSessionStatusView[];
+  diagnostics: string[];
+  paper_safe: boolean;
+  no_execution: boolean;
+};
+
+export type MarketSessionAssetResponse = {
+  generated_at: string;
+  asset_code: string;
+  asset_context: AssetSessionContextView;
+  decision: MarketSessionDecisionView;
+  diagnostics: string[];
+  paper_safe: boolean;
+  no_execution: boolean;
+};

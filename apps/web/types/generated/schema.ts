@@ -548,6 +548,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/market-sessions/current": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Global market-session statuses (open/opening/closing) — read-only, paper-safe */
+        get: operations["getMarketSessionsCurrent"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/market-sessions/asset/{asset_code}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Per-asset session context + restrictive gate decision — read-only, paper-safe */
+        get: operations["getMarketSessionAsset"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -1720,6 +1754,67 @@ export interface components {
                 [key: string]: unknown;
             };
         };
+        /** @description One market's session status at generated_at. Backend-derived (timezone / DST / holidays); the frontend renders these fields and computes nothing. */
+        MarketSessionStatusView: {
+            market_id: string;
+            label: string;
+            exchange: string;
+            timezone: string;
+            is_open: boolean;
+            is_holiday?: boolean | null;
+            /** Format: date-time */
+            open_time_utc?: string | null;
+            /** Format: date-time */
+            close_time_utc?: string | null;
+            minutes_to_open?: number | null;
+            minutes_to_close?: number | null;
+            /** @enum {string} */
+            session_phase: "closed" | "pre_open" | "opening_window" | "mid_session" | "closing_window" | "after_close" | "unknown";
+            /** @enum {string} */
+            liquidity_tone: "high" | "normal" | "thin" | "closed" | "unknown";
+            volatility_window: boolean;
+            /** @description false → holidays/early-closes unverified (calendar lib absent); see diagnostics. */
+            holiday_verified: boolean;
+            diagnostics: string[];
+        };
+        AssetSessionContextView: {
+            asset_code: string;
+            relevant_markets: components["schemas"]["MarketSessionStatusView"][];
+            any_relevant_market_open: boolean;
+            primary_market_open?: boolean | null;
+            /** @enum {string} */
+            session_risk: "normal" | "caution" | "manual_review" | "block" | "unknown";
+            reason: string;
+            diagnostics: string[];
+        };
+        /** @description Restrictive session gate decision. size_multiplier is always ≤ 1.0 — market sessions can only reduce size, never boost. RiskGate stays final. */
+        MarketSessionDecisionView: {
+            /** @enum {string} */
+            action: "allow" | "caution" | "manual_ready" | "block";
+            size_multiplier: number;
+            reason: string;
+            reason_code?: string | null;
+            evidence: string[];
+            diagnostics: string[];
+        };
+        MarketSessionsCurrentResponse: {
+            /** Format: date-time */
+            generated_at: string;
+            markets: components["schemas"]["MarketSessionStatusView"][];
+            diagnostics: string[];
+            paper_safe: boolean;
+            no_execution: boolean;
+        };
+        MarketSessionAssetResponse: {
+            /** Format: date-time */
+            generated_at: string;
+            asset_code: string;
+            asset_context: components["schemas"]["AssetSessionContextView"];
+            decision: components["schemas"]["MarketSessionDecisionView"];
+            diagnostics: string[];
+            paper_safe: boolean;
+            no_execution: boolean;
+        };
     };
     responses: never;
     parameters: never;
@@ -2431,6 +2526,48 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+        };
+    };
+    getMarketSessionsCurrent: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MarketSessionsCurrentResponse"];
+                };
+            };
+        };
+    };
+    getMarketSessionAsset: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                asset_code: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MarketSessionAssetResponse"];
+                };
             };
         };
     };
