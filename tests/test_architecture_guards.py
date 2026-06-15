@@ -351,3 +351,85 @@ def test_no_frontend_decision_math() -> None:
         "Frontend decision math found — panels/selectors must render backend "
         "fields, not reconstruct PnL/risk/DQS/sizing:\n" + "\n".join(offenders)
     )
+
+
+# ── Market sessions: pure context, restrictive-only, read-only panel ──────────
+# packages/market_sessions is decision-support: it derives session context from
+# config + calendar + stdlib zoneinfo. It must not reach into the paper engine /
+# RiskGate / a broker / the network, may only RESTRICT size (≤ 1.0), and its
+# dashboard panel must stay read-only (no trade actions, no client-side session
+# computation).
+
+MARKET_SESSIONS = REPO / "packages" / "market_sessions"
+MARKET_SESSIONS_PANEL = (
+    REPO / "apps" / "web" / "components" / "panels" / "MarketSessionsPanel" / "index.tsx"
+)
+
+_MS_FORBIDDEN_IMPORT = re.compile(
+    r"^\s*(?:from|import)\s+"
+    r"(packages\.paper|packages\.risk|packages\.decision"
+    r"|requests|httpx|urllib|aiohttp|socket|ccxt|websocket)\b",
+    re.M,
+)
+_MS_FORBIDDEN_CALL = re.compile(
+    r"\b(attempt_open|open_position|close_position|route_to_manual_ready)\s*\("
+)
+
+
+def test_market_sessions_engine_is_pure() -> None:
+    """packages/market_sessions derives context only — no paper/risk/broker/network
+    imports and no paper open/close calls (it must never trade or duplicate RiskGate)."""
+    offenders: list[str] = []
+    for path in _py_files(MARKET_SESSIONS):
+        text = path.read_text(encoding="utf-8")
+        for m in _MS_FORBIDDEN_IMPORT.finditer(text):
+            offenders.append(f"{path.relative_to(REPO)}: forbidden import {m.group(1)}")
+        for m in _MS_FORBIDDEN_CALL.finditer(text):
+            offenders.append(f"{path.relative_to(REPO)}: forbidden call {m.group(1)}()")
+    assert not offenders, (
+        "packages/market_sessions must stay pure (no paper/risk/broker/network "
+        "imports, no paper open/close):\n" + "\n".join(offenders)
+    )
+
+
+def test_market_session_size_multiplier_clamped() -> None:
+    """Market sessions may only reduce size — no size_multiplier literal above 1.0,
+    and the engine clamps via min(1.0, ...)."""
+    rx = re.compile(r"size_multiplier\s*=\s*([0-9]+(?:\.[0-9]+)?)\b")
+    offenders: list[str] = []
+    for path in _py_files(MARKET_SESSIONS):
+        for val in rx.findall(path.read_text(encoding="utf-8")):
+            if float(val) > 1.0:
+                offenders.append(f"{path.relative_to(REPO)}: size_multiplier={val}")
+    assert not offenders, (
+        "market-session size_multiplier literal > 1.0 (sessions may only restrict): "
+        + ", ".join(offenders)
+    )
+    engine_src = (MARKET_SESSIONS / "engine.py").read_text(encoding="utf-8")
+    assert "min(1.0," in engine_src, "engine must clamp size_multiplier via min(1.0, ...)"
+
+
+_PANEL_TRADE_ACTION = re.compile(r"<button|onClick|onSubmit")
+_PANEL_TIME_MATH = re.compile(
+    r"\bnew\s+Date\b|\bDate\.now\b|getTimezoneOffset|toLocale|Intl\.DateTimeFormat"
+)
+# Imports are checked on RAW source (paths live in string literals, which the
+# code-only stripper blanks).
+_PANEL_FORBIDDEN_IMPORT = re.compile(
+    r"""from\s+["'][^"']*(packages|/paper|/risk|/decision)[^"']*["']"""
+)
+
+
+def test_market_sessions_panel_is_read_only() -> None:
+    """The dashboard Market Sessions panel renders backend status only — no trade
+    actions, no client-side session/time computation, no paper/risk/decision imports."""
+    raw = MARKET_SESSIONS_PANEL.read_text(encoding="utf-8")
+    code = _ts_code_only(raw)
+    problems: list[str] = []
+    if _PANEL_TRADE_ACTION.search(code):
+        problems.append("contains a trade-action control (<button / onClick)")
+    if _PANEL_TIME_MATH.search(code):
+        problems.append("computes session/time client-side (Date / timezone / locale)")
+    if _PANEL_FORBIDDEN_IMPORT.search(raw):
+        problems.append("imports paper/risk/decision logic")
+    assert not problems, "MarketSessionsPanel must be read-only: " + "; ".join(problems)
