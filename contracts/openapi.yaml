@@ -2586,3 +2586,33 @@ components:
           type: array
           items: { type: string }
         ts: { type: string, format: date-time }
+
+    # ── T2 — AgentDecision (deterministic action; RiskGate stays final) ───────
+    AgentDecision:
+      type: object
+      description: >
+        Deterministic high-level decision bridging consensus evidence to one action
+        + entry timeframe. Never opens trades; risk_gate_required is always true;
+        upper TF only scales down (size_multiplier ≤ 1.0); 1w yields bias only.
+      required: [asset, action]
+      properties:
+        asset: { type: string }
+        action:
+          type: string
+          enum: [NO_TRADE, WATCH, SCOUT_ALLOWED, CONFIRMATION_REQUIRED, RISK_REDUCE, KILL_SWITCH]
+        entry_timeframe: { type: string, enum: ["15m", "1h", "4h", "1d", "1w"], nullable: true }
+        size_multiplier: { type: number }
+        confidence: { type: number }
+        reason: { type: string }
+        supporting_agents:
+          type: array
+          items: { type: string }
+        blocking_agents:
+          type: array
+          items: { type: string }
+        required_confirmations:
+          type: array
+          items: { type: string }
+        manual_ready_required: { type: boolean }
+        risk_gate_required: { type: boolean }
+        ts: { type: string, format: date-time }

@@ -1413,3 +1413,27 @@ export type ConsensusSnapshot = {
   evidence?: string[];
   ts?: string;
 };
+
+// ── T2 — AgentDecision (deterministic action; RiskGate stays final) ───────────
+export type DecisionAction =
+  | "NO_TRADE"
+  | "WATCH"
+  | "SCOUT_ALLOWED"
+  | "CONFIRMATION_REQUIRED"
+  | "RISK_REDUCE"
+  | "KILL_SWITCH";
+
+export type AgentDecision = {
+  asset: string;
+  action: DecisionAction;
+  entry_timeframe?: Timeframe | null;
+  size_multiplier?: number;
+  confidence?: number;
+  reason?: string;
+  supporting_agents?: string[];
+  blocking_agents?: string[];
+  required_confirmations?: string[];
+  manual_ready_required?: boolean;
+  risk_gate_required?: boolean;
+  ts?: string;
+};

@@ -2017,6 +2017,24 @@ export interface components {
             /** Format: date-time */
             ts?: string;
         };
+        /** @description Deterministic high-level decision bridging consensus evidence to one action + entry timeframe. Never opens trades; risk_gate_required is always true; upper TF only scales down (size_multiplier ≤ 1.0); 1w yields bias only. */
+        AgentDecision: {
+            asset: string;
+            /** @enum {string} */
+            action: "NO_TRADE" | "WATCH" | "SCOUT_ALLOWED" | "CONFIRMATION_REQUIRED" | "RISK_REDUCE" | "KILL_SWITCH";
+            /** @enum {string|null} */
+            entry_timeframe?: "15m" | "1h" | "4h" | "1d" | "1w" | null;
+            size_multiplier?: number;
+            confidence?: number;
+            reason?: string;
+            supporting_agents?: string[];
+            blocking_agents?: string[];
+            required_confirmations?: string[];
+            manual_ready_required?: boolean;
+            risk_gate_required?: boolean;
+            /** Format: date-time */
+            ts?: string;
+        };
     };
     responses: never;
     parameters: never;
