@@ -471,11 +471,9 @@ export type LivePrice = {
   fallback: boolean;
 };
 
-export type SnapshotMode = {
-  mock_mode: boolean;
-  mock_warning: boolean;
-  test_mock: boolean;
-};
+// SnapshotMode (mock_mode/mock_warning/test_mock) was a dead friendly type — never
+// referenced; /data/snapshot + /dashboard/state return the 7-field ProvenanceMode
+// provenance stamp instead. Removed in Phase 3 (no schema invented for a non-response).
 
 export type TechnicalStatus = "OK" | "DEGRADED";
 

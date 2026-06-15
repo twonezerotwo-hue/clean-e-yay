@@ -134,18 +134,12 @@ def _iter_export_types(ts: str):
 # Allow an optional leading `|` (TS multiline union style).
 _LITERAL_UNION = re.compile(r'^\|?\s*"[^"]*"(\s*\|\s*"[^"]*")*$')
 
-# Pre-existing frontend-only object types with no OpenAPI schema yet (contract debt
-# inherited from clean's hand-written friendly layer). Phase 3 promotes each of these
-# to a named schema in contracts/openapi.yaml as its panel is wired to a ViewModel.
-# This guard is a *ratchet*: it allows these known orphans but fails on any NEW one.
-KNOWN_UNCONTRACTED = {
-    "AgentBriefCandidate",
-    "ClusterPosition",
-    "LearningWorkerRun",
-    "OutcomeBucket",
-    "SnapshotMode",
-    "TechnicalTf",
-}
+# Frontend-only object types with no OpenAPI schema yet (contract debt inherited from
+# clean's hand-written friendly layer). Phase 3 promoted all of them to named schemas in
+# contracts/openapi.yaml (SnapshotMode was dead — superseded by ProvenanceMode — and was
+# removed instead of promoted). This guard is now a *ratchet at zero*: any NEW orphan
+# friendly type fails the guard until it gets a contract schema (contract-first).
+KNOWN_UNCONTRACTED: set[str] = set()
 
 
 def test_friendly_types_map_to_contract() -> None:

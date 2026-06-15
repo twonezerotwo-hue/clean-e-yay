@@ -960,24 +960,48 @@ export interface components {
             outcomes_total?: number;
             verified_outcomes?: number;
             by_timeframe?: {
-                [key: string]: Record<string, never>;
+                [key: string]: components["schemas"]["OutcomeBucket"];
             };
             by_symbol?: {
-                [key: string]: Record<string, never>;
+                [key: string]: components["schemas"]["OutcomeBucket"];
             };
             by_regime?: {
-                [key: string]: Record<string, never>;
+                [key: string]: components["schemas"]["OutcomeBucket"];
             };
             by_dominant_module?: {
-                [key: string]: Record<string, never>;
+                [key: string]: components["schemas"]["OutcomeBucket"];
             };
             by_close_reason?: {
-                [key: string]: Record<string, never>;
+                [key: string]: components["schemas"]["OutcomeBucket"];
             };
             /** @description L1 — son learning worker koşusu metadata'sı (yoksa null). */
-            worker_last_run?: Record<string, never> | null;
+            worker_last_run?: components["schemas"]["LearningWorkerRun"] | null;
             /** @description L1 — rebalance proposal durumu (PENDING/APPROVED/REJECTED/NONE). */
             proposal_status?: string;
+        };
+        /** @description L1 — timeframe/symbol/regime/module/close_reason kırılımı başına outcome özeti (packages/learning/outcomes.py türetir; presentation-only). */
+        OutcomeBucket: {
+            trades: number;
+            wins: number;
+            losses: number;
+            win_rate: number;
+            total_pnl: number;
+            avg_pnl: number;
+            verified: number;
+        };
+        /** @description L1 — son learning worker koşusunun metadata'sı (apps/learning_worker türetir). Karar üretmez; yalnızca koşu durumunu yüzeye taşır. */
+        LearningWorkerRun: {
+            run_id: string;
+            /** Format: date-time */
+            started_at: string;
+            /** Format: date-time */
+            completed_at: string;
+            status: string;
+            skipped_reason?: string | null;
+            outcomes_seen: number;
+            proposals_generated: number;
+            calibration_status: string;
+            errors: string[];
         };
         CorrelationEntry: {
             symbol_a: string;
@@ -987,15 +1011,17 @@ export interface components {
             source: "computed" | "baseline" | "neutral";
             samples: number;
         };
+        /** @description Risk — bir exposure cluster'ındaki tek açık paper pozisyon (packages/risk/correlation.py serileştirir; presentation-only). */
+        ClusterPosition: {
+            id: string;
+            symbol: string;
+            /** @enum {string} */
+            side: "long" | "short";
+            size_usd: number;
+        };
         ExposureCluster: {
             symbols: string[];
-            positions: {
-                id?: string;
-                symbol?: string;
-                /** @enum {string} */
-                side?: "long" | "short";
-                size_usd?: number;
-            }[];
+            positions: components["schemas"]["ClusterPosition"][];
             total_usd: number;
             cluster_pct: number;
             /** @enum {string} */
@@ -1187,6 +1213,8 @@ export interface components {
             /** Format: date-time */
             ts?: string;
         };
+        /** @description FE-friendly alias of TechnicalSnapshotTF — the per-(symbol,timeframe) cell shape in DataSnapshot.technicals_by_tf. Same fields; named so the friendly api.ts type maps to the contract (no schema drift). */
+        TechnicalTf: components["schemas"]["TechnicalSnapshotTF"];
         ProviderStatus: {
             /** @enum {string} */
             status: "ok" | "degraded" | "down" | "unknown";
@@ -1510,6 +1538,19 @@ export interface components {
             label: string;
             detail?: string;
         };
+        /** @description UX1 — AgentBrief.top_candidates'taki tek aday (decision matrix hücresinin özet projeksiyonu; packages/decision/cockpit.py türetir). Tüm alanlar opsiyonel — backend hücreden `.get()` ile okur. Presentation-only. */
+        AgentBriefCandidate: {
+            symbol?: string;
+            timeframe?: components["schemas"]["Timeframe"];
+            /** @enum {string} */
+            direction?: "bullish" | "bearish" | "neutral";
+            score?: number;
+            candidate_action?: string;
+            final_action?: string;
+            actionable?: boolean;
+            /** @enum {string} */
+            status?: "ACTIONABLE" | "NOT_ACTIONABLE" | "SUSPENDED";
+        };
         /** @description UX1 — ilk-ekran tek ana kart: agent şu an ne yapabilir, ana engel ne, ne izliyor. Tüm türetilmiş alanlar backend'de (frontend hesap yapmaz). */
         AgentBrief: {
             /** @enum {string} */
@@ -1528,9 +1569,7 @@ export interface components {
             };
             open_paper_positions?: number;
             top_blockers?: string[];
-            top_candidates?: {
-                [key: string]: unknown;
-            }[];
+            top_candidates?: components["schemas"]["AgentBriefCandidate"][];
             next_watch_conditions?: components["schemas"]["WatchCondition"][];
             recommended_stance: string;
             paper_state_summary?: {
