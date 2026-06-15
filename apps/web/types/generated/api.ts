@@ -1382,3 +1382,34 @@ export type TechnicalAgentOutput = {
   missing_data?: string[];
   ts?: string;
 };
+
+// ── T2 — Cross-timeframe consensus snapshot (TF + agent aggregation) ──────────
+export type AlignmentStatus =
+  | "ALIGNED"
+  | "PARTIAL"
+  | "COUNTERTREND"
+  | "CONFLICTED";
+
+export type CrossTimeframeConfluenceZone = {
+  price: number;
+  kind: "support" | "resistance";
+  timeframes?: string[];
+  components?: string[];
+};
+
+export type ConsensusSnapshot = {
+  asset: string;
+  per_timeframe_bias?: { [key: string]: TechnicalBias };
+  alignment_status?: AlignmentStatus;
+  alignment_score?: number;
+  cross_timeframe_confluence?: CrossTimeframeConfluenceZone[];
+  direction_score?: number | null;
+  strength_score?: number | null;
+  agreement_score?: number;
+  is_countertrend?: boolean;
+  confirmed_count?: number;
+  pending_count?: number;
+  blocking_count?: number;
+  evidence?: string[];
+  ts?: string;
+};

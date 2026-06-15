@@ -1990,6 +1990,33 @@ export interface components {
             /** Format: date-time */
             ts?: string;
         };
+        CrossTimeframeConfluenceZone: {
+            price: number;
+            /** @enum {string} */
+            kind: "support" | "resistance";
+            timeframes?: string[];
+            components?: string[];
+        };
+        ConsensusSnapshot: {
+            asset: string;
+            per_timeframe_bias?: {
+                [key: string]: "BULLISH" | "BEARISH" | "NEUTRAL";
+            };
+            /** @enum {string} */
+            alignment_status?: "ALIGNED" | "PARTIAL" | "COUNTERTREND" | "CONFLICTED";
+            alignment_score?: number;
+            cross_timeframe_confluence?: components["schemas"]["CrossTimeframeConfluenceZone"][];
+            direction_score?: number | null;
+            strength_score?: number | null;
+            agreement_score?: number;
+            is_countertrend?: boolean;
+            confirmed_count?: number;
+            pending_count?: number;
+            blocking_count?: number;
+            evidence?: string[];
+            /** Format: date-time */
+            ts?: string;
+        };
     };
     responses: never;
     parameters: never;

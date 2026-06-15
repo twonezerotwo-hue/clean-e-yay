@@ -2545,3 +2545,44 @@ components:
           type: array
           items: { type: string }
         ts: { type: string, format: date-time }
+
+    # ── T2 — Cross-timeframe consensus snapshot (TF + agent aggregation) ───────
+    # SEPARATE axes (direction/strength/agreement/alignment) — never one collapsed
+    # score for all strategies. NEUTRAL dilutes alignment; countertrend conditional.
+    CrossTimeframeConfluenceZone:
+      type: object
+      required: [price, kind]
+      properties:
+        price: { type: number }
+        kind: { type: string, enum: [support, resistance] }
+        timeframes:
+          type: array
+          items: { type: string }
+        components:
+          type: array
+          items: { type: string }
+
+    ConsensusSnapshot:
+      type: object
+      required: [asset]
+      properties:
+        asset: { type: string }
+        per_timeframe_bias:
+          type: object
+          additionalProperties: { type: string, enum: [BULLISH, BEARISH, NEUTRAL] }
+        alignment_status: { type: string, enum: [ALIGNED, PARTIAL, COUNTERTREND, CONFLICTED] }
+        alignment_score: { type: number }
+        cross_timeframe_confluence:
+          type: array
+          items: { $ref: "#/components/schemas/CrossTimeframeConfluenceZone" }
+        direction_score: { type: number, nullable: true }
+        strength_score: { type: number, nullable: true }
+        agreement_score: { type: number }
+        is_countertrend: { type: boolean }
+        confirmed_count: { type: integer }
+        pending_count: { type: integer }
+        blocking_count: { type: integer }
+        evidence:
+          type: array
+          items: { type: string }
+        ts: { type: string, format: date-time }
