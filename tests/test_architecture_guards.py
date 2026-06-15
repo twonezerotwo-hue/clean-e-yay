@@ -227,3 +227,127 @@ def test_ai_opinion_multipliers_go_through_clamp() -> None:
         "AI/opinion/persona multiplier applied without clamp_ai_multiplier:\n"
         + "\n".join(offenders)
     )
+
+
+# ── Phase 3 Wave-0: dashboard panels render typed ViewModels only ─────────────
+# Two structural guards lock in the clean web wiring so the codex visual
+# transplant can't drag dirty patterns across:
+#   1) components do no manual/untyped network I/O — data flows only through the
+#      typed lib/queries hooks -> lib/api client -> generated contract;
+#   2) components & selectors do no trading/risk/regime/DQS/sizing/PnL *decision
+#      math* — they may read backend fields, format them, and pick colours/labels
+#      (incl. thresholding a finished backend value for a colour band), but must
+#      not RECONSTRUCT the underlying decision numbers.
+# Both ignore comments and string/template literals and key on the computational
+# fingerprint (a network call, or an arithmetic operator on a decision field), so
+# number formatting and visual rendering never false-positive. Decisions stay in
+# packages/* (deterministic) and reach the UI as typed contract fields.
+
+WEB_COMPONENTS = REPO / "apps" / "web" / "components"
+WEB_SELECTORS = REPO / "apps" / "web" / "lib" / "selectors"
+
+_TS_BLOCK_COMMENT = re.compile(r"/\*.*?\*/", re.S)
+_TS_LINE_COMMENT = re.compile(r"(?<!:)//[^\n]*")
+# Strings/templates are blanked wholesale (incl. `${...}` interpolations) — this
+# trades a rare evasion (reconstruction written inside a template literal) for
+# zero false positives from class-name tokens and display labels. The guard
+# targets statement-level decision math, which is the realistic regression.
+_TS_STRING = re.compile(
+    r"\"(?:\\.|[^\"\\\n])*\"|'(?:\\.|[^'\\\n])*'|`(?:\\.|[^`\\])*`", re.S
+)
+
+
+def _blank_keep_lines(match: re.Match[str]) -> str:
+    """Replace a match with blanks but preserve newlines so line numbers hold."""
+    return "\n" * match.group(0).count("\n")
+
+
+def _ts_code_only(text: str) -> str:
+    """Strip comments + string/template literals (line-count preserving) so prose
+    or class names that *mention* fetch/risk/PnL can't trip the structural guards."""
+    text = _TS_BLOCK_COMMENT.sub(_blank_keep_lines, text)
+    text = _TS_LINE_COMMENT.sub("", text)
+    text = _TS_STRING.sub(_blank_keep_lines, text)
+    return text
+
+
+def _ts_files(root: Path) -> list[Path]:
+    if not root.exists():
+        return []
+    return [
+        p
+        for p in root.rglob("*")
+        if p.suffix in {".ts", ".tsx"} and "node_modules" not in p.parts
+    ]
+
+
+# 1) No manual/untyped network I/O inside dashboard components.
+_NET_IO = [
+    re.compile(r"\bfetch\s*\("),
+    re.compile(r"\baxios\b"),
+    re.compile(r"\bXMLHttpRequest\b"),
+    re.compile(r"\bEventSource\b"),
+    re.compile(r"\bnew\s+WebSocket\b"),
+]
+
+
+def test_no_manual_fetch_in_panels() -> None:
+    """Dashboard components must not do manual/untyped network I/O — data only via
+    the typed lib/queries hooks -> lib/api client (generated contract). react-query
+    `refetch` is fine: ``\\bfetch\\(`` does not match ``refetch(``."""
+    offenders: list[str] = []
+    for path in _ts_files(WEB_COMPONENTS):
+        code = _ts_code_only(path.read_text(encoding="utf-8"))
+        for i, line in enumerate(code.splitlines(), 1):
+            for rx in _NET_IO:
+                if rx.search(line):
+                    offenders.append(f"{path.relative_to(REPO)}:{i}: {line.strip()[:100]}")
+    assert not offenders, (
+        "Manual/untyped network I/O in apps/web/components — use the typed "
+        "lib/queries hooks instead (no fetch/axios/XHR/SSE/WebSocket in panels):\n"
+        + "\n".join(offenders)
+    )
+
+
+# 2) No frontend trading/risk/regime/DQS/sizing/PnL decision math.
+# Money/decision fields that must never be RECONSTRUCTED in the frontend.
+_MONEY = (
+    r"(?:equity_usd|realized_pnl_usd|unrealized_pnl_usd|daily_pnl_usd|pnl_usd"
+    r"|size_usd|starting_balance|max_drawdown_pct|drawdown_pct)"
+)
+# DQS sub-metrics — combining these into a score is "computing DQS" (banned);
+# thresholding the finished dqs.score for a colour band is rendering (allowed).
+_DQS_SUB = r"(?:freshness|completeness|reconciliation|decision_usage|drift)"
+
+_DECISION_MATH = [
+    (re.compile(_MONEY + r"\s*[-+*/]"), "PnL/equity/size reconstruction"),
+    (re.compile(r"[-+*/]\s*[\w.]*" + _MONEY + r"\b"), "PnL/equity/size reconstruction"),
+    (re.compile(r"\bsize\s*\*="), "position sizing math"),
+    (re.compile(r"size_factor\s*[*/]|[*/]\s*[\w.]*size_factor\b"), "position sizing math"),
+    (re.compile(_DQS_SUB + r"\s*[-+*/]"), "DQS score reconstruction"),
+    (re.compile(r"[-+*/]\s*[\w.]*" + _DQS_SUB + r"\b"), "DQS score reconstruction"),
+]
+
+
+def test_no_frontend_decision_math() -> None:
+    """Panels & selectors render backend ViewModels; they must not RECOMPUTE
+    trading/risk/regime/DQS/sizing/PnL decisions. The guard targets the
+    computational fingerprint — an arithmetic operator applied to a decision field
+    (PnL/equity/size reconstruction, sizing math, DQS score reconstruction).
+    Reading a field, formatting it, and choosing a colour/label from a finished
+    backend value (e.g. ``score >= 60``, ``dqs.score >= 75``) is presentation and
+    is allowed; only reconstructing the decision numbers is banned."""
+    offenders: list[str] = []
+    for root in (WEB_COMPONENTS, WEB_SELECTORS):
+        for path in _ts_files(root):
+            code = _ts_code_only(path.read_text(encoding="utf-8"))
+            for i, line in enumerate(code.splitlines(), 1):
+                for rx, label in _DECISION_MATH:
+                    if rx.search(line):
+                        offenders.append(
+                            f"{path.relative_to(REPO)}:{i}: {label} — {line.strip()[:100]}"
+                        )
+    assert not offenders, (
+        "Frontend decision math found — panels/selectors must render backend "
+        "fields, not reconstruct PnL/risk/DQS/sizing:\n" + "\n".join(offenders)
+    )
