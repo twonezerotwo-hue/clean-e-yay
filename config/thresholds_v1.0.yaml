@@ -225,3 +225,16 @@ decision:
   strength_min: 40
   scout_alignment_min: 60
   countertrend_size_cap: 0.5
+
+# Step 6 — Per-trade ekonomi kapısı (cost + R:R). RiskGate'in parçası; YALNIZCA
+# kısıtlayıcı: asla giriş üretmez, asla size artırmaz. Önerilen girişin maliyet
+# sonrası net edge'i veya risk:reward'ı yetersizse girişi BLOCK eder.
+#   costs            : round-trip maliyet bileşenleri (bps).
+#                      round_trip = 2×taker_fee + spread + slippage
+#   min_net_edge_bps : reward_bps − round_trip_cost_bps bunun altındaysa giriş bloklanır
+#   min_rr           : reward:risk bunun altındaysa giriş bloklanır
+# TF size cap zaten `timeframe_risk.risk_multiplier` (≤1.0) ile gelir; burada tekrar tanımlanmaz.
+trade_economics:
+  costs: { taker_fee_bps: 10, est_spread_bps: 2, est_slippage_bps: 3 }
+  min_net_edge_bps: 20
+  min_rr: 1.5
