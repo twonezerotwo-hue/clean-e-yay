@@ -288,6 +288,42 @@ class TechnicalAgentOutput(BaseModel):
     ts: datetime = Field(default_factory=utcnow)
 
 
+# ── T2 — Cross-timeframe consensus snapshot (TF + agent aggregation) ───────────
+# Aggregates per-TF technical results into one asset view. SEPARATE axes
+# (direction / strength / agreement / alignment) — never one collapsed score for
+# all strategies. NEUTRAL biases DILUTE alignment; countertrend is CONDITIONAL
+# (only when higher-TF bias and lower-TF signal disagree in sign). EVIDENCE only:
+# never opens trades, never sizes, not the RiskGate.
+AlignmentStatus = Literal["ALIGNED", "PARTIAL", "COUNTERTREND", "CONFLICTED"]
+
+
+class CrossTimeframeConfluenceZone(BaseModel):
+    """A price band where ≥2 timeframes' levels cluster (e.g. 4H support + 1D fib)."""
+
+    price: float
+    kind: Literal["support", "resistance"]
+    timeframes: list[str] = Field(default_factory=list)
+    components: list[str] = Field(default_factory=list)
+
+
+class ConsensusSnapshot(BaseModel):
+    asset: str
+    # per-TF bias keyed m15/h1/h4/d1/w1 (NEUTRAL included)
+    per_timeframe_bias: dict[str, TechnicalBias] = Field(default_factory=dict)
+    alignment_status: AlignmentStatus = "CONFLICTED"
+    alignment_score: float = 0.0          # 0..100 weighted directional consensus (NEUTRAL dilutes)
+    cross_timeframe_confluence: list[CrossTimeframeConfluenceZone] = Field(default_factory=list)
+    direction_score: float | None = None  # weighted across TFs (50=neutral); None=insufficient
+    strength_score: float | None = None
+    agreement_score: float = 0.0          # unanimity among directional TFs (0..100)
+    is_countertrend: bool = False
+    confirmed_count: int = 0
+    pending_count: int = 0
+    blocking_count: int = 0
+    evidence: list[str] = Field(default_factory=list)
+    ts: datetime = Field(default_factory=utcnow)
+
+
 # P0 parity — başlık tazeliği yayın yaşına göre damgalanır (UI hesap yapmaz).
 NewsFreshness = Literal["FRESH", "RECENT", "STALE"]
 
