@@ -12,25 +12,29 @@
 
 ## 🔖 ŞU AN NEREDEYİZ  (her oturum sonu burayı güncelle)
 
-**Tamamlanan:** Spec adım **1–6 (tam)** + **7 (backend + contract)** + **8 (kalibrasyon temeli)**.
+**Tamamlanan:** Spec adım **1–6 (tam)** + **7 (backend + contract + frontend)** + **8 (kalibrasyon temeli)**.
 - **6** — `packages/risk/trade_economics.py`: cost + R:R kapısı (RiskGate-side, yalnız kısıtlayıcı;
   `trade_economics` config bloğu). Guard'lar: `test_bad_rr_blocks_entry`, `test_scalp_below_cost_blocked`.
 - **7 (backend+contract)** — `packages/decision/agent_pipeline.py` composer (adım 1–6'yı birleştirir;
   economics FINAL overlay) + `GET /api/v1/technical/agent-matrix` (`apps/api/routers/technical.py`) +
   contract: openapi `AgentMatrix`/`AgentMatrixRow`/`TradeEconomics`, `schema.ts` (üretildi), `api.ts` (el).
+- **7 (frontend)** — `AgentMatrixPanel` (`apps/web/components/panels/AgentMatrixPanel`) `/technical/agent-matrix`'e
+  bağlı: `api.agentMatrix` + `useAgentMatrix` hook + `lib/selectors/agent-matrix.ts` + panel-registry (decision grubu) +
+  `app/page.tsx` mount. Frontend hesap yapmaz; selector ViewModel'i map eder. Browser-doğrulandı (:4000 → :8001:
+  KILL_SWITCH banner + ETHUSD COUNTERTREND/CT). `tsc --noEmit` temiz (latent duplicate `Timeframe` api.ts fix).
 - **8 (temel)** — `packages/learning/tf_calibration.py`: verified outcome → per-TF hit-rate/expectancy +
   tf_weights **trust-gate** (kalibrasyon doğrulayana kadar PRIOR) + `tf_weights` PRIOR (`weights_v1.0.yaml`).
 - **Tooling** — codegen artık **her OS'ta** çalışıyor (`node cli.js` + satır-sonu duyarsız karşılaştırma);
   riskgate guard'ları OS-portable (`as_posix`). **Makine ayrımı YOK.**
 
 **Sıradaki:**
-1. **Adım 7 frontend paneli** — `apps/web` panelini `/technical/agent-matrix`'e bağla. Types HAZIR
-   (`AgentMatrix` api.ts'te). Eklenecek: api client fn + `qk` key + `useAgentMatrix` hook + panel + selector.
+1. **Adım 9** — controlled activation: `shadow_mode` → `affect_decision: false` (izle) → sonra `true`,
+   `manual_ready_only`. Yeni agent pipeline'ı (agent-matrix) gözlem moduna al; kararı henüz paper'a yazma.
 2. **Adım 8 tam tf_weights auto-tune** — per-TF sinyal-katkısı attribution'ı için zengin decision-logging
    gerekir (kasıtlı ertelendi, faking yok). Not: `auto_weight_trainer` önerileri tf_weights'i taşımıyor.
-3. **Adım 9** — controlled activation (shadow_mode → affect_decision false→izle→true).
+3. **Reversal_signals + chart_pattern_analysis** stateful katmanları (kasıtlı ertelendi, faking yok).
 
-**Son durum:** **644 test geçiyor** · 0 hata · ruff temiz · codegen senkron (Windows **ve** Mac).
+**Son durum:** **644 test geçiyor** · 0 hata · ruff temiz · `tsc --noEmit` temiz · codegen senkron (Windows **ve** Mac) · agent matrix paneli **browser-doğrulandı**.
 **Windows test komutu:** `python -m pytest -q -p no:cacheprovider --basetemp=".pytest_tmp/basetemp"`
 (varsayılan temp `pytest-of-twone` erişim reddediyor → basetemp şart).
 **Push edildi mi:** ✅ phase-3-dashboard-transplant (bu oturumda push edildi)
