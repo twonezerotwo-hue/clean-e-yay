@@ -1437,3 +1437,36 @@ export type AgentDecision = {
   risk_gate_required?: boolean;
   ts?: string;
 };
+
+// ── T2 step 6 — per-trade cost + R:R gate output (RiskGate-side overlay) ──────
+export type TradeEconomics = {
+  allow: boolean;
+  reason:
+    | "ok"
+    | "bad_rr"
+    | "below_cost"
+    | "insufficient_levels"
+    | "invalid_entry"
+    | "invalid_stop";
+  rr?: number | null;
+  reward_bps?: number | null;
+  risk_bps?: number | null;
+  cost_bps?: number;
+  net_edge_bps?: number | null;
+  evidence?: string[];
+};
+
+// ── T2 step 7 — composed per-symbol agent pipeline row + matrix ───────────────
+export type AgentMatrixRow = {
+  symbol: string;
+  stance: TechnicalStance;
+  consensus: ConsensusSnapshot;
+  decision: AgentDecision;
+  economics?: TradeEconomics | null;
+};
+
+export type AgentMatrix = {
+  risk_action?: string | null;
+  timeframes: Timeframe[];
+  symbols: AgentMatrixRow[];
+};

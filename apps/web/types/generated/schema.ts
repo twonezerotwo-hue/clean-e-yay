@@ -599,6 +599,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/technical/agent-matrix": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** New multi-timeframe agent pipeline (steps 1–6) per-symbol matrix — read-only */
+        get: operations["getAgentMatrix"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -2035,6 +2052,32 @@ export interface components {
             /** Format: date-time */
             ts?: string;
         };
+        /** @description Per-trade economics gate result (cost + risk:reward). Only ever restrictive: allow is true only when rr ≥ min_rr AND net_edge_bps ≥ min_net_edge_bps. */
+        TradeEconomics: {
+            allow: boolean;
+            /** @enum {string} */
+            reason: "ok" | "bad_rr" | "below_cost" | "insufficient_levels" | "invalid_entry" | "invalid_stop";
+            rr?: number | null;
+            reward_bps?: number | null;
+            risk_bps?: number | null;
+            cost_bps?: number;
+            net_edge_bps?: number | null;
+            evidence?: string[];
+        };
+        AgentMatrixRow: {
+            symbol: string;
+            /** @enum {string} */
+            stance: "ALLOW" | "CAUTION" | "ABSTAIN" | "DEGRADED";
+            consensus: components["schemas"]["ConsensusSnapshot"];
+            decision: components["schemas"]["AgentDecision"];
+            economics?: components["schemas"]["TradeEconomics"] | null;
+        };
+        /** @description Read-only multi-TF agent pipeline matrix (steps 1–6). Global RiskGate action is applied first; the per-trade cost + R:R gate is final. Frontend renders only. */
+        AgentMatrix: {
+            risk_action?: string | null;
+            timeframes: ("15m" | "1h" | "4h" | "1d" | "1w")[];
+            symbols: components["schemas"]["AgentMatrixRow"][];
+        };
     };
     responses: never;
     parameters: never;
@@ -2809,6 +2852,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["TechnicalInsight"];
+                };
+            };
+        };
+    };
+    getAgentMatrix: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentMatrix"];
                 };
             };
         };

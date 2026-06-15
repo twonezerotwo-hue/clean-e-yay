@@ -511,6 +511,18 @@ paths:
               schema:
                 $ref: "#/components/schemas/TechnicalInsight"
 
+  /api/v1/technical/agent-matrix:
+    get:
+      operationId: getAgentMatrix
+      summary: New multi-timeframe agent pipeline (steps 1–6) per-symbol matrix — read-only
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AgentMatrix"
+
 components:
   schemas:
     Health:
@@ -2616,3 +2628,53 @@ components:
         manual_ready_required: { type: boolean }
         risk_gate_required: { type: boolean }
         ts: { type: string, format: date-time }
+
+    # ── T2 step 6 — per-trade cost + R:R gate output (RiskGate-side overlay) ──
+    TradeEconomics:
+      type: object
+      description: >
+        Per-trade economics gate result (cost + risk:reward). Only ever restrictive:
+        allow is true only when rr ≥ min_rr AND net_edge_bps ≥ min_net_edge_bps.
+      required: [allow, reason]
+      properties:
+        allow: { type: boolean }
+        reason:
+          type: string
+          enum: [ok, bad_rr, below_cost, insufficient_levels, invalid_entry, invalid_stop]
+        rr: { type: number, nullable: true }
+        reward_bps: { type: number, nullable: true }
+        risk_bps: { type: number, nullable: true }
+        cost_bps: { type: number }
+        net_edge_bps: { type: number, nullable: true }
+        evidence:
+          type: array
+          items: { type: string }
+
+    # ── T2 step 7 — composed per-symbol agent pipeline row ────────────────────
+    AgentMatrixRow:
+      type: object
+      required: [symbol, stance, consensus, decision]
+      properties:
+        symbol: { type: string }
+        stance: { type: string, enum: [ALLOW, CAUTION, ABSTAIN, DEGRADED] }
+        consensus: { $ref: "#/components/schemas/ConsensusSnapshot" }
+        decision: { $ref: "#/components/schemas/AgentDecision" }
+        economics:
+          anyOf:
+            - $ref: "#/components/schemas/TradeEconomics"
+            - type: "null"
+
+    AgentMatrix:
+      type: object
+      description: >
+        Read-only multi-TF agent pipeline matrix (steps 1–6). Global RiskGate action
+        is applied first; the per-trade cost + R:R gate is final. Frontend renders only.
+      required: [timeframes, symbols]
+      properties:
+        risk_action: { type: string, nullable: true }
+        timeframes:
+          type: array
+          items: { type: string, enum: ["15m", "1h", "4h", "1d", "1w"] }
+        symbols:
+          type: array
+          items: { $ref: "#/components/schemas/AgentMatrixRow" }
