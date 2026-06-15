@@ -1,7 +1,17 @@
 # PHASE 3 — Dashboard Transplant Map
 
-> Planning artifact. **No components are implemented until this map is approved.**
+> Living artifact. **Wave 0 (guardrails) + first Wave 1 slice are DONE.**
 > Goal: **codex dashboard visual parity** with the **clean web architecture preserved**.
+
+## Progress (current reality)
+
+- ✅ **Contract debt cleared — all 6 orphan friendly types resolved** (`KNOWN_UNCONTRACTED` is now empty; `test_friendly_types_map_to_contract` ratchets at zero):
+  - **Promoted to named OpenAPI schemas (5):** `OutcomeBucket`, `LearningWorkerRun`, `ClusterPosition`, `AgentBriefCandidate` (parents re-wired to `$ref`; `worker_last_run` nullable via `anyOf`+`type: "null"`), and `TechnicalTf`.
+  - **`TechnicalTf` → documented alias of the existing `TechnicalSnapshotTF`** (identical shape; FE-friendly name kept, no field duplication). `DataSnapshot.technicals_by_tf` keeps the canonical `TechnicalSnapshotTF`.
+  - **`SnapshotMode` → deleted as dead**, not promoted: it was never referenced; `/data/snapshot` + `/dashboard/state` return the 7-field `ProvenanceMode` stamp. No schema invented for a non-response.
+- ✅ **Wave 0 guards added** (`tests/test_architecture_guards.py`): `test_no_manual_fetch_in_panels` + `test_no_frontend_decision_math` (see §6).
+- ✅ **First typed dashboard slice done:** `TradingPanel` (codex `PaperTradingTicker` visual language, ViewModel-only). Surfaced `unrealized_pnl_usd` (state + per-position, passthrough); **removed** the prior client-side equity reconstruction; read-only (no order/close/reset UI).
+- ⏭️ **Next recommended (Wave 1, R1, existing schemas):** `AIReportPanel` or `DataQualityPanel` (no animation, no new schema). Then the rest of Wave 1, then Wave 2 (remaining orphan-fed panels are already de-orphaned, so they're now plain visual wires), then Wave 3 (animated/3D layers).
 
 ## 0. Rules (binding for every row below)
 
@@ -24,7 +34,7 @@ The clean web app is **already architecturally clean**:
 **Therefore Phase 3 is mainly:**
 1. **Visual parity** — port codex's richer visuals/animations/3D-radar layers into the existing typed panels (most rows are *visual-only*, R1).
 2. **6 orphan schema promotions** — break nested friendly types out into named OpenAPI schemas as their panels are touched (contract-first, R2).
-3. **Guardrails** — add a structural `no manual fetch in panels` arch guard (and a `no frontend decision-math` guard) so the clean wiring can't regress.
+3. **Guardrails** — ✅ added: a structural `no manual fetch in panels` arch guard and a `no frontend decision-math` guard so the clean wiring can't regress (§6).
 
 There is **no R3 work in Phase 3** (no RiskGate/paper-safety surface is touched). Any R3 would mean a paper-engine change → out of scope.
 
@@ -50,7 +60,7 @@ There is **no R3 work in Phase 3** (no RiskGate/paper-safety surface is touched)
 | `useChat` | `POST /chat` | `ChatRequest`, `ChatResponse` |
 | `useHealth` | `GET /health` | `Health` |
 
-`*` = friendly type that is **not yet a named OpenAPI schema** (orphan — see §5). 84 schemas already exist; the contract layer is otherwise complete.
+`*` = friendly type that **was** an orphan (no named OpenAPI schema). **All resolved — see §5** (`SnapshotMode` deleted as dead; the rest now have schemas, incl. `TechnicalTf` aliased to `TechnicalSnapshotTF`). The contract layer is complete and the friendly-types ratchet is at zero.
 
 ## 3. Component transplant map (codex → clean), by IA group
 
@@ -102,7 +112,7 @@ Default checks for every row: `tsc`/`pnpm build` + the new `no-manual-fetch-in-p
 | `AssetGrid.tsx`, `MiniChart.tsx` | `MarketDataPanel` (+ `charts/SparkLine`) | `/data/snapshot` → `LivePrice`/`OHLCVBar`/`TechnicalTf` | `TechnicalTf` | +contract | R2 | codegen, friendly-types guard |
 | (DQS viz) | `DataQualityPanel` | `/data/snapshot` → `DqsBreakdown` | — | visual-only | R1 | tsc; **no DQS math in FE** |
 | (provider viz) | `ProviderStatusPanel` | `/data/snapshot` + `/system/health` → `ProviderStatus` | — | visual-only | R1 | tsc |
-| (snapshot/provenance viz) | `SnapshotPanel` | `/data/snapshot` → `SnapshotMeta`/`ProvenanceMode` | `SnapshotMode` | +contract | R2 | codegen, friendly-types guard |
+| (snapshot/provenance viz) | `SnapshotPanel` | `/data/snapshot` → `SnapshotMeta`/`ProvenanceMode` | ~~`SnapshotMode`~~ (deleted as dead — use `ProvenanceMode`) | visual-only | R1 | tsc |
 | (audit viz) | `PanelAuditPanel` | `/dashboard/state` → `PaperAuditEvent` | — | visual-only | R1 | tsc |
 
 ### 3.6 Market Structure
@@ -130,7 +140,7 @@ Default checks for every row: `tsc`/`pnpm build` + the new `no-manual-fetch-in-p
 
 | codex source | clean target | endpoint / ViewModel | missing schema | kind | risk | checks |
 |---|---|---|---|---|---|---|
-| `PaperTradingTicker.tsx` | `TradingPanel` | `/paper-trading/state` → `PaperTradingState`/`Trade` | — | visual-only | R1 | tsc; **read-only, no order UI** |
+| `PaperTradingTicker.tsx` | `TradingPanel` ✅ **DONE** | `/paper-trading/state` → `PaperTradingState`/`Trade` | — | visual-only | R1 | tsc; **read-only, no order UI** |
 | `LearningPanel.tsx` | `LearningPanel` | `/learning/summary` → `LearningSummary` | `OutcomeBucket`, `LearningWorkerRun` | +contract | R2 | codegen, friendly-types guard |
 | (calibration viz) | `CalibrationPanel` (+ `charts/CalibrationGrid`) | `/learning/calibration` → `CalibrationState` | — | visual-only | R1 | tsc |
 | (mistake viz) | `MistakeMemoryPanel` | `/learning/mistakes` → `MistakesState`/`MistakeRecord` | — | visual-only | R1 | tsc |
@@ -160,18 +170,18 @@ Each is a pure-presentation animation/3D layer. **Rule:** the layer receives a V
 
 ## 5. Orphan schema promotions (contract-first, do as each panel is wired)
 
-These 6 friendly types in `apps/web/types/generated/api.ts` are nested inside existing ViewModels but have **no named OpenAPI schema** (baselined in `tests/test_architecture_guards.py::KNOWN_UNCONTRACTED`). Promote each when its panel is touched:
+**✅ RESOLVED — all 6 done** (commit `chore(web): promote dashboard orphan types to openapi schemas`). `KNOWN_UNCONTRACTED` is now empty; the friendly-types guard ratchets at zero. Shapes were verified against the backend serializers (`outcomes.py`, `run_store.py`, `correlation.py`, `cockpit.py`, `data/types.py`) — no fields invented.
 
-| orphan type | lives in (parent ViewModel) | endpoint | wired by panel |
+| orphan type | lives in (parent ViewModel) | endpoint | resolution |
 |---|---|---|---|
-| `AgentBriefCandidate` | `AgentBrief.top_candidates` | `/cockpit/brief` | `AgentBriefPanel`, `CommandSignalsPanel` |
-| `ClusterPosition` | `ExposureCluster.positions` | `/risk/correlation` | `CorrelationPanel` |
-| `LearningWorkerRun` | `LearningSummary.worker_last_run` | `/learning/summary` | `LearningPanel` |
-| `OutcomeBucket` | `LearningSummary.by_{timeframe,symbol,regime,dominant_module,close_reason}` | `/learning/summary` | `LearningPanel` |
-| `SnapshotMode` | `DataSnapshot` provenance | `/data/snapshot` | `SnapshotPanel` |
-| `TechnicalTf` | `DataSnapshot.technicals_by_tf` | `/data/snapshot` | `MarketDataPanel`, `TimeframeMatrixPanel` |
+| `AgentBriefCandidate` | `AgentBrief.top_candidates` | `/cockpit/brief` | ✅ named schema; `top_candidates.items` → `$ref` |
+| `ClusterPosition` | `ExposureCluster.positions` | `/risk/correlation` | ✅ named schema; `positions.items` → `$ref` |
+| `LearningWorkerRun` | `LearningSummary.worker_last_run` | `/learning/summary` | ✅ named schema; `worker_last_run` → nullable `$ref` (`anyOf` + `type: "null"`) |
+| `OutcomeBucket` | `LearningSummary.by_{timeframe,symbol,regime,dominant_module,close_reason}` | `/learning/summary` | ✅ named schema; `by_*.additionalProperties` → `$ref` |
+| `SnapshotMode` | (none — was never referenced) | `/data/snapshot` | ✅ **deleted as dead**; `/data/snapshot` + `/dashboard/state` use the 7-field `ProvenanceMode`. No schema invented. |
+| `TechnicalTf` | `DataSnapshot.technicals_by_tf` | `/data/snapshot` | ✅ **alias** of existing `TechnicalSnapshotTF` (`allOf` ref) — identical shape, FE-friendly name documented in contract |
 
-**Per-promotion procedure (contract-first):**
+**Per-promotion procedure (contract-first) — the record of how each was done:**
 1. Add the named schema to `contracts/openapi.yaml` `components.schemas` (matching the backend response shape — verify against the router/ViewModel, do **not** invent fields).
 2. `make codegen` → regenerate `apps/web/types/generated/schema.ts`; `make codegen-check` clean.
 3. Update `apps/web/types/generated/api.ts` so the friendly type references / re-exports the generated schema (kill manual drift).
@@ -188,17 +198,17 @@ Run on every Phase 3 PR / wave:
 - `make lint` + `make test` (backend untouched → stays green; **paper-engine behavior unchanged**).
 - `tests/test_architecture_guards.py` — all existing guards green; `KNOWN_UNCONTRACTED` shrinks as orphans are promoted (ratchet).
 
-New guards to add early in Phase 3 (so clean wiring can't regress):
-- **`test_no_manual_fetch_in_panels`** — no `fetch(`/`axios`/`XMLHttpRequest` under `apps/web/components/**` (data only via `lib/queries/hooks`). (Promised in MIGRATION_MAP §D.)
-- **`test_no_frontend_decision_math`** — panels/selectors must not compute risk/DQS/regime/sizing (e.g. no `riskAction =`, no DQS thresholding, no PnL/size arithmetic that isn't a passthrough of a backend field). Presentation/formatting only.
+✅ **Wave-0 guards added** in `tests/test_architecture_guards.py` (both ignore comments + string/template literals, line-count preserving, so prose/class-names that *mention* fetch/risk/PnL don't false-positive):
+- **`test_no_manual_fetch_in_panels`** — no `fetch(`/`axios`/`XMLHttpRequest`/`EventSource`/`new WebSocket` under `apps/web/components/**` (data only via `lib/queries/hooks` → typed `lib/api` client). react-query `refetch` is allowed (`\bfetch\(` doesn't match `refetch(`).
+- **`test_no_frontend_decision_math`** — `components/**` + `lib/selectors/**` must not **reconstruct** trading/risk/regime/DQS/sizing/PnL decisions. Keys on the **computational fingerprint**: an arithmetic operator (`+ - * /`) on a decision field — PnL/equity/size reconstruction (`equity_usd`/`*_pnl_usd`/`size_usd`/…), sizing math (`size *=`, `size_factor * …`), or DQS-subfield score reconstruction (`freshness`/`completeness`/`drift`/…). **Deliberately narrow:** reading a field, formatting it, and *thresholding a finished backend value for a colour band* (e.g. `score >= 60`, `dqs.score >= 75`) is presentation and stays allowed — verified against the existing color-band panels to avoid false positives. Negative-tested: both guards fail on a planted `fetch(` + `equity_usd - realized_pnl_usd`.
 
 ## 7. Risk legend & recommended sequencing
 
 `R1` pure visual, schema already exists · `R2` visual + schema promotion **or** heavy animation/3D · `R3` would touch RiskGate/paper safety → **not present in Phase 3** (any R3 = out of scope).
 
-**Wave 0 — guardrails (do first):** add `test_no_manual_fetch_in_panels` + `test_no_frontend_decision_math`; port shared shell (`Header/Footer/PanelShell/ErrorBoundary/AutoRefresh`) onto existing clean shell. Establishes the pattern.
-**Wave 1 — R1 visual-only panels with existing schemas:** AIReport, DataQuality, ProviderStatus, Derivatives, Volatility, OptionsVol, Patterns, Calibration, MistakeMemory, Weights, Trading, SystemHealth, Replay, PanelAudit, RiskGate, DrawdownGuard, PositionChecks, WatchConditions, Catalyst, Macro. (Bulk of the visual parity, lowest risk.)
-**Wave 2 — the 6 orphan-schema panels (contract-first, one at a time):** AgentBrief, CommandSignals, MarketData, Snapshot, Correlation, Learning. Each: schema → codegen → wire → de-orphan.
+**Wave 0 — guardrails:** ✅ both arch guards added (§6). ⏭️ still to do: port shared shell (`Header/Footer/PanelShell/ErrorBoundary/AutoRefresh`) onto the existing clean shell.
+**Wave 1 — R1 visual-only panels with existing schemas:** ✅ **Trading done** (first slice). Next: **AIReport** or **DataQuality** (no animation, no schema). Remaining: ProviderStatus, Derivatives, Volatility, OptionsVol, Patterns, Calibration, MistakeMemory, Weights, SystemHealth, Replay, PanelAudit, RiskGate, DrawdownGuard, PositionChecks, WatchConditions, Catalyst, Macro. (Bulk of the visual parity, lowest risk.)
+**Wave 2 — the (formerly) orphan-fed panels:** AgentBrief, CommandSignals, MarketData, Snapshot, Correlation, Learning. **The contract work is already done** (all 6 orphans resolved in §5), so these are now plain R1/R2 visual wires — no schema/codegen step remains, just port the visuals over the existing typed ViewModels.
 **Wave 3 — heavy animated/3D layers:** Scenario battle, EventCalendar 3D, CapitalFlow animation, News radar/war alert, ActionSignal race, CommandSignal cards. Visual-fidelity + perf focus.
 
 ## 8. Out of scope (explicit)
@@ -210,11 +220,11 @@ New guards to add early in Phase 3 (so clean wiring can't regress):
 
 ## 9. Exit criteria for Phase 3
 
-- Visual parity with codex across the panels above; codex animations/3D/radar UX preserved.
-- Zero manual fetch in `components/`; all data via typed hooks → ViewModels.
-- `KNOWN_UNCONTRACTED` empty (all 6 orphans promoted) and `test_friendly_types_map_to_contract` green with no baseline.
-- Full gate green: `pnpm build`, `make codegen-check`, `make lint`, `make test`, arch guards (incl. the 2 new ones).
-- No change to Phase 2 backend behavior (paper suite unchanged).
+- ⏳ Visual parity with codex across the panels above; codex animations/3D/radar UX preserved. (1/N panels done — Trading.)
+- ✅ Zero manual fetch in `components/`; all data via typed hooks → ViewModels — **now enforced** by `test_no_manual_fetch_in_panels`.
+- ✅ `KNOWN_UNCONTRACTED` empty (all 6 orphans resolved) and `test_friendly_types_map_to_contract` green with no baseline.
+- ✅ Full gate green: `pnpm build`, `make codegen-check`, `make lint`, `make test` (509 passed), arch guards (incl. the 2 new ones).
+- ✅ No change to Phase 2 backend behavior (paper suite unchanged).
 
 ---
-**Status: MAP ONLY — no components implemented. Awaiting approval before Wave 0.**
+**Status: IN PROGRESS — Wave 0 guards done · contract debt cleared (6/6 orphans) · first Wave 1 slice (Trading) done. Next: shared-shell port + AIReport/DataQuality.**
