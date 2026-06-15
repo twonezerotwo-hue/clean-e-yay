@@ -73,6 +73,16 @@ def entry_for(trade: Trade) -> dict:
             "confidence_source": trade.confidence_source,
             "data_verified": trade.data_verified,
         },
+        # Market-session context at open (if available; getattr keeps legacy trades
+        # backward-compatible — missing context stays null, never invented).
+        "market_session": {
+            "action": getattr(trade, "open_session_action", None),
+            "reason": getattr(trade, "open_session_reason", None),
+            "evidence": getattr(trade, "open_session_evidence", None),
+            "primary_market_open": getattr(trade, "open_session_primary_market_open", None),
+            "phase": getattr(trade, "open_session_phase", None),
+            "size_multiplier": getattr(trade, "open_session_size_multiplier", None),
+        },
         "exit": {
             "reason": trade.close_reason,
             "lifecycle_status": trade.lifecycle_status,

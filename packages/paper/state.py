@@ -65,6 +65,13 @@ class Position:
     # Signal attribution (additive): karar izi açılışta damgalanır.
     open_dqs: float | None = None           # açılış anındaki DQS
     open_risk_action: str | None = None     # açılış anındaki RiskGate kararı (izinli)
+    # Market-session attribution (additive): açılış anındaki seans bağlamı.
+    open_session_action: str | None = None              # allow/caution/manual_ready/block
+    open_session_phase: str | None = None               # primary market session phase
+    open_session_reason: str | None = None
+    open_session_size_multiplier: float | None = None   # uygulanan seans çarpanı (≤ 1.0)
+    open_session_primary_market_open: bool | None = None
+    open_session_evidence: str | None = None            # "; "-joined evidence
 
     @property
     def unrealized_pnl_usd(self) -> float:
@@ -98,6 +105,13 @@ class Trade:
     # Signal attribution (additive): pozisyondan miras alınan karar izi.
     open_dqs: float | None = None
     open_risk_action: str | None = None
+    # Market-session attribution (additive): pozisyondan miras alınır.
+    open_session_action: str | None = None
+    open_session_phase: str | None = None
+    open_session_reason: str | None = None
+    open_session_size_multiplier: float | None = None
+    open_session_primary_market_open: bool | None = None
+    open_session_evidence: str | None = None
 
 
 @dataclass

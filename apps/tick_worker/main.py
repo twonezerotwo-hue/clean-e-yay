@@ -24,6 +24,7 @@ from packages.data.ingestion.pipeline import DEFAULT_SYMBOLS, get_cached_snapsho
 from packages.data.provenance import data_provenance
 from packages.decision.engine import decide_matrix, matrix_view
 from packages.ops import heartbeat
+from packages.paper import manual_queue, session_gate
 from packages.paper import state as paper_state
 from packages.paper.lifecycle import attempt_open, flatten_all
 from packages.paper.lifecycle import tick as price_tick
@@ -158,18 +159,37 @@ async def run_once() -> None:
             MATRIX_SYMBOLS, snap, risk_in, open_positions=ps.open_positions
         )
         decisions_generated = len(decisions)
+        now = datetime.now(UTC)
         for d in decisions:
             if d.action in {"blocked", "hold"}:
                 continue
             side = "long" if d.action == "open_long" else "short"
+            # Market-session gate (restrictive: block / manual_ready / size clamp ≤ 1.0).
+            # RiskGate already applied in decide_matrix; sessions only restrict further.
+            gate = session_gate.evaluate_open(
+                d.symbol, side, d.timeframe, now_utc=now,
+                regime=_regime, risk_action=d.risk.action,
+            )
+            if gate.route == "block":
+                continue
+            session_mult = gate.effective_multiplier
+            if gate.route == "manual_ready":
+                manual_queue.route_to_manual_ready(
+                    ps, symbol=d.symbol, timeframe=d.timeframe, side=side,
+                    size_multiplier=d.size_multiplier * session_mult,
+                    requested_price=prices.get(d.symbol),
+                    reason=gate.reason_code, fingerprint=d.fingerprint,
+                    snapshot_id=snap.snapshot_id,
+                )
+                continue
             # P1 — açılış tek yoldan (attempt_open): duplicate/scale-in politikası +
-            # fiyat denetimi + audit ortak. (symbol, timeframe) duplicate bloklanır.
+            # fiyat denetimi + audit ortak. Seans çarpanı kısıtlayıcı + attribution.
             pos, _decision = attempt_open(
                 ps,
                 symbol=d.symbol,
                 side=side,
                 entry_price=prices.get(d.symbol),
-                size_multiplier=d.size_multiplier,
+                size_multiplier=d.size_multiplier * session_mult,
                 timeframe=d.timeframe,
                 open_reason=d.reason,
                 snapshot_id=snap.snapshot_id,
@@ -178,6 +198,7 @@ async def run_once() -> None:
                 predicted_confidence=d.confidence,
                 raw_confidence=d.raw_confidence,
                 confidence_source=d.confidence_source,
+                **gate.attribution(),
             )
             if pos is not None:
                 paper_actions += 1

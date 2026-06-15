@@ -77,6 +77,12 @@ def open_position(
     scale_in: bool = False,
     open_dqs: float | None = None,
     open_risk_action: str | None = None,
+    open_session_action: str | None = None,
+    open_session_phase: str | None = None,
+    open_session_reason: str | None = None,
+    open_session_size_multiplier: float | None = None,
+    open_session_primary_market_open: bool | None = None,
+    open_session_evidence: str | None = None,
 ) -> Position:
     sl_pct = _sl_pct_for(symbol)
     tp_pct = sl_pct * _tp_rr()
@@ -118,6 +124,12 @@ def open_position(
         scale_in=bool(scale_in),
         open_dqs=open_dqs,
         open_risk_action=open_risk_action,
+        open_session_action=open_session_action,
+        open_session_phase=open_session_phase,
+        open_session_reason=open_session_reason,
+        open_session_size_multiplier=open_session_size_multiplier,
+        open_session_primary_market_open=open_session_primary_market_open,
+        open_session_evidence=open_session_evidence,
     )
     state.open_positions.append(pos)
     audit.record(
@@ -189,6 +201,12 @@ def attempt_open(
     confidence_source: str | None = None,
     open_dqs: float | None = None,
     open_risk_action: str | None = None,
+    open_session_action: str | None = None,
+    open_session_phase: str | None = None,
+    open_session_reason: str | None = None,
+    open_session_size_multiplier: float | None = None,
+    open_session_primary_market_open: bool | None = None,
+    open_session_evidence: str | None = None,
 ) -> tuple[Position | None, dict]:
     """P1 — tek açılış giriş noktası: denetim → blocked/opened + audit.
 
@@ -249,6 +267,12 @@ def attempt_open(
         raw_confidence=raw_confidence, confidence_source=confidence_source,
         timeframe=timeframe, open_reason=open_reason, snapshot_id=snapshot_id,
         scale_in=scale_in, open_dqs=open_dqs, open_risk_action=open_risk_action,
+        open_session_action=open_session_action,
+        open_session_phase=open_session_phase,
+        open_session_reason=open_session_reason,
+        open_session_size_multiplier=open_session_size_multiplier,
+        open_session_primary_market_open=open_session_primary_market_open,
+        open_session_evidence=open_session_evidence,
     )
     return pos, decision
 
@@ -278,6 +302,12 @@ def close_position(state: PaperState, pos: Position, *, exit_price: float, reaso
         snapshot_id=pos.snapshot_id,
         open_dqs=pos.open_dqs,
         open_risk_action=pos.open_risk_action,
+        open_session_action=pos.open_session_action,
+        open_session_phase=pos.open_session_phase,
+        open_session_reason=pos.open_session_reason,
+        open_session_size_multiplier=pos.open_session_size_multiplier,
+        open_session_primary_market_open=pos.open_session_primary_market_open,
+        open_session_evidence=pos.open_session_evidence,
     )
     state.recent_trades.append(trade)
     # Signal attribution: kapanan trade'in karar izini kalıcı decision_log'a yaz

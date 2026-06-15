@@ -9,7 +9,7 @@ from fastapi import APIRouter, HTTPException
 from packages.data.ingestion.pipeline import DEFAULT_SYMBOLS, get_cached_snapshot
 from packages.decision.engine import decide_matrix
 from packages.paper import audit as paper_audit
-from packages.paper import maintenance, manual_queue
+from packages.paper import maintenance, manual_queue, session_gate
 from packages.paper import state as paper_state
 from packages.paper.lifecycle import (
     attempt_open,
@@ -97,6 +97,7 @@ def get_paper_state() -> dict:
 @router.post("/paper-trading/tick")
 def post_paper_tick() -> dict:
     ps = paper_state.load()
+    now = datetime.now(UTC)
     snap = get_cached_snapshot()
     # None fiyatlar lifecycle'a aktarılmaz; mock fiyat dağıtılmaz.
     prices = {q.symbol: q.price for q in snap.prices if q.price is not None}
@@ -154,28 +155,43 @@ def post_paper_tick() -> dict:
             actions.append({**entry, "action": "hold", "reason": d.reason})
             continue
         side = "long" if d.action == "open_long" else "short"
-        # P2 — DEFENSIVE/CRISIS rejiminde otomatik açılış YOK: aday owner-approval
-        # kuyruğuna düşer (manual_queue). Aynı (symbol, side, tf) tekrarında spam
-        # olmaz (silent block). Owner approve endpoint'i (Phase 2b) açar.
-        if _regime in ("DEFENSIVE", "CRISIS"):
+        # Market-session gate: deterministic session context (block / manual_ready /
+        # size clamp ≤ 1.0). RiskGate is already applied in decide_matrix; sessions
+        # only RESTRICT further — never relax, never boost. AI cannot override this.
+        gate = session_gate.evaluate_open(
+            d.symbol, side, d.timeframe, now_utc=now,
+            regime=_regime, risk_action=d.risk.action,
+        )
+        if gate.route == "block":
+            actions.append(
+                {**entry, "action": "blocked", "reason": gate.reason_code or "market_session_block"}
+            )
+            continue
+        session_mult = gate.effective_multiplier
+        # P2 — owner-approval kuyruğu: seans manual_ready VEYA DEFENSIVE/CRISIS rejim.
+        # Otomatik açılış YOK; (symbol, side, tf) tekrarında spam olmaz (silent block).
+        if gate.route == "manual_ready" or _regime in ("DEFENSIVE", "CRISIS"):
+            mr_reason = gate.reason_code if gate.route == "manual_ready" else d.reason
             queued = manual_queue.route_to_manual_ready(
                 ps, symbol=d.symbol, timeframe=d.timeframe, side=side,
-                size_multiplier=d.size_multiplier, requested_price=prices.get(d.symbol),
-                reason=d.reason, fingerprint=d.fingerprint, snapshot_id=snap.snapshot_id,
+                size_multiplier=d.size_multiplier * session_mult,
+                requested_price=prices.get(d.symbol),
+                reason=mr_reason, fingerprint=d.fingerprint, snapshot_id=snap.snapshot_id,
             )
             if queued is not None:
-                actions.append({**entry, "action": "manual_ready", "reason": d.reason})
+                actions.append({**entry, "action": "manual_ready", "reason": mr_reason})
             else:
                 actions.append({**entry, "action": "hold", "reason": "manual_ready_silent_block"})
             continue
         # P1 — açılış tek yoldan (attempt_open): duplicate/scale-in politikası +
-        # fiyat denetimi + audit burada. Yanıt etiketleri korunur.
+        # fiyat denetimi + audit burada. Seans çarpanı kısıtlayıcı uygulanır
+        # (final_size = base * min(1.0, session_multiplier)) + seans attribution.
         pos, decision = attempt_open(
             ps,
             symbol=d.symbol,
             side=side,
             entry_price=prices.get(d.symbol),
-            size_multiplier=d.size_multiplier,
+            size_multiplier=d.size_multiplier * session_mult,
             timeframe=d.timeframe,
             open_reason=d.reason,
             snapshot_id=snap.snapshot_id,
@@ -186,6 +202,7 @@ def post_paper_tick() -> dict:
             confidence_source=d.confidence_source,
             open_dqs=snap.quality.score,
             open_risk_action=d.risk.action,
+            **gate.attribution(),
         )
         if pos is not None:
             actions.append({**entry, "action": "open", "reason": d.reason})
