@@ -1288,7 +1288,7 @@ export type TfVolatilityRegime =
   | "UNKNOWN";
 export type TrendStrengthLabel = "TRENDING" | "WEAK" | "UNKNOWN";
 export type TechnicalStance = "ALLOW" | "CAUTION" | "ABSTAIN" | "DEGRADED";
-export type Timeframe = "15m" | "1h" | "4h" | "1d" | "1w";
+// `Timeframe` is declared once under "T0 — Timeframe contracts" above; reuse it.
 
 export type IndicatorQualityReport = {
   rsi?: IndicatorQuality;
