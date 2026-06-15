@@ -5,6 +5,7 @@ export const qk = {
   dashboardState: ["dashboard-state"] as const,
   aiReport: ["ai-report"] as const,
   paperTradingState: ["paper-trading", "state"] as const,
+  marketSessions: ["market-sessions", "current"] as const,
   learningSummary: ["learning", "summary"] as const,
   dataSnapshot: ["data", "snapshot"] as const,
   rebalanceProposal: ["learning", "rebalance"] as const,

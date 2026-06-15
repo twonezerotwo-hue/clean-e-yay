@@ -49,6 +49,15 @@ export const usePaperTradingState = () =>
     refetchInterval: 15_000,
   });
 
+/** Global market-session statuses (backend-derived; FE renders only). */
+export const useMarketSessions = () =>
+  useQuery({
+    queryKey: qk.marketSessions,
+    queryFn: api.marketSessions,
+    staleTime: 60_000,
+    refetchInterval: 60_000,
+  });
+
 export const useLearningSummary = () =>
   useQuery({
     queryKey: qk.learningSummary,

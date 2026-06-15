@@ -11,6 +11,7 @@ import { AgentBriefPanel } from "@/components/panels/AgentBriefPanel";
 import { DecisionTracePanel } from "@/components/panels/DecisionTracePanel";
 import { WatchConditionsPanel } from "@/components/panels/WatchConditionsPanel";
 import { PaperActionPanel } from "@/components/panels/PaperActionPanel";
+import { MarketSessionsPanel } from "@/components/panels/MarketSessionsPanel";
 import { TimeframeMatrixPanel } from "@/components/panels/TimeframeMatrixPanel";
 import { ChatPanel } from "@/components/panels/ChatPanel";
 
@@ -90,6 +91,7 @@ export default function HomePage() {
         <GridCell span="1"><DrawdownGuardPanel /></GridCell>
         <GridCell span="2"><PaperActionPanel /></GridCell>
         <GridCell span="1"><PositionChecksPanel /></GridCell>
+        <GridCell span="1"><MarketSessionsPanel /></GridCell>
       </PanelGroup>
 
       <PanelGroup title="Karar İzi / Aday Matrisi" hint="candidate → final · global gate tek banner">

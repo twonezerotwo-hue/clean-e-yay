@@ -15,6 +15,7 @@ import type {
   DataSnapshot,
   Health,
   LearningSummary,
+  MarketSessionsCurrentResponse,
   MistakesState,
   PaperTradingState,
   RebalanceState,
@@ -51,6 +52,8 @@ export const api = {
   aiReport: () => fetchJSON<AIReport>("/api/v1/ai-report/current"),
   paperTradingState: () =>
     fetchJSON<PaperTradingState>("/api/v1/paper-trading/state"),
+  marketSessions: () =>
+    fetchJSON<MarketSessionsCurrentResponse>("/api/v1/market-sessions/current"),
   paperTradingTick: () =>
     fetchJSON<TickResult>("/api/v1/paper-trading/tick", { method: "POST" }),
   learningSummary: () =>
