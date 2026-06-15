@@ -192,3 +192,23 @@ agent:
   personas: [analyst, risk_officer, macro_strategist]
   quorum_required: 2          # 3'ten en az 2 hemfikir
   groq_daily_token_budget: 1000000
+
+# T-MTF — Multi-timeframe technical feature (per closed-candle TF). EVIDENCE only:
+# TechnicalTimeframeResult üretir; ASLA trade açmaz, ASLA RiskGate/DQS/halt'ı
+# bypass etmez ve TEK aggregate skor ÜRETMEZ (direction/strength ayrı eksen).
+#   bias_cuts        : direction_score → BULLISH (>bull) / BEARISH (<bear) / NEUTRAL
+#   adx_trend_min    : ADX ≥ bu → trend gerçek (trend-follow); altı → level/reversal ağırlığı
+#   warmup_min_bars  : indikatör başına minimum bar; altı → INSUFFICIENT_HISTORY (fake yok)
+#   volatility       : bb_width(%) eşikleri → SQUEEZE / EXPANSION rejimi
+#   swing_pivot      : fraktal pivot pencereleri (key_levels + confluence)
+#   stop_atr_mult/target_rr : key_levels stop/target referansı (yalnızca evidence)
+technical:
+  bias_cuts: { bull: 60, bear: 40 }
+  adx_trend_min: 20
+  warmup_min_bars: { rsi: 30, macd: 60, ema200: 220, atr: 30, adx: 40 }
+  volatility:
+    bb_squeeze_pct: 4.0
+    bb_expansion_pct: 12.0
+  swing_pivot: { left: 3, right: 3 }
+  stop_atr_mult: 1.5
+  target_rr: 2.0

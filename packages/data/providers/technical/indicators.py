@@ -86,3 +86,134 @@ def atr(bars: list[OHLCVBar], period: int = 14) -> float | None:
     for tr in trs[period:]:
         value = (value * (period - 1) + tr) / period
     return value
+
+
+def atr_percent(bars: list[OHLCVBar], period: int = 14) -> float | None:
+    """ATR'nin son kapanışa oranı (%) — semboller arası karşılaştırılabilir
+    volatilite ölçüsü. ATR yoksa veya fiyat geçersizse None."""
+    a = atr(bars, period)
+    if a is None or not bars or bars[-1].close <= 0:
+        return None
+    return a / bars[-1].close * 100.0
+
+
+def adx(bars: list[OHLCVBar], period: int = 14) -> tuple[float, float, float] | None:
+    """Wilder ADX + yön göstergeleri → (adx, +DI, -DI).
+
+    Trend gücü ölçer (yön değil): ADX yüksek = güçlü trend, düşük = range.
+    Kararlı ADX için en az 2*period+1 bar gerekir; altı → None (DATA_POLICY).
+    """
+    if len(bars) < 2 * period + 1:
+        return None
+    trs: list[float] = []
+    plus_dms: list[float] = []
+    minus_dms: list[float] = []
+    for prev, cur in pairwise(bars):
+        up_move = cur.high - prev.high
+        down_move = prev.low - cur.low
+        plus_dms.append(up_move if (up_move > down_move and up_move > 0) else 0.0)
+        minus_dms.append(down_move if (down_move > up_move and down_move > 0) else 0.0)
+        trs.append(
+            max(
+                cur.high - cur.low,
+                abs(cur.high - prev.close),
+                abs(cur.low - prev.close),
+            )
+        )
+
+    # Wilder smoothing (running sums) — ATR/RSI ile aynı teknik.
+    atr_s = sum(trs[:period])
+    plus_s = sum(plus_dms[:period])
+    minus_s = sum(minus_dms[:period])
+
+    def _di(plus_sum: float, minus_sum: float, atr_sum: float) -> tuple[float, float]:
+        if atr_sum == 0.0:
+            return 0.0, 0.0
+        return 100.0 * plus_sum / atr_sum, 100.0 * minus_sum / atr_sum
+
+    def _dx(plus_di: float, minus_di: float) -> float:
+        denom = plus_di + minus_di
+        return 100.0 * abs(plus_di - minus_di) / denom if denom > 0 else 0.0
+
+    plus_di, minus_di = _di(plus_s, minus_s, atr_s)
+    dxs: list[float] = [_dx(plus_di, minus_di)]
+    for i in range(period, len(trs)):
+        atr_s = atr_s - atr_s / period + trs[i]
+        plus_s = plus_s - plus_s / period + plus_dms[i]
+        minus_s = minus_s - minus_s / period + minus_dms[i]
+        plus_di, minus_di = _di(plus_s, minus_s, atr_s)
+        dxs.append(_dx(plus_di, minus_di))
+
+    if len(dxs) < period:
+        return None
+    adx_v = sum(dxs[:period]) / period
+    for dx in dxs[period:]:
+        adx_v = (adx_v * (period - 1) + dx) / period
+    # +DI / -DI son (en güncel) değerleriyle birlikte dön.
+    return adx_v, plus_di, minus_di
+
+
+def swing_pivots(
+    bars: list[OHLCVBar], *, left: int = 2, right: int = 2
+) -> tuple[list[float], list[float]] | None:
+    """Fraktal swing pivotları → (swing_highs, swing_lows), kronolojik sırada.
+
+    Bir bar, solundaki `left` ve sağındaki `right` barın hepsinden kesinkes
+    yüksek (pivot high) / düşük (pivot low) ise pivottur. Yeterli bar yoksa
+    None; pivot bulunmazsa boş listeler (uydurma seviye yok)."""
+    n = len(bars)
+    if n < left + right + 1:
+        return None
+    highs: list[float] = []
+    lows: list[float] = []
+    for i in range(left, n - right):
+        hi = bars[i].high
+        lo = bars[i].low
+        is_high = all(hi > bars[j].high for j in range(i - left, i)) and all(
+            hi > bars[j].high for j in range(i + 1, i + right + 1)
+        )
+        is_low = all(lo < bars[j].low for j in range(i - left, i)) and all(
+            lo < bars[j].low for j in range(i + 1, i + right + 1)
+        )
+        if is_high:
+            highs.append(hi)
+        if is_low:
+            lows.append(lo)
+    return highs, lows
+
+
+def vwap(bars: list[OHLCVBar]) -> float | None:
+    """Hacim ağırlıklı ortalama fiyat (typical price = (H+L+C)/3).
+
+    VWAP yalnızca intraday TF'lerde anlamlıdır (per-TF semantik kuralı çağıran
+    tarafça uygulanır). Herhangi bir barda hacim yoksa/negatifse None —
+    uydurma hacim yok (DATA_POLICY)."""
+    if not bars:
+        return None
+    pv = 0.0
+    vol = 0.0
+    for b in bars:
+        if b.volume is None or b.volume < 0:
+            return None
+        typical = (b.high + b.low + b.close) / 3.0
+        pv += typical * b.volume
+        vol += b.volume
+    if vol <= 0:
+        return None
+    return pv / vol
+
+
+def bollinger_width(closes: list[float], period: int = 20, mult: float = 2.0) -> float | None:
+    """Bollinger bant genişliği = (üst-alt)/orta × 100 (% cinsinden).
+
+    Volatilite rejimi (SQUEEZE/EXPANSION) için kullanılır. En az `period`
+    kapanış gerekir; orta bant ≤ 0 ise None."""
+    if len(closes) < period:
+        return None
+    window = closes[-period:]
+    mean = sum(window) / period
+    if mean <= 0:
+        return None
+    var = sum((c - mean) ** 2 for c in window) / period
+    std = var**0.5
+    return (2.0 * mult * std) / mean * 100.0

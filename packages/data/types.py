@@ -147,6 +147,147 @@ class TechnicalInsight(BaseModel):
     fibonacci_score: int = 0
 
 
+# ── T-MTF — Per-timeframe technical result (multi-TF feature; never decides) ───
+# One structured technical opinion per (symbol, closed-candle timeframe). EVIDENCE
+# only: indicators are computed from real closed OHLCV here. It does NOT open
+# trades, is NOT consumed as a single aggregated score, and is NOT the RiskGate.
+# CORE RULE: direction and strength are SEPARATE axes — there is no one
+# "aggregated_technical_score" that represents every strategy. Missing/insufficient
+# data becomes diagnostics (indicator_quality / warnings), NEVER a fake neutral
+# confidence (DATA_POLICY).
+IndicatorQuality = Literal["OK", "INSUFFICIENT_HISTORY"]
+TechnicalBias = Literal["BULLISH", "BEARISH", "NEUTRAL"]
+# Per-TF (price-derived) volatility regime — distinct from the macro regime
+# (packages/regime, price-OFF). UNKNOWN = could not be computed (no fake value).
+TfVolatilityRegime = Literal["TRENDING", "RANGING", "SQUEEZE", "EXPANSION", "UNKNOWN"]
+TrendStrengthLabel = Literal["TRENDING", "WEAK", "UNKNOWN"]
+
+
+class IndicatorQualityReport(BaseModel):
+    """Per-indicator warm-up status — INSUFFICIENT_HISTORY is a diagnostic, not a
+    fake value. Missing M15 must not collapse D1/H4/H1 (graceful degradation)."""
+
+    rsi: IndicatorQuality = "INSUFFICIENT_HISTORY"
+    macd: IndicatorQuality = "INSUFFICIENT_HISTORY"
+    ema200: IndicatorQuality = "INSUFFICIENT_HISTORY"
+    atr: IndicatorQuality = "INSUFFICIENT_HISTORY"
+    adx: IndicatorQuality = "INSUFFICIENT_HISTORY"
+
+
+class TechnicalDataQuality(BaseModel):
+    status: TechnicalStatus = "DEGRADED"
+    bars_used: int = 0
+    stale: bool = False
+    indicator_quality: IndicatorQualityReport = Field(default_factory=IndicatorQualityReport)
+    warnings: list[str] = Field(default_factory=list)
+
+
+class TechnicalScoreOverview(BaseModel):
+    """Two SEPARATE axes — never collapsed into one aggregate (architecture rule).
+
+    `direction_score` 0–100 (50 = neutral); `strength_score` 0–100 (conviction).
+    `None` means insufficient data — NOT a neutral 50 (DATA_POLICY)."""
+
+    direction_score: float | None = None
+    strength_score: float | None = None
+
+
+class TechnicalKeyLevels(BaseModel):
+    support: float | None = None
+    resistance: float | None = None
+    atr: float | None = None
+    atr_percent: float | None = None
+    stop_reference: float | None = None
+    target_reference: float | None = None
+
+
+class TechnicalTrendStrength(BaseModel):
+    """ADX-band trend reality (NOT direction). adx < adx_trend_min → trend-follow
+    signals are weakened; levels/reversals gain weight (architecture gate)."""
+
+    adx: float | None = None
+    plus_di: float | None = None
+    minus_di: float | None = None
+    is_trending: bool = False
+    label: TrendStrengthLabel = "UNKNOWN"
+
+
+class TechnicalConfluenceZone(BaseModel):
+    """Per-TF confluence: fib + S/R + VWAP clustering in the same price band."""
+
+    price: float
+    kind: Literal["support", "resistance"]
+    components: list[str] = Field(default_factory=list)
+
+
+class ConfirmationSignal(BaseModel):
+    """A TIMING gate ('triggered or not') — separate from scoring (no double count).
+    The same EMA/volume magnitude is scored once in score_overview; here we only
+    say whether a trigger fired (section 4.4)."""
+
+    name: str
+    fired: bool = False
+    detail: str = ""
+
+
+class TechnicalTimeframeSummary(BaseModel):
+    bias: TechnicalBias = "NEUTRAL"
+    evidence: list[str] = Field(default_factory=list)
+    warnings: list[str] = Field(default_factory=list)
+
+
+class TechnicalTimeframeResult(BaseModel):
+    """Canonical per-(symbol, timeframe) technical result (contract section 5).
+
+    Reversal/chart-pattern layers (section 4.5) are stateful and land later; they
+    are intentionally absent here rather than fabricated. `fibonacci_analysis` is
+    only attached for 4H/1D (its per-TF semantics). EVIDENCE only — never trades."""
+
+    symbol: str
+    timeframe: Timeframe
+    data_quality: TechnicalDataQuality = Field(default_factory=TechnicalDataQuality)
+    score_overview: TechnicalScoreOverview = Field(default_factory=TechnicalScoreOverview)
+    key_levels: TechnicalKeyLevels = Field(default_factory=TechnicalKeyLevels)
+    confirmation_signals: list[ConfirmationSignal] = Field(default_factory=list)
+    trend_strength: TechnicalTrendStrength = Field(default_factory=TechnicalTrendStrength)
+    volatility_regime: TfVolatilityRegime = "UNKNOWN"
+    confluence_zones: list[TechnicalConfluenceZone] = Field(default_factory=list)
+    timeframe_summary: TechnicalTimeframeSummary = Field(default_factory=TechnicalTimeframeSummary)
+    fibonacci_analysis: FibonacciAnalysis | None = None
+    status: TechnicalStatus = "OK"
+    source: str = "unknown"
+    ts: datetime = Field(default_factory=utcnow)
+
+
+# ── T2 — TechnicalAgent output (one structured opinion per symbol) ─────────────
+# Consumes per-TF TechnicalTimeframeResult and emits a single agent view. It does
+# NOT open trades, NOT size positions, and is NOT the RiskGate. Missing/degraded
+# inputs → ABSTAIN/DEGRADED + missing_data (never a fabricated confident opinion).
+# `direction_score`/`strength_score` are COARSE summaries; `per_timeframe` detail
+# stays authoritative and consensus does the strategy-specific combination.
+TechnicalStance = Literal["ALLOW", "CAUTION", "ABSTAIN", "DEGRADED"]
+
+
+class TechnicalInvalidation(BaseModel):
+    timeframe: Timeframe | None = None
+    price: float | None = None
+    reason: str = ""
+
+
+class TechnicalAgentOutput(BaseModel):
+    agent: Literal["technical"] = "technical"
+    symbol: str
+    # keys: m15 / h1 / h4 / d1 / w1 (contract naming)
+    per_timeframe: dict[str, TechnicalTimeframeResult] = Field(default_factory=dict)
+    stance: TechnicalStance = "ABSTAIN"
+    direction_score: float | None = None
+    strength_score: float | None = None
+    used_observations: list[str] = Field(default_factory=list)
+    invalidation: TechnicalInvalidation | None = None
+    missing_data: list[str] = Field(default_factory=list)
+    ts: datetime = Field(default_factory=utcnow)
+
+
 # P0 parity — başlık tazeliği yayın yaşına göre damgalanır (UI hesap yapmaz).
 NewsFreshness = Literal["FRESH", "RECENT", "STALE"]
 
