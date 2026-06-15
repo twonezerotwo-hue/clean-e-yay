@@ -1,0 +1,117 @@
+# Global market sessions / exchange opening hours.
+#
+# Backend owns market-session meaning (frontend renders only). The engine reads
+# this config + the market's local timezone (DST-correct via stdlib zoneinfo) to
+# derive open/close, session phase and gating context.
+#
+# `kind`:
+#   exchange        — a real exchange with a regular weekday session. Holidays /
+#                     early closes are verified ONLY when an exchange-calendar
+#                     library is installed (pandas_market_calendars /
+#                     exchange_calendars). Without it the engine falls back to
+#                     regular weekday sessions, marks holiday_verified=false and
+#                     emits diagnostic `exchange_calendar_missing:<exchange>`.
+#   continuous      — 24/7 market (crypto). No holidays; always open.
+#   futures_global  — near-24h futures (energy/metals). Without a futures calendar
+#                     the engine uses a broad weekday session, holiday_verified=
+#                     false, diagnostic `exchange_calendar_missing:<exchange>`.
+#
+# regular_open / regular_close are LOCAL times in the market's timezone (HH:MM).
+# Tokyo's lunch break is intentionally not modelled (treated as one session).
+
+session_thresholds:
+  opening_pre_minutes: 15      # closed-but-imminent: opening_window starts 15m before open
+  opening_post_minutes: 30     # opening_window lasts 30m after open
+  closing_pre_minutes: 30      # closing_window starts 30m before close
+  pre_open_watch_minutes: 120  # closed but next open within 120m -> pre_open
+
+markets:
+  US_EQUITY:
+    label: "US Equities"
+    exchange: "XNYS"
+    timezone: "America/New_York"
+    kind: "exchange"
+    regular_open: "09:30"
+    regular_close: "16:00"
+    assets: ["SPY", "QQQ", "IWM", "SMH", "XLF", "HYG", "LQD"]
+
+  NASDAQ:
+    label: "Nasdaq"
+    exchange: "XNAS"
+    timezone: "America/New_York"
+    kind: "exchange"
+    regular_open: "09:30"
+    regular_close: "16:00"
+    assets: ["QQQ", "SMH"]
+
+  LONDON:
+    label: "London"
+    exchange: "XLON"
+    timezone: "Europe/London"
+    kind: "exchange"
+    regular_open: "08:00"
+    regular_close: "16:30"
+    assets: ["DXY", "XAUUSD", "XAGUSD", "BRENT"]
+
+  EUROPE:
+    label: "Europe"
+    exchange: "XPAR"
+    timezone: "Europe/Paris"
+    kind: "exchange"
+    regular_open: "09:00"
+    regular_close: "17:30"
+    assets: ["DXY", "XAUUSD", "XAGUSD", "BRENT"]
+
+  TOKYO:
+    label: "Tokyo"
+    exchange: "XTKS"
+    timezone: "Asia/Tokyo"
+    kind: "exchange"
+    regular_open: "09:00"
+    regular_close: "15:00"
+    assets: ["DXY", "XAUUSD", "XAGUSD"]
+
+  HONG_KONG:
+    label: "Hong Kong"
+    exchange: "XHKG"
+    timezone: "Asia/Hong_Kong"
+    kind: "exchange"
+    regular_open: "09:30"
+    regular_close: "16:00"
+    assets: ["FXI", "BTCUSD", "ETHUSD"]
+
+  SHANGHAI:
+    label: "Shanghai"
+    exchange: "XSHG"
+    timezone: "Asia/Shanghai"
+    kind: "exchange"
+    regular_open: "09:30"
+    regular_close: "15:00"
+    assets: ["FXI", "XCUUSD"]
+
+  CRYPTO_GLOBAL:
+    label: "Crypto 24/7"
+    exchange: "CRYPTO_247"
+    timezone: "UTC"
+    kind: "continuous"
+    regular_open: "00:00"
+    regular_close: "23:59"
+    assets: ["BTCUSD", "ETHUSD", "BTC_DOMINANCE", "USDT_DOMINANCE", "TOTAL", "TOTAL2"]
+
+  ENERGY_GLOBAL:
+    label: "Energy Futures"
+    exchange: "ENERGY_FUTURES"
+    timezone: "America/New_York"
+    kind: "futures_global"
+    regular_open: "00:00"
+    regular_close: "23:59"
+    assets: ["BRENT", "WTI"]
+
+  METALS_GLOBAL:
+    label: "Metals Futures"
+    exchange: "METALS_FUTURES"
+    timezone: "America/New_York"
+    kind: "futures_global"
+    regular_open: "00:00"
+    regular_close: "23:59"
+    assets: ["XAUUSD", "XAGUSD", "XCUUSD"]
