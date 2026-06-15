@@ -324,6 +324,31 @@ class ConsensusSnapshot(BaseModel):
     ts: datetime = Field(default_factory=utcnow)
 
 
+# ── T2 — AgentDecision (deterministic action; RiskGate stays final) ────────────
+# Bridges consensus EVIDENCE → one high-level action + entry_timeframe. It does
+# NOT open trades (paper open is the matrix/RiskGate's job) and `risk_gate_required`
+# is always true. Upper TF only SCALES DOWN (size_multiplier ≤ 1.0, never boosts);
+# 1w yields bias only (no entry); countertrend is never an automatic full entry.
+DecisionAction = Literal[
+    "NO_TRADE", "WATCH", "SCOUT_ALLOWED", "CONFIRMATION_REQUIRED", "RISK_REDUCE", "KILL_SWITCH"
+]
+
+
+class AgentDecision(BaseModel):
+    asset: str
+    action: DecisionAction = "NO_TRADE"
+    entry_timeframe: Timeframe | None = None
+    size_multiplier: float = 0.0          # ≤1.0 — upper TF only scales DOWN
+    confidence: float = 0.0               # 0..1
+    reason: str = ""
+    supporting_agents: list[str] = Field(default_factory=list)
+    blocking_agents: list[str] = Field(default_factory=list)
+    required_confirmations: list[str] = Field(default_factory=list)
+    manual_ready_required: bool = False
+    risk_gate_required: bool = True
+    ts: datetime = Field(default_factory=utcnow)
+
+
 # P0 parity — başlık tazeliği yayın yaşına göre damgalanır (UI hesap yapmaz).
 NewsFreshness = Literal["FRESH", "RECENT", "STALE"]
 

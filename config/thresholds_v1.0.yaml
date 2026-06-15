@@ -212,3 +212,16 @@ technical:
   swing_pivot: { left: 3, right: 3 }
   stop_atr_mult: 1.5
   target_rr: 2.0
+
+# T2 — AgentDecision (deterministic). ConsensusSnapshot + RiskGate aksiyonu →
+# tek yüksek-seviye aksiyon + entry_timeframe. EVIDENCE→aksiyon köprüsü; trade
+# AÇMAZ (paper open matrix/RiskGate işi). Kurallar: RiskGate her zaman final
+# (risk_gate_required=true); ÜST TF yalnızca KÜÇÜLTÜR (asla scale-up); 1w giriş
+# üretmez (yalnız bias); countertrend asla otomatik full giriş.
+#   strength_min        : consensus strength_score < bu → SCOUT yerine CONFIRMATION/WATCH
+#   scout_alignment_min : alignment_score ≥ bu + confirmed → SCOUT_ALLOWED
+#   countertrend_size_cap: countertrend ek size kısıtı (≤1.0, yalnız küçültür)
+decision:
+  strength_min: 40
+  scout_alignment_min: 60
+  countertrend_size_cap: 0.5
