@@ -38,3 +38,12 @@ constraints:
   min_module_floor: 0.02
   max_delta_per_module: 0.03
   max_total_drift: 0.10
+
+# Step 8 — per-strategy timeframe weights (PRIOR). Consensus may weight TF signals
+# by strategy; these START as PRIOR and stay untrusted until per-TF calibration
+# validates them (packages/learning/tf_calibration.py — "don't trust weights until
+# calibration validates"). Attribution-based auto-tune is deferred, not faked.
+tf_weights:
+  swing:    { d1: 0.50, h4: 0.35, h1: 0.15, m15: 0.00 }
+  intraday: { d1: 0.15, h4: 0.35, h1: 0.35, m15: 0.15 }
+  scalp:    { d1: 0.00, h4: 0.15, h1: 0.35, m15: 0.50 }
