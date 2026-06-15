@@ -28,6 +28,7 @@ from apps.api.routers import (
     replay,
     risk,
     system,
+    technical,
 )
 
 _START_TS = time.monotonic()
@@ -75,6 +76,7 @@ def create_app() -> FastAPI:
     app.include_router(market_sessions.router, prefix=prefix)
     app.include_router(learning.router, prefix=prefix)
     app.include_router(data.router, prefix=prefix)
+    app.include_router(technical.router, prefix=prefix)
     app.include_router(decision.router, prefix=prefix)
     app.include_router(cockpit.router, prefix=prefix)
     app.include_router(rebalance.router, prefix=prefix)

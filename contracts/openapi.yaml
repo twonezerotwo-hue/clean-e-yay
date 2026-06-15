@@ -494,6 +494,23 @@ paths:
               schema:
                 $ref: "#/components/schemas/MarketSessionAssetResponse"
 
+  /api/v1/technical/insight/{asset_code}:
+    get:
+      operationId: getTechnicalInsight
+      summary: Per-symbol multi-timeframe Fibonacci technical evidence — read-only
+      parameters:
+        - name: asset_code
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TechnicalInsight"
+
 components:
   schemas:
     Health:
@@ -2288,3 +2305,92 @@ components:
           items: { type: string }
         paper_safe: { type: boolean }
         no_execution: { type: boolean }
+
+    # ── F1 — Multi-timeframe Fibonacci (technical evidence; backend-computed) ──
+    FibonacciLevel:
+      type: object
+      required: [ratio, label, price, kind]
+      properties:
+        ratio: { type: number }
+        label: { type: string }
+        price: { type: number }
+        kind: { type: string, enum: [retracement, extension] }
+        role: { type: string, enum: [support, resistance, neutral, unknown] }
+        distance_pct: { type: number, nullable: true }
+
+    FibonacciAnalysis:
+      type: object
+      description: >
+        One timeframe's Fibonacci context (1D = HTF swing; 4H = retest). Computed
+        from real OHLCV by the backend — the frontend renders, never calculates.
+      required: [timeframe, trend_direction, levels, zone, validity, diagnostics]
+      properties:
+        timeframe: { type: string, enum: ["1D", "4H"] }
+        swing_high: { type: number, nullable: true }
+        swing_low: { type: number, nullable: true }
+        swing_start: { type: string, format: date-time, nullable: true }
+        swing_end: { type: string, format: date-time, nullable: true }
+        trend_direction: { type: string, enum: [uptrend, downtrend, range, unknown] }
+        levels:
+          type: array
+          items: { $ref: "#/components/schemas/FibonacciLevel" }
+        nearest_level:
+          anyOf:
+            - $ref: "#/components/schemas/FibonacciLevel"
+            - type: "null"
+        nearest_distance_pct: { type: number, nullable: true }
+        zone:
+          type: string
+          enum: [near_support, near_resistance, breakout, breakdown, mid_range, unknown]
+        validity: { type: string, enum: [sane, weak, unavailable] }
+        diagnostics:
+          type: array
+          items: { type: string }
+
+    FibonacciConfluence:
+      type: object
+      required: [has_confluence, confluence_zone, score, reason, diagnostics]
+      properties:
+        has_confluence: { type: boolean }
+        confluence_zone: { type: string, enum: [support, resistance, mixed, none, unknown] }
+        nearest_1d_level:
+          anyOf:
+            - $ref: "#/components/schemas/FibonacciLevel"
+            - type: "null"
+        nearest_4h_level:
+          anyOf:
+            - $ref: "#/components/schemas/FibonacciLevel"
+            - type: "null"
+        distance_between_levels_pct: { type: number, nullable: true }
+        score:
+          type: integer
+          description: 0–25 confluence sub-score (evidence only; never opens trades).
+        reason: { type: string }
+        diagnostics:
+          type: array
+          items: { type: string }
+
+    TechnicalInsight:
+      type: object
+      description: >
+        Per-symbol technical evidence aggregate carrying the Fibonacci layer. It
+        does NOT alter the per-TF TechnicalSnapshot score (technical_score) and is
+        not consumed by the decision engine / RiskGate.
+      required: [symbol, fibonacci_score]
+      properties:
+        symbol: { type: string }
+        fib_1d:
+          anyOf:
+            - $ref: "#/components/schemas/FibonacciAnalysis"
+            - type: "null"
+        fib_4h:
+          anyOf:
+            - $ref: "#/components/schemas/FibonacciAnalysis"
+            - type: "null"
+        fib_confluence:
+          anyOf:
+            - $ref: "#/components/schemas/FibonacciConfluence"
+            - type: "null"
+        fibonacci_score:
+          type: integer
+          description: 0–25 Fibonacci evidence score (separate from technical_score).

@@ -1211,3 +1211,66 @@ export type MarketSessionAssetResponse = {
   paper_safe: boolean;
   no_execution: boolean;
 };
+
+// ── F1 — Multi-timeframe Fibonacci (technical evidence; backend-computed) ─────
+export type FibKind = "retracement" | "extension";
+export type FibRole = "support" | "resistance" | "neutral" | "unknown";
+export type FibTrend = "uptrend" | "downtrend" | "range" | "unknown";
+export type FibZone =
+  | "near_support"
+  | "near_resistance"
+  | "breakout"
+  | "breakdown"
+  | "mid_range"
+  | "unknown";
+export type FibValidity = "sane" | "weak" | "unavailable";
+export type FibConfluenceZone =
+  | "support"
+  | "resistance"
+  | "mixed"
+  | "none"
+  | "unknown";
+export type FibTF = "1D" | "4H";
+
+export type FibonacciLevel = {
+  ratio: number;
+  label: string;
+  price: number;
+  kind: FibKind;
+  role?: FibRole;
+  distance_pct?: number | null;
+};
+
+export type FibonacciAnalysis = {
+  timeframe: FibTF;
+  swing_high?: number | null;
+  swing_low?: number | null;
+  swing_start?: string | null;
+  swing_end?: string | null;
+  trend_direction: FibTrend;
+  levels: FibonacciLevel[];
+  nearest_level?: FibonacciLevel | null;
+  nearest_distance_pct?: number | null;
+  zone: FibZone;
+  validity: FibValidity;
+  diagnostics: string[];
+};
+
+export type FibonacciConfluence = {
+  has_confluence: boolean;
+  confluence_zone: FibConfluenceZone;
+  nearest_1d_level?: FibonacciLevel | null;
+  nearest_4h_level?: FibonacciLevel | null;
+  distance_between_levels_pct?: number | null;
+  score: number;
+  reason: string;
+  diagnostics: string[];
+};
+
+export type TechnicalInsight = {
+  symbol: string;
+  fib_1d?: FibonacciAnalysis | null;
+  fib_4h?: FibonacciAnalysis | null;
+  fib_confluence?: FibonacciConfluence | null;
+  fibonacci_score: number;
+};

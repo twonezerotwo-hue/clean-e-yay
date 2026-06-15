@@ -582,6 +582,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/technical/insight/{asset_code}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Per-symbol multi-timeframe Fibonacci technical evidence — read-only */
+        get: operations["getTechnicalInsight"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -1815,6 +1832,58 @@ export interface components {
             paper_safe: boolean;
             no_execution: boolean;
         };
+        FibonacciLevel: {
+            ratio: number;
+            label: string;
+            price: number;
+            /** @enum {string} */
+            kind: "retracement" | "extension";
+            /** @enum {string} */
+            role?: "support" | "resistance" | "neutral" | "unknown";
+            distance_pct?: number | null;
+        };
+        /** @description One timeframe's Fibonacci context (1D = HTF swing; 4H = retest). Computed from real OHLCV by the backend — the frontend renders, never calculates. */
+        FibonacciAnalysis: {
+            /** @enum {string} */
+            timeframe: "1D" | "4H";
+            swing_high?: number | null;
+            swing_low?: number | null;
+            /** Format: date-time */
+            swing_start?: string | null;
+            /** Format: date-time */
+            swing_end?: string | null;
+            /** @enum {string} */
+            trend_direction: "uptrend" | "downtrend" | "range" | "unknown";
+            levels: components["schemas"]["FibonacciLevel"][];
+            nearest_level?: components["schemas"]["FibonacciLevel"] | null;
+            nearest_distance_pct?: number | null;
+            /** @enum {string} */
+            zone: "near_support" | "near_resistance" | "breakout" | "breakdown" | "mid_range" | "unknown";
+            /** @enum {string} */
+            validity: "sane" | "weak" | "unavailable";
+            diagnostics: string[];
+        };
+        FibonacciConfluence: {
+            has_confluence: boolean;
+            /** @enum {string} */
+            confluence_zone: "support" | "resistance" | "mixed" | "none" | "unknown";
+            nearest_1d_level?: components["schemas"]["FibonacciLevel"] | null;
+            nearest_4h_level?: components["schemas"]["FibonacciLevel"] | null;
+            distance_between_levels_pct?: number | null;
+            /** @description 0–25 confluence sub-score (evidence only; never opens trades). */
+            score: number;
+            reason: string;
+            diagnostics: string[];
+        };
+        /** @description Per-symbol technical evidence aggregate carrying the Fibonacci layer. It does NOT alter the per-TF TechnicalSnapshot score (technical_score) and is not consumed by the decision engine / RiskGate. */
+        TechnicalInsight: {
+            symbol: string;
+            fib_1d?: components["schemas"]["FibonacciAnalysis"] | null;
+            fib_4h?: components["schemas"]["FibonacciAnalysis"] | null;
+            fib_confluence?: components["schemas"]["FibonacciConfluence"] | null;
+            /** @description 0–25 Fibonacci evidence score (separate from technical_score). */
+            fibonacci_score: number;
+        };
     };
     responses: never;
     parameters: never;
@@ -2567,6 +2636,28 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["MarketSessionAssetResponse"];
+                };
+            };
+        };
+    };
+    getTechnicalInsight: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                asset_code: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TechnicalInsight"];
                 };
             };
         };
