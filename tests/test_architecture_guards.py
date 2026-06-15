@@ -433,3 +433,50 @@ def test_market_sessions_panel_is_read_only() -> None:
     if _PANEL_FORBIDDEN_IMPORT.search(raw):
         problems.append("imports paper/risk/decision logic")
     assert not problems, "MarketSessionsPanel must be read-only: " + "; ".join(problems)
+
+
+# ── Fibonacci: technical EVIDENCE only — never trades, never bypasses RiskGate ──
+# Fibonacci is an additive technical-analysis layer. It must stay pure evidence:
+# no paper/risk/decision imports, no paper open/close calls, and it must NOT be
+# consumed by the decision engine or RiskGate (so it can't enable a trade or
+# relax the gate). fibonacci_score stays within [0, 25].
+
+FIBONACCI = REPO / "packages" / "data" / "providers" / "technical" / "fibonacci.py"
+DECISION_DIR = REPO / "packages" / "decision"
+RISK_DIR = REPO / "packages" / "risk"
+
+_FIB_FORBIDDEN_IMPORT = re.compile(
+    r"^\s*(?:from|import)\s+(packages\.risk|packages\.paper|packages\.decision)\b", re.M
+)
+_FIB_FORBIDDEN_CALL = re.compile(r"\b(attempt_open|open_position|close_position)\s*\(")
+
+
+def test_fibonacci_is_pure_evidence() -> None:
+    """fibonacci.py is pure technical evidence — no risk/paper/decision imports and
+    no paper open/close calls (it can never open a trade)."""
+    src = FIBONACCI.read_text(encoding="utf-8")
+    offenders = [m.group(1) for m in _FIB_FORBIDDEN_IMPORT.finditer(src)]
+    offenders += [f"{m.group(1)}()" for m in _FIB_FORBIDDEN_CALL.finditer(src)]
+    assert not offenders, "fibonacci.py must stay pure evidence: " + ", ".join(offenders)
+
+
+def test_fibonacci_not_consumed_by_decision_or_risk() -> None:
+    """Fibonacci is not wired into the decision engine or RiskGate — so it cannot
+    open a trade or bypass the gate (it stays technical evidence only)."""
+    offenders: list[str] = []
+    for root in (DECISION_DIR, RISK_DIR):
+        for path in _py_files(root):
+            if re.search(r"fibonacci", path.read_text(encoding="utf-8"), re.I):
+                offenders.append(str(path.relative_to(REPO)))
+    assert not offenders, (
+        "Fibonacci must not be referenced by decision/risk engines (evidence only): "
+        + ", ".join(offenders)
+    )
+
+
+def test_fibonacci_score_bounded_to_25() -> None:
+    """The fibonacci_score function returns are within [0, 25] — never a boost."""
+    src = FIBONACCI.read_text(encoding="utf-8")
+    returns = [int(n) for n in re.findall(r"\breturn\s+(\d+)\b", src)]
+    assert returns, "expected integer score returns in fibonacci_score"
+    assert all(0 <= n <= 25 for n in returns), f"fibonacci_score returns out of [0,25]: {returns}"
