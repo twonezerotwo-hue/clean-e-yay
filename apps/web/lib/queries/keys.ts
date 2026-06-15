@@ -14,6 +14,7 @@ export const qk = {
   riskCorrelation: ["risk", "correlation"] as const,
   riskHalts: ["risk", "halts"] as const,
   decisionMatrix: ["decision", "matrix"] as const,
+  agentMatrix: ["technical", "agent-matrix"] as const,
   cockpitBrief: ["cockpit", "brief"] as const,
   replayStatus: ["replay", "status"] as const,
 };

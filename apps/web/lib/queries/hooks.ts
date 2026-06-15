@@ -114,6 +114,15 @@ export const useDecisionMatrix = () =>
     refetchInterval: 30_000,
   });
 
+/** T2 step 7 — multi-TF agent pipeline matrisi (consensus → karar → ekonomi). */
+export const useAgentMatrix = () =>
+  useQuery({
+    queryKey: qk.agentMatrix,
+    queryFn: api.agentMatrix,
+    staleTime: 15_000,
+    refetchInterval: 30_000,
+  });
+
 /** UX1 — Agent Operating Cockpit özeti (AgentBrief + DecisionTrace). */
 export const useCockpitBrief = () =>
   useQuery({

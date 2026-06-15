@@ -3,6 +3,7 @@
  * Tüm tipler `types/generated/api.ts`'den gelir.
  */
 import type {
+  AgentMatrix,
   AIReport,
   ChatResponse,
   CockpitBrief,
@@ -71,6 +72,8 @@ export const api = {
     fetchJSON<HaltResetResult>("/api/v1/risk/halts/reset", { method: "POST" }),
   decisionMatrix: () =>
     fetchJSON<DecisionMatrix>("/api/v1/decision/matrix"),
+  agentMatrix: () =>
+    fetchJSON<AgentMatrix>("/api/v1/technical/agent-matrix"),
   cockpitBrief: () => fetchJSON<CockpitBrief>("/api/v1/cockpit/brief"),
   replayStatus: () => fetchJSON<ReplayStatus>("/api/v1/replay/status"),
   chat: (message: string) =>
