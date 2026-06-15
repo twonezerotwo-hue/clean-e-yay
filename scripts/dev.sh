@@ -73,10 +73,16 @@ cleanup() {
 trap cleanup EXIT INT TERM
 
 # API
+# Not: uvicorn --reload, Python 3.14 StatReload alt-sürecini başlatamıyor
+# (worker spawn olmuyor, port bind edilmiyor). API_RELOAD=false ile kapat.
 (
   cd "$ROOT"
   export PYTHONPATH="$ROOT"
-  exec "$PY" -m uvicorn apps.api.main:app --reload --host 127.0.0.1 --port "$API_PORT"
+  if [ "${API_RELOAD:-true}" = "false" ]; then
+    exec "$PY" -m uvicorn apps.api.main:app --host 127.0.0.1 --port "$API_PORT"
+  else
+    exec "$PY" -m uvicorn apps.api.main:app --reload --host 127.0.0.1 --port "$API_PORT"
+  fi
 ) &
 API_PID=$!
 
