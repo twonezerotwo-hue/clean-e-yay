@@ -84,6 +84,69 @@ class TechnicalSnapshot(BaseModel):
     bars_used: int = 0
 
 
+# ── F1 — Multi-timeframe Fibonacci (technical evidence layer; never decides) ───
+# Backend owns Fibonacci meaning: levels are computed from real OHLCV swings here.
+# This is additive technical evidence — it does NOT change `technical_score`,
+# does NOT open trades, and is NOT consumed by the decision engine / RiskGate.
+FibKind = Literal["retracement", "extension"]
+FibRole = Literal["support", "resistance", "neutral", "unknown"]
+FibTrend = Literal["uptrend", "downtrend", "range", "unknown"]
+FibZone = Literal[
+    "near_support", "near_resistance", "breakout", "breakdown", "mid_range", "unknown"
+]
+FibValidity = Literal["sane", "weak", "unavailable"]
+FibConfluenceZone = Literal["support", "resistance", "mixed", "none", "unknown"]
+FibTF = Literal["1D", "4H"]
+
+
+class FibonacciLevel(BaseModel):
+    ratio: float
+    label: str
+    price: float
+    kind: FibKind
+    role: FibRole = "unknown"
+    distance_pct: float | None = None
+
+
+class FibonacciAnalysis(BaseModel):
+    timeframe: FibTF
+    swing_high: float | None = None
+    swing_low: float | None = None
+    swing_start: str | None = None
+    swing_end: str | None = None
+    trend_direction: FibTrend = "unknown"
+    levels: list[FibonacciLevel] = Field(default_factory=list)
+    nearest_level: FibonacciLevel | None = None
+    nearest_distance_pct: float | None = None
+    zone: FibZone = "unknown"
+    validity: FibValidity = "unavailable"
+    diagnostics: list[str] = Field(default_factory=list)
+
+
+class FibonacciConfluence(BaseModel):
+    has_confluence: bool = False
+    confluence_zone: FibConfluenceZone = "unknown"
+    nearest_1d_level: FibonacciLevel | None = None
+    nearest_4h_level: FibonacciLevel | None = None
+    distance_between_levels_pct: float | None = None
+    score: int = 0
+    reason: str = ""
+    diagnostics: list[str] = Field(default_factory=list)
+
+
+class TechnicalInsight(BaseModel):
+    """Per-symbol technical evidence aggregate carrying the Fibonacci layer.
+
+    Additive: it does not alter the per-TF `TechnicalSnapshot.score`
+    (`technical_score`). `fibonacci_score` (0–25) is a separate evidence signal.
+    """
+    symbol: str
+    fib_1d: FibonacciAnalysis | None = None
+    fib_4h: FibonacciAnalysis | None = None
+    fib_confluence: FibonacciConfluence | None = None
+    fibonacci_score: int = 0
+
+
 # P0 parity — başlık tazeliği yayın yaşına göre damgalanır (UI hesap yapmaz).
 NewsFreshness = Literal["FRESH", "RECENT", "STALE"]
 

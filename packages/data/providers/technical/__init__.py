@@ -12,8 +12,15 @@ from __future__ import annotations
 from datetime import UTC, datetime
 
 from packages.data.providers import ohlcv
-from packages.data.providers.technical import indicators
-from packages.data.types import TIMEFRAMES, OHLCVBar, TechnicalSnapshot, Timeframe
+from packages.data.providers.technical import fibonacci, indicators
+from packages.data.types import (
+    TIMEFRAMES,
+    FibonacciAnalysis,
+    OHLCVBar,
+    TechnicalInsight,
+    TechnicalSnapshot,
+    Timeframe,
+)
 
 # TF bazlı stale eşiği (saniye) — 15m hızlı bayatlar, 1w en toleranslı.
 STALE_AFTER_SEC: dict[Timeframe, int] = {
@@ -97,3 +104,71 @@ def get_snapshot(symbol: str, timeframe: str = "1d") -> TechnicalSnapshot:
     tf: Timeframe = timeframe if timeframe in TIMEFRAMES else "1d"  # type: ignore[assignment]
     bars = ohlcv.get_bars(symbol, tf)
     return compute_snapshot(symbol, tf, bars)
+
+
+# ── F1 — Multi-timeframe Fibonacci (additive technical evidence) ──────────────
+# Does NOT change `technical_score` (compute_snapshot is untouched), does NOT open
+# trades, and is NOT consumed by the decision engine / RiskGate.
+
+def _momentum_agrees(zone: str, snap: TechnicalSnapshot) -> bool:
+    """Whether 1D momentum agrees with a confluence support/resistance zone.
+
+    Reuses the existing snapshot signals (ema_stack / RSI / MACD) — read-only; it
+    does not recompute or alter `technical_score`.
+    """
+    bullish = (
+        snap.ema_stack == "bullish"
+        or (snap.rsi is not None and snap.rsi >= 55)
+        or (snap.macd is not None and snap.macd > 0)
+    )
+    bearish = (
+        snap.ema_stack == "bearish"
+        or (snap.rsi is not None and snap.rsi <= 45)
+        or (snap.macd is not None and snap.macd < 0)
+    )
+    if zone == "support":
+        return bool(bullish)
+    if zone == "resistance":
+        return bool(bearish)
+    return False
+
+
+def get_technical_insight(symbol: str, *, now: datetime | None = None) -> TechnicalInsight:
+    """1D (HTF swing context) + 4H (retest context) Fibonacci evidence for a symbol.
+
+    Uses cache-backed OHLCV (the pipeline already warms 1d/4h). If 4H bars are
+    unavailable, 1D analysis is kept and 4H is marked unavailable (no invented
+    levels). Never trades, never touches RiskGate.
+    """
+    bars_1d = ohlcv.get_bars(symbol, "1d")
+    bars_4h = ohlcv.get_bars(symbol, "4h")
+
+    current: float | None = None
+    if bars_4h:
+        current = bars_4h[-1].close
+    elif bars_1d:
+        current = bars_1d[-1].close
+
+    fib_1d = fibonacci.analyze(bars_1d, timeframe="1D", current_price=current)
+    if bars_4h:
+        fib_4h = fibonacci.analyze(bars_4h, timeframe="4H", current_price=current)
+    else:
+        fib_4h = FibonacciAnalysis(
+            timeframe="4H", validity="unavailable", diagnostics=["bars_4h_unavailable"]
+        )
+
+    atr_4h = indicators.atr(bars_4h) if bars_4h else None
+    atr_pct = (atr_4h / current * 100.0) if (atr_4h and current and current > 0) else None
+    conf = fibonacci.confluence(fib_1d, fib_4h, current_price=current or 0.0, atr_pct=atr_pct)
+
+    snap_1d = compute_snapshot(symbol, "1d", bars_1d, now=now)
+    momentum_ok = _momentum_agrees(conf.confluence_zone, snap_1d)
+    score = fibonacci.fibonacci_score(fib_1d, fib_4h, conf, momentum_ok=momentum_ok)
+
+    return TechnicalInsight(
+        symbol=symbol,
+        fib_1d=fib_1d,
+        fib_4h=fib_4h,
+        fib_confluence=conf,
+        fibonacci_score=score,
+    )
