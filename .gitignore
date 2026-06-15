@@ -47,3 +47,4 @@ contracts/codegen/typescript/
 
 # Misc
 .cache/
+.pytest_tmp/

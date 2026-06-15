@@ -29,6 +29,10 @@ OPENAPI = REPO / "contracts" / "openapi.yaml"
 WEB = REPO / "apps" / "web"
 TS_OUT = WEB / "types" / "generated" / "schema.ts"
 OPENAPI_TS_BIN = WEB / "node_modules" / ".bin" / "openapi-typescript"
+# Invoke the package's JS entry via `node` directly so codegen works on every OS:
+# the bare `.bin/openapi-typescript` shim is a unix shell script (not a valid
+# Windows executable → WinError 193). `node cli.js` is platform-agnostic.
+OPENAPI_TS_CLI = WEB / "node_modules" / "openapi-typescript" / "bin" / "cli.js"
 
 
 def _node_env() -> dict[str, str]:
@@ -44,7 +48,7 @@ def _node_env() -> dict[str, str]:
 def _ensure_tools() -> None:
     if not OPENAPI.exists():
         sys.exit(f"[codegen] missing contract: {OPENAPI}")
-    if not OPENAPI_TS_BIN.exists():
+    if not OPENAPI_TS_CLI.exists():
         sys.exit(
             "[codegen] openapi-typescript not installed. Run:\n"
             "    cd apps/web && pnpm install"
@@ -56,10 +60,12 @@ def _ensure_tools() -> None:
 
 def _run_openapi_ts(out_path: Path) -> None:
     out_path.parent.mkdir(parents=True, exist_ok=True)
+    env = _node_env()
+    node = shutil.which("node", path=env.get("PATH")) or "node"
     res = subprocess.run(
-        [str(OPENAPI_TS_BIN), str(OPENAPI), "-o", str(out_path)],
+        [node, str(OPENAPI_TS_CLI), str(OPENAPI), "-o", str(out_path)],
         cwd=str(WEB),
-        env=_node_env(),
+        env=env,
         capture_output=True,
         text=True,
     )
@@ -86,7 +92,9 @@ def check() -> int:
         _run_openapi_ts(tmp)
         fresh = tmp.read_text(encoding="utf-8")
     committed = TS_OUT.read_text(encoding="utf-8")
-    if fresh != committed:
+    # Compare line-ending-insensitively so a CRLF working-tree checkout (Windows)
+    # is not flagged as drift against the LF the generator emits.
+    if fresh.replace("\r\n", "\n") != committed.replace("\r\n", "\n"):
         print(
             f"[codegen --check] FAIL: {TS_OUT.relative_to(REPO)} is out of sync with "
             "contracts/openapi.yaml. Run `make codegen` and commit the result."

@@ -83,7 +83,7 @@ def _files_defining(pattern: str, roots: list[Path]) -> list[Path]:
 def test_single_riskgate_decision_class() -> None:
     roots = [REPO / "packages", REPO / "apps"]
     hits = _files_defining(r"^class RiskDecision\b", roots)
-    rels = sorted(str(p.relative_to(REPO)) for p in hits)
+    rels = sorted(p.relative_to(REPO).as_posix() for p in hits)
     assert rels == ["packages/risk/engine.py"], (
         "RiskDecision must be defined once (the canonical gate). Found in: " + ", ".join(rels)
     )
@@ -92,7 +92,7 @@ def test_single_riskgate_decision_class() -> None:
 def test_single_riskgate_action_enum() -> None:
     roots = [REPO / "packages", REPO / "apps"]
     hits = _files_defining(r"^RiskAction\s*=\s*Literal\[", roots)
-    rels = sorted(str(p.relative_to(REPO)) for p in hits)
+    rels = sorted(p.relative_to(REPO).as_posix() for p in hits)
     assert rels == ["packages/risk/engine.py"], (
         "The canonical RiskAction enum must live only in packages/risk/engine.py. "
         "Found in: " + ", ".join(rels)
