@@ -1274,3 +1274,111 @@ export type TechnicalInsight = {
   fib_confluence?: FibonacciConfluence | null;
   fibonacci_score: number;
 };
+
+// ── T-MTF — Per-timeframe technical result (multi-TF feature; backend-computed) ─
+// EVIDENCE only: never opens trades, never a single aggregated score
+// (direction/strength stay separate). The frontend renders, never calculates.
+export type IndicatorQuality = "OK" | "INSUFFICIENT_HISTORY";
+export type TechnicalBias = "BULLISH" | "BEARISH" | "NEUTRAL";
+export type TfVolatilityRegime =
+  | "TRENDING"
+  | "RANGING"
+  | "SQUEEZE"
+  | "EXPANSION"
+  | "UNKNOWN";
+export type TrendStrengthLabel = "TRENDING" | "WEAK" | "UNKNOWN";
+export type TechnicalStance = "ALLOW" | "CAUTION" | "ABSTAIN" | "DEGRADED";
+export type Timeframe = "15m" | "1h" | "4h" | "1d" | "1w";
+
+export type IndicatorQualityReport = {
+  rsi?: IndicatorQuality;
+  macd?: IndicatorQuality;
+  ema200?: IndicatorQuality;
+  atr?: IndicatorQuality;
+  adx?: IndicatorQuality;
+};
+
+export type TechnicalDataQuality = {
+  status?: "OK" | "DEGRADED";
+  bars_used?: number;
+  stale?: boolean;
+  indicator_quality?: IndicatorQualityReport;
+  warnings?: string[];
+};
+
+export type TechnicalScoreOverview = {
+  direction_score?: number | null;
+  strength_score?: number | null;
+};
+
+export type TechnicalKeyLevels = {
+  support?: number | null;
+  resistance?: number | null;
+  atr?: number | null;
+  atr_percent?: number | null;
+  stop_reference?: number | null;
+  target_reference?: number | null;
+};
+
+export type TechnicalTrendStrength = {
+  adx?: number | null;
+  plus_di?: number | null;
+  minus_di?: number | null;
+  is_trending?: boolean;
+  label?: TrendStrengthLabel;
+};
+
+export type TechnicalConfluenceZone = {
+  price: number;
+  kind: "support" | "resistance";
+  components?: string[];
+};
+
+export type ConfirmationSignal = {
+  name: string;
+  fired?: boolean;
+  detail?: string;
+};
+
+export type TechnicalTimeframeSummary = {
+  bias?: TechnicalBias;
+  evidence?: string[];
+  warnings?: string[];
+};
+
+export type TechnicalTimeframeResult = {
+  symbol: string;
+  timeframe: Timeframe;
+  data_quality?: TechnicalDataQuality;
+  score_overview?: TechnicalScoreOverview;
+  key_levels?: TechnicalKeyLevels;
+  confirmation_signals?: ConfirmationSignal[];
+  trend_strength?: TechnicalTrendStrength;
+  volatility_regime?: TfVolatilityRegime;
+  confluence_zones?: TechnicalConfluenceZone[];
+  timeframe_summary?: TechnicalTimeframeSummary;
+  fibonacci_analysis?: FibonacciAnalysis | null;
+  status?: "OK" | "DEGRADED";
+  source?: string;
+  ts?: string;
+};
+
+// ── T2 — TechnicalAgent output (one structured opinion per symbol) ────────────
+export type TechnicalInvalidation = {
+  timeframe?: Timeframe | null;
+  price?: number | null;
+  reason?: string;
+};
+
+export type TechnicalAgentOutput = {
+  agent: "technical";
+  symbol: string;
+  per_timeframe?: { [key: string]: TechnicalTimeframeResult };
+  stance?: TechnicalStance;
+  direction_score?: number | null;
+  strength_score?: number | null;
+  used_observations?: string[];
+  invalidation?: TechnicalInvalidation | null;
+  missing_data?: string[];
+  ts?: string;
+};

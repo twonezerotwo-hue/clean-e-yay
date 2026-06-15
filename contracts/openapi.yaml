@@ -2394,3 +2394,154 @@ components:
         fibonacci_score:
           type: integer
           description: 0–25 Fibonacci evidence score (separate from technical_score).
+
+    # ── T-MTF — Per-timeframe technical result (multi-TF feature; backend-computed) ──
+    # EVIDENCE only: never opens trades, never a single aggregated score
+    # (direction/strength stay separate). The frontend renders, never calculates.
+    IndicatorQualityReport:
+      type: object
+      description: Per-indicator warm-up status (INSUFFICIENT_HISTORY is a diagnostic, never a fake value).
+      properties:
+        rsi: { type: string, enum: [OK, INSUFFICIENT_HISTORY] }
+        macd: { type: string, enum: [OK, INSUFFICIENT_HISTORY] }
+        ema200: { type: string, enum: [OK, INSUFFICIENT_HISTORY] }
+        atr: { type: string, enum: [OK, INSUFFICIENT_HISTORY] }
+        adx: { type: string, enum: [OK, INSUFFICIENT_HISTORY] }
+
+    TechnicalDataQuality:
+      type: object
+      properties:
+        status: { type: string, enum: [OK, DEGRADED] }
+        bars_used: { type: integer }
+        stale: { type: boolean }
+        indicator_quality: { $ref: "#/components/schemas/IndicatorQualityReport" }
+        warnings:
+          type: array
+          items: { type: string }
+
+    TechnicalScoreOverview:
+      type: object
+      description: >
+        Two SEPARATE axes (architecture rule). null = insufficient data — never a
+        neutral 50 (DATA_POLICY).
+      properties:
+        direction_score: { type: number, nullable: true }
+        strength_score: { type: number, nullable: true }
+
+    TechnicalKeyLevels:
+      type: object
+      properties:
+        support: { type: number, nullable: true }
+        resistance: { type: number, nullable: true }
+        atr: { type: number, nullable: true }
+        atr_percent: { type: number, nullable: true }
+        stop_reference: { type: number, nullable: true }
+        target_reference: { type: number, nullable: true }
+
+    TechnicalTrendStrength:
+      type: object
+      description: ADX-band trend reality (NOT direction); adx < adx_trend_min → weak trend.
+      properties:
+        adx: { type: number, nullable: true }
+        plus_di: { type: number, nullable: true }
+        minus_di: { type: number, nullable: true }
+        is_trending: { type: boolean }
+        label: { type: string, enum: [TRENDING, WEAK, UNKNOWN] }
+
+    TechnicalConfluenceZone:
+      type: object
+      required: [price, kind]
+      properties:
+        price: { type: number }
+        kind: { type: string, enum: [support, resistance] }
+        components:
+          type: array
+          items: { type: string }
+
+    ConfirmationSignal:
+      type: object
+      description: A TIMING gate (fired/not) — separate from scoring (no double count).
+      required: [name]
+      properties:
+        name: { type: string }
+        fired: { type: boolean }
+        detail: { type: string }
+
+    TechnicalTimeframeSummary:
+      type: object
+      properties:
+        bias: { type: string, enum: [BULLISH, BEARISH, NEUTRAL] }
+        evidence:
+          type: array
+          items: { type: string }
+        warnings:
+          type: array
+          items: { type: string }
+
+    TechnicalTimeframeResult:
+      type: object
+      description: >
+        Canonical per-(symbol, timeframe) technical result (one structured opinion
+        per closed-candle timeframe). EVIDENCE only — never opens trades, never a
+        single aggregated score. Backend computes from real closed OHLCV.
+      required: [symbol, timeframe]
+      properties:
+        symbol: { type: string }
+        timeframe: { type: string, enum: ["15m", "1h", "4h", "1d", "1w"] }
+        data_quality: { $ref: "#/components/schemas/TechnicalDataQuality" }
+        score_overview: { $ref: "#/components/schemas/TechnicalScoreOverview" }
+        key_levels: { $ref: "#/components/schemas/TechnicalKeyLevels" }
+        confirmation_signals:
+          type: array
+          items: { $ref: "#/components/schemas/ConfirmationSignal" }
+        trend_strength: { $ref: "#/components/schemas/TechnicalTrendStrength" }
+        volatility_regime:
+          type: string
+          enum: [TRENDING, RANGING, SQUEEZE, EXPANSION, UNKNOWN]
+        confluence_zones:
+          type: array
+          items: { $ref: "#/components/schemas/TechnicalConfluenceZone" }
+        timeframe_summary: { $ref: "#/components/schemas/TechnicalTimeframeSummary" }
+        fibonacci_analysis:
+          anyOf:
+            - $ref: "#/components/schemas/FibonacciAnalysis"
+            - type: "null"
+        status: { type: string, enum: [OK, DEGRADED] }
+        source: { type: string }
+        ts: { type: string, format: date-time }
+
+    # ── T2 — TechnicalAgent output (one structured opinion per symbol) ─────────
+    TechnicalInvalidation:
+      type: object
+      properties:
+        timeframe: { type: string, enum: ["15m", "1h", "4h", "1d", "1w"], nullable: true }
+        price: { type: number, nullable: true }
+        reason: { type: string }
+
+    TechnicalAgentOutput:
+      type: object
+      description: >
+        One structured TechnicalAgent opinion per symbol. EVIDENCE only — never
+        opens trades, never sizes; per_timeframe detail stays authoritative and
+        consensus does the strategy-specific combination.
+      required: [agent, symbol]
+      properties:
+        agent: { type: string, enum: [technical] }
+        symbol: { type: string }
+        per_timeframe:
+          type: object
+          additionalProperties: { $ref: "#/components/schemas/TechnicalTimeframeResult" }
+        stance: { type: string, enum: [ALLOW, CAUTION, ABSTAIN, DEGRADED] }
+        direction_score: { type: number, nullable: true }
+        strength_score: { type: number, nullable: true }
+        used_observations:
+          type: array
+          items: { type: string }
+        invalidation:
+          anyOf:
+            - $ref: "#/components/schemas/TechnicalInvalidation"
+            - type: "null"
+        missing_data:
+          type: array
+          items: { type: string }
+        ts: { type: string, format: date-time }

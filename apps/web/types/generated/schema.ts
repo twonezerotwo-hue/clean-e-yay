@@ -1884,6 +1884,112 @@ export interface components {
             /** @description 0–25 Fibonacci evidence score (separate from technical_score). */
             fibonacci_score: number;
         };
+        /** @description Per-indicator warm-up status (INSUFFICIENT_HISTORY is a diagnostic, never a fake value). */
+        IndicatorQualityReport: {
+            /** @enum {string} */
+            rsi?: "OK" | "INSUFFICIENT_HISTORY";
+            /** @enum {string} */
+            macd?: "OK" | "INSUFFICIENT_HISTORY";
+            /** @enum {string} */
+            ema200?: "OK" | "INSUFFICIENT_HISTORY";
+            /** @enum {string} */
+            atr?: "OK" | "INSUFFICIENT_HISTORY";
+            /** @enum {string} */
+            adx?: "OK" | "INSUFFICIENT_HISTORY";
+        };
+        TechnicalDataQuality: {
+            /** @enum {string} */
+            status?: "OK" | "DEGRADED";
+            bars_used?: number;
+            stale?: boolean;
+            indicator_quality?: components["schemas"]["IndicatorQualityReport"];
+            warnings?: string[];
+        };
+        /** @description Two SEPARATE axes (architecture rule). null = insufficient data — never a neutral 50 (DATA_POLICY). */
+        TechnicalScoreOverview: {
+            direction_score?: number | null;
+            strength_score?: number | null;
+        };
+        TechnicalKeyLevels: {
+            support?: number | null;
+            resistance?: number | null;
+            atr?: number | null;
+            atr_percent?: number | null;
+            stop_reference?: number | null;
+            target_reference?: number | null;
+        };
+        /** @description ADX-band trend reality (NOT direction); adx < adx_trend_min → weak trend. */
+        TechnicalTrendStrength: {
+            adx?: number | null;
+            plus_di?: number | null;
+            minus_di?: number | null;
+            is_trending?: boolean;
+            /** @enum {string} */
+            label?: "TRENDING" | "WEAK" | "UNKNOWN";
+        };
+        TechnicalConfluenceZone: {
+            price: number;
+            /** @enum {string} */
+            kind: "support" | "resistance";
+            components?: string[];
+        };
+        /** @description A TIMING gate (fired/not) — separate from scoring (no double count). */
+        ConfirmationSignal: {
+            name: string;
+            fired?: boolean;
+            detail?: string;
+        };
+        TechnicalTimeframeSummary: {
+            /** @enum {string} */
+            bias?: "BULLISH" | "BEARISH" | "NEUTRAL";
+            evidence?: string[];
+            warnings?: string[];
+        };
+        /** @description Canonical per-(symbol, timeframe) technical result (one structured opinion per closed-candle timeframe). EVIDENCE only — never opens trades, never a single aggregated score. Backend computes from real closed OHLCV. */
+        TechnicalTimeframeResult: {
+            symbol: string;
+            /** @enum {string} */
+            timeframe: "15m" | "1h" | "4h" | "1d" | "1w";
+            data_quality?: components["schemas"]["TechnicalDataQuality"];
+            score_overview?: components["schemas"]["TechnicalScoreOverview"];
+            key_levels?: components["schemas"]["TechnicalKeyLevels"];
+            confirmation_signals?: components["schemas"]["ConfirmationSignal"][];
+            trend_strength?: components["schemas"]["TechnicalTrendStrength"];
+            /** @enum {string} */
+            volatility_regime?: "TRENDING" | "RANGING" | "SQUEEZE" | "EXPANSION" | "UNKNOWN";
+            confluence_zones?: components["schemas"]["TechnicalConfluenceZone"][];
+            timeframe_summary?: components["schemas"]["TechnicalTimeframeSummary"];
+            fibonacci_analysis?: components["schemas"]["FibonacciAnalysis"] | null;
+            /** @enum {string} */
+            status?: "OK" | "DEGRADED";
+            source?: string;
+            /** Format: date-time */
+            ts?: string;
+        };
+        TechnicalInvalidation: {
+            /** @enum {string|null} */
+            timeframe?: "15m" | "1h" | "4h" | "1d" | "1w" | null;
+            price?: number | null;
+            reason?: string;
+        };
+        /** @description One structured TechnicalAgent opinion per symbol. EVIDENCE only — never opens trades, never sizes; per_timeframe detail stays authoritative and consensus does the strategy-specific combination. */
+        TechnicalAgentOutput: {
+            /** @enum {string} */
+            agent: "technical";
+            symbol: string;
+            per_timeframe?: {
+                [key: string]: components["schemas"]["TechnicalTimeframeResult"];
+            };
+            /** @enum {string} */
+            stance?: "ALLOW" | "CAUTION" | "ABSTAIN" | "DEGRADED";
+            direction_score?: number | null;
+            strength_score?: number | null;
+            used_observations?: string[];
+            invalidation?: components["schemas"]["TechnicalInvalidation"] | null;
+            missing_data?: string[];
+            /** Format: date-time */
+            ts?: string;
+        };
     };
     responses: never;
     parameters: never;
