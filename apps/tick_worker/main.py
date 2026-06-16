@@ -22,7 +22,9 @@ from datetime import UTC, datetime
 from packages.data import snapshot_store
 from packages.data.ingestion.pipeline import DEFAULT_SYMBOLS, get_cached_snapshot
 from packages.data.provenance import data_provenance
+from packages.decision import shadow, shadow_activation
 from packages.decision.engine import decide_matrix, matrix_view
+from packages.learning import tf_calibration
 from packages.ops import heartbeat
 from packages.paper import manual_queue, session_gate
 from packages.paper import state as paper_state
@@ -209,6 +211,51 @@ async def run_once() -> None:
                 )
 
         paper_state.save(ps)
+
+        # Step 9 — controlled activation (OBSERVATION mode). Run the NEW agent
+        # pipeline in shadow and persist a comparison vs. the live engine. Runs
+        # AFTER paper is saved and never receives paper state — with
+        # affect_decision:false it cannot move paper. Best-effort: never breaks tick.
+        try:
+            shadow_cfg = shadow.load_config()
+            if shadow_cfg.enabled:
+                # tf_weights trust verdict (read-only; worker owns paper state `ps`).
+                # Surfaced in the record so applying PRIOR weights stays data-driven.
+                try:
+                    cal_summary = shadow.calibration_summary(
+                        tf_calibration.calibration_report(state=ps)
+                    )
+                except Exception:
+                    cal_summary = {}
+                shadow.record(
+                    shadow.observe(
+                        MATRIX_SYMBOLS,
+                        snapshot_id=snap.snapshot_id,
+                        risk_action=_risk.action,
+                        live_decisions=decisions,
+                        cfg=shadow_cfg,
+                        calibration=cal_summary,
+                    )
+                )
+                if shadow.affects_paper(shadow_cfg):
+                    # Phase B — controlled activation: route shadow entries to
+                    # manual_ready ONLY (never auto-open; RiskGate re-runs at owner
+                    # approval). Inert under the shipped affect_decision:false config.
+                    queued = shadow_activation.activate(
+                        ps,
+                        MATRIX_SYMBOLS,
+                        risk_action=_risk.action,
+                        prices=prices,
+                        snapshot_id=snap.snapshot_id,
+                        cfg=shadow_cfg,
+                    )
+                    if queued:
+                        paper_state.save(ps)
+                        log.info(
+                            "shadow activation: %d entry → manual_ready", len(queued)
+                        )
+        except Exception:
+            log.exception("shadow observe failed (tick devam ediyor)")
 
         # R1 — kararı disk snapshot store'a kaydet (replay temeli). Store yazımı
         # ASLA tick'i patlatmaz; başarısızsa loglanır ve döngü devam eder.

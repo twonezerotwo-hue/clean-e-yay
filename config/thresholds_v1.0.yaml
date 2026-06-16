@@ -238,3 +238,17 @@ trade_economics:
   costs: { taker_fee_bps: 10, est_spread_bps: 2, est_slippage_bps: 3 }
   min_net_edge_bps: 20
   min_rr: 1.5
+
+# Step 9 — controlled activation. The NEW agent pipeline (agent_pipeline) runs in
+# OBSERVATION mode alongside the live decide_matrix engine: each tick its decision is
+# logged next to the live decision for comparison, but affect_decision:false means it
+# NEVER mutates paper. Owner watches the shadow log, then flips affect_decision:true
+# (Phase B) to let it influence — still RiskGate-final, manual_ready_only, scale-down.
+#   enabled         : run the shadow pipeline each tick (observe-only side effect: a log line)
+#   affect_decision : false → pure observation; true (Phase B) → shadow may route entries
+#                     to manual_ready (never auto-open). Until Phase B is wired, true is a no-op.
+#   manual_ready_only: when activated, shadow entries ONLY queue to manual_ready (never attempt_open)
+shadow:
+  enabled: true
+  affect_decision: false
+  manual_ready_only: true

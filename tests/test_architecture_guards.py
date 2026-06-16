@@ -480,3 +480,70 @@ def test_fibonacci_score_bounded_to_25() -> None:
     returns = [int(n) for n in re.findall(r"\breturn\s+(\d+)\b", src)]
     assert returns, "expected integer score returns in fibonacci_score"
     assert all(0 <= n <= 25 for n in returns), f"fibonacci_score returns out of [0,25]: {returns}"
+
+
+def test_reversal_patterns_not_consumed_by_decision_or_risk() -> None:
+    """Reversal + chart-pattern layers (§4.5) are EVIDENCE only — like fibonacci they
+    are not wired into the decision engine or RiskGate, so they can never open a trade
+    or bypass the gate (they only enrich the per-TF result)."""
+    rx = re.compile(r"reversal_signals|chart_pattern_analysis|import reversal|import patterns")
+    offenders: list[str] = []
+    for root in (DECISION_DIR, RISK_DIR):
+        for path in _py_files(root):
+            if rx.search(path.read_text(encoding="utf-8")):
+                offenders.append(str(path.relative_to(REPO)))
+    assert not offenders, (
+        "reversal/chart-pattern must not be consumed by decision/risk engines "
+        "(EVIDENCE only): " + ", ".join(offenders)
+    )
+
+
+# ── Step 9: shadow NEVER auto-opens (observe in Phase A; queue-only in Phase B) ─
+
+SHADOW_MODULE = REPO / "packages" / "decision" / "shadow.py"
+SHADOW_ACTIVATION = REPO / "packages" / "decision" / "shadow_activation.py"
+TICK_WORKER = REPO / "apps" / "tick_worker" / "main.py"
+
+# Full paper mutators — the OBSERVE module (shadow.py) must reach none of these.
+_PAPER_MUTATORS = ("attempt_open", "route_to_manual_ready", "flatten_all", "paper_state.save")
+# Auto-open/close entry points — FORBIDDEN anywhere on the shadow path (Phase A or B):
+# the shadow may only ever QUEUE to manual_ready, never auto-open a position.
+_AUTO_OPEN = ("attempt_open", "flatten_all")
+
+
+def test_shadow_module_is_observe_only() -> None:
+    """The shadow module records a comparison only — it never imports paper state
+    nor reaches any paper-mutating entry point (observation cannot move paper).
+    Activation lives in the separate shadow_activation module, not here."""
+    src = SHADOW_MODULE.read_text(encoding="utf-8")
+    offenders = [m for m in _PAPER_MUTATORS if m in src]
+    if "packages.paper" in src:
+        offenders.append("packages.paper import")
+    assert not offenders, (
+        "shadow observation must never open/queue/flatten/save paper: " + ", ".join(offenders)
+    )
+
+
+def test_tick_worker_shadow_block_never_auto_opens() -> None:
+    """The tick_worker shadow block never AUTO-OPENS: Phase B activation may queue to
+    manual_ready (owner-gated), but attempt_open / flatten_all must never appear in
+    the shadow path. RiskGate stays final (it re-runs at owner approval)."""
+    src = TICK_WORKER.read_text(encoding="utf-8")
+    start = src.index("OBSERVATION mode")
+    end = src.index("R1 — kararı disk snapshot", start)
+    block = src[start:end]
+    offenders = [m for m in _AUTO_OPEN if m in block]
+    assert not offenders, (
+        "tick_worker shadow path must never auto-open a position: " + ", ".join(offenders)
+    )
+
+
+def test_shadow_activation_only_queues_manual_ready() -> None:
+    """Phase B activation routes shadow entries to manual_ready ONLY — it calls
+    route_to_manual_ready, never attempt_open / flatten_all, and is gated by the
+    single activation authority `affects_paper` (inert under affect_decision:false)."""
+    src = SHADOW_ACTIVATION.read_text(encoding="utf-8")
+    auto = [m for m in _AUTO_OPEN if m in src]
+    assert not auto, "shadow_activation must never auto-open: " + ", ".join(auto)
+    assert "route_to_manual_ready" in src, "activation must queue to manual_ready"
+    assert "affects_paper" in src, "activation must be gated by affects_paper"
