@@ -236,12 +236,57 @@ class TechnicalTimeframeSummary(BaseModel):
     warnings: list[str] = Field(default_factory=list)
 
 
+# ── Reversal + chart-pattern layers (section 4.5) — EVIDENCE only, never trades ──
+# Computed from real closed bars (momentum divergence / swing structure). Like the
+# fibonacci layer, they enrich the per-TF result but never open a trade, never feed a
+# single aggregate score, and are not the RiskGate. Insufficient bars → None (the
+# field is absent, never a fabricated NEUTRAL).
+ReversalType = Literal[
+    "rsi_bullish_divergence",
+    "rsi_bearish_divergence",
+    "macd_bullish_divergence",
+    "macd_bearish_divergence",
+    "double_bottom",
+    "double_top",
+]
+ChartPatternName = Literal["uptrend_structure", "downtrend_structure", "ranging"]
+
+
+class ReversalSignal(BaseModel):
+    """One detected reversal cue (momentum divergence or double formation)."""
+
+    type: ReversalType
+    detected: bool = True
+    detail: str = ""
+
+
+class TechnicalReversalSignals(BaseModel):
+    """Reversal cues from real closed bars; `bias` is the net direction (NEUTRAL when
+    none or conflicting). EVIDENCE only — never opens or sizes a trade."""
+
+    signals: list[ReversalSignal] = Field(default_factory=list)
+    bias: TechnicalBias = "NEUTRAL"
+
+
+class ChartPattern(BaseModel):
+    name: ChartPatternName
+    detail: str = ""
+
+
+class TechnicalChartPatterns(BaseModel):
+    """Price-structure read from swing pivots (HH/HL vs LH/LL). EVIDENCE only."""
+
+    active_patterns: list[ChartPattern] = Field(default_factory=list)
+    bias: TechnicalBias = "NEUTRAL"
+
+
 class TechnicalTimeframeResult(BaseModel):
     """Canonical per-(symbol, timeframe) technical result (contract section 5).
 
-    Reversal/chart-pattern layers (section 4.5) are stateful and land later; they
-    are intentionally absent here rather than fabricated. `fibonacci_analysis` is
-    only attached for 4H/1D (its per-TF semantics). EVIDENCE only — never trades."""
+    Reversal (momentum divergence + double formations) and chart-pattern (swing
+    structure) layers (section 4.5) are computed from real closed bars; insufficient
+    history → the field is None (absent), never a fabricated value. `fibonacci_analysis`
+    is only attached for 4H/1D (its per-TF semantics). EVIDENCE only — never trades."""
 
     symbol: str
     timeframe: Timeframe
@@ -254,6 +299,8 @@ class TechnicalTimeframeResult(BaseModel):
     confluence_zones: list[TechnicalConfluenceZone] = Field(default_factory=list)
     timeframe_summary: TechnicalTimeframeSummary = Field(default_factory=TechnicalTimeframeSummary)
     fibonacci_analysis: FibonacciAnalysis | None = None
+    reversal_signals: TechnicalReversalSignals | None = None
+    chart_pattern_analysis: TechnicalChartPatterns | None = None
     status: TechnicalStatus = "OK"
     source: str = "unknown"
     ts: datetime = Field(default_factory=utcnow)

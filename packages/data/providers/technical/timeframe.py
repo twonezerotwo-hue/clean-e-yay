@@ -17,7 +17,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 
-from packages.data.providers.technical import fibonacci, indicators
+from packages.data.providers.technical import fibonacci, indicators, patterns, reversal
 from packages.data.registry.loader import load_thresholds
 from packages.data.types import (
     ConfirmationSignal,
@@ -352,6 +352,10 @@ def build_timeframe_result(
             bars, timeframe=("1D" if timeframe == "1d" else "4H"), current_price=current
         )
 
+    # ── reversal + chart patterns (section 4.5; EVIDENCE only) ────────────────
+    reversal_signals = reversal.detect(bars, left=cfg.pivot_left, right=cfg.pivot_right)
+    chart_patterns = patterns.detect(bars, left=cfg.pivot_left, right=cfg.pivot_right)
+
     # ── scoring (SEPARATE axes) + summary ─────────────────────────────────────
     direction = _direction_score(rsi_v, macd_norm, ema_stack)
     strength = _strength_score(adx_v, direction)
@@ -373,6 +377,12 @@ def build_timeframe_result(
     evidence.append(f"volatility_regime={vol_regime}")
     if fib is not None and fib.validity != "unavailable":
         evidence.append(f"fib_zone={fib.zone}")
+    if reversal_signals is not None and reversal_signals.bias != "NEUTRAL":
+        evidence.append(
+            f"reversal_bias={reversal_signals.bias} ({len(reversal_signals.signals)} signals)"
+        )
+    if chart_patterns is not None and chart_patterns.active_patterns:
+        evidence.append(f"pattern={chart_patterns.active_patterns[0].name}")
     for z in zones:
         evidence.append(f"confluence:{z.kind}@{z.price} [{'+'.join(z.components)}]")
 
@@ -395,6 +405,8 @@ def build_timeframe_result(
         confluence_zones=zones,
         timeframe_summary=summary,
         fibonacci_analysis=fib,
+        reversal_signals=reversal_signals,
+        chart_pattern_analysis=chart_patterns,
         status=status,
         source=bars[-1].source if bars else "none",
         ts=bars[-1].ts if bars else now,
