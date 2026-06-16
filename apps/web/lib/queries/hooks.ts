@@ -123,6 +123,15 @@ export const useAgentMatrix = () =>
     refetchInterval: 30_000,
   });
 
+/** Step 9 — controlled activation: canlı vs shadow karşılaştırması (observe-only). */
+export const useShadowComparison = () =>
+  useQuery({
+    queryKey: qk.shadowComparison,
+    queryFn: api.shadowComparison,
+    staleTime: 15_000,
+    refetchInterval: 30_000,
+  });
+
 /** UX1 — Agent Operating Cockpit özeti (AgentBrief + DecisionTrace). */
 export const useCockpitBrief = () =>
   useQuery({

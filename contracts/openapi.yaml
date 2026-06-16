@@ -523,6 +523,18 @@ paths:
               schema:
                 $ref: "#/components/schemas/AgentMatrix"
 
+  /api/v1/decision/shadow:
+    get:
+      operationId: getShadowComparison
+      summary: Step 9 controlled activation — latest live-vs-shadow comparison (observe-only, read-only)
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ShadowComparison"
+
 components:
   schemas:
     Health:
@@ -2490,6 +2502,49 @@ components:
           type: array
           items: { type: string }
 
+    ReversalSignal:
+      type: object
+      required: [type, detected]
+      properties:
+        type:
+          type: string
+          enum:
+            - rsi_bullish_divergence
+            - rsi_bearish_divergence
+            - macd_bullish_divergence
+            - macd_bearish_divergence
+            - double_bottom
+            - double_top
+        detected: { type: boolean }
+        detail: { type: string }
+
+    TechnicalReversalSignals:
+      type: object
+      description: >
+        Reversal cues (momentum divergence + double formations) read from real closed
+        bars; bias is the net direction (NEUTRAL when none/conflicting). EVIDENCE only.
+      properties:
+        signals:
+          type: array
+          items: { $ref: "#/components/schemas/ReversalSignal" }
+        bias: { type: string, enum: [BULLISH, BEARISH, NEUTRAL] }
+
+    ChartPattern:
+      type: object
+      required: [name]
+      properties:
+        name: { type: string, enum: [uptrend_structure, downtrend_structure, ranging] }
+        detail: { type: string }
+
+    TechnicalChartPatterns:
+      type: object
+      description: Swing-structure read (HH/HL vs LH/LL) from real closed bars — EVIDENCE only.
+      properties:
+        active_patterns:
+          type: array
+          items: { $ref: "#/components/schemas/ChartPattern" }
+        bias: { type: string, enum: [BULLISH, BEARISH, NEUTRAL] }
+
     TechnicalTimeframeResult:
       type: object
       description: >
@@ -2517,6 +2572,14 @@ components:
         fibonacci_analysis:
           anyOf:
             - $ref: "#/components/schemas/FibonacciAnalysis"
+            - type: "null"
+        reversal_signals:
+          anyOf:
+            - $ref: "#/components/schemas/TechnicalReversalSignals"
+            - type: "null"
+        chart_pattern_analysis:
+          anyOf:
+            - $ref: "#/components/schemas/TechnicalChartPatterns"
             - type: "null"
         status: { type: string, enum: [OK, DEGRADED] }
         source: { type: string }
@@ -2678,3 +2741,76 @@ components:
         symbols:
           type: array
           items: { $ref: "#/components/schemas/AgentMatrixRow" }
+
+    ShadowTfCalibration:
+      type: object
+      required: [timeframe, strategy, trades, win_rate, trust]
+      properties:
+        timeframe: { type: string }
+        strategy: { type: string }
+        trades: { type: integer }
+        win_rate: { type: number }
+        trust: { type: string, enum: [PRIOR, CALIBRATED] }
+
+    ShadowCalibration:
+      type: object
+      description: tf_weights trust verdict — PRIOR/untrusted until per-TF calibration validates.
+      required: [tf_weights_trusted, calibrated_timeframes, per_timeframe]
+      properties:
+        tf_weights_trusted: { type: boolean }
+        calibrated_timeframes:
+          type: array
+          items: { type: string }
+        min_trades_per_tf: { type: integer, nullable: true }
+        per_timeframe:
+          type: array
+          items: { $ref: "#/components/schemas/ShadowTfCalibration" }
+
+    ShadowAgreementSummary:
+      type: object
+      description: Per-tick counts of how live and shadow intents agreed (observation only).
+      required: [agree_entry, agree_flat, disagree_direction, live_only_entry, shadow_only_entry]
+      properties:
+        agree_entry: { type: integer }
+        agree_flat: { type: integer }
+        disagree_direction: { type: integer }
+        live_only_entry: { type: integer }
+        shadow_only_entry: { type: integer }
+
+    ShadowRow:
+      type: object
+      required: [symbol, agreement, live_wants_entry, shadow_wants_entry]
+      properties:
+        symbol: { type: string }
+        agreement:
+          type: string
+          enum: [AGREE_ENTRY, AGREE_FLAT, DISAGREE_DIRECTION, LIVE_ONLY_ENTRY, SHADOW_ONLY_ENTRY]
+        live_wants_entry: { type: boolean }
+        live_action: { type: string, nullable: true }
+        live_direction: { type: string, nullable: true }
+        live_timeframe: { type: string, nullable: true }
+        shadow_wants_entry: { type: boolean }
+        shadow_action: { type: string, nullable: true }
+        shadow_direction: { type: string, nullable: true }
+        shadow_entry_timeframe: { type: string, nullable: true }
+        shadow_stance: { type: string, nullable: true }
+
+    ShadowComparison:
+      type: object
+      description: >
+        Step 9 controlled activation (observation mode). Latest comparison of the live
+        decide_matrix engine vs the NEW agent pipeline running in shadow. affected_paper
+        is always false in Phase A — the shadow never moves paper; this is read-only.
+      required: [available, affect_decision, affected_paper, summary, calibration, rows]
+      properties:
+        available: { type: boolean }
+        recorded_at: { type: string, nullable: true }
+        snapshot_id: { type: string, nullable: true }
+        risk_action: { type: string, nullable: true }
+        affect_decision: { type: boolean }
+        affected_paper: { type: boolean }
+        summary: { $ref: "#/components/schemas/ShadowAgreementSummary" }
+        calibration: { $ref: "#/components/schemas/ShadowCalibration" }
+        rows:
+          type: array
+          items: { $ref: "#/components/schemas/ShadowRow" }

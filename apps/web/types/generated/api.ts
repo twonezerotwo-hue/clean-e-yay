@@ -1346,6 +1346,41 @@ export type TechnicalTimeframeSummary = {
   warnings?: string[];
 };
 
+// ── §4.5 reversal + chart-pattern layers (EVIDENCE only, from real bars) ──────
+export type ReversalType =
+  | "rsi_bullish_divergence"
+  | "rsi_bearish_divergence"
+  | "macd_bullish_divergence"
+  | "macd_bearish_divergence"
+  | "double_bottom"
+  | "double_top";
+
+export type ReversalSignal = {
+  type: ReversalType;
+  detected: boolean;
+  detail?: string;
+};
+
+export type TechnicalReversalSignals = {
+  signals?: ReversalSignal[];
+  bias?: TechnicalBias;
+};
+
+export type ChartPatternName =
+  | "uptrend_structure"
+  | "downtrend_structure"
+  | "ranging";
+
+export type ChartPattern = {
+  name: ChartPatternName;
+  detail?: string;
+};
+
+export type TechnicalChartPatterns = {
+  active_patterns?: ChartPattern[];
+  bias?: TechnicalBias;
+};
+
 export type TechnicalTimeframeResult = {
   symbol: string;
   timeframe: Timeframe;
@@ -1358,6 +1393,8 @@ export type TechnicalTimeframeResult = {
   confluence_zones?: TechnicalConfluenceZone[];
   timeframe_summary?: TechnicalTimeframeSummary;
   fibonacci_analysis?: FibonacciAnalysis | null;
+  reversal_signals?: TechnicalReversalSignals | null;
+  chart_pattern_analysis?: TechnicalChartPatterns | null;
   status?: "OK" | "DEGRADED";
   source?: string;
   ts?: string;
@@ -1469,4 +1506,61 @@ export type AgentMatrix = {
   risk_action?: string | null;
   timeframes: Timeframe[];
   symbols: AgentMatrixRow[];
+};
+
+// ── T2 step 9 — controlled activation: live-vs-shadow comparison (observe-only) ──
+export type ShadowAgreement =
+  | "AGREE_ENTRY"
+  | "AGREE_FLAT"
+  | "DISAGREE_DIRECTION"
+  | "LIVE_ONLY_ENTRY"
+  | "SHADOW_ONLY_ENTRY";
+
+export type ShadowTfCalibration = {
+  timeframe: string;
+  strategy: string;
+  trades: number;
+  win_rate: number;
+  trust: "PRIOR" | "CALIBRATED";
+};
+
+export type ShadowCalibration = {
+  tf_weights_trusted: boolean;
+  calibrated_timeframes: string[];
+  min_trades_per_tf?: number | null;
+  per_timeframe: ShadowTfCalibration[];
+};
+
+export type ShadowAgreementSummary = {
+  agree_entry: number;
+  agree_flat: number;
+  disagree_direction: number;
+  live_only_entry: number;
+  shadow_only_entry: number;
+};
+
+export type ShadowRow = {
+  symbol: string;
+  agreement: ShadowAgreement;
+  live_wants_entry: boolean;
+  live_action?: string | null;
+  live_direction?: string | null;
+  live_timeframe?: string | null;
+  shadow_wants_entry: boolean;
+  shadow_action?: string | null;
+  shadow_direction?: string | null;
+  shadow_entry_timeframe?: string | null;
+  shadow_stance?: string | null;
+};
+
+export type ShadowComparison = {
+  available: boolean;
+  recorded_at?: string | null;
+  snapshot_id?: string | null;
+  risk_action?: string | null;
+  affect_decision: boolean;
+  affected_paper: boolean;
+  summary: ShadowAgreementSummary;
+  calibration: ShadowCalibration;
+  rows: ShadowRow[];
 };

@@ -11,6 +11,7 @@ from fastapi import APIRouter
 
 from packages.data.ingestion.pipeline import DEFAULT_SYMBOLS, get_cached_snapshot
 from packages.data.provenance import data_provenance
+from packages.decision import shadow
 from packages.decision.engine import decide_matrix, matrix_view
 from packages.paper import state as paper_state
 from packages.risk.engine import RiskInput
@@ -37,3 +38,13 @@ def get_decision_matrix() -> dict:
     view = matrix_view(regime, risk, decisions, snap, MATRIX_SYMBOLS)
     view["mode"] = data_provenance(snap)
     return view
+
+
+@router.get("/decision/shadow")
+def get_shadow_comparison() -> dict:
+    """Step 9 — latest live-vs-shadow comparison (observe-only).
+
+    Thin read layer over the shadow log the tick_worker writes; it never runs the
+    pipeline, never touches paper, and `affected_paper` is always false (Phase A).
+    """
+    return shadow.latest_viewmodel()

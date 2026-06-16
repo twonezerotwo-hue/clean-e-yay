@@ -22,6 +22,7 @@ import type {
   RebalanceState,
   RegimeReport,
   ReplayStatus,
+  ShadowComparison,
   SystemHealth,
   TickResult,
 } from "@/types/generated/api";
@@ -74,6 +75,8 @@ export const api = {
     fetchJSON<DecisionMatrix>("/api/v1/decision/matrix"),
   agentMatrix: () =>
     fetchJSON<AgentMatrix>("/api/v1/technical/agent-matrix"),
+  shadowComparison: () =>
+    fetchJSON<ShadowComparison>("/api/v1/decision/shadow"),
   cockpitBrief: () => fetchJSON<CockpitBrief>("/api/v1/cockpit/brief"),
   replayStatus: () => fetchJSON<ReplayStatus>("/api/v1/replay/status"),
   chat: (message: string) =>

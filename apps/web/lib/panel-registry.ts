@@ -57,7 +57,8 @@ export type PanelKey =
   | "options_vol"
   | "catalyst_impact"
   | "timeframe_matrix"
-  | "agent_matrix";
+  | "agent_matrix"
+  | "shadow";
 
 export type PanelGroupId =
   // simple tier
@@ -95,6 +96,7 @@ export const PANEL_REGISTRY: PanelMeta[] = [
   // ── SIMPLE — Decision Trace / Candidate Matrix ───────────────────────────
   { id: "timeframe_matrix", title: "Timeframe Matrisi",    defaultVisible: true,  span: "3",    group: "decision", tier: "simple" },
   { id: "agent_matrix",     title: "Agent Matrisi",        defaultVisible: true,  span: "3",    group: "decision", tier: "simple" },
+  { id: "shadow",           title: "Shadow Gözlem",        defaultVisible: true,  span: "3",    group: "decision", tier: "simple" },
   { id: "decision_trace",   title: "Decision Trace",       defaultVisible: true,  span: "2",    group: "decision", tier: "simple" },
   { id: "agent_votes",      title: "Agent Kanıt Zinciri",  defaultVisible: true,  span: "1",    group: "decision", tier: "simple" },
   { id: "command_signals",  title: "Aday Sinyalleri",      defaultVisible: true,  span: "full", group: "decision", tier: "simple" },

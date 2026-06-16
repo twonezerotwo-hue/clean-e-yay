@@ -616,6 +616,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/decision/shadow": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Step 9 controlled activation — latest live-vs-shadow comparison (observe-only, read-only) */
+        get: operations["getShadowComparison"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -1962,6 +1979,29 @@ export interface components {
             evidence?: string[];
             warnings?: string[];
         };
+        ReversalSignal: {
+            /** @enum {string} */
+            type: "rsi_bullish_divergence" | "rsi_bearish_divergence" | "macd_bullish_divergence" | "macd_bearish_divergence" | "double_bottom" | "double_top";
+            detected: boolean;
+            detail?: string;
+        };
+        /** @description Reversal cues (momentum divergence + double formations) read from real closed bars; bias is the net direction (NEUTRAL when none/conflicting). EVIDENCE only. */
+        TechnicalReversalSignals: {
+            signals?: components["schemas"]["ReversalSignal"][];
+            /** @enum {string} */
+            bias?: "BULLISH" | "BEARISH" | "NEUTRAL";
+        };
+        ChartPattern: {
+            /** @enum {string} */
+            name: "uptrend_structure" | "downtrend_structure" | "ranging";
+            detail?: string;
+        };
+        /** @description Swing-structure read (HH/HL vs LH/LL) from real closed bars — EVIDENCE only. */
+        TechnicalChartPatterns: {
+            active_patterns?: components["schemas"]["ChartPattern"][];
+            /** @enum {string} */
+            bias?: "BULLISH" | "BEARISH" | "NEUTRAL";
+        };
         /** @description Canonical per-(symbol, timeframe) technical result (one structured opinion per closed-candle timeframe). EVIDENCE only — never opens trades, never a single aggregated score. Backend computes from real closed OHLCV. */
         TechnicalTimeframeResult: {
             symbol: string;
@@ -1977,6 +2017,8 @@ export interface components {
             confluence_zones?: components["schemas"]["TechnicalConfluenceZone"][];
             timeframe_summary?: components["schemas"]["TechnicalTimeframeSummary"];
             fibonacci_analysis?: components["schemas"]["FibonacciAnalysis"] | null;
+            reversal_signals?: components["schemas"]["TechnicalReversalSignals"] | null;
+            chart_pattern_analysis?: components["schemas"]["TechnicalChartPatterns"] | null;
             /** @enum {string} */
             status?: "OK" | "DEGRADED";
             source?: string;
@@ -2077,6 +2119,55 @@ export interface components {
             risk_action?: string | null;
             timeframes: ("15m" | "1h" | "4h" | "1d" | "1w")[];
             symbols: components["schemas"]["AgentMatrixRow"][];
+        };
+        ShadowTfCalibration: {
+            timeframe: string;
+            strategy: string;
+            trades: number;
+            win_rate: number;
+            /** @enum {string} */
+            trust: "PRIOR" | "CALIBRATED";
+        };
+        /** @description tf_weights trust verdict — PRIOR/untrusted until per-TF calibration validates. */
+        ShadowCalibration: {
+            tf_weights_trusted: boolean;
+            calibrated_timeframes: string[];
+            min_trades_per_tf?: number | null;
+            per_timeframe: components["schemas"]["ShadowTfCalibration"][];
+        };
+        /** @description Per-tick counts of how live and shadow intents agreed (observation only). */
+        ShadowAgreementSummary: {
+            agree_entry: number;
+            agree_flat: number;
+            disagree_direction: number;
+            live_only_entry: number;
+            shadow_only_entry: number;
+        };
+        ShadowRow: {
+            symbol: string;
+            /** @enum {string} */
+            agreement: "AGREE_ENTRY" | "AGREE_FLAT" | "DISAGREE_DIRECTION" | "LIVE_ONLY_ENTRY" | "SHADOW_ONLY_ENTRY";
+            live_wants_entry: boolean;
+            live_action?: string | null;
+            live_direction?: string | null;
+            live_timeframe?: string | null;
+            shadow_wants_entry: boolean;
+            shadow_action?: string | null;
+            shadow_direction?: string | null;
+            shadow_entry_timeframe?: string | null;
+            shadow_stance?: string | null;
+        };
+        /** @description Step 9 controlled activation (observation mode). Latest comparison of the live decide_matrix engine vs the NEW agent pipeline running in shadow. affected_paper is always false in Phase A — the shadow never moves paper; this is read-only. */
+        ShadowComparison: {
+            available: boolean;
+            recorded_at?: string | null;
+            snapshot_id?: string | null;
+            risk_action?: string | null;
+            affect_decision: boolean;
+            affected_paper: boolean;
+            summary: components["schemas"]["ShadowAgreementSummary"];
+            calibration: components["schemas"]["ShadowCalibration"];
+            rows: components["schemas"]["ShadowRow"][];
         };
     };
     responses: never;
@@ -2872,6 +2963,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AgentMatrix"];
+                };
+            };
+        };
+    };
+    getShadowComparison: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ShadowComparison"];
                 };
             };
         };
