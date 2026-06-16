@@ -3,12 +3,37 @@
 Clean rewrite of **E_YAY CODEX** — a paper-trading decision-support system that prepares trading-data agents for real execution through paper trading + calibrated heuristic learning.
 
 > **Nihai mimari için → [ARCHITECTURE.md](ARCHITECTURE.md).** Yeni iş başlamadan önce o belge okunur.
+> **Süregelen ilerleme için → [docs/TECHNICAL_ARCHITECTURE_PROGRESS.md](docs/TECHNICAL_ARCHITECTURE_PROGRESS.md).**
 >
-> Status: **Backend Release Candidate** (A1 final audit PASS; P0 yok). Veri →
-> DQS → consensus/decision → RiskGate → paper → learning → replay/LLM zinciri
-> canlı; gerçek provider'lar + v2.7 deep data (türev/options/volatilite/catalyst)
-> + LLM persona + 7/24 worker reliability. pytest 419/419, ruff/tsc/build/CI yeşil.
-> Backend FREEZE — yalnızca P0 hotfix. Sıradaki: UX2 dashboard polish.
+> Status: **BACKEND HAZIR** — spec adım 1–9 + §4.5 tam (per-TF contribution attribution +
+> live tf_weights resolver dahil); 714 test, ruff/codegen/tsc temiz. Sıradaki: frontend cilası.
+
+## Fresh-clone setup (TEK komut)
+
+Repoyu yeni bir makineye klonladıktan sonra **tek komutla** backend çalışır hâle gelir:
+
+**Windows (PowerShell):**
+```powershell
+.\scripts\bootstrap.ps1
+```
+
+**Mac / Linux (bash):**
+```bash
+./scripts/bootstrap.sh
+```
+
+Bootstrap şunları yapar (idempotent — tekrar koşulabilir):
+1. `.venv` oluşturur (yoksa) + `pyproject` bağımlılıklarını kurar (`fastapi`, `uvicorn`, `pydantic`, `PyYAML`, `httpx` + dev için `pytest`, `ruff`).
+2. `data/runtime/` klasörünü oluşturur (worker'lar bekler, gitignored).
+3. **Uçtan uca smoke:** import + bir tick + bir learning koşar; yeşilse `BACKEND HAZIR` der.
+
+Sonra:
+- **Test:** `.venv\Scripts\python.exe -m pytest -q` (Win) · `./.venv/bin/python -m pytest -q` (Unix)
+- **API:** `python -m uvicorn apps.api.main:app --port 8001`
+- **Worker:** `python -m apps.tick_worker.main`
+- **Dev (API + web pencereli):** `.\scripts\dev.ps1` veya `./scripts/dev.sh`
+
+Gerekli: Python **3.11+** PATH'te. Web tarafı için ayrıca Node 20+ + pnpm.
 
 ## Felsefe
 

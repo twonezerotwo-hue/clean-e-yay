@@ -12,8 +12,8 @@
 
 ## 🔖 ŞU AN NEREDEYİZ  (her oturum sonu burayı güncelle)
 
-**Tamamlanan:** Spec adım **1–7 (tam)** + **8 (kalibrasyon + tf_weights auto-tune proposal)** +
-**9 (controlled activation — kod-tam, gözlem fazı)** + **§4.5 (reversal + chart-pattern)**.
+**🟢 BACKEND HAZIR — spec adım 1–9 + §4.5 TAM** (per-TF contribution attribution +
+canlı tf_weights resolver dahil; öğrenmenin canlı karara akışı uçtan uca bağlı).
 - **6** — `packages/risk/trade_economics.py`: cost + R:R kapısı (RiskGate-side, yalnız kısıtlayıcı).
   Guard'lar: `test_bad_rr_blocks_entry`, `test_scalp_below_cost_blocked`.
 - **7** — `agent_pipeline.py` composer + `GET /technical/agent-matrix` + `AgentMatrixPanel` (browser-doğrulandı).
@@ -30,19 +30,26 @@
   `build_timeframe_result`'a EVIDENCE-only bağlı (yetersiz veri → None, faking yok; decision/risk tüketmez — guard).
   Contract: openapi `ReversalSignal`/`TechnicalReversalSignals`/`ChartPattern`/`TechnicalChartPatterns` + api.ts.
 
-**Sıradaki:**
-1. **Adım 9 aktivasyon (owner kararı, kod değil)** — yeterince gözlemledikten sonra
-   `config/thresholds_v1.0.yaml`'da `shadow.affect_decision: true` çevir → activate() devreye girer
-   (yalnız manual_ready). "izle → SONRA aktive et" disiplini: önce ShadowPanel'i izle.
-2. **Tam per-TF signal-contribution attribution** — tf_weights'i entry-outcome yerine sinyal-katkısından
-   ayarlamak için zengin per-TF decision-logging gerekir (kasıtlı ertelendi, faking yok).
-3. **Onaylanan tf_weights'i canlı consensus'a uygulama** — strateji-çözümleme kararına bağlı (ertelendi);
-   yeni consensus şu an bilinçli strateji-agnostik (eşit ağırlık).
+- **Yeni (bu faz):** `packages/learning/tf_contribution.py` — per-TF signal-contribution snapshot
+  (direction-magnitude × tf_weight, normalize). Shadow her tick her sembol için snapshot yazar
+  (`shadow_decisions.jsonl.contributions`). `tf_weight_trainer.propose(attributed_pnl=...)` artık
+  gerçek attribution kullanıyor; veri yokken entry-outcome fallback (faking yok).
+- **Yeni (bu faz):** `tf_weight_trainer.resolve_live_tf_weights()` — trust-gate AÇIK ve manifest
+  owner-onaylı olduğunda canonical-keyed bucket döner; kapalıysa `None` (strateji-agnostik).
+  `tick_worker` + `/agent-matrix` API + `shadow_activation` artık geçiriyor.
+- **Fresh-clone:** `scripts/bootstrap.ps1` (Windows) + `scripts/bootstrap.sh` (Unix) → tek komutla
+  `.venv` + deps + uçtan uca smoke. pyproject `dependencies` listesi tam.
 
-**Son durum:** **700 test geçiyor** · 0 hata · ruff temiz · `tsc --noEmit` temiz · codegen senkron · ShadowPanel **browser-doğrulandı**.
+**Sıradaki: FRONTEND.** Backend bittiği için sıradaki iş cilası: ShadowPanel/TfWeightsPanel/AgentMatrix
+"Yapı" kolonu canlı, ama uzman-tier görünümler ve mobile/responsive polish bekliyor. Owner runtime
+kararı (`shadow.affect_decision: true` → aktivasyon) kod değil.
+
+**Son durum:** **714 test geçiyor** · 0 hata · ruff temiz · `tsc --noEmit` temiz · codegen senkron ·
+ShadowPanel + TfWeightsPanel + AgentMatrix(Yapı) **browser-doğrulandı** · `bootstrap.ps1` yeşil.
 **Windows test komutu:** `python -m pytest -q -p no:cacheprovider --basetemp=".pytest_tmp/basetemp"`
 (varsayılan temp `pytest-of-twone` erişim reddediyor → basetemp şart). Web tsc: `node apps/web/node_modules/typescript/bin/tsc --noEmit`.
-**Push edildi mi:** ✅ phase-3-dashboard-transplant (bu oturumda push edildi)
+**Fresh-clone:** `.\scripts\bootstrap.ps1` (Win) · `./scripts/bootstrap.sh` (Unix) — tek komut.
+**Push edildi mi:** ✅ phase-3-dashboard-transplant
 
 ---
 
