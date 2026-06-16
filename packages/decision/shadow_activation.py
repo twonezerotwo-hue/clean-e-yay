@@ -52,6 +52,7 @@ def activate(
     prices: dict[str, float],
     snapshot_id: str | None,
     cfg: shadow.ShadowConfig | None = None,
+    tf_weights: dict[str, float] | None = None,
     build_views: Callable[..., Sequence[Any]] | None = None,
 ) -> list[dict]:
     """Route the shadow pipeline's entry decisions to manual_ready ONLY.
@@ -65,7 +66,11 @@ def activate(
     if not shadow.affects_paper(cfg):
         return []  # double-gated: observe-only unless explicitly activated
     builder = build_views or agent_pipeline.build_agent_matrix
-    views = builder(symbols, risk_action=risk_action)
+    try:
+        views = builder(symbols, risk_action=risk_action, tf_weights=tf_weights)
+    except TypeError:
+        # test stubs may not accept tf_weights — keep the activate path resilient
+        views = builder(symbols, risk_action=risk_action)
     queued: list[dict] = []
     for v in views:
         decision = getattr(v, "decision", None)

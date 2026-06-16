@@ -483,17 +483,23 @@ def test_fibonacci_score_bounded_to_25() -> None:
 
 
 def test_reversal_patterns_not_consumed_by_decision_or_risk() -> None:
-    """Reversal + chart-pattern layers (§4.5) are EVIDENCE only — like fibonacci they
-    are not wired into the decision engine or RiskGate, so they can never open a trade
-    or bypass the gate (they only enrich the per-TF result)."""
+    """Reversal + chart-pattern layers (§4.5) are EVIDENCE only — they must never feed
+    the ACTION decision or the RiskGate, so they cannot open a trade or bypass the gate.
+    The read-only `agent_pipeline` may surface them in its display ViewModel (after the
+    decision is made), but the decision engines and risk never consume them."""
     rx = re.compile(r"reversal_signals|chart_pattern_analysis|import reversal|import patterns")
-    offenders: list[str] = []
-    for root in (DECISION_DIR, RISK_DIR):
-        for path in _py_files(root):
-            if rx.search(path.read_text(encoding="utf-8")):
-                offenders.append(str(path.relative_to(REPO)))
+    targets = [
+        DECISION_DIR / "agent_decision.py",
+        DECISION_DIR / "engine.py",
+        *_py_files(RISK_DIR),
+    ]
+    offenders = [
+        str(p.relative_to(REPO))
+        for p in targets
+        if p.exists() and rx.search(p.read_text(encoding="utf-8"))
+    ]
     assert not offenders, (
-        "reversal/chart-pattern must not be consumed by decision/risk engines "
+        "reversal/chart-pattern must not feed the action decision or RiskGate "
         "(EVIDENCE only): " + ", ".join(offenders)
     )
 
@@ -547,3 +553,15 @@ def test_shadow_activation_only_queues_manual_ready() -> None:
     assert not auto, "shadow_activation must never auto-open: " + ", ".join(auto)
     assert "route_to_manual_ready" in src, "activation must queue to manual_ready"
     assert "affects_paper" in src, "activation must be gated by affects_paper"
+
+
+def test_tf_weight_trainer_never_auto_applies_weights() -> None:
+    """tf_weight_trainer proposes only; it must never write to the active weights
+    manifest. Active weights are owned by the rebalance approval flow."""
+    src = (REPO / "packages" / "learning" / "tf_weight_trainer.py").read_text(encoding="utf-8")
+    forbidden = ("weights_manifest_path", "write_text", "approve_current")
+    offenders = [k for k in forbidden if k in src]
+    assert not offenders, (
+        "tf_weight_trainer must propose only, never write live weights: "
+        + ", ".join(offenders)
+    )

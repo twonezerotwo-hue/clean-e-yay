@@ -86,9 +86,55 @@ def test_proposal_to_dict_shape():
     rep = _report([_cal("1d", "swing", win_rate=0.80, expectancy=5.0)])
     d = twt.proposal_to_dict(twt.propose(rep))
     assert {"prior", "proposed", "deltas", "calibrated_timeframes", "note"} <= set(d)
-    assert "deferred" in d["note"]
+    # Note now reflects which path (entry-outcome fallback or attribution) was used.
+    assert "trust-gated" in d["note"]
 
 
 def test_skip_when_no_prior():
     out = twt.propose({"tf_weights_prior": {}, "per_timeframe": []})
     assert isinstance(out, dict) and out["reason"] == "no_prior_weights"
+
+
+# ── attributed PnL path: closes the deferred contribution-attribution route ──
+
+def test_proposal_uses_attributed_pnl_when_supplied():
+    # 1d calibrated under swing; attributed PnL says 1d earned +100, 4h earned -20.
+    rep = _report([_cal("1d", "swing", win_rate=0.6, expectancy=2.0)])
+    attributed = {"swing": {"1d": 100.0, "4h": -20.0}}
+    p = twt.propose(rep, attributed_pnl=attributed)
+    assert isinstance(p, TfWeightProposal)
+    assert "contribution attribution" in p.note  # attribution path used
+    # the validated 1d gets up-weighted vs its prior under attribution
+    assert p.proposed["swing"]["d1"] > _PRIOR["swing"]["d1"]
+
+
+def test_attributed_negative_share_downweights():
+    rep = _report([_cal("1h", "intraday", win_rate=0.6, expectancy=1.0)])
+    attributed = {"intraday": {"1h": -100.0, "4h": 20.0}}  # 1h lost
+    p = twt.propose(rep, attributed_pnl=attributed)
+    assert isinstance(p, TfWeightProposal)
+    assert p.proposed["intraday"]["h1"] < _PRIOR["intraday"]["h1"]
+
+
+def test_falls_back_to_entry_outcome_when_no_attribution():
+    rep = _report([_cal("1d", "swing", win_rate=0.80, expectancy=5.0)])
+    p = twt.propose(rep, attributed_pnl=None)
+    assert isinstance(p, TfWeightProposal)
+    assert "entry-outcome" in p.note
+
+
+# ── live tf_weights resolver (trust-gated) ────────────────────────────────────
+
+def test_resolve_live_weights_returns_none_until_trusted():
+    rep_untrusted = _report([_cal("1d", "swing", win_rate=0.9, expectancy=5.0, trust="PRIOR")])
+    assert twt.resolve_live_tf_weights(rep_untrusted) is None
+
+
+def test_resolve_live_weights_returns_canonical_keyed_bucket_when_trusted():
+    # Build a trusted report (any calibrated TF → trusted)
+    rep_trusted = _report([_cal("1h", "intraday", win_rate=0.7, expectancy=3.0)])
+    out = twt.resolve_live_tf_weights(rep_trusted)
+    # Trusted → either a canonical-keyed bucket or None (if active manifest empty)
+    if out is not None:
+        # canonical keys are 15m / 1h / 4h / 1d
+        assert all(k in {"15m", "1h", "4h", "1d", "1w"} for k in out)

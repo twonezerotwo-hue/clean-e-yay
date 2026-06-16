@@ -29,6 +29,7 @@ from typing import Any
 
 from packages.data.registry.loader import load_thresholds
 from packages.decision import agent_pipeline
+from packages.learning import tf_contribution
 
 DEFAULT_PATH = "data/runtime/shadow_decisions.jsonl"
 DEFAULT_MAX_READ = 200
@@ -150,6 +151,7 @@ def build_comparison(
     shadow_views: Sequence[Any],
     cfg: ShadowConfig,
     calibration: dict | None = None,
+    tf_weights: dict[str, float] | None = None,
     now: datetime | None = None,
 ) -> dict:
     """Pure comparison record: per-symbol live-vs-shadow intent + agreement summary.
@@ -163,6 +165,7 @@ def build_comparison(
     """
     now = now or datetime.now(UTC)
     rows: list[dict] = []
+    contributions: dict[str, dict[str, float]] = {}
     counts: dict[str, int] = {
         "AGREE_ENTRY": 0,
         "AGREE_FLAT": 0,
@@ -179,6 +182,10 @@ def build_comparison(
         rows.append(
             {"symbol": symbol, "live": live, "shadow": shadow, "agreement": agreement}
         )
+        # Per-TF contribution share — empty when nothing pushed (no faking).
+        share = tf_contribution.compute_snapshot(view, tf_weights=tf_weights)
+        if share and symbol is not None:
+            contributions[symbol] = share
 
     recorded_at = now.isoformat()
     return {
@@ -192,6 +199,11 @@ def build_comparison(
         "affected_paper": affects_paper(cfg),
         # tf_weights trust verdict (PRIOR/untrusted until per-TF calibration validates).
         "calibration": calibration or {},
+        # Per-TF score-contribution shares per symbol (sum=1.0 per symbol; empty when
+        # no TF pushed). Closes the deferred contribution-attribution path: learning
+        # correlates closed trades to this snapshot by (snapshot_id, symbol).
+        "contributions": contributions,
+        "tf_weights_applied": bool(tf_weights),
         "symbols": rows,
         "summary": counts,
         # Safety contract stamped on every record (audit/replay evidence).
@@ -234,6 +246,7 @@ def observe(
     live_decisions: Sequence[Any],
     cfg: ShadowConfig | None = None,
     calibration: dict | None = None,
+    tf_weights: dict[str, float] | None = None,
     build_views: Callable[..., Sequence[Any]] | None = None,
 ) -> dict:
     """Run the shadow pipeline and build the comparison record (no paper access).
@@ -247,7 +260,11 @@ def observe(
     """
     cfg = cfg or load_config()
     builder = build_views or agent_pipeline.build_agent_matrix
-    shadow_views = builder(symbols, risk_action=risk_action)
+    try:
+        shadow_views = builder(symbols, risk_action=risk_action, tf_weights=tf_weights)
+    except TypeError:
+        # Builder stub may not accept tf_weights — strategy-agnostic fallback is fine.
+        shadow_views = builder(symbols, risk_action=risk_action)
     return build_comparison(
         snapshot_id=snapshot_id,
         risk_action=risk_action,
@@ -255,6 +272,7 @@ def observe(
         shadow_views=shadow_views,
         cfg=cfg,
         calibration=calibration,
+        tf_weights=tf_weights,
     )
 
 

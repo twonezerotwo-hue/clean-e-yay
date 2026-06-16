@@ -133,37 +133,69 @@ def build_symbol_view_from_bars(
 
 
 def build_agent_matrix(
-    symbols: list[str], *, risk_action: str | None = None
+    symbols: list[str],
+    *,
+    risk_action: str | None = None,
+    tf_weights: dict[Timeframe, float] | None = None,
 ) -> list[SymbolAgentView]:
     """I/O wrapper: pull cache-backed bars per TF (no live network) and compose.
 
     Mirrors the existing technical/decision routers' data source (`ohlcv.get_bars`,
-    already pipeline-warmed). Read-only; never mutates paper state.
+    already pipeline-warmed). Read-only; never mutates paper state. `tf_weights` is
+    an optional per-strategy bucket — applied only when the calibration trust-gate is
+    open at the call site; passed through to consensus.
     """
     views: list[SymbolAgentView] = []
     for sym in symbols:
         bars_by_tf = {tf: (ohlcv.get_bars(sym, tf) or []) for tf in PIPELINE_TFS}
         views.append(
-            build_symbol_view_from_bars(sym, bars_by_tf, risk_action=risk_action)
+            build_symbol_view_from_bars(
+                sym, bars_by_tf, risk_action=risk_action, tf_weights=tf_weights,
+            )
         )
     return views
+
+
+# ConsensusSnapshot/per_timeframe key naming (contract): 15m→m15 … 1w→w1.
+_TF_TO_KEY: dict[Timeframe, str] = {"15m": "m15", "1h": "h1", "4h": "h4", "1d": "d1", "1w": "w1"}
+
+
+def _reversal_pattern_summary(view: SymbolAgentView) -> tuple[str | None, str | None]:
+    """Compact §4.5 evidence for the matrix: reversal bias + active pattern from the
+    entry timeframe's result (fallback 1d/4h). EVIDENCE only — read, never decided on."""
+    per_tf = getattr(view.agent, "per_timeframe", {}) or {}
+    entry = view.decision.entry_timeframe
+    key = _TF_TO_KEY.get(entry) if entry else None
+    res = (per_tf.get(key) if key else None) or per_tf.get("d1") or per_tf.get("h4")
+    if res is None:
+        return None, None
+    rev = getattr(res, "reversal_signals", None)
+    pat = getattr(res, "chart_pattern_analysis", None)
+    rev_bias = rev.bias if rev is not None else None
+    pattern = pat.active_patterns[0].name if (pat is not None and pat.active_patterns) else None
+    return rev_bias, pattern
 
 
 def matrix_viewmodel(
     views: list[SymbolAgentView], *, risk_action: str | None = None
 ) -> dict:
     """Serialize composed views into a plain dict ViewModel (frontend does no math)."""
-    return {
-        "risk_action": risk_action,
-        "timeframes": list(PIPELINE_TFS),
-        "symbols": [
+    symbols = []
+    for v in views:
+        rev_bias, pattern = _reversal_pattern_summary(v)
+        symbols.append(
             {
                 "symbol": v.symbol,
                 "stance": v.agent.stance,
                 "consensus": v.consensus.model_dump(mode="json"),
                 "decision": v.decision.model_dump(mode="json"),
                 "economics": asdict(v.economics) if v.economics is not None else None,
+                "reversal_bias": rev_bias,
+                "pattern": pattern,
             }
-            for v in views
-        ],
+        )
+    return {
+        "risk_action": risk_action,
+        "timeframes": list(PIPELINE_TFS),
+        "symbols": symbols,
     }

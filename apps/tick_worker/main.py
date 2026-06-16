@@ -24,7 +24,7 @@ from packages.data.ingestion.pipeline import DEFAULT_SYMBOLS, get_cached_snapsho
 from packages.data.provenance import data_provenance
 from packages.decision import shadow, shadow_activation
 from packages.decision.engine import decide_matrix, matrix_view
-from packages.learning import tf_calibration
+from packages.learning import tf_calibration, tf_weight_trainer
 from packages.ops import heartbeat
 from packages.paper import manual_queue, session_gate
 from packages.paper import state as paper_state
@@ -222,11 +222,16 @@ async def run_once() -> None:
                 # tf_weights trust verdict (read-only; worker owns paper state `ps`).
                 # Surfaced in the record so applying PRIOR weights stays data-driven.
                 try:
-                    cal_summary = shadow.calibration_summary(
-                        tf_calibration.calibration_report(state=ps)
-                    )
+                    cal_report = tf_calibration.calibration_report(state=ps)
+                    cal_summary = shadow.calibration_summary(cal_report)
                 except Exception:
+                    cal_report = {}
                     cal_summary = {}
+                # Trust-gated live tf_weights application: only when calibration trusts.
+                try:
+                    live_tf_weights = tf_weight_trainer.resolve_live_tf_weights(cal_report)
+                except Exception:
+                    live_tf_weights = None
                 shadow.record(
                     shadow.observe(
                         MATRIX_SYMBOLS,
@@ -235,6 +240,7 @@ async def run_once() -> None:
                         live_decisions=decisions,
                         cfg=shadow_cfg,
                         calibration=cal_summary,
+                        tf_weights=live_tf_weights,
                     )
                 )
                 if shadow.affects_paper(shadow_cfg):
@@ -248,6 +254,7 @@ async def run_once() -> None:
                         prices=prices,
                         snapshot_id=snap.snapshot_id,
                         cfg=shadow_cfg,
+                        tf_weights=live_tf_weights,
                     )
                     if queued:
                         paper_state.save(ps)

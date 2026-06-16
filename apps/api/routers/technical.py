@@ -11,6 +11,7 @@ from fastapi import APIRouter
 from packages.data.ingestion.pipeline import DEFAULT_SYMBOLS, get_cached_snapshot
 from packages.data.providers import technical as tech_provider
 from packages.decision import agent_pipeline
+from packages.learning import tf_weight_trainer
 from packages.paper import state as paper_state
 from packages.risk import engine as risk_engine
 
@@ -44,5 +45,13 @@ def get_agent_matrix() -> dict:
             open_position_count=len(ps.open_positions),
         )
     )
-    views = agent_pipeline.build_agent_matrix(_MATRIX_SYMBOLS, risk_action=risk.action)
+    # Trust-gated live tf_weights: None when calibration hasn't validated yet
+    # (strategy-agnostic equal weighting). Defensive — never breaks the read path.
+    try:
+        tf_weights = tf_weight_trainer.resolve_live_tf_weights()
+    except Exception:
+        tf_weights = None
+    views = agent_pipeline.build_agent_matrix(
+        _MATRIX_SYMBOLS, risk_action=risk.action, tf_weights=tf_weights,
+    )
     return agent_pipeline.matrix_viewmodel(views, risk_action=risk.action)
