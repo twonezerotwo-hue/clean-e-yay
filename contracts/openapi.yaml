@@ -276,6 +276,18 @@ paths:
               schema:
                 $ref: "#/components/schemas/CalibrationState"
 
+  /api/v1/learning/tf-weights:
+    get:
+      operationId: getLearningTfWeights
+      summary: Step 8 — per-TF calibration + trust-gated tf_weights proposal (read-only)
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TfWeightsReport"
+
   /api/v1/learning/calibration/retrain:
     post:
       operationId: postLearningCalibrationRetrain
@@ -1821,6 +1833,48 @@ components:
 
     # ---------------- OPS — /learning/* yüzeyi (read-only) ----------------
 
+    TfCalibrationRow:
+      type: object
+      required: [timeframe, strategy, trades, win_rate, trust]
+      properties:
+        timeframe: { type: string }
+        strategy: { type: string }
+        trades: { type: integer }
+        win_rate: { type: number }
+        expectancy: { type: number }
+        trust: { type: string, enum: [PRIOR, CALIBRATED] }
+
+    TfWeightDeltaRow:
+      type: object
+      required: [strategy, timeframe, old, new, delta]
+      properties:
+        strategy: { type: string }
+        timeframe: { type: string }
+        old: { type: number }
+        new: { type: number }
+        delta: { type: number }
+
+    TfWeightsReport:
+      type: object
+      description: >
+        Step 8 per-TF calibration + trust-gated tf_weights proposal. Informational —
+        live weights are never moved here (owner approval, never auto-apply).
+      required: [tf_weights_trusted, per_timeframe, proposal_status, deltas]
+      properties:
+        tf_weights_trusted: { type: boolean }
+        min_trades_per_tf: { type: integer, nullable: true }
+        calibrated_timeframes:
+          type: array
+          items: { type: string }
+        per_timeframe:
+          type: array
+          items: { $ref: "#/components/schemas/TfCalibrationRow" }
+        proposal_status: { type: string }
+        deltas:
+          type: array
+          items: { $ref: "#/components/schemas/TfWeightDeltaRow" }
+        note: { type: string }
+
     CalibrationParams:
       type: object
       required: [a, b, samples, status]
@@ -2726,6 +2780,8 @@ components:
           anyOf:
             - $ref: "#/components/schemas/TradeEconomics"
             - type: "null"
+        reversal_bias: { type: string, enum: [BULLISH, BEARISH, NEUTRAL], nullable: true }
+        pattern: { type: string, nullable: true }
 
     AgentMatrix:
       type: object

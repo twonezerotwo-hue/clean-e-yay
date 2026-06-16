@@ -85,6 +85,30 @@ export function isRiskRestrictive(action?: string | null): boolean {
   );
 }
 
+const PATTERN_LABEL: Record<string, string> = {
+  uptrend_structure: "↗ trend",
+  downtrend_structure: "↘ trend",
+  ranging: "↔ range",
+};
+
+/** §4.5 chart-pattern → compact label (evidence only). */
+export function patternLabel(pattern?: string | null): string {
+  return pattern ? (PATTERN_LABEL[pattern] ?? pattern) : "—";
+}
+
+/** §4.5 reversal bias → glyph (↩▲ bullish / ↩▼ bearish; empty when NEUTRAL/none). */
+export function reversalGlyph(bias?: string | null): string {
+  if (bias === "BULLISH") return "↩▲";
+  if (bias === "BEARISH") return "↩▼";
+  return "";
+}
+
+export function reversalTone(bias?: string | null): string {
+  if (bias === "BULLISH") return "text-signal-up";
+  if (bias === "BEARISH") return "text-signal-down";
+  return "text-white/45";
+}
+
 /** Short economics summary string (R:R + net edge) or the block reason. */
 export function economicsSummary(row: AgentMatrixRow): string {
   const e = row.economics;

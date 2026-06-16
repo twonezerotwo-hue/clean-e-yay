@@ -89,6 +89,15 @@ export const useCalibration = () =>
     refetchInterval: 5 * 60_000,
   });
 
+/** Step 8 — per-TF calibration + trust-gated tf_weights proposal (owner-approved). */
+export const useTfWeights = () =>
+  useQuery({
+    queryKey: qk.tfWeights,
+    queryFn: api.tfWeights,
+    staleTime: 60_000,
+    refetchInterval: 5 * 60_000,
+  });
+
 export const useMistakes = () =>
   useQuery({
     queryKey: qk.mistakes,

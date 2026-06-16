@@ -344,6 +344,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/learning/tf-weights": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Step 8 — per-TF calibration + trust-gated tf_weights proposal (read-only) */
+        get: operations["getLearningTfWeights"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/learning/calibration/retrain": {
         parameters: {
             query?: never;
@@ -1535,6 +1552,32 @@ export interface components {
             status: components["schemas"]["OptionsStatus"];
             verified: boolean;
         };
+        TfCalibrationRow: {
+            timeframe: string;
+            strategy: string;
+            trades: number;
+            win_rate: number;
+            expectancy?: number;
+            /** @enum {string} */
+            trust: "PRIOR" | "CALIBRATED";
+        };
+        TfWeightDeltaRow: {
+            strategy: string;
+            timeframe: string;
+            old: number;
+            new: number;
+            delta: number;
+        };
+        /** @description Step 8 per-TF calibration + trust-gated tf_weights proposal. Informational — live weights are never moved here (owner approval, never auto-apply). */
+        TfWeightsReport: {
+            tf_weights_trusted: boolean;
+            min_trades_per_tf?: number | null;
+            calibrated_timeframes?: string[];
+            per_timeframe: components["schemas"]["TfCalibrationRow"][];
+            proposal_status: string;
+            deltas: components["schemas"]["TfWeightDeltaRow"][];
+            note?: string;
+        };
         CalibrationParams: {
             a: number;
             b: number;
@@ -2113,6 +2156,9 @@ export interface components {
             consensus: components["schemas"]["ConsensusSnapshot"];
             decision: components["schemas"]["AgentDecision"];
             economics?: components["schemas"]["TradeEconomics"] | null;
+            /** @enum {string|null} */
+            reversal_bias?: "BULLISH" | "BEARISH" | "NEUTRAL" | null;
+            pattern?: string | null;
         };
         /** @description Read-only multi-TF agent pipeline matrix (steps 1–6). Global RiskGate action is applied first; the per-trade cost + R:R gate is final. Frontend renders only. */
         AgentMatrix: {
@@ -2605,6 +2651,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CalibrationState"];
+                };
+            };
+        };
+    };
+    getLearningTfWeights: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TfWeightsReport"];
                 };
             };
         };

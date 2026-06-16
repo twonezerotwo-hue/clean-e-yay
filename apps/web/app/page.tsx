@@ -43,6 +43,7 @@ import { WeightProposalPanel } from "@/components/panels/WeightProposalPanel";
 import { WeightHistoryPanel } from "@/components/panels/WeightHistoryPanel";
 import { CalibrationPanel } from "@/components/panels/CalibrationPanel";
 import { MistakeMemoryPanel } from "@/components/panels/MistakeMemoryPanel";
+import { TfWeightsPanel } from "@/components/panels/TfWeightsPanel";
 import { CorrelationPanel } from "@/components/panels/CorrelationPanel";
 import { DrawdownGuardPanel } from "@/components/panels/DrawdownGuardPanel";
 import { CryptoDerivativesPanel } from "@/components/panels/CryptoDerivativesPanel";
@@ -159,6 +160,7 @@ export default function HomePage() {
             <GridCell span="1"><WeightHistoryPanel /></GridCell>
             <GridCell span="2"><CalibrationPanel /></GridCell>
             <GridCell span="1"><MistakeMemoryPanel /></GridCell>
+            <GridCell span="2"><TfWeightsPanel /></GridCell>
           </PanelGroup>
 
           <PanelGroup title="Ops / System" hint="replay · sistem sağlığı · sözleşme">

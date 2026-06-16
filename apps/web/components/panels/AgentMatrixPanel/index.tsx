@@ -15,6 +15,9 @@ import {
   biasTone,
   economicsSummary,
   isRiskRestrictive,
+  patternLabel,
+  reversalGlyph,
+  reversalTone,
   selectAgentRows,
 } from "@/lib/selectors/agent-matrix";
 import type { AgentMatrixRow } from "@/types/generated/api";
@@ -89,6 +92,15 @@ function AgentRow({ row, suspended }: { row: AgentMatrixRow; suspended: boolean 
       <td className="p-1 text-center text-[10px] tabular-nums text-white/55">
         {economicsSummary(row)}
       </td>
+      <td
+        className="p-1 text-center text-[10px] leading-tight"
+        title={`§4.5 evidence · pattern ${row.pattern ?? "—"} · reversal ${row.reversal_bias ?? "—"}`}
+      >
+        <div className="text-white/55">{patternLabel(row.pattern)}</div>
+        <div className={`text-[9px] ${reversalTone(row.reversal_bias)}`}>
+          {reversalGlyph(row.reversal_bias)}
+        </div>
+      </td>
     </tr>
   );
 }
@@ -143,6 +155,7 @@ export function AgentMatrixPanel() {
               <th className="p-1 font-normal">Hizalama</th>
               <th className="p-1 font-normal">Karar</th>
               <th className="p-1 font-normal">Ekonomi</th>
+              <th className="p-1 font-normal">Yapı</th>
             </tr>
           </thead>
           <tbody>

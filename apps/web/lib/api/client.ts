@@ -24,6 +24,7 @@ import type {
   ReplayStatus,
   ShadowComparison,
   SystemHealth,
+  TfWeightsReport,
   TickResult,
 } from "@/types/generated/api";
 
@@ -65,6 +66,8 @@ export const api = {
     fetchJSON<RebalanceState>("/api/v1/learning/rebalance/proposal"),
   calibration: () =>
     fetchJSON<CalibrationState>("/api/v1/learning/calibration"),
+  tfWeights: () =>
+    fetchJSON<TfWeightsReport>("/api/v1/learning/tf-weights"),
   mistakes: () => fetchJSON<MistakesState>("/api/v1/learning/mistakes"),
   riskCorrelation: () =>
     fetchJSON<CorrelationState>("/api/v1/risk/correlation"),

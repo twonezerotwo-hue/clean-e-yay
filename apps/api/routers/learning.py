@@ -7,7 +7,12 @@ from dataclasses import asdict
 
 from fastapi import APIRouter
 
-from packages.learning import calibration_store, calibration_trainer, mistake_memory
+from packages.learning import (
+    calibration_store,
+    calibration_trainer,
+    mistake_memory,
+    tf_weight_trainer,
+)
 from packages.learning.calibration import reliability_bins
 from packages.learning.summary import build_summary
 from packages.paper import state as paper_state
@@ -44,6 +49,16 @@ def get_calibration() -> dict:
 @router.post("/learning/calibration/retrain")
 def post_retrain_calibration() -> dict:
     return calibration_trainer.train()
+
+
+@router.get("/learning/tf-weights")
+def get_tf_weights() -> dict:
+    """Step 8 — per-TF calibration + the trust-gated tf_weights proposal (read-only).
+
+    Owner-facing view: which timeframes are validated (CALIBRATED) and what weight
+    changes the verified outcomes suggest. Informational — live weights are never
+    moved here (owner approval, never auto-apply)."""
+    return tf_weight_trainer.report_viewmodel()
 
 
 @router.get("/learning/mistakes")

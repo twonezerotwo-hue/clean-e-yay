@@ -10,6 +10,7 @@ export const qk = {
   dataSnapshot: ["data", "snapshot"] as const,
   rebalanceProposal: ["learning", "rebalance"] as const,
   calibration: ["learning", "calibration"] as const,
+  tfWeights: ["learning", "tf-weights"] as const,
   mistakes: ["learning", "mistakes"] as const,
   riskCorrelation: ["risk", "correlation"] as const,
   riskHalts: ["risk", "halts"] as const,

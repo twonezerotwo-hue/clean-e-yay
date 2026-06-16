@@ -732,6 +732,34 @@ export type CalibrationState = {
   bins: CalibrationBin[];
 };
 
+// ── Step 8 — per-TF calibration + trust-gated tf_weights proposal (read-only) ──
+export type TfCalibrationRow = {
+  timeframe: string;
+  strategy: string;
+  trades: number;
+  win_rate: number;
+  expectancy?: number;
+  trust: "PRIOR" | "CALIBRATED";
+};
+
+export type TfWeightDeltaRow = {
+  strategy: string;
+  timeframe: string;
+  old: number;
+  new: number;
+  delta: number;
+};
+
+export type TfWeightsReport = {
+  tf_weights_trusted: boolean;
+  min_trades_per_tf?: number | null;
+  calibrated_timeframes?: string[];
+  per_timeframe: TfCalibrationRow[];
+  proposal_status: string;
+  deltas: TfWeightDeltaRow[];
+  note?: string;
+};
+
 export type MistakeAction = "NEUTRAL" | "AVOID" | "BOOST" | "WARNING";
 
 export type MistakeRecord = {
@@ -1500,6 +1528,8 @@ export type AgentMatrixRow = {
   consensus: ConsensusSnapshot;
   decision: AgentDecision;
   economics?: TradeEconomics | null;
+  reversal_bias?: TechnicalBias | null;
+  pattern?: string | null;
 };
 
 export type AgentMatrix = {

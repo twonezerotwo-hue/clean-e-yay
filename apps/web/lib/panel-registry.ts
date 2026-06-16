@@ -58,7 +58,8 @@ export type PanelKey =
   | "catalyst_impact"
   | "timeframe_matrix"
   | "agent_matrix"
-  | "shadow";
+  | "shadow"
+  | "tf_weights";
 
 export type PanelGroupId =
   // simple tier
@@ -130,6 +131,7 @@ export const PANEL_REGISTRY: PanelMeta[] = [
   { id: "weight_history",   title: "Ağırlık Geçmişi",      defaultVisible: true,  span: "1",    group: "learning", tier: "expert" },
   { id: "calibration",      title: "Calibration",          defaultVisible: true,  span: "2",    group: "learning", tier: "expert" },
   { id: "mistake_memory",   title: "Mistake Memory",       defaultVisible: true,  span: "1",    group: "learning", tier: "expert" },
+  { id: "tf_weights",       title: "tf_weights Kalibrasyon", defaultVisible: true, span: "2",   group: "learning", tier: "expert" },
   // ── EXPERT — Ops / System ────────────────────────────────────────────────
   { id: "replay_status",    title: "Replay Durumu",        defaultVisible: false, span: "1",    group: "ops",      tier: "expert" },
   { id: "system_health",    title: "Sistem Sağlığı",       defaultVisible: true,  span: "full", group: "ops",      tier: "expert" },
