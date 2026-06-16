@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import asyncio
 import importlib
+import json
 from datetime import UTC, datetime, timedelta
 
 import pytest
@@ -26,6 +27,8 @@ def ops_env(tmp_path, monkeypatch):
     monkeypatch.setenv("SNAPSHOT_STORE_PATH", str(tmp_path / "snapshots"))
     monkeypatch.setenv("LEARNING_RUN_PATH", str(tmp_path / "learning_run.json"))
     monkeypatch.setenv("LEARNING_OUT_PATH", str(tmp_path / "learning_summary.json"))
+    monkeypatch.setenv("TF_CALIBRATION_OUT_PATH", str(tmp_path / "tf_calibration.json"))
+    monkeypatch.setenv("TF_WEIGHT_PROPOSAL_OUT_PATH", str(tmp_path / "tf_weight_proposal.json"))
     monkeypatch.setenv("CALIBRATION_STORE_PATH", str(tmp_path / "platt.json"))
     monkeypatch.setenv("REBALANCE_STORE_PATH", str(tmp_path / "rebalance.json"))
     monkeypatch.setenv("WEIGHTS_MANIFEST_PATH", str(tmp_path / "weights_active.json"))
@@ -170,6 +173,33 @@ def test_learning_worker_empty_data_writes_no_data_heartbeat(ops_env) -> None:
     assert hb["status"] == "NO_DATA"
     assert hb["learning_outcomes_seen"] == 0
     assert hb["cycle_count"] >= 1
+
+
+def test_learning_worker_emits_tf_calibration_verdict(ops_env) -> None:
+    """Step 8 — per-TF calibration runs each cycle and persists the trust verdict.
+
+    Empty paper state → no verified outcomes → tf_weights stay PRIOR/untrusted, and a
+    durable tf_calibration.json artifact is written for the trust gate to read.
+    """
+    from apps.learning_worker import main as lw
+    importlib.reload(lw)
+    run = lw.run_once()
+    assert run["tf_calibration_status"] == "PRIOR"
+    assert run["tf_weights_trusted"] is False
+    art = json.loads(lw.TF_CALIBRATION_OUT_PATH.read_text(encoding="utf-8"))
+    assert art["tf_weights_trusted"] is False
+    assert "per_timeframe" in art and "tf_weights_prior" in art
+
+
+def test_learning_worker_emits_tf_weight_proposal(ops_env) -> None:
+    """Step 8 — tf_weights auto-tune runs each cycle. Empty state has no calibrated
+    timeframe, so it skips (no faked proposal) and persists that verdict."""
+    from apps.learning_worker import main as lw
+    importlib.reload(lw)
+    run = lw.run_once()
+    assert run["tf_weight_proposal_status"] == "no_calibrated_tf"
+    art = json.loads(lw.TF_WEIGHT_PROPOSAL_OUT_PATH.read_text(encoding="utf-8"))
+    assert art["status"] == "skipped" and art["reason"] == "no_calibrated_tf"
 
 
 # ------------------------------- endpoint ------------------------------------
