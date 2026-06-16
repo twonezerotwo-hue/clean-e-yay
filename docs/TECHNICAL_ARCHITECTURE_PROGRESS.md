@@ -12,31 +12,36 @@
 
 ## 🔖 ŞU AN NEREDEYİZ  (her oturum sonu burayı güncelle)
 
-**Tamamlanan:** Spec adım **1–6 (tam)** + **7 (backend + contract + frontend)** + **8 (kalibrasyon temeli)**.
-- **6** — `packages/risk/trade_economics.py`: cost + R:R kapısı (RiskGate-side, yalnız kısıtlayıcı;
-  `trade_economics` config bloğu). Guard'lar: `test_bad_rr_blocks_entry`, `test_scalp_below_cost_blocked`.
-- **7 (backend+contract)** — `packages/decision/agent_pipeline.py` composer (adım 1–6'yı birleştirir;
-  economics FINAL overlay) + `GET /api/v1/technical/agent-matrix` (`apps/api/routers/technical.py`) +
-  contract: openapi `AgentMatrix`/`AgentMatrixRow`/`TradeEconomics`, `schema.ts` (üretildi), `api.ts` (el).
-- **7 (frontend)** — `AgentMatrixPanel` (`apps/web/components/panels/AgentMatrixPanel`) `/technical/agent-matrix`'e
-  bağlı: `api.agentMatrix` + `useAgentMatrix` hook + `lib/selectors/agent-matrix.ts` + panel-registry (decision grubu) +
-  `app/page.tsx` mount. Frontend hesap yapmaz; selector ViewModel'i map eder. Browser-doğrulandı (:4000 → :8001:
-  KILL_SWITCH banner + ETHUSD COUNTERTREND/CT). `tsc --noEmit` temiz (latent duplicate `Timeframe` api.ts fix).
-- **8 (temel)** — `packages/learning/tf_calibration.py`: verified outcome → per-TF hit-rate/expectancy +
-  tf_weights **trust-gate** (kalibrasyon doğrulayana kadar PRIOR) + `tf_weights` PRIOR (`weights_v1.0.yaml`).
-- **Tooling** — codegen artık **her OS'ta** çalışıyor (`node cli.js` + satır-sonu duyarsız karşılaştırma);
-  riskgate guard'ları OS-portable (`as_posix`). **Makine ayrımı YOK.**
+**Tamamlanan:** Spec adım **1–7 (tam)** + **8 (kalibrasyon + tf_weights auto-tune proposal)** +
+**9 (controlled activation — kod-tam, gözlem fazı)** + **§4.5 (reversal + chart-pattern)**.
+- **6** — `packages/risk/trade_economics.py`: cost + R:R kapısı (RiskGate-side, yalnız kısıtlayıcı).
+  Guard'lar: `test_bad_rr_blocks_entry`, `test_scalp_below_cost_blocked`.
+- **7** — `agent_pipeline.py` composer + `GET /technical/agent-matrix` + `AgentMatrixPanel` (browser-doğrulandı).
+- **8** — `tf_calibration.py` (verified → per-TF hit-rate/expectancy + trust-gate) **artık learning_worker
+  döngüsünde** çalışıp durable artifact (`data/runtime/tf_calibration.json`) yazıyor. `tf_weight_trainer.py`:
+  trust-gated, entry-outcome tabanlı **tf_weights PROPOSAL** (CALIBRATED TF'ler nudge'lanır; negatif-expectancy
+  asla up-weight; bucket renormalize; owner-onaylı, asla auto-apply). Tam signal-contribution attribution ertelendi.
+- **9 (controlled activation)** — `packages/decision/shadow.py`: yeni pipeline her tick **gözlem modunda** çalışır,
+  canlı-vs-shadow karşılaştırması JSONL'e yazılır (`affect_decision:false` → paper'a dokunmaz; trust verdict gömülü).
+  `shadow_activation.py`: Faz B `activate()` → girişleri **yalnız manual_ready**'ye yönlendirir (asla auto-open;
+  RiskGate owner onayında yeniden çalışır), `affects_paper` ile gated → **shipped config'te inert**.
+  `GET /api/v1/decision/shadow` + **ShadowPanel** (browser-doğrulandı, gerçek veri: SHADOW_ONLY_ENTRY divergence).
+- **§4.5** — `reversal.py` (RSI/MACD divergence + double bottom/top) + `patterns.py` (HH/HL swing yapısı);
+  `build_timeframe_result`'a EVIDENCE-only bağlı (yetersiz veri → None, faking yok; decision/risk tüketmez — guard).
+  Contract: openapi `ReversalSignal`/`TechnicalReversalSignals`/`ChartPattern`/`TechnicalChartPatterns` + api.ts.
 
 **Sıradaki:**
-1. **Adım 9** — controlled activation: `shadow_mode` → `affect_decision: false` (izle) → sonra `true`,
-   `manual_ready_only`. Yeni agent pipeline'ı (agent-matrix) gözlem moduna al; kararı henüz paper'a yazma.
-2. **Adım 8 tam tf_weights auto-tune** — per-TF sinyal-katkısı attribution'ı için zengin decision-logging
-   gerekir (kasıtlı ertelendi, faking yok). Not: `auto_weight_trainer` önerileri tf_weights'i taşımıyor.
-3. **Reversal_signals + chart_pattern_analysis** stateful katmanları (kasıtlı ertelendi, faking yok).
+1. **Adım 9 aktivasyon (owner kararı, kod değil)** — yeterince gözlemledikten sonra
+   `config/thresholds_v1.0.yaml`'da `shadow.affect_decision: true` çevir → activate() devreye girer
+   (yalnız manual_ready). "izle → SONRA aktive et" disiplini: önce ShadowPanel'i izle.
+2. **Tam per-TF signal-contribution attribution** — tf_weights'i entry-outcome yerine sinyal-katkısından
+   ayarlamak için zengin per-TF decision-logging gerekir (kasıtlı ertelendi, faking yok).
+3. **Onaylanan tf_weights'i canlı consensus'a uygulama** — strateji-çözümleme kararına bağlı (ertelendi);
+   yeni consensus şu an bilinçli strateji-agnostik (eşit ağırlık).
 
-**Son durum:** **644 test geçiyor** · 0 hata · ruff temiz · `tsc --noEmit` temiz · codegen senkron (Windows **ve** Mac) · agent matrix paneli **browser-doğrulandı**.
+**Son durum:** **700 test geçiyor** · 0 hata · ruff temiz · `tsc --noEmit` temiz · codegen senkron · ShadowPanel **browser-doğrulandı**.
 **Windows test komutu:** `python -m pytest -q -p no:cacheprovider --basetemp=".pytest_tmp/basetemp"`
-(varsayılan temp `pytest-of-twone` erişim reddediyor → basetemp şart).
+(varsayılan temp `pytest-of-twone` erişim reddediyor → basetemp şart). Web tsc: `node apps/web/node_modules/typescript/bin/tsc --noEmit`.
 **Push edildi mi:** ✅ phase-3-dashboard-transplant (bu oturumda push edildi)
 
 ---
@@ -96,13 +101,14 @@ Mevcut `decide_matrix` engine DOKUNULMADI. config `decision:` bloğu. Test: `tes
 
 ## Kalan adımlar (spec §9)
 
-- **6 (T2) — risk genişlet:** cost (taker/spread/slippage) + net edge + R:R kapısı +
-  tf cap. RiskGate final. Test: `test_bad_rr_blocks_entry`, `test_scalp_below_cost_blocked`.
-- **7 — wiring + dashboard:** TechnicalTimeframeResult/TechnicalAgentOutput/
-  ConsensusSnapshot/AgentDecision'ı bir API endpoint'e + `TimeframeMatrixPanel`'e bağla.
-- **8 — learning:** replay → outcomes → calibration → tf_weights auto-tune.
-- **9 — controlled activation:** shadow_mode → affect_decision false→izle→true.
-- **Ertelenen (kasıtlı, faking yok):** reversal_signals + chart_pattern_analysis stateful katmanları.
+Spec §9 build sırası **1–9 tamamlandı** (+ §4.5). Geriye yalnız kod-dışı / kasıtlı-ertelenmiş kalemler:
+
+- **Adım 9 aktivasyon — owner kararı (kod değil):** ShadowPanel'i yeterince izledikten sonra
+  `shadow.affect_decision: true` çevir → `shadow_activation.activate()` devreye girer (yalnız manual_ready).
+- **Tam per-TF signal-contribution attribution (ertelendi, faking yok):** tf_weights'i entry-outcome yerine
+  sinyal-katkısından ayarlamak zengin per-TF decision-logging ister. Mevcut: trust-gated entry-outcome proposal.
+- **Onaylanan tf_weights → canlı consensus:** strateji-çözümleme kararına bağlı (yeni consensus şu an
+  bilinçli strateji-agnostik / eşit ağırlık).
 
 ---
 
