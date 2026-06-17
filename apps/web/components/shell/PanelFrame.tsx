@@ -18,7 +18,7 @@ export function PanelFrame({
   children: ReactNode;
 }) {
   return (
-    <section data-panel={id} className={`panel ${className}`}>
+    <section id={id} data-panel={id} className={`panel ${className}`}>
       <ErrorBoundary
         fallback={
           <div className="text-xs text-signal-down/80">
