@@ -73,6 +73,8 @@ def get_regime_report_current() -> dict:
                 "title_tr": h.title_tr,
                 "sentiment": h.sentiment,
                 "asset_impact": h.asset_impact,
+                # UI haber kartlarından kaynak makaleye geçiş için.
+                "url": h.url,
                 # P0 — haber yalnızca bağlam/analytics; deterministik kararı
                 # belirleyen sembol etkisi varsa actionable, yoksa context-only.
                 "actionable": bool(h.asset_impact),
