@@ -5,8 +5,6 @@ import type { ReactNode } from "react";
 import { HeroScene } from "@/components/visuals/HeroScene";
 import { DashboardGrid, GridCell } from "@/components/shell/DashboardGrid";
 import { MockModeBanner } from "@/components/shell/MockModeBanner";
-import { NotificationBell } from "@/components/shell/NotificationBell";
-import { NotificationToast } from "@/components/shell/NotificationToast";
 
 // ── ANA — 6 panel (tek-bakış cockpit) ────────────────────────────────────────
 import { AgentNarratorPanel } from "@/components/panels/AgentNarratorPanel";
@@ -70,7 +68,6 @@ export default function HomePage() {
           </p>
         </div>
         <div className="flex items-center gap-3">
-          <NotificationBell />
           <div className="text-xs uppercase tracking-widest text-accent-cyan">
             PAPER_ONLY · NO_EXECUTION
           </div>
@@ -225,7 +222,6 @@ export default function HomePage() {
       <footer className="text-xs text-white/40 pt-8">
         PAPER_ONLY · NO_EXECUTION — karar-destek; final karar deterministik engine + RiskGate.
       </footer>
-      <NotificationToast />
     </main>
   );
 }

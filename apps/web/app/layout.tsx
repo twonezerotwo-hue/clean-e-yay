@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 
+import { GlobalChrome } from "@/components/shell/GlobalChrome";
 import { I18nProvider } from "@/providers/I18nProvider";
 import { QueryProvider } from "@/providers/QueryProvider";
 import { ThemeProvider } from "@/providers/ThemeProvider";
@@ -17,7 +18,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body className="min-h-screen antialiased">
         <ThemeProvider>
           <I18nProvider>
-            <QueryProvider>{children}</QueryProvider>
+            <QueryProvider>
+              {children}
+              <GlobalChrome />
+            </QueryProvider>
           </I18nProvider>
         </ThemeProvider>
       </body>
