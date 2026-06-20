@@ -2,7 +2,6 @@
 
 import type { ReactNode } from "react";
 
-import { HeroScene } from "@/components/visuals/HeroScene";
 import { DashboardGrid, GridCell } from "@/components/shell/DashboardGrid";
 import { MockModeBanner } from "@/components/shell/MockModeBanner";
 
@@ -83,11 +82,10 @@ export default function HomePage() {
       ────────────────────────────────────────────────────────────────── */}
 
       {/* 1) HERO — Agent Narrator (ana sonuç + TF rotator + gündem feed) */}
-      <section className="relative overflow-hidden rounded-2xl border border-ink-700/60 bg-ink-800/70 backdrop-blur">
-        <div className="absolute inset-0 -z-10 opacity-70">
-          <HeroScene />
-        </div>
-        <div className="relative p-6">
+      <section className="relative overflow-hidden rounded-xl border border-white/10 bg-[#090d12]/82">
+        <div className="pointer-events-none absolute inset-0 opacity-[0.12] [background-image:linear-gradient(rgba(255,255,255,0.58)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.58)_1px,transparent_1px)] [background-size:56px_56px]" />
+        <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-emerald-300/30 to-transparent" />
+        <div className="relative p-4 sm:p-5">
           <AgentNarratorPanel />
         </div>
       </section>

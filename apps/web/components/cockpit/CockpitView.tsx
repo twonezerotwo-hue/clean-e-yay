@@ -5,7 +5,7 @@ import type { ReactNode } from "react";
 import { DataQualityBadge } from "@/components/shell/DataQualityBadge";
 import { EmptyState } from "@/components/shell/EmptyState";
 import { LoadingState } from "@/components/shell/LoadingState";
-import { useCockpitBrief } from "@/lib/queries/hooks";
+import { useCockpitBrief, useTradeTickets } from "@/lib/queries/hooks";
 import {
   AGENT_STATUS_LABEL,
   AGENT_STATUS_TONE,
@@ -27,7 +27,6 @@ import { Layer2QuickNav } from "./Layer2QuickNav";
 import { MacroRiskStrip } from "./MacroRiskStrip";
 import { QuantumBackplaneScene } from "./QuantumBackplaneScene";
 import { SignalRadar } from "./SignalRadar";
-import { SpaceBrainScene } from "./SpaceBrainScene";
 
 // Layer 1 reads one backend ViewModel and turns it into a visual cockpit.
 // No decisions, orders, live calls, or backend mutations happen here.
@@ -57,7 +56,7 @@ function HudMetric({
   tone?: string;
 }) {
   return (
-    <div className="min-h-[72px] rounded-lg border border-white/10 bg-black/28 px-3 py-2 backdrop-blur-md">
+    <div className="min-h-[72px] rounded-lg border border-white/10 bg-black/24 px-3 py-2">
       <div className="text-[10px] uppercase tracking-widest text-white/38">{label}</div>
       <div className={`mt-1 font-display text-xl leading-none tabular-nums ${tone}`}>{value}</div>
     </div>
@@ -74,10 +73,10 @@ function HudPanel({
   children: ReactNode;
 }) {
   return (
-    <section className="rounded-lg border border-white/12 bg-black/34 p-3 shadow-[0_0_34px_rgba(34,211,238,0.08)] backdrop-blur-md">
+    <section className="rounded-lg border border-white/10 bg-[#090d12]/78 p-3 shadow-[0_18px_44px_rgba(0,0,0,0.22)]">
       <div className="flex items-center justify-between gap-3">
-        <span className="text-[10px] uppercase tracking-widest text-accent-cyan/70">{eyebrow}</span>
-        <span className="h-1.5 w-1.5 rounded-full bg-accent-lime shadow-[0_0_12px_rgba(163,230,53,0.9)]" />
+        <span className="text-[10px] uppercase tracking-widest text-white/42">{eyebrow}</span>
+        <span className="h-1.5 w-1.5 rounded-full bg-emerald-300/80" />
       </div>
       <div className="mt-1 font-display text-sm text-white/90">{title}</div>
       <div className="mt-2">{children}</div>
@@ -87,6 +86,7 @@ function HudPanel({
 
 export function CockpitView() {
   const { data, isLoading } = useCockpitBrief();
+  const { data: ticketList } = useTradeTickets();
 
   if (isLoading) {
     return (
@@ -108,6 +108,7 @@ export function CockpitView() {
   const trace = selectDecisionTrace(data);
   const cards = buildCockpitCards(brief, trace);
   const candidates = brief.top_candidates ?? [];
+  const activeTicket = ticketList?.tickets?.find((ticket) => ticket.status === "active");
   const dqs = brief.dqs?.score ?? undefined;
   const watch = brief.next_watch_conditions?.slice(0, 3) ?? [];
   const topSymbols = candidates.length
@@ -118,50 +119,69 @@ export function CockpitView() {
     : "radar bos";
   const openPaperPositions =
     brief.paper_state_summary?.open_positions ?? brief.open_paper_positions ?? 0;
+  const decisionTitle = activeTicket
+    ? `${activeTicket.symbol} ${activeTicket.side.toUpperCase()}`
+    : "Su an islem yok";
+  const decisionDetail = activeTicket
+    ? `${activeTicket.timeframe} · R:R ${activeTicket.summary.rr_ratio.toFixed(2)} · ${activeTicket.display.confidence_text}`
+    : brief.main_blocker.detail ?? brief.main_blocker.label ?? brief.recommended_stance;
+  const decisionTone = activeTicket
+    ? "text-emerald-200"
+    : brief.status === "BLOCKED" || brief.status === "FROZEN"
+      ? "text-red-200"
+      : "text-amber-200";
 
   return (
-    <main className="min-h-screen overflow-hidden bg-[#02030a] text-white">
-      <section className="relative min-h-[620px] overflow-hidden border-b border-white/10 md:min-h-[670px]">
-        <SpaceBrainScene brief={brief} />
+    <main className="min-h-screen overflow-hidden bg-[#05070b] text-white">
+      <section className="relative min-h-[520px] overflow-hidden border-b border-white/10 bg-[#070a0f] md:min-h-[560px]">
+        <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(180deg,rgba(9,13,18,0.98),rgba(5,7,11,0.98))]" />
+        <div className="pointer-events-none absolute inset-0 opacity-[0.18] [background-image:linear-gradient(rgba(255,255,255,0.58)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.58)_1px,transparent_1px)] [background-size:64px_64px]" />
+        <div className="pointer-events-none absolute left-[7%] top-20 h-px w-[42%] bg-gradient-to-r from-transparent via-emerald-300/30 to-transparent" />
+        <div className="pointer-events-none absolute right-[8%] top-28 h-[240px] w-[240px] rounded-full border border-white/[0.06] bg-emerald-400/[0.025]" />
+        <div className="pointer-events-none absolute right-[14%] top-44 h-[120px] w-[120px] rounded-full border border-amber-300/[0.08]" />
+        <div className="pointer-events-none absolute inset-x-0 bottom-0 h-32 bg-gradient-to-t from-[#05070b] to-transparent" />
 
-        <div className="pointer-events-none relative z-10 mx-auto flex min-h-[620px] max-w-7xl flex-col px-4 py-4 md:min-h-[670px] md:py-5">
+        <div className="relative z-10 mx-auto flex min-h-[520px] max-w-7xl flex-col px-4 py-4 md:min-h-[560px] md:py-5">
           <header className="flex items-center justify-between gap-3">
             <div className="flex min-w-0 items-center gap-3">
-              <div className="grid h-9 w-9 shrink-0 place-items-center rounded-full border border-accent-cyan/35 bg-accent-cyan/10 text-sm shadow-[0_0_22px_rgba(34,211,238,0.22)]">
-                AI
+              <div className="grid h-9 w-9 shrink-0 place-items-center rounded-full border border-emerald-300/28 bg-emerald-300/8 text-xs text-emerald-200">
+                CE
               </div>
               <div className="min-w-0">
                 <div className="text-[10px] uppercase tracking-widest text-white/42">
-                  Clean E-yAy Cockpit
+                  Clean E-yAy
                 </div>
                 <div className="truncate font-display text-sm text-white/86">
-                  Layer 1 / Agent Brain Command
+                  Karar durumu
                 </div>
               </div>
             </div>
             <div className="flex shrink-0 items-center gap-2">
-              <span className="hidden rounded-full border border-emerald-400/20 bg-emerald-400/10 px-2 py-1 text-[10px] uppercase tracking-widest text-emerald-300 sm:inline-flex">
-                Read only
+              <span className="hidden rounded-full border border-white/10 bg-white/[0.04] px-2 py-1 text-[10px] uppercase tracking-widest text-white/55 sm:inline-flex">
+                {brief.data_mode}
               </span>
-              <span className="rounded-full border border-amber-400/25 bg-amber-400/10 px-2 py-1 text-[10px] uppercase tracking-widest text-amber-300">
-                No execution
+              <span className="rounded-full border border-amber-400/20 bg-amber-400/8 px-2 py-1 text-[10px] uppercase tracking-widest text-amber-300">
+                NO_EXECUTION
               </span>
             </div>
           </header>
 
-          <div className="grid flex-1 items-start gap-4 py-4 lg:grid-cols-[minmax(0,0.95fr)_minmax(320px,0.52fr)] lg:items-center lg:gap-5 lg:py-5">
-            <section className="max-w-2xl">
-              <div className="inline-flex rounded-full border border-accent-cyan/24 bg-black/30 px-3 py-1 text-[10px] uppercase tracking-widest text-accent-cyan/80 backdrop-blur-md">
-                Space AI Agent Brain / backend viewmodel
+          <div className="grid flex-1 items-start gap-4 py-5 lg:grid-cols-[minmax(0,0.95fr)_minmax(320px,0.52fr)] lg:items-center lg:gap-5">
+            <section className="max-w-2xl rounded-lg border border-white/10 bg-[#090d12]/72 p-4 shadow-[0_22px_60px_rgba(0,0,0,0.28)] md:p-5">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1 text-[10px] uppercase tracking-widest text-white/52">
+                  {AGENT_STATUS_LABEL[brief.status] ?? brief.status}
+                </span>
+                <DataQualityBadge dqs={dqs} generatedAt={data?.generated_at} />
               </div>
-              <h1 className="mt-4 max-w-xl font-display text-3xl leading-[1.04] text-white sm:text-4xl md:text-5xl">
-                Uzay yapay zeka agent beyni
+              <h1 className={`mt-5 max-w-xl font-display text-3xl leading-[1.04] sm:text-4xl md:text-5xl ${decisionTone}`}>
+                {decisionTitle}
               </h1>
-              <p className="mt-4 max-w-xl text-sm leading-6 text-white/76">{brief.summary}</p>
+              <p className="mt-3 max-w-xl text-sm leading-6 text-white/68">{decisionDetail}</p>
 
               <div className="mt-5 grid max-w-3xl grid-cols-2 gap-2 sm:grid-cols-4">
                 <HudMetric
-                  label="Agent state"
+                  label="Durum"
                   value={AGENT_STATUS_LABEL[brief.status] ?? brief.status}
                   tone={AGENT_STATUS_TONE[brief.status]}
                 />
@@ -176,13 +196,13 @@ export function CockpitView() {
                         : "text-signal-down"
                   }
                 />
-                <HudMetric label="Aday radar" value={String(candidates.length)} tone="text-accent-cyan" />
-                <HudMetric label="Paper pozisyon" value={String(openPaperPositions)} tone="text-accent-lime" />
+                <HudMetric label="Aday" value={String(candidates.length)} tone="text-emerald-200" />
+                <HudMetric label="Pozisyon" value={String(openPaperPositions)} tone="text-amber-200" />
               </div>
             </section>
 
-            <aside className="pointer-events-auto space-y-3">
-              <HudPanel eyebrow="Core" title="Karar cekirdegi">
+            <aside className="space-y-3">
+              <HudPanel eyebrow="Veri" title="Snapshot">
                 <div className="flex items-center justify-between gap-3">
                   <span className={`font-display text-xl ${AGENT_STATUS_TONE[brief.status]}`}>
                     {AGENT_STATUS_LABEL[brief.status] ?? brief.status}
@@ -201,7 +221,7 @@ export function CockpitView() {
                 </div>
               </HudPanel>
 
-              <HudPanel eyebrow="Gate" title="Risk ve ana blokaj">
+              <HudPanel eyebrow="Risk" title={brief.main_blocker.label}>
                 <div className={`font-display text-lg ${BLOCKER_TONE[brief.main_blocker.code]}`}>
                   {brief.main_blocker.label}
                 </div>
@@ -211,7 +231,7 @@ export function CockpitView() {
               </HudPanel>
 
               <div className="hidden md:block">
-                <HudPanel eyebrow="Radar" title={topSymbols}>
+                <HudPanel eyebrow="Adaylar" title={topSymbols}>
                   <div className="space-y-1.5">
                     {candidates.slice(0, 4).map((candidate, index) => (
                       <div
@@ -236,7 +256,7 @@ export function CockpitView() {
             </aside>
           </div>
 
-          <div className="pointer-events-auto mt-auto hidden md:block">
+          <div className="mt-auto hidden md:block">
             {watch.length ? (
               <div className="mb-3 flex flex-wrap gap-2">
                 {watch.map((item, index) => (
