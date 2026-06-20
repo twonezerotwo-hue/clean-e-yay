@@ -1,9 +1,9 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import type { CSSProperties } from "react";
 
 import { PanelFrame } from "@/components/shell/PanelFrame";
-import { PanelHeader } from "@/components/shell/PanelHeader";
 import {
   useAgentMatrix,
   useCalibration,
@@ -22,6 +22,7 @@ import {
 import { selectAgentBrief } from "@/lib/selectors/cockpit";
 import { selectHaltActive } from "@/lib/selectors/halts";
 import { selectAgentQuorum } from "@/lib/selectors/dashboard";
+import type { TradeTicket } from "@/types/generated/api";
 
 type CheckItem = {
   id: string;
@@ -51,28 +52,133 @@ function isHardRiskAction(action?: string | null) {
   return action === "NO_POSITION_INCREASE" || action === "RISK_REDUCE" || action === "KILL_SWITCH";
 }
 
-function statusIcon(passed: boolean) {
-  return passed ? "✓" : "X";
-}
-
 function statusLabel(passed: boolean) {
   return passed ? "ONAY" : "GEÇERSİZ";
 }
 
 function statusClass(passed: boolean) {
   return passed
-    ? "border-emerald-400/45 bg-emerald-400/12 text-emerald-200 shadow-[0_0_18px_rgba(52,211,153,0.16)]"
-    : "border-red-400/45 bg-red-400/12 text-red-200 shadow-[0_0_18px_rgba(248,113,113,0.12)]";
+    ? "border-emerald-300/55 bg-emerald-400/12 text-emerald-200 shadow-[0_0_24px_rgba(52,211,153,0.22)]"
+    : "border-red-300/55 bg-red-400/12 text-red-200 shadow-[0_0_24px_rgba(248,113,113,0.18)]";
 }
 
 function CheckBadge({ passed }: { passed: boolean }) {
   return (
     <span
-      className={`grid h-8 w-8 shrink-0 place-items-center rounded-full border text-sm font-black ${statusClass(passed)}`}
+      className={`readiness-mark ${passed ? "readiness-mark-ok" : "readiness-mark-bad"} ${statusClass(passed)}`}
       aria-label={statusLabel(passed)}
+    />
+  );
+}
+
+function ScoreRing({ passed, total }: { passed: number; total: number }) {
+  const pct = total > 0 ? Math.round((passed / total) * 100) : 0;
+  return (
+    <div
+      className="readiness-score-ring"
+      style={{ "--readiness-score": `${pct}%` } as CSSProperties}
+      aria-label={`${passed} / ${total} onay`}
     >
-      {statusIcon(passed)}
-    </span>
+      <div className="readiness-score-ring-inner">
+        <span className="text-4xl font-black leading-none text-emerald-200">{passed}</span>
+        <span className="text-sm text-white/52">/{total}</span>
+      </div>
+    </div>
+  );
+}
+
+function TradeTicketMini({ ticket }: { ticket?: TradeTicket }) {
+  const rows = ticket
+    ? [
+        ["YON", ticket.side.toUpperCase()],
+        ["GIRIS", ticket.summary.entry_price.toLocaleString("en-US")],
+        ["ZARAR KES", ticket.summary.stop_loss.toLocaleString("en-US")],
+        ["KAR HEDEFI", ticket.summary.take_profit.toLocaleString("en-US")],
+        ["BUYUKLUK", `$${Math.round(ticket.summary.size_usd).toLocaleString("en-US")}`],
+        ["R:R", `1:${ticket.summary.rr_ratio.toFixed(2)}`],
+        ["GECERLILIK", ticket.display.expiry_text],
+      ]
+    : [
+        ["YON", "---"],
+        ["GIRIS", "---"],
+        ["ZARAR KES", "---"],
+        ["KAR HEDEFI", "---"],
+        ["BUYUKLUK", "---"],
+        ["R:R", "---"],
+        ["GECERLILIK", "---"],
+      ];
+
+  return (
+    <aside className="readiness-ticket-card">
+      <div className="readiness-ticket-glow" />
+      <div className="relative z-10">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <div className="text-2xl font-black leading-none text-white">Trade Ticket</div>
+            <div className="mt-1 text-xs text-white/50">broker'a manuel girmeden tek bakis kart</div>
+          </div>
+          <span className={ticket ? "readiness-ticket-live" : "readiness-ticket-empty"}>
+            {ticket ? "HAZIR" : "YOK"}
+          </span>
+        </div>
+
+        <div className="mt-5 grid gap-2 text-xs">
+          {rows.map(([label, value]) => (
+            <div key={label} className="grid grid-cols-[92px_1fr] items-center gap-3">
+              <span className="font-mono text-[10px] uppercase tracking-widest text-sky-200/55">{label}</span>
+              <span className="min-w-0 truncate text-right font-mono text-white/78">{value}</span>
+            </div>
+          ))}
+        </div>
+
+        <div className="readiness-ticket-radar" aria-hidden="true">
+          <span className="readiness-ticket-candle readiness-ticket-candle-a" />
+          <span className="readiness-ticket-candle readiness-ticket-candle-b" />
+          <span className="readiness-ticket-candle readiness-ticket-candle-c" />
+          <span className="readiness-ticket-candle readiness-ticket-candle-d" />
+        </div>
+
+        <div className="mt-5 rounded-md border border-white/10 bg-white/[0.03] px-3 py-2">
+          <div className="flex items-center justify-between gap-3 text-xs">
+            <span className="font-mono uppercase tracking-widest text-white/42">Durum</span>
+            <span className={ticket ? "font-black text-emerald-300" : "font-black text-red-300"}>
+              {ticket ? `${ticket.symbol} ${ticket.side.toUpperCase()}` : "TICKET YOK"}
+            </span>
+          </div>
+        </div>
+      </div>
+    </aside>
+  );
+}
+
+function AgentHologram() {
+  return (
+    <aside className="readiness-agent-hologram" aria-hidden="true">
+      <div className="readiness-agent-chip">
+        <span>AI AGENT</span>
+        <strong>NEXUS 7</strong>
+        <em>CALISIYOR</em>
+      </div>
+      <span className="readiness-agent-data-thread" />
+      <span className="readiness-agent-ring readiness-agent-ring-a" />
+      <span className="readiness-agent-ring readiness-agent-ring-b" />
+      <span className="readiness-agent-ring readiness-agent-ring-c" />
+      <span className="readiness-agent-head" />
+      <span className="readiness-agent-temple">2047</span>
+      <span className="readiness-agent-neck" />
+      <span className="readiness-agent-body" />
+      <span className="readiness-agent-arm readiness-agent-arm-think" />
+      <span className="readiness-agent-arm readiness-agent-arm-rest" />
+      <span className="readiness-agent-core" />
+      <span className="readiness-agent-chest">2047</span>
+      <span className="readiness-agent-base" />
+      <span className="readiness-agent-particle readiness-agent-particle-a" />
+      <span className="readiness-agent-particle readiness-agent-particle-b" />
+      <span className="readiness-agent-particle readiness-agent-particle-c" />
+      <span className="readiness-agent-particle readiness-agent-particle-d" />
+      <span className="readiness-agent-particle readiness-agent-particle-e" />
+      <span className="readiness-agent-particle readiness-agent-particle-f" />
+    </aside>
   );
 }
 
@@ -80,37 +186,41 @@ function CheckRow({
   check,
   index,
   active,
+  faded,
+  progress,
 }: {
   check: CheckItem;
   index: number;
   active: boolean;
+  faded?: boolean;
+  progress?: number;
 }) {
   return (
     <li
-      className={`rounded-lg border px-3 py-2 transition-colors ${
-        active
-          ? "border-accent-cyan/45 bg-accent-cyan/8"
-          : "border-white/10 bg-black/24"
-      }`}
+      className={`readiness-sequence-card ${active ? "readiness-sequence-card-active" : ""} ${faded ? "readiness-sequence-card-faded" : ""}`}
     >
-      <div className="flex items-start gap-3">
+      <div className="readiness-sequence-node-wrap">
+        <span className="readiness-sequence-index">{String(index + 1).padStart(2, "0")}</span>
         <CheckBadge passed={check.passed} />
-        <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <div className="flex min-w-0 items-center gap-2">
-              <span className="font-mono text-[10px] text-white/35">{String(index + 1).padStart(2, "0")}</span>
-              <span className="truncate text-sm font-medium text-white/88">{check.title}</span>
-            </div>
-            <span className={`rounded border px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-widest ${statusClass(check.passed)}`}>
-              {statusLabel(check.passed)}
-            </span>
-          </div>
-          <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px]">
-            <span className="font-mono uppercase tracking-widest text-accent-cyan/65">{check.source}</span>
-            {check.metric ? <span className="font-mono text-white/62">{check.metric}</span> : null}
-          </div>
-          <p className="mt-1 text-xs leading-5 text-white/60">{check.detail}</p>
+      </div>
+      <div className="min-w-0">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h3 className="text-sm font-black leading-tight text-white/92 2xl:text-base">{check.title}</h3>
+          <span className={check.passed ? "readiness-status-ok" : "readiness-status-bad"}>
+            {active ? `${statusLabel(check.passed)} · taraniyor` : statusLabel(check.passed)}
+          </span>
         </div>
+        <div className="mt-1 text-[11px] font-mono text-sky-300/82">{check.source}</div>
+        <div className="mt-1 text-xs font-mono text-white/70">{check.metric}</div>
+        <p className="mt-1 line-clamp-2 text-xs leading-5 text-white/58">{check.detail}</p>
+        {active ? (
+          <div className="mt-3 h-1 overflow-hidden rounded-full bg-white/10">
+            <div
+              className={check.passed ? "h-full bg-sky-300" : "h-full bg-red-300"}
+              style={{ width: `${progress ?? 0}%` }}
+            />
+          </div>
+        ) : null}
       </div>
     </li>
   );
@@ -432,78 +542,129 @@ export function ExecutionReadinessPanel() {
   const allPassed = passedCount === checks.length;
   const activeCheck = checks[activeIndex] ?? checks[0];
   const cycleRemaining = CYCLE_MS - cycleElapsed;
+  const visibleChecks = checks.slice(0, 5);
 
   return (
-    <PanelFrame id="execution_readiness" className="border-emerald-400/18">
-      <PanelHeader
-        title="İşlem Açma Kontrol Döngüsü"
-        subtitle="10 kontrol · 60 saniyede tam tarama · frontend read-only"
-        actions={
-          <div className="flex flex-wrap justify-end gap-2">
-            <span className={`rounded border px-2 py-1 text-[10px] font-semibold uppercase tracking-widest ${statusClass(allPassed)}`}>
-              {allPassed ? "MANUEL REVIEW HAZIR" : "İŞLEM YOK"}
-            </span>
-            <span className="rounded border border-white/10 bg-black/30 px-2 py-1 font-mono text-[10px] text-white/55">
-              kalan {formatTime(cycleRemaining)}
-            </span>
-          </div>
-        }
-      />
+    <PanelFrame id="execution_readiness" className="readiness-panel">
+      <div className="readiness-panel-shell">
+        <div className="readiness-frame-line readiness-frame-line-top" />
+        <div className="readiness-frame-line readiness-frame-line-bottom" />
 
-      <div className="space-y-4">
-        <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_260px]">
-          <div className="rounded-lg border border-white/10 bg-black/28 p-3">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div>
-                <div className="text-[10px] uppercase tracking-[0.22em] text-white/42">Şu an kontrol ediliyor</div>
-                <div className="mt-1 font-display text-base text-white/90">
-                  {String(activeIndex + 1).padStart(2, "0")} · {activeCheck.title}
-                </div>
-                <p className="mt-1 text-xs text-white/55">{activeCheck.detail}</p>
-              </div>
-              <CheckBadge passed={activeCheck.passed} />
-            </div>
-            <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-white/10">
-              <div
-                className={activeCheck.passed ? "h-full bg-emerald-300" : "h-full bg-red-300"}
-                style={{ width: `${activeStepProgress}%` }}
-              />
-            </div>
+        <header className="readiness-header">
+          <div className="readiness-logo">
+            <span className="readiness-logo-mark" />
+            <span className="font-mono text-xs font-black text-sky-300">2047</span>
           </div>
-
-          <div className="rounded-lg border border-white/10 bg-black/28 p-3">
-            <div className="text-[10px] uppercase tracking-[0.22em] text-white/42">Toplam sonuç</div>
-            <div className="mt-2 flex items-end gap-2">
-              <span className={allPassed ? "font-display text-4xl text-emerald-300" : "font-display text-4xl text-red-300"}>
-                {passedCount}
-              </span>
-              <span className="pb-1 text-sm text-white/50">/ {checks.length} onay</span>
-            </div>
-            <div className="mt-3 h-2 overflow-hidden rounded-full bg-white/10">
-              <div
-                className={allPassed ? "h-full bg-emerald-300" : "h-full bg-amber-300"}
-                style={{ width: `${cycleProgress}%` }}
-              />
-            </div>
-            <p className="mt-2 text-[11px] leading-5 text-white/48">
-              Döngü bittiğinde başa sarar; aktif adım her 6 saniyede bir kendi veri grubunu yeniden okur.
+          <div className="min-w-0 flex-1">
+            <h2 className="text-3xl font-black tracking-tight text-white md:text-4xl">
+              İşlem Açma Kontrol Döngüsü
+            </h2>
+            <p className="mt-1 text-sm text-white/68 md:text-base">
+              10 kontrol / 60 saniyede tam tarama / frontend read-only
             </p>
           </div>
-        </div>
+          <div className="hidden text-right md:block">
+            <div className="font-mono text-2xl font-black text-sky-300">
+              {new Intl.DateTimeFormat("tr-TR", {
+                hour: "2-digit",
+                minute: "2-digit",
+                second: "2-digit",
+              }).format(now)}
+            </div>
+            <div className="font-mono text-xs font-black uppercase tracking-widest text-sky-300/80">
+              {new Intl.DateTimeFormat("tr-TR", {
+                day: "2-digit",
+                month: "long",
+                year: "numeric",
+              }).format(now)}
+            </div>
+          </div>
+        </header>
 
-        <ol className="grid gap-2 lg:grid-cols-2">
-          {checks.map((check, index) => (
-            <CheckRow
-              key={check.id}
-              check={check}
-              index={index}
-              active={index === activeIndex}
-            />
-          ))}
-        </ol>
+        <div className="readiness-scene-grid">
+          <section className="readiness-control-zone">
+            <div className="readiness-mini-grid">
+              <section className={`readiness-active-card ${allPassed ? "readiness-active-card-ok" : ""}`}>
+                <div className="readiness-shield readiness-shield-mini" aria-hidden="true">
+                  <span className="readiness-shield-core" />
+                  <span className="readiness-shield-check" />
+                </div>
+                <div className="min-w-0">
+                  <div className="text-2xl font-black text-emerald-300">
+                    {allPassed ? "MANUEL REVIEW HAZIR" : "İŞLEM YOK"}
+                  </div>
+                  <div className="mt-1 flex flex-wrap items-end gap-2">
+                    <span className="text-sm font-semibold text-white/78">kalan</span>
+                    <span className="font-mono text-4xl font-black leading-none text-emerald-300">
+                      {formatTime(cycleRemaining)}
+                    </span>
+                  </div>
+                  <div className="mt-3 text-sm text-white/72">Şu an kontrol ediliyor</div>
+                  <div className="font-black text-xl text-emerald-200">
+                    {String(activeIndex + 1).padStart(2, "0")} / {activeCheck.title}
+                  </div>
+                  <p className="mt-2 max-w-xl text-sm leading-6 text-white/68">{activeCheck.detail}</p>
+                  <div className="mt-4 h-1.5 overflow-hidden rounded-full bg-white/10">
+                    <div
+                      className={activeCheck.passed ? "h-full bg-emerald-300" : "h-full bg-red-300"}
+                      style={{ width: `${activeStepProgress}%` }}
+                    />
+                  </div>
+                </div>
+              </section>
 
-        <div className="rounded-lg border border-white/10 bg-white/[0.025] px-3 py-2 text-[11px] leading-5 text-white/48">
-          Bu panel emir üretmez ve backend kararını değiştirmez. Sadece mevcut dashboard verilerini aynı sırayla okuyup manuel işlem kontrolü için tek ekranda onay/X durumuna indirger.
+              <section className="readiness-total-card">
+                <ScoreRing passed={passedCount} total={checks.length} />
+                <div className="min-w-0 flex-1">
+                  <div className="text-lg font-black text-white">Toplam sonuç</div>
+                  <div className="mt-2 flex items-end gap-2">
+                    <span className="text-5xl font-black text-emerald-300">{passedCount}</span>
+                    <span className="pb-2 text-xl font-semibold text-white/72">/ {checks.length} onay</span>
+                  </div>
+                  <div className="mt-3 h-px bg-sky-300/20" />
+                  <p className="mt-3 text-sm leading-6 text-white/62">
+                    Döngü bittiğinde başa sarar; aktif adım her 6 saniyede bir kendi veri grubunu yeniden okur.
+                  </p>
+                  <div className="mt-4 h-1.5 overflow-hidden rounded-full bg-white/10">
+                    <div
+                      className={allPassed ? "h-full bg-emerald-300" : "h-full bg-amber-300"}
+                      style={{ width: `${cycleProgress}%` }}
+                    />
+                  </div>
+                </div>
+              </section>
+            </div>
+
+            <ol className="readiness-sequence-flow">
+              {visibleChecks.map((check, index) => (
+                <CheckRow
+                  key={check.id}
+                  check={check}
+                  index={index}
+                  active={index === activeIndex}
+                  faded={index > activeIndex + 1 || (activeIndex > 4 && index < 4)}
+                  progress={activeStepProgress}
+                />
+              ))}
+              <li className="readiness-sequence-more">
+                <span>06-10</span>
+                <strong>Derin kontroller akista</strong>
+                <em>TF matrix / agent quorum / catalyst / shadow / ticket integrity</em>
+              </li>
+            </ol>
+
+            <div className="readiness-footnote">
+              <span className="readiness-info-icon">i</span>
+              <span>
+                Bu panel emir üretmez ve backend kararını değiştirmez. Sadece mevcut dashboard verilerini aynı sırayla okuyup manuel işlem kontrolü için tek ekranda onay/X durumuna indirger.
+              </span>
+            </div>
+          </section>
+
+          <section className="readiness-ai-zone">
+            <AgentHologram />
+            <TradeTicketMini ticket={activeTicket} />
+          </section>
         </div>
       </div>
     </PanelFrame>

@@ -18,6 +18,7 @@ import {
 import { NewsPanel } from "@/components/panels/NewsPanel";
 import { CapitalRotationPanel } from "@/components/panels/CapitalRotationPanel";
 import { EventCalendarPanel } from "@/components/panels/EventCalendarPanel";
+import { ExecutionReadinessPanel } from "@/components/panels/ExecutionReadinessPanel";
 import { ScenarioPanel } from "@/components/panels/ScenarioPanel";
 
 import { AgentBrainCard } from "./AgentBrainCard";
@@ -281,6 +282,8 @@ export function CockpitView() {
           <div className="md:hidden">
             <Layer2QuickNav />
           </div>
+
+          <ExecutionReadinessPanel />
 
           <HolographicSignalDeck brief={brief} />
 
