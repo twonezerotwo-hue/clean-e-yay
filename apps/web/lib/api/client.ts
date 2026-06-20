@@ -38,10 +38,14 @@ const BASE =
   "http://127.0.0.1:9000";
 
 async function fetchJSON<T>(path: string, init?: RequestInit): Promise<T> {
+  const headers = new Headers(init?.headers);
+  if (init?.body && !headers.has("content-type")) {
+    headers.set("content-type", "application/json");
+  }
   const res = await fetch(`${BASE}${path}`, {
     cache: "no-store",
     ...init,
-    headers: { "content-type": "application/json", ...(init?.headers ?? {}) },
+    headers,
   });
   if (!res.ok) {
     throw new Error(`API ${res.status} ${path}: ${await res.text().catch(() => "")}`);
