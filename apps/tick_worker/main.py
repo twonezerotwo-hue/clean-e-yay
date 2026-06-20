@@ -297,6 +297,22 @@ async def run_once() -> None:
             paper_actions=paper_actions,
             duration_ms=int((time.monotonic() - t0) * 1000),
         )
+        # SSE: cockpit'in canlı nabzı — UI bu event'i alınca brief/decision/
+        # paper cache'lerini invalidate eder.
+        try:
+            from packages.events import bus as _bus
+
+            _bus.publish(
+                "tick.complete",
+                {
+                    "status": "degraded" if degraded else "ok",
+                    "decisions": decisions_generated,
+                    "paper_actions": paper_actions,
+                    "duration_ms": int((time.monotonic() - t0) * 1000),
+                },
+            )
+        except Exception:
+            log.debug("event bus publish failed", exc_info=True)
     except Exception as exc:  # tick loop'u öldürmez — FAILED heartbeat yaz, devam et
         heartbeat.record(
             WORKER_NAME,

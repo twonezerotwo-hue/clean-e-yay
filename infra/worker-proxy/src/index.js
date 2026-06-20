@@ -37,9 +37,29 @@ export default {
 
     const upstreamRes = await fetch(upstreamReq);
 
-    // Upstream cevabını olduğu gibi dön. Set-Cookie / Location domain
-    // rewriting'i yapmıyoruz — bu uygulama same-origin (Next rewrite) ile
-    // zaten relative path kullanıyor.
+    // SSE (text/event-stream): TransformStream ile body'i pipe et — bu
+    // Cloudflare'in chunk'ları biriktirmesini engeller. ÖNEMLI KISIT:
+    // cloudflared 'quick' tunnel (trycloudflare.com) tarafı bir başka
+    // buffering katmanı ekliyor; named tunnel veya doğrudan Worker→origin
+    // bağlantısı olmadan SSE üzerinden tunnel'a sub-saniye latency
+    // garanti edilemez. Bu durumda web tarafı polling fallback'iyle
+    // (react-query refetchInterval) çalışır.
+    const ct = upstreamRes.headers.get("content-type") || "";
+    if (ct.startsWith("text/event-stream")) {
+      const { readable, writable } = new TransformStream();
+      upstreamRes.body.pipeTo(writable).catch(() => {});
+      const sseHeaders = new Headers(upstreamRes.headers);
+      sseHeaders.set("cache-control", "no-cache, no-transform");
+      sseHeaders.set("x-accel-buffering", "no");
+      sseHeaders.delete("content-encoding");
+      return new Response(readable, {
+        status: upstreamRes.status,
+        statusText: upstreamRes.statusText,
+        headers: sseHeaders,
+      });
+    }
+
+    // Diğer yanıtlar için header'ı normalleştirmek üzere sarma OK.
     const resHeaders = new Headers(upstreamRes.headers);
     return new Response(upstreamRes.body, {
       status: upstreamRes.status,

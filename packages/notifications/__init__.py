@@ -91,12 +91,26 @@ def _write_all(items: list[Notification]) -> None:
     os.replace(tmp, NOTIFICATIONS_PATH)
 
 
+def _publish(notif: Notification) -> None:
+    """SSE: yeni bildirimi UI'a anında push'la. Bus yoksa sessiz."""
+    try:
+        from packages.events import bus as _bus
+
+        _bus.publish(
+            "notification.new",
+            {"id": notif.id, "type": notif.type, "priority": notif.priority},
+        )
+    except Exception:
+        pass
+
+
 def append(notif: Notification) -> None:
     """Yeni bildirim ekle (rotate son MAX_NOTIFICATIONS)."""
     with _LOCK:
         items = _read_all()
         items.append(notif)
         _write_all(items)
+    _publish(notif)
 
 
 def append_many(notifs: list[Notification]) -> None:
@@ -106,6 +120,8 @@ def append_many(notifs: list[Notification]) -> None:
         items = _read_all()
         items.extend(notifs)
         _write_all(items)
+    for n in notifs:
+        _publish(n)
 
 
 def list_recent(limit: int = 50, unread_only: bool = False) -> list[Notification]:
