@@ -101,6 +101,10 @@ _STOP = asyncio.Event()
 
 
 def _install_signals() -> None:
+    # When embedded in another process (e.g. FastAPI lifespan), the host owns
+    # signals. Set TICK_SKIP_SIGNAL_HANDLERS=1 to opt out cleanly.
+    if os.environ.get("TICK_SKIP_SIGNAL_HANDLERS", "").strip() in {"1", "true", "yes"}:
+        return
     loop = asyncio.get_event_loop()
     for sig in (signal.SIGINT, signal.SIGTERM):
         try:
