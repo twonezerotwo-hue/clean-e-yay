@@ -19,7 +19,6 @@ import { ChatPanel } from "@/components/panels/ChatPanel";
 import { AgentBriefPanel } from "@/components/panels/AgentBriefPanel";
 import { DecisionPanel } from "@/components/panels/DecisionPanel";
 import { AIReportPanel } from "@/components/panels/AIReportPanel";
-import { RiskGatePanel } from "@/components/panels/RiskGatePanel";
 import { DrawdownGuardPanel } from "@/components/panels/DrawdownGuardPanel";
 import { PaperActionPanel } from "@/components/panels/PaperActionPanel";
 import { MarketSessionsPanel } from "@/components/panels/MarketSessionsPanel";
@@ -32,7 +31,6 @@ import { CryptoDerivativesPanel } from "@/components/panels/CryptoDerivativesPan
 import { VolatilityPanel } from "@/components/panels/VolatilityPanel";
 import { OptionsVolPanel } from "@/components/panels/OptionsVolPanel";
 import { CorrelationPanel } from "@/components/panels/CorrelationPanel";
-import { PatternsPanel } from "@/components/panels/PatternsPanel";
 import { CapitalRotationPanel } from "@/components/panels/CapitalRotationPanel";
 import { HaberlerCatalystPanel } from "@/components/panels/HaberlerCatalystPanel";
 import { ScenarioPanel } from "@/components/panels/ScenarioPanel";
@@ -147,19 +145,17 @@ export default function HomePage() {
             <GridCell span="full"><WatchConditionsPanel /></GridCell>
           </PanelGroup>
 
-          <PanelGroup title="Risk Detayı" hint="RiskGate · Drawdown · Paper Action · Market Sessions">
-            <GridCell span="2"><RiskGatePanel /></GridCell>
-            <GridCell span="1"><DrawdownGuardPanel /></GridCell>
-            <GridCell span="2"><PaperActionPanel /></GridCell>
+          <PanelGroup title="Risk Detayı" hint="Drawdown · Paper Action · Market Sessions (RiskGate, RiskDurumu içinde)">
+            <GridCell span="2"><DrawdownGuardPanel /></GridCell>
             <GridCell span="1"><MarketSessionsPanel /></GridCell>
+            <GridCell span="full"><PaperActionPanel /></GridCell>
           </PanelGroup>
 
           <PanelGroup title="Piyasa Yapısı" hint="türev · volatilite · options · korelasyon · rotasyon">
             <GridCell span="1"><CryptoDerivativesPanel /></GridCell>
             <GridCell span="1"><VolatilityPanel /></GridCell>
             <GridCell span="1"><OptionsVolPanel /></GridCell>
-            <GridCell span="2"><CorrelationPanel /></GridCell>
-            <GridCell span="1"><PatternsPanel /></GridCell>
+            <GridCell span="full"><CorrelationPanel /></GridCell>
             <GridCell span="full"><CapitalRotationPanel /></GridCell>
           </PanelGroup>
 
