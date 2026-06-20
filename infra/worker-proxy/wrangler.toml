@@ -1,0 +1,9 @@
+name = "cockpit-eyay"
+main = "src/index.js"
+compatibility_date = "2024-09-23"
+
+# UPSTREAM: tunnel veya başka herhangi bir HTTP(S) origin.
+# cloudflared yeniden başlatıldığında trycloudflare URL'si değişir →
+# burayı güncelle + `wrangler deploy` çalıştır.
+[vars]
+UPSTREAM = "https://showtimes-timothy-athens-thickness.trycloudflare.com"
