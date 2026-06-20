@@ -42,6 +42,7 @@ export function useEventStream() {
         qc.invalidateQueries({ queryKey: qk.tradeTickets });
         qc.invalidateQueries({ queryKey: qk.decisionMatrix });
         qc.invalidateQueries({ queryKey: qk.agentMatrix });
+        qc.invalidateQueries({ queryKey: qk.agentBriefing });
       });
 
       es.addEventListener("notification.new", () => {

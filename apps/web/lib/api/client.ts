@@ -111,4 +111,16 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ message }),
     }),
+  agentBriefing: () =>
+    fetchJSON<{
+      generated_at: string;
+      snapshot_id?: string | null;
+      regime_label?: string | null;
+      headlines: Array<{
+        tone: "ok" | "info" | "warn" | "alert";
+        category: string;
+        title: string;
+        detail?: string | null;
+      }>;
+    }>("/api/v1/agent/briefing"),
 };

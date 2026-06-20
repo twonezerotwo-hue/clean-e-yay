@@ -209,6 +209,16 @@ export const useAckAllNotifications = () => {
   });
 };
 
+/** Raporcu agent — başlık başlık deterministik özet. SSE tick.complete'te
+ *  de invalidate edilir (useEventStream), polling fallback. */
+export const useAgentBriefing = () =>
+  useQuery({
+    queryKey: qk.agentBriefing,
+    queryFn: api.agentBriefing,
+    refetchInterval: 15_000,
+    staleTime: 5_000,
+  });
+
 /** G5 — owner reset (tek manuel çıkış yolu; otomatik reset yok). */
 export const useHaltReset = () => {
   const queryClient = useQueryClient();

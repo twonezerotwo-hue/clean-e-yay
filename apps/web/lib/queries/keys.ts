@@ -21,4 +21,5 @@ export const qk = {
   replayStatus: ["replay", "status"] as const,
   tradeTickets: ["paper-trading", "tickets"] as const,
   notifications: ["notifications"] as const,
+  agentBriefing: ["agent", "briefing"] as const,
 };

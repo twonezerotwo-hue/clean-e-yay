@@ -27,6 +27,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from apps.api.routers import (
     ai_report,
+    briefing,
     chat,
     cockpit,
     dashboard_state,
@@ -159,6 +160,7 @@ def create_app() -> FastAPI:
     app.include_router(replay.router, prefix=prefix)
     app.include_router(system.router, prefix=prefix)
     app.include_router(stream.router, prefix=prefix)
+    app.include_router(briefing.router, prefix=prefix)
     return app
 
 
