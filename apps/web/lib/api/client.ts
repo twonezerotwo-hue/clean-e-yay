@@ -31,11 +31,13 @@ import type {
 } from "@/types/generated/api";
 
 // NEXT_PUBLIC_API_BASE_URL tercih edilen; NEXT_PUBLIC_API_BASE geriye dönük
-// uyumluluk için fallback olarak okunur.
+// uyumluluk için fallback olarak okunur. Boş bırakılırsa same-origin
+// (Next.js rewrite /api/* → backend) kullanılır — tek tunnel URL'si yeterli
+// olsun diye varsayılan budur.
 const BASE =
   process.env.NEXT_PUBLIC_API_BASE_URL ??
   process.env.NEXT_PUBLIC_API_BASE ??
-  "http://127.0.0.1:9000";
+  "";
 
 async function fetchJSON<T>(path: string, init?: RequestInit): Promise<T> {
   const headers = new Headers(init?.headers);
