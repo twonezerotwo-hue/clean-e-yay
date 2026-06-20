@@ -11,6 +11,7 @@ import hashlib
 from packages.agent.llm import budget, cache, guard
 from packages.agent.llm import client as llm_client
 from packages.agent.llm import context as ctx_mod
+from packages.notifications import list_recent as list_notifications
 
 _SYMBOL_ALIASES = {
     "btc": "BTCUSD",
@@ -303,10 +304,55 @@ def _catalyst_answer(ctx: dict) -> tuple[str, list[str]]:
     return "Catalyst zekâsı: " + " | ".join(parts) + "." + _CONTEXT_ONLY_NOTE, ev
 
 
+def _tickets_answer() -> tuple[str, list[str]]:
+    # Lazy import — router-level cache; chat'i sıkı bağımlı yapmaz.
+    try:
+        from apps.api.routers.paper_trading import _LAST_TICKETS as tickets  # noqa
+    except Exception:
+        tickets = []
+    active = [t for t in (tickets or []) if t.get("status") == "active"]
+    if not active:
+        return (
+            "Şu an aktif Trade Ticket yok — sinyaller ya gate'lerle bloklandı ya "
+            "da consensus eşiği aşılmadı.",
+            ["tickets:none"],
+        )
+    parts = []
+    ev = []
+    for t in active[:4]:
+        s = t.get("summary", {}) or {}
+        side_label = "AL" if t.get("side") == "long" else "SAT"
+        parts.append(
+            f"{t.get('symbol')} {side_label} {t.get('timeframe', '?').upper()}: "
+            f"entry {s.get('entry_price')}, SL {s.get('stop_loss')}, "
+            f"TP {s.get('take_profit')}, R/R 1:{s.get('rr_ratio', 0):.1f}, "
+            f"güven {int((s.get('confidence_calibrated') or 0) * 100)}%"
+        )
+        ev.append(f"ticket:{t.get('id')}")
+    return "Aktif Trade Ticket'lar: " + " | ".join(parts) + ".", ev
+
+
+def _notifications_answer() -> tuple[str, list[str]]:
+    items = list_notifications(limit=8, unread_only=False)
+    if not items:
+        return ("Henüz bildirim yok.", ["notifications:none"])
+    parts = []
+    ev = []
+    for n in items[:5]:
+        prefix = "[okunmadı] " if not n.ack else ""
+        parts.append(f"{prefix}{n.title} — {n.body_short}")
+        ev.append(f"notif:{n.id}")
+    return "Son bildirimler: " + " | ".join(parts) + ".", ev
+
+
 def _grounded_answer(message: str, ctx: dict) -> tuple[str, list[str]]:
     folded = message.casefold()
     symbol = _detect_symbol(folded)
     timeframe = _detect_timeframe(folded)
+    if any(k in folded for k in ("ticket", "tiket", "sinyal listesi", "aktif sinyal")):
+        return _tickets_answer()
+    if any(k in folded for k in ("bildirim", "notification", "uyarı", "uyari", "alarm")):
+        return _notifications_answer()
     if any(k in folded for k in ("eksik", "missing", "hangi veri")):
         return _missing_data_answer(ctx)
     # v2.7 deep-data niyetleri (RiskGate/why fallback'inden ÖNCE — "volatility

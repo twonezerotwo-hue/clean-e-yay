@@ -19,4 +19,6 @@ export const qk = {
   shadowComparison: ["decision", "shadow"] as const,
   cockpitBrief: ["cockpit", "brief"] as const,
   replayStatus: ["replay", "status"] as const,
+  tradeTickets: ["paper-trading", "tickets"] as const,
+  notifications: ["notifications"] as const,
 };

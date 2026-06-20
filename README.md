@@ -108,14 +108,14 @@ API + web tek komutla kalksın:
 
 ```bash
 make dev
-# → API  http://127.0.0.1:8000
-# → Web  http://127.0.0.1:3000
+# → API  http://127.0.0.1:9000
+# → Web  http://127.0.0.1:4000
 ```
 
 `scripts/dev.sh` arkasından:
-- API → `PYTHONPATH=. uvicorn apps.api.main:app --reload --port 8000`
-- Web → `pnpm dev --port 3000` (ilk kez `pnpm install` çalıştırır)
-- `apps/web/.env.local` yoksa `NEXT_PUBLIC_API_BASE_URL=http://127.0.0.1:8000`
+- API → `PYTHONPATH=. uvicorn apps.api.main:app --reload --port 9000`
+- Web → `pnpm dev --port 4000` (ilk kez `pnpm install` çalıştırır)
+- `apps/web/.env.local` yoksa `NEXT_PUBLIC_API_BASE_URL=http://127.0.0.1:9000`
   ile otomatik oluşturulur.
 - Ctrl+C ikisini birlikte durdurur.
 
@@ -138,23 +138,15 @@ gösterir. `make api-dev` ve `scripts/dev.sh`, venv'de `certifi` kuruluysa
 
 ```bash
 pip install certifi
-SSL_CERT_FILE="$(python -m certifi)" PYTHONPATH=. uvicorn apps.api.main:app --port 8000
+SSL_CERT_FILE="$(python -m certifi)" PYTHONPATH=. uvicorn apps.api.main:app --port 9000
 ```
 
-### Port çakışması (eski E_YAY CODEX LaunchAgent'ları)
+### Port seçimi
 
-Bu makinede eski `E_YAY CODEX` projesinden kalma LaunchAgent'lar (örn.
-`com.eyay.backend` → `0.0.0.0:8000`, `com.eyay.frontend` → `:3000`)
-KeepAlive ile çalışıyor olabilir; `kill` yetmez, login'de geri gelirler.
-
-- Clean E-yAy API'sini `--host 127.0.0.1 --port 8000` ile başlat: eski agent
-  `0.0.0.0:8000`'de dinlese bile `127.0.0.1` istekleri Clean E-yAy'e gider.
-  `lsof -nP -iTCP:8000 -sTCP:LISTEN` iki dinleyici gösterebilir — kafa
-  karıştırıcı ama çalışır. Doğrulama: `curl …/api/v1/health` → `version 2.0.0`
-  (Clean E-yAy). Başka bir sürüm dönerse eski backend yanıtlıyordur.
-- Oturum bazlı kapatma (plist'i silmeden):
-  `launchctl bootout gui/$(id -u)/com.eyay.backend`
-  (login'de geri gelir; kalıcı kaldırma kullanıcının kararı).
+Clean E-yAy artık **9000 (API)** ve **4000 (Web)** portlarını kullanır;
+eski `E_YAY CODEX` (8000/3000) ile çakışma yok. Eski LaunchAgent'lar
+çalışıyor olsa da Clean E-yAy ayrı portlarda kalkar; `lsof -nP -iTCP:9000
+-sTCP:LISTEN` yalnızca Clean E-yAy'ı göstermelidir.
 
 ### Docker (node/pnpm lokalde yoksa)
 
@@ -171,7 +163,7 @@ Tek komut (çalışan API + opsiyonel web gerekir):
 ```bash
 make smoke
 # veya izole port:
-API_BASE=http://127.0.0.1:8050 WEB_BASE=http://127.0.0.1:3050 ./scripts/smoke.sh
+API_BASE=http://127.0.0.1:9050 WEB_BASE=http://127.0.0.1:4050 ./scripts/smoke.sh
 # yalnızca API:
 SKIP_WEB=true ./scripts/smoke.sh
 ```
@@ -192,7 +184,7 @@ make lint
 `apps/web/.env.local`:
 
 ```env
-NEXT_PUBLIC_API_BASE_URL=http://127.0.0.1:8000
+NEXT_PUBLIC_API_BASE_URL=http://127.0.0.1:9000
 # Eski isim (NEXT_PUBLIC_API_BASE) hâlâ fallback olarak okunur.
 ```
 
@@ -218,14 +210,14 @@ başlatır (pid+log `data/runtime/` altında) ve learning'i bir kez seed eder.
 cd apps/web && pnpm install && cd ../..      # node/pnpm gerekli
 cp .env.example .env                          # düzenle (GROQ/FRED ops.; .env varsa prod_up yükler)
 
-make prod-up        # API(8000)+web(3000)+tick başlat (arka plan) + learning seed
+make prod-up        # API(9000)+web(4000)+tick başlat (arka plan) + learning seed
 make prod-status    # süreç + port + system/health (paper_safe) durumu
 make prod-smoke     # health smoke (8/8: API + web SSR + paper_safe)
 make prod-down      # supervised süreçleri (api/web/tick) nazikçe durdur
 
 # Port çakışması varsa izole port:
-API_PORT=8060 WEB_PORT=3060 make prod-up
-API_PORT=8060 WEB_PORT=3060 make prod-smoke
+API_PORT=9060 WEB_PORT=4060 make prod-up
+API_PORT=9060 WEB_PORT=4060 make prod-smoke
 ```
 
 - **first run**: `pnpm install` (web), ilk `prod-up` `.next` yoksa `next build`
@@ -239,10 +231,8 @@ API_PORT=8060 WEB_PORT=3060 make prod-smoke
   (spin-loop). tick daemon SIGTERM-aware; api/web restart-safe.
 - **common failures**:
   - *Port meşgul* → `prod_up` açık hata + meşgul pid verir, başlatmaz; izole
-    port'la dene. **Eski E_YAY CODEX LaunchAgent** (`com.eyay.backend` → `*:8000`,
-    `com.eyay.frontend` → `:3000`) tespit edilirse uyarır:
-    `launchctl bootout gui/$(id -u)/com.eyay.backend` (oturum bazlı; login'de
-    geri gelir — kalıcı kaldırma kullanıcının kararı).
+    port'la dene (default 9000/4000; çakışma olursa `API_PORT/WEB_PORT` ile
+    override).
   - *SSL `CERTIFICATE_VERIFY_FAILED`* → `prod_up` certifi'den `SSL_CERT_FILE`'ı
     otomatik ayarlar; gerekirse `pip install certifi`.
   - *Worker stale* → `make prod-status` / `/system/health` `warnings` içinde

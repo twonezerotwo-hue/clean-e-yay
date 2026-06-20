@@ -18,6 +18,7 @@ import type {
   LearningSummary,
   MarketSessionsCurrentResponse,
   MistakesState,
+  NotificationList,
   PaperTradingState,
   RebalanceState,
   RegimeReport,
@@ -26,6 +27,7 @@ import type {
   SystemHealth,
   TfWeightsReport,
   TickResult,
+  TradeTicketList,
 } from "@/types/generated/api";
 
 // NEXT_PUBLIC_API_BASE_URL tercih edilen; NEXT_PUBLIC_API_BASE geriye dönük
@@ -33,7 +35,7 @@ import type {
 const BASE =
   process.env.NEXT_PUBLIC_API_BASE_URL ??
   process.env.NEXT_PUBLIC_API_BASE ??
-  "http://127.0.0.1:8000";
+  "http://127.0.0.1:9000";
 
 async function fetchJSON<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`${BASE}${path}`, {
@@ -74,6 +76,22 @@ export const api = {
   riskHalts: () => fetchJSON<HaltsState>("/api/v1/risk/halts"),
   riskHaltsReset: () =>
     fetchJSON<HaltResetResult>("/api/v1/risk/halts/reset", { method: "POST" }),
+  tradeTickets: () =>
+    fetchJSON<TradeTicketList>("/api/v1/paper-trading/tickets"),
+  notifications: (unreadOnly = false) =>
+    fetchJSON<NotificationList>(
+      `/api/v1/notifications?limit=50&unread_only=${unreadOnly}`,
+    ),
+  ackNotification: (id: string) =>
+    fetchJSON<{ status: string; id: string }>(
+      `/api/v1/notifications/${encodeURIComponent(id)}/ack`,
+      { method: "POST" },
+    ),
+  ackAllNotifications: () =>
+    fetchJSON<{ status: string; marked: number }>(
+      "/api/v1/notifications/ack-all",
+      { method: "POST" },
+    ),
   decisionMatrix: () =>
     fetchJSON<DecisionMatrix>("/api/v1/decision/matrix"),
   agentMatrix: () =>

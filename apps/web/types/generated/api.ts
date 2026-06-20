@@ -268,6 +268,22 @@ export type Trade = {
   snapshot_id?: string | null;
 };
 
+export type PositionRecheckVerdict = "OK" | "WATCH" | "REDUCE" | "EXIT_RECOMMEND";
+
+export type PositionRecheck = {
+  position_id: string;
+  symbol: string;
+  timeframe: string;
+  side: "long" | "short";
+  verdict: PositionRecheckVerdict;
+  reason: string;
+  fresh_action?: "open_long" | "open_short" | "hold" | "blocked" | null;
+  fresh_direction?: Direction | null;
+  fresh_confidence?: number | null;
+  pnl_pct: number;
+  checked_at: string;
+};
+
 export type PaperTradingState = {
   equity_usd: number;
   realized_pnl_usd: number;
@@ -283,6 +299,96 @@ export type PaperTradingState = {
   recent_audit_events?: PaperAuditEvent[];
   // P2 — owner onayı bekleyen aday sayısı (queue listesi ayrı endpoint'ten gelir).
   manual_ready_count?: number;
+  // UX-A14 — açık pozisyonların fresh karara karşı verdict'i (read-only).
+  position_rechecks?: PositionRecheck[];
+  last_recheck_at?: string | null;
+};
+
+// UX-A15 — Trade Ticket (broker handoff payload).
+export type TradeTicketStatus = "active" | "insufficient_rr" | "invalid";
+
+export type TradeTicketSummary = {
+  entry_price: number;
+  stop_loss: number;
+  take_profit: number;
+  rr_ratio: number;
+  rr_source: string;     // resistance | support | atr_floor | atr_max | below_floor
+  size_usd: number;
+  size_pct_equity: number;
+  risk_usd: number;
+  risk_pct_equity: number;
+  confidence_calibrated: number;
+  confidence_raw: number;
+  confidence_label: string;  // "yüksek" / "orta" / vb.
+  consensus_score: number;
+  consensus_direction: Direction;
+  atr: number;
+};
+
+export type TradeTicketDisplay = {
+  title: string;
+  expiry_text: string;
+  rr_text: string;
+  rr_note: string;
+  why_bullets: string[];
+  safety_lines: { level: "ok" | "warn" | "error"; text: string }[];
+  confidence_text: string;
+};
+
+export type TradeTicket = {
+  id: string;
+  symbol: string;
+  side: "long" | "short" | string;
+  timeframe: string;
+  status: TradeTicketStatus;
+  expires_at: string;
+  ttl_seconds: number;
+  summary: TradeTicketSummary;
+  technical_detail: Record<string, unknown>;  // 7 bölüm derin veri
+  display: TradeTicketDisplay;
+};
+
+export type TradeTicketList = {
+  tickets: TradeTicket[];
+  total: number;
+  last_built_at?: string | null;
+};
+
+// UX-A16 — Notifications (observer; karar vermez).
+export type NotificationType =
+  | "ticket_created"
+  | "ticket_expiring"
+  | "ticket_expired"
+  | "ticket_blocked"
+  | "recheck_exit_recommend"
+  | "recheck_reduce"
+  | "risk_gate_changed"
+  | "risk_kill_switch"
+  | "catalyst_imminent"
+  | "dqs_dropped"
+  | "position_near_sl"
+  | "position_near_tp";
+
+export type NotificationPriority = "critical" | "high" | "medium" | "low";
+
+export type Notification = {
+  id: string;
+  ts: string;
+  type: NotificationType;
+  priority: NotificationPriority;
+  title: string;
+  body_short: string;
+  body_long: string;
+  ticket_id?: string | null;
+  position_id?: string | null;
+  actions?: { label: string; deep_link?: string }[];
+  ack: boolean;
+};
+
+export type NotificationList = {
+  notifications: Notification[];
+  unread_count: number;
+  total: number;
 };
 
 // P2 — owner-approval (manual-ready) workflow.

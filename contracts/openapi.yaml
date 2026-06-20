@@ -6,7 +6,7 @@ info:
     Sözleşme-önce API. Pydantic ve TypeScript tipleri buradan üretilir.
     `make codegen` ile yenilenir. Manuel düzenleme yok.
 servers:
-  - url: http://127.0.0.1:8000
+  - url: http://127.0.0.1:9000
     description: Local dev
 paths:
   /api/v1/health:
@@ -110,6 +110,72 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/TickResult"
+
+  /api/v1/paper-trading/tickets:
+    get:
+      operationId: getTradeTickets
+      summary: Aktif Trade Ticket'lar (broker'a manuel girmeden tek-bakış kart)
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TradeTicketList"
+
+  /api/v1/notifications:
+    get:
+      operationId: getNotifications
+      summary: Bildirim listesi (en yeni önce; observer — karar vermez)
+      parameters:
+        - in: query
+          name: limit
+          schema: { type: integer, default: 50 }
+        - in: query
+          name: unread_only
+          schema: { type: boolean, default: false }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NotificationList"
+
+  /api/v1/notifications/{id}/ack:
+    post:
+      operationId: ackNotification
+      summary: Bildirimi okundu işaretle
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string }
+                  id: { type: string }
+
+  /api/v1/notifications/ack-all:
+    post:
+      operationId: ackAllNotifications
+      summary: Tüm okunmamış bildirimleri okundu işaretle
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string }
+                  marked: { type: integer }
 
   /api/v1/paper-trading/manual-ready:
     get:
@@ -1025,6 +1091,124 @@ components:
         manual_ready_count:
           type: integer
           description: P2 — owner onayı bekleyen aday sayısı (DEFENSIVE/CRISIS).
+        position_rechecks:
+          type: array
+          description: |
+            UX-A14 — tick yan ürünü, her açık pozisyon için fresh karara karşı
+            verdict (OK/WATCH/REDUCE/EXIT_RECOMMEND). Read-only öneri; otomatik
+            kapatma YOK. Çıkış yine SL/TP veya manuel close üzerinden.
+          items: { $ref: "#/components/schemas/PositionRecheck" }
+        last_recheck_at:
+          type: string
+          nullable: true
+          description: Son recheck zamanı (ISO-8601 UTC). null → henüz tick atılmadı.
+
+    TradeTicket:
+      type: object
+      required: [id, symbol, side, timeframe, status, expires_at, ttl_seconds]
+      description: |
+        Broker'a manuel girmeden önce tek-bakış kart payload'ı. Karar
+        zincirinin gözlemleyicisi — yeni karar üretmez. Şema iki katmanlı:
+        `summary` (stable field, agent + UI), `technical_detail` (collapsed
+        derin veri), `display` (önceden hazırlanmış Türkçe stringler).
+      properties:
+        id: { type: string }
+        symbol: { type: string }
+        side: { type: string, enum: [long, short] }
+        timeframe: { type: string }
+        status: { type: string, enum: [active, insufficient_rr, invalid] }
+        expires_at: { type: string }
+        ttl_seconds: { type: integer }
+        summary:
+          type: object
+          additionalProperties: true
+          description: Entry/SL/TP/size/confidence/rr stable field'lar
+        technical_detail:
+          type: object
+          additionalProperties: true
+          description: 7 bölüm derin veri (konsensüs/piyasa/geçmiş/güvenlik/sizing/kalibrasyon/audit)
+        display:
+          type: object
+          additionalProperties: true
+          description: title, expiry_text, why_bullets, safety_lines (pre-rendered)
+
+    TradeTicketList:
+      type: object
+      required: [tickets, total]
+      properties:
+        tickets:
+          type: array
+          items: { $ref: "#/components/schemas/TradeTicket" }
+        total: { type: integer }
+        last_built_at: { type: string, nullable: true }
+
+    Notification:
+      type: object
+      required: [id, ts, type, priority, title, body_short]
+      properties:
+        id: { type: string }
+        ts: { type: string }
+        type:
+          type: string
+          enum:
+            - ticket_created
+            - ticket_expiring
+            - ticket_expired
+            - ticket_blocked
+            - recheck_exit_recommend
+            - recheck_reduce
+            - risk_gate_changed
+            - risk_kill_switch
+            - catalyst_imminent
+            - dqs_dropped
+            - position_near_sl
+            - position_near_tp
+        priority:
+          type: string
+          enum: [critical, high, medium, low]
+        title: { type: string }
+        body_short: { type: string }
+        body_long: { type: string }
+        ticket_id: { type: string, nullable: true }
+        position_id: { type: string, nullable: true }
+        actions:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+        ack: { type: boolean }
+
+    NotificationList:
+      type: object
+      required: [notifications, unread_count, total]
+      properties:
+        notifications:
+          type: array
+          items: { $ref: "#/components/schemas/Notification" }
+        unread_count: { type: integer }
+        total: { type: integer }
+
+    PositionRecheck:
+      type: object
+      required: [position_id, symbol, timeframe, side, verdict, reason, pnl_pct, checked_at]
+      properties:
+        position_id: { type: string }
+        symbol: { type: string }
+        timeframe: { type: string }
+        side: { type: string, enum: [long, short] }
+        verdict: { type: string, enum: [OK, WATCH, REDUCE, EXIT_RECOMMEND] }
+        reason: { type: string }
+        fresh_action:
+          type: string
+          nullable: true
+          enum: [open_long, open_short, hold, blocked, null]
+        fresh_direction:
+          type: string
+          nullable: true
+          enum: [bullish, bearish, neutral, null]
+        fresh_confidence: { type: number, nullable: true }
+        pnl_pct: { type: number }
+        checked_at: { type: string }
 
     ManualReadyTrade:
       type: object

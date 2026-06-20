@@ -29,8 +29,13 @@ MARKET_FEEDS: Final[tuple[dict[str, str], ...]] = (
     {"url": "https://www.cnbc.com/id/100003114/device/rss/rss.html", "source": "CNBC"},
     {"url": "https://www.cnbc.com/id/10000664/device/rss/rss.html", "source": "CNBC Economy"},
     {"url": "https://feeds.content.dowjones.io/public/rss/mw_marketpulse", "source": "MarketWatch"},
+    {"url": "https://feeds.content.dowjones.io/public/rss/RSSWSJD", "source": "WSJ Markets"},
+    {"url": "https://www.investing.com/rss/news_25.rss", "source": "Investing.com"},
+    {"url": "https://www.investing.com/rss/news_301.rss", "source": "Investing FX"},
+    {"url": "https://www.investing.com/rss/news_11.rss", "source": "Investing Emtia"},
     {"url": "https://www.coindesk.com/arc/outboundfeeds/rss/", "source": "CoinDesk"},
     {"url": "https://cointelegraph.com/rss", "source": "Cointelegraph"},
+    {"url": "https://decrypt.co/feed", "source": "Decrypt"},
     {"url": "https://www.federalreserve.gov/feeds/press_all.xml", "source": "Fed Reserve"},
     {
         "url": (
@@ -39,12 +44,20 @@ MARKET_FEEDS: Final[tuple[dict[str, str], ...]] = (
         ),
         "source": "Reuters",
     },
+    {
+        "url": (
+            "https://news.google.com/rss/search?q=when:1d+(Bloomberg+OR+"
+            "%22Financial+Times%22)+(markets+OR+fed+OR+oil)&hl=en-US&gl=US&ceid=US:en"
+        ),
+        "source": "Bloomberg/FT",
+    },
 )
 
 GEO_FEEDS: Final[tuple[dict[str, str], ...]] = (
     {"url": "https://feeds.bbci.co.uk/news/world/rss.xml", "source": "BBC World"},
     {"url": "https://www.aljazeera.com/xml/rss/all.xml", "source": "Al Jazeera"},
     {"url": "https://www.jpost.com/Rss/RssFeedsHeadlines.aspx", "source": "Jerusalem Post"},
+    {"url": "https://www.aa.com.tr/en/rss/default?cat=world", "source": "Anadolu Agency"},
     {
         "url": (
             "https://news.google.com/rss/search?q=when:1d+(geopolitics+OR+iran+OR+"

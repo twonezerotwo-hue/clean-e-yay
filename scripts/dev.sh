@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
 # Clean E-yAy — local live dev başlatıcısı.
 #
-# API'yi 127.0.0.1:8000'da uvicorn --reload ile,
-# Web'i 127.0.0.1:3000'de `pnpm dev` ile çalıştırır.
+# API'yi 127.0.0.1:9000'da uvicorn --reload ile,
+# Web'i 127.0.0.1:4000'de `pnpm dev` ile çalıştırır.
 # Ctrl+C ile her ikisini durdurur.
 #
 # Çevre değişkenleri:
-#   API_PORT (default 8000)
-#   WEB_PORT (default 3000)
+#   API_PORT (default 9000)
+#   WEB_PORT (default 4000)
 #   PYTHON   (default: önce repo .venv/bin/python, yoksa cross-repo venv,
 #             yoksa python3)
 #   DEV_CORS=true → API tüm origin'leri kabul eder
@@ -17,8 +17,8 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 
-API_PORT="${API_PORT:-8000}"
-WEB_PORT="${WEB_PORT:-3000}"
+API_PORT="${API_PORT:-9000}"
+WEB_PORT="${WEB_PORT:-4000}"
 
 # Python yorumlayıcısını seç (uvicorn'u içeren bir venv).
 choose_python() {

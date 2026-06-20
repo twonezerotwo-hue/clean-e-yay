@@ -2,14 +2,13 @@
   Clean E-yAy - Windows local dev baslatici (PowerShell).
   scripts/dev.sh'in Windows karsiligi. API + web'i ayri pencerelerde acar.
 
-  Varsayilan portlar, eski "E_YAY CODEX" projesi 8000/3000'de calisirken
-  yan yana calismak icin secildi:
-    API -> http://127.0.0.1:8001
+  Varsayilan portlar:
+    API -> http://127.0.0.1:9000
     Web -> http://127.0.0.1:4000
 
   Kullanim:
-    .\scripts\dev.ps1                          # API 8001, Web 4000
-    .\scripts\dev.ps1 -ApiPort 8000 -WebPort 3000   # repo varsayilani
+    .\scripts\dev.ps1                          # API 9000, Web 4000
+    .\scripts\dev.ps1 -ApiPort 9001 -WebPort 4001   # override
 
   Notlar:
     - Python: repo .venv\Scripts\python.exe (yoksa PATH'teki python).
@@ -18,7 +17,7 @@
     - PAPER_SAFE / NO_EXECUTION korunur - broker yok.
 #>
 param(
-  [int]$ApiPort = 8001,
+  [int]$ApiPort = 9000,
   [int]$WebPort = 4000
 )
 $ErrorActionPreference = "Stop"

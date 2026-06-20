@@ -1,5 +1,7 @@
 "use client";
 
+import { useState } from "react";
+
 import { PanelFrame } from "@/components/shell/PanelFrame";
 import { PanelHeader } from "@/components/shell/PanelHeader";
 import { LoadingState } from "@/components/shell/LoadingState";
@@ -8,6 +10,7 @@ import { useRegimeReport } from "@/lib/queries/hooks";
 import { headlineImpactBadges, selectHeadlines } from "@/lib/selectors/regime";
 import { fmtRelative } from "@/lib/format";
 import { DIRECTION_COLOR } from "@/lib/constants";
+import { NewsMapRadarLayer } from "./NewsMapRadarLayer";
 
 // UX4 — ham haber detaydır: ilk birkaç başlık görünür, gerisi collapsed.
 const NEWS_HEAD = 6;
@@ -63,13 +66,48 @@ export function NewsPanel() {
   const items = selectHeadlines(data, 14);
   const head = items.slice(0, NEWS_HEAD);
   const rest = items.slice(NEWS_HEAD);
+  const [view, setView] = useState<"list" | "radar">("list");
+  const hasItems = items.length > 0;
   return (
     <PanelFrame id="news">
-      <PanelHeader title="Haberler" subtitle={`${items.length} başlık`} />
+      <PanelHeader
+        title="Haberler"
+        subtitle={`${items.length} başlık`}
+        actions={
+          hasItems ? (
+            <div className="flex items-center gap-1 text-[10px] font-mono">
+              <button
+                type="button"
+                onClick={() => setView("list")}
+                className={`rounded border px-1.5 py-0.5 uppercase tracking-widest ${
+                  view === "list"
+                    ? "border-accent-cyan/60 text-accent-cyan"
+                    : "border-white/15 text-white/40 hover:text-white/70"
+                }`}
+              >
+                Liste
+              </button>
+              <button
+                type="button"
+                onClick={() => setView("radar")}
+                className={`rounded border px-1.5 py-0.5 uppercase tracking-widest ${
+                  view === "radar"
+                    ? "border-accent-cyan/60 text-accent-cyan"
+                    : "border-white/15 text-white/40 hover:text-white/70"
+                }`}
+              >
+                Radar
+              </button>
+            </div>
+          ) : undefined
+        }
+      />
       {isLoading ? (
         <LoadingState />
-      ) : !items.length ? (
+      ) : !hasItems ? (
         <EmptyState />
+      ) : view === "radar" ? (
+        <NewsMapRadarLayer headlines={items} />
       ) : (
         <>
           <ul className="space-y-2 text-sm">

@@ -2,29 +2,36 @@
  * Pano düzeni için tek doğruluk kaynağı (information architecture). Her panel
  * kayıtlı: id, başlık, default visibility, grid span, IA grubu, tier.
  *
- * UX3 — IA grupları:
- *   simple (ilk ekran, önem sırası):
- *     command  → Agent Command Center (brief + karar + analist)
- *     risk     → Risk & Execution Freeze (gate/halt/paper)
- *     decision → Decision Trace / Candidate Matrix
- *     watch    → Watch Conditions
- *     chat     → Ask the Agent
- *   expert (collapsed, gruplu detay):
- *     data     → Data Quality & Providers
- *     market   → Market Structure
- *     macro    → Macro / Catalyst
- *     learning → Paper & Learning
- *     ops      → Ops / System
+ * UX4 — 3-tier IA:
+ *   ANA (daima açık, tek-bakış operasyonel cockpit):
+ *     hero    → Agent Brief
+ *     command → Karar Merkezi + Analist (deterministik → neden)
+ *     risk    → Risk & Yürütme (gate · drawdown · paper · seans)
+ *     matrix  → Karar Matrisi (TF + Agent)
+ *     watch   → İzlenecek Koşullar
+ *     chat    → Agent'a Sor
+ *   DETAY (collapsed, uzman bakışı):
+ *     decision_detail → Karar İzi (trace · votes · shadow · checks · candidates)
+ *     market          → Piyasa Yapısı (türev · vol · options · korelasyon · rotasyon)
+ *     macro           → Makro & Catalyst (etki · takvim · haber · senaryo)
+ *     learning        → Öğrenme & Kalibrasyon (paper · ağırlık · platt · TF)
+ *   OPS (collapsed, default kapalı; sistem/veri):
+ *     ops             → Data Quality · Provider · System Health · Replay · Audit
  *
  * Not: `group`/`tier` IA metadata'sıdır; layout `app/page.tsx`'te bu IA'ya göre
  * elle render edilir (yalnızca `defaultVisible` `usePanelVisibility` tarafından
  * okunur). Frontend hesap yapmaz — paneller mevcut selector/brief'i sunar.
  */
 export type PanelKey =
+  | "agent_narrator"
+  | "risk_durumu"
+  | "haberler_catalyst"
+  | "trade_ticket"
   | "agent_brief"
   | "decision_trace"
   | "watch_conditions"
   | "paper_action"
+  | "market_sessions"
   | "decision"
   | "risk_gate"
   | "agent_votes"
@@ -62,18 +69,23 @@ export type PanelKey =
   | "tf_weights";
 
 export type PanelGroupId =
-  // simple tier
+  // ana tier
+  | "hero"
+  | "ticket"
   | "command"
   | "risk"
-  | "decision"
+  | "matrix"
   | "watch"
   | "chat"
-  // expert tier
-  | "data"
+  // detay tier
+  | "decision_detail"
   | "market"
   | "macro"
   | "learning"
+  // ops tier
   | "ops";
+
+export type PanelTier = "ana" | "detay" | "ops";
 
 export type PanelMeta = {
   id: PanelKey;
@@ -81,58 +93,69 @@ export type PanelMeta = {
   defaultVisible: boolean;
   span: "1" | "2" | "3" | "full";
   group: PanelGroupId;
-  tier: "simple" | "expert";
+  tier: PanelTier;
 };
 
 export const PANEL_REGISTRY: PanelMeta[] = [
-  // ── SIMPLE — Agent Command Center ────────────────────────────────────────
-  { id: "agent_brief",      title: "Agent Brief",          defaultVisible: true,  span: "full", group: "command",  tier: "simple" },
-  { id: "decision",         title: "Karar Merkezi",        defaultVisible: true,  span: "2",    group: "command",  tier: "simple" },
-  { id: "ai_report",        title: "AI Analist Raporu",    defaultVisible: true,  span: "1",    group: "command",  tier: "simple" },
-  // ── SIMPLE — Risk & Execution Freeze ─────────────────────────────────────
-  { id: "risk_gate",        title: "Risk Kapısı",          defaultVisible: true,  span: "2",    group: "risk",     tier: "simple" },
-  { id: "drawdown_guard",   title: "Drawdown Guard",       defaultVisible: true,  span: "1",    group: "risk",     tier: "simple" },
-  { id: "paper_action",     title: "Paper Action State",   defaultVisible: true,  span: "2",    group: "risk",     tier: "simple" },
-  { id: "position_checks",  title: "Pozisyon Kontrolleri", defaultVisible: true,  span: "1",    group: "risk",     tier: "simple" },
-  // ── SIMPLE — Decision Trace / Candidate Matrix ───────────────────────────
-  { id: "timeframe_matrix", title: "Timeframe Matrisi",    defaultVisible: true,  span: "3",    group: "decision", tier: "simple" },
-  { id: "agent_matrix",     title: "Agent Matrisi",        defaultVisible: true,  span: "3",    group: "decision", tier: "simple" },
-  { id: "shadow",           title: "Shadow Gözlem",        defaultVisible: true,  span: "3",    group: "decision", tier: "simple" },
-  { id: "decision_trace",   title: "Decision Trace",       defaultVisible: true,  span: "2",    group: "decision", tier: "simple" },
-  { id: "agent_votes",      title: "Agent Kanıt Zinciri",  defaultVisible: true,  span: "1",    group: "decision", tier: "simple" },
-  { id: "command_signals",  title: "Aday Sinyalleri",      defaultVisible: true,  span: "full", group: "decision", tier: "simple" },
-  // ── SIMPLE — Watch Conditions ────────────────────────────────────────────
-  { id: "watch_conditions", title: "İzlenecek Koşullar",   defaultVisible: true,  span: "full", group: "watch",    tier: "simple" },
-  // ── SIMPLE — Ask the Agent ───────────────────────────────────────────────
-  { id: "chat",             title: "Agent'a Sor",          defaultVisible: true,  span: "full", group: "chat",     tier: "simple" },
+  // ── ANA — Hero (Agent Narrator) ──────────────────────────────────────────
+  { id: "agent_narrator",   title: "Agent",                defaultVisible: true,  span: "full", group: "hero",            tier: "ana" },
+  // ── ANA — Trade Ticket (broker handoff) ──────────────────────────────────
+  { id: "trade_ticket",     title: "Trade Ticket",         defaultVisible: true,  span: "full", group: "ticket",          tier: "ana" },
+  // ── ANA — Risk Durumu (RiskGate + Drawdown + Catalyst birleşik) ──────────
+  { id: "risk_durumu",      title: "Risk Durumu",          defaultVisible: true,  span: "full", group: "risk",            tier: "ana" },
+  // ── DETAY — Haberler & Catalyst (3 panel sekme) ──────────────────────────
+  { id: "haberler_catalyst", title: "Haberler & Catalyst", defaultVisible: true,  span: "full", group: "macro",           tier: "detay" },
+  // ── DETAY (eski) — Agent Brief (uzun-form, ANA'da Narrator var) ──────────
+  { id: "agent_brief",      title: "Agent Brief (detay)",  defaultVisible: false, span: "full", group: "command",         tier: "detay" },
+  // ── ANA — Komuta Merkezi ─────────────────────────────────────────────────
+  { id: "decision",         title: "Karar Merkezi",        defaultVisible: true,  span: "2",    group: "command",         tier: "ana" },
+  { id: "ai_report",        title: "AI Analist Raporu",    defaultVisible: true,  span: "1",    group: "command",         tier: "ana" },
+  // ── ANA — Risk & Yürütme ─────────────────────────────────────────────────
+  { id: "risk_gate",        title: "Risk Kapısı",          defaultVisible: true,  span: "2",    group: "risk",            tier: "ana" },
+  { id: "drawdown_guard",   title: "Drawdown Guard",       defaultVisible: true,  span: "1",    group: "risk",            tier: "ana" },
+  { id: "paper_action",     title: "Paper Action State",   defaultVisible: true,  span: "2",    group: "risk",            tier: "ana" },
+  { id: "market_sessions",  title: "Piyasa Seansları",     defaultVisible: true,  span: "1",    group: "risk",            tier: "ana" },
+  // ── ANA — Karar Matrisi ──────────────────────────────────────────────────
+  { id: "timeframe_matrix", title: "Timeframe Matrisi",    defaultVisible: true,  span: "full", group: "matrix",          tier: "ana" },
+  { id: "agent_matrix",     title: "Agent Matrisi",        defaultVisible: true,  span: "full", group: "matrix",          tier: "ana" },
+  // ── ANA — İzlenecek Koşullar ─────────────────────────────────────────────
+  { id: "watch_conditions", title: "İzlenecek Koşullar",   defaultVisible: true,  span: "full", group: "watch",           tier: "ana" },
+  // ── ANA — Agent'a Sor ────────────────────────────────────────────────────
+  { id: "chat",             title: "Agent'a Sor",          defaultVisible: true,  span: "full", group: "chat",            tier: "ana" },
 
-  // ── EXPERT — Data Quality & Providers ────────────────────────────────────
-  { id: "data_quality",     title: "Veri Kalitesi",        defaultVisible: true,  span: "2",    group: "data",     tier: "expert" },
-  { id: "provider_status",  title: "Sağlayıcı Durumu",     defaultVisible: true,  span: "1",    group: "data",     tier: "expert" },
-  { id: "snapshot",         title: "Snapshot",             defaultVisible: true,  span: "1",    group: "data",     tier: "expert" },
-  { id: "market_data",      title: "Piyasa Verisi",        defaultVisible: true,  span: "2",    group: "data",     tier: "expert" },
-  { id: "panel_audit",      title: "Pano Denetimi",        defaultVisible: false, span: "1",    group: "data",     tier: "expert" },
-  // ── EXPERT — Market Structure ────────────────────────────────────────────
-  { id: "crypto_derivatives", title: "Kripto Türevleri",   defaultVisible: true,  span: "1",    group: "market",   tier: "expert" },
-  { id: "volatility",       title: "Volatilite Rejimi",    defaultVisible: true,  span: "1",    group: "market",   tier: "expert" },
-  { id: "options_vol",      title: "Options IV / Skew",    defaultVisible: true,  span: "1",    group: "market",   tier: "expert" },
-  { id: "correlation",      title: "Korelasyon",           defaultVisible: true,  span: "2",    group: "market",   tier: "expert" },
-  { id: "patterns",         title: "Grafik Desenleri",     defaultVisible: false, span: "1",    group: "market",   tier: "expert" },
-  { id: "capital_rotation", title: "Sermaye Rotasyonu",    defaultVisible: true,  span: "full", group: "market",   tier: "expert" },
-  // ── EXPERT — Macro / Catalyst ────────────────────────────────────────────
-  { id: "catalyst_impact",  title: "Catalyst Etkisi",      defaultVisible: true,  span: "2",    group: "macro",    tier: "expert" },
-  { id: "event_calendar",   title: "Olay Takvimi",         defaultVisible: true,  span: "1",    group: "macro",    tier: "expert" },
-  { id: "news",             title: "Haberler",             defaultVisible: true,  span: "2",    group: "macro",    tier: "expert" },
-  { id: "scenario",         title: "Senaryo",              defaultVisible: true,  span: "1",    group: "macro",    tier: "expert" },
-  // ── EXPERT — Paper & Learning ────────────────────────────────────────────
-  { id: "trading",          title: "Paper Trading",        defaultVisible: true,  span: "2",    group: "learning", tier: "expert" },
-  { id: "learning",         title: "Öğrenme",              defaultVisible: true,  span: "1",    group: "learning", tier: "expert" },
-  { id: "weight_proposal",  title: "Ağırlık Önerisi",      defaultVisible: true,  span: "2",    group: "learning", tier: "expert" },
-  { id: "weight_history",   title: "Ağırlık Geçmişi",      defaultVisible: true,  span: "1",    group: "learning", tier: "expert" },
-  { id: "calibration",      title: "Calibration",          defaultVisible: true,  span: "2",    group: "learning", tier: "expert" },
-  { id: "mistake_memory",   title: "Mistake Memory",       defaultVisible: true,  span: "1",    group: "learning", tier: "expert" },
-  { id: "tf_weights",       title: "tf_weights Kalibrasyon", defaultVisible: true, span: "2",   group: "learning", tier: "expert" },
-  // ── EXPERT — Ops / System ────────────────────────────────────────────────
-  { id: "replay_status",    title: "Replay Durumu",        defaultVisible: false, span: "1",    group: "ops",      tier: "expert" },
-  { id: "system_health",    title: "Sistem Sağlığı",       defaultVisible: true,  span: "full", group: "ops",      tier: "expert" },
+  // ── DETAY — Karar İzi ────────────────────────────────────────────────────
+  { id: "decision_trace",   title: "Decision Trace",       defaultVisible: true,  span: "2",    group: "decision_detail", tier: "detay" },
+  { id: "agent_votes",      title: "Agent Kanıt Zinciri",  defaultVisible: true,  span: "1",    group: "decision_detail", tier: "detay" },
+  { id: "shadow",           title: "Shadow Gözlem",        defaultVisible: true,  span: "full", group: "decision_detail", tier: "detay" },
+  { id: "position_checks",  title: "Pozisyon Kontrolleri", defaultVisible: true,  span: "1",    group: "decision_detail", tier: "detay" },
+  { id: "command_signals",  title: "Aday Sinyalleri",      defaultVisible: true,  span: "full", group: "decision_detail", tier: "detay" },
+  // ── DETAY — Piyasa Yapısı ────────────────────────────────────────────────
+  { id: "crypto_derivatives", title: "Kripto Türevleri",   defaultVisible: true,  span: "1",    group: "market",          tier: "detay" },
+  { id: "volatility",       title: "Volatilite Rejimi",    defaultVisible: true,  span: "1",    group: "market",          tier: "detay" },
+  { id: "options_vol",      title: "Options IV / Skew",    defaultVisible: true,  span: "1",    group: "market",          tier: "detay" },
+  { id: "correlation",      title: "Korelasyon",           defaultVisible: true,  span: "2",    group: "market",          tier: "detay" },
+  { id: "patterns",         title: "Grafik Desenleri",     defaultVisible: true,  span: "1",    group: "market",          tier: "detay" },
+  { id: "capital_rotation", title: "Sermaye Rotasyonu",    defaultVisible: true,  span: "full", group: "market",          tier: "detay" },
+  // ── DETAY — Makro / Catalyst ─────────────────────────────────────────────
+  { id: "catalyst_impact",  title: "Catalyst Etkisi",      defaultVisible: true,  span: "2",    group: "macro",           tier: "detay" },
+  { id: "event_calendar",   title: "Olay Takvimi",         defaultVisible: true,  span: "1",    group: "macro",           tier: "detay" },
+  { id: "news",             title: "Haberler",             defaultVisible: true,  span: "2",    group: "macro",           tier: "detay" },
+  { id: "scenario",         title: "Senaryo",              defaultVisible: true,  span: "1",    group: "macro",           tier: "detay" },
+  // ── DETAY — Öğrenme & Kalibrasyon ────────────────────────────────────────
+  { id: "trading",          title: "Paper Trading",        defaultVisible: true,  span: "2",    group: "learning",        tier: "detay" },
+  { id: "learning",         title: "Öğrenme",              defaultVisible: true,  span: "1",    group: "learning",        tier: "detay" },
+  { id: "weight_proposal",  title: "Ağırlık Önerisi",      defaultVisible: true,  span: "2",    group: "learning",        tier: "detay" },
+  { id: "weight_history",   title: "Ağırlık Geçmişi",      defaultVisible: true,  span: "1",    group: "learning",        tier: "detay" },
+  { id: "calibration",      title: "Calibration",          defaultVisible: true,  span: "2",    group: "learning",        tier: "detay" },
+  { id: "mistake_memory",   title: "Mistake Memory",       defaultVisible: true,  span: "1",    group: "learning",        tier: "detay" },
+  { id: "tf_weights",       title: "tf_weights Kalibrasyon", defaultVisible: true, span: "2",   group: "learning",        tier: "detay" },
+
+  // ── OPS — Sistem / Veri (default kapalı) ─────────────────────────────────
+  { id: "data_quality",     title: "Veri Kalitesi",        defaultVisible: false, span: "2",    group: "ops",             tier: "ops" },
+  { id: "provider_status",  title: "Sağlayıcı Durumu",     defaultVisible: false, span: "1",    group: "ops",             tier: "ops" },
+  { id: "snapshot",         title: "Snapshot",             defaultVisible: false, span: "1",    group: "ops",             tier: "ops" },
+  { id: "market_data",      title: "Piyasa Verisi",        defaultVisible: false, span: "2",    group: "ops",             tier: "ops" },
+  { id: "panel_audit",      title: "Pano Denetimi",        defaultVisible: false, span: "1",    group: "ops",             tier: "ops" },
+  { id: "system_health",    title: "Sistem Sağlığı",       defaultVisible: false, span: "full", group: "ops",             tier: "ops" },
+  { id: "replay_status",    title: "Replay Durumu",        defaultVisible: false, span: "1",    group: "ops",             tier: "ops" },
 ];

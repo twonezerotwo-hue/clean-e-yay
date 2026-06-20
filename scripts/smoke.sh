@@ -7,14 +7,14 @@
 #
 # Kullanım:
 #   scripts/smoke.sh
-#   API_BASE=http://127.0.0.1:8050 WEB_BASE=http://127.0.0.1:3050 scripts/smoke.sh
+#   API_BASE=http://127.0.0.1:9050 WEB_BASE=http://127.0.0.1:4050 scripts/smoke.sh
 #   SKIP_WEB=true scripts/smoke.sh        # yalnızca API
 #
 # PAPER_SAFE / NO_EXECUTION: bu script salt-okur GET'ler atar; emir üretmez.
 set -uo pipefail
 
-API_BASE="${API_BASE:-http://127.0.0.1:8000}"
-WEB_BASE="${WEB_BASE:-http://127.0.0.1:3000}"
+API_BASE="${API_BASE:-http://127.0.0.1:9000}"
+WEB_BASE="${WEB_BASE:-http://127.0.0.1:4000}"
 SKIP_WEB="${SKIP_WEB:-false}"
 
 PASS=0

@@ -19,6 +19,14 @@ from packages.paper.lifecycle import (
 from packages.paper.lifecycle import (
     tick as price_tick,
 )
+from packages.paper.recheck import compute_rechecks
+from packages.paper.ticket import build_tickets_from_decisions
+from packages.notifications import append_many, list_recent, mark_ack, mark_all_ack, unread_count
+from packages.notifications import detector as notif_detector
+
+# Tick-içi geçici state (proses ömrü) — diff detector için
+_PREV_STATE: dict = {"ticket_ids": set(), "verdicts": {}, "risk_action": None, "dqs": None}
+_LAST_TICKETS: list[dict] = []
 from packages.risk import halt as halt_store
 from packages.risk.engine import RiskInput
 
@@ -86,12 +94,56 @@ def _serialize_state(ps: paper_state.PaperState) -> dict:
         "audit_summary": paper_audit.summary(),
         "recent_audit_events": paper_audit.read_recent(20),
         "manual_ready_count": len(ps.manual_ready),
+        # Recheck (UX-A14): her tick'te decide_matrix yan ürünü. Boşsa henüz tick
+        # atılmamış. Sadece öneri — otomatik kapatma YOK; çıkış SL/TP veya manuel.
+        "position_rechecks": list(ps.last_rechecks),
+        "last_recheck_at": ps.last_recheck_at,
     }
 
 
 @router.get("/paper-trading/state")
 def get_paper_state() -> dict:
     return _serialize_state(paper_state.load())
+
+
+@router.get("/paper-trading/tickets")
+def get_tickets() -> dict:
+    """Aktif Trade Ticket'lar — broker'a manuel girmeden önce tek bakış kart.
+
+    Son tick'in actionable kararlarından türetilmiş; karar zincirine dokunmaz.
+    insufficient_rr/invalid ticket'lar UI'da görünmez (filtreli döner).
+    """
+    visible = [t for t in _LAST_TICKETS if t.get("status") == "active"]
+    return {
+        "tickets": visible,
+        "total": len(visible),
+        "last_built_at": datetime.now(UTC).isoformat() if _LAST_TICKETS else None,
+    }
+
+
+@router.get("/notifications")
+def get_notifications(limit: int = 50, unread_only: bool = False) -> dict:
+    """Bildirim listesi (en yeni önce). unread_only=true → sadece okunmamış."""
+    items = list_recent(limit=limit, unread_only=unread_only)
+    return {
+        "notifications": [n.to_dict() for n in items],
+        "unread_count": unread_count(),
+        "total": len(items),
+    }
+
+
+@router.post("/notifications/{notif_id}/ack")
+def ack_notification(notif_id: str) -> dict:
+    """Bildirimi okundu işaretle."""
+    ok = mark_ack(notif_id)
+    return {"status": "ok" if ok else "not_found", "id": notif_id}
+
+
+@router.post("/notifications/ack-all")
+def ack_all_notifications() -> dict:
+    """Tüm okunmamışları okundu işaretle."""
+    n = mark_all_ack()
+    return {"status": "ok", "marked": n}
 
 
 @router.post("/paper-trading/tick")
@@ -135,6 +187,36 @@ def post_paper_tick() -> dict:
     _regime, _risk, decisions = decide_matrix(
         DEFAULT_SYMBOLS[:4], snap, risk_in, open_positions=ps.open_positions
     )
+
+    # Recheck — açık pozisyonları fresh karara karşı değerlendir (read-only öneri).
+    rechecks = compute_rechecks(ps.open_positions, decisions)
+    ps.last_rechecks = [r.to_dict() for r in rechecks]
+    ps.last_recheck_at = datetime.now(UTC).isoformat()
+
+    # Trade Tickets — actionable kararlar için canlı kart payload'ı (observer).
+    tickets = build_tickets_from_decisions(decisions, snap, ps)
+    ticket_dicts = [t.to_dict() for t in tickets]
+    global _LAST_TICKETS
+    _LAST_TICKETS = ticket_dicts
+
+    # Notification detector — state değişimlerini bildirime çevir (observer).
+    notifs = []
+    notifs += notif_detector.detect_new_tickets(_PREV_STATE["ticket_ids"], ticket_dicts)
+    notifs += notif_detector.detect_expiring_tickets(ticket_dicts)
+    notifs += notif_detector.detect_recheck_changes(_PREV_STATE["verdicts"], ps.last_rechecks)
+    notifs += notif_detector.detect_risk_gate_change(
+        _PREV_STATE["risk_action"], _risk.action, _risk.reason,
+    )
+    notifs += notif_detector.detect_dqs_drop(
+        _PREV_STATE["dqs"], snap.quality.score if snap.quality else None,
+    )
+    if notifs:
+        append_many(notifs)
+
+    _PREV_STATE["ticket_ids"] = {t["id"] for t in ticket_dicts if t.get("status") == "active"}
+    _PREV_STATE["verdicts"] = {r["position_id"]: r["verdict"] for r in ps.last_rechecks}
+    _PREV_STATE["risk_action"] = _risk.action
+    _PREV_STATE["dqs"] = snap.quality.score if snap.quality else None
 
     for cls in closed:
         actions.append(

@@ -47,17 +47,15 @@ def create_app() -> FastAPI:
         lifespan=lifespan,
     )
     # Local dev: DEV_CORS=true → tüm origin'ler. Aksi halde whitelist:
-    # 3000/3001 portları + env'den ek origin (CORS_EXTRA_ORIGINS, virgülle).
+    # 4000 (web) portu + env'den ek origin (CORS_EXTRA_ORIGINS, virgülle).
     extra = os.environ.get("CORS_EXTRA_ORIGINS", "").strip()
     extra_list = [o.strip() for o in extra.split(",") if o.strip()]
     if os.environ.get("DEV_CORS", "").lower() == "true":
         allow_origins = ["*"]
     else:
         allow_origins = [
-            "http://127.0.0.1:3000",
-            "http://localhost:3000",
-            "http://127.0.0.1:3001",
-            "http://localhost:3001",
+            "http://127.0.0.1:4000",
+            "http://localhost:4000",
             *extra_list,
         ]
     app.add_middleware(

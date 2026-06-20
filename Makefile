@@ -3,9 +3,9 @@
 
 help:
 	@echo "Clean E-yAy — make targets"
-	@echo "  dev          Start API (8000) + web (3000) together (Ctrl+C kapatır)"
-	@echo "  api-dev      FastAPI --reload (8000)"
-	@echo "  web-dev      Next.js dev (3000)"
+	@echo "  dev          Start API (9000) + web (4000) together (Ctrl+C kapatır)"
+	@echo "  api-dev      FastAPI --reload (9000)"
+	@echo "  web-dev      Next.js dev (4000)"
 	@echo "  workers      tick_worker daemon + learning_worker one-shot (scripts/workers.sh)"
 	@echo "  smoke        Health smoke (API + web SSR; scripts/smoke.sh)"
 	@echo "  prod-up      Local production: API+web+tick (background) + learning seed"
@@ -36,10 +36,10 @@ test:
 # otomatik kullan; env'de zaten set ise ona dokunma.
 api-dev:
 	PYTHONPATH=. SSL_CERT_FILE="$${SSL_CERT_FILE:-$$(python3 -m certifi 2>/dev/null || python -m certifi 2>/dev/null || true)}" \
-		uvicorn apps.api.main:app --reload --host 127.0.0.1 --port 8000
+		uvicorn apps.api.main:app --reload --host 127.0.0.1 --port 9000
 
 web-dev:
-	cd apps/web && pnpm dev
+	cd apps/web && pnpm dev --port 4000
 
 dev:
 	./scripts/dev.sh
@@ -54,7 +54,7 @@ smoke:
 	./scripts/smoke.sh
 
 # Local production runbook (background pid+log data/runtime/ altında).
-# İzole port: API_PORT=8060 WEB_PORT=3060 make prod-up
+# İzole port: API_PORT=9060 WEB_PORT=4060 make prod-up
 prod-up:
 	./scripts/prod_up.sh
 
@@ -65,7 +65,7 @@ prod-status:
 	./scripts/prod_status.sh
 
 prod-smoke:
-	API_BASE="http://127.0.0.1:$${API_PORT:-8000}" WEB_BASE="http://127.0.0.1:$${WEB_PORT:-3000}" ./scripts/smoke.sh
+	API_BASE="http://127.0.0.1:$${API_PORT:-9000}" WEB_BASE="http://127.0.0.1:$${WEB_PORT:-4000}" ./scripts/smoke.sh
 
 compose-up:
 	docker compose -f docker-compose.dev.yml up --build

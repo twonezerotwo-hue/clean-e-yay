@@ -140,6 +140,74 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/paper-trading/tickets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Aktif Trade Ticket'lar (broker'a manuel girmeden tek-bakış kart) */
+        get: operations["getTradeTickets"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/notifications": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Bildirim listesi (en yeni önce; observer — karar vermez) */
+        get: operations["getNotifications"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/notifications/{id}/ack": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Bildirimi okundu işaretle */
+        post: operations["ackNotification"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/notifications/ack-all": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Tüm okunmamış bildirimleri okundu işaretle */
+        post: operations["ackAllNotifications"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/paper-trading/manual-ready": {
         parameters: {
             query?: never;
@@ -993,6 +1061,87 @@ export interface components {
             recent_audit_events?: components["schemas"]["PaperAuditEvent"][];
             /** @description P2 — owner onayı bekleyen aday sayısı (DEFENSIVE/CRISIS). */
             manual_ready_count?: number;
+            /**
+             * @description UX-A14 — tick yan ürünü, her açık pozisyon için fresh karara karşı
+             *     verdict (OK/WATCH/REDUCE/EXIT_RECOMMEND). Read-only öneri; otomatik
+             *     kapatma YOK. Çıkış yine SL/TP veya manuel close üzerinden.
+             */
+            position_rechecks?: components["schemas"]["PositionRecheck"][];
+            /** @description Son recheck zamanı (ISO-8601 UTC). null → henüz tick atılmadı. */
+            last_recheck_at?: string | null;
+        };
+        /**
+         * @description Broker'a manuel girmeden önce tek-bakış kart payload'ı. Karar
+         *     zincirinin gözlemleyicisi — yeni karar üretmez. Şema iki katmanlı:
+         *     `summary` (stable field, agent + UI), `technical_detail` (collapsed
+         *     derin veri), `display` (önceden hazırlanmış Türkçe stringler).
+         */
+        TradeTicket: {
+            id: string;
+            symbol: string;
+            /** @enum {string} */
+            side: "long" | "short";
+            timeframe: string;
+            /** @enum {string} */
+            status: "active" | "insufficient_rr" | "invalid";
+            expires_at: string;
+            ttl_seconds: number;
+            /** @description Entry/SL/TP/size/confidence/rr stable field'lar */
+            summary?: {
+                [key: string]: unknown;
+            };
+            /** @description 7 bölüm derin veri (konsensüs/piyasa/geçmiş/güvenlik/sizing/kalibrasyon/audit) */
+            technical_detail?: {
+                [key: string]: unknown;
+            };
+            /** @description title, expiry_text, why_bullets, safety_lines (pre-rendered) */
+            display?: {
+                [key: string]: unknown;
+            };
+        };
+        TradeTicketList: {
+            tickets: components["schemas"]["TradeTicket"][];
+            total: number;
+            last_built_at?: string | null;
+        };
+        Notification: {
+            id: string;
+            ts: string;
+            /** @enum {string} */
+            type: "ticket_created" | "ticket_expiring" | "ticket_expired" | "ticket_blocked" | "recheck_exit_recommend" | "recheck_reduce" | "risk_gate_changed" | "risk_kill_switch" | "catalyst_imminent" | "dqs_dropped" | "position_near_sl" | "position_near_tp";
+            /** @enum {string} */
+            priority: "critical" | "high" | "medium" | "low";
+            title: string;
+            body_short: string;
+            body_long?: string;
+            ticket_id?: string | null;
+            position_id?: string | null;
+            actions?: {
+                [key: string]: unknown;
+            }[];
+            ack?: boolean;
+        };
+        NotificationList: {
+            notifications: components["schemas"]["Notification"][];
+            unread_count: number;
+            total: number;
+        };
+        PositionRecheck: {
+            position_id: string;
+            symbol: string;
+            timeframe: string;
+            /** @enum {string} */
+            side: "long" | "short";
+            /** @enum {string} */
+            verdict: "OK" | "WATCH" | "REDUCE" | "EXIT_RECOMMEND";
+            reason: string;
+            /** @enum {string|null} */
+            fresh_action?: "open_long" | "open_short" | "hold" | "blocked" | null;
+            /** @enum {string|null} */
+            fresh_direction?: "bullish" | "bearish" | "neutral" | null;
+            fresh_confidence?: number | null;
+            pnl_pct: number;
+            checked_at: string;
         };
         ManualReadyTrade: {
             id: string;
@@ -2384,6 +2533,97 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["TickResult"];
+                };
+            };
+        };
+    };
+    getTradeTickets: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TradeTicketList"];
+                };
+            };
+        };
+    };
+    getNotifications: {
+        parameters: {
+            query?: {
+                limit?: number;
+                unread_only?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NotificationList"];
+                };
+            };
+        };
+    };
+    ackNotification: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        status?: string;
+                        id?: string;
+                    };
+                };
+            };
+        };
+    };
+    ackAllNotifications: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        status?: string;
+                        marked?: number;
+                    };
                 };
             };
         };

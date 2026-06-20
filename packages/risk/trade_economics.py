@@ -144,6 +144,131 @@ def evaluate_trade(
     )
 
 
+# ── Adaptive SL/TP — Trade Ticket için sembol/TF bazında SL/TP üretici ───────
+# `evaluate_trade` yalnızca verilen (entry, stop, target) üçlüsünü doğrular.
+# Bu fonksiyon ise (entry, atr, optional support/resistance) verilince SL+TP
+# üretir. Adaptif kural: SL=ATR×1.5 sabit; TP = min(ATR×4.5)→max(ATR×6.75)
+# aralığında, doğal direnç/destek varsa onu, yoksa ATR tabanı.
+#  - Doğal hedef ATR tabanından KISA ise: rr_floor_met=False (sinyal yetersiz)
+#  - Doğal hedef ATR tavanından UZAK ise: ATR tavanı kullanılır (yapı zorlanmaz)
+#  - Aksi halde: doğal hedef kullanılır
+@dataclass(frozen=True)
+class AdaptiveTargets:
+    sl: float
+    tp: float
+    rr: float
+    sl_basis: str       # "atr" | "invalid"
+    tp_basis: str       # "resistance" | "support" | "atr_floor" | "atr_max" | "below_floor" | "invalid"
+    rr_floor_met: bool  # rr ≥ min_rr (yetersizse sinyal atlanmalı)
+    sl_distance: float
+    notes: list[str] = field(default_factory=list)
+
+
+def compute_adaptive_targets(
+    side: str,
+    entry: float,
+    atr: float,
+    *,
+    support: float | None = None,
+    resistance: float | None = None,
+    atr_mult_sl: float = 1.5,
+    min_rr: float = 3.0,
+    max_rr: float = 4.5,
+) -> AdaptiveTargets:
+    """side='long'/'short' için entry+atr ve opsiyonel S/R ile adaptif SL/TP üret.
+
+    SL mesafesi sabit (ATR×atr_mult_sl). TP'nin minimum hedefi SL × min_rr
+    (yani entry'den ATR × atr_mult_sl × min_rr uzakta), maksimumu SL × max_rr.
+    Doğal hedef (long için direnç, short için destek) varsa aralık içinde
+    kullanılır; aralığın altındaysa sinyal yetersiz; üstündeyse ATR tavanı.
+    """
+    notes: list[str] = []
+    if entry <= 0 or atr <= 0:
+        return AdaptiveTargets(
+            sl=0.0, tp=0.0, rr=0.0,
+            sl_basis="invalid", tp_basis="invalid",
+            rr_floor_met=False, sl_distance=0.0,
+            notes=["entry veya atr geçersiz"],
+        )
+    if side not in {"long", "short"}:
+        return AdaptiveTargets(
+            sl=0.0, tp=0.0, rr=0.0,
+            sl_basis="invalid", tp_basis="invalid",
+            rr_floor_met=False, sl_distance=0.0,
+            notes=[f"side bilinmiyor: {side}"],
+        )
+
+    sl_distance = atr * atr_mult_sl
+    tp_min_dist = sl_distance * min_rr
+    tp_max_dist = sl_distance * max_rr
+
+    if side == "long":
+        sl = entry - sl_distance
+        tp_min = entry + tp_min_dist
+        tp_max = entry + tp_max_dist
+        natural = resistance if (resistance is not None and resistance > entry) else None
+        if natural is None:
+            tp, tp_basis = tp_min, "atr_floor"
+            notes.append("doğal direnç yok; ATR tabanı kullanıldı (1:%.1f)" % min_rr)
+        elif natural < tp_min:
+            # Yetersiz fırsat — sinyal atlanmalı
+            rr = (natural - entry) / sl_distance
+            return AdaptiveTargets(
+                sl=sl, tp=natural, rr=rr,
+                sl_basis="atr", tp_basis="below_floor",
+                rr_floor_met=False, sl_distance=sl_distance,
+                notes=[
+                    "direnç %.2f, minimum 1:%.1f için %.2f gerekirdi"
+                    % (natural, min_rr, tp_min),
+                    "R/R yetersiz — sinyal atlanmalı",
+                ],
+            )
+        elif natural > tp_max:
+            tp, tp_basis = tp_max, "atr_max"
+            notes.append("doğal direnç çok uzakta; ATR tavanı kullanıldı (1:%.1f)" % max_rr)
+        else:
+            tp, tp_basis = natural, "resistance"
+            notes.append("doğal direnç hedef olarak kullanıldı")
+    else:  # short
+        sl = entry + sl_distance
+        tp_min = entry - tp_min_dist
+        tp_max = entry - tp_max_dist
+        natural = support if (support is not None and support < entry) else None
+        if natural is None:
+            tp, tp_basis = tp_min, "atr_floor"
+            notes.append("doğal destek yok; ATR tabanı kullanıldı (1:%.1f)" % min_rr)
+        elif natural > tp_min:
+            rr = (entry - natural) / sl_distance
+            return AdaptiveTargets(
+                sl=sl, tp=natural, rr=rr,
+                sl_basis="atr", tp_basis="below_floor",
+                rr_floor_met=False, sl_distance=sl_distance,
+                notes=[
+                    "destek %.2f, minimum 1:%.1f için %.2f gerekirdi"
+                    % (natural, min_rr, tp_min),
+                    "R/R yetersiz — sinyal atlanmalı",
+                ],
+            )
+        elif natural < tp_max:
+            tp, tp_basis = tp_max, "atr_max"
+            notes.append("doğal destek çok uzakta; ATR tavanı kullanıldı (1:%.1f)" % max_rr)
+        else:
+            tp, tp_basis = natural, "support"
+            notes.append("doğal destek hedef olarak kullanıldı")
+
+    rr = abs(tp - entry) / sl_distance
+    return AdaptiveTargets(
+        sl=round(sl, 4),
+        tp=round(tp, 4),
+        rr=round(rr, 4),
+        sl_basis="atr",
+        tp_basis=tp_basis,
+        rr_floor_met=rr >= min_rr,
+        sl_distance=round(sl_distance, 4),
+        notes=notes,
+    )
+
+
 def tf_size_cap(timeframe: str) -> float:
     """`timeframe_risk.risk_multiplier`'dan TF size tavanı (≤1.0; yalnız küçültür).
 

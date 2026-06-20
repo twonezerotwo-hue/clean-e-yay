@@ -1,7 +1,7 @@
 # Clean E-yAy — local dev compose.
 # Tek komut: `docker compose -f docker-compose.dev.yml up --build`
-# API   → http://127.0.0.1:8000
-# Web   → http://127.0.0.1:3000
+# API   → http://127.0.0.1:9000
+# Web   → http://127.0.0.1:4000
 #
 # Notlar:
 # - Lokalde node/pnpm yoksa bu compose ile çalıştır.
@@ -17,14 +17,14 @@ services:
       bash -lc "pip install --no-cache-dir 'fastapi' 'uvicorn[standard]' 'pydantic>=2'
                                             'pyyaml' 'httpx' &&
                 exec uvicorn apps.api.main:app --reload
-                  --host 0.0.0.0 --port 8000"
+                  --host 0.0.0.0 --port 9000"
     environment:
       - PYTHONPATH=/app
       - DEV_CORS=true
       - PRICE_USE_MOCK=false   # runtime mock yasak; live provider'lar
       # - FRED_API_KEY=<key>   # opsiyonel
     ports:
-      - "8000:8000"
+      - "9000:9000"
     volumes:
       - .:/app
 
@@ -34,11 +34,11 @@ services:
     command: >
       sh -lc "corepack enable && corepack prepare pnpm@9.0.0 --activate &&
               pnpm install --no-frozen-lockfile &&
-              pnpm dev --port 3000 --hostname 0.0.0.0"
+              pnpm dev --port 4000 --hostname 0.0.0.0"
     environment:
-      - NEXT_PUBLIC_API_BASE_URL=http://127.0.0.1:8000
+      - NEXT_PUBLIC_API_BASE_URL=http://127.0.0.1:9000
     ports:
-      - "3000:3000"
+      - "4000:4000"
     volumes:
       - .:/app
     depends_on:

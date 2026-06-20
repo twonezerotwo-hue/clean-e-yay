@@ -151,6 +151,10 @@ class PaperState:
     daily_anchor_date: str = ""
     manual_ready: list[ManualReady] = field(default_factory=list)
     rejected_signals: list[RejectedSignal] = field(default_factory=list)
+    # Tick yan ürünü: açık pozisyon başına recheck verdict listesi (read-only öneri).
+    # Boş ise henüz tick atılmamış demektir; legacy kayıtlar default boş yüklenir.
+    last_rechecks: list[dict] = field(default_factory=list)
+    last_recheck_at: str | None = None
 
     def to_dict(self) -> dict:
         return {
@@ -164,6 +168,8 @@ class PaperState:
             "recent_trades": [asdict(t) for t in self.recent_trades[-200:]],
             "manual_ready": [asdict(m) for m in self.manual_ready],
             "rejected_signals": [asdict(r) for r in self.rejected_signals],
+            "last_rechecks": list(self.last_rechecks),
+            "last_recheck_at": self.last_recheck_at,
         }
 
     @classmethod
@@ -196,6 +202,10 @@ class PaperState:
                 for r in d.get("rejected_signals", [])
                 if isinstance(r, dict)
             ],
+            last_rechecks=[
+                r for r in d.get("last_rechecks", []) if isinstance(r, dict)
+            ],
+            last_recheck_at=d.get("last_recheck_at") or None,
         )
 
 

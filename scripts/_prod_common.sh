@@ -25,8 +25,8 @@ if [ -f "$ROOT/.env" ]; then
 fi
 
 API_HOST="${API_HOST:-127.0.0.1}"
-API_PORT="${API_PORT:-8000}"
-WEB_PORT="${WEB_PORT:-3000}"
+API_PORT="${API_PORT:-9000}"
+WEB_PORT="${WEB_PORT:-4000}"
 
 RUN_DIR="$ROOT/data/runtime/run"
 LOG_DIR="$ROOT/data/runtime/logs"
@@ -47,7 +47,7 @@ detect_old_agents() {
   hit="$(launchctl list 2>/dev/null | awk '/com\.eyay/{print $3}' | tr '\n' ' ')"
   if [ -n "$hit" ]; then
     echo "[prod] UYARI: eski E_YAY CODEX LaunchAgent'ları aktif: $hit" >&2
-    echo "       (örn. com.eyay.backend → *:8000 / com.eyay.frontend → :3000 port çakışması)" >&2
+    echo "       (örn. com.eyay.backend → *:9000 / com.eyay.frontend → :4000 port çakışması)" >&2
     echo "       Oturum bazlı kapat (plist silmeden): launchctl bootout gui/\$(id -u)/com.eyay.backend" >&2
   fi
 }

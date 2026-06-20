@@ -171,6 +171,44 @@ export const useReplayStatus = () =>
 export const useChat = () =>
   useMutation({ mutationFn: (message: string) => api.chat(message) });
 
+/** UX-A15 — Trade Tickets (broker handoff payload). */
+export const useTradeTickets = () =>
+  useQuery({
+    queryKey: qk.tradeTickets,
+    queryFn: api.tradeTickets,
+    staleTime: 10_000,
+    refetchInterval: 15_000,
+  });
+
+/** UX-A16 — Notifications (observer; karar vermez). */
+export const useNotifications = () =>
+  useQuery({
+    queryKey: qk.notifications,
+    queryFn: () => api.notifications(false),
+    staleTime: 5_000,
+    refetchInterval: 10_000,
+  });
+
+export const useAckNotification = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => api.ackNotification(id),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: qk.notifications });
+    },
+  });
+};
+
+export const useAckAllNotifications = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: api.ackAllNotifications,
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: qk.notifications });
+    },
+  });
+};
+
 /** G5 — owner reset (tek manuel çıkış yolu; otomatik reset yok). */
 export const useHaltReset = () => {
   const queryClient = useQueryClient();
