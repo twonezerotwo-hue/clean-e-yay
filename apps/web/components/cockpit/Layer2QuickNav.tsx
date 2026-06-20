@@ -3,7 +3,7 @@
 
 import Link from "next/link";
 
-// KATMAN 1 → KATMAN 2 hızlı geçiş. Hedefler app/page.tsx (tek sayfalık panel
+// KATMAN 1 → KATMAN 2 hızlı geçiş. Hedefler /dashboard (tek sayfalık panel
 // dashboard) + panel hash'i. Panel id'leri panel-registry.ts ile doğrulanmalı;
 // yanlış id'de en kötü Katman 2 ana sayfasına düşülür.
 
@@ -29,7 +29,7 @@ export function Layer2QuickNav() {
         {NAV.map((n) => (
           <Link
             key={n.panelId}
-            href={`/#${n.panelId}`}
+            href={`/dashboard#${n.panelId}`}
             className="rounded-lg border border-white/12 bg-white/[0.03] px-3 py-1.5 text-xs text-white/70 hover:border-accent-cyan/40 hover:text-white transition-colors"
           >
             {n.label}

@@ -104,10 +104,10 @@ export function CockpitCard(p: CockpitCardProps) {
 }
 
 // ── Katman 2 hedefleri ──────────────────────────────────────────────────────
-// NOT: Katman 2 tek sayfalık panel dashboard'u (app/page.tsx). Derin link için
-// panel id'leri panel-registry.ts ile DOĞRULANMALI; şimdilik "/" + hash (panel
-// görünürse tarayıcı oraya kaydırır). Yanlış id'de en kötü Katman 2'ye düşer.
-const L2 = (panelId: string) => `/#${panelId}`;
+// NOT: Katman 2 tek sayfalık panel dashboard'u (/dashboard). Derin link için
+// panel id'leri panel-registry.ts ile doğrulanır. Yanlış id'de en kötü
+// /dashboard'a düşer.
+const L2 = (panelId: string) => `/dashboard#${panelId}`;
 const T = {
   decision: { href: L2("decision_trace"), label: "Decision & Evidence" },
   risk: { href: L2("risk_gate"), label: "Risk & Execution" },
