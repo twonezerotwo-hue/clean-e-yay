@@ -95,7 +95,8 @@ def _worker_view(name: str, threshold_sec: int, now: datetime) -> dict:
 
 
 def _provider_summary(provider_status: dict) -> dict:
-    counts = {"ok": 0, "degraded": 0, "down": 0, "unknown": 0}
+    # "disabled" = config eksik (opsiyonel entegrasyon kapalı) — degraded değil.
+    counts = {"ok": 0, "degraded": 0, "down": 0, "unknown": 0, "disabled": 0}
     for info in (provider_status or {}).values():
         raw = info.get("status") if isinstance(info, dict) else info
         st = str(raw or "unknown").lower()
@@ -158,8 +159,13 @@ def build_system_health() -> dict:
     if risk_halt_status["active"]:
         warnings.append("active_halt")
 
+    # Cold-start / kullanıcı-eylemi gerektiren beklenen durumlar overall'u
+    # degraded'a düşürmesin (warning yine raporlanır).
+    INFO_ONLY = {"learning_worker_no_data", "snapshot_store_empty"}
+    severe = [w for w in warnings if w not in INFO_ONLY]
+
     return {
-        "api_status": "degraded" if warnings else "ok",
+        "api_status": "degraded" if severe else "ok",
         "paper_safe": True,
         "no_execution": True,
         "workers": {"tick_worker": tick, "learning_worker": learning},

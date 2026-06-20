@@ -87,6 +87,19 @@ def _mark(
             st["fallbacks"] += 1
 
 
+def _mark_disabled(name: str, *, error: str) -> None:
+    """Provider config eksik (örn. API key yok) → 'disabled' = beklenen durum.
+
+    'degraded' DEĞİL — kullanıcının opsiyonel bir entegrasyonu açmama
+    tercihi runtime hatası gibi sayılmamalı.
+    """
+    with _LOCK:
+        st = _STATUS[name]
+        st["calls"] += 1
+        st["status"] = "disabled"
+        st["last_error"] = error
+
+
 def get_provider_status() -> dict[str, dict]:
     with _LOCK:
         return {k: dict(v) for k, v in _STATUS.items()}
@@ -135,6 +148,11 @@ def _try_live(symbol: str) -> PriceQuote:
             error="no live provider configured for symbol",
         )
     name = _provider_name(primary)
+    # Config eksikse provider'ı çağırma — disabled olarak işaretle.
+    cfg_err = _config_missing(name)
+    if cfg_err:
+        _mark_disabled(name, error=cfg_err)
+        return _data_unavailable(symbol, source=name, error=cfg_err)
     try:
         q = primary.get_quote(symbol)
     except Exception as exc:
@@ -142,8 +160,8 @@ def _try_live(symbol: str) -> PriceQuote:
         _mark(name, ok=False, error=msg)
         return _data_unavailable(symbol, source=name, error=msg)
     if q is None:
-        # Live provider sebepleri kendi içinde swallow ediyor (key yok, HTTP
-        # hatası, parse hatası); ortak DATA_UNAVAILABLE üret.
+        # Live provider sebepleri kendi içinde swallow ediyor (HTTP hatası,
+        # parse hatası); ortak DATA_UNAVAILABLE üret.
         reason = _explain_none(name)
         _mark(name, ok=False, error=reason)
         return _data_unavailable(symbol, source=name, error=reason)
@@ -151,9 +169,17 @@ def _try_live(symbol: str) -> PriceQuote:
     return q
 
 
-def _explain_none(provider_name: str) -> str:
+def _config_missing(provider_name: str) -> str | None:
+    """Provider'ı çağırmadan önce config eksikliğini tespit et.
+
+    None döner → provider çağrılabilir; str döner → disabled olarak işaretle.
+    """
     if provider_name == "fred" and not os.environ.get("FRED_API_KEY"):
-        return "FRED_API_KEY missing"
+        return "FRED_API_KEY missing (set to enable Fed/macro series)"
+    return None
+
+
+def _explain_none(provider_name: str) -> str:
     return "provider returned no data"
 
 

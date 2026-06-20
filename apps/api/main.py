@@ -8,8 +8,19 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
+import sys
 import time
 from contextlib import asynccontextmanager
+
+# Windows-only: ProactorEventLoop (Python 3.8+ default on win32) crashes the
+# whole API process when it sees malformed accept events — observed in
+# practice under Cloudflare Tunnel / Worker reverse-proxy traffic with
+# "OSError: [WinError 64] Belirtilen ağ adı artık geçersiz" bubbling up
+# out of the accept coroutine and never being retrieved.
+# SelectorEventLoop on Windows tolerates these silently and is fine for
+# uvicorn workloads (no subprocess on the event loop, < 64 sockets).
+if sys.platform == "win32":
+    asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
