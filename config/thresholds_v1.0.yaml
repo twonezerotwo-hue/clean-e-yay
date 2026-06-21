@@ -2,10 +2,14 @@ version: "1.0.0"
 created_at: "2026-06-11"
 
 consensus:
-  bullish_min: 60
-  bearish_max: 40
-  strong_bullish_min: 70
-  strong_bearish_max: 30
+  # 2026-06-20: 60/40 → 55/45 (strong 70/30 → 65/35). Sebep: TF
+  # segmentasyonu 4×5=20 hücre üretiyordu ama hepsi 50-55 bandında
+  # kilitleniyordu; eşik geçilemiyor, sinyal yok. weights_v1.1'le
+  # touche ağırlığı arttı, bu eşik bandıyla TF'ler yön çevirebilir.
+  bullish_min: 55
+  bearish_max: 45
+  strong_bullish_min: 65
+  strong_bearish_max: 35
 
 dqs:
   min_for_decision: 55
@@ -30,7 +34,11 @@ timeframe_risk:
   "1h":  { role: confirmation, risk_multiplier: 0.50, paper_execution: true,  time_stop_hours: 48 }
   "4h":  { role: tactical,     risk_multiplier: 1.00, paper_execution: true,  time_stop_hours: 168 }
   "1d":  { role: swing,        risk_multiplier: 1.00, paper_execution: true,  time_stop_hours: 672 }
-  "1w":  { role: strategic,    risk_multiplier: 0.00, paper_execution: false, time_stop_hours: 0 }
+  # 2026-06-20: 1w paper_execution false→true, multiplier 0→0.50,
+  # time_stop 0→336 (2 hafta). 1w strategic sinyaller paper trade
+  # açabilsin diye — sadece bias değil. Multiplier düşük tutuldu;
+  # 1w pozisyon küçük açılır, RiskGate yine final.
+  "1w":  { role: strategic,    risk_multiplier: 0.50, paper_execution: true,  time_stop_hours: 336 }
 
 # P0 — Olay riski (event risk) yalnızca KISITLAYICIDIR. Yaklaşan, doğrulanmış
 # (verified) yüksek etkili takvim olayı varsa yeni pozisyon açılışını kısar;
