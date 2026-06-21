@@ -1,7 +1,9 @@
 "use client";
 
 import Link from "next/link";
+import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
+import { motion } from "framer-motion";
 
 import { DataQualityBadge } from "@/components/shell/DataQualityBadge";
 import { EmptyState } from "@/components/shell/EmptyState";
@@ -35,6 +37,58 @@ import { SpaceBrainScene } from "./SpaceBrainScene";
 // Layer 2: grouped deep panels under /dashboard.
 // Layer 3: raw backend/provider/contract spine, read-only.
 
+type LayerIndex = 0 | 1 | 2 | 3;
+
+type LayerMeta = {
+  index: LayerIndex;
+  code: string;
+  title: string;
+  shortTitle: string;
+  subtitle: string;
+  depth: string;
+};
+
+const LAYERS: LayerMeta[] = [
+  {
+    index: 0,
+    code: "00",
+    title: "E-yAy Brain",
+    shortTitle: "Brain",
+    subtitle: "ilk acilis / kendi kendine tarama / iletisim",
+    depth: "dis yuzey",
+  },
+  {
+    index: 1,
+    code: "01",
+    title: "Ozet Odasi",
+    shortTitle: "Ozet",
+    subtitle: "6 ana karar yuzeyi / operasyon bakisi",
+    depth: "operasyon odasi",
+  },
+  {
+    index: 2,
+    code: "02",
+    title: "Grup Detaylari",
+    shortTitle: "Detay",
+    subtitle: "kanit, risk, piyasa yapisi ve analiz gruplari",
+    depth: "analiz cekirdegi",
+  },
+  {
+    index: 3,
+    code: "03",
+    title: "Veri Omurgasi",
+    shortTitle: "Veri",
+    subtitle: "backend viewmodel / provider / snapshot / sistem sagligi",
+    depth: "makine odasi",
+  },
+];
+
+function parseLayerHash(hash: string): LayerIndex | null {
+  const match = hash.match(/layer-(\d)/);
+  const value = match ? Number(match[1]) : NaN;
+  return value >= 0 && value <= 3 ? (value as LayerIndex) : null;
+}
+
 function formatGeneratedAt(value?: string) {
   if (!value) return "snapshot bekleniyor";
   const date = new Date(value);
@@ -60,21 +114,21 @@ function LayerBadge({ index, label }: { index: string; label: string }) {
 }
 
 function LayerHeader({
-  index,
-  title,
+  meta,
   detail,
   children,
 }: {
-  index: string;
-  title: string;
+  meta: LayerMeta;
   detail: string;
   children?: ReactNode;
 }) {
   return (
     <header className="flex flex-col gap-3 border-b border-white/[0.08] pb-3 md:flex-row md:items-end md:justify-between">
       <div>
-        <LayerBadge index={index} label="katman" />
-        <h2 className="mt-3 font-display text-2xl leading-none text-white md:text-3xl">{title}</h2>
+        <LayerBadge index={meta.code} label={meta.depth} />
+        <h2 className="mt-3 font-display text-2xl leading-none text-white md:text-3xl">
+          Katman {meta.index} - {meta.title}
+        </h2>
         <p className="mt-2 max-w-3xl text-sm leading-6 text-white/55">{detail}</p>
       </div>
       {children ? <div className="shrink-0">{children}</div> : null}
@@ -99,7 +153,42 @@ function HudMetric({
   );
 }
 
-function ScanRow({
+function ScanButton({
+  label,
+  value,
+  ok,
+  onClick,
+}: {
+  label: string;
+  value: string;
+  ok: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="grid w-full grid-cols-[auto_1fr_auto] items-center gap-3 rounded-lg border border-white/10 bg-white/[0.035] px-3 py-2 text-left transition-colors hover:border-accent-cyan/35 hover:bg-white/[0.055]"
+    >
+      <span
+        className={`h-2.5 w-2.5 rounded-full shadow-[0_0_14px_currentColor] ${
+          ok ? "bg-signal-up text-signal-up" : "bg-amber-400 text-amber-400"
+        }`}
+      />
+      <span className="min-w-0">
+        <span className="block truncate text-xs text-white/80">{label}</span>
+        <span className="block truncate text-[10px] uppercase tracking-widest text-white/35">
+          {value}
+        </span>
+      </span>
+      <span className={ok ? "text-[10px] text-signal-up" : "text-[10px] text-amber-300"}>
+        {ok ? "OK" : "IZLE"}
+      </span>
+    </button>
+  );
+}
+
+function ScanLink({
   label,
   value,
   ok,
@@ -184,9 +273,215 @@ function DataSpineCard({
   );
 }
 
+function LayerRail({
+  activeLayer,
+  onSelect,
+}: {
+  activeLayer: LayerIndex;
+  onSelect: (layer: LayerIndex) => void;
+}) {
+  return (
+    <nav className="pointer-events-auto fixed left-4 top-1/2 z-40 hidden -translate-y-1/2 xl:block">
+      <div className="rounded-full border border-white/10 bg-black/34 p-2 shadow-[0_22px_70px_rgba(0,0,0,0.34)] backdrop-blur-xl">
+        <div className="flex flex-col gap-2">
+          {LAYERS.map((layer) => {
+            const active = layer.index === activeLayer;
+            return (
+              <button
+                key={layer.code}
+                type="button"
+                onClick={() => onSelect(layer.index)}
+                className={`group flex w-[92px] items-center gap-2 rounded-full border px-2 py-2 text-left transition-all ${
+                  active
+                    ? "border-accent-cyan/55 bg-accent-cyan/12 text-white shadow-[0_0_22px_rgba(34,211,238,0.18)]"
+                    : "border-white/8 bg-white/[0.025] text-white/46 hover:border-white/18 hover:text-white/75"
+                }`}
+                aria-current={active ? "page" : undefined}
+              >
+                <span className="font-display text-xs text-accent-cyan">{layer.code}</span>
+                <span className="text-[10px] uppercase tracking-widest">{layer.shortTitle}</span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+    </nav>
+  );
+}
+
+function LayerControls({
+  activeLayer,
+  onSelect,
+}: {
+  activeLayer: LayerIndex;
+  onSelect: (layer: LayerIndex) => void;
+}) {
+  const previous = activeLayer > 0 ? ((activeLayer - 1) as LayerIndex) : null;
+  const next = activeLayer < 3 ? ((activeLayer + 1) as LayerIndex) : null;
+
+  return (
+    <div className="pointer-events-auto fixed bottom-4 left-1/2 z-40 flex -translate-x-1/2 items-center gap-2 rounded-full border border-white/10 bg-black/34 p-2 shadow-[0_22px_70px_rgba(0,0,0,0.34)] backdrop-blur-xl">
+      <button
+        type="button"
+        disabled={previous == null}
+        onClick={() => previous != null && onSelect(previous)}
+        className="rounded-full border border-white/10 px-3 py-2 text-xs text-white/62 transition-colors hover:border-white/24 hover:text-white disabled:cursor-not-allowed disabled:opacity-30"
+      >
+        Geri
+      </button>
+      <div className="hidden items-center gap-1 sm:flex">
+        {LAYERS.map((layer) => (
+          <button
+            key={layer.code}
+            type="button"
+            onClick={() => onSelect(layer.index)}
+            className={`h-2.5 rounded-full transition-all ${
+              layer.index === activeLayer
+                ? "w-8 bg-accent-cyan"
+                : "w-2.5 bg-white/24 hover:bg-white/45"
+            }`}
+            aria-label={`Katman ${layer.index}`}
+          />
+        ))}
+      </div>
+      <button
+        type="button"
+        disabled={next == null}
+        onClick={() => next != null && onSelect(next)}
+        className="rounded-full border border-accent-cyan/35 bg-accent-cyan/8 px-3 py-2 text-xs text-accent-cyan transition-colors hover:bg-accent-cyan/14 disabled:cursor-not-allowed disabled:opacity-30"
+      >
+        Iceri gir
+      </button>
+    </div>
+  );
+}
+
+function LayerDepthBackdrop({
+  activeLayer,
+  brief,
+}: {
+  activeLayer: LayerIndex;
+  brief: NonNullable<ReturnType<typeof selectAgentBrief>>;
+}) {
+  return (
+    <div className="pointer-events-none absolute inset-0 overflow-hidden">
+      <motion.div
+        className="absolute inset-0"
+        animate={{
+          scale: 1 + activeLayer * 0.12,
+          opacity: activeLayer === 0 ? 1 : 0.56,
+          filter: activeLayer >= 2 ? "blur(5px)" : "blur(0px)",
+        }}
+        transition={{ duration: 0.8, ease: [0.22, 1, 0.36, 1] }}
+      >
+        <SpaceBrainScene brief={brief} />
+      </motion.div>
+      <motion.div
+        className="absolute inset-0"
+        animate={{ opacity: activeLayer === 0 ? 0 : 0.78, scale: 0.98 + activeLayer * 0.04 }}
+        transition={{ duration: 0.8, ease: [0.22, 1, 0.36, 1] }}
+      >
+        <QuantumBackplaneScene brief={brief} />
+      </motion.div>
+      <motion.div
+        className="absolute inset-0 bg-[radial-gradient(circle_at_58%_46%,rgba(20,184,166,0.13),transparent_26%),radial-gradient(circle_at_72%_16%,rgba(251,191,36,0.09),transparent_23%),linear-gradient(180deg,rgba(2,3,10,0.2),rgba(2,3,10,0.92))]"
+        animate={{ opacity: 0.58 + activeLayer * 0.1 }}
+      />
+      <motion.div
+        className="absolute inset-0 opacity-[0.16] [background-image:linear-gradient(rgba(255,255,255,0.58)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.58)_1px,transparent_1px)] [background-size:58px_58px]"
+        animate={{ scale: 1 + activeLayer * 0.04, opacity: activeLayer >= 2 ? 0.22 : 0.12 }}
+      />
+    </div>
+  );
+}
+
+function LayerStage({
+  activeLayer,
+  direction,
+  children,
+}: {
+  activeLayer: LayerIndex;
+  direction: number;
+  children: ReactNode;
+}) {
+  return (
+    <div
+      className="relative z-10 mx-auto h-screen max-w-7xl px-4 pb-24 pt-4 md:px-6 md:pb-20 md:pt-5 xl:pl-24"
+      style={{ perspective: 1800 }}
+    >
+      <motion.section
+        key={activeLayer}
+        initial={{
+          opacity: 0,
+          scale: direction >= 0 ? 1.16 : 0.84,
+          z: direction >= 0 ? -360 : 260,
+          rotateX: direction >= 0 ? 7 : -5,
+          filter: "blur(18px)",
+        }}
+        animate={{
+          opacity: 1,
+          scale: 1,
+          z: 0,
+          rotateX: 0,
+          filter: "blur(0px)",
+        }}
+        transition={{ duration: 0.58, ease: [0.22, 1, 0.36, 1] }}
+        className="h-full overflow-hidden rounded-2xl border border-white/10 bg-[#05080d]/58 shadow-[0_28px_90px_rgba(0,0,0,0.36)] backdrop-blur-md"
+        style={{ transformStyle: "preserve-3d" }}
+      >
+        {children}
+      </motion.section>
+    </div>
+  );
+}
+
 export function CockpitView() {
   const { data, isLoading } = useCockpitBrief();
   const { data: ticketList } = useTradeTickets();
+  const [activeLayer, setActiveLayer] = useState<LayerIndex>(0);
+  const [direction, setDirection] = useState(1);
+
+  const activateLayer = (next: LayerIndex) => {
+    setDirection(next >= activeLayer ? 1 : -1);
+    setActiveLayer(next);
+  };
+
+  useEffect(() => {
+    const applyHash = () => {
+      const fromHash = parseLayerHash(window.location.hash);
+      if (fromHash != null) {
+        setActiveLayer((current) => {
+          if (fromHash === current) return current;
+          setDirection(fromHash > current ? 1 : -1);
+          return fromHash;
+        });
+      }
+    };
+    applyHash();
+    window.addEventListener("hashchange", applyHash);
+    return () => window.removeEventListener("hashchange", applyHash);
+  }, []);
+
+  useEffect(() => {
+    const nextHash = `#layer-${activeLayer}`;
+    if (window.location.hash !== nextHash) {
+      window.history.replaceState(null, "", nextHash);
+    }
+  }, [activeLayer]);
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return;
+      const target = event.target as HTMLElement | null;
+      if (target?.closest("input, textarea, [contenteditable='true']")) return;
+      event.preventDefault();
+      const delta = event.key === "ArrowDown" ? 1 : -1;
+      const next = Math.min(3, Math.max(0, activeLayer + delta)) as LayerIndex;
+      if (next !== activeLayer) activateLayer(next);
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [activeLayer]);
 
   if (isLoading) {
     return (
@@ -234,164 +529,164 @@ export function CockpitView() {
         .join(" / ")
     : "radar bos";
 
-  return (
-    <main className="min-h-screen overflow-hidden bg-[#05070b] text-white">
-      <section className="relative min-h-screen overflow-hidden border-b border-white/10 bg-[#02030a]">
-        <SpaceBrainScene brief={brief} />
-        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_72%_42%,rgba(20,184,166,0.1),transparent_30%),linear-gradient(180deg,rgba(2,3,10,0.28),rgba(2,3,10,0.92))]" />
-        <div className="pointer-events-none absolute inset-x-0 bottom-0 h-32 bg-gradient-to-t from-[#05070b] to-transparent" />
+  const currentMeta = LAYERS[activeLayer];
+  let layerContent: ReactNode;
+  if (activeLayer === 0) {
+    layerContent = (
+        <div className="grid h-full min-h-0 gap-5 p-4 md:p-5 lg:grid-cols-[minmax(0,0.92fr)_minmax(340px,0.58fr)]">
+          <section className="flex min-h-0 flex-col justify-center">
+            <LayerBadge index="00" label="ilk ekran" />
+            <h1 className={`mt-5 max-w-2xl font-display text-4xl leading-[0.98] sm:text-5xl md:text-6xl ${decisionTone}`}>
+              {decisionTitle}
+            </h1>
+            <p className="mt-4 max-w-2xl text-sm leading-6 text-white/68">{decisionDetail}</p>
 
-        <div className="relative z-10 mx-auto flex min-h-screen max-w-7xl flex-col px-4 py-4 md:py-5">
-          <header className="flex items-center justify-between gap-3">
-            <div className="flex min-w-0 items-center gap-3">
-              <div className="grid h-10 w-10 shrink-0 place-items-center rounded-full border border-accent-cyan/35 bg-accent-cyan/10 font-display text-sm text-accent-cyan shadow-[0_0_28px_rgba(34,211,238,0.16)]">
-                EY
-              </div>
-              <div className="min-w-0">
-                <div className="text-[10px] uppercase tracking-widest text-white/42">Katman 0</div>
-                <div className="truncate font-display text-sm text-white/86">
-                  E-yAy Brain
-                </div>
-              </div>
+            <div className="mt-6 grid max-w-3xl grid-cols-2 gap-2 sm:grid-cols-4">
+              <HudMetric
+                label="Durum"
+                value={AGENT_STATUS_LABEL[brief.status] ?? brief.status}
+                tone={AGENT_STATUS_TONE[brief.status]}
+              />
+              <HudMetric
+                label="DQS"
+                value={formatScore(dqs)}
+                tone={
+                  (dqs ?? 0) >= 80
+                    ? "text-signal-up"
+                    : (dqs ?? 0) >= 60
+                      ? "text-amber-300"
+                      : "text-signal-down"
+                }
+              />
+              <HudMetric label="Aday" value={String(candidates.length)} tone="text-emerald-200" />
+              <HudMetric label="Pozisyon" value={String(openPaperPositions)} tone="text-amber-200" />
             </div>
-            <div className="flex shrink-0 items-center gap-2">
-              <span className="hidden rounded-full border border-white/10 bg-white/[0.04] px-2 py-1 text-[10px] uppercase tracking-widest text-white/55 sm:inline-flex">
-                {brief.data_mode}
-              </span>
-              <span className="rounded-full border border-amber-400/20 bg-amber-400/8 px-2 py-1 text-[10px] uppercase tracking-widest text-amber-300">
-                NO_EXECUTION
-              </span>
+
+            <div className="mt-6 grid gap-2 md:grid-cols-2">
+              <ScanButton
+                label="Veri omurgasi"
+                value={`DQS ${formatScore(dqs)} / ${brief.data_mode}`}
+                ok={dataTrusted}
+                onClick={() => activateLayer(3)}
+              />
+              <ScanLink label="Risk kapisi" value={riskAction} ok={riskClear} href="/dashboard#risk_gate" />
+              <ScanButton
+                label="Sinyal adaylari"
+                value={`${actionableCount} actionable / ${candidates.length} izlenen`}
+                ok={actionableCount > 0}
+                onClick={() => activateLayer(1)}
+              />
+              <ScanLink
+                label="Trade ticket"
+                value={activeTicket ? activeTicket.symbol : "ticket yok"}
+                ok={Boolean(activeTicket)}
+                href="/dashboard#trade_ticket"
+              />
             </div>
-          </header>
 
-          <div className="grid flex-1 items-center gap-5 py-5 lg:grid-cols-[minmax(0,0.92fr)_minmax(340px,0.58fr)]">
-            <section className="max-w-3xl">
-              <LayerBadge index="00" label="ilk ekran" />
-              <h1 className={`mt-5 max-w-2xl font-display text-4xl leading-[0.98] sm:text-5xl md:text-6xl ${decisionTone}`}>
-                {decisionTitle}
-              </h1>
-              <p className="mt-4 max-w-2xl text-sm leading-6 text-white/68">{decisionDetail}</p>
-
-              <div className="mt-6 grid max-w-3xl grid-cols-2 gap-2 sm:grid-cols-4">
-                <HudMetric
-                  label="Durum"
-                  value={AGENT_STATUS_LABEL[brief.status] ?? brief.status}
-                  tone={AGENT_STATUS_TONE[brief.status]}
-                />
-                <HudMetric
-                  label="DQS"
-                  value={formatScore(dqs)}
-                  tone={
-                    (dqs ?? 0) >= 80
-                      ? "text-signal-up"
-                      : (dqs ?? 0) >= 60
-                        ? "text-amber-300"
-                        : "text-signal-down"
-                  }
-                />
-                <HudMetric label="Aday" value={String(candidates.length)} tone="text-emerald-200" />
-                <HudMetric label="Pozisyon" value={String(openPaperPositions)} tone="text-amber-200" />
+            {watch.length ? (
+              <div className="mt-5 flex flex-wrap gap-2">
+                {watch.map((item, index) => (
+                  <span
+                    key={`${item.key}-${index}`}
+                    className="rounded-full border border-white/10 bg-black/28 px-3 py-1 text-[11px] text-white/64 backdrop-blur-md"
+                  >
+                    {item.label}
+                  </span>
+                ))}
               </div>
-
-              <div className="mt-6 grid gap-2 md:grid-cols-2">
-                <ScanRow label="Veri omurgasi" value={`DQS ${formatScore(dqs)} / ${brief.data_mode}`} ok={dataTrusted} href="#layer-3" />
-                <ScanRow label="Risk kapisi" value={riskAction} ok={riskClear} href="/dashboard#risk_gate" />
-                <ScanRow label="Sinyal adaylari" value={`${actionableCount} actionable / ${candidates.length} izlenen`} ok={actionableCount > 0} href="#layer-1" />
-                <ScanRow label="Trade ticket" value={activeTicket ? activeTicket.symbol : "ticket yok"} ok={Boolean(activeTicket)} href="/dashboard#trade_ticket" />
-              </div>
-
-              {watch.length ? (
-                <div className="mt-5 flex flex-wrap gap-2">
-                  {watch.map((item, index) => (
-                    <span
-                      key={`${item.key}-${index}`}
-                      className="rounded-full border border-white/10 bg-black/28 px-3 py-1 text-[11px] text-white/64 backdrop-blur-md"
-                    >
-                      {item.label}
-                    </span>
-                  ))}
-                </div>
-              ) : null}
-            </section>
-
-            <aside className="space-y-3">
-              <AgentBriefingPanel />
-              <ChatPanel />
-            </aside>
-          </div>
-        </div>
-      </section>
-
-      <section
-        id="layer-1"
-        className="relative overflow-hidden border-t border-white/[0.08] bg-[radial-gradient(circle_at_18%_4%,rgba(167,139,250,0.08),transparent_28%),radial-gradient(circle_at_84%_12%,rgba(251,191,36,0.07),transparent_26%),linear-gradient(180deg,rgba(3,5,12,0.98),rgba(6,8,14,0.99))]"
-      >
-        <QuantumBackplaneScene brief={brief} />
-        <div className="quantum-dashboard-grid pointer-events-none absolute inset-0 z-[1]" />
-        <div className="relative z-10 mx-auto max-w-7xl space-y-5 px-4 py-6">
-          <LayerHeader
-            index="01"
-            title="Katman 1 - Ozet Odasi"
-            detail="Yazi kalabaligi yerine 6 ana karar yuzeyi: kontrol dongusu, sinyal, makro risk, takvim, senaryo, rotasyon ve haber radari."
-          >
-            <DataQualityBadge dqs={dqs} generatedAt={data?.generated_at} />
-          </LayerHeader>
-
-          <ExecutionReadinessPanel />
-
-          <HolographicSignalDeck brief={brief} />
-
-          <MacroRiskStrip />
-
-          <section className="quantum-panel-cluster grid grid-cols-1 gap-5 xl:grid-cols-2">
-            <EventCalendarPanel />
-            <ScenarioPanel />
+            ) : null}
           </section>
 
-          <CapitalRotationPanel />
-
-          <NewsPanel />
+          <aside className="min-h-0 space-y-3 overflow-y-auto pr-1">
+            <AgentBriefingPanel />
+            <ChatPanel />
+          </aside>
         </div>
-      </section>
+      );
+  } else if (activeLayer === 1) {
+    layerContent = (
+        <div className="h-full overflow-y-auto p-4 md:p-5">
+          <div className="space-y-5">
+            <LayerHeader
+              meta={LAYERS[1]}
+              detail="Yazi kalabaligi yerine ana karar yuzeyleri: kontrol dongusu, sinyal, makro risk, takvim, senaryo, rotasyon ve haber radari."
+            >
+              <DataQualityBadge dqs={dqs} generatedAt={data?.generated_at} />
+            </LayerHeader>
 
-      <section id="layer-2" className="border-t border-white/[0.08] bg-[#05070b]">
-        <div className="mx-auto max-w-7xl space-y-5 px-4 py-6">
-          <LayerHeader
-            index="02"
-            title="Katman 2 - Grup Detaylari"
-            detail="Katman 1'de ozet gordugun her yuzeyin detayli panel grubu burada. Bu katman okuma ve inceleme icin, emir uretmez."
-          />
-          <div className="rounded-lg border border-white/10 bg-[#090d12]/72 p-4">
-            <Layer2QuickNav />
-          </div>
-          <div className="grid gap-3 md:grid-cols-3">
-            <LayerPortalCard
-              layer="karar"
-              title="Decision & Evidence"
-              detail="Final durum, ana blocker, karar izi ve agent oy birligi."
-              href="/dashboard#decision_trace"
-            />
-            <LayerPortalCard
-              layer="risk"
-              title="Risk & Execution"
-              detail="RiskGate, drawdown, paper action ve pozisyon kontrolleri."
-              href="/dashboard#risk_gate"
-            />
-            <LayerPortalCard
-              layer="piyasa"
-              title="Market Structure"
-              detail="TF matrisi, korelasyon, volatilite, options, turev ve rotasyon."
-              href="/dashboard#correlation"
-            />
+            <ExecutionReadinessPanel />
+            <HolographicSignalDeck brief={brief} />
+            <MacroRiskStrip />
+
+            <section className="quantum-panel-cluster grid grid-cols-1 gap-5 xl:grid-cols-2">
+              <EventCalendarPanel />
+              <ScenarioPanel />
+            </section>
+
+            <CapitalRotationPanel />
+            <NewsPanel />
           </div>
         </div>
-      </section>
-
-      <section id="layer-3" className="border-t border-white/[0.08] bg-[#03050a]">
-        <div className="mx-auto max-w-7xl space-y-5 px-4 py-6">
+      );
+  } else if (activeLayer === 2) {
+    layerContent = (
+        <div className="h-full overflow-y-auto p-4 md:p-5">
+          <div className="space-y-5">
+            <LayerHeader
+              meta={LAYERS[2]}
+              detail="Katman 1'de ozet gordugun her yuzeyin detayli panel grubu burada. Bu katman okuma ve inceleme icin, emir uretmez."
+            />
+            <div className="rounded-lg border border-white/10 bg-[#090d12]/72 p-4">
+              <Layer2QuickNav />
+            </div>
+            <div className="grid gap-3 md:grid-cols-3">
+              <LayerPortalCard
+                layer="karar"
+                title="Decision & Evidence"
+                detail="Final durum, ana blocker, karar izi ve agent oy birligi."
+                href="/dashboard#decision_trace"
+              />
+              <LayerPortalCard
+                layer="risk"
+                title="Risk & Execution"
+                detail="RiskGate, drawdown, paper action ve pozisyon kontrolleri."
+                href="/dashboard#risk_gate"
+              />
+              <LayerPortalCard
+                layer="piyasa"
+                title="Market Structure"
+                detail="TF matrisi, korelasyon, volatilite, options, turev ve rotasyon."
+                href="/dashboard#correlation"
+              />
+              <LayerPortalCard
+                layer="haber"
+                title="Macro, Catalyst & News"
+                detail="Haber radari, olay takvimi ve catalyst etkileri."
+                href="/dashboard#catalyst_impact"
+              />
+              <LayerPortalCard
+                layer="ogrenme"
+                title="Paper & Learning"
+                detail="Paper state, kalibrasyon, mistake memory ve shadow karsilastirma."
+                href="/dashboard#paper_action"
+              />
+              <LayerPortalCard
+                layer="ops"
+                title="Ops & Replay"
+                detail="Replay, system health ve panel audit izleme."
+                href="/dashboard#replay_status"
+              />
+            </div>
+          </div>
+        </div>
+      );
+  } else {
+    layerContent = (
+      <div className="h-full overflow-y-auto p-4 md:p-5">
+        <div className="space-y-5">
           <LayerHeader
-            index="03"
-            title="Katman 3 - Veri Omurgasi"
+            meta={LAYERS[3]}
             detail="Backendten gelen viewmodel, provider, snapshot ve sistem sagligi burada toplanir. Frontend bu veriyi degistirmez."
           />
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
@@ -424,8 +719,53 @@ export function CockpitView() {
               tone="text-accent-cyan"
             />
           </div>
+          <div className="rounded-lg border border-white/10 bg-black/24 p-4">
+            <Layer2QuickNav />
+          </div>
         </div>
-      </section>
+      </div>
+    );
+  }
+
+  return (
+    <main className="relative h-screen overflow-hidden bg-[#02030a] text-white">
+      <LayerDepthBackdrop activeLayer={activeLayer} brief={brief} />
+
+      <div className="pointer-events-none fixed inset-x-0 top-0 z-30 border-b border-white/[0.08] bg-black/18 backdrop-blur-md">
+        <div className="mx-auto flex max-w-7xl items-center justify-between gap-3 px-4 py-3 md:px-6 xl:pl-24">
+          <div className="flex min-w-0 items-center gap-3">
+            <div className="grid h-10 w-10 shrink-0 place-items-center rounded-full border border-accent-cyan/35 bg-accent-cyan/10 font-display text-sm text-accent-cyan shadow-[0_0_28px_rgba(34,211,238,0.16)]">
+              EY
+            </div>
+            <div className="min-w-0">
+              <div className="text-[10px] uppercase tracking-widest text-white/42">
+                Katman {currentMeta.index} / {currentMeta.depth}
+              </div>
+              <div className="truncate font-display text-sm text-white/86">{currentMeta.title}</div>
+            </div>
+          </div>
+          <div className="hidden min-w-0 flex-1 justify-center md:flex">
+            <div className="truncate rounded-full border border-white/10 bg-white/[0.035] px-3 py-1 text-[10px] uppercase tracking-widest text-white/42">
+              {currentMeta.subtitle}
+            </div>
+          </div>
+          <div className="flex shrink-0 items-center gap-2">
+            <span className="hidden rounded-full border border-white/10 bg-white/[0.04] px-2 py-1 text-[10px] uppercase tracking-widest text-white/55 sm:inline-flex">
+              {brief.data_mode}
+            </span>
+            <span className="rounded-full border border-amber-400/20 bg-amber-400/8 px-2 py-1 text-[10px] uppercase tracking-widest text-amber-300">
+              NO_EXECUTION
+            </span>
+          </div>
+        </div>
+      </div>
+
+      <LayerRail activeLayer={activeLayer} onSelect={activateLayer} />
+      <LayerControls activeLayer={activeLayer} onSelect={activateLayer} />
+
+      <LayerStage activeLayer={activeLayer} direction={direction}>
+        {layerContent}
+      </LayerStage>
     </main>
   );
 }
