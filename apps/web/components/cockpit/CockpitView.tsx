@@ -6,6 +6,7 @@ import type { ReactNode } from "react";
 import { motion } from "framer-motion";
 
 import { DataQualityBadge } from "@/components/shell/DataQualityBadge";
+import { DashboardGrid, GridCell } from "@/components/shell/DashboardGrid";
 import { EmptyState } from "@/components/shell/EmptyState";
 import { LoadingState } from "@/components/shell/LoadingState";
 import { useCockpitBrief, useTradeTickets } from "@/lib/queries/hooks";
@@ -17,13 +18,48 @@ import {
   selectAgentBrief,
 } from "@/lib/selectors/cockpit";
 
+import { AgentBriefPanel } from "@/components/panels/AgentBriefPanel";
 import { AgentBriefingPanel } from "@/components/panels/AgentBriefingPanel";
+import { AgentMatrixPanel } from "@/components/panels/AgentMatrixPanel";
+import { AgentVotesPanel } from "@/components/panels/AgentVotesPanel";
+import { AIReportPanel } from "@/components/panels/AIReportPanel";
+import { CalibrationPanel } from "@/components/panels/CalibrationPanel";
 import { CapitalRotationPanel } from "@/components/panels/CapitalRotationPanel";
 import { ChatPanel } from "@/components/panels/ChatPanel";
+import { CommandSignalsPanel } from "@/components/panels/CommandSignalsPanel";
+import { CorrelationPanel } from "@/components/panels/CorrelationPanel";
+import { CryptoDerivativesPanel } from "@/components/panels/CryptoDerivativesPanel";
+import { DataQualityPanel } from "@/components/panels/DataQualityPanel";
+import { DecisionPanel } from "@/components/panels/DecisionPanel";
+import { DecisionTracePanel } from "@/components/panels/DecisionTracePanel";
+import { DrawdownGuardPanel } from "@/components/panels/DrawdownGuardPanel";
 import { EventCalendarPanel } from "@/components/panels/EventCalendarPanel";
 import { ExecutionReadinessPanel } from "@/components/panels/ExecutionReadinessPanel";
+import { HaberlerCatalystPanel } from "@/components/panels/HaberlerCatalystPanel";
+import { LearningPanel } from "@/components/panels/LearningPanel";
+import { MarketDataPanel } from "@/components/panels/MarketDataPanel";
+import { MarketSessionsPanel } from "@/components/panels/MarketSessionsPanel";
+import { MistakeMemoryPanel } from "@/components/panels/MistakeMemoryPanel";
 import { NewsPanel } from "@/components/panels/NewsPanel";
+import { OptionsVolPanel } from "@/components/panels/OptionsVolPanel";
+import { PanelAuditPanel } from "@/components/panels/PanelAuditPanel";
+import { PaperActionPanel } from "@/components/panels/PaperActionPanel";
+import { PositionChecksPanel } from "@/components/panels/PositionChecksPanel";
+import { ProviderStatusPanel } from "@/components/panels/ProviderStatusPanel";
+import { ReplayStatusPanel } from "@/components/panels/ReplayStatusPanel";
+import { RiskDurumuPanel } from "@/components/panels/RiskDurumuPanel";
 import { ScenarioPanel } from "@/components/panels/ScenarioPanel";
+import { ShadowPanel } from "@/components/panels/ShadowPanel";
+import { SnapshotPanel } from "@/components/panels/SnapshotPanel";
+import { SystemHealthBar } from "@/components/panels/SystemHealthBar";
+import { TfWeightsPanel } from "@/components/panels/TfWeightsPanel";
+import { TimeframeMatrixPanel } from "@/components/panels/TimeframeMatrixPanel";
+import { TradeTicketPanel } from "@/components/panels/TradeTicketPanel";
+import { TradingPanel } from "@/components/panels/TradingPanel";
+import { VolatilityPanel } from "@/components/panels/VolatilityPanel";
+import { WatchConditionsPanel } from "@/components/panels/WatchConditionsPanel";
+import { WeightHistoryPanel } from "@/components/panels/WeightHistoryPanel";
+import { WeightProposalPanel } from "@/components/panels/WeightProposalPanel";
 
 import { HolographicSignalDeck } from "./HolographicSignalDeck";
 import { Layer2QuickNav } from "./Layer2QuickNav";
@@ -222,29 +258,37 @@ function ScanLink({
   );
 }
 
-function LayerPortalCard({
-  layer,
+function Layer2DetailGroup({
+  index,
   title,
   detail,
-  href,
+  children,
 }: {
-  layer: string;
+  index: string;
   title: string;
   detail: string;
-  href: string;
+  children: ReactNode;
 }) {
   return (
-    <Link
-      href={href}
-      className="group rounded-lg border border-white/10 bg-[#090d12]/76 p-4 transition-colors hover:border-accent-cyan/35 hover:bg-[#0b1118]/90"
-    >
-      <div className="flex items-center justify-between gap-3">
-        <span className="text-[10px] uppercase tracking-widest text-accent-cyan/70">{layer}</span>
-        <span className="text-white/24 transition-colors group-hover:text-accent-cyan">/</span>
-      </div>
-      <div className="mt-3 font-display text-lg leading-tight text-white/92">{title}</div>
-      <p className="mt-2 text-xs leading-5 text-white/52">{detail}</p>
-    </Link>
+    <section className="layer2-detail-group">
+      <div className="layer2-detail-scan" />
+      <header className="relative z-10 mb-4 flex flex-col gap-3 border-b border-white/[0.08] pb-3 md:flex-row md:items-end md:justify-between">
+        <div className="min-w-0">
+          <div className="flex items-center gap-3">
+            <span className="layer2-detail-index">{index}</span>
+            <div className="h-px flex-1 bg-gradient-to-r from-accent-cyan/45 via-white/10 to-transparent" />
+          </div>
+          <h3 className="mt-3 font-display text-xl leading-none text-white/92 md:text-2xl">
+            {title}
+          </h3>
+          <p className="mt-2 max-w-4xl text-sm leading-6 text-white/52">{detail}</p>
+        </div>
+        <span className="shrink-0 rounded-full border border-accent-cyan/20 bg-accent-cyan/8 px-3 py-1 text-[10px] uppercase tracking-widest text-accent-cyan/72">
+          read-only
+        </span>
+      </header>
+      <div className="relative z-10">{children}</div>
+    </section>
   );
 }
 
@@ -632,52 +676,209 @@ export function CockpitView() {
   } else if (activeLayer === 2) {
     layerContent = (
         <div className="h-full overflow-y-auto p-4 md:p-5">
-          <div className="space-y-5">
+          <div className="space-y-6 pb-12">
             <LayerHeader
               meta={LAYERS[2]}
-              detail="Katman 1'de ozet gordugun her yuzeyin detayli panel grubu burada. Bu katman okuma ve inceleme icin, emir uretmez."
-            />
-            <div className="rounded-lg border border-white/10 bg-[#090d12]/72 p-4">
-              <Layer2QuickNav />
-            </div>
-            <div className="grid gap-3 md:grid-cols-3">
-              <LayerPortalCard
-                layer="karar"
-                title="Decision & Evidence"
-                detail="Final durum, ana blocker, karar izi ve agent oy birligi."
-                href="/dashboard#decision_trace"
+              detail="Tum detay panelleri link veya tab olmadan burada acik durur. Bu katman okuma ve inceleme icin, emir uretmez."
+            >
+              <DataQualityBadge dqs={dqs} generatedAt={data?.generated_at} />
+            </LayerHeader>
+
+            <div className="layer2-command-strip grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+              <HudMetric label="Grup" value="7" tone="text-accent-cyan" />
+              <HudMetric
+                label="Sinyal"
+                value={`${actionableCount}/${candidates.length}`}
+                tone={actionableCount > 0 ? "text-signal-up" : "text-amber-300"}
               />
-              <LayerPortalCard
-                layer="risk"
-                title="Risk & Execution"
-                detail="RiskGate, drawdown, paper action ve pozisyon kontrolleri."
-                href="/dashboard#risk_gate"
+              <HudMetric
+                label="Risk"
+                value={riskAction}
+                tone={riskClear ? "text-signal-up" : "text-signal-down"}
               />
-              <LayerPortalCard
-                layer="piyasa"
-                title="Market Structure"
-                detail="TF matrisi, korelasyon, volatilite, options, turev ve rotasyon."
-                href="/dashboard#correlation"
-              />
-              <LayerPortalCard
-                layer="haber"
-                title="Macro, Catalyst & News"
-                detail="Haber radari, olay takvimi ve catalyst etkileri."
-                href="/dashboard#catalyst_impact"
-              />
-              <LayerPortalCard
-                layer="ogrenme"
-                title="Paper & Learning"
-                detail="Paper state, kalibrasyon, mistake memory ve shadow karsilastirma."
-                href="/dashboard#paper_action"
-              />
-              <LayerPortalCard
-                layer="ops"
-                title="Ops & Replay"
-                detail="Replay, system health ve panel audit izleme."
-                href="/dashboard#replay_status"
+              <HudMetric
+                label="Veri"
+                value={`DQS ${formatScore(dqs)}`}
+                tone={DATA_MODE_TONE[brief.data_mode]}
               />
             </div>
+
+            <Layer2DetailGroup
+              index="01"
+              title="Karar ve Agent Kaniti"
+              detail="Agent brief, final karar, AI raporu, karar izi, oy birligi ve shadow karsilastirmasi."
+            >
+              <DashboardGrid>
+                <GridCell span="1">
+                  <AgentBriefPanel />
+                </GridCell>
+                <GridCell span="1">
+                  <DecisionPanel />
+                </GridCell>
+                <GridCell span="1">
+                  <AIReportPanel />
+                </GridCell>
+                <GridCell span="2">
+                  <DecisionTracePanel />
+                </GridCell>
+                <GridCell span="1">
+                  <AgentVotesPanel />
+                </GridCell>
+                <GridCell span="2">
+                  <AgentMatrixPanel />
+                </GridCell>
+                <GridCell span="1">
+                  <ShadowPanel />
+                </GridCell>
+              </DashboardGrid>
+            </Layer2DetailGroup>
+
+            <Layer2DetailGroup
+              index="02"
+              title="Islem ve Risk Kapisi"
+              detail="Trade ticket, RiskGate, drawdown guard, paper action, pozisyon kontrolleri ve seans uygunlugu."
+            >
+              <DashboardGrid>
+                <GridCell span="1">
+                  <TradeTicketPanel />
+                </GridCell>
+                <GridCell span="1">
+                  <RiskDurumuPanel />
+                </GridCell>
+                <GridCell span="1">
+                  <DrawdownGuardPanel />
+                </GridCell>
+                <GridCell span="1">
+                  <PaperActionPanel />
+                </GridCell>
+                <GridCell span="1">
+                  <PositionChecksPanel />
+                </GridCell>
+                <GridCell span="1">
+                  <MarketSessionsPanel />
+                </GridCell>
+                <GridCell span="2">
+                  <WatchConditionsPanel />
+                </GridCell>
+              </DashboardGrid>
+            </Layer2DetailGroup>
+
+            <Layer2DetailGroup
+              index="03"
+              title="Sinyal ve Timeframe Yapisi"
+              detail="Komut sinyalleri, tum timeframe matrisi ve timeframe agirliklari tek akis icinde."
+            >
+              <DashboardGrid>
+                <GridCell span="full">
+                  <CommandSignalsPanel />
+                </GridCell>
+                <GridCell span="2">
+                  <TimeframeMatrixPanel />
+                </GridCell>
+                <GridCell span="1">
+                  <TfWeightsPanel />
+                </GridCell>
+              </DashboardGrid>
+            </Layer2DetailGroup>
+
+            <Layer2DetailGroup
+              index="04"
+              title="Piyasa Yapisi"
+              detail="Turev, volatilite, options, korelasyon ve sermaye rotasyonu panelleri."
+            >
+              <DashboardGrid>
+                <GridCell span="1">
+                  <CryptoDerivativesPanel />
+                </GridCell>
+                <GridCell span="1">
+                  <VolatilityPanel />
+                </GridCell>
+                <GridCell span="1">
+                  <OptionsVolPanel />
+                </GridCell>
+                <GridCell span="2">
+                  <CorrelationPanel />
+                </GridCell>
+                <GridCell span="1">
+                  <CapitalRotationPanel />
+                </GridCell>
+              </DashboardGrid>
+            </Layer2DetailGroup>
+
+            <Layer2DetailGroup
+              index="05"
+              title="Makro, Catalyst ve Haber"
+              detail="Haber catalyst katmani, olay takvimi ve senaryo analizi ayni okuma sirasi icinde."
+            >
+              <DashboardGrid>
+                <GridCell span="2">
+                  <HaberlerCatalystPanel />
+                </GridCell>
+                <GridCell span="1">
+                  <EventCalendarPanel />
+                </GridCell>
+                <GridCell span="2">
+                  <ScenarioPanel />
+                </GridCell>
+              </DashboardGrid>
+            </Layer2DetailGroup>
+
+            <Layer2DetailGroup
+              index="06"
+              title="Ogrenme ve Kalibrasyon"
+              detail="Paper/trading kaydi, ogrenme durumu, agirlik onerileri, kalibrasyon ve hata hafizasi."
+            >
+              <DashboardGrid>
+                <GridCell span="1">
+                  <TradingPanel />
+                </GridCell>
+                <GridCell span="1">
+                  <LearningPanel />
+                </GridCell>
+                <GridCell span="1">
+                  <WeightProposalPanel />
+                </GridCell>
+                <GridCell span="1">
+                  <WeightHistoryPanel />
+                </GridCell>
+                <GridCell span="1">
+                  <CalibrationPanel />
+                </GridCell>
+                <GridCell span="1">
+                  <MistakeMemoryPanel />
+                </GridCell>
+              </DashboardGrid>
+            </Layer2DetailGroup>
+
+            <Layer2DetailGroup
+              index="07"
+              title="Veri Kalitesi ve Operasyon"
+              detail="Provider, snapshot, market data, panel audit, sistem sagligi ve replay durumlari."
+            >
+              <DashboardGrid>
+                <GridCell span="1">
+                  <DataQualityPanel />
+                </GridCell>
+                <GridCell span="1">
+                  <ProviderStatusPanel />
+                </GridCell>
+                <GridCell span="1">
+                  <SnapshotPanel />
+                </GridCell>
+                <GridCell span="1">
+                  <MarketDataPanel />
+                </GridCell>
+                <GridCell span="1">
+                  <PanelAuditPanel />
+                </GridCell>
+                <GridCell span="1">
+                  <SystemHealthBar />
+                </GridCell>
+                <GridCell span="1">
+                  <ReplayStatusPanel />
+                </GridCell>
+              </DashboardGrid>
+            </Layer2DetailGroup>
           </div>
         </div>
       );
