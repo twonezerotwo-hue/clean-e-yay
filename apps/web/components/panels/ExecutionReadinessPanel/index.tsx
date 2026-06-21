@@ -151,33 +151,83 @@ function TradeTicketMini({ ticket }: { ticket?: TradeTicket }) {
   );
 }
 
-function AgentHologram() {
+function HologramAgent() {
+  const particles = Array.from({ length: 28 }, (_, index) => index);
+  const circuitSegments = Array.from({ length: 12 }, (_, index) => index);
+
   return (
-    <aside className="readiness-agent-hologram" aria-hidden="true">
+    <aside className="readiness-agent-hologram readiness-agent-premium" aria-hidden="true">
+      <div className="readiness-agent-grid" />
+      <div className="readiness-agent-noise" />
+      <div className="readiness-agent-aura readiness-agent-aura-outer" />
+      <div className="readiness-agent-aura readiness-agent-aura-inner" />
       <div className="readiness-agent-chip">
         <span>AI AGENT</span>
         <strong>NEXUS 7</strong>
         <em>CALISIYOR</em>
       </div>
-      <span className="readiness-agent-data-thread" />
-      <span className="readiness-agent-ring readiness-agent-ring-a" />
-      <span className="readiness-agent-ring readiness-agent-ring-b" />
-      <span className="readiness-agent-ring readiness-agent-ring-c" />
-      <span className="readiness-agent-head" />
-      <span className="readiness-agent-temple">2047</span>
-      <span className="readiness-agent-neck" />
-      <span className="readiness-agent-body" />
-      <span className="readiness-agent-arm readiness-agent-arm-think" />
-      <span className="readiness-agent-arm readiness-agent-arm-rest" />
-      <span className="readiness-agent-core" />
-      <span className="readiness-agent-chest">2047</span>
-      <span className="readiness-agent-base" />
-      <span className="readiness-agent-particle readiness-agent-particle-a" />
-      <span className="readiness-agent-particle readiness-agent-particle-b" />
-      <span className="readiness-agent-particle readiness-agent-particle-c" />
-      <span className="readiness-agent-particle readiness-agent-particle-d" />
-      <span className="readiness-agent-particle readiness-agent-particle-e" />
-      <span className="readiness-agent-particle readiness-agent-particle-f" />
+      <span className="readiness-agent-data-thread readiness-agent-data-thread-a" />
+      <span className="readiness-agent-data-thread readiness-agent-data-thread-b" />
+      <span className="readiness-agent-beam" />
+      <span className="readiness-agent-orbit readiness-agent-orbit-head" />
+      <span className="readiness-agent-orbit readiness-agent-orbit-torso" />
+      <span className="readiness-agent-orbit readiness-agent-orbit-wide" />
+
+      <div className="readiness-agent-bust">
+        <span className="readiness-agent-halo" />
+        <span className="readiness-agent-cranium" />
+        <span className="readiness-agent-face-mask" />
+        <span className="readiness-agent-eye readiness-agent-eye-left" />
+        <span className="readiness-agent-eye readiness-agent-eye-right" />
+        <span className="readiness-agent-temple-node" />
+        <span className="readiness-agent-jaw" />
+        <span className="readiness-agent-neck-column" />
+        <span className="readiness-agent-shoulders" />
+        <span className="readiness-agent-torso-shell" />
+        <span className="readiness-agent-spine" />
+        <span className="readiness-agent-core-prism" />
+        <span className="readiness-agent-chest-logo">2047</span>
+        <span className="readiness-agent-scan readiness-agent-scan-a" />
+        <span className="readiness-agent-scan readiness-agent-scan-b" />
+      </div>
+
+      <span className="readiness-agent-orbit readiness-agent-orbit-front" />
+      <div className="readiness-agent-emitter">
+        <span />
+        <i />
+      </div>
+
+      {circuitSegments.map((segment) => (
+        <span
+          key={`circuit-${segment}`}
+          className="readiness-agent-circuit"
+          style={
+            {
+              "--circuit-x": `${16 + ((segment * 19) % 66)}%`,
+              "--circuit-y": `${14 + ((segment * 29) % 62)}%`,
+              "--circuit-width": `${42 + ((segment * 17) % 82)}px`,
+              "--circuit-rotation": `${-28 + ((segment * 23) % 58)}deg`,
+              "--circuit-delay": `${segment * -0.22}s`,
+            } as CSSProperties
+          }
+        />
+      ))}
+
+      {particles.map((particle) => (
+        <span
+          key={`particle-${particle}`}
+          className="readiness-agent-particle"
+          style={
+            {
+              "--particle-x": `${10 + ((particle * 37) % 80)}%`,
+              "--particle-y": `${10 + ((particle * 53) % 74)}%`,
+              "--particle-size": `${particle % 6 === 0 ? 4 : particle % 3 === 0 ? 3 : 2}px`,
+              "--particle-delay": `${particle * -0.17}s`,
+              "--particle-opacity": `${0.36 + (particle % 5) * 0.11}`,
+            } as CSSProperties
+          }
+        />
+      ))}
     </aside>
   );
 }
@@ -542,7 +592,16 @@ export function ExecutionReadinessPanel() {
   const allPassed = passedCount === checks.length;
   const activeCheck = checks[activeIndex] ?? checks[0];
   const cycleRemaining = CYCLE_MS - cycleElapsed;
-  const visibleChecks = checks.slice(0, 5);
+  const visibleWindowSize = 4;
+  const visibleStart = Math.min(
+    Math.max(activeIndex - 1, 0),
+    Math.max(0, checks.length - visibleWindowSize),
+  );
+  const visibleChecks = checks
+    .slice(visibleStart, visibleStart + visibleWindowSize)
+    .map((check, offset) => ({ check, index: visibleStart + offset }));
+  const hiddenBefore = visibleStart;
+  const hiddenAfter = Math.max(0, checks.length - visibleStart - visibleChecks.length);
 
   return (
     <PanelFrame id="execution_readiness" className="readiness-panel">
@@ -636,21 +695,28 @@ export function ExecutionReadinessPanel() {
             </div>
 
             <ol className="readiness-sequence-flow">
-              {visibleChecks.map((check, index) => (
+              {hiddenBefore > 0 ? (
+                <li className="readiness-sequence-fade-label">
+                  <span>{String(hiddenBefore).padStart(2, "0")} kontrol hafizada</span>
+                </li>
+              ) : null}
+              {visibleChecks.map(({ check, index }) => (
                 <CheckRow
                   key={check.id}
                   check={check}
                   index={index}
                   active={index === activeIndex}
-                  faded={index > activeIndex + 1 || (activeIndex > 4 && index < 4)}
+                  faded={Math.abs(index - activeIndex) > 1}
                   progress={activeStepProgress}
                 />
               ))}
-              <li className="readiness-sequence-more">
-                <span>06-10</span>
-                <strong>Derin kontroller akista</strong>
-                <em>TF matrix / agent quorum / catalyst / shadow / ticket integrity</em>
-              </li>
+              {hiddenAfter > 0 ? (
+                <li className="readiness-sequence-more">
+                  <span>{String(visibleStart + visibleChecks.length + 1).padStart(2, "0")}-10</span>
+                  <strong>Siradaki kontroller beklemede</strong>
+                  <em>Matrix / quorum / catalyst / shadow / ticket integrity</em>
+                </li>
+              ) : null}
             </ol>
 
             <div className="readiness-footnote">
@@ -662,7 +728,7 @@ export function ExecutionReadinessPanel() {
           </section>
 
           <section className="readiness-ai-zone">
-            <AgentHologram />
+            <HologramAgent />
             <TradeTicketMini ticket={activeTicket} />
           </section>
         </div>
