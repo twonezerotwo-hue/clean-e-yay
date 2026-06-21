@@ -98,14 +98,13 @@ def _documented_get_endpoints():
     for p, item in SPEC["paths"].items():
         if "get" not in item or "{" in p:  # path-param'lı GET ayrı test edilir
             continue
-        schema = (
-            item["get"]
-            .get("responses", {})
-            .get("200", {})
-            .get("content", {})
-            .get("application/json", {})
-            .get("schema")
-        )
+        content = item["get"].get("responses", {}).get("200", {}).get("content", {})
+        # SSE / streaming endpoint'leri request-response değil — blocking
+        # client.get() ile test edilemez (akış kopana dek bekler). Conformance
+        # dışında tutulur.
+        if "text/event-stream" in content:
+            continue
+        schema = content.get("application/json", {}).get("schema")
         out.append((p, schema))
     return out
 

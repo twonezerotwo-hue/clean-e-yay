@@ -1700,3 +1700,19 @@ export type ShadowComparison = {
   calibration: ShadowCalibration;
   rows: ShadowRow[];
 };
+
+export type AgentBriefingTone = "ok" | "info" | "warn" | "alert";
+
+export type AgentBriefingHeadline = {
+  tone: AgentBriefingTone;
+  category: string;
+  title: string;
+  detail?: string | null;
+};
+
+export type AgentBriefing = {
+  generated_at: string;
+  snapshot_id?: string | null;
+  regime_label?: string | null;
+  headlines: AgentBriefingHeadline[];
+};

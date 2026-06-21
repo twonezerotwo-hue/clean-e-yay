@@ -174,7 +174,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/notifications/{id}/ack": {
+    "/api/v1/notifications/{notif_id}/ack": {
         parameters: {
             query?: never;
             header?: never;
@@ -718,6 +718,43 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/agent/briefing": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Raporcu agent — sistem state'inin başlık başlık özeti (observer; karar vermez) */
+        get: operations["getAgentBriefing"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/stream": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Server-Sent Events — agent event akışı (tick.complete, notification.new)
+         * @description text/event-stream. Tek bağlantı açık kalır; sunucu agent event'lerini push'lar. UI EventSource ile dinler. Request-scoped stream (arka plan döngüsü değil).
+         */
+        get: operations["streamEvents"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -1086,18 +1123,45 @@ export interface components {
             status: "active" | "insufficient_rr" | "invalid";
             expires_at: string;
             ttl_seconds: number;
-            /** @description Entry/SL/TP/size/confidence/rr stable field'lar */
-            summary?: {
-                [key: string]: unknown;
-            };
+            summary?: components["schemas"]["TradeTicketSummary"];
             /** @description 7 bölüm derin veri (konsensüs/piyasa/geçmiş/güvenlik/sizing/kalibrasyon/audit) */
             technical_detail?: {
                 [key: string]: unknown;
             };
-            /** @description title, expiry_text, why_bullets, safety_lines (pre-rendered) */
-            display?: {
-                [key: string]: unknown;
-            };
+            display?: components["schemas"]["TradeTicketDisplay"];
+        };
+        /** @description Trade ticket stable field'ları (agent + UI direkt kullanır). */
+        TradeTicketSummary: {
+            entry_price?: number;
+            stop_loss?: number;
+            take_profit?: number;
+            rr_ratio?: number;
+            rr_source?: string;
+            size_usd?: number;
+            size_pct_equity?: number;
+            risk_usd?: number;
+            risk_pct_equity?: number;
+            confidence_calibrated?: number;
+            confidence_raw?: number;
+            confidence_label?: string;
+            consensus_score?: number;
+            /** @enum {string} */
+            consensus_direction?: "bullish" | "bearish" | "neutral";
+            atr?: number;
+        };
+        /** @description Önceden hazırlanmış Türkçe display stringleri (UI + agent). */
+        TradeTicketDisplay: {
+            title?: string;
+            expiry_text?: string;
+            rr_text?: string;
+            rr_note?: string;
+            why_bullets?: string[];
+            safety_lines?: {
+                /** @enum {string} */
+                level?: "ok" | "warn" | "error";
+                text?: string;
+            }[];
+            confidence_text?: string;
         };
         TradeTicketList: {
             tickets: components["schemas"]["TradeTicket"][];
@@ -2364,6 +2428,21 @@ export interface components {
             calibration: components["schemas"]["ShadowCalibration"];
             rows: components["schemas"]["ShadowRow"][];
         };
+        /** @description Raporcu agent tek başlığı (deterministik; karar vermez). */
+        AgentBriefingHeadline: {
+            /** @enum {string} */
+            tone: "ok" | "info" | "warn" | "alert";
+            category: string;
+            title: string;
+            detail?: string | null;
+        };
+        /** @description Raporcu agent — sistem state'ini her cycle tarayıp başlık başlık özet üretir. LLM gerektirmez; karar vermez (observer). */
+        AgentBriefing: {
+            generated_at: string;
+            snapshot_id?: string | null;
+            regime_label?: string | null;
+            headlines: components["schemas"]["AgentBriefingHeadline"][];
+        };
     };
     responses: never;
     parameters: never;
@@ -2585,7 +2664,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                id: string;
+                notif_id: string;
             };
             cookie?: never;
         };
@@ -3289,6 +3368,46 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ShadowComparison"];
+                };
+            };
+        };
+    };
+    getAgentBriefing: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentBriefing"];
+                };
+            };
+        };
+    };
+    streamEvents: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description SSE stream (text/event-stream) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/event-stream": string;
                 };
             };
         };

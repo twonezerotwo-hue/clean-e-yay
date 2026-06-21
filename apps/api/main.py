@@ -6,7 +6,6 @@ Tüm karar mantığı packages/ altındaki paketlerdedir. Eklenen her endpoint
 from __future__ import annotations
 
 import asyncio
-import logging
 import os
 import sys
 import time
@@ -74,75 +73,16 @@ from apps.api.routers import (
 )
 
 _START_TS = time.monotonic()
-_log = logging.getLogger("apps.api.agent")
-
-
-def _env_truthy(name: str, default: str = "true") -> bool:
-    return os.environ.get(name, default).strip().lower() in {"1", "true", "yes", "on"}
-
-
-async def _learning_loop(stop: asyncio.Event, interval: int) -> None:
-    """Wrap learning_worker.run_once in a periodic loop (one-shot script → daemon)."""
-    from apps.learning_worker.main import run_once as learning_run_once
-
-    _log.info("learning loop started, interval=%ds", interval)
-    while not stop.is_set():
-        try:
-            await asyncio.to_thread(learning_run_once)
-        except Exception:
-            _log.exception("learning run_once failed")
-        try:
-            await asyncio.wait_for(stop.wait(), timeout=interval)
-        except TimeoutError:
-            pass
-    _log.info("learning loop stopped")
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    # apps/api ince HTTP katmanı: arka plan döngüsü YOK (architecture guard).
+    # Tick + learning worker'ları ayrı process'lerdir; tek komutla birlikte
+    # çalıştırmak için `python -m apps.supervisor` kullan (api + worker'ları
+    # tek event-loop'ta yönetir, apps/api'yi kirletmeden).
     app.state.started_at = _START_TS
-    app.state.agent_tasks = []
-    app.state.agent_stop = asyncio.Event()
-
-    if _env_truthy("EMBEDDED_WORKERS", "true"):
-        # Tick worker (decisions, paper lifecycle, snapshots) — async loop.
-        from apps.tick_worker.main import run as tick_run
-
-        # Tick worker installs its own SIGTERM/SIGINT handlers when run as a
-        # standalone process. Skip that here — uvicorn owns the signals.
-        os.environ.setdefault("TICK_SKIP_SIGNAL_HANDLERS", "1")
-
-        learning_interval = int(os.environ.get("LEARNING_INTERVAL_SEC", "300"))
-
-        app.state.agent_tasks = [
-            asyncio.create_task(tick_run(), name="tick_worker"),
-            asyncio.create_task(
-                _learning_loop(app.state.agent_stop, learning_interval),
-                name="learning_loop",
-            ),
-        ]
-        _log.info("embedded agent ON — tick + learning workers running in-process")
-    else:
-        _log.info("embedded agent OFF (EMBEDDED_WORKERS=false)")
-
-    try:
-        yield
-    finally:
-        app.state.agent_stop.set()
-        # Signal tick_worker's own STOP event too.
-        try:
-            from apps.tick_worker.main import _STOP as _tick_stop
-
-            _tick_stop.set()
-        except Exception:
-            pass
-        for task in app.state.agent_tasks:
-            task.cancel()
-        for task in app.state.agent_tasks:
-            try:
-                await asyncio.wait_for(task, timeout=5.0)
-            except (asyncio.CancelledError, TimeoutError, Exception):
-                pass
+    yield
 
 
 def create_app() -> FastAPI:

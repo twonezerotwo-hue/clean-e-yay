@@ -28,6 +28,7 @@ import type {
   TfWeightsReport,
   TickResult,
   TradeTicketList,
+  AgentBriefing,
 } from "@/types/generated/api";
 
 // NEXT_PUBLIC_API_BASE_URL tercih edilen; NEXT_PUBLIC_API_BASE geriye dönük
@@ -111,16 +112,5 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ message }),
     }),
-  agentBriefing: () =>
-    fetchJSON<{
-      generated_at: string;
-      snapshot_id?: string | null;
-      regime_label?: string | null;
-      headlines: Array<{
-        tone: "ok" | "info" | "warn" | "alert";
-        category: string;
-        title: string;
-        detail?: string | null;
-      }>;
-    }>("/api/v1/agent/briefing"),
+  agentBriefing: () => fetchJSON<AgentBriefing>("/api/v1/agent/briefing"),
 };

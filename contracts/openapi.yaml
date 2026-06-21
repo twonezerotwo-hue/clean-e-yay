@@ -142,13 +142,13 @@ paths:
               schema:
                 $ref: "#/components/schemas/NotificationList"
 
-  /api/v1/notifications/{id}/ack:
+  /api/v1/notifications/{notif_id}/ack:
     post:
       operationId: ackNotification
       summary: Bildirimi okundu işaretle
       parameters:
         - in: path
-          name: id
+          name: notif_id
           required: true
           schema: { type: string }
       responses:
@@ -612,6 +612,34 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ShadowComparison"
+
+  /api/v1/agent/briefing:
+    get:
+      operationId: getAgentBriefing
+      summary: Raporcu agent — sistem state'inin başlık başlık özeti (observer; karar vermez)
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AgentBriefing"
+
+  /api/v1/stream:
+    get:
+      operationId: streamEvents
+      summary: Server-Sent Events — agent event akışı (tick.complete, notification.new)
+      description: >
+        text/event-stream. Tek bağlantı açık kalır; sunucu agent
+        event'lerini push'lar. UI EventSource ile dinler. Request-scoped
+        stream (arka plan döngüsü değil).
+      responses:
+        "200":
+          description: SSE stream (text/event-stream)
+          content:
+            text/event-stream:
+              schema:
+                type: string
 
 components:
   schemas:
@@ -1120,17 +1148,53 @@ components:
         expires_at: { type: string }
         ttl_seconds: { type: integer }
         summary:
-          type: object
-          additionalProperties: true
-          description: Entry/SL/TP/size/confidence/rr stable field'lar
+          $ref: "#/components/schemas/TradeTicketSummary"
         technical_detail:
           type: object
           additionalProperties: true
           description: 7 bölüm derin veri (konsensüs/piyasa/geçmiş/güvenlik/sizing/kalibrasyon/audit)
         display:
-          type: object
-          additionalProperties: true
-          description: title, expiry_text, why_bullets, safety_lines (pre-rendered)
+          $ref: "#/components/schemas/TradeTicketDisplay"
+
+    TradeTicketSummary:
+      type: object
+      description: Trade ticket stable field'ları (agent + UI direkt kullanır).
+      properties:
+        entry_price: { type: number }
+        stop_loss: { type: number }
+        take_profit: { type: number }
+        rr_ratio: { type: number }
+        rr_source: { type: string }
+        size_usd: { type: number }
+        size_pct_equity: { type: number }
+        risk_usd: { type: number }
+        risk_pct_equity: { type: number }
+        confidence_calibrated: { type: number }
+        confidence_raw: { type: number }
+        confidence_label: { type: string }
+        consensus_score: { type: number }
+        consensus_direction: { type: string, enum: [bullish, bearish, neutral] }
+        atr: { type: number }
+
+    TradeTicketDisplay:
+      type: object
+      description: Önceden hazırlanmış Türkçe display stringleri (UI + agent).
+      properties:
+        title: { type: string }
+        expiry_text: { type: string }
+        rr_text: { type: string }
+        rr_note: { type: string }
+        why_bullets:
+          type: array
+          items: { type: string }
+        safety_lines:
+          type: array
+          items:
+            type: object
+            properties:
+              level: { type: string, enum: [ok, warn, error] }
+              text: { type: string }
+        confidence_text: { type: string }
 
     TradeTicketList:
       type: object
@@ -3054,3 +3118,27 @@ components:
         rows:
           type: array
           items: { $ref: "#/components/schemas/ShadowRow" }
+
+    AgentBriefingHeadline:
+      type: object
+      description: Raporcu agent tek başlığı (deterministik; karar vermez).
+      required: [tone, category, title]
+      properties:
+        tone: { type: string, enum: [ok, info, warn, alert] }
+        category: { type: string }
+        title: { type: string }
+        detail: { type: string, nullable: true }
+
+    AgentBriefing:
+      type: object
+      description: >
+        Raporcu agent — sistem state'ini her cycle tarayıp başlık başlık
+        özet üretir. LLM gerektirmez; karar vermez (observer).
+      required: [generated_at, headlines]
+      properties:
+        generated_at: { type: string }
+        snapshot_id: { type: string, nullable: true }
+        regime_label: { type: string, nullable: true }
+        headlines:
+          type: array
+          items: { $ref: "#/components/schemas/AgentBriefingHeadline" }

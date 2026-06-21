@@ -34,11 +34,11 @@ timeframe_risk:
   "1h":  { role: confirmation, risk_multiplier: 0.50, paper_execution: true,  time_stop_hours: 48 }
   "4h":  { role: tactical,     risk_multiplier: 1.00, paper_execution: true,  time_stop_hours: 168 }
   "1d":  { role: swing,        risk_multiplier: 1.00, paper_execution: true,  time_stop_hours: 672 }
-  # 2026-06-20: 1w paper_execution false→true, multiplier 0→0.50,
-  # time_stop 0→336 (2 hafta). 1w strategic sinyaller paper trade
-  # açabilsin diye — sadece bias değil. Multiplier düşük tutuldu;
-  # 1w pozisyon küçük açılır, RiskGate yine final.
-  "1w":  { role: strategic,    risk_multiplier: 0.50, paper_execution: true,  time_stop_hours: 336 }
+  # 1w strategic = SADECE BIAS (paper_execution=false). Haftalık sinyalle
+  # 2 haftalık pozisyon açmak paper sistemde yanlış; 1w yönü alt TF'leri
+  # ölçeklemek için kullanılır (decide_matrix 1w_bias_conflict). Bu
+  # deliberate invariant — değiştirme (test_timeframe_* korur).
+  "1w":  { role: strategic,    risk_multiplier: 0.00, paper_execution: false, time_stop_hours: 0 }
 
 # P0 — Olay riski (event risk) yalnızca KISITLAYICIDIR. Yaklaşan, doğrulanmış
 # (verified) yüksek etkili takvim olayı varsa yeni pozisyon açılışını kısar;

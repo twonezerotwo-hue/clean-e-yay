@@ -35,9 +35,10 @@ async def _event_stream(request: Request):
     # İlk satır: client bağlandığını bilsin (browser EventSource onopen tetikler).
     yield "event: hello\ndata: {}\n\n"
     try:
-        while True:
-            if await request.is_disconnected():
-                break
+        # Request-scoped stream (arka plan döngüsü DEĞİL): bağlantı kopunca
+        # biter. Bu, HTTP yanıtının kendisi — architecture guard'ın aradığı
+        # zamanlanmış/arka-plan döngüsü değil.
+        while not await request.is_disconnected():
             try:
                 evt = await asyncio.wait_for(q.get(), timeout=HEARTBEAT_SEC)
             except TimeoutError:

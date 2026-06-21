@@ -148,11 +148,6 @@ def _try_live(symbol: str) -> PriceQuote:
             error="no live provider configured for symbol",
         )
     name = _provider_name(primary)
-    # Config eksikse provider'ı çağırma — disabled olarak işaretle.
-    cfg_err = _config_missing(name)
-    if cfg_err:
-        _mark_disabled(name, error=cfg_err)
-        return _data_unavailable(symbol, source=name, error=cfg_err)
     try:
         q = primary.get_quote(symbol)
     except Exception as exc:
@@ -160,8 +155,15 @@ def _try_live(symbol: str) -> PriceQuote:
         _mark(name, ok=False, error=msg)
         return _data_unavailable(symbol, source=name, error=msg)
     if q is None:
-        # Live provider sebepleri kendi içinde swallow ediyor (HTTP hatası,
-        # parse hatası); ortak DATA_UNAVAILABLE üret.
+        # Provider veri getiremedi. Sebep CONFIG eksikliği mi (örn. API key
+        # yok → 'disabled', beklenen durum, degraded sayılmaz) yoksa gerçek
+        # bir hata mı ('degraded')? Provider'ı önce çağırıyoruz ki patch'li/
+        # test provider'ı kısa devre olmasın — config kontrolü yalnızca None
+        # döndüğünde ayrıştırma için.
+        cfg_err = _config_missing(name)
+        if cfg_err:
+            _mark_disabled(name, error=cfg_err)
+            return _data_unavailable(symbol, source=name, error=cfg_err)
         reason = _explain_none(name)
         _mark(name, ok=False, error=reason)
         return _data_unavailable(symbol, source=name, error=reason)
