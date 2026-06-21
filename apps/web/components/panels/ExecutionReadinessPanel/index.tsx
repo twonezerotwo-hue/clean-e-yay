@@ -604,135 +604,131 @@ export function ExecutionReadinessPanel() {
   const hiddenAfter = Math.max(0, checks.length - visibleStart - visibleChecks.length);
 
   return (
-    <PanelFrame id="execution_readiness" className="readiness-panel">
-      <div className="readiness-panel-shell">
-        <div className="readiness-frame-line readiness-frame-line-top" />
-        <div className="readiness-frame-line readiness-frame-line-bottom" />
+    <PanelFrame id="execution_readiness" className="readiness-panel rc-panel">
+      <div className="rc-stage">
+        {/* sol üst — agent modu */}
+        <div className="rc-mode">
+          <span className="rc-mode-top">AI AGENT</span>
+          <span className="rc-mode-mid">MODE ×</span>
+          <strong className={`rc-mode-state ${allPassed ? "rc-mode-state-ok" : ""}`}>
+            {allPassed ? "READY" : "CALIBRATING"}
+          </strong>
+        </div>
 
-        <header className="readiness-header">
-          <div className="readiness-logo">
-            <span className="readiness-logo-mark" />
-            <span className="font-mono text-xs font-black text-sky-300">2047</span>
+        {/* sağ üst — döngü skoru + sayaç */}
+        <div className="rc-cyclehud">
+          <div className="rc-cyclehud-score">
+            <span className="rc-cyclehud-pass">{passedCount}</span>
+            <span className="rc-cyclehud-sep">/</span>
+            <span className="rc-cyclehud-total">{checks.length}</span>
           </div>
-          <div className="min-w-0 flex-1">
-            <h2 className="text-3xl font-black tracking-tight text-white md:text-4xl">
-              İşlem Açma Kontrol Döngüsü
-            </h2>
-            <p className="mt-1 text-sm text-white/68 md:text-base">
-              10 kontrol / 60 saniyede tam tarama / frontend read-only
-            </p>
+          <div className="rc-cyclehud-label">onay · {formatTime(cycleRemaining)}</div>
+        </div>
+
+        {/* merkez — holografik agent */}
+        <div className="rc-figure">
+          <HologramAgent />
+        </div>
+
+        {/* sol orbit — 10 kontrol node'u */}
+        <ul className="rc-orbit">
+          {checks.map((check, i) => {
+            const state = i === activeIndex
+              ? "scanning"
+              : i < activeIndex
+                ? (check.passed ? "ok" : "bad")
+                : "pending";
+            const stateLabel =
+              state === "scanning"
+                ? `${check.passed ? "ONAY" : "GEÇERSİZ"} · sınanıyor`
+                : state === "ok"
+                  ? "ONAY"
+                  : state === "bad"
+                    ? "GEÇERSİZ"
+                    : "beklemede";
+            const t = checks.length > 1 ? i / (checks.length - 1) : 0.5;
+            const bulge = Math.sin(t * Math.PI) * 7;
+            return (
+              <li
+                key={check.id}
+                className={`rc-node rc-node-${state}`}
+                style={
+                  {
+                    "--node-top": `${5 + t * 84}%`,
+                    "--node-x": `${bulge}%`,
+                  } as CSSProperties
+                }
+              >
+                <span className="rc-node-num">{String(i + 1).padStart(2, "0")}</span>
+                <span className="rc-node-mark" aria-hidden="true" />
+                <span className="rc-node-body">
+                  <span className="rc-node-title">{check.title}</span>
+                  <span className="rc-node-state">{stateLabel}</span>
+                </span>
+              </li>
+            );
+          })}
+        </ul>
+      </div>
+
+      {/* alt — trade ticket şeridi */}
+      <TradeTicketStrip ticket={activeTicket} />
+    </PanelFrame>
+  );
+}
+
+function TradeTicketStrip({ ticket }: { ticket?: TradeTicket }) {
+  const fields: [string, string][] = ticket
+    ? [
+        ["YÖN", ticket.side.toUpperCase()],
+        ["GİRİŞ", ticket.summary.entry_price.toLocaleString("en-US")],
+        ["ZARAR EŞİK", ticket.summary.stop_loss.toLocaleString("en-US")],
+        ["KÂR HEDEFİ", ticket.summary.take_profit.toLocaleString("en-US")],
+        ["BÜYÜKLÜK", `$${Math.round(ticket.summary.size_usd).toLocaleString("en-US")}`],
+        ["RRR", `1:${ticket.summary.rr_ratio.toFixed(2)}`],
+        ["GEÇERLİLİK", ticket.display.expiry_text],
+      ]
+    : [
+        ["YÖN", "---"],
+        ["GİRİŞ", "---"],
+        ["ZARAR EŞİK", "---"],
+        ["KÂR HEDEFİ", "---"],
+        ["BÜYÜKLÜK", "---"],
+        ["RRR", "---"],
+        ["GEÇERLİLİK", "---"],
+      ];
+
+  return (
+    <aside className="rc-ticket">
+      <div className="rc-ticket-glow" aria-hidden="true" />
+      <div className="rc-ticket-head">
+        <div>
+          <div className="rc-ticket-title">Trade Ticket</div>
+          <div className="rc-ticket-sub">intraday / manuel girmeden tek tıkla kart</div>
+        </div>
+        <span className={ticket ? "rc-ticket-badge rc-ticket-badge-live" : "rc-ticket-badge rc-ticket-badge-empty"}>
+          {ticket ? "HAZIR" : "YOK"}
+        </span>
+      </div>
+
+      <div className="rc-ticket-grid">
+        {fields.map(([label, value]) => (
+          <div key={label} className="rc-ticket-field">
+            <span className="rc-ticket-label">{label}</span>
+            <span className="rc-ticket-value">{value}</span>
           </div>
-          <div className="hidden text-right md:block">
-            <div className="font-mono text-2xl font-black text-sky-300">
-              {new Intl.DateTimeFormat("tr-TR", {
-                hour: "2-digit",
-                minute: "2-digit",
-                second: "2-digit",
-              }).format(now)}
-            </div>
-            <div className="font-mono text-xs font-black uppercase tracking-widest text-sky-300/80">
-              {new Intl.DateTimeFormat("tr-TR", {
-                day: "2-digit",
-                month: "long",
-                year: "numeric",
-              }).format(now)}
-            </div>
-          </div>
-        </header>
-
-        <div className="readiness-scene-grid">
-          <section className="readiness-control-zone">
-            <div className="readiness-mini-grid">
-              <section className={`readiness-active-card ${allPassed ? "readiness-active-card-ok" : ""}`}>
-                <div className="readiness-shield readiness-shield-mini" aria-hidden="true">
-                  <span className="readiness-shield-core" />
-                  <span className="readiness-shield-check" />
-                </div>
-                <div className="min-w-0">
-                  <div className="text-2xl font-black text-emerald-300">
-                    {allPassed ? "MANUEL REVIEW HAZIR" : "İŞLEM YOK"}
-                  </div>
-                  <div className="mt-1 flex flex-wrap items-end gap-2">
-                    <span className="text-sm font-semibold text-white/78">kalan</span>
-                    <span className="font-mono text-4xl font-black leading-none text-emerald-300">
-                      {formatTime(cycleRemaining)}
-                    </span>
-                  </div>
-                  <div className="mt-3 text-sm text-white/72">Şu an kontrol ediliyor</div>
-                  <div className="font-black text-xl text-emerald-200">
-                    {String(activeIndex + 1).padStart(2, "0")} / {activeCheck.title}
-                  </div>
-                  <p className="mt-2 max-w-xl text-sm leading-6 text-white/68">{activeCheck.detail}</p>
-                  <div className="mt-4 h-1.5 overflow-hidden rounded-full bg-white/10">
-                    <div
-                      className={activeCheck.passed ? "h-full bg-emerald-300" : "h-full bg-red-300"}
-                      style={{ width: `${activeStepProgress}%` }}
-                    />
-                  </div>
-                </div>
-              </section>
-
-              <section className="readiness-total-card">
-                <ScoreRing passed={passedCount} total={checks.length} />
-                <div className="min-w-0 flex-1">
-                  <div className="text-lg font-black text-white">Toplam sonuç</div>
-                  <div className="mt-2 flex items-end gap-2">
-                    <span className="text-5xl font-black text-emerald-300">{passedCount}</span>
-                    <span className="pb-2 text-xl font-semibold text-white/72">/ {checks.length} onay</span>
-                  </div>
-                  <div className="mt-3 h-px bg-sky-300/20" />
-                  <p className="mt-3 text-sm leading-6 text-white/62">
-                    Döngü bittiğinde başa sarar; aktif adım her 6 saniyede bir kendi veri grubunu yeniden okur.
-                  </p>
-                  <div className="mt-4 h-1.5 overflow-hidden rounded-full bg-white/10">
-                    <div
-                      className={allPassed ? "h-full bg-emerald-300" : "h-full bg-amber-300"}
-                      style={{ width: `${cycleProgress}%` }}
-                    />
-                  </div>
-                </div>
-              </section>
-            </div>
-
-            <ol className="readiness-sequence-flow">
-              {hiddenBefore > 0 ? (
-                <li className="readiness-sequence-fade-label">
-                  <span>{String(hiddenBefore).padStart(2, "0")} kontrol hafizada</span>
-                </li>
-              ) : null}
-              {visibleChecks.map(({ check, index }) => (
-                <CheckRow
-                  key={check.id}
-                  check={check}
-                  index={index}
-                  active={index === activeIndex}
-                  faded={Math.abs(index - activeIndex) > 1}
-                  progress={activeStepProgress}
-                />
-              ))}
-              {hiddenAfter > 0 ? (
-                <li className="readiness-sequence-more">
-                  <span>{String(visibleStart + visibleChecks.length + 1).padStart(2, "0")}-10</span>
-                  <strong>Siradaki kontroller beklemede</strong>
-                  <em>Matrix / quorum / catalyst / shadow / ticket integrity</em>
-                </li>
-              ) : null}
-            </ol>
-
-            <div className="readiness-footnote">
-              <span className="readiness-info-icon">i</span>
-              <span>
-                Bu panel emir üretmez ve backend kararını değiştirmez. Sadece mevcut dashboard verilerini aynı sırayla okuyup manuel işlem kontrolü için tek ekranda onay/X durumuna indirger.
-              </span>
-            </div>
-          </section>
-
-          <section className="readiness-ai-zone">
-            <HologramAgent />
-            <TradeTicketMini ticket={activeTicket} />
-          </section>
+        ))}
+        <div className="rc-ticket-spark" aria-hidden="true">
+          <span /><span /><span /><span /><span /><span /><span />
         </div>
       </div>
-    </PanelFrame>
+
+      <div className="rc-ticket-foot">
+        <span className="rc-ticket-foot-label">DURUM</span>
+        <span className={ticket ? "rc-ticket-foot-live" : "rc-ticket-foot-empty"}>
+          {ticket ? `${ticket.symbol} ${ticket.side.toUpperCase()}` : "TICKET YOK"}
+        </span>
+      </div>
+    </aside>
   );
 }
