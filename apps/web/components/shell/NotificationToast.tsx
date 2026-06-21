@@ -40,7 +40,12 @@ export function NotificationToast() {
       return;
     }
     // Yeni okunmamış bildirimleri (önceden görülmemiş) toast olarak göster.
-    const newOnes = items.filter((n) => !n.ack && !seenIds.current.has(n.id));
+    const newOnes = items.reduce<Notification[]>((acc, notification) => {
+      if (notification.ack || seenIds.current.has(notification.id)) return acc;
+      if (acc.some((item) => item.id === notification.id)) return acc;
+      acc.push(notification);
+      return acc;
+    }, []);
     if (newOnes.length === 0) return;
     newOnes.forEach((n) => seenIds.current.add(n.id));
     setVisible((prev) => [...prev, ...newOnes].slice(-3));  // max 3 görünür
