@@ -19,13 +19,11 @@ import {
 } from "@/lib/selectors/cockpit";
 
 import { AgentBriefPanel } from "@/components/panels/AgentBriefPanel";
-import { AgentBriefingPanel } from "@/components/panels/AgentBriefingPanel";
 import { AgentMatrixPanel } from "@/components/panels/AgentMatrixPanel";
 import { AgentVotesPanel } from "@/components/panels/AgentVotesPanel";
 import { AIReportPanel } from "@/components/panels/AIReportPanel";
 import { CalibrationPanel } from "@/components/panels/CalibrationPanel";
 import { CapitalRotationPanel } from "@/components/panels/CapitalRotationPanel";
-import { ChatPanel } from "@/components/panels/ChatPanel";
 import { CommandSignalsPanel } from "@/components/panels/CommandSignalsPanel";
 import { CorrelationPanel } from "@/components/panels/CorrelationPanel";
 import { CryptoDerivativesPanel } from "@/components/panels/CryptoDerivativesPanel";
@@ -63,6 +61,7 @@ import { WeightProposalPanel } from "@/components/panels/WeightProposalPanel";
 
 import { HolographicSignalDeck } from "./HolographicSignalDeck";
 import { Layer2QuickNav } from "./Layer2QuickNav";
+import { Layer0ReporterAgent } from "./Layer0ReporterAgent";
 import { MacroRiskStrip } from "./MacroRiskStrip";
 import { QuantumBackplaneScene } from "./QuantumBackplaneScene";
 import { SpaceBrainScene } from "./SpaceBrainScene";
@@ -577,7 +576,7 @@ export function CockpitView() {
   let layerContent: ReactNode;
   if (activeLayer === 0) {
     layerContent = (
-        <div className="grid h-full min-h-0 gap-5 p-4 md:p-5 lg:grid-cols-[minmax(0,0.92fr)_minmax(340px,0.58fr)]">
+        <div className="grid h-full min-h-0 gap-5 p-4 md:p-5 lg:grid-cols-[minmax(270px,0.58fr)_minmax(520px,1.12fr)]">
           <section className="flex min-h-0 flex-col justify-center">
             <LayerBadge index="00" label="ilk ekran" />
             <h1 className={`mt-5 max-w-2xl font-display text-4xl leading-[0.98] sm:text-5xl md:text-6xl ${decisionTone}`}>
@@ -642,9 +641,8 @@ export function CockpitView() {
             ) : null}
           </section>
 
-          <aside className="min-h-0 space-y-3 overflow-y-auto pr-1">
-            <AgentBriefingPanel />
-            <ChatPanel />
+          <aside className="min-h-0 overflow-y-auto pr-1">
+            <Layer0ReporterAgent />
           </aside>
         </div>
       );
