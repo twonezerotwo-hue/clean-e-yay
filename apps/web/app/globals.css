@@ -984,6 +984,81 @@ html, body {
   }
 }
 
+@keyframes capital-pool-breathe {
+  0%, 100% {
+    transform: scale(1);
+    box-shadow:
+      0 0 42px color-mix(in srgb, var(--pool-color) 25%, transparent),
+      inset 0 0 28px rgba(125, 211, 252, 0.18);
+  }
+  50% {
+    transform: scale(1.035);
+    box-shadow:
+      0 0 68px color-mix(in srgb, var(--pool-color) 42%, transparent),
+      inset 0 0 42px rgba(125, 211, 252, 0.28);
+  }
+}
+
+@keyframes capital-pool-wave {
+  from {
+    transform: translateX(-22%) rotate(0deg);
+  }
+  to {
+    transform: translateX(22%) rotate(360deg);
+  }
+}
+
+@keyframes capital-money-float {
+  0%, 100% {
+    opacity: 0.62;
+    transform: translate3d(0, 4px, 0) rotate(var(--bill-rotate, 0deg));
+  }
+  50% {
+    opacity: 1;
+    transform: translate3d(0, -8px, 0) rotate(calc(var(--bill-rotate, 0deg) + 5deg));
+  }
+}
+
+@keyframes capital-orbit-spin {
+  to {
+    transform: translate(-50%, -50%) rotate(360deg);
+  }
+}
+
+@keyframes capital-node-pulse {
+  0%, 100% {
+    box-shadow: 0 0 0 rgba(255, 255, 255, 0);
+    transform: translateY(0);
+  }
+  50% {
+    box-shadow: 0 0 18px color-mix(in srgb, var(--node-color) 24%, transparent);
+    transform: translateY(-1px);
+  }
+}
+
+@keyframes capital-rank-rise {
+  0%, 100% {
+    transform: translateX(0);
+  }
+  50% {
+    transform: translateX(3px);
+  }
+}
+
+@keyframes capital-rank-sweep {
+  0% {
+    transform: translateX(-110%);
+    opacity: 0;
+  }
+  18%, 64% {
+    opacity: 0.65;
+  }
+  100% {
+    transform: translateX(120%);
+    opacity: 0;
+  }
+}
+
 @keyframes scenario-breathe {
   0%, 100% {
     opacity: 0.82;
@@ -1023,6 +1098,261 @@ html, body {
   border-radius: 999px;
   border: 1px dashed rgba(34, 211, 238, 0.24);
   animation: capital-core-spin 24s linear infinite;
+}
+
+.capital-rotation-stage {
+  min-height: 360px;
+  background:
+    radial-gradient(circle at 50% 52%, rgba(20, 184, 166, 0.16), transparent 32%),
+    radial-gradient(circle at 20% 12%, rgba(251, 191, 36, 0.11), transparent 24%),
+    radial-gradient(circle at 82% 80%, rgba(96, 165, 250, 0.12), transparent 24%),
+    linear-gradient(145deg, rgba(4, 17, 31, 0.98), rgba(2, 8, 18, 0.98));
+}
+
+.capital-stage-grid {
+  opacity: 0.1;
+  background-image:
+    linear-gradient(rgba(34, 211, 238, 0.72) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(34, 211, 238, 0.72) 1px, transparent 1px),
+    radial-gradient(circle, rgba(251, 191, 36, 0.22) 1px, transparent 1px);
+  background-size: 42px 42px, 42px 42px, 22px 22px;
+  mask-image: radial-gradient(circle at center, black 18%, transparent 78%);
+  -webkit-mask-image: radial-gradient(circle at center, black 18%, transparent 78%);
+}
+
+.capital-map-haze {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(circle at 50% 50%, rgba(34, 211, 238, 0.18), transparent 34%),
+    linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.035), transparent);
+  mix-blend-mode: screen;
+}
+
+.capital-flow-svg {
+  overflow: visible;
+}
+
+.capital-money-pool {
+  --pool-color: #22d3ee;
+  position: relative;
+  z-index: 2;
+  display: grid;
+  width: 132px;
+  height: 132px;
+  place-items: center;
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--pool-color) 46%, transparent);
+  border-radius: 999px;
+  background:
+    radial-gradient(circle at 35% 23%, rgba(255, 255, 255, 0.4), transparent 16%),
+    radial-gradient(circle at 45% 54%, color-mix(in srgb, var(--pool-color) 26%, transparent), transparent 44%),
+    radial-gradient(circle at 50% 50%, rgba(14, 165, 233, 0.22), rgba(3, 12, 28, 0.94) 72%);
+  animation: capital-pool-breathe 3.8s ease-in-out infinite;
+  isolation: isolate;
+}
+
+.capital-pool-liquid {
+  position: absolute;
+  inset: 22px;
+  overflow: hidden;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background:
+    radial-gradient(circle at 50% 28%, rgba(255, 255, 255, 0.2), transparent 18%),
+    linear-gradient(180deg, rgba(45, 212, 191, 0.16), rgba(14, 165, 233, 0.09));
+}
+
+.capital-pool-liquid span {
+  position: absolute;
+  left: -36%;
+  width: 172%;
+  height: 58%;
+  border-radius: 46%;
+  background:
+    radial-gradient(circle at 24% 52%, rgba(251, 191, 36, 0.4), transparent 10%),
+    radial-gradient(circle at 62% 42%, rgba(34, 197, 94, 0.34), transparent 10%),
+    color-mix(in srgb, var(--pool-color) 28%, rgba(8, 47, 73, 0.62));
+  opacity: 0.7;
+  animation: capital-pool-wave 7.6s linear infinite;
+}
+
+.capital-pool-liquid span:first-child {
+  top: 40%;
+}
+
+.capital-pool-liquid span:last-child {
+  top: 48%;
+  opacity: 0.46;
+  animation-duration: 10.4s;
+  animation-direction: reverse;
+}
+
+.capital-money-stack {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+}
+
+.capital-money-stack i {
+  --bill-rotate: -12deg;
+  position: absolute;
+  width: 30px;
+  height: 14px;
+  border-radius: 3px;
+  border: 1px solid rgba(187, 247, 208, 0.46);
+  background:
+    linear-gradient(90deg, rgba(187, 247, 208, 0.18), rgba(52, 211, 153, 0.52), rgba(187, 247, 208, 0.18));
+  box-shadow: 0 0 14px rgba(52, 211, 153, 0.18);
+  animation: capital-money-float 4.4s ease-in-out infinite;
+}
+
+.capital-money-stack i:nth-child(1) {
+  left: 28px;
+  top: 42px;
+}
+
+.capital-money-stack i:nth-child(2) {
+  --bill-rotate: 16deg;
+  right: 25px;
+  top: 49px;
+  animation-delay: 0.42s;
+}
+
+.capital-money-stack i:nth-child(3) {
+  --bill-rotate: -5deg;
+  left: 48px;
+  top: 75px;
+  animation-delay: 0.72s;
+}
+
+.capital-money-stack i:nth-child(4) {
+  --bill-rotate: 22deg;
+  left: 22px;
+  bottom: 32px;
+  animation-delay: 1.04s;
+}
+
+.capital-money-stack i:nth-child(5) {
+  --bill-rotate: -19deg;
+  right: 24px;
+  bottom: 38px;
+  animation-delay: 1.28s;
+}
+
+.capital-pool-orbit {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  border-radius: 999px;
+  border: 1px dashed color-mix(in srgb, var(--pool-color) 44%, transparent);
+  transform: translate(-50%, -50%);
+  animation: capital-orbit-spin 18s linear infinite;
+}
+
+.capital-pool-orbit-a {
+  width: 162px;
+  height: 76px;
+}
+
+.capital-pool-orbit-b {
+  width: 106px;
+  height: 156px;
+  animation-duration: 23s;
+  animation-direction: reverse;
+}
+
+.capital-pool-glint {
+  position: absolute;
+  inset: 14px;
+  z-index: 4;
+  border-radius: 999px;
+  background: linear-gradient(112deg, transparent 18%, rgba(255, 255, 255, 0.18), transparent 52%);
+  mix-blend-mode: screen;
+  opacity: 0.6;
+}
+
+.capital-pool-label {
+  position: relative;
+  z-index: 5;
+  text-align: center;
+  text-transform: uppercase;
+  text-shadow: 0 0 18px rgba(34, 211, 238, 0.48);
+}
+
+.capital-pool-label span,
+.capital-pool-label strong {
+  display: block;
+  font-size: 9px;
+  letter-spacing: 0.24em;
+  color: rgba(207, 250, 254, 0.9);
+}
+
+.capital-pool-label strong {
+  margin-top: 2px;
+  color: #f8fafc;
+}
+
+.capital-flow-node {
+  position: relative;
+  overflow: hidden;
+  backdrop-filter: blur(8px);
+  animation: capital-node-pulse 4.2s ease-in-out infinite;
+  animation-delay: var(--node-delay, 0s);
+}
+
+.capital-flow-node::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--node-color) 13%, transparent), transparent);
+  opacity: 0.75;
+}
+
+.capital-rank-row {
+  position: relative;
+  overflow: hidden;
+  border-radius: 7px;
+  padding: 4px 5px;
+  animation: capital-rank-rise 3.2s ease-in-out infinite;
+  animation-delay: var(--rank-delay, 0s);
+}
+
+.capital-rank-row::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--rank-color) 14%, transparent), transparent);
+  transform: translateX(-110%);
+  animation: capital-rank-sweep 3.8s ease-in-out infinite;
+  animation-delay: var(--rank-delay, 0s);
+}
+
+.capital-rank-index {
+  color: color-mix(in srgb, var(--rank-color) 55%, rgba(255, 255, 255, 0.35));
+}
+
+.capital-rank-track {
+  position: relative;
+}
+
+.capital-rank-track::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.32), transparent);
+  transform: translateX(-100%);
+  animation: capital-rank-sweep 2.6s linear infinite;
+  animation-delay: var(--rank-delay, 0s);
+}
+
+.capital-rank-fill {
+  position: relative;
+  box-shadow: 0 0 12px color-mix(in srgb, var(--rank-color) 28%, transparent);
 }
 
 .scenario-figure {

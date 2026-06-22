@@ -134,7 +134,7 @@ export default function HomePage() {
           <GridCell span="1"><VolatilityPanel /></GridCell>
           <GridCell span="1"><OptionsVolPanel /></GridCell>
           <GridCell span="full"><CorrelationPanel /></GridCell>
-          <GridCell span="full"><CapitalRotationPanel /></GridCell>
+          <GridCell span="full" lazy={false}><CapitalRotationPanel /></GridCell>
         </PanelGroup>
 
         <PanelGroup title="Makro / Catalyst / Haber" hint="haber radari, catalyst etkisi ve olay takvimi ayri paneller olarak acik">
