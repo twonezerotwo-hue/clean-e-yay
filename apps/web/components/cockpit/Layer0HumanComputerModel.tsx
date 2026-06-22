@@ -347,10 +347,12 @@ function Scene({
       <pointLight position={[2.6, 3.2, 3.6]} color="#67e8f9" intensity={4.1} />
       <pointLight position={[-3.2, 1.2, 1.6]} color={color} intensity={2.2} />
       <pointLight position={[0, -1.2, 2.8]} color="#fbbf24" intensity={0.9} />
-      <NeuralParticles mode={mode} />
-      <DataRibbons mode={mode} />
-      <HologramRings mode={mode} />
-      <HumanComputerBust mode={mode} dataQuality={dataQuality} />
+      <group position={[0, -0.12, 0]}>
+        <NeuralParticles mode={mode} />
+        <DataRibbons mode={mode} />
+        <HologramRings mode={mode} />
+        <HumanComputerBust mode={mode} dataQuality={dataQuality} />
+      </group>
     </>
   );
 }
@@ -370,16 +372,21 @@ function clampMetric(value: number) {
 export function Layer0HumanComputerModel({
   mode,
   dataQuality,
+  onOpenLayer1,
 }: {
   mode: ModelMode;
   dataQuality?: Layer0DataQualityPulse | null;
+  onOpenLayer1?: () => void;
 }) {
   const status = dataQuality?.status ?? "DEGRADED";
-  const score = dataQuality ? clampMetric(dataQuality.score) : null;
   return (
-    <div className="layer0-human-model">
+    <div
+      className="layer0-human-model"
+      onDoubleClick={onOpenLayer1}
+      title="Katman 1'e geç"
+    >
       <Canvas
-        camera={{ position: [0, 0.52, 4.55], fov: 42 }}
+        camera={{ position: [0, 0.38, 4.55], fov: 42 }}
         dpr={[1, 1.75]}
         gl={{ antialias: true, alpha: false, preserveDrawingBuffer: true }}
       >
@@ -390,11 +397,6 @@ export function Layer0HumanComputerModel({
       <div className="layer0-human-model__beam" />
       <div className="layer0-human-model__scan" />
       <div className={`layer0-human-model__dqs layer0-human-model__dqs--${status.toLowerCase()}`}>
-        <div className="layer0-human-model__dqs-head">
-          <span>Veri Kalp Ritmi</span>
-          <strong>{score == null ? "--" : `DQS ${score}`}</strong>
-          <em>{dataQuality ? `${dataQuality.status} · ${dataQuality.ageLabel}` : "bekleniyor"}</em>
-        </div>
         <div className="layer0-human-model__ecg" aria-hidden="true">
           <svg viewBox="0 0 240 42" preserveAspectRatio="none">
             <path d="M0 24 H35 L44 24 L51 10 L59 34 L69 18 L78 24 H112 L121 24 L128 8 L136 36 L146 19 L156 24 H240" />
@@ -404,10 +406,8 @@ export function Layer0HumanComputerModel({
           {DQS_METRICS.map(([label, key]) => {
             const value = dataQuality ? clampMetric(dataQuality[key]) : 0;
             return (
-              <span key={key}>
-                <b>{label}</b>
+              <span key={key} title={`${label}: ${dataQuality ? value : "--"}`} aria-label={`${label}: ${dataQuality ? value : "--"}`}>
                 <i style={{ width: `${value}%` }} />
-                <em>{dataQuality ? value : "--"}</em>
               </span>
             );
           })}

@@ -472,16 +472,6 @@ export function Layer0ReporterAgent({
         : speaking
           ? "speaking"
           : "idle";
-  const stateLabel =
-    modelMode === "speaking"
-      ? "konusuyor"
-      : modelMode === "listening"
-        ? "dinliyor"
-        : modelMode === "thinking"
-          ? voiceLoading
-            ? "ses hazirlaniyor"
-            : "dusunuyor"
-          : "hazir";
   const positions = paper.data?.open_positions ?? [];
   const totalPnl = paper.data?.unrealized_pnl_usd ?? 0;
   const subtitleSpeaker =
@@ -668,16 +658,12 @@ export function Layer0ReporterAgent({
       {/* ── Sutun 2: Human-computer model + karar hero ──────────────── */}
       <div className="flex min-h-0 flex-col gap-4 overflow-y-auto pr-1">
         <div className="reporter-model-card shrink-0">
-          <Layer0HumanComputerModel mode={modelMode} dataQuality={dataQualityPulse} />
+          <Layer0HumanComputerModel
+            mode={modelMode}
+            dataQuality={dataQualityPulse}
+            onOpenLayer1={() => onNavigate(1)}
+          />
           <div className="reporter-model-hud">
-            <div>
-              <div className="text-[10px] uppercase tracking-[0.24em] text-accent-cyan/76">
-                human-computer
-              </div>
-              <div className="mt-1 font-display text-xl leading-none text-white/92">
-                E-yAy Nexus
-              </div>
-            </div>
             <div className="reporter-model-spectrum" aria-hidden>
               <span />
               <span />
@@ -686,11 +672,6 @@ export function Layer0ReporterAgent({
               <span />
               <span />
             </div>
-          </div>
-          <div className="reporter-model-footer">
-            <span>{stateLabel}</span>
-            <span>{voiceEnabled ? "tts ready" : "audio off"}</span>
-            <span>{micReady ? "mic ready" : "mic off"}</span>
           </div>
         </div>
 
