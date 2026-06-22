@@ -576,8 +576,9 @@ export function CockpitView() {
   let layerContent: ReactNode;
   if (activeLayer === 0) {
     layerContent = (
-        <div className="grid h-full min-h-0 gap-5 p-4 md:p-5 lg:grid-cols-[minmax(270px,0.58fr)_minmax(520px,1.12fr)]">
-          <section className="flex min-h-0 flex-col justify-center">
+      <div className="h-full overflow-y-auto p-4 md:p-5">
+        <div className="grid min-h-full gap-5 lg:grid-cols-[minmax(250px,0.48fr)_minmax(650px,1.35fr)]">
+          <section className="order-2 flex min-h-0 flex-col justify-center lg:order-1">
             <LayerBadge index="00" label="ilk ekran" />
             <h1 className={`mt-5 max-w-2xl font-display text-4xl leading-[0.98] sm:text-5xl md:text-6xl ${decisionTone}`}>
               {decisionTitle}
@@ -641,10 +642,11 @@ export function CockpitView() {
             ) : null}
           </section>
 
-          <aside className="min-h-0 overflow-y-auto pr-1">
+          <aside className="order-1 min-h-0 overflow-visible pr-1 lg:order-2 lg:overflow-y-auto">
             <Layer0ReporterAgent />
           </aside>
         </div>
+      </div>
       );
   } else if (activeLayer === 1) {
     layerContent = (
