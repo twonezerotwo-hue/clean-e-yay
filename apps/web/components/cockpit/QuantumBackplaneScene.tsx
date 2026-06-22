@@ -257,12 +257,19 @@ function QuantumBackplaneModel({ brief }: { brief: AgentBrief }) {
   );
 }
 
-export function QuantumBackplaneScene({ brief }: { brief: AgentBrief }) {
+export function QuantumBackplaneScene({
+  brief,
+  active = true,
+}: {
+  brief: AgentBrief;
+  active?: boolean;
+}) {
   return (
     <div className="quantum-backplane-canvas pointer-events-none absolute inset-x-0 top-0 z-0 h-[1180px] opacity-70 md:h-[1320px]">
       <Canvas
         camera={{ position: [0, 2.45, 8.2], fov: 46 }}
         dpr={[1, 1.5]}
+        frameloop={active ? "always" : "never"}
         gl={{ antialias: true, alpha: true, preserveDrawingBuffer: true }}
         className="h-full w-full"
         style={{ width: "100%", height: "100%" }}

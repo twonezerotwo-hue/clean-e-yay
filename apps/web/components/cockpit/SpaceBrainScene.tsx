@@ -224,12 +224,19 @@ function BrainModel({ brief }: { brief: AgentBrief }) {
   );
 }
 
-export function SpaceBrainScene({ brief }: { brief: AgentBrief }) {
+export function SpaceBrainScene({
+  brief,
+  active = true,
+}: {
+  brief: AgentBrief;
+  active?: boolean;
+}) {
   return (
     <div className="space-brain-canvas absolute inset-0">
       <Canvas
         camera={{ position: [0, 0.62, 6.1], fov: 45 }}
         dpr={[1, 1.75]}
+        frameloop={active ? "always" : "never"}
         gl={{ antialias: true, alpha: false, preserveDrawingBuffer: true }}
         className="h-full w-full"
         style={{ width: "100%", height: "100%" }}

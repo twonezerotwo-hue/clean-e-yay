@@ -340,14 +340,14 @@ function LayerDepthBackdrop({
         }}
         transition={{ duration: 0.8, ease: [0.22, 1, 0.36, 1] }}
       >
-        <SpaceBrainScene brief={brief} />
+        <SpaceBrainScene brief={brief} active={activeLayer === 0} />
       </motion.div>
       <motion.div
         className="absolute inset-0"
         animate={{ opacity: activeLayer === 0 ? 0 : 0.78, scale: 0.98 + activeLayer * 0.04 }}
         transition={{ duration: 0.8, ease: [0.22, 1, 0.36, 1] }}
       >
-        <QuantumBackplaneScene brief={brief} />
+        <QuantumBackplaneScene brief={brief} active={activeLayer > 0} />
       </motion.div>
       <motion.div
         className="absolute inset-0 bg-[radial-gradient(circle_at_58%_46%,rgba(20,184,166,0.13),transparent_26%),radial-gradient(circle_at_72%_16%,rgba(251,191,36,0.09),transparent_23%),linear-gradient(180deg,rgba(2,3,10,0.2),rgba(2,3,10,0.92))]"

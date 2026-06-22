@@ -78,28 +78,28 @@ export default function HomePage() {
       </section>
 
       <PanelGroup title="Islem Kontrol Dongusu" hint="10 kontrol / 30 saniye / read-only">
-        <GridCell span="full"><ExecutionReadinessPanel /></GridCell>
+        <GridCell span="full" lazy={false}><ExecutionReadinessPanel /></GridCell>
       </PanelGroup>
 
       <PanelGroup title="Trade Ticket" hint="broker'a manuel girmeden tek-bakis kart">
-        <GridCell span="full"><TradeTicketPanel /></GridCell>
+        <GridCell span="full" lazy={false}><TradeTicketPanel /></GridCell>
       </PanelGroup>
 
       <PanelGroup title="Risk Durumu" hint="ana engel / drawdown / yaklasan olaylar">
-        <GridCell span="full"><RiskDurumuPanel /></GridCell>
+        <GridCell span="full" lazy={false}><RiskDurumuPanel /></GridCell>
       </PanelGroup>
 
       <PanelGroup title="Karar Matrisi" hint="candidate -> final / TF + agent overlay">
-        <GridCell span="full"><TimeframeMatrixPanel /></GridCell>
-        <GridCell span="full"><AgentMatrixPanel /></GridCell>
+        <GridCell span="full" lazy={false}><TimeframeMatrixPanel /></GridCell>
+        <GridCell span="full" lazy={false}><AgentMatrixPanel /></GridCell>
       </PanelGroup>
 
       <PanelGroup title="Pozisyon Kontrolleri" hint="acik pozisyon + recheck verdict">
-        <GridCell span="full"><PositionChecksPanel /></GridCell>
+        <GridCell span="full" lazy={false}><PositionChecksPanel /></GridCell>
       </PanelGroup>
 
       <PanelGroup title="Agent'a Sor" hint="state-grounded / LLM karar vermez">
-        <GridCell span="full"><ChatPanel /></GridCell>
+        <GridCell span="full" lazy={false}><ChatPanel /></GridCell>
       </PanelGroup>
 
       <section className="space-y-7 rounded-2xl border border-ink-700/60 bg-ink-800/40 px-5 py-5">

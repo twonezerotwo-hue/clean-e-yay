@@ -3,54 +3,64 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { api } from "@/lib/api/client";
+import { usePanelQueryPolicy } from "@/lib/panel-runtime";
 import { qk } from "./keys";
 
-export const useHealth = () =>
-  useQuery({ queryKey: qk.health, queryFn: api.health, refetchInterval: 30_000 });
+export const useHealth = () => {
+  const policy = usePanelQueryPolicy(30_000);
+  return useQuery({ queryKey: qk.health, queryFn: api.health, ...policy });
+};
 
-/** O1 — 7/24 worker reliability özeti (worker/provider/dqs/snapshot/halt). */
-export const useSystemHealth = () =>
-  useQuery({
+export const useSystemHealth = () => {
+  const policy = usePanelQueryPolicy(30_000);
+  return useQuery({
     queryKey: qk.systemHealth,
     queryFn: api.systemHealth,
     staleTime: 15_000,
-    refetchInterval: 30_000,
+    ...policy,
   });
+};
 
-export const useRegimeReport = () =>
-  useQuery({
+export const useRegimeReport = () => {
+  const policy = usePanelQueryPolicy(60_000);
+  return useQuery({
     queryKey: qk.regimeReport,
     queryFn: api.regimeReport,
     staleTime: 60_000,
-    refetchInterval: 60_000,
+    ...policy,
   });
+};
 
-export const useDashboardState = () =>
-  useQuery({
+export const useDashboardState = () => {
+  const policy = usePanelQueryPolicy(30_000);
+  return useQuery({
     queryKey: qk.dashboardState,
     queryFn: api.dashboardState,
     staleTime: 30_000,
-    refetchInterval: 30_000,
+    ...policy,
   });
+};
 
-export const useAIReport = () =>
-  useQuery({
+export const useAIReport = () => {
+  const policy = usePanelQueryPolicy(30 * 60_000);
+  return useQuery({
     queryKey: qk.aiReport,
     queryFn: api.aiReport,
     staleTime: 30 * 60_000,
-    refetchInterval: 30 * 60_000,
+    ...policy,
   });
+};
 
-export const usePaperTradingState = () =>
-  useQuery({
+export const usePaperTradingState = () => {
+  const policy = usePanelQueryPolicy(15_000);
+  return useQuery({
     queryKey: qk.paperTradingState,
     queryFn: api.paperTradingState,
     staleTime: 10_000,
-    refetchInterval: 15_000,
+    ...policy,
   });
+};
 
-/** Owner — tek açık pozisyonu manuel kapat (MANUAL exit). Başarıda paper
- *  state'i invalidate eder. Fiyat yoksa backend 409 döner (DATA_POLICY). */
 export const useClosePaperPosition = () => {
   const queryClient = useQueryClient();
   return useMutation({
@@ -61,154 +71,178 @@ export const useClosePaperPosition = () => {
   });
 };
 
-/** Global market-session statuses (backend-derived; FE renders only). */
-export const useMarketSessions = () =>
-  useQuery({
+export const useMarketSessions = () => {
+  const policy = usePanelQueryPolicy(60_000);
+  return useQuery({
     queryKey: qk.marketSessions,
     queryFn: api.marketSessions,
     staleTime: 60_000,
-    refetchInterval: 60_000,
+    ...policy,
   });
+};
 
-export const useLearningSummary = () =>
-  useQuery({
+export const useLearningSummary = () => {
+  const policy = usePanelQueryPolicy();
+  return useQuery({
     queryKey: qk.learningSummary,
     queryFn: api.learningSummary,
     staleTime: 5 * 60_000,
+    ...policy,
   });
+};
 
-export const useDataSnapshot = () =>
-  useQuery({
+export const useDataSnapshot = () => {
+  const policy = usePanelQueryPolicy(30_000);
+  return useQuery({
     queryKey: qk.dataSnapshot,
     queryFn: api.dataSnapshot,
     staleTime: 15_000,
-    refetchInterval: 30_000,
+    ...policy,
   });
+};
 
-/** Küresel Likidite Rotasyon — sepet × 1D/7D/30D flow skoru + rejim. */
-export const useLiquidityRotation = () =>
-  useQuery({
+export const useLiquidityRotation = () => {
+  const policy = usePanelQueryPolicy(60_000);
+  return useQuery({
     queryKey: qk.liquidityRotation,
     queryFn: api.liquidityRotation,
     staleTime: 30_000,
-    refetchInterval: 60_000,
+    ...policy,
   });
+};
 
-export const useRebalanceProposal = () =>
-  useQuery({
+export const useRebalanceProposal = () => {
+  const policy = usePanelQueryPolicy(60_000);
+  return useQuery({
     queryKey: qk.rebalanceProposal,
     queryFn: api.rebalanceProposal,
     staleTime: 60_000,
-    refetchInterval: 60_000,
+    ...policy,
   });
+};
 
-export const useCalibration = () =>
-  useQuery({
+export const useCalibration = () => {
+  const policy = usePanelQueryPolicy(5 * 60_000);
+  return useQuery({
     queryKey: qk.calibration,
     queryFn: api.calibration,
     staleTime: 60_000,
-    refetchInterval: 5 * 60_000,
+    ...policy,
   });
+};
 
-/** Step 8 — per-TF calibration + trust-gated tf_weights proposal (owner-approved). */
-export const useTfWeights = () =>
-  useQuery({
+export const useTfWeights = () => {
+  const policy = usePanelQueryPolicy(5 * 60_000);
+  return useQuery({
     queryKey: qk.tfWeights,
     queryFn: api.tfWeights,
     staleTime: 60_000,
-    refetchInterval: 5 * 60_000,
+    ...policy,
   });
+};
 
-export const useMistakes = () =>
-  useQuery({
+export const useMistakes = () => {
+  const policy = usePanelQueryPolicy(2 * 60_000);
+  return useQuery({
     queryKey: qk.mistakes,
     queryFn: api.mistakes,
     staleTime: 60_000,
-    refetchInterval: 2 * 60_000,
+    ...policy,
   });
+};
 
-export const useRiskCorrelation = () =>
-  useQuery({
+export const useRiskCorrelation = () => {
+  const policy = usePanelQueryPolicy(2 * 60_000);
+  return useQuery({
     queryKey: qk.riskCorrelation,
     queryFn: api.riskCorrelation,
     staleTime: 60_000,
-    refetchInterval: 2 * 60_000,
+    ...policy,
   });
+};
 
-/** T2 — (symbol × timeframe) karar matrisi. */
-export const useDecisionMatrix = () =>
-  useQuery({
+export const useDecisionMatrix = () => {
+  const policy = usePanelQueryPolicy(30_000);
+  return useQuery({
     queryKey: qk.decisionMatrix,
     queryFn: api.decisionMatrix,
     staleTime: 15_000,
-    refetchInterval: 30_000,
+    ...policy,
   });
+};
 
-/** T2 step 7 — multi-TF agent pipeline matrisi (consensus → karar → ekonomi). */
-export const useAgentMatrix = () =>
-  useQuery({
+export const useAgentMatrix = () => {
+  const policy = usePanelQueryPolicy(30_000);
+  return useQuery({
     queryKey: qk.agentMatrix,
     queryFn: api.agentMatrix,
     staleTime: 15_000,
-    refetchInterval: 30_000,
+    ...policy,
   });
+};
 
-/** Step 9 — controlled activation: canlı vs shadow karşılaştırması (observe-only). */
-export const useShadowComparison = () =>
-  useQuery({
+export const useShadowComparison = () => {
+  const policy = usePanelQueryPolicy(30_000);
+  return useQuery({
     queryKey: qk.shadowComparison,
     queryFn: api.shadowComparison,
     staleTime: 15_000,
-    refetchInterval: 30_000,
+    ...policy,
   });
+};
 
-/** UX1 — Agent Operating Cockpit özeti (AgentBrief + DecisionTrace). */
-export const useCockpitBrief = () =>
-  useQuery({
+export const useCockpitBrief = () => {
+  const policy = usePanelQueryPolicy(30_000);
+  return useQuery({
     queryKey: qk.cockpitBrief,
     queryFn: api.cockpitBrief,
     staleTime: 15_000,
-    refetchInterval: 30_000,
+    ...policy,
   });
+};
 
-export const useRiskHalts = () =>
-  useQuery({
+export const useRiskHalts = () => {
+  const policy = usePanelQueryPolicy(30_000);
+  return useQuery({
     queryKey: qk.riskHalts,
     queryFn: api.riskHalts,
     staleTime: 15_000,
-    refetchInterval: 30_000,
+    ...policy,
   });
+};
 
-/** OPS — replay altyapı durumu (rezerve, aktif değil; sahte replay yok). */
-export const useReplayStatus = () =>
-  useQuery({
+export const useReplayStatus = () => {
+  const policy = usePanelQueryPolicy(60_000);
+  return useQuery({
     queryKey: qk.replayStatus,
     queryFn: api.replayStatus,
     staleTime: 60_000,
-    refetchInterval: 60_000,
+    ...policy,
   });
+};
 
-/** v2.6 — state-grounded chat (LLM karar vermez; backend guard'lı). */
 export const useChat = () =>
   useMutation({ mutationFn: (message: string) => api.chat(message) });
 
-/** UX-A15 — Trade Tickets (broker handoff payload). */
-export const useTradeTickets = () =>
-  useQuery({
+export const useTradeTickets = () => {
+  const policy = usePanelQueryPolicy(15_000);
+  return useQuery({
     queryKey: qk.tradeTickets,
     queryFn: api.tradeTickets,
     staleTime: 10_000,
-    refetchInterval: 15_000,
+    ...policy,
   });
+};
 
-/** UX-A16 — Notifications (observer; karar vermez). */
-export const useNotifications = () =>
-  useQuery({
+export const useNotifications = () => {
+  const policy = usePanelQueryPolicy(10_000);
+  return useQuery({
     queryKey: qk.notifications,
     queryFn: () => api.notifications(false),
     staleTime: 5_000,
-    refetchInterval: 10_000,
+    ...policy,
   });
+};
 
 export const useAckNotification = () => {
   const queryClient = useQueryClient();
@@ -230,17 +264,16 @@ export const useAckAllNotifications = () => {
   });
 };
 
-/** Raporcu agent — başlık başlık deterministik özet. SSE tick.complete'te
- *  de invalidate edilir (useEventStream), polling fallback. */
-export const useAgentBriefing = () =>
-  useQuery({
+export const useAgentBriefing = () => {
+  const policy = usePanelQueryPolicy(15_000);
+  return useQuery({
     queryKey: qk.agentBriefing,
     queryFn: api.agentBriefing,
-    refetchInterval: 15_000,
     staleTime: 5_000,
+    ...policy,
   });
+};
 
-/** G5 — owner reset (tek manuel çıkış yolu; otomatik reset yok). */
 export const useHaltReset = () => {
   const queryClient = useQueryClient();
   return useMutation({
