@@ -34,7 +34,7 @@ type CheckItem = {
   metric?: string;
 };
 
-const CYCLE_MS = 60_000;
+const CYCLE_MS = 30_000;
 const CHECK_COUNT = 10;
 const STEP_MS = CYCLE_MS / CHECK_COUNT;
 
@@ -182,7 +182,7 @@ export function ExecutionReadinessPanel() {
     return [
       {
         id: "data_quality",
-        title: "Veri kalitesi ve sağlayıcılar",
+        title: "Veri güvenilir mi?",
         source: "DataQuality / Provider / Snapshot",
         passed:
           Boolean(snapshot.data && system.data) &&
@@ -192,14 +192,14 @@ export function ExecutionReadinessPanel() {
         metric: dqs ? `DQS ${Math.round(dqs.score)} · ${dqs.status}` : "DQS yok",
         detail:
           downProviders.length > 0
-            ? `Down provider: ${downProviders.join(", ")}`
+            ? `Veri sağlayıcı kapalı: ${downProviders.join(", ")}`
             : degradedProviders.length > 0
-              ? `Degraded provider var ama hard down yok: ${degradedProviders.join(", ")}`
-              : "Snapshot, DQS ve provider katmanı işlem kontrolü için okunabilir.",
+              ? `Zayıf sağlayıcı var ama veri tamamen kesilmedi: ${degradedProviders.join(", ")}`
+              : "Veri akışı açık; DQS ve sağlayıcılar okunabilir.",
       },
       {
         id: "system_safety",
-        title: "Sistem güvenliği",
+        title: "Sistem güvenli modda mı?",
         source: "SystemHealth / RiskHalts",
         passed:
           Boolean(system.data) &&
@@ -209,14 +209,14 @@ export function ExecutionReadinessPanel() {
           !haltActive,
         metric: `${system.data?.paper_safe ? "PAPER_SAFE" : "paper?"} · ${system.data?.no_execution ? "NO_EXECUTION" : "exec?"}`,
         detail: haltActive
-          ? "Aktif risk halt var; yeni işlem kontrolü kırmızı."
+          ? "Risk halt aktif; yeni işlem kapısı kapalı."
           : staleWorkers.length
-            ? `Stale worker: ${staleWorkers.join(", ")}`
-            : "Paper-safe ve no-execution guard aktif; worker/halt engeli yok.",
+            ? `Geciken worker var: ${staleWorkers.join(", ")}`
+            : "Simülasyon güvenliği açık; worker ve halt engeli yok.",
       },
       {
         id: "risk_gate",
-        title: "Risk kapısı",
+        title: "Risk yeni girişe izin veriyor mu?",
         source: "RiskDurumu / RiskGate",
         passed:
           Boolean(dashboard.data && cockpit.data) &&
@@ -227,13 +227,13 @@ export function ExecutionReadinessPanel() {
         detail:
           riskGate?.action !== "HOLD"
             ? riskGate?.reason ?? "RiskGate HOLD değil."
-            : brief?.main_blocker?.code !== "NONE"
-              ? brief?.main_blocker?.detail ?? brief?.main_blocker?.label ?? "Ana blocker temiz değil."
-              : "RiskGate ve ana blocker yeni girişe engel göstermiyor.",
+          : brief?.main_blocker?.code !== "NONE"
+              ? brief?.main_blocker?.detail ?? brief?.main_blocker?.label ?? "Ana engel temiz değil."
+              : "Risk kapısı yeni giriş için açık görünüyor.",
       },
       {
         id: "agent_permission",
-        title: "Agent işlem izni",
+        title: "Agent işlem aç diyor mu?",
         source: "AgentNarrator / AgentBrief / Decision",
         passed:
           Boolean(brief) &&
@@ -244,23 +244,23 @@ export function ExecutionReadinessPanel() {
         detail:
           brief?.can_act && brief.status === "ACTIONABLE"
             ? brief.recommended_stance
-            : brief?.summary ?? "Agent brief henüz okunmadı veya actionable değil.",
+            : brief?.summary ?? "Agent henüz işlem aç sinyali vermiyor.",
       },
       {
         id: "trade_signal",
-        title: "Aktif sinyal / ticket adayı",
+        title: "Net sinyal veya ticket var mı?",
         source: "CommandSignals / TradeTicket",
         passed: Boolean(activeTicket) && actionableCandidates.length > 0,
         metric: activeTicket
           ? `${activeTicket.symbol} ${activeTicket.side.toUpperCase()} · ${activeTicket.timeframe}`
           : `${actionableCandidates.length} actionable aday`,
         detail: activeTicket
-          ? `Broker handoff ticket bulundu; aday sayısı ${actionableCandidates.length}.`
-          : "Aktif trade ticket yok; manuel işlem açma kontrolü geçmez.",
+          ? `Broker ticket var; destekleyen aday sayısı ${actionableCandidates.length}.`
+          : "Açılacak net ticket yok; manuel giriş kontrolü geçmez.",
       },
       {
         id: "timeframe_matrix",
-        title: "Timeframe matrix uyumu",
+        title: "Timeframe'ler aynı yönü destekliyor mu?",
         source: "TimeframeMatrix",
         passed:
           Boolean(matrix.data) &&
@@ -272,12 +272,12 @@ export function ExecutionReadinessPanel() {
           matrix.data?.suspended === true
             ? "Matrix suspended; tüm TF'lerde yeni işlem yok."
             : matrixDirectionOk
-              ? "Ticket yönü ile matrix actionable hücreleri uyumlu."
-              : "Ticket yönünü destekleyen actionable TF hücresi bulunamadı.",
+              ? "Ticket yönü en az bir güçlü timeframe ile uyumlu."
+              : "Long/short yönünü destekleyen güçlü timeframe yok.",
       },
       {
         id: "agent_consensus",
-        title: "Agent quorum ve yön birliği",
+        title: "Agentlar aynı yönde mi?",
         source: "AgentVotes / AgentMatrix",
         passed:
           Boolean(dashboard.data) &&
@@ -287,26 +287,26 @@ export function ExecutionReadinessPanel() {
           (!ticketDirection || quorum.leadDirection === ticketDirection),
         metric: `lead ${quorum.leadDirection ?? "-"} · ${quorum.leadCount}/${quorum.votes.length}`,
         detail: agentMatrixBlocks
-          ? `Agent matrix risk action bloklayıcı: ${agentMatrix.data?.risk_action}`
+          ? `Agent matrix risk nedeniyle blokluyor: ${agentMatrix.data?.risk_action}`
           : quorum.quorumReached
-            ? "Agent quorum yönü ticket ile çelişmiyor."
-            : "Agent quorum oluşmadı veya ticket yönüyle çelişiyor.",
+            ? "Agent çoğunluğu ticket yönüyle çelişmiyor."
+            : "Agent çoğunluğu oluşmadı veya yönler çelişiyor.",
       },
       {
         id: "market_structure",
-        title: "Piyasa yapısı ve catalyst",
+        title: "Haber / volatilite engeli var mı?",
         source: "Derivatives / Volatility / Options / Catalyst",
         passed: Boolean(regime.data && matrix.data) && !eventRestrictive && structureWarnings === 0,
         metric: `uyarı ${structureWarnings} · event ${eventRestrictive ? "restrictive" : "clear"}`,
         detail: eventRestrictive
           ? regime.data?.event_risk?.reason ?? matrix.data?.event_risk?.reason ?? "Restrictive event risk var."
           : structureWarnings > 0
-            ? "Türev/volatilite/options/catalyst katmanında kısıtlayıcı uyarı var."
-            : "Makro/catalyst ve piyasa yapı katmanlarında hard kısıt görünmüyor.",
+            ? "Piyasa yapısı, volatilite veya haber katmanında uyarı var."
+            : "Haber, volatilite ve piyasa yapısında sert engel görünmüyor.",
       },
       {
         id: "position_learning",
-        title: "Pozisyon, öğrenme ve shadow kontrolü",
+        title: "Pozisyon ve öğrenme tarafı temiz mi?",
         source: "PositionChecks / Calibration / Mistake / Shadow",
         passed:
           Boolean(paper.data && calibration.data && mistakes.data) &&
@@ -321,30 +321,30 @@ export function ExecutionReadinessPanel() {
           paper.data?.new_entries_disabled === true
             ? "Paper state yeni girişleri kapatmış."
             : !calibrationReady
-              ? "Kalibrasyon örnekleri yetersiz veya fitted değil."
+              ? "Sistem bu rejimde yeterince öğrenmiş değil."
               : avoidMistakes > 0
-                ? "Mistake memory AVOID verdict üretiyor."
+                ? "Geçmiş hata hafızası bu kurulumu kaçın diyor."
                 : shadowConflicts > 0
-                  ? "Shadow/live karşılaştırmasında entry veya yön çatışması var."
-                  : "Pozisyon, kalibrasyon, mistake memory ve shadow katmanı temiz.",
+                  ? "Shadow ve canlı karar arasında yön çatışması var."
+                  : "Pozisyon, öğrenme ve shadow kontrolleri temiz.",
       },
       {
         id: "ticket_integrity",
-        title: "Trade ticket bütünlüğü",
+        title: "Broker'a girilecek ticket hazır mı?",
         source: "TradeTicket",
         passed: ticketPassed,
         metric: activeTicket
           ? `R:R 1:${(ticketSummary?.rr_ratio ?? 0).toFixed(2)} · conf ${Math.round((ticketSummary?.confidence_calibrated ?? 0) * 100)}%`
           : "ticket yok",
         detail: !activeTicket
-          ? "Aktif Trade Ticket yok."
+          ? "Entry, stop, hedef ve büyüklük içeren aktif ticket yok."
           : ticketExpired
             ? "Ticket süresi dolmuş."
-            : ticketSafetyErrors > 0
-              ? "Ticket safety_lines içinde error var."
+          : ticketSafetyErrors > 0
+              ? "Ticket güvenlik satırlarında hata var."
               : ticketPassed
-                ? "Entry, SL, TP, R:R, confidence ve safety lines geçerli."
-                : "Ticket var ama R:R veya confidence eşiği yetersiz.",
+                ? "Entry, stop, hedef, R:R ve güvenlik kontrolleri hazır."
+                : "Ticket var ama R:R veya güven skoru yetersiz.",
       },
     ];
   }, [
@@ -400,7 +400,7 @@ export function ExecutionReadinessPanel() {
             <span className="rc-cyclehud-sep">/</span>
             <span className="rc-cyclehud-total">{checks.length}</span>
           </div>
-          <div className="rc-cyclehud-label">onay · {formatTime(cycleRemaining)}</div>
+          <div className="rc-cyclehud-label">hazır · {formatTime(cycleRemaining)}</div>
         </div>
 
         {/* merkez — holografik agent (3D point-cloud büst) */}
@@ -418,12 +418,18 @@ export function ExecutionReadinessPanel() {
                 : "pending";
             const stateLabel =
               state === "scanning"
-                ? `${check.passed ? "ONAY" : "GEÇERSİZ"} · sınanıyor`
+                ? `${check.passed ? "HAZIR" : "ENGEL VAR"} · kontrol`
                 : state === "ok"
-                  ? "ONAY"
+                  ? "HAZIR"
                   : state === "bad"
-                    ? "GEÇERSİZ"
-                    : "beklemede";
+                    ? "ENGEL VAR"
+                    : "sırada";
+            const reason =
+              state === "pending"
+                ? "Henüz sıraya gelmedi."
+                : check.passed
+                  ? check.metric ?? check.detail
+                  : check.detail;
             const t = checks.length > 1 ? i / (checks.length - 1) : 0.5;
             const bulge = Math.sin(t * Math.PI) * 7;
             return (
@@ -442,6 +448,7 @@ export function ExecutionReadinessPanel() {
                 <span className="rc-node-body">
                   <span className="rc-node-title">{check.title}</span>
                   <span className="rc-node-state">{stateLabel}</span>
+                  <span className="rc-node-reason">{reason}</span>
                 </span>
               </li>
             );

@@ -60,7 +60,6 @@ import { WeightProposalPanel } from "@/components/panels/WeightProposalPanel";
 
 import { HolographicSignalDeck } from "./HolographicSignalDeck";
 import { Layer0ReporterAgent, type Layer0HeroProps } from "./Layer0ReporterAgent";
-import { MacroRiskStrip } from "./MacroRiskStrip";
 import { QuantumBackplaneScene } from "./QuantumBackplaneScene";
 import { SpaceBrainScene } from "./SpaceBrainScene";
 
@@ -408,6 +407,7 @@ export function CockpitView() {
   const { data: paperState } = usePaperTradingState();
   const [activeLayer, setActiveLayer] = useState<LayerIndex>(0);
   const [direction, setDirection] = useState(1);
+  const [hashSynced, setHashSynced] = useState(false);
 
   const activateLayer = (next: LayerIndex) => {
     setDirection(next >= activeLayer ? 1 : -1);
@@ -426,16 +426,18 @@ export function CockpitView() {
       }
     };
     applyHash();
+    setHashSynced(true);
     window.addEventListener("hashchange", applyHash);
     return () => window.removeEventListener("hashchange", applyHash);
   }, []);
 
   useEffect(() => {
+    if (!hashSynced) return;
     const nextHash = `#layer-${activeLayer}`;
     if (window.location.hash !== nextHash) {
       window.history.replaceState(null, "", nextHash);
     }
-  }, [activeLayer]);
+  }, [activeLayer, hashSynced]);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -569,16 +571,8 @@ export function CockpitView() {
     layerContent = (
         <div className="h-full overflow-y-auto p-4 md:p-5">
           <div className="space-y-5">
-            <LayerHeader
-              meta={LAYERS[1]}
-              detail="Yazi kalabaligi yerine ana karar yuzeyleri: kontrol dongusu, sinyal, makro risk, takvim, senaryo, rotasyon ve haber radari."
-            >
-              <DataQualityBadge dqs={dqs} generatedAt={data?.generated_at} />
-            </LayerHeader>
-
             <ExecutionReadinessPanel />
             <HolographicSignalDeck brief={brief} />
-            <MacroRiskStrip />
 
             <section className="quantum-panel-cluster grid grid-cols-1 gap-5 xl:grid-cols-2">
               <EventCalendarPanel />

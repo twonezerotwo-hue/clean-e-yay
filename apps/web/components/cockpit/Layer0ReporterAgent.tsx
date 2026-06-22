@@ -6,12 +6,17 @@ import {
   useAgentBriefing,
   useChat,
   useClosePaperPosition,
+  useDataSnapshot,
   usePaperTradingState,
 } from "@/lib/queries/hooks";
 import { api } from "@/lib/api/client";
 import { fmtRelative } from "@/lib/format";
+import { selectDqs, selectSnapshotMeta } from "@/lib/selectors/snapshot";
 import type { AgentBriefing, ChatResponse } from "@/types/generated/api";
-import { Layer0HumanComputerModel } from "./Layer0HumanComputerModel";
+import {
+  Layer0HumanComputerModel,
+  type Layer0DataQualityPulse,
+} from "./Layer0HumanComputerModel";
 
 type ReporterMessage = {
   role: "user" | "agent";
@@ -182,6 +187,7 @@ export function Layer0ReporterAgent({
   const briefing = useAgentBriefing();
   const chat = useChat();
   const paper = usePaperTradingState();
+  const snapshot = useDataSnapshot();
   const closePosition = useClosePaperPosition();
   const [confirmCloseId, setConfirmCloseId] = useState<string | null>(null);
   const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
@@ -253,6 +259,26 @@ export function Layer0ReporterAgent({
     const last = [...messages].reverse().find((item) => item.role === "agent");
     return last?.text ?? briefingText;
   }, [briefingText, messages]);
+
+  const dataQualityPulse = useMemo<Layer0DataQualityPulse | null>(() => {
+    const dqs = selectDqs(snapshot.data);
+    if (!dqs) return null;
+    const meta = selectSnapshotMeta(snapshot.data);
+    const generatedAt = meta?.generated_at ? Date.parse(meta.generated_at) : NaN;
+    const ageSeconds = Number.isFinite(generatedAt)
+      ? Math.max(0, (Date.now() - generatedAt) / 1000)
+      : null;
+    return {
+      score: dqs.score,
+      status: dqs.status,
+      freshness: dqs.freshness,
+      completeness: dqs.completeness,
+      drift: dqs.drift,
+      reconciliation: dqs.reconciliation,
+      decisionUsage: dqs.decision_usage,
+      ageLabel: ageSeconds == null ? "snapshot bekleniyor" : `${fmtAge(ageSeconds)} önce`,
+    };
+  }, [snapshot.data]);
 
   const clearAudioPlayback = () => {
     audioRef.current?.pause();
@@ -642,7 +668,7 @@ export function Layer0ReporterAgent({
       {/* ── Sutun 2: Human-computer model + karar hero ──────────────── */}
       <div className="flex min-h-0 flex-col gap-4 overflow-y-auto pr-1">
         <div className="reporter-model-card shrink-0">
-          <Layer0HumanComputerModel mode={modelMode} />
+          <Layer0HumanComputerModel mode={modelMode} dataQuality={dataQualityPulse} />
           <div className="reporter-model-hud">
             <div>
               <div className="text-[10px] uppercase tracking-[0.24em] text-accent-cyan/76">

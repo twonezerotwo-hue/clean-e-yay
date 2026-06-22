@@ -7,12 +7,28 @@ import * as THREE from "three";
 
 type ModelMode = "idle" | "listening" | "thinking" | "speaking";
 type Vec3 = [number, number, number];
+export type Layer0DataQualityPulse = {
+  score: number;
+  status: "OK" | "DEGRADED" | "BLOCKED";
+  freshness: number;
+  completeness: number;
+  drift: number;
+  reconciliation: number;
+  decisionUsage: number;
+  ageLabel: string;
+};
 
 const MODE_COLOR: Record<ModelMode, string> = {
   idle: "#22d3ee",
   listening: "#34d399",
   thinking: "#fbbf24",
   speaking: "#a78bfa",
+};
+
+const DQS_COLOR: Record<Layer0DataQualityPulse["status"], string> = {
+  OK: "#34d399",
+  DEGRADED: "#fbbf24",
+  BLOCKED: "#f87171",
 };
 
 function NeuralParticles({ mode }: { mode: ModelMode }) {
@@ -124,7 +140,58 @@ function VoiceAnalyzer({ mode }: { mode: ModelMode }) {
   );
 }
 
-function HumanComputerBust({ mode }: { mode: ModelMode }) {
+function DataQualityCore({
+  dataQuality,
+}: {
+  dataQuality?: Layer0DataQualityPulse | null;
+}) {
+  const group = useRef<THREE.Group>(null);
+  const score = dataQuality?.score ?? 0;
+  const color = dataQuality ? DQS_COLOR[dataQuality.status] : "#67e8f9";
+  const stress = dataQuality ? Math.max(0, 70 - dataQuality.freshness) / 70 : 0.25;
+  const bpm = dataQuality?.status === "BLOCKED" ? 2.55 : dataQuality?.status === "DEGRADED" ? 2.15 : 1.62 + stress * 0.8;
+
+  useFrame(({ clock }) => {
+    if (!group.current) return;
+    const phase = (clock.elapsedTime * bpm) % 1;
+    const systole = Math.exp(-Math.pow((phase - 0.08) / 0.034, 2));
+    const echo = Math.exp(-Math.pow((phase - 0.24) / 0.06, 2));
+    const pulse = 1 + systole * 0.46 + echo * 0.2;
+    group.current.scale.setScalar(pulse);
+    group.current.rotation.z = Math.sin(clock.elapsedTime * 1.5) * 0.08;
+  });
+
+  return (
+    <group ref={group} position={[0, 0.62, 0.58]}>
+      <mesh>
+        <sphereGeometry args={[0.075 + Math.max(0, score) / 1600, 24, 24]} />
+        <meshBasicMaterial
+          color={color}
+          transparent
+          opacity={0.9}
+          blending={THREE.AdditiveBlending}
+          depthWrite={false}
+        />
+      </mesh>
+      <mesh rotation={[Math.PI / 2, 0, 0]}>
+        <torusGeometry args={[0.18, 0.006, 8, 72]} />
+        <meshBasicMaterial color={color} transparent opacity={0.72} depthWrite={false} />
+      </mesh>
+      <mesh rotation={[Math.PI / 2, 0, 0]}>
+        <torusGeometry args={[0.29, 0.004, 8, 96]} />
+        <meshBasicMaterial color={color} transparent opacity={0.34} depthWrite={false} />
+      </mesh>
+    </group>
+  );
+}
+
+function HumanComputerBust({
+  mode,
+  dataQuality,
+}: {
+  mode: ModelMode;
+  dataQuality?: Layer0DataQualityPulse | null;
+}) {
   const group = useRef<THREE.Group>(null);
   const cloud = useRef<THREE.Points>(null);
   const color = MODE_COLOR[mode];
@@ -217,6 +284,7 @@ function HumanComputerBust({ mode }: { mode: ModelMode }) {
         <meshBasicMaterial color="#e0f2fe" transparent opacity={0.95} />
       </mesh>
       <VoiceAnalyzer mode={mode} />
+      <DataQualityCore dataQuality={dataQuality} />
     </group>
   );
 }
@@ -262,7 +330,13 @@ function DataRibbons({ mode }: { mode: ModelMode }) {
   );
 }
 
-function Scene({ mode }: { mode: ModelMode }) {
+function Scene({
+  mode,
+  dataQuality,
+}: {
+  mode: ModelMode;
+  dataQuality?: Layer0DataQualityPulse | null;
+}) {
   const color = MODE_COLOR[mode];
 
   return (
@@ -276,12 +350,32 @@ function Scene({ mode }: { mode: ModelMode }) {
       <NeuralParticles mode={mode} />
       <DataRibbons mode={mode} />
       <HologramRings mode={mode} />
-      <HumanComputerBust mode={mode} />
+      <HumanComputerBust mode={mode} dataQuality={dataQuality} />
     </>
   );
 }
 
-export function Layer0HumanComputerModel({ mode }: { mode: ModelMode }) {
+const DQS_METRICS = [
+  ["Fresh", "freshness"],
+  ["Comp", "completeness"],
+  ["Drift", "drift"],
+  ["Recon", "reconciliation"],
+  ["Use", "decisionUsage"],
+] as const;
+
+function clampMetric(value: number) {
+  return Math.max(0, Math.min(100, Math.round(value)));
+}
+
+export function Layer0HumanComputerModel({
+  mode,
+  dataQuality,
+}: {
+  mode: ModelMode;
+  dataQuality?: Layer0DataQualityPulse | null;
+}) {
+  const status = dataQuality?.status ?? "DEGRADED";
+  const score = dataQuality ? clampMetric(dataQuality.score) : null;
   return (
     <div className="layer0-human-model">
       <Canvas
@@ -290,11 +384,35 @@ export function Layer0HumanComputerModel({ mode }: { mode: ModelMode }) {
         gl={{ antialias: true, alpha: false, preserveDrawingBuffer: true }}
       >
         <Suspense fallback={null}>
-          <Scene mode={mode} />
+          <Scene mode={mode} dataQuality={dataQuality} />
         </Suspense>
       </Canvas>
       <div className="layer0-human-model__beam" />
       <div className="layer0-human-model__scan" />
+      <div className={`layer0-human-model__dqs layer0-human-model__dqs--${status.toLowerCase()}`}>
+        <div className="layer0-human-model__dqs-head">
+          <span>Veri Kalp Ritmi</span>
+          <strong>{score == null ? "--" : `DQS ${score}`}</strong>
+          <em>{dataQuality ? `${dataQuality.status} · ${dataQuality.ageLabel}` : "bekleniyor"}</em>
+        </div>
+        <div className="layer0-human-model__ecg" aria-hidden="true">
+          <svg viewBox="0 0 240 42" preserveAspectRatio="none">
+            <path d="M0 24 H35 L44 24 L51 10 L59 34 L69 18 L78 24 H112 L121 24 L128 8 L136 36 L146 19 L156 24 H240" />
+          </svg>
+        </div>
+        <div className="layer0-human-model__dqs-metrics">
+          {DQS_METRICS.map(([label, key]) => {
+            const value = dataQuality ? clampMetric(dataQuality[key]) : 0;
+            return (
+              <span key={key}>
+                <b>{label}</b>
+                <i style={{ width: `${value}%` }} />
+                <em>{dataQuality ? value : "--"}</em>
+              </span>
+            );
+          })}
+        </div>
+      </div>
     </div>
   );
 }
