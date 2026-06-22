@@ -87,6 +87,29 @@ paths:
               schema:
                 $ref: "#/components/schemas/ChatResponse"
 
+  /api/voice/speak:
+    post:
+      operationId: postVoiceSpeak
+      summary: High quality TTS proxy (provider key never reaches frontend)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/VoiceSpeakRequest"
+      responses:
+        "200":
+          description: MPEG audio
+          content:
+            audio/mpeg:
+              schema:
+                type: string
+                format: binary
+        "400":
+          description: Empty text
+        "503":
+          description: TTS provider not configured or unavailable
+
   /api/v1/paper-trading/state:
     get:
       operationId: getPaperTradingState
@@ -984,6 +1007,14 @@ components:
       required: [message]
       properties:
         message: { type: string, minLength: 1, maxLength: 2000 }
+
+    VoiceSpeakRequest:
+      type: object
+      required: [text]
+      properties:
+        text: { type: string, minLength: 1, maxLength: 4000 }
+        voice: { type: string, nullable: true, maxLength: 128 }
+        provider: { type: string, nullable: true, maxLength: 32 }
 
     ChatResponse:
       type: object

@@ -212,6 +212,12 @@ export type AIReport = {
 
 export type ChatRequest = { message: string };
 
+export type VoiceSpeakRequest = {
+  text: string;
+  voice?: string | null;
+  provider?: string | null;
+};
+
 export type ChatResponse = {
   answer: string;
   refused: boolean;

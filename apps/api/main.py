@@ -72,6 +72,7 @@ from apps.api.routers import (
     stream,
     system,
     technical,
+    voice,
 )
 
 _START_TS = time.monotonic()
@@ -132,6 +133,7 @@ def create_app() -> FastAPI:
     app.include_router(system.router, prefix=prefix)
     app.include_router(stream.router, prefix=prefix)
     app.include_router(briefing.router, prefix=prefix)
+    app.include_router(voice.router, prefix="/api")
     return app
 
 

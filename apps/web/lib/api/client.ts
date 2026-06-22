@@ -30,6 +30,7 @@ import type {
   TickResult,
   TradeTicketList,
   AgentBriefing,
+  VoiceSpeakRequest,
 } from "@/types/generated/api";
 
 // NEXT_PUBLIC_API_BASE_URL tercih edilen; NEXT_PUBLIC_API_BASE geriye dönük
@@ -64,6 +65,22 @@ async function fetchJSON<T>(path: string, init?: RequestInit): Promise<T> {
     throw new Error(`API ${res.status} ${path}: ${await res.text().catch(() => "")}`);
   }
   return res.json() as Promise<T>;
+}
+
+async function fetchAudio(path: string, init?: RequestInit): Promise<Blob> {
+  const headers = new Headers(init?.headers);
+  if (init?.body && !headers.has("content-type")) {
+    headers.set("content-type", "application/json");
+  }
+  const res = await fetch(`${BASE}${path}`, {
+    cache: "no-store",
+    ...init,
+    headers,
+  });
+  if (!res.ok) {
+    throw new Error(`API ${res.status} ${path}: ${await res.text().catch(() => "")}`);
+  }
+  return res.blob();
 }
 
 export const api = {
@@ -130,4 +147,9 @@ export const api = {
       body: JSON.stringify({ message }),
     }),
   agentBriefing: () => fetchJSON<AgentBriefing>("/api/v1/agent/briefing"),
+  voiceSpeak: (payload: VoiceSpeakRequest) =>
+    fetchAudio("/api/voice/speak", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
 };

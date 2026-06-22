@@ -8,6 +8,7 @@ import {
   useClosePaperPosition,
   usePaperTradingState,
 } from "@/lib/queries/hooks";
+import { api } from "@/lib/api/client";
 import { fmtRelative } from "@/lib/format";
 import type { AgentBriefing, ChatResponse } from "@/types/generated/api";
 import { Layer0HumanComputerModel } from "./Layer0HumanComputerModel";
@@ -190,21 +191,32 @@ export function Layer0ReporterAgent({
   const [dialogueMode, setDialogueMode] = useState(false);
   const [listening, setListening] = useState(false);
   const [speaking, setSpeaking] = useState(false);
-  const [speechReady, setSpeechReady] = useState(false);
+  const [voiceLoading, setVoiceLoading] = useState(false);
+  const [voiceError, setVoiceError] = useState<string | null>(null);
   const [micReady, setMicReady] = useState(false);
   const [lastUserText, setLastUserText] = useState("");
   const dialogueModeRef = useRef(false);
   const listeningRef = useRef(false);
   const chatPendingRef = useRef(false);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const audioUrlRef = useRef<string | null>(null);
+  const speechRunRef = useRef(0);
 
   useEffect(() => {
-    setSpeechReady(typeof window !== "undefined" && "speechSynthesis" in window);
     setMicReady(Boolean(getSpeechRecognition()));
     return () => {
+      speechRunRef.current += 1;
+      audioRef.current?.pause();
+      audioRef.current = null;
+      if (audioUrlRef.current) {
+        window.URL.revokeObjectURL(audioUrlRef.current);
+        audioUrlRef.current = null;
+      }
       if (typeof window !== "undefined" && "speechSynthesis" in window) {
         window.speechSynthesis.cancel();
       }
       setSpeaking(false);
+      setVoiceLoading(false);
       recognitionRef.current?.stop();
     };
   }, []);
@@ -242,20 +254,38 @@ export function Layer0ReporterAgent({
     return last?.text ?? briefingText;
   }, [briefingText, messages]);
 
-  const speak = (text: string) => {
+  const clearAudioPlayback = () => {
+    audioRef.current?.pause();
+    audioRef.current = null;
+    if (audioUrlRef.current) {
+      window.URL.revokeObjectURL(audioUrlRef.current);
+      audioUrlRef.current = null;
+    }
+  };
+
+  const speakWithBrowserFallback = (text: string) => {
     if (!voiceEnabled || typeof window === "undefined" || !("speechSynthesis" in window)) {
       return false;
     }
+    clearAudioPlayback();
     window.speechSynthesis.cancel();
     setSpeaking(false);
     const utterance = new SpeechSynthesisUtterance(cleanForVoice(text));
     utterance.lang = "tr-TR";
-    utterance.rate = 0.96;
-    utterance.pitch = 0.92;
+    utterance.rate = 1.0;
+    utterance.pitch = 1.02;
     const voices = window.speechSynthesis.getVoices();
+    // Doğal/neural sesleri tercih et (Microsoft "Online (Natural)", Google,
+    // wavenet…) — yoksa varsayılan robotik sese düş.
+    const isNatural = (v: SpeechSynthesisVoice) =>
+      /natural|neural|online|google|premium|wavenet|siri/i.test(v.name);
+    const isTr = (v: SpeechSynthesisVoice) => v.lang.toLowerCase().startsWith("tr");
+    const isEn = (v: SpeechSynthesisVoice) => v.lang.toLowerCase().startsWith("en");
     utterance.voice =
-      voices.find((voice) => voice.lang.toLowerCase().startsWith("tr")) ??
-      voices.find((voice) => voice.lang.toLowerCase().startsWith("en")) ??
+      voices.find((v) => isTr(v) && isNatural(v)) ??
+      voices.find(isTr) ??
+      voices.find((v) => isEn(v) && isNatural(v)) ??
+      voices.find(isEn) ??
       null;
     utterance.onstart = () => setSpeaking(true);
     utterance.onend = () => {
@@ -267,6 +297,64 @@ export function Layer0ReporterAgent({
     utterance.onerror = () => setSpeaking(false);
     window.speechSynthesis.speak(utterance);
     return true;
+  };
+
+  const speak = async (text: string) => {
+    const cleanText = cleanForVoice(text);
+    if (!voiceEnabled || !cleanText || typeof window === "undefined") {
+      return false;
+    }
+
+    const runId = speechRunRef.current + 1;
+    speechRunRef.current = runId;
+    setVoiceError(null);
+    setVoiceLoading(true);
+    setSpeaking(false);
+    clearAudioPlayback();
+    if ("speechSynthesis" in window) {
+      window.speechSynthesis.cancel();
+    }
+
+    try {
+      const audioBlob = await api.voiceSpeak({ text: cleanText });
+      if (speechRunRef.current !== runId) return false;
+
+      const audioUrl = window.URL.createObjectURL(audioBlob);
+      const audio = new Audio(audioUrl);
+      audioRef.current = audio;
+      audioUrlRef.current = audioUrl;
+      audio.onended = () => {
+        if (speechRunRef.current !== runId) return;
+        setSpeaking(false);
+        clearAudioPlayback();
+        if (dialogueModeRef.current) {
+          window.setTimeout(() => startListening(), 520);
+        }
+      };
+      audio.onerror = () => {
+        if (speechRunRef.current !== runId) return;
+        setSpeaking(false);
+        setVoiceError("Ses üretilemedi.");
+        clearAudioPlayback();
+      };
+
+      setVoiceLoading(false);
+      setSpeaking(true);
+      await audio.play();
+      return true;
+    } catch {
+      if (speechRunRef.current !== runId) return false;
+      setVoiceLoading(false);
+      setSpeaking(false);
+      clearAudioPlayback();
+      const fallbackSpoke = speakWithBrowserFallback(cleanText);
+      setVoiceError(
+        fallbackSpoke
+          ? "Kaliteli ses üretilemedi; tarayıcı sesi kullanılıyor."
+          : "Ses üretilemedi.",
+      );
+      return fallbackSpoke;
+    }
   };
 
   const send = (message: string) => {
@@ -281,19 +369,21 @@ export function Layer0ReporterAgent({
           ...items,
           { role: "agent", text: response.answer, meta: response },
         ]);
-        const spoke = speak(response.answer);
-        if (!spoke && dialogueModeRef.current) {
-          window.setTimeout(() => startListening(), 520);
-        }
+        void speak(response.answer).then((spoke) => {
+          if (!spoke && dialogueModeRef.current) {
+            window.setTimeout(() => startListening(), 520);
+          }
+        });
       },
       onError: () => {
         const fallback =
           "API chat yaniti alinamadi. Katman 0 sadece mevcut backend verisine bagli calisir; baglanti gelince soruyu yeniden cevaplayabilirim.";
         setMessages((items) => [...items, { role: "agent", text: fallback }]);
-        const spoke = speak(fallback);
-        if (!spoke && dialogueModeRef.current) {
-          window.setTimeout(() => startListening(), 520);
-        }
+        void speak(fallback).then((spoke) => {
+          if (!spoke && dialogueModeRef.current) {
+            window.setTimeout(() => startListening(), 520);
+          }
+        });
       },
     });
   };
@@ -324,12 +414,15 @@ export function Layer0ReporterAgent({
 
   const stopSpeaking = () => {
     setDialogueMode(false);
+    speechRunRef.current += 1;
+    clearAudioPlayback();
     if (typeof window !== "undefined" && "speechSynthesis" in window) {
       window.speechSynthesis.cancel();
     }
     recognitionRef.current?.stop();
     setListening(false);
     setSpeaking(false);
+    setVoiceLoading(false);
   };
 
   const toggleDialogueMode = () => {
@@ -348,16 +441,20 @@ export function Layer0ReporterAgent({
     ? "listening"
     : chat.isPending
       ? "thinking"
-      : speaking
-        ? "speaking"
-        : "idle";
+      : voiceLoading
+        ? "thinking"
+        : speaking
+          ? "speaking"
+          : "idle";
   const stateLabel =
     modelMode === "speaking"
       ? "konusuyor"
       : modelMode === "listening"
         ? "dinliyor"
         : modelMode === "thinking"
-          ? "dusunuyor"
+          ? voiceLoading
+            ? "ses hazirlaniyor"
+            : "dusunuyor"
           : "hazir";
   const positions = paper.data?.open_positions ?? [];
   const totalPnl = paper.data?.unrealized_pnl_usd ?? 0;
@@ -566,7 +663,7 @@ export function Layer0ReporterAgent({
           </div>
           <div className="reporter-model-footer">
             <span>{stateLabel}</span>
-            <span>{speechReady ? "audio ready" : "audio off"}</span>
+            <span>{voiceEnabled ? "tts ready" : "audio off"}</span>
             <span>{micReady ? "mic ready" : "mic off"}</span>
           </div>
         </div>
@@ -615,9 +712,8 @@ export function Layer0ReporterAgent({
             <button
               type="button"
               onClick={() => setVoiceEnabled((value) => !value)}
-              disabled={!speechReady}
               className={`rounded-lg border px-2 py-1 text-[10px] uppercase tracking-widest transition-colors disabled:opacity-40 ${
-                voiceEnabled && speechReady
+                voiceEnabled
                   ? "border-emerald-400/40 bg-emerald-400/10 text-emerald-300"
                   : "border-white/10 bg-white/[0.035] text-white/45"
               }`}
@@ -657,12 +753,23 @@ export function Layer0ReporterAgent({
               <p className="mt-2 text-sm leading-6 text-white/72">{latestAgentText}</p>
               <button
                 type="button"
-                onClick={() => speak(latestAgentText)}
-                disabled={!speechReady}
+                onClick={() => {
+                  if (speaking || voiceLoading) {
+                    stopSpeaking();
+                  } else {
+                    void speak(latestAgentText);
+                  }
+                }}
+                disabled={!voiceEnabled}
                 className="mt-3 rounded-full border border-accent-cyan/30 bg-accent-cyan/8 px-3 py-1.5 text-[10px] uppercase tracking-widest text-accent-cyan disabled:opacity-40"
               >
-                Sesli oku
+                {voiceLoading ? "Ses uretiliyor" : speaking ? "Durdur" : "Sesli oku"}
               </button>
+              {voiceError ? (
+                <div className="mt-2 text-[10px] uppercase tracking-widest text-amber-300/80">
+                  {voiceError}
+                </div>
+              ) : null}
             </div>
           ) : (
             messages.map((message, index) => (
