@@ -85,6 +85,15 @@ export const useDataSnapshot = () =>
     refetchInterval: 30_000,
   });
 
+/** Küresel Likidite Rotasyon — sepet × 1D/7D/30D flow skoru + rejim. */
+export const useLiquidityRotation = () =>
+  useQuery({
+    queryKey: qk.liquidityRotation,
+    queryFn: api.liquidityRotation,
+    staleTime: 30_000,
+    refetchInterval: 60_000,
+  });
+
 export const useRebalanceProposal = () =>
   useQuery({
     queryKey: qk.rebalanceProposal,

@@ -26,6 +26,29 @@ _SYMBOL_ALIASES = {
     "silver": "XAGUSD",
 }
 
+# İşlem evreni (otomatik işlem yalnızca bunlarda).
+_TRADE_UNIVERSE = {"BTCUSD", "ETHUSD", "XAUUSD", "XAGUSD"}
+
+# Geçici (ephemeral) teknik analiz için DESTEKLENEN sembol alias'ları —
+# işlem evreni + provider'da çekilebilen diğer varlıklar.
+_ANALYZE_ALIASES = {
+    **_SYMBOL_ALIASES,
+    "sp500": "SP500", "s&p": "SP500", "spx": "SP500", "hisse": "SP500",
+    "stocks": "SP500", "borsa": "SP500",
+    "qqq": "QQQ", "nasdaq": "QQQ",
+    "brent": "BRENT", "petrol": "BRENT", "oil": "BRENT",
+    "tlt": "TLT", "tahvil": "TLT", "bond": "TLT", "bonds": "TLT",
+    "dxy": "DXY", "dolar endeks": "DXY", "dollar index": "DXY",
+    "vix": "VIX", "korku endeks": "VIX",
+    "hyg": "HYG", "lqd": "LQD",
+}
+
+# Analiz niyeti — sembol + bu kelimelerden biri → ephemeral teknik analiz.
+_ANALYZE_INTENT = (
+    "analiz", "teknik", "incele", "yorumla", "yorum", "rsi", "trend",
+    "nasıl görün", "nasil gorun", "ne durumda", "grafik", "momentum",
+)
+
 _TIMEFRAMES = ("15m", "1h", "4h", "1d", "1w")
 
 # Yön eşiği (consensus.bullish_min) — config tek kaynak, hardcode etme.
@@ -75,6 +98,46 @@ def _detect_timeframe(folded: str) -> str | None:
         if tf in folded:
             return tf
     return None
+
+
+def _detect_analyze_symbol(folded: str) -> str | None:
+    """Geçici teknik analiz için desteklenen sembol (geniş alias seti)."""
+    for alias, sym in _ANALYZE_ALIASES.items():
+        if alias in folded:
+            return sym
+    return None
+
+
+def _asset_analysis_answer(symbol: str) -> tuple[str, list[str]]:
+    """Ephemeral teknik analiz — mevcut pipeline'ı sembol için on-demand çalıştırır."""
+    from packages.analysis.ephemeral import analyze_symbol
+
+    a = analyze_symbol(symbol)
+    if not a.get("available"):
+        return (
+            f"{symbol} için on-demand veri kaynağı yok ({a.get('reason', '')}). "
+            "Desteklenenlerde teknik analiz yapabilirim: BTC, ETH, Altın, Gümüş, "
+            "SP500, QQQ, Brent, Tahvil (TLT), DXY, VIX.",
+            ["analysis:unavailable"],
+        )
+    tf = a["timeframes"]
+    parts = [f"{symbol} geçici teknik analiz (gözlemci):"]
+    parts.append(f"Genel skor {a['overall_score']}/100 → {a['overall_direction']}.")
+    if a.get("last_price") is not None:
+        parts.append(f"Son fiyat {a['last_price']:,.2f}.")
+    mom = a.get("momentum_pct") or {}
+    mom_str = ", ".join(f"{k} {v:+.1f}%" for k, v in mom.items() if v is not None)
+    if mom_str:
+        parts.append(f"Momentum: {mom_str}.")
+    for t, d in tf.items():
+        rsi = f"RSI {d['rsi']}" if d.get("rsi") is not None else "RSI yok"
+        parts.append(
+            f"{t}: skor {d['score']} ({d['direction']}), {rsi}, EMA {d.get('ema_stack') or '—'}."
+        )
+    parts.append("Not: işlem evreni dışı / gözlemci — otomatik işlem yok.")
+    evidence = [f"analysis:{symbol}", f"score:{a['overall_score']}"]
+    evidence += [f"tf:{t}:{d['score']}" for t, d in tf.items()]
+    return " ".join(parts), evidence
 
 
 def _cells_for(ctx: dict, symbol: str, timeframe: str | None) -> list[dict]:
@@ -491,6 +554,13 @@ def _grounded_answer(message: str, ctx: dict) -> tuple[str, list[str]]:
                   "engelliyor", "engelle", "blocked", "ne durduruyor", "ne engel")
     ):
         return _risk_gate_answer(ctx)
+    # Geçici teknik analiz: desteklenen sembol + analiz niyeti, VEYA işlem
+    # evreni dışı bir sembol (onun için "neden işlem yok" mantığı yoktur).
+    analyze_sym = _detect_analyze_symbol(folded)
+    if analyze_sym and (
+        any(k in folded for k in _ANALYZE_INTENT) or analyze_sym not in _TRADE_UNIVERSE
+    ):
+        return _asset_analysis_answer(analyze_sym)
     if symbol and any(
         k in folded for k in ("neden", "niye", "açmadın", "açılmadı", "hold", "why")
     ):

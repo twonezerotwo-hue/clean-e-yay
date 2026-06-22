@@ -16,6 +16,7 @@ import type {
   DataSnapshot,
   Health,
   LearningSummary,
+  LiquidityRotation,
   MarketSessionsCurrentResponse,
   MistakesState,
   NotificationList,
@@ -85,6 +86,8 @@ export const api = {
   learningSummary: () =>
     fetchJSON<LearningSummary>("/api/v1/learning/summary"),
   dataSnapshot: () => fetchJSON<DataSnapshot>("/api/v1/data/snapshot"),
+  liquidityRotation: () =>
+    fetchJSON<LiquidityRotation>("/api/v1/liquidity/rotation"),
   rebalanceProposal: () =>
     fetchJSON<RebalanceState>("/api/v1/learning/rebalance/proposal"),
   calibration: () =>

@@ -135,7 +135,7 @@ export const PANEL_REGISTRY: PanelMeta[] = [
   { id: "options_vol",      title: "Options IV / Skew",    defaultVisible: true,  span: "1",    group: "market",          tier: "detay" },
   { id: "correlation",      title: "Korelasyon",           defaultVisible: true,  span: "2",    group: "market",          tier: "detay" },
   { id: "patterns",         title: "Grafik Desenleri",     defaultVisible: true,  span: "1",    group: "market",          tier: "detay" },
-  { id: "capital_rotation", title: "Sermaye Rotasyonu",    defaultVisible: true,  span: "full", group: "market",          tier: "detay" },
+  { id: "capital_rotation", title: "Kuresel Likidite Rotasyonu", defaultVisible: true,  span: "full", group: "market",          tier: "detay" },
   // ── DETAY — Makro / Catalyst ─────────────────────────────────────────────
   { id: "catalyst_impact",  title: "Catalyst Etkisi",      defaultVisible: true,  span: "2",    group: "macro",           tier: "detay" },
   { id: "event_calendar",   title: "Olay Takvimi",         defaultVisible: true,  span: "1",    group: "macro",           tier: "detay" },

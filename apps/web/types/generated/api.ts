@@ -95,6 +95,35 @@ export type RegimeReport = {
   event_risk?: EventRiskView;
 };
 
+// Küresel Likidite Rotasyon — sabit sepet flow skoru (1D/7D/30D). Gözlemci.
+export type FlowDirection = "in" | "out" | "neutral";
+export type LiquidityRegime =
+  | "RISK_ON"
+  | "CONTROLLED_RISK_ON"
+  | "NEUTRAL"
+  | "RISK_OFF"
+  | "CRISIS";
+export type LiquidityAssetFlow = {
+  symbol: string;
+  label: string;
+  kind: string;
+  return_pct: number | null;
+  volume_change_pct: number | null;
+  flow_score: number;
+  direction: FlowDirection;
+};
+export type LiquidityWindow = {
+  window: string;
+  assets: LiquidityAssetFlow[];
+  regime: LiquidityRegime;
+  regime_reasons: string[];
+  contradictions: string[];
+};
+export type LiquidityRotation = {
+  windows: LiquidityWindow[];
+  basket_size: number;
+};
+
 export type RiskAction =
   | "HOLD"
   | "WATCH"

@@ -242,11 +242,6 @@ export function Layer0ReporterAgent({
     return last?.text ?? briefingText;
   }, [briefingText, messages]);
 
-  const queueDialogueListen = (delay = 520) => {
-    if (!dialogueModeRef.current || typeof window === "undefined") return;
-    window.setTimeout(() => startListening(), delay);
-  };
-
   const speak = (text: string) => {
     if (!voiceEnabled || typeof window === "undefined" || !("speechSynthesis" in window)) {
       return false;
@@ -265,12 +260,11 @@ export function Layer0ReporterAgent({
     utterance.onstart = () => setSpeaking(true);
     utterance.onend = () => {
       setSpeaking(false);
-      queueDialogueListen();
+      if (dialogueModeRef.current) {
+        window.setTimeout(() => startListening(), 520);
+      }
     };
-    utterance.onerror = () => {
-      setSpeaking(false);
-      queueDialogueListen(720);
-    };
+    utterance.onerror = () => setSpeaking(false);
     window.speechSynthesis.speak(utterance);
     return true;
   };
@@ -278,30 +272,27 @@ export function Layer0ReporterAgent({
   const send = (message: string) => {
     const text = message.trim();
     if (!text || chat.isPending) return;
-    chatPendingRef.current = true;
     setLastUserText(text);
     setMessages((items) => [...items, { role: "user", text }]);
     setInput("");
     chat.mutate(text, {
       onSuccess: (response) => {
-        chatPendingRef.current = false;
         setMessages((items) => [
           ...items,
           { role: "agent", text: response.answer, meta: response },
         ]);
         const spoke = speak(response.answer);
         if (!spoke && dialogueModeRef.current) {
-          queueDialogueListen();
+          window.setTimeout(() => startListening(), 520);
         }
       },
       onError: () => {
-        chatPendingRef.current = false;
         const fallback =
           "API chat yaniti alinamadi. Katman 0 sadece mevcut backend verisine bagli calisir; baglanti gelince soruyu yeniden cevaplayabilirim.";
         setMessages((items) => [...items, { role: "agent", text: fallback }]);
         const spoke = speak(fallback);
         if (!spoke && dialogueModeRef.current) {
-          queueDialogueListen();
+          window.setTimeout(() => startListening(), 520);
         }
       },
     });
@@ -312,57 +303,41 @@ export function Layer0ReporterAgent({
     const Recognition = getSpeechRecognition();
     if (!Recognition) return;
     const recognition = new Recognition();
-    let deliveredTranscript = false;
     recognition.lang = "tr-TR";
     recognition.interimResults = false;
     recognition.maxAlternatives = 1;
     recognition.onresult = (event) => {
-      deliveredTranscript = true;
       const transcript = event.results[0]?.[0]?.transcript ?? "";
-      listeningRef.current = false;
       setListening(false);
       if (transcript.trim()) send(transcript);
     };
-    recognition.onerror = () => {
-      listeningRef.current = false;
-      setListening(false);
-      if (!deliveredTranscript) queueDialogueListen(900);
-    };
-    recognition.onend = () => {
-      listeningRef.current = false;
-      setListening(false);
-      if (!deliveredTranscript) queueDialogueListen(900);
-    };
+    recognition.onerror = () => setListening(false);
+    recognition.onend = () => setListening(false);
     recognitionRef.current = recognition;
-    listeningRef.current = true;
     setListening(true);
     try {
       recognition.start();
     } catch {
-      listeningRef.current = false;
       setListening(false);
     }
   };
 
   const stopSpeaking = () => {
-    dialogueModeRef.current = false;
     setDialogueMode(false);
     if (typeof window !== "undefined" && "speechSynthesis" in window) {
       window.speechSynthesis.cancel();
     }
     recognitionRef.current?.stop();
-    listeningRef.current = false;
     setListening(false);
     setSpeaking(false);
   };
 
   const toggleDialogueMode = () => {
     const next = !dialogueMode;
-    dialogueModeRef.current = next;
     setDialogueMode(next);
     if (next) {
       setVoiceEnabled(true);
-      queueDialogueListen(120);
+      window.setTimeout(() => startListening(), 120);
     } else {
       stopSpeaking();
     }
@@ -569,17 +544,8 @@ export function Layer0ReporterAgent({
 
       {/* ── Sutun 2: Human-computer model + karar hero ──────────────── */}
       <div className="flex min-h-0 flex-col gap-4 overflow-y-auto pr-1">
-        <div
-          className={`reporter-model-card shrink-0 reporter-model-card-${modelMode} ${
-            dialogueMode ? "reporter-model-card-live" : ""
-          }`}
-        >
+        <div className="reporter-model-card shrink-0">
           <Layer0HumanComputerModel mode={modelMode} />
-          <div className="cinema-voice-halo" aria-hidden>
-            <span />
-            <span />
-            <span />
-          </div>
           <div className="reporter-model-hud">
             <div>
               <div className="text-[10px] uppercase tracking-[0.24em] text-accent-cyan/76">
@@ -602,10 +568,6 @@ export function Layer0ReporterAgent({
             <span>{stateLabel}</span>
             <span>{speechReady ? "audio ready" : "audio off"}</span>
             <span>{micReady ? "mic ready" : "mic off"}</span>
-          </div>
-          <div className="cinema-subtitle">
-            <span>{subtitleSpeaker}</span>
-            <p>{subtitleText}</p>
           </div>
         </div>
 
@@ -652,18 +614,6 @@ export function Layer0ReporterAgent({
           <div className="flex items-center gap-1.5">
             <button
               type="button"
-              onClick={toggleDialogueMode}
-              disabled={!micReady || (!dialogueMode && chat.isPending)}
-              className={`rounded-lg border px-2 py-1 text-[10px] uppercase tracking-widest transition-colors disabled:opacity-40 ${
-                dialogueMode
-                  ? "border-emerald-400/45 bg-emerald-400/12 text-emerald-300"
-                  : "border-accent-cyan/30 bg-accent-cyan/8 text-accent-cyan"
-              }`}
-            >
-              Diyalog
-            </button>
-            <button
-              type="button"
               onClick={() => setVoiceEnabled((value) => !value)}
               disabled={!speechReady}
               className={`rounded-lg border px-2 py-1 text-[10px] uppercase tracking-widest transition-colors disabled:opacity-40 ${
@@ -693,21 +643,6 @@ export function Layer0ReporterAgent({
             >
               Sus
             </button>
-          </div>
-        </div>
-
-        <div className={`cinema-dialogue-bridge ${dialogueMode ? "is-live" : ""}`}>
-          <div className="cinema-dialogue-head">
-            <span>{dialogueMode ? "CANLI BAGLANTI" : "SINEMATIK DIYALOG"}</span>
-            <span>{stateLabel}</span>
-          </div>
-          <div className="cinema-dialogue-line user">
-            <span>Sen</span>
-            <p>{lastUserText ? shortLine(lastUserText, 130) : "Mikrofona bas veya diyalog modunu ac."}</p>
-          </div>
-          <div className="cinema-dialogue-line agent">
-            <span>E-yAy</span>
-            <p>{shortLine(latestAgentText, 150)}</p>
           </div>
         </div>
 

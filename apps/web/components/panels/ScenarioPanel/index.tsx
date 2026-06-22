@@ -35,12 +35,15 @@ function scenarioWeights(data: ReturnType<typeof useRegimeReport>["data"]): Scen
     .filter((layer) => layer.direction === "neutral")
     .reduce((sum, layer) => sum + layer.score, 0);
 
+  // Ağırlıklar YALNIZCA backend skorlarından (yön bazında asset + layer skoru).
+  // Frontend sabit/bonus eklemez — regime_label zaten bu skorlardan türediği için
+  // ayrıca eklemek çift sayım olur (panel başlığındaki "derived from backend" iddiası).
   const riskOnRaw =
-    bullishAssets.reduce((sum, asset) => sum + asset.score, 0) + bullishLayerScore + (data?.regime_label === "OFFENSIVE" ? 80 : 0);
+    bullishAssets.reduce((sum, asset) => sum + asset.score, 0) + bullishLayerScore;
   const riskOffRaw =
-    bearishAssets.reduce((sum, asset) => sum + asset.score, 0) + bearishLayerScore + (data?.regime_label === "CRISIS" ? 90 : 0);
+    bearishAssets.reduce((sum, asset) => sum + asset.score, 0) + bearishLayerScore;
   const baseRaw =
-    neutralAssets.reduce((sum, asset) => sum + asset.score, 0) + neutralLayerScore + (data?.regime_label === "NEUTRAL" ? 75 : 38);
+    neutralAssets.reduce((sum, asset) => sum + asset.score, 0) + neutralLayerScore;
   const [riskOn, base, riskOff] = normalize([riskOnRaw, baseRaw, riskOffRaw]);
 
   return [

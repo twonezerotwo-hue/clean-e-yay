@@ -53,6 +53,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from apps.api.routers import (
     ai_report,
+    analysis,
     briefing,
     chat,
     cockpit,
@@ -61,6 +62,7 @@ from apps.api.routers import (
     decision,
     health,
     learning,
+    liquidity,
     market_sessions,
     paper_trading,
     rebalance,
@@ -119,6 +121,8 @@ def create_app() -> FastAPI:
     app.include_router(market_sessions.router, prefix=prefix)
     app.include_router(learning.router, prefix=prefix)
     app.include_router(data.router, prefix=prefix)
+    app.include_router(liquidity.router, prefix=prefix)
+    app.include_router(analysis.router, prefix=prefix)
     app.include_router(technical.router, prefix=prefix)
     app.include_router(decision.router, prefix=prefix)
     app.include_router(cockpit.router, prefix=prefix)

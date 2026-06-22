@@ -12,11 +12,11 @@ import { useCockpitBrief, usePaperTradingState, useTradeTickets } from "@/lib/qu
 import {
   AGENT_STATUS_LABEL,
   AGENT_STATUS_TONE,
+  BLOCKER_TONE,
   DATA_MODE_TONE,
   selectAgentBrief,
 } from "@/lib/selectors/cockpit";
 
-import { BackendDataSpinePanel } from "./BackendDataSpinePanel";
 import { AgentBriefPanel } from "@/components/panels/AgentBriefPanel";
 import { AgentMatrixPanel } from "@/components/panels/AgentMatrixPanel";
 import { AgentVotesPanel } from "@/components/panels/AgentVotesPanel";
@@ -122,6 +122,17 @@ function parseLayerHash(hash: string): LayerIndex | null {
   return value >= 0 && value <= 3 ? (value as LayerIndex) : null;
 }
 
+function formatGeneratedAt(value?: string) {
+  if (!value) return "snapshot bekleniyor";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "snapshot hazir";
+  return new Intl.DateTimeFormat("tr-TR", {
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  }).format(date);
+}
+
 function formatScore(value?: number | null) {
   return value == null ? "--" : String(Math.round(value));
 }
@@ -206,6 +217,26 @@ function Layer2DetailGroup({
       </header>
       <div className="relative z-10">{children}</div>
     </section>
+  );
+}
+
+function DataSpineCard({
+  label,
+  value,
+  detail,
+  tone = "text-white",
+}: {
+  label: string;
+  value: string;
+  detail: string;
+  tone?: string;
+}) {
+  return (
+    <div className="rounded-lg border border-white/10 bg-black/24 p-4">
+      <div className="text-[10px] uppercase tracking-widest text-white/38">{label}</div>
+      <div className={`mt-2 font-display text-2xl leading-none ${tone}`}>{value}</div>
+      <p className="mt-2 text-xs leading-5 text-white/50">{detail}</p>
+    </div>
   );
 }
 
@@ -479,6 +510,13 @@ export function CockpitView() {
       : brief.status === "BLOCKED" || brief.status === "FROZEN"
         ? "text-red-200"
         : "text-amber-200";
+  const topSymbols = candidates.length
+    ? candidates
+        .slice(0, 4)
+        .map((candidate) => candidate.symbol ?? "?")
+        .join(" / ")
+    : "radar bos";
+
   const currentMeta = LAYERS[activeLayer];
   let layerContent: ReactNode;
   const dqsTone =
@@ -770,9 +808,108 @@ export function CockpitView() {
         <div className="space-y-5">
           <LayerHeader
             meta={LAYERS[3]}
-            detail="Backendten gelen tum read-only endpointler burada toplanir. Katman 3 ham veri omurgasidir; frontend karar matematiği yapmaz."
+            detail="Backendten gelen viewmodel, provider, snapshot ve sistem sagligi burada toplanir. Frontend bu veriyi degistirmez."
           />
-          <BackendDataSpinePanel />
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <DataSpineCard
+              label="Cockpit ViewModel"
+              value={AGENT_STATUS_LABEL[brief.status] ?? brief.status}
+              detail={`snapshot ${formatGeneratedAt(data?.generated_at)}`}
+              tone={AGENT_STATUS_TONE[brief.status]}
+            />
+            <DataSpineCard
+              label="Data Quality"
+              value={`DQS ${formatScore(dqs)}`}
+              detail={`mode ${brief.data_mode}`}
+              tone={DATA_MODE_TONE[brief.data_mode]}
+            />
+            <DataSpineCard
+              label="Main Blocker"
+              value={brief.main_blocker.label}
+              detail={brief.main_blocker.detail ?? brief.recommended_stance}
+              tone={BLOCKER_TONE[brief.main_blocker.code]}
+            />
+            <DataSpineCard
+              label="Signal Feed"
+              value={topSymbols}
+              detail={`${candidates.length} aday / ${actionableCount} actionable`}
+              tone="text-accent-cyan"
+            />
+          </div>
+          <Layer2DetailGroup
+            index="A"
+            title="ViewModel ve Karar Izleri"
+            detail="Katman 3 link listesi degil; backendten gelen agent ozeti, karar izi ve data contract burada dogrudan okunur."
+          >
+            <DashboardGrid>
+              <GridCell span="1">
+                <AgentBriefPanel />
+              </GridCell>
+              <GridCell span="1">
+                <DecisionPanel />
+              </GridCell>
+              <GridCell span="2">
+                <DecisionTracePanel />
+              </GridCell>
+              <GridCell span="1">
+                <AgentVotesPanel />
+              </GridCell>
+              <GridCell span="2">
+                <AgentMatrixPanel />
+              </GridCell>
+            </DashboardGrid>
+          </Layer2DetailGroup>
+
+          <Layer2DetailGroup
+            index="B"
+            title="Provider, Snapshot ve Data Quality"
+            detail="Saglayici durumu, DQS, snapshot ve market data panelleri artik ayri link arkasinda degil."
+          >
+            <DashboardGrid>
+              <GridCell span="1">
+                <DataQualityPanel />
+              </GridCell>
+              <GridCell span="1">
+                <ProviderStatusPanel />
+              </GridCell>
+              <GridCell span="1">
+                <SnapshotPanel />
+              </GridCell>
+              <GridCell span="1">
+                <MarketDataPanel />
+              </GridCell>
+            </DashboardGrid>
+          </Layer2DetailGroup>
+
+          <Layer2DetailGroup
+            index="C"
+            title="Risk, Execution ve Operasyon"
+            detail="Risk kapisi, trade ticket, paper action, sistem sagligi, panel audit ve replay omurgasi tek sayfada acik."
+          >
+            <DashboardGrid>
+              <GridCell span="1">
+                <TradeTicketPanel />
+              </GridCell>
+              <GridCell span="1">
+                <RiskDurumuPanel />
+              </GridCell>
+              <GridCell span="1">
+                <PaperActionPanel />
+              </GridCell>
+              <GridCell span="1">
+                <PositionChecksPanel />
+              </GridCell>
+              <GridCell span="1">
+                <SystemHealthBar />
+              </GridCell>
+              <GridCell span="1">
+                <PanelAuditPanel />
+              </GridCell>
+              <GridCell span="1">
+                <ReplayStatusPanel />
+              </GridCell>
+            </DashboardGrid>
+          </Layer2DetailGroup>
         </div>
       </div>
     );
