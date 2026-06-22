@@ -40,6 +40,15 @@ const BASE =
   process.env.NEXT_PUBLIC_API_BASE ??
   "";
 
+export type ClosePositionResult = {
+  status: string;
+  position_id: string;
+  symbol: string;
+  side: string;
+  exit_price: number;
+  pnl_usd: number;
+};
+
 async function fetchJSON<T>(path: string, init?: RequestInit): Promise<T> {
   const headers = new Headers(init?.headers);
   if (init?.body && !headers.has("content-type")) {
@@ -68,6 +77,11 @@ export const api = {
     fetchJSON<MarketSessionsCurrentResponse>("/api/v1/market-sessions/current"),
   paperTradingTick: () =>
     fetchJSON<TickResult>("/api/v1/paper-trading/tick", { method: "POST" }),
+  closePaperPosition: (positionId: string) =>
+    fetchJSON<ClosePositionResult>(
+      `/api/v1/paper-trading/positions/${positionId}/close`,
+      { method: "POST" },
+    ),
   learningSummary: () =>
     fetchJSON<LearningSummary>("/api/v1/learning/summary"),
   dataSnapshot: () => fetchJSON<DataSnapshot>("/api/v1/data/snapshot"),

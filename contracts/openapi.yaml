@@ -111,6 +111,34 @@ paths:
               schema:
                 $ref: "#/components/schemas/TickResult"
 
+  /api/v1/paper-trading/positions/{position_id}/close:
+    post:
+      operationId: postPaperTradingPositionClose
+      summary: Owner — tek açık pozisyonu manuel kapat (MANUAL exit; paper-safe, broker yok)
+      parameters:
+        - name: position_id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Kapatıldı (realized trade)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string }
+                  position_id: { type: string }
+                  symbol: { type: string }
+                  side: { type: string }
+                  exit_price: { type: number }
+                  pnl_usd: { type: number }
+        "404":
+          description: position_not_found
+        "409":
+          description: Fiyat yok / price-insane — kapatma yapılmadı (DATA_POLICY)
+
   /api/v1/paper-trading/tickets:
     get:
       operationId: getTradeTickets
@@ -3129,16 +3157,56 @@ components:
         title: { type: string }
         detail: { type: string, nullable: true }
 
+    AgentBriefingEngine:
+      type: object
+      description: Karar motorunun (tick worker) gerçek tazeliği — render zamanı değil.
+      required: [status, stale]
+      properties:
+        status: { type: string }
+        age_seconds: { type: number, nullable: true }
+        cycle_count: { type: integer }
+        stale: { type: boolean }
+
+    AgentBriefingExecutive:
+      type: object
+      description: >
+        Genel müdür → CEO brifingi. Deterministik sentez; tek cümle sonuç +
+        kısa anlatı + tavsiye + önceliklendirilmiş risk bayrakları. Karar vermez.
+      required: [stance, stance_label, tone, headline, narrative, recommendation, flags]
+      properties:
+        stance:
+          type: string
+          enum: [halt, stale, blocked, data_gap, signal, watching, calm]
+        stance_label: { type: string }
+        tone: { type: string, enum: [ok, info, warn, alert] }
+        headline: { type: string }
+        narrative: { type: string }
+        recommendation: { type: string }
+        flags:
+          type: array
+          items: { type: string }
+
+    AgentBriefingDqs:
+      type: object
+      required: [score, status]
+      properties:
+        score: { type: number }
+        status: { type: string }
+
     AgentBriefing:
       type: object
       description: >
-        Raporcu agent — sistem state'ini her cycle tarayıp başlık başlık
-        özet üretir. LLM gerektirmez; karar vermez (observer).
+        Raporcu agent — sistem state'ini her cycle tarayıp yönetici özeti +
+        başlık başlık özet üretir. LLM gerektirmez; karar vermez (observer).
       required: [generated_at, headlines]
       properties:
         generated_at: { type: string }
         snapshot_id: { type: string, nullable: true }
         regime_label: { type: string, nullable: true }
+        stale: { type: boolean }
+        executive: { $ref: "#/components/schemas/AgentBriefingExecutive" }
+        engine: { $ref: "#/components/schemas/AgentBriefingEngine" }
+        dqs: { $ref: "#/components/schemas/AgentBriefingDqs" }
         headlines:
           type: array
           items: { $ref: "#/components/schemas/AgentBriefingHeadline" }

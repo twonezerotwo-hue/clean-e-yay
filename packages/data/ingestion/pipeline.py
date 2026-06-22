@@ -35,7 +35,10 @@ from packages.data.types import (
     VolatilitySnapshot,
 )
 
-DEFAULT_SYMBOLS = ["BTCUSD", "ETHUSD", "XAUUSD", "XAGUSD", "DXY", "US10Y", "VIX"]
+DEFAULT_SYMBOLS = [
+    "BTCUSD", "ETHUSD", "XAUUSD", "XAGUSD",  # işlem evreni (ilk 4)
+    "DXY", "US10Y", "US02Y", "VIX", "CPI",   # makro bağlam (FRED/yfinance)
+]
 
 # T1 — multi-TF technicals yalnızca ana 4 sembol için üretilir (payload ve
 # rate-limit dengesi); kalan semboller legacy 1d teknik alır.
@@ -127,7 +130,23 @@ def build_snapshot(symbols: list[str] | None = None) -> MarketSnapshot:
         if by_tf[tf].status == "DEGRADED"
     ]
     if degraded_tfs:
-        warnings.append("technicals DEGRADED: " + ", ".join(degraded_tfs))
+        # Piyasası kapalı sembolleri ayır: bunlar veri hatası değil (hafta sonu/
+        # tatil → taze bar yok). 'DEGRADED' yerine 'piyasa kapalı' etiketlenir.
+        closed_syms: set[str] = set()
+        try:
+            from packages import market_sessions
+
+            for s in {d.split(":")[0] for d in degraded_tfs}:
+                ctx = market_sessions.asset_context(s, now)
+                if ctx.relevant_markets and not ctx.any_relevant_market_open:
+                    closed_syms.add(s)
+        except Exception:
+            closed_syms = set()
+        real_degraded = [d for d in degraded_tfs if d.split(":")[0] not in closed_syms]
+        if real_degraded:
+            warnings.append("technicals DEGRADED: " + ", ".join(real_degraded))
+        if closed_syms:
+            warnings.append("piyasa kapalı (market closed): " + ", ".join(sorted(closed_syms)))
     # DATA_POLICY: veri yoksa mock üretilmez — açık warning + DEGRADED status.
     if not headlines:
         warnings.append("news_unavailable")

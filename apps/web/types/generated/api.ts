@@ -1710,9 +1710,44 @@ export type AgentBriefingHeadline = {
   detail?: string | null;
 };
 
+export type AgentBriefingStance =
+  | "halt"
+  | "stale"
+  | "blocked"
+  | "data_gap"
+  | "signal"
+  | "watching"
+  | "calm";
+
+export type AgentBriefingExecutive = {
+  stance: AgentBriefingStance;
+  stance_label: string;
+  tone: AgentBriefingTone;
+  headline: string;
+  narrative: string;
+  recommendation: string;
+  flags: string[];
+};
+
+export type AgentBriefingEngine = {
+  status: string;
+  age_seconds?: number | null;
+  cycle_count: number;
+  stale: boolean;
+};
+
+export type AgentBriefingDqs = {
+  score: number;
+  status: string;
+};
+
 export type AgentBriefing = {
   generated_at: string;
   snapshot_id?: string | null;
   regime_label?: string | null;
+  stale?: boolean;
+  executive?: AgentBriefingExecutive;
+  engine?: AgentBriefingEngine;
+  dqs?: AgentBriefingDqs;
   headlines: AgentBriefingHeadline[];
 };

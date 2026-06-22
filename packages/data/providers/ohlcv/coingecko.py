@@ -1,7 +1,8 @@
 """CoinGecko market_chart OHLCV adapter — kripto (BTC/ETH).
 
-Public REST API, anahtar gerektirmez. Hata/timeout durumunda None döner;
-orchestrator cache'e (varsa stale) döner, asla mock üretmez.
+Demo API anahtarı (`COINGECKO_API_KEY`) varsa kimlik doğrulamalı çağrılır
+(`x-cg-demo-api-key`). Hata/timeout durumunda None döner; orchestrator
+DATA_UNAVAILABLE verir, MOCK üretmez.
 
 Granülarite (CoinGecko market_chart otomatik):
 - days=1   → ~5 dakikalık fiyat noktaları → 15m barlara resample edilir
@@ -17,14 +18,33 @@ hacmi değildir → volume=None bırakılır (yanlış veri taşımamak için).
 from __future__ import annotations
 
 import json
+import os
+import threading
+import time
 import urllib.error
 import urllib.request
 from datetime import UTC, datetime
 
+from packages.data.providers import coingecko_auth
 from packages.data.types import OHLCVBar, Timeframe
 
 API = "https://api.coingecko.com/api/v3/coins"
 TIMEOUT_SEC = 6.0
+
+# Aylık ücretsiz limiti (10k/ay) korumak için coingecko'ya özel min-refetch
+# aralığı. Bu, ağ çağrısını seyrekleştirir ama içeride GERÇEK son barları
+# tutar — başarısızlıkta bayat-veri 'fallback'ı DEĞİL, normal rate-limit cache.
+# yfinance OHLCV bundan etkilenmez (ayrı provider).
+_DEFAULT_OHLCV_TTL_SEC = 2400
+_THROTTLE_LOCK = threading.Lock()
+_BARS_CACHE: dict[tuple[str, str], tuple[float, list[OHLCVBar]]] = {}
+
+
+def _ohlcv_ttl_sec() -> float:
+    try:
+        return float(os.environ.get("COINGECKO_OHLCV_TTL_SEC", _DEFAULT_OHLCV_TTL_SEC))
+    except (TypeError, ValueError):
+        return float(_DEFAULT_OHLCV_TTL_SEC)
 
 _SYMBOL_MAP = {
     "BTCUSD": "bitcoin",
@@ -45,7 +65,7 @@ NATIVE_TFS = frozenset(_TF_PLAN.keys())
 
 def _fetch_prices(cg_id: str, days: int) -> list[tuple[float, float]] | None:
     url = f"{API}/{cg_id}/market_chart?vs_currency=usd&days={days}"
-    req = urllib.request.Request(url, headers={"User-Agent": "clean-e-yay/0.1"})
+    req = urllib.request.Request(url, headers=coingecko_auth.headers())
     try:
         with urllib.request.urlopen(req, timeout=TIMEOUT_SEC) as resp:
             data = json.loads(resp.read().decode("utf-8"))
@@ -99,8 +119,20 @@ def get_bars(symbol: str, timeframe: Timeframe) -> list[OHLCVBar] | None:
     plan = _TF_PLAN.get(timeframe)
     if cg_id is None or plan is None:
         return None
+    key = (symbol, timeframe)
+    ttl = _ohlcv_ttl_sec()
+    now = time.monotonic()
+    with _THROTTLE_LOCK:
+        cached = _BARS_CACHE.get(key)
+        if cached and (now - cached[0]) < ttl:
+            return cached[1]
     days, bucket_sec, source = plan
     points = _fetch_prices(cg_id, days)
     if points is None:
         return None
-    return _points_to_bars(symbol, timeframe, points, bucket_sec, source)
+    bars = _points_to_bars(symbol, timeframe, points, bucket_sec, source)
+    # Yalnızca gerçek/taze sonucu cache'le — None cache'lenmez (stale fallback YOK).
+    if bars:
+        with _THROTTLE_LOCK:
+            _BARS_CACHE[key] = (now, bars)
+    return bars

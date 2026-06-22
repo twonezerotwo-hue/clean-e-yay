@@ -43,13 +43,23 @@ def _price_or(snap: MarketSnapshot, symbol: str, default: float) -> float:
 def _liquidity_layer(snap: MarketSnapshot) -> RegimeLayer:
     dxy = _price_or(snap, "DXY", 104.0)
     us10y = _price_or(snap, "US10Y", 4.3)
-    # Yüksek DXY + yüksek getiri → likidite daralıyor
-    score = max(0.0, min(100.0, 100.0 - (dxy - 100.0) * 2.0 - (us10y - 4.0) * 5.0))
+    us02y = _price_or(snap, "US02Y", 4.3)
+    cpi = _price_or(snap, "CPI", 0.0)
+    curve = us10y - us02y  # 2s10s getiri eğrisi spread'i
+    # Yüksek DXY + yüksek getiri → likidite daralıyor.
+    score = 100.0 - (dxy - 100.0) * 2.0 - (us10y - 4.0) * 5.0
+    # Ters getiri eğrisi (curve<0) → resesyon/sıkılaşma sinyali; ek ceza (cap 15).
+    if curve < 0:
+        score -= min(abs(curve) * 10.0, 15.0)
+    score = max(0.0, min(100.0, score))
+    evidence = [f"DXY {dxy:.2f}", f"US10Y {us10y:.2f}%", f"2s10s {curve:+.2f}%"]
+    if cpi:
+        evidence.append(f"CPI {cpi:.1f}")
     return RegimeLayer(
         name="Likidite",
         score=round(score, 1),
         direction=_direction(score),
-        evidence=[f"DXY {dxy:.2f}", f"US10Y {us10y:.2f}%"],
+        evidence=evidence,
     )
 
 

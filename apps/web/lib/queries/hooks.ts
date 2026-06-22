@@ -49,6 +49,18 @@ export const usePaperTradingState = () =>
     refetchInterval: 15_000,
   });
 
+/** Owner — tek açık pozisyonu manuel kapat (MANUAL exit). Başarıda paper
+ *  state'i invalidate eder. Fiyat yoksa backend 409 döner (DATA_POLICY). */
+export const useClosePaperPosition = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (positionId: string) => api.closePaperPosition(positionId),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: qk.paperTradingState });
+    },
+  });
+};
+
 /** Global market-session statuses (backend-derived; FE renders only). */
 export const useMarketSessions = () =>
   useQuery({

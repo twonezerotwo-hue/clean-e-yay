@@ -98,60 +98,6 @@ function HologramRings({ mode }: { mode: ModelMode }) {
   );
 }
 
-function FaceCircuits({ mode }: { mode: ModelMode }) {
-  const color = MODE_COLOR[mode];
-  const lines: Vec3[][] = [
-    [
-      [-0.22, 1.38, 0.53],
-      [-0.12, 1.28, 0.58],
-      [0.02, 1.28, 0.6],
-      [0.16, 1.36, 0.56],
-    ],
-    [
-      [0.28, 1.58, 0.45],
-      [0.46, 1.48, 0.36],
-      [0.5, 1.22, 0.28],
-    ],
-    [
-      [-0.42, 1.58, 0.36],
-      [-0.52, 1.42, 0.28],
-      [-0.42, 1.24, 0.36],
-    ],
-    [
-      [-0.06, 1.72, 0.56],
-      [0.05, 1.82, 0.5],
-      [0.22, 1.78, 0.44],
-    ],
-  ];
-
-  return (
-    <group>
-      {lines.map((points, index) => (
-        <Line
-          key={index}
-          points={points}
-          color={index % 2 ? "#67e8f9" : color}
-          transparent
-          opacity={0.72}
-          lineWidth={1}
-        />
-      ))}
-      {[
-        [-0.26, 1.48, 0.55],
-        [0.24, 1.48, 0.55],
-        [0.46, 1.25, 0.3],
-        [-0.48, 1.32, 0.3],
-        [0.04, 1.82, 0.5],
-      ].map((position, index) => (
-        <mesh key={index} position={position as Vec3}>
-          <sphereGeometry args={[0.024, 14, 14]} />
-          <meshBasicMaterial color={index % 2 ? "#67e8f9" : color} transparent opacity={0.9} />
-        </mesh>
-      ))}
-    </group>
-  );
-}
-
 function VoiceAnalyzer({ mode }: { mode: ModelMode }) {
   const group = useRef<THREE.Group>(null);
   const speaking = mode === "speaking";
@@ -180,61 +126,96 @@ function VoiceAnalyzer({ mode }: { mode: ModelMode }) {
 
 function HumanComputerBust({ mode }: { mode: ModelMode }) {
   const group = useRef<THREE.Group>(null);
+  const cloud = useRef<THREE.Points>(null);
   const color = MODE_COLOR[mode];
 
+  // Symmetric head + shoulders silhouette built from a point cloud so it reads
+  // as a holographic bust from any angle (no lopsided wireframe artifacts).
+  const positions = useMemo(() => {
+    const HEAD = 2600;
+    const SHOULDER = 1600;
+    const NECK = 260;
+    const data = new Float32Array((HEAD + SHOULDER + NECK) * 3);
+    let o = 0;
+    const onSphere = (): Vec3 => {
+      const theta = Math.random() * Math.PI * 2;
+      const phi = Math.acos(2 * Math.random() - 1);
+      const s = Math.sin(phi);
+      return [Math.cos(theta) * s, Math.cos(phi), Math.sin(theta) * s];
+    };
+    for (let i = 0; i < HEAD; i += 1) {
+      const [x, y, z] = onSphere();
+      const taper = y < 0 ? 1 + y * 0.22 : 1 - y * 0.05; // narrow jaw, round crown
+      data[o++] = x * 0.6 * taper;
+      data[o++] = y * 0.78 + 1.48;
+      data[o++] = z * 0.58 * taper;
+    }
+    for (let i = 0; i < SHOULDER; i += 1) {
+      const [x, y, z] = onSphere();
+      data[o++] = x * 1.08;
+      data[o++] = -Math.abs(y) * 0.36 + 0.64; // lower dome -> shoulders
+      data[o++] = z * 0.46;
+    }
+    for (let i = 0; i < NECK; i += 1) {
+      const a = Math.random() * Math.PI * 2;
+      const r = 0.19 + Math.random() * 0.03;
+      data[o++] = Math.cos(a) * r;
+      data[o++] = 0.74 + Math.random() * 0.38;
+      data[o++] = Math.sin(a) * r * 0.85;
+    }
+    return data;
+  }, []);
+
   useFrame(({ clock }) => {
-    if (!group.current) return;
     const t = clock.elapsedTime;
-    group.current.rotation.y = Math.sin(t * 0.28) * 0.13;
-    group.current.position.y = Math.sin(t * 1.12) * 0.025;
+    if (group.current) {
+      group.current.rotation.y = Math.sin(t * 0.26) * 0.16;
+      group.current.position.y = Math.sin(t * 1.1) * 0.02;
+    }
+    if (cloud.current) {
+      const mat = cloud.current.material as THREE.PointsMaterial;
+      mat.opacity =
+        mode === "speaking"
+          ? 0.74 + Math.sin(t * 9) * 0.16
+          : mode === "thinking"
+            ? 0.6 + Math.sin(t * 4) * 0.12
+            : 0.6;
+    }
   });
 
   return (
     <group ref={group}>
-      <mesh position={[0, 1.46, 0]} scale={[0.66, 0.86, 0.56]}>
-        <sphereGeometry args={[0.72, 64, 64]} />
-        <meshPhysicalMaterial
-          color="#c8fbff"
-          emissive={color}
-          emissiveIntensity={1.18}
-          roughness={0.18}
-          metalness={0.16}
-          clearcoat={1}
+      <points ref={cloud}>
+        <bufferGeometry>
+          <bufferAttribute
+            attach="attributes-position"
+            count={positions.length / 3}
+            array={positions}
+            itemSize={3}
+          />
+        </bufferGeometry>
+        <pointsMaterial
+          color={color}
+          size={0.026}
           transparent
-          opacity={0.54}
-          transmission={0.35}
+          opacity={0.6}
+          sizeAttenuation
+          depthWrite={false}
+          blending={THREE.AdditiveBlending}
         />
+      </points>
+      <mesh position={[0, 1.46, 0]} scale={[0.58, 0.78, 0.56]}>
+        <sphereGeometry args={[0.72, 32, 32]} />
+        <meshBasicMaterial color={color} transparent opacity={0.06} />
       </mesh>
-      <mesh position={[0.2, 1.45, 0.015]} scale={[0.4, 0.82, 0.48]}>
-        <sphereGeometry args={[0.72, 32, 32, 0, Math.PI]} />
-        <meshBasicMaterial color={color} wireframe transparent opacity={0.32} />
-      </mesh>
-      <mesh position={[0, 0.62, 0]} scale={[0.9, 0.8, 0.36]}>
-        <sphereGeometry args={[0.98, 64, 32]} />
-        <meshPhysicalMaterial
-          color="#e0f7ff"
-          emissive="#0ea5e9"
-          emissiveIntensity={0.58}
-          roughness={0.22}
-          metalness={0.34}
-          transparent
-          opacity={0.34}
-          clearcoat={0.9}
-        />
-      </mesh>
-      <mesh position={[0, 0.88, 0]} scale={[0.22, 0.42, 0.18]}>
-        <cylinderGeometry args={[0.24, 0.32, 0.6, 32]} />
-        <meshPhysicalMaterial color="#a7f3d0" emissive={color} emissiveIntensity={0.45} transparent opacity={0.44} />
-      </mesh>
-      <mesh position={[-0.23, 1.5, 0.52]}>
-        <sphereGeometry args={[0.045, 24, 24]} />
+      <mesh position={[-0.2, 1.5, 0.5]}>
+        <sphereGeometry args={[0.04, 18, 18]} />
         <meshBasicMaterial color="#e0f2fe" transparent opacity={0.95} />
       </mesh>
-      <mesh position={[0.23, 1.5, 0.52]}>
-        <sphereGeometry args={[0.045, 24, 24]} />
+      <mesh position={[0.2, 1.5, 0.5]}>
+        <sphereGeometry args={[0.04, 18, 18]} />
         <meshBasicMaterial color="#e0f2fe" transparent opacity={0.95} />
       </mesh>
-      <FaceCircuits mode={mode} />
       <VoiceAnalyzer mode={mode} />
     </group>
   );

@@ -28,6 +28,40 @@ _SYMBOL_ALIASES = {
 
 _TIMEFRAMES = ("15m", "1h", "4h", "1d", "1w")
 
+# Yön eşiği (consensus.bullish_min) — config tek kaynak, hardcode etme.
+def _directional_threshold() -> float:
+    try:
+        from packages.data.registry.loader import load_thresholds
+
+        return float(load_thresholds().get("consensus", {}).get("bullish_min", 55))
+    except Exception:
+        return 55.0
+
+
+_SCORE_DIRECTIONAL = _directional_threshold()
+
+_SIDE_TR = {"long": "alış", "short": "satış", "open_long": "alış", "open_short": "satış"}
+
+
+def _money(x) -> str:
+    try:
+        return f"${float(x):,.0f}"
+    except (TypeError, ValueError):
+        return "?"
+
+
+def _positions_phrase(ctx: dict) -> str:
+    """Açık pozisyonları patron diline çevirir (jargon yok)."""
+    pos = ctx["paper"]["open_positions"]
+    if not pos:
+        return "açık pozisyonun yok"
+    if len(pos) == 1:
+        p = pos[0]
+        side = _SIDE_TR.get(p.get("side", ""), p.get("side", ""))
+        return f"1 açık pozisyonun var ({p['symbol']} {side}, {_money(p['size_usd'])})"
+    total = sum(p.get("size_usd", 0) for p in pos)
+    return f"{len(pos)} açık pozisyonun var (toplam {_money(total)})"
+
 
 def _detect_symbol(folded: str) -> str | None:
     for alias, sym in _SYMBOL_ALIASES.items():
@@ -107,15 +141,25 @@ def _missing_data_answer(ctx: dict) -> tuple[str, list[str]]:
 
 def _risk_gate_answer(ctx: dict) -> tuple[str, list[str]]:
     rg = ctx["matrix"]["risk_gate"] or {}
-    parts = [f"RiskGate: {rg.get('action')} — {rg.get('reason')}."]
-    evidence = [f"risk_gate:{rg.get('action')}"]
+    action = rg.get("action")
+    if action in (None, "HOLD") and not ctx["halt"]["active"] and not ctx["matrix"]["blocked_by_reasons"]:
+        return (
+            "Risk tarafında seni durduran bir şey yok: kapı açık (HOLD), aktif halt "
+            "yok ve adayları kesen bir kural çalışmıyor. Engel sinyal gücünde, riskte değil.",
+            [f"risk_gate:{action}"],
+        )
+    if action == "HOLD":
+        parts = ["Risk kapısı açık (HOLD)."]
+    else:
+        parts = [f"Risk kapısı şu an {action} ({rg.get('reason')})."]
+    evidence = [f"risk_gate:{action}"]
     if ctx["halt"]["active"]:
         halts = ", ".join(f"{h['type']}→{h['level']}" for h in ctx["halt"]["events"])
-        parts.append(f"Aktif halt: {halts} (sadece owner reset kapatır).")
+        parts.append(f"Üstüne aktif halt var ({halts}) — bunu yalnızca senin manuel reset'in açar.")
         evidence += [f"halt:{h['type']}" for h in ctx["halt"]["events"]]
     blocked = ctx["matrix"]["blocked_by_reasons"]
     if blocked:
-        parts.append("Hücreleri kesen kapılar: " + ", ".join(blocked[:5]) + ".")
+        parts.append("Asıl seni durduran, adayları kesen şu kurallar: " + ", ".join(blocked[:5]) + ".")
         evidence += [f"blocked_by:{b}" for b in blocked[:5]]
     return " ".join(parts), evidence
 
@@ -157,51 +201,110 @@ def _waiting_answer(ctx: dict) -> tuple[str, list[str]]:
             [f"dqs:{ctx['dqs']['status']}"],
         )
     actions = ctx["matrix"]["paper_actions"]
+    blocked = ctx["matrix"]["blocked_by_reasons"]
     if actions:
         acts = ", ".join(
-            f"{a['symbol']} {a['timeframe']} {a['paper_action']}" for a in actions[:4]
+            f"{a['symbol']} {a['timeframe']} {_SIDE_TR.get(a['paper_action'], a['paper_action'])}"
+            for a in actions[:4]
         )
+        ev = [f"paper_action:{a['symbol']}:{a['timeframe']}" for a in actions[:4]]
+        if blocked:
+            return (
+                f"Sinyaller oluştu ({acts}) ama şu kurallar paper'da gerçek açılışı "
+                f"engelliyor: {', '.join(blocked[:4])}. Bu yüzden ekranda 'işlem yok' "
+                "görüyorsun — engeller kalkmadan pozisyon açılmaz.",
+                ev + [f"blocked_by:{b}" for b in blocked[:4]],
+            )
         return (
-            f"Agent beklemede değil — actionable hücreler var: {acts}. "
-            "Paper tick'te RiskGate onayıyla uygulanır.",
-            [f"paper_action:{a['symbol']}:{a['timeframe']}" for a in actions[:4]],
+            f"İşleme hazır sinyal var: {acts}. Risk kapısı onaylayınca paper "
+            "tarafında açılır.",
+            ev,
         )
     diffs = ctx["matrix"]["candidate_vs_final_diffs"]
     if diffs:
         lines = " | ".join(_fmt_cell(d) for d in diffs[:3])
         return (
-            f"Agent izleme modunda: adaylar var ama gate'ler kesiyor — {lines}. "
-            "Bu blokların temizlenmesini bekliyor.",
+            f"İzleme modundayım: adaylar oluştu ama risk kapıları kesiyor — {lines}. "
+            "Bu engeller kalkana kadar pozisyon açmıyorum.",
             [f"matrix:{_fmt_cell(d)}" for d in diffs[:3]],
         )
     return (
-        "Agent izleme modunda: hiçbir hücrede consensus eşiği aşılmış aday yok; "
-        "daha güçlü sinyal bekleniyor.",
+        "İzleme modundayım: hiçbir adayın yön gücü işlem eşiğini geçmedi, yani "
+        "daha güçlü bir sinyal bekliyorum. Zorlama işlem yok.",
         [f"regime:{ctx['matrix']['regime']}"],
     )
 
 
+def _best_cell(ctx: dict) -> dict | None:
+    cells = ctx["matrix"]["top_cells"]
+    return max(cells, key=lambda c: c.get("score") or 0) if cells else None
+
+
 def _overview_answer(ctx: dict) -> tuple[str, list[str]]:
+    """30 saniyelik patron brifingi — düz cümleler, jargon minimumda."""
     m = ctx["matrix"]
-    rg = m["risk_gate"] or {}
     note = _suspended_note(ctx)
-    parts = [
-        f"Rejim {m['regime']}, DQS {ctx['dqs']['status']} ({ctx['dqs']['score']:.0f}), "
-        f"RiskGate {rg.get('action')}."
-    ]
+    parts: list[str] = []
+
     if note:
         parts.append(note)
-    if m["top_cells"]:
-        top = m["top_cells"][0]
-        parts.append(
-            f"En güçlü kanaat: {top['symbol']} {top['timeframe']} {top['direction']} "
-            f"(skor {top['score']:.0f}, final {top['final']})."
-        )
-    parts.append(
-        f"Paper: equity {ctx['paper']['equity_usd']}, açık pozisyon "
-        f"{len(ctx['paper']['open_positions'])}."
-    )
+    else:
+        parts.append(f"Patron, kısaca: piyasa {m['regime']} rejiminde ve risk kapısı açık.")
+
+    best = _best_cell(ctx)
+    if best:
+        score = best.get("score") or 0
+        gap = _SCORE_DIRECTIONAL - score
+        if gap <= 0:
+            parts.append(
+                f"En güçlü kanaat {best['symbol']} {best['timeframe']}: skor "
+                f"{score:.0f}/{_SCORE_DIRECTIONAL:.0f} ile yön eşiğini geçti."
+            )
+        else:
+            parts.append(
+                f"En güçlü aday {best['symbol']} {best['timeframe']}: skor {score:.0f}/{_SCORE_DIRECTIONAL:.0f}, "
+                f"eşiğe {gap:.1f} puan var — henüz tetik yok."
+            )
+
+    parts.append(f"{_positions_phrase(ctx).capitalize()}; kasada {_money(ctx['paper']['equity_usd'])}.")
     return " ".join(parts), [f"snapshot:{ctx['snapshot_id']}", f"dqs:{ctx['dqs']['status']}"]
+
+
+def _opportunity_answer(ctx: dict) -> tuple[str, list[str]]:
+    """'İşleme en yakın aday?' / '15 dakikalık fırsat var mı?' — net cevap."""
+    note = _suspended_note(ctx)
+    best = _best_cell(ctx)
+    if not best:
+        return ("Şu an matris boş, değerlendirilecek bir aday yok.", ["matrix:empty"])
+    score = best.get("score") or 0
+    gap = _SCORE_DIRECTIONAL - score
+    sym, tf = best["symbol"], best["timeframe"]
+    if gap <= 0:
+        msg = (
+            f"İşleme en yakın aday {sym} {tf}: skor {score:.0f}/{_SCORE_DIRECTIONAL:.0f} ile yön eşiğini geçti. "
+            "Risk kapısından da geçerse paper tick'te uygulanır."
+        )
+    else:
+        msg = (
+            f"İşleme en yakın aday {sym} {tf}: skor {score:.0f}/{_SCORE_DIRECTIONAL:.0f} — eşiğe {gap:.1f} puan kaldı, "
+            "yani fırsata yakınız ama henüz tetiklenmedi."
+        )
+    if note:
+        msg += f" Yalnız şunu da bil: {note}"
+    return msg, [f"matrix:{sym}/{tf}:{score:.0f}"]
+
+
+def _news_answer(ctx: dict) -> tuple[str, list[str]]:
+    """Haber özeti — başlıklar bağlamdır; tek başına işlem üretmez."""
+    news = list(ctx.get("news") or [])
+    if not news:
+        return ("Akışta yeni öne çıkan haber yok.", ["news:none"])
+    listing = " • ".join(h[:90] for h in news[:3])
+    return (
+        f"Öne çıkan başlıklar: {listing}. Haber yalnızca bağlamdır; sembol etkisi "
+        "doğrulanmadan tek başına işlem açtırmaz.",
+        [f"news:{h[:40]}" for h in news[:3]],
+    )
 
 
 _CONTEXT_ONLY_NOTE = (
@@ -304,7 +407,7 @@ def _catalyst_answer(ctx: dict) -> tuple[str, list[str]]:
     return "Catalyst zekâsı: " + " | ".join(parts) + "." + _CONTEXT_ONLY_NOTE, ev
 
 
-def _tickets_answer() -> tuple[str, list[str]]:
+def _tickets_answer(ctx: dict | None = None) -> tuple[str, list[str]]:
     # Lazy import — router-level cache; chat'i sıkı bağımlı yapmaz.
     try:
         from apps.api.routers.paper_trading import _LAST_TICKETS as tickets  # noqa
@@ -312,11 +415,17 @@ def _tickets_answer() -> tuple[str, list[str]]:
         tickets = []
     active = [t for t in (tickets or []) if t.get("status") == "active"]
     if not active:
-        return (
-            "Şu an aktif Trade Ticket yok — sinyaller ya gate'lerle bloklandı ya "
-            "da consensus eşiği aşılmadı.",
-            ["tickets:none"],
+        msg = (
+            "Şu an broker'a gidecek aktif Trade Ticket yok — yeni bir sinyal ya "
+            "gate'lere takıldı ya da yön eşiğini aşamadı."
         )
+        # Pozisyon var ama ticket yok → görünür çelişkiyi açıkla.
+        if ctx and ctx["paper"]["open_positions"]:
+            msg += (
+                f" Bu arada {_positions_phrase(ctx)}; ticket sadece YENİ sinyal için "
+                "üretilir, mevcut açık pozisyon ondan ayrı bir şeydir."
+            )
+        return (msg, ["tickets:none"])
     parts = []
     ev = []
     for t in active[:4]:
@@ -350,9 +459,18 @@ def _grounded_answer(message: str, ctx: dict) -> tuple[str, list[str]]:
     symbol = _detect_symbol(folded)
     timeframe = _detect_timeframe(folded)
     if any(k in folded for k in ("ticket", "tiket", "sinyal listesi", "aktif sinyal")):
-        return _tickets_answer()
+        return _tickets_answer(ctx)
     if any(k in folded for k in ("bildirim", "notification", "uyarı", "uyari", "alarm")):
         return _notifications_answer()
+    # Fırsat / en yakın aday — sembolden bağımsız "işleme yakın olan ne?" sorusu.
+    if any(
+        k in folded
+        for k in ("fırsat", "firsat", "opportunity", "en yakın aday", "en yakin aday",
+                  "yakın aday", "yakin aday", "aday hangi", "işleme yakın", "isleme yakin")
+    ):
+        return _opportunity_answer(ctx)
+    if any(k in folded for k in ("haber", "news", "manşet", "manset", "başlık", "baslik")):
+        return _news_answer(ctx)
     if any(k in folded for k in ("eksik", "missing", "hangi veri")):
         return _missing_data_answer(ctx)
     # v2.7 deep-data niyetleri (RiskGate/why fallback'inden ÖNCE — "volatility
@@ -367,13 +485,22 @@ def _grounded_answer(message: str, ctx: dict) -> tuple[str, list[str]]:
         return _rotation_answer(ctx)
     if any(k in folded for k in ("katalizör", "katalizor", "catalyst", "haber etkisi", "yarı ömür", "half-life", "half life")):
         return _catalyst_answer(ctx)
-    if any(k in folded for k in ("riskgate", "risk gate", "risk kapısı", "engelledi", "blocked")):
+    if any(
+        k in folded
+        for k in ("riskgate", "risk gate", "risk kapısı", "risk kapisi", "engelledi",
+                  "engelliyor", "engelle", "blocked", "ne durduruyor", "ne engel")
+    ):
         return _risk_gate_answer(ctx)
     if symbol and any(
         k in folded for k in ("neden", "niye", "açmadın", "açılmadı", "hold", "why")
     ):
         return _why_no_trade_answer(ctx, symbol, timeframe)
-    if any(k in folded for k in ("bekliyor", "ne yapıyor", "waiting", "durum ne")):
+    # Sembolsüz "neden işlem yok / ne bekliyorsun" → genel bekleme gerekçesi.
+    if any(
+        k in folded
+        for k in ("bekliyor", "ne yapıyor", "waiting", "durum ne", "neden işlem",
+                  "neden islem", "niye işlem", "niye islem", "neden açmıyor", "neden acmiyor")
+    ):
         return _waiting_answer(ctx)
     if symbol:
         return _why_no_trade_answer(ctx, symbol, timeframe)

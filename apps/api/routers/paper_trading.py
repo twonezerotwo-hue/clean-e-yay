@@ -11,8 +11,10 @@ from packages.decision.engine import decide_matrix
 from packages.paper import audit as paper_audit
 from packages.paper import maintenance, manual_queue, session_gate
 from packages.paper import state as paper_state
+from packages.paper.guards import price_sanity
 from packages.paper.lifecycle import (
     attempt_open,
+    close_position,
     flatten_all,
     max_drawdown_pct,
 )
@@ -301,6 +303,36 @@ def post_paper_tick() -> dict:
         "tick_at": datetime.now(UTC).isoformat(),
         "signals_processed": len(decisions),
         "actions": actions,
+    }
+
+
+@router.post("/paper-trading/positions/{position_id}/close")
+def close_position_manual(position_id: str) -> dict:
+    """Owner — tek açık pozisyonu manuel kapat (MANUAL exit). Paper-safe; broker yok.
+
+    Güncel snapshot fiyatıyla kapatır (uydurma fiyat YOK — DATA_POLICY). Fiyat yok
+    veya price-sanity dışıysa kapatma YAPILMAZ → 409; pozisyon olduğu gibi kalır
+    (sonraki tick'te SL/TP/time-stop veya tekrar manuel denenebilir)."""
+    ps = paper_state.load()
+    pos = next((p for p in ps.open_positions if p.id == position_id), None)
+    if pos is None:
+        raise HTTPException(status_code=404, detail="position_not_found")
+    snap = get_cached_snapshot()
+    prices = {q.symbol: q.price for q in snap.prices if q.price is not None}
+    price = prices.get(pos.symbol)
+    if price is None or price <= 0:
+        raise HTTPException(status_code=409, detail="no_price_cannot_close")
+    if price_sanity.price_sane_reason(pos.symbol, price) is not None:
+        raise HTTPException(status_code=409, detail="price_insane_cannot_close")
+    trade = close_position(ps, pos, exit_price=price, reason="MANUAL")
+    paper_state.save(ps)
+    return {
+        "status": "closed",
+        "position_id": position_id,
+        "symbol": trade.symbol,
+        "side": trade.side,
+        "exit_price": trade.exit_price,
+        "pnl_usd": trade.pnl_usd,
     }
 
 

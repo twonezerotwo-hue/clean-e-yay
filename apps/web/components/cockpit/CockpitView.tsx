@@ -9,7 +9,7 @@ import { DataQualityBadge } from "@/components/shell/DataQualityBadge";
 import { DashboardGrid, GridCell } from "@/components/shell/DashboardGrid";
 import { EmptyState } from "@/components/shell/EmptyState";
 import { LoadingState } from "@/components/shell/LoadingState";
-import { useCockpitBrief, useTradeTickets } from "@/lib/queries/hooks";
+import { useCockpitBrief, usePaperTradingState, useTradeTickets } from "@/lib/queries/hooks";
 import {
   AGENT_STATUS_LABEL,
   AGENT_STATUS_TONE,
@@ -61,7 +61,7 @@ import { WeightProposalPanel } from "@/components/panels/WeightProposalPanel";
 
 import { HolographicSignalDeck } from "./HolographicSignalDeck";
 import { Layer2QuickNav } from "./Layer2QuickNav";
-import { Layer0ReporterAgent } from "./Layer0ReporterAgent";
+import { Layer0ReporterAgent, type Layer0HeroProps } from "./Layer0ReporterAgent";
 import { MacroRiskStrip } from "./MacroRiskStrip";
 import { QuantumBackplaneScene } from "./QuantumBackplaneScene";
 import { SpaceBrainScene } from "./SpaceBrainScene";
@@ -188,75 +188,6 @@ function HudMetric({
   );
 }
 
-function ScanButton({
-  label,
-  value,
-  ok,
-  onClick,
-}: {
-  label: string;
-  value: string;
-  ok: boolean;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className="grid w-full grid-cols-[auto_1fr_auto] items-center gap-3 rounded-lg border border-white/10 bg-white/[0.035] px-3 py-2 text-left transition-colors hover:border-accent-cyan/35 hover:bg-white/[0.055]"
-    >
-      <span
-        className={`h-2.5 w-2.5 rounded-full shadow-[0_0_14px_currentColor] ${
-          ok ? "bg-signal-up text-signal-up" : "bg-amber-400 text-amber-400"
-        }`}
-      />
-      <span className="min-w-0">
-        <span className="block truncate text-xs text-white/80">{label}</span>
-        <span className="block truncate text-[10px] uppercase tracking-widest text-white/35">
-          {value}
-        </span>
-      </span>
-      <span className={ok ? "text-[10px] text-signal-up" : "text-[10px] text-amber-300"}>
-        {ok ? "OK" : "IZLE"}
-      </span>
-    </button>
-  );
-}
-
-function ScanLink({
-  label,
-  value,
-  ok,
-  href,
-}: {
-  label: string;
-  value: string;
-  ok: boolean;
-  href: string;
-}) {
-  return (
-    <Link
-      href={href}
-      className="grid grid-cols-[auto_1fr_auto] items-center gap-3 rounded-lg border border-white/10 bg-white/[0.035] px-3 py-2 transition-colors hover:border-accent-cyan/35 hover:bg-white/[0.055]"
-    >
-      <span
-        className={`h-2.5 w-2.5 rounded-full shadow-[0_0_14px_currentColor] ${
-          ok ? "bg-signal-up text-signal-up" : "bg-amber-400 text-amber-400"
-        }`}
-      />
-      <span className="min-w-0">
-        <span className="block truncate text-xs text-white/80">{label}</span>
-        <span className="block truncate text-[10px] uppercase tracking-widest text-white/35">
-          {value}
-        </span>
-      </span>
-      <span className={ok ? "text-[10px] text-signal-up" : "text-[10px] text-amber-300"}>
-        {ok ? "OK" : "IZLE"}
-      </span>
-    </Link>
-  );
-}
-
 function Layer2DetailGroup({
   index,
   title,
@@ -363,7 +294,7 @@ function LayerControls({
   const next = activeLayer < 3 ? ((activeLayer + 1) as LayerIndex) : null;
 
   return (
-    <div className="pointer-events-auto fixed bottom-4 left-1/2 z-40 flex -translate-x-1/2 items-center gap-2 rounded-full border border-white/10 bg-black/34 p-2 shadow-[0_22px_70px_rgba(0,0,0,0.34)] backdrop-blur-xl">
+    <div className="pointer-events-auto fixed bottom-12 left-1/2 z-40 flex -translate-x-1/2 items-center gap-2 rounded-full border border-white/10 bg-black/40 p-2 shadow-[0_22px_70px_rgba(0,0,0,0.34)] backdrop-blur-xl">
       <button
         type="button"
         disabled={previous == null}
@@ -449,7 +380,7 @@ function LayerStage({
 }) {
   return (
     <div
-      className="relative z-10 mx-auto h-screen max-w-7xl px-4 pb-24 pt-4 md:px-6 md:pb-20 md:pt-5 xl:pl-24"
+      className="relative z-10 mx-auto h-screen max-w-7xl px-4 pb-20 pt-[68px] md:px-6 md:pb-20 md:pt-[72px] xl:pl-24"
       style={{ perspective: 1800 }}
     >
       <motion.section
@@ -481,6 +412,7 @@ function LayerStage({
 export function CockpitView() {
   const { data, isLoading } = useCockpitBrief();
   const { data: ticketList } = useTradeTickets();
+  const { data: paperState } = usePaperTradingState();
   const [activeLayer, setActiveLayer] = useState<LayerIndex>(0);
   const [direction, setDirection] = useState(1);
 
@@ -553,18 +485,38 @@ export function CockpitView() {
   const riskAction = brief.risk?.action ?? "HOLD";
   const riskClear = brief.main_blocker.code !== "RISK_GATE";
   const dataTrusted = brief.data_mode !== "BLOCKED" && (dqs ?? 0) >= 60;
-  const decisionTitle = activeTicket
-    ? `${activeTicket.symbol} ${activeTicket.side.toUpperCase()}`
-    : "Su an islem yok";
   const ticketRr = activeTicket?.summary?.rr_ratio;
-  const decisionDetail = activeTicket
-    ? `${activeTicket.timeframe} / R:R ${ticketRr != null ? ticketRr.toFixed(2) : "--"} / ${activeTicket.display.confidence_text}`
-    : brief.main_blocker.detail ?? brief.main_blocker.label ?? brief.recommended_stance;
-  const decisionTone = activeTicket
-    ? "text-emerald-200"
-    : brief.status === "BLOCKED" || brief.status === "FROZEN"
-      ? "text-red-200"
-      : "text-amber-200";
+  const unrealizedPnl = paperState?.unrealized_pnl_usd ?? 0;
+  const hasOpenPositions = openPaperPositions > 0;
+  const newSignalNote = activeTicket
+    ? `yeni sinyal: ${activeTicket.symbol} ${activeTicket.side.toUpperCase()}`
+    : null;
+  // Hero "ilk ekran": canlı portföy önce. Açık pozisyon varsa onları göster
+  // (aktif ticket = broker'a devredilecek YENİ sinyal; ayrı kavram, detayda not).
+  const decisionTitle = hasOpenPositions
+    ? `${openPaperPositions} acik islem`
+    : activeTicket
+      ? `${activeTicket.symbol} ${activeTicket.side.toUpperCase()}`
+      : "Su an islem yok";
+  const decisionDetail = hasOpenPositions
+    ? [
+        `Acik P&L ${unrealizedPnl >= 0 ? "+" : ""}$${Math.round(unrealizedPnl).toLocaleString()}`,
+        newSignalNote,
+      ]
+        .filter(Boolean)
+        .join(" / ")
+    : activeTicket
+      ? `${activeTicket.timeframe} / R:R ${ticketRr != null ? ticketRr.toFixed(2) : "--"} / ${activeTicket.display.confidence_text}`
+      : brief.main_blocker.detail ?? brief.main_blocker.label ?? brief.recommended_stance;
+  const decisionTone = hasOpenPositions
+    ? unrealizedPnl >= 0
+      ? "text-emerald-200"
+      : "text-red-200"
+    : activeTicket
+      ? "text-emerald-200"
+      : brief.status === "BLOCKED" || brief.status === "FROZEN"
+        ? "text-red-200"
+        : "text-amber-200";
   const topSymbols = candidates.length
     ? candidates
         .slice(0, 4)
@@ -574,78 +526,50 @@ export function CockpitView() {
 
   const currentMeta = LAYERS[activeLayer];
   let layerContent: ReactNode;
+  const dqsTone =
+    (dqs ?? 0) >= 80 ? "text-signal-up" : (dqs ?? 0) >= 60 ? "text-amber-300" : "text-signal-down";
+  const heroProps: Layer0HeroProps = {
+    title: decisionTitle,
+    detail: decisionDetail,
+    tone: decisionTone,
+    status: {
+      label: AGENT_STATUS_LABEL[brief.status] ?? brief.status,
+      tone: AGENT_STATUS_TONE[brief.status],
+    },
+    dqs: { value: formatScore(dqs), tone: dqsTone },
+    candidates: candidates.length,
+    positions: openPaperPositions,
+    scans: {
+      veri: {
+        label: "Veri omurgasi",
+        value: `DQS ${formatScore(dqs)} / ${brief.data_mode}`,
+        ok: dataTrusted,
+      },
+      risk: {
+        label: "Risk kapisi",
+        value: riskAction,
+        ok: riskClear,
+        href: "/dashboard#risk_gate",
+      },
+      sinyal: {
+        label: "Sinyal adaylari",
+        value: `${actionableCount} actionable / ${candidates.length} izlenen`,
+        ok: actionableCount > 0,
+      },
+      ticket: {
+        label: "Trade ticket",
+        value: activeTicket ? activeTicket.symbol : "ticket yok",
+        ok: Boolean(activeTicket),
+        href: "/dashboard#trade_ticket",
+      },
+    },
+    watch: watch.map((item) => ({ key: item.key, label: item.label })),
+  };
+
   if (activeLayer === 0) {
     layerContent = (
-      <div className="h-full overflow-y-auto p-4 md:p-5">
-        <div className="grid min-h-full gap-5 lg:grid-cols-[minmax(250px,0.48fr)_minmax(650px,1.35fr)]">
-          <section className="order-2 flex min-h-0 flex-col justify-center lg:order-1">
-            <LayerBadge index="00" label="ilk ekran" />
-            <h1 className={`mt-5 max-w-2xl font-display text-4xl leading-[0.98] sm:text-5xl md:text-6xl ${decisionTone}`}>
-              {decisionTitle}
-            </h1>
-            <p className="mt-4 max-w-2xl text-sm leading-6 text-white/68">{decisionDetail}</p>
-
-            <div className="mt-6 grid max-w-3xl grid-cols-2 gap-2 sm:grid-cols-4">
-              <HudMetric
-                label="Durum"
-                value={AGENT_STATUS_LABEL[brief.status] ?? brief.status}
-                tone={AGENT_STATUS_TONE[brief.status]}
-              />
-              <HudMetric
-                label="DQS"
-                value={formatScore(dqs)}
-                tone={
-                  (dqs ?? 0) >= 80
-                    ? "text-signal-up"
-                    : (dqs ?? 0) >= 60
-                      ? "text-amber-300"
-                      : "text-signal-down"
-                }
-              />
-              <HudMetric label="Aday" value={String(candidates.length)} tone="text-emerald-200" />
-              <HudMetric label="Pozisyon" value={String(openPaperPositions)} tone="text-amber-200" />
-            </div>
-
-            <div className="mt-6 grid gap-2 md:grid-cols-2">
-              <ScanButton
-                label="Veri omurgasi"
-                value={`DQS ${formatScore(dqs)} / ${brief.data_mode}`}
-                ok={dataTrusted}
-                onClick={() => activateLayer(3)}
-              />
-              <ScanLink label="Risk kapisi" value={riskAction} ok={riskClear} href="/dashboard#risk_gate" />
-              <ScanButton
-                label="Sinyal adaylari"
-                value={`${actionableCount} actionable / ${candidates.length} izlenen`}
-                ok={actionableCount > 0}
-                onClick={() => activateLayer(1)}
-              />
-              <ScanLink
-                label="Trade ticket"
-                value={activeTicket ? activeTicket.symbol : "ticket yok"}
-                ok={Boolean(activeTicket)}
-                href="/dashboard#trade_ticket"
-              />
-            </div>
-
-            {watch.length ? (
-              <div className="mt-5 flex flex-wrap gap-2">
-                {watch.map((item, index) => (
-                  <span
-                    key={`${item.key}-${index}`}
-                    className="rounded-full border border-white/10 bg-black/28 px-3 py-1 text-[11px] text-white/64 backdrop-blur-md"
-                  >
-                    {item.label}
-                  </span>
-                ))}
-              </div>
-            ) : null}
-          </section>
-
-          <aside className="order-1 min-h-0 overflow-visible pr-1 lg:order-2 lg:overflow-y-auto">
-            <Layer0ReporterAgent />
-          </aside>
-        </div>
+      <div className="h-full overflow-hidden p-3 md:p-4">
+        <Layer0ReporterAgent hero={heroProps} onNavigate={activateLayer} />
       </div>
       );
   } else if (activeLayer === 1) {
@@ -932,31 +856,55 @@ export function CockpitView() {
     <main className="relative h-screen overflow-hidden bg-[#02030a] text-white">
       <LayerDepthBackdrop activeLayer={activeLayer} brief={brief} />
 
-      <div className="pointer-events-none fixed inset-x-0 top-0 z-30 border-b border-white/[0.08] bg-black/18 backdrop-blur-md">
-        <div className="mx-auto flex max-w-7xl items-center justify-between gap-3 px-4 py-3 md:px-6 xl:pl-24">
+      <div className="pointer-events-none fixed inset-x-0 top-0 z-30 border-b border-white/[0.08] bg-black/24 backdrop-blur-md">
+        <div className="mx-auto flex max-w-7xl items-center justify-between gap-3 px-4 py-2.5 md:px-6 xl:pl-24">
           <div className="flex min-w-0 items-center gap-3">
-            <div className="grid h-10 w-10 shrink-0 place-items-center rounded-full border border-accent-cyan/35 bg-accent-cyan/10 font-display text-sm text-accent-cyan shadow-[0_0_28px_rgba(34,211,238,0.16)]">
+            <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-accent-cyan/35 bg-accent-cyan/10 font-display text-sm text-accent-cyan shadow-[0_0_28px_rgba(34,211,238,0.16)]">
               EY
             </div>
             <div className="min-w-0">
-              <div className="text-[10px] uppercase tracking-widest text-white/42">
-                Katman {currentMeta.index} / {currentMeta.depth}
+              <div className="truncate font-display text-sm leading-tight text-white/92">
+                E-yAy Brain
               </div>
-              <div className="truncate font-display text-sm text-white/86">{currentMeta.title}</div>
+              <div className="text-[10px] uppercase tracking-[0.22em] text-white/42">
+                Human-AI Interface
+              </div>
             </div>
           </div>
           <div className="hidden min-w-0 flex-1 justify-center md:flex">
-            <div className="truncate rounded-full border border-white/10 bg-white/[0.035] px-3 py-1 text-[10px] uppercase tracking-widest text-white/42">
+            <div className="truncate rounded-full border border-white/10 bg-white/[0.035] px-4 py-1.5 text-[10px] uppercase tracking-[0.2em] text-white/55">
               {currentMeta.subtitle}
             </div>
           </div>
           <div className="flex shrink-0 items-center gap-2">
-            <span className="hidden rounded-full border border-white/10 bg-white/[0.04] px-2 py-1 text-[10px] uppercase tracking-widest text-white/55 sm:inline-flex">
+            <span className="hidden items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1 text-[10px] uppercase tracking-widest text-white/72 sm:inline-flex">
+              <span
+                className={`h-1.5 w-1.5 rounded-full shadow-[0_0_10px_currentColor] ${
+                  brief.data_mode.startsWith("LIVE")
+                    ? "bg-signal-up text-signal-up"
+                    : "bg-amber-400 text-amber-400"
+                }`}
+              />
               {brief.data_mode}
             </span>
-            <span className="rounded-full border border-amber-400/20 bg-amber-400/8 px-2 py-1 text-[10px] uppercase tracking-widest text-amber-300">
-              NO_EXECUTION
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-amber-400/20 bg-amber-400/8 px-2.5 py-1 text-[10px] uppercase tracking-widest text-amber-300">
+              <span className="h-1.5 w-1.5 rounded-full bg-amber-400 shadow-[0_0_10px_currentColor]" />
+              No_Execution
             </span>
+            <span className="hidden text-right leading-tight md:block">
+              <span className="block text-[9px] uppercase tracking-widest text-white/40">
+                Sistem saati
+              </span>
+              <SystemClock />
+            </span>
+            <button
+              type="button"
+              onClick={() => activateLayer(3)}
+              title="Sistem / veri omurgasi"
+              className="pointer-events-auto grid h-9 w-9 shrink-0 place-items-center rounded-xl border border-white/10 bg-white/[0.04] text-white/60 transition-colors hover:border-accent-cyan/35 hover:text-accent-cyan"
+            >
+              <span className="text-base leading-none">⚙</span>
+            </button>
           </div>
         </div>
       </div>
@@ -967,6 +915,79 @@ export function CockpitView() {
       <LayerStage activeLayer={activeLayer} direction={direction}>
         {layerContent}
       </LayerStage>
+
+      <div className="pointer-events-none fixed inset-x-0 bottom-0 z-30 border-t border-white/[0.08] bg-black/30 backdrop-blur-md">
+        <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-x-6 gap-y-1 px-4 py-2 md:px-6 xl:pl-24">
+          <StatusCell
+            label="Baglanti"
+            value={brief.data_mode.startsWith("LIVE") ? "CANLI" : brief.data_mode}
+            tone={brief.data_mode.startsWith("LIVE") ? "text-signal-up" : "text-amber-300"}
+          />
+          <StatusCell label="Veri kalitesi" value={`DQS ${formatScore(dqs)}`} tone={dqsTone} />
+          <StatusCell
+            label="Risk modu"
+            value={riskAction}
+            tone={riskClear ? "text-signal-up" : "text-signal-down"}
+          />
+          <StatusCell
+            label="Piyasa rejimi"
+            value={brief.regime ?? "okunuyor"}
+            tone="text-accent-cyan"
+          />
+          <StatusCell
+            label="Pozisyon"
+            value={String(openPaperPositions)}
+            tone="text-amber-200"
+          />
+          <StatusCell
+            label="Durum"
+            value={AGENT_STATUS_LABEL[brief.status] ?? brief.status}
+            tone={AGENT_STATUS_TONE[brief.status]}
+          />
+        </div>
+      </div>
     </main>
+  );
+}
+
+function SystemClock() {
+  const [now, setNow] = useState("");
+  useEffect(() => {
+    const tick = () => {
+      setNow(
+        new Date().toLocaleTimeString("tr-TR", {
+          hour12: false,
+          timeZone: "Europe/Istanbul",
+        }),
+      );
+    };
+    tick();
+    const id = window.setInterval(tick, 1000);
+    return () => window.clearInterval(id);
+  }, []);
+  return (
+    <span className="font-mono text-xs tabular-nums text-white/82">
+      {now} <span className="text-white/40">UTC+3</span>
+    </span>
+  );
+}
+
+function StatusCell({
+  label,
+  value,
+  tone = "text-white",
+}: {
+  label: string;
+  value: string;
+  tone?: string;
+}) {
+  return (
+    <div className="flex items-center gap-2">
+      <span className={`h-1.5 w-1.5 rounded-full bg-current shadow-[0_0_10px_currentColor] ${tone}`} />
+      <span className="text-[10px] uppercase tracking-widest text-white/40">{label}</span>
+      <span className={`text-[11px] font-semibold uppercase tracking-widest tabular-nums ${tone}`}>
+        {value}
+      </span>
+    </div>
   );
 }

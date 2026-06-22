@@ -1,12 +1,19 @@
-"""FRED fiyat sağlayıcı — makro seriler (US10Y).
+"""FRED fiyat sağlayıcı — makro seriler (US10Y/US02Y/CPI).
 
-`FRED_API_KEY` environment değişkeni gerekir. Anahtar yoksa veya hata
-durumunda None döner; orchestrator mock'a düşer.
+`FRED_API_KEY` environment değişkeni gerekir. Anahtar yoksa orchestrator
+provider'ı 'disabled' işaretler; hata durumunda None → DATA_UNAVAILABLE
+(MOCK YOK, fallback YOK).
+
+Makro seriler günlük/aylık güncellenir → modül-seviyesi TTL cache ile
+(`FRED_TTL_SEC`, varsayılan 3600sn) boşa ağ çağrısı yapılmaz. Cache yalnızca
+GERÇEK son değeri tutar; None cache'lenmez.
 """
 from __future__ import annotations
 
 import json
 import os
+import threading
+import time
 import urllib.error
 import urllib.request
 
@@ -24,14 +31,19 @@ _SYMBOL_MAP = {
 
 SUPPORTED = frozenset(_SYMBOL_MAP.keys())
 
+_DEFAULT_TTL_SEC = 3600
+_LOCK = threading.Lock()
+_CACHE: dict[str, tuple[float, PriceQuote]] = {}
 
-def get_quote(symbol: str) -> PriceQuote | None:
-    series_id = _SYMBOL_MAP.get(symbol)
-    if series_id is None:
-        return None
-    api_key = os.environ.get("FRED_API_KEY")
-    if not api_key:
-        return None
+
+def _ttl_sec() -> float:
+    try:
+        return float(os.environ.get("FRED_TTL_SEC", _DEFAULT_TTL_SEC))
+    except (TypeError, ValueError):
+        return float(_DEFAULT_TTL_SEC)
+
+
+def _fetch(symbol: str, series_id: str, api_key: str) -> PriceQuote | None:
     url = (
         f"{API}?series_id={series_id}&api_key={api_key}"
         f"&file_type=json&limit=1&sort_order=desc"
@@ -59,3 +71,23 @@ def get_quote(symbol: str) -> PriceQuote | None:
         status="OK",
         fallback=False,
     )
+
+
+def get_quote(symbol: str) -> PriceQuote | None:
+    series_id = _SYMBOL_MAP.get(symbol)
+    if series_id is None:
+        return None
+    api_key = os.environ.get("FRED_API_KEY")
+    if not api_key:
+        return None
+    ttl = _ttl_sec()
+    now = time.monotonic()
+    with _LOCK:
+        cached = _CACHE.get(symbol)
+        if cached and (now - cached[0]) < ttl:
+            return cached[1]
+    quote = _fetch(symbol, series_id, api_key)
+    if quote is not None:
+        with _LOCK:
+            _CACHE[symbol] = (now, quote)
+    return quote

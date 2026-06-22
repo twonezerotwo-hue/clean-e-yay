@@ -309,7 +309,8 @@ def test_chat_riskgate_question_grounded(llm_env, no_network, monkeypatch) -> No
     r = _client().post("/api/v1/chat", json={"message": "RiskGate neyi engelledi?"})
     body = r.json()
     assert body["refused"] is False
-    assert "RiskGate" in body["answer"]
+    # Yanıt risk kapısına grounded olmalı (jargon "RiskGate" değil, patron dili).
+    assert "Risk kapısı" in body["answer"]
     assert any(e.startswith("risk_gate:") for e in body["evidence_used"])
 
 

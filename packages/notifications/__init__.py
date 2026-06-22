@@ -124,9 +124,27 @@ def append_many(notifs: list[Notification]) -> None:
         _publish(n)
 
 
-def list_recent(limit: int = 50, unread_only: bool = False) -> list[Notification]:
+def _ts_epoch(ts: str) -> float:
+    """ISO ts → epoch saniye; parse edilemezse 0.0 (eski/bilinmeyen sayılır)."""
+    try:
+        return datetime.fromisoformat(ts).timestamp()
+    except (ValueError, TypeError):
+        return 0.0
+
+
+def list_recent(
+    limit: int = 50,
+    unread_only: bool = False,
+    max_age_seconds: float | None = None,
+) -> list[Notification]:
+    """Son bildirimler (yeniden eskiye). max_age_seconds verilirse `ts`'i bu
+    yaştan eski olan (veya ts'i geçersiz) bildirimler ELENİR — böylece bayat
+    backlog "taze" gibi yüzeye çıkmaz."""
     with _LOCK:
         items = _read_all()
+    if max_age_seconds is not None:
+        cutoff = datetime.now(UTC).timestamp() - max_age_seconds
+        items = [n for n in items if _ts_epoch(n.ts) >= cutoff]
     if unread_only:
         items = [n for n in items if not n.ack]
     return items[-limit:][::-1]  # newest first

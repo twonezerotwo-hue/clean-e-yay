@@ -158,9 +158,19 @@ html, body {
     0 0 62px rgba(34, 211, 238, 0.1);
 }
 
+.layer0-card {
+  border-radius: 1.25rem;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: linear-gradient(180deg, rgba(6, 12, 22, 0.7), rgba(2, 6, 12, 0.86));
+  padding: 1rem;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.04),
+    0 18px 48px rgba(0, 0, 0, 0.24);
+}
+
 .reporter-model-card {
   position: relative;
-  min-height: 390px;
+  min-height: 300px;
   overflow: hidden;
   border-radius: 1.25rem;
   border: 1px solid rgba(34, 211, 238, 0.24);
