@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
 import { motion } from "framer-motion";
@@ -33,7 +32,7 @@ import { DecisionTracePanel } from "@/components/panels/DecisionTracePanel";
 import { DrawdownGuardPanel } from "@/components/panels/DrawdownGuardPanel";
 import { EventCalendarPanel } from "@/components/panels/EventCalendarPanel";
 import { ExecutionReadinessPanel } from "@/components/panels/ExecutionReadinessPanel";
-import { HaberlerCatalystPanel } from "@/components/panels/HaberlerCatalystPanel";
+import { CatalystImpactPanel } from "@/components/panels/CatalystImpactPanel";
 import { LearningPanel } from "@/components/panels/LearningPanel";
 import { MarketDataPanel } from "@/components/panels/MarketDataPanel";
 import { MarketSessionsPanel } from "@/components/panels/MarketSessionsPanel";
@@ -60,7 +59,6 @@ import { WeightHistoryPanel } from "@/components/panels/WeightHistoryPanel";
 import { WeightProposalPanel } from "@/components/panels/WeightProposalPanel";
 
 import { HolographicSignalDeck } from "./HolographicSignalDeck";
-import { Layer2QuickNav } from "./Layer2QuickNav";
 import { Layer0ReporterAgent, type Layer0HeroProps } from "./Layer0ReporterAgent";
 import { MacroRiskStrip } from "./MacroRiskStrip";
 import { QuantumBackplaneScene } from "./QuantumBackplaneScene";
@@ -226,24 +224,19 @@ function DataSpineCard({
   label,
   value,
   detail,
-  href,
   tone = "text-white",
 }: {
   label: string;
   value: string;
   detail: string;
-  href: string;
   tone?: string;
 }) {
   return (
-    <Link
-      href={href}
-      className="rounded-lg border border-white/10 bg-black/24 p-4 transition-colors hover:border-accent-cyan/35 hover:bg-white/[0.04]"
-    >
+    <div className="rounded-lg border border-white/10 bg-black/24 p-4">
       <div className="text-[10px] uppercase tracking-widest text-white/38">{label}</div>
       <div className={`mt-2 font-display text-2xl leading-none ${tone}`}>{value}</div>
       <p className="mt-2 text-xs leading-5 text-white/50">{detail}</p>
-    </Link>
+    </div>
   );
 }
 
@@ -732,11 +725,14 @@ export function CockpitView() {
             <Layer2DetailGroup
               index="05"
               title="Makro, Catalyst ve Haber"
-              detail="Haber catalyst katmani, olay takvimi ve senaryo analizi ayni okuma sirasi icinde."
+              detail="Haber radari, catalyst etkisi, olay takvimi ve senaryo analizi sekme olmadan ayni okuma sirasi icinde."
             >
               <DashboardGrid>
+                <GridCell span="full">
+                  <NewsPanel />
+                </GridCell>
                 <GridCell span="2">
-                  <HaberlerCatalystPanel />
+                  <CatalystImpactPanel />
                 </GridCell>
                 <GridCell span="1">
                   <EventCalendarPanel />
@@ -819,34 +815,101 @@ export function CockpitView() {
               label="Cockpit ViewModel"
               value={AGENT_STATUS_LABEL[brief.status] ?? brief.status}
               detail={`snapshot ${formatGeneratedAt(data?.generated_at)}`}
-              href="/dashboard#agent_brief"
               tone={AGENT_STATUS_TONE[brief.status]}
             />
             <DataSpineCard
               label="Data Quality"
               value={`DQS ${formatScore(dqs)}`}
               detail={`mode ${brief.data_mode}`}
-              href="/dashboard#data_quality"
               tone={DATA_MODE_TONE[brief.data_mode]}
             />
             <DataSpineCard
               label="Main Blocker"
               value={brief.main_blocker.label}
               detail={brief.main_blocker.detail ?? brief.recommended_stance}
-              href="/dashboard#risk_gate"
               tone={BLOCKER_TONE[brief.main_blocker.code]}
             />
             <DataSpineCard
               label="Signal Feed"
               value={topSymbols}
               detail={`${candidates.length} aday / ${actionableCount} actionable`}
-              href="/dashboard#agent_matrix"
               tone="text-accent-cyan"
             />
           </div>
-          <div className="rounded-lg border border-white/10 bg-black/24 p-4">
-            <Layer2QuickNav />
-          </div>
+          <Layer2DetailGroup
+            index="A"
+            title="ViewModel ve Karar Izleri"
+            detail="Katman 3 link listesi degil; backendten gelen agent ozeti, karar izi ve data contract burada dogrudan okunur."
+          >
+            <DashboardGrid>
+              <GridCell span="1">
+                <AgentBriefPanel />
+              </GridCell>
+              <GridCell span="1">
+                <DecisionPanel />
+              </GridCell>
+              <GridCell span="2">
+                <DecisionTracePanel />
+              </GridCell>
+              <GridCell span="1">
+                <AgentVotesPanel />
+              </GridCell>
+              <GridCell span="2">
+                <AgentMatrixPanel />
+              </GridCell>
+            </DashboardGrid>
+          </Layer2DetailGroup>
+
+          <Layer2DetailGroup
+            index="B"
+            title="Provider, Snapshot ve Data Quality"
+            detail="Saglayici durumu, DQS, snapshot ve market data panelleri artik ayri link arkasinda degil."
+          >
+            <DashboardGrid>
+              <GridCell span="1">
+                <DataQualityPanel />
+              </GridCell>
+              <GridCell span="1">
+                <ProviderStatusPanel />
+              </GridCell>
+              <GridCell span="1">
+                <SnapshotPanel />
+              </GridCell>
+              <GridCell span="1">
+                <MarketDataPanel />
+              </GridCell>
+            </DashboardGrid>
+          </Layer2DetailGroup>
+
+          <Layer2DetailGroup
+            index="C"
+            title="Risk, Execution ve Operasyon"
+            detail="Risk kapisi, trade ticket, paper action, sistem sagligi, panel audit ve replay omurgasi tek sayfada acik."
+          >
+            <DashboardGrid>
+              <GridCell span="1">
+                <TradeTicketPanel />
+              </GridCell>
+              <GridCell span="1">
+                <RiskDurumuPanel />
+              </GridCell>
+              <GridCell span="1">
+                <PaperActionPanel />
+              </GridCell>
+              <GridCell span="1">
+                <PositionChecksPanel />
+              </GridCell>
+              <GridCell span="1">
+                <SystemHealthBar />
+              </GridCell>
+              <GridCell span="1">
+                <PanelAuditPanel />
+              </GridCell>
+              <GridCell span="1">
+                <ReplayStatusPanel />
+              </GridCell>
+            </DashboardGrid>
+          </Layer2DetailGroup>
         </div>
       </div>
     );

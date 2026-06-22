@@ -4,8 +4,6 @@ import type { ReactNode } from "react";
 
 import { DashboardGrid, GridCell } from "@/components/shell/DashboardGrid";
 import { MockModeBanner } from "@/components/shell/MockModeBanner";
-
-// ── ANA — 6 panel (tek-bakış cockpit) ────────────────────────────────────────
 import { AgentNarratorPanel } from "@/components/panels/AgentNarratorPanel";
 import { ExecutionReadinessPanel } from "@/components/panels/ExecutionReadinessPanel";
 import { TradeTicketPanel } from "@/components/panels/TradeTicketPanel";
@@ -14,8 +12,6 @@ import { TimeframeMatrixPanel } from "@/components/panels/TimeframeMatrixPanel";
 import { AgentMatrixPanel } from "@/components/panels/AgentMatrixPanel";
 import { PositionChecksPanel } from "@/components/panels/PositionChecksPanel";
 import { ChatPanel } from "@/components/panels/ChatPanel";
-
-// ── DETAY — uzman bakışı (collapsed) ─────────────────────────────────────────
 import { AgentBriefPanel } from "@/components/panels/AgentBriefPanel";
 import { DecisionPanel } from "@/components/panels/DecisionPanel";
 import { AIReportPanel } from "@/components/panels/AIReportPanel";
@@ -32,7 +28,9 @@ import { VolatilityPanel } from "@/components/panels/VolatilityPanel";
 import { OptionsVolPanel } from "@/components/panels/OptionsVolPanel";
 import { CorrelationPanel } from "@/components/panels/CorrelationPanel";
 import { CapitalRotationPanel } from "@/components/panels/CapitalRotationPanel";
-import { HaberlerCatalystPanel } from "@/components/panels/HaberlerCatalystPanel";
+import { CatalystImpactPanel } from "@/components/panels/CatalystImpactPanel";
+import { EventCalendarPanel } from "@/components/panels/EventCalendarPanel";
+import { NewsPanel } from "@/components/panels/NewsPanel";
 import { ScenarioPanel } from "@/components/panels/ScenarioPanel";
 import { TradingPanel } from "@/components/panels/TradingPanel";
 import { LearningPanel } from "@/components/panels/LearningPanel";
@@ -41,8 +39,6 @@ import { WeightHistoryPanel } from "@/components/panels/WeightHistoryPanel";
 import { CalibrationPanel } from "@/components/panels/CalibrationPanel";
 import { MistakeMemoryPanel } from "@/components/panels/MistakeMemoryPanel";
 import { TfWeightsPanel } from "@/components/panels/TfWeightsPanel";
-
-// ── OPS — sistem / veri (default kapalı) ─────────────────────────────────────
 import { DataQualityPanel } from "@/components/panels/DataQualityPanel";
 import { ProviderStatusPanel } from "@/components/panels/ProviderStatusPanel";
 import { SnapshotPanel } from "@/components/panels/SnapshotPanel";
@@ -50,36 +46,29 @@ import { MarketDataPanel } from "@/components/panels/MarketDataPanel";
 import { PanelAuditPanel } from "@/components/panels/PanelAuditPanel";
 import { SystemHealthBar } from "@/components/panels/SystemHealthBar";
 import { ReplayStatusPanel } from "@/components/panels/ReplayStatusPanel";
-
 import { useKeyboardShortcuts } from "@/hooks/useKeyboardShortcuts";
 
 export default function HomePage() {
   useKeyboardShortcuts();
+
   return (
-    <main className="mx-auto max-w-7xl px-4 py-6 space-y-6">
+    <main className="mx-auto max-w-7xl space-y-6 px-4 py-6">
       <header className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-display tracking-tight">Clean E-yAy</h1>
-          <p className="text-xs text-white/50 mt-0.5">
-            agent operating cockpit · karar-destek
+          <h1 className="font-display text-2xl tracking-tight">Clean E-yAy</h1>
+          <p className="mt-0.5 text-xs text-white/50">
+            agent operating cockpit - karar-destek
           </p>
         </div>
         <div className="flex items-center gap-3">
           <div className="text-xs uppercase tracking-widest text-accent-cyan">
-            PAPER_ONLY · NO_EXECUTION
+            PAPER_ONLY - NO_EXECUTION
           </div>
         </div>
       </header>
 
       <MockModeBanner />
 
-      {/* ──────────────────────────────────────────────────────────────────
-          ANA — 6 panel. Broker-action modu için keskin cockpit.
-          1) Agent Narrator  2) Trade Ticket  3) Risk Durumu
-          4) Karar Matrisi   5) Pozisyon Kontrolleri  6) Agent'a Sor
-      ────────────────────────────────────────────────────────────────── */}
-
-      {/* 1) HERO — Agent Narrator (ana sonuç + TF rotator + gündem feed) */}
       <section className="relative overflow-hidden rounded-xl border border-white/10 bg-[#090d12]/82">
         <div className="pointer-events-none absolute inset-0 opacity-[0.12] [background-image:linear-gradient(rgba(255,255,255,0.58)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.58)_1px,transparent_1px)] [background-size:56px_56px]" />
         <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-emerald-300/30 to-transparent" />
@@ -88,139 +77,121 @@ export default function HomePage() {
         </div>
       </section>
 
-      <PanelGroup title="Islem Kontrol Dongusu" hint="10 kontrol · 60 saniye · read-only">
+      <PanelGroup title="Islem Kontrol Dongusu" hint="10 kontrol / 60 saniye / read-only">
         <GridCell span="full"><ExecutionReadinessPanel /></GridCell>
       </PanelGroup>
 
-      {/* 2) Trade Ticket */}
-      <PanelGroup title="Trade Ticket" hint="broker'a manuel girmeden tek-bakış kart">
+      <PanelGroup title="Trade Ticket" hint="broker'a manuel girmeden tek-bakis kart">
         <GridCell span="full"><TradeTicketPanel /></GridCell>
       </PanelGroup>
 
-      {/* 3) Risk Durumu (RiskGate + Drawdown + Catalyst birleşik) */}
-      <PanelGroup title="Risk Durumu" hint="ana engel · drawdown · yaklaşan olaylar">
+      <PanelGroup title="Risk Durumu" hint="ana engel / drawdown / yaklasan olaylar">
         <GridCell span="full"><RiskDurumuPanel /></GridCell>
       </PanelGroup>
 
-      {/* 4) Karar Matrisi (TF × symbol) */}
-      <PanelGroup title="Karar Matrisi" hint="candidate → final · TF + agent overlay">
+      <PanelGroup title="Karar Matrisi" hint="candidate -> final / TF + agent overlay">
         <GridCell span="full"><TimeframeMatrixPanel /></GridCell>
         <GridCell span="full"><AgentMatrixPanel /></GridCell>
       </PanelGroup>
 
-      {/* 5) Pozisyon Kontrolleri */}
-      <PanelGroup title="Pozisyon Kontrolleri" hint="açık pozisyon + recheck verdict">
+      <PanelGroup title="Pozisyon Kontrolleri" hint="acik pozisyon + recheck verdict">
         <GridCell span="full"><PositionChecksPanel /></GridCell>
       </PanelGroup>
 
-      {/* 6) Agent'a Sor */}
-      <PanelGroup title="Agent'a Sor" hint="state-grounded · LLM karar vermez">
+      <PanelGroup title="Agent'a Sor" hint="state-grounded / LLM karar vermez">
         <GridCell span="full"><ChatPanel /></GridCell>
       </PanelGroup>
 
-      {/* ──────────────────────────────────────────────────────────────────
-          DETAY — uzman bakışı. Geri kalan 25 panel collapsed.
-      ────────────────────────────────────────────────────────────────── */}
-      <details className="group rounded-2xl border border-ink-700/60 bg-ink-800/40">
-        <summary className="cursor-pointer select-none list-none px-5 py-3 flex items-center justify-between">
-          <span className="text-sm font-medium tracking-wide text-white/80">
-            DETAY — Uzman bakışı
-          </span>
-          <span className="text-xs text-white/40 group-open:hidden">
-            karar izi · piyasa yapısı · makro · öğrenme ▾
-          </span>
-          <span className="text-xs text-white/40 hidden group-open:inline">
-            gizle ▴
-          </span>
-        </summary>
-        <div className="px-5 pb-5 pt-1 space-y-7">
-          <PanelGroup title="Komuta & Karar" hint="brief · decision · AI rapor · trace · oylama · shadow · adaylar · izleme">
-            <GridCell span="full"><AgentBriefPanel /></GridCell>
-            <GridCell span="2"><DecisionPanel /></GridCell>
-            <GridCell span="1"><AIReportPanel /></GridCell>
-            <GridCell span="2"><DecisionTracePanel /></GridCell>
-            <GridCell span="1"><AgentVotesPanel /></GridCell>
-            <GridCell span="full"><ShadowPanel /></GridCell>
-            <GridCell span="full"><CommandSignalsPanel /></GridCell>
-            <GridCell span="full"><WatchConditionsPanel /></GridCell>
-          </PanelGroup>
-
-          <PanelGroup title="Risk Detayı" hint="Drawdown · Paper Action · Market Sessions (RiskGate, RiskDurumu içinde)">
-            <GridCell span="2"><DrawdownGuardPanel /></GridCell>
-            <GridCell span="1"><MarketSessionsPanel /></GridCell>
-            <GridCell span="full"><PaperActionPanel /></GridCell>
-          </PanelGroup>
-
-          <PanelGroup title="Piyasa Yapısı" hint="türev · volatilite · options · korelasyon · rotasyon">
-            <GridCell span="1"><CryptoDerivativesPanel /></GridCell>
-            <GridCell span="1"><VolatilityPanel /></GridCell>
-            <GridCell span="1"><OptionsVolPanel /></GridCell>
-            <GridCell span="full"><CorrelationPanel /></GridCell>
-            <GridCell span="full"><CapitalRotationPanel /></GridCell>
-          </PanelGroup>
-
-          <PanelGroup title="Makro / Catalyst" hint="haberler + catalyst + olay takvimi (sekme) · senaryo">
-            <GridCell span="full"><HaberlerCatalystPanel /></GridCell>
-            <GridCell span="full"><ScenarioPanel /></GridCell>
-          </PanelGroup>
-
-          <PanelGroup title="Öğrenme & Kalibrasyon" hint="paper · ağırlık · platt · TF kalibrasyon (owner onayı)">
-            <GridCell span="2"><TradingPanel /></GridCell>
-            <GridCell span="1"><LearningPanel /></GridCell>
-            <GridCell span="2"><WeightProposalPanel /></GridCell>
-            <GridCell span="1"><WeightHistoryPanel /></GridCell>
-            <GridCell span="2"><CalibrationPanel /></GridCell>
-            <GridCell span="1"><MistakeMemoryPanel /></GridCell>
-            <GridCell span="2"><TfWeightsPanel /></GridCell>
-          </PanelGroup>
+      <section className="space-y-7 rounded-2xl border border-ink-700/60 bg-ink-800/40 px-5 py-5">
+        <div className="border-b border-ink-700/50 pb-2">
+          <h2 className="text-sm font-medium tracking-wide text-white/80">
+            DETAY - Uzman bakisi
+          </h2>
+          <p className="mt-1 text-xs text-white/40">
+            Karar izi, piyasa yapisi, makro, haber, ogrenme ve kalibrasyon panelleri kapali bolum olmadan acik akar.
+          </p>
         </div>
-      </details>
 
-      {/* ──────────────────────────────────────────────────────────────────
-          OPS — sistem / veri. Default kapalı; sorun olunca açılır.
-      ────────────────────────────────────────────────────────────────── */}
-      <details className="group rounded-2xl border border-ink-700/60 bg-ink-800/40">
-        <summary className="cursor-pointer select-none list-none px-5 py-3 flex items-center justify-between">
-          <span className="text-sm font-medium tracking-wide text-white/80">
-            OPS — Sistem & Veri
-          </span>
-          <span className="text-xs text-white/40 group-open:hidden">
-            data quality · provider · system health · replay · audit ▾
-          </span>
-          <span className="text-xs text-white/40 hidden group-open:inline">
-            gizle ▴
-          </span>
-        </summary>
-        <div className="px-5 pb-5 pt-1 space-y-7">
-          <PanelGroup title="Data Quality & Providers" hint="veri kalitesi · sağlayıcı · snapshot · piyasa verisi · denetim">
-            <GridCell span="2"><DataQualityPanel /></GridCell>
-            <GridCell span="1"><ProviderStatusPanel /></GridCell>
-            <GridCell span="1"><SnapshotPanel /></GridCell>
-            <GridCell span="2"><MarketDataPanel /></GridCell>
-            <GridCell span="1"><PanelAuditPanel /></GridCell>
-          </PanelGroup>
+        <PanelGroup title="Komuta & Karar" hint="brief / decision / AI rapor / trace / oylama / shadow / adaylar / izleme">
+          <GridCell span="full"><AgentBriefPanel /></GridCell>
+          <GridCell span="2"><DecisionPanel /></GridCell>
+          <GridCell span="1"><AIReportPanel /></GridCell>
+          <GridCell span="2"><DecisionTracePanel /></GridCell>
+          <GridCell span="1"><AgentVotesPanel /></GridCell>
+          <GridCell span="full"><ShadowPanel /></GridCell>
+          <GridCell span="full"><CommandSignalsPanel /></GridCell>
+          <GridCell span="full"><WatchConditionsPanel /></GridCell>
+        </PanelGroup>
 
-          <PanelGroup title="System / Replay" hint="sistem sağlığı · replay · sözleşme">
-            <GridCell span="full"><SystemHealthBar /></GridCell>
-            <GridCell span="1"><ReplayStatusPanel /></GridCell>
-            <GridCell span="full">
-              <p className="text-[10px] text-white/35">
-                Sözleşme: <code>contracts/openapi.yaml</code> — tipler codegen ile
-                üretilir (tek doğruluk kaynağı).
-              </p>
-            </GridCell>
-          </PanelGroup>
+        <PanelGroup title="Risk Detayi" hint="Drawdown / Paper Action / Market Sessions">
+          <GridCell span="2"><DrawdownGuardPanel /></GridCell>
+          <GridCell span="1"><MarketSessionsPanel /></GridCell>
+          <GridCell span="full"><PaperActionPanel /></GridCell>
+        </PanelGroup>
+
+        <PanelGroup title="Piyasa Yapisi" hint="turev / volatilite / options / korelasyon / rotasyon">
+          <GridCell span="1"><CryptoDerivativesPanel /></GridCell>
+          <GridCell span="1"><VolatilityPanel /></GridCell>
+          <GridCell span="1"><OptionsVolPanel /></GridCell>
+          <GridCell span="full"><CorrelationPanel /></GridCell>
+          <GridCell span="full"><CapitalRotationPanel /></GridCell>
+        </PanelGroup>
+
+        <PanelGroup title="Makro / Catalyst / Haber" hint="haber radari, catalyst etkisi ve olay takvimi ayri paneller olarak acik">
+          <GridCell span="full"><NewsPanel /></GridCell>
+          <GridCell span="2"><CatalystImpactPanel /></GridCell>
+          <GridCell span="1"><EventCalendarPanel /></GridCell>
+          <GridCell span="full"><ScenarioPanel /></GridCell>
+        </PanelGroup>
+
+        <PanelGroup title="Ogrenme & Kalibrasyon" hint="paper / agirlik / platt / TF kalibrasyon">
+          <GridCell span="2"><TradingPanel /></GridCell>
+          <GridCell span="1"><LearningPanel /></GridCell>
+          <GridCell span="2"><WeightProposalPanel /></GridCell>
+          <GridCell span="1"><WeightHistoryPanel /></GridCell>
+          <GridCell span="2"><CalibrationPanel /></GridCell>
+          <GridCell span="1"><MistakeMemoryPanel /></GridCell>
+          <GridCell span="2"><TfWeightsPanel /></GridCell>
+        </PanelGroup>
+      </section>
+
+      <section className="space-y-7 rounded-2xl border border-ink-700/60 bg-ink-800/40 px-5 py-5">
+        <div className="border-b border-ink-700/50 pb-2">
+          <h2 className="text-sm font-medium tracking-wide text-white/80">
+            OPS - Sistem & Veri
+          </h2>
+          <p className="mt-1 text-xs text-white/40">
+            Data quality, provider, system health, replay ve audit panelleri default kapali degil.
+          </p>
         </div>
-      </details>
 
-      <footer className="text-xs text-white/40 pt-8">
-        PAPER_ONLY · NO_EXECUTION — karar-destek; final karar deterministik engine + RiskGate.
+        <PanelGroup title="Data Quality & Providers" hint="veri kalitesi / saglayici / snapshot / piyasa verisi / denetim">
+          <GridCell span="2"><DataQualityPanel /></GridCell>
+          <GridCell span="1"><ProviderStatusPanel /></GridCell>
+          <GridCell span="1"><SnapshotPanel /></GridCell>
+          <GridCell span="2"><MarketDataPanel /></GridCell>
+          <GridCell span="1"><PanelAuditPanel /></GridCell>
+        </PanelGroup>
+
+        <PanelGroup title="System / Replay" hint="sistem sagligi / replay / sozlesme">
+          <GridCell span="full"><SystemHealthBar /></GridCell>
+          <GridCell span="1"><ReplayStatusPanel /></GridCell>
+          <GridCell span="full">
+            <p className="text-[10px] text-white/35">
+              Sozlesme: <code>contracts/openapi.yaml</code> - tipler codegen ile
+              uretilir (tek dogruluk kaynagi).
+            </p>
+          </GridCell>
+        </PanelGroup>
+      </section>
+
+      <footer className="pt-8 text-xs text-white/40">
+        PAPER_ONLY - NO_EXECUTION - karar-destek; final karar deterministik engine + RiskGate.
       </footer>
     </main>
   );
 }
 
-// Panelleri okunur IA gruplarına ayıran başlık + grid.
 function PanelGroup({
   title,
   hint,
