@@ -114,7 +114,6 @@ function fmtAge(seconds: number | null | undefined): string {
   if (seconds < 5400) return `${Math.round(seconds / 60)} dk`;
   return `${(seconds / 3600).toFixed(1)} sa`;
 }
-
 function getSpeechRecognition(): SpeechRecognitionConstructor | null {
   if (typeof window === "undefined") return null;
   const scopedWindow = window as Window & {
@@ -137,43 +136,93 @@ function shortLine(text: string, max = 148) {
   return clean.length > max ? `${clean.slice(0, max - 1)}...` : clean;
 }
 
-/** Tarama satırı: layer'a yönlendiren buton veya /dashboard link'i. */
-function ScanRow({
-  item,
-  onClick,
+/** Layer 0 orta sutundaki karar, metrik ve tarama HUD'u. */
+function Layer0StatusCore({
+  hero,
+  onNavigate,
 }: {
-  item: ScanItem;
-  onClick?: () => void;
+  hero: Layer0HeroProps;
+  onNavigate: (layer: 0 | 1 | 2 | 3) => void;
 }) {
-  const dot = item.ok ? "bg-signal-up text-signal-up" : "bg-amber-400 text-amber-400";
-  const badge = item.ok ? "text-signal-up" : "text-amber-300";
-  const body = (
-    <>
-      <span className={`h-2.5 w-2.5 shrink-0 rounded-full shadow-[0_0_14px_currentColor] ${dot}`} />
-      <span className="min-w-0">
-        <span className="block truncate text-xs text-white/82">{item.label}</span>
-        <span className="block truncate text-[10px] uppercase tracking-widest text-white/38">
-          {item.value}
-        </span>
-      </span>
-      <span className={`text-[10px] uppercase tracking-widest ${badge}`}>
-        {item.ok ? "OK" : "IZLE"}
-      </span>
-    </>
-  );
-  const cls =
-    "grid grid-cols-[auto_1fr_auto] items-center gap-3 rounded-xl border border-white/10 bg-white/[0.035] px-3 py-2 text-left transition-colors hover:border-accent-cyan/35 hover:bg-white/[0.06]";
-  if (item.href) {
-    return (
-      <a href={item.href} className={cls}>
-        {body}
-      </a>
-    );
-  }
+  const metrics = [
+    { label: "Durum", value: hero.status.label, tone: hero.status.tone },
+    { label: "DQS", value: hero.dqs.value, tone: hero.dqs.tone },
+    { label: "Aday", value: String(hero.candidates), tone: "text-emerald-200" },
+    { label: "Pozisyon", value: String(hero.positions), tone: "text-amber-200" },
+  ];
+  const nodes = [
+    { key: "veri", item: hero.scans.veri, index: "01", onClick: () => onNavigate(3) },
+    { key: "risk", item: hero.scans.risk, index: "02" },
+    { key: "sinyal", item: hero.scans.sinyal, index: "03", onClick: () => onNavigate(1) },
+    { key: "ticket", item: hero.scans.ticket, index: "04" },
+  ];
+
   return (
-    <button type="button" onClick={onClick} className={cls}>
-      {body}
-    </button>
+    <div className="layer0-status-core shrink-0">
+      <div className="layer0-status-core__scan" aria-hidden />
+      <div className="layer0-status-core__head">
+        <div className="min-w-0">
+          <div className="layer0-status-core__kicker">Canli karar cekirdegi</div>
+          <div className={`layer0-status-core__title ${hero.tone}`}>{hero.title}</div>
+          <div className="layer0-status-core__detail">{hero.detail}</div>
+        </div>
+        <div className="layer0-status-core__mode">
+          <span>MOD</span>
+          <strong>{hero.status.label}</strong>
+        </div>
+      </div>
+
+      <div className="layer0-status-core__metrics">
+        {metrics.map((metric) => (
+          <div key={metric.label} className="layer0-status-metric">
+            <span>{metric.label}</span>
+            <strong className={metric.tone}>{metric.value}</strong>
+          </div>
+        ))}
+      </div>
+
+      <div className="layer0-status-core__nodes">
+        {nodes.map(({ key, item, index, onClick }) => {
+          const cls = `layer0-status-node ${
+            item.ok ? "layer0-status-node--ok" : "layer0-status-node--watch"
+          }`;
+          const content = (
+            <>
+              <span className="layer0-status-node__pulse" aria-hidden />
+              <span className="layer0-status-node__index">{index}</span>
+              <span className="layer0-status-node__copy">
+                <strong>{item.label}</strong>
+                <em>{item.value}</em>
+              </span>
+              <span className="layer0-status-node__state">{item.ok ? "OK" : "IZLE"}</span>
+            </>
+          );
+          if (item.href) {
+            return (
+              <a key={key} href={item.href} className={cls}>
+                {content}
+              </a>
+            );
+          }
+          return (
+            <button key={key} type="button" onClick={onClick} className={cls}>
+              {content}
+            </button>
+          );
+        })}
+      </div>
+
+      {hero.watch.length ? (
+        <div className="layer0-status-core__watch">
+          {hero.watch.slice(0, 2).map((item) => (
+            <div key={item.key} className="layer0-status-watch">
+              <span aria-hidden />
+              <p>{item.label}</p>
+            </div>
+          ))}
+        </div>
+      ) : null}
+    </div>
   );
 }
 
@@ -706,35 +755,7 @@ export function Layer0ReporterAgent({
           </div>
         </div>
 
-        <div className="layer0-card shrink-0 text-center">
-          <div className={`font-display text-4xl leading-none sm:text-5xl ${hero.tone}`}>
-            {hero.title}
-          </div>
-          <div className="mt-3 text-sm leading-6 text-white/62">{hero.detail}</div>
-        </div>
-
-        <div className="grid shrink-0 grid-cols-2 gap-2 sm:grid-cols-4">
-          <HudMetric label="Durum" value={hero.status.label} tone={hero.status.tone} />
-          <HudMetric label="DQS" value={hero.dqs.value} tone={hero.dqs.tone} />
-          <HudMetric label="Aday" value={String(hero.candidates)} tone="text-emerald-200" />
-          <HudMetric label="Pozisyon" value={String(hero.positions)} tone="text-amber-200" />
-        </div>
-
-        <div className="grid shrink-0 grid-cols-1 gap-2 sm:grid-cols-2">
-          <ScanRow item={hero.scans.veri} onClick={() => onNavigate(3)} />
-          <ScanRow item={hero.scans.risk} />
-          <ScanRow item={hero.scans.sinyal} onClick={() => onNavigate(1)} />
-          <ScanRow item={hero.scans.ticket} />
-          {hero.watch.slice(0, 2).map((item) => (
-            <div
-              key={item.key}
-              className="grid grid-cols-[auto_1fr] items-center gap-3 rounded-xl border border-white/10 bg-black/24 px-3 py-2"
-            >
-              <span className="h-2.5 w-2.5 rounded-full bg-accent-cyan/70 shadow-[0_0_12px_currentColor]" />
-              <span className="min-w-0 truncate text-xs text-white/68">{item.label}</span>
-            </div>
-          ))}
-        </div>
+        <Layer0StatusCore hero={hero} onNavigate={onNavigate} />
       </div>
 
       {/* ── Sutun 3: Konusma paneli ─────────────────────────────────── */}
@@ -903,14 +924,5 @@ export function Layer0ReporterAgent({
         </form>
       </div>
     </section>
-  );
-}
-
-function HudMetric({ label, value, tone }: { label: string; value: string; tone: string }) {
-  return (
-    <div className="rounded-xl border border-white/10 bg-black/24 px-3 py-2 text-center">
-      <div className="text-[10px] uppercase tracking-widest text-white/38">{label}</div>
-      <div className={`mt-1 font-display text-lg leading-none tabular-nums ${tone}`}>{value}</div>
-    </div>
   );
 }
