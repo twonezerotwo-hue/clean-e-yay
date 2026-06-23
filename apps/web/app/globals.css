@@ -14,18 +14,23 @@ html, body {
 
 .floating-notification-dock {
   position: fixed;
-  top: clamp(72px, 9vh, 118px);
-  right: clamp(18px, 4vw, 64px);
+  top: clamp(74px, 9vh, 112px);
+  right: clamp(16px, 3vw, 48px);
   z-index: 90;
   width: 86px;
   height: 86px;
-  animation: eyay-notification-drift 28s ease-in-out infinite;
+  animation: eyay-notification-edge-patrol 54s cubic-bezier(0.45, 0, 0.16, 1) infinite;
   transform-style: preserve-3d;
 }
 
 .floating-notification-dock:hover,
 .floating-notification-dock[data-open="true"] {
   animation-play-state: paused;
+}
+
+.floating-notification-dock[data-open="true"] {
+  animation: none;
+  transform: translate3d(0, 0, 0) !important;
 }
 
 .floating-notification-button {
@@ -37,6 +42,7 @@ html, body {
   border: 1px solid rgba(34, 211, 238, 0.32);
   border-radius: 999px;
   background:
+    linear-gradient(145deg, rgba(34, 211, 238, 0.10), rgba(167, 139, 250, 0.10)),
     radial-gradient(circle at 50% 50%, rgba(34, 211, 238, 0.16), rgba(2, 6, 12, 0.54) 64%, rgba(0, 0, 0, 0.18));
   box-shadow:
     0 0 32px rgba(34, 211, 238, 0.22),
@@ -67,6 +73,20 @@ html, body {
   animation-direction: reverse;
 }
 
+.floating-notification-dock[data-speaking="true"] .floating-notification-button::before {
+  border-color: rgba(74, 222, 128, 0.48);
+  box-shadow: 0 0 28px rgba(74, 222, 128, 0.24);
+  animation-duration: 3.8s;
+}
+
+.floating-notification-dock[data-unread="true"] .floating-notification-button {
+  border-color: rgba(251, 191, 36, 0.55);
+  box-shadow:
+    0 0 34px rgba(251, 191, 36, 0.18),
+    0 0 72px rgba(34, 211, 238, 0.18),
+    inset 0 1px 0 rgba(255, 255, 255, 0.18);
+}
+
 .floating-notification-button:hover {
   border-color: rgba(103, 232, 249, 0.62);
   transform: scale(1.06);
@@ -86,6 +106,24 @@ html, body {
   object-fit: cover;
   filter: drop-shadow(0 0 18px rgba(34, 211, 238, 0.5));
   animation: eyay-notification-breathe 3.8s ease-in-out infinite;
+}
+
+.floating-notification-status-dot {
+  position: absolute;
+  right: 11px;
+  bottom: 12px;
+  z-index: 4;
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  background: #22c55e;
+  box-shadow: 0 0 16px rgba(34, 197, 94, 0.82);
+}
+
+.floating-notification-dock[data-speaking="true"] .floating-notification-status-dot {
+  background: #a78bfa;
+  box-shadow: 0 0 18px rgba(167, 139, 250, 0.9);
+  animation: eyay-notification-status-pulse 0.8s ease-in-out infinite;
 }
 
 .floating-notification-badge {
@@ -114,13 +152,14 @@ html, body {
   top: calc(100% + 14px);
   right: 0;
   display: flex;
-  width: min(360px, calc(100vw - 24px));
-  max-height: min(480px, calc(100vh - 160px));
+  width: min(430px, calc(100vw - 24px));
+  max-height: min(620px, calc(100vh - 138px));
   flex-direction: column;
   overflow: hidden;
   border: 1px solid rgba(34, 211, 238, 0.22);
-  border-radius: 1rem;
+  border-radius: 1.15rem;
   background:
+    radial-gradient(circle at 18% 12%, rgba(167, 139, 250, 0.16), transparent 34%),
     radial-gradient(circle at 90% 0%, rgba(34, 211, 238, 0.12), transparent 36%),
     linear-gradient(180deg, rgba(6, 12, 24, 0.96), rgba(3, 7, 14, 0.94));
   box-shadow:
@@ -130,18 +169,246 @@ html, body {
   backdrop-filter: blur(18px);
 }
 
-@keyframes eyay-notification-drift {
+.floating-notification-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.10);
+  padding: 12px;
+}
+
+.floating-notification-kicker {
+  font-family: var(--font-mono, monospace);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: rgba(165, 243, 252, 0.82);
+}
+
+.floating-notification-chip,
+.floating-notification-tabs button,
+.floating-notification-mini-btn {
+  border: 1px solid rgba(34, 211, 238, 0.22);
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.72);
+  color: rgba(207, 250, 254, 0.76);
+  font-family: var(--font-mono, monospace);
+  font-size: 10px;
+  line-height: 1;
+  padding: 7px 9px;
+  transition: border-color 160ms ease, background 160ms ease, color 160ms ease, box-shadow 160ms ease;
+}
+
+.floating-notification-chip:hover,
+.floating-notification-tabs button:hover,
+.floating-notification-mini-btn:hover,
+.floating-notification-chip.is-active,
+.floating-notification-tabs button.is-active {
+  border-color: rgba(103, 232, 249, 0.5);
+  background: rgba(8, 145, 178, 0.16);
+  color: rgba(224, 242, 254, 0.96);
+  box-shadow: 0 0 18px rgba(34, 211, 238, 0.10);
+}
+
+.floating-notification-oracle {
+  position: relative;
+  display: flex;
+  gap: 10px;
+  margin: 10px 12px;
+  overflow: hidden;
+  border: 1px solid rgba(34, 211, 238, 0.18);
+  border-radius: 14px;
+  background:
+    linear-gradient(90deg, rgba(34, 211, 238, 0.10), transparent 44%),
+    rgba(2, 6, 23, 0.56);
+  padding: 11px 12px;
+}
+
+.floating-notification-oracle p {
+  margin: 0;
+  color: rgba(226, 232, 240, 0.78);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.floating-notification-oracle-pulse {
+  width: 34px;
+  height: 34px;
+  flex: 0 0 auto;
+  border-radius: 999px;
+  background:
+    radial-gradient(circle, rgba(103, 232, 249, 0.96), rgba(34, 211, 238, 0.24) 44%, transparent 72%);
+  box-shadow:
+    0 0 20px rgba(34, 211, 238, 0.42),
+    inset 0 0 14px rgba(255, 255, 255, 0.22);
+  animation: eyay-notification-oracle 2.8s ease-in-out infinite;
+}
+
+.floating-notification-voice-error {
+  margin-top: 6px;
+  color: rgba(252, 165, 165, 0.86);
+  font-size: 10px;
+}
+
+.floating-notification-tabs {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  padding: 0 12px 10px;
+}
+
+.floating-notification-feed,
+.floating-notification-chat-log {
+  min-height: 0;
+  overflow-y: auto;
+  padding: 0 0 8px;
+}
+
+.floating-notification-feed {
+  flex: 1;
+}
+
+.floating-notification-row {
+  margin: 0 10px 8px;
+  border-radius: 12px;
+  background:
+    linear-gradient(90deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0.015)),
+    rgba(2, 6, 23, 0.45);
+  padding: 10px 11px;
+}
+
+.floating-notification-chat {
+  display: flex;
+  min-height: 0;
+  flex: 1;
+  flex-direction: column;
+  gap: 10px;
+  padding: 0 12px 12px;
+}
+
+.floating-notification-chat-log {
+  display: flex;
+  max-height: 310px;
+  flex-direction: column;
+  gap: 8px;
+  padding-right: 2px;
+}
+
+.floating-notification-chat-row {
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  padding: 9px 10px;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.floating-notification-chat-row--user {
+  margin-left: 28px;
+  background: rgba(34, 211, 238, 0.10);
+  color: rgba(207, 250, 254, 0.92);
+}
+
+.floating-notification-chat-row--agent {
+  margin-right: 18px;
+  background: rgba(15, 23, 42, 0.70);
+  color: rgba(226, 232, 240, 0.82);
+}
+
+.floating-notification-chat-row--blocked {
+  margin-right: 18px;
+  border-color: rgba(248, 113, 113, 0.35);
+  background: rgba(127, 29, 29, 0.24);
+  color: rgba(254, 202, 202, 0.92);
+}
+
+.floating-notification-chat-role {
+  margin-bottom: 3px;
+  font-family: var(--font-mono, monospace);
+  font-size: 9px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.44);
+}
+
+.floating-notification-prompt {
+  display: block;
+  width: 100%;
+  border: 1px solid rgba(34, 211, 238, 0.18);
+  border-radius: 10px;
+  background: rgba(8, 47, 73, 0.18);
+  padding: 8px 9px;
+  text-align: left;
+  color: rgba(165, 243, 252, 0.82);
+  font-size: 11px;
+}
+
+.floating-notification-prompt:hover {
+  border-color: rgba(103, 232, 249, 0.44);
+  color: rgba(224, 242, 254, 0.98);
+}
+
+.floating-notification-input {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 7px;
+}
+
+.floating-notification-input input,
+.floating-notification-input button {
+  border: 1px solid rgba(34, 211, 238, 0.22);
+  border-radius: 10px;
+  background: rgba(2, 6, 23, 0.72);
+  color: rgba(226, 232, 240, 0.88);
+  font-size: 12px;
+  outline: none;
+}
+
+.floating-notification-input input {
+  min-width: 0;
+  padding: 9px 10px;
+}
+
+.floating-notification-input input::placeholder {
+  color: rgba(148, 163, 184, 0.52);
+}
+
+.floating-notification-input input:focus {
+  border-color: rgba(103, 232, 249, 0.5);
+  box-shadow: 0 0 0 2px rgba(34, 211, 238, 0.08);
+}
+
+.floating-notification-input button {
+  padding: 0 10px;
+  font-family: var(--font-mono, monospace);
+  font-size: 10px;
+}
+
+.floating-notification-input button:disabled {
+  cursor: not-allowed;
+  opacity: 0.42;
+}
+
+@keyframes eyay-notification-edge-patrol {
   0%, 100% {
     transform: translate3d(0, 0, 0);
   }
-  22% {
-    transform: translate3d(-18vw, 14vh, 0);
+  16% {
+    transform: translate3d(0, calc(100vh - 226px), 0);
   }
-  48% {
-    transform: translate3d(-6vw, 38vh, 0);
+  34% {
+    transform: translate3d(calc(-100vw + 154px), calc(100vh - 226px), 0);
   }
-  72% {
-    transform: translate3d(-34vw, 26vh, 0);
+  52% {
+    transform: translate3d(calc(-100vw + 154px), 6vh, 0);
+  }
+  64% {
+    transform: translate3d(-58vw, 12vh, 0);
+  }
+  82% {
+    transform: translate3d(-10vw, 2vh, 0);
   }
 }
 
@@ -165,13 +432,36 @@ html, body {
   }
 }
 
+@keyframes eyay-notification-status-pulse {
+  0%, 100% {
+    transform: scale(0.82);
+    opacity: 0.72;
+  }
+  50% {
+    transform: scale(1.24);
+    opacity: 1;
+  }
+}
+
+@keyframes eyay-notification-oracle {
+  0%, 100% {
+    transform: scale(0.88);
+    opacity: 0.68;
+  }
+  50% {
+    transform: scale(1.08);
+    opacity: 1;
+  }
+}
+
 @media (max-width: 700px) {
   .floating-notification-dock {
     top: 74px;
     right: 16px;
     width: 72px;
     height: 72px;
-    animation-name: eyay-notification-drift-mobile;
+    animation-name: eyay-notification-edge-patrol-mobile;
+    animation-duration: 44s;
   }
 
   .floating-notification-button {
@@ -186,18 +476,22 @@ html, body {
 
   .floating-notification-panel {
     right: -4px;
+    width: min(360px, calc(100vw - 22px));
   }
 }
 
-@keyframes eyay-notification-drift-mobile {
+@keyframes eyay-notification-edge-patrol-mobile {
   0%, 100% {
     transform: translate3d(0, 0, 0);
   }
-  34% {
-    transform: translate3d(-18vw, 18vh, 0);
+  22% {
+    transform: translate3d(0, calc(100vh - 190px), 0);
   }
-  68% {
-    transform: translate3d(-4vw, 42vh, 0);
+  48% {
+    transform: translate3d(calc(-100vw + 112px), calc(100vh - 190px), 0);
+  }
+  72% {
+    transform: translate3d(calc(-100vw + 112px), 4vh, 0);
   }
 }
 
