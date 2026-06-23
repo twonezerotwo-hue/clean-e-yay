@@ -1394,9 +1394,10 @@ html, body {
   .layer0-human-model__scan,
   .layer0-status-core__scan,
   .layer0-human-model__ecg path,
-  .h-full.overflow-y-auto:has(> .space-y-5 > #execution_readiness) > .space-y-5 > *,
+  .layer1-stack-item,
   .reporter-model-spectrum span {
     animation: none;
+    transition: none;
   }
 }
 
@@ -1405,41 +1406,44 @@ html, body {
   transform-style: preserve-3d;
 }
 
-.h-full.overflow-y-auto:has(> .space-y-5 > #execution_readiness) {
+.layer1-stack-scroll {
+  --layer1-stack-gap: clamp(112px, 18vh, 152px);
+  --layer1-sticky-top: 1.25rem;
+  --layer1-slide-height: clamp(620px, calc(100dvh - 8.5rem), 820px);
   overflow-y: auto;
   overscroll-behavior-y: contain;
   perspective: 1600px;
   scroll-behavior: smooth;
-  scroll-padding-block: 1.25rem;
-  scroll-snap-type: none;
-  scroll-timeline-axis: block;
-  scroll-timeline-name: --layer1-stack-scroll;
+  scroll-padding-block: var(--layer1-sticky-top);
+  scroll-snap-type: y proximity;
   scrollbar-width: none;
   -ms-overflow-style: none;
 }
 
-.h-full.overflow-y-auto:has(> .space-y-5 > #execution_readiness)::-webkit-scrollbar {
+.layer1-stack-scroll::-webkit-scrollbar {
   display: none;
   width: 0;
   height: 0;
 }
 
-.h-full.overflow-y-auto:has(> .space-y-5 > #execution_readiness) > .space-y-5 {
+.layer1-stack {
   position: relative;
   display: flex;
   flex-direction: column;
+  gap: var(--layer1-stack-gap);
   min-height: 100%;
-  padding-bottom: min(22vh, 160px);
+  padding-bottom: clamp(160px, 24vh, 220px);
   transform-style: preserve-3d;
 }
 
-.h-full.overflow-y-auto:has(> .space-y-5 > #execution_readiness) > .space-y-5 > * {
+.layer1-stack-item {
   position: sticky;
-  top: 1.25rem;
+  top: var(--layer1-sticky-top);
+  min-height: var(--layer1-slide-height);
   margin-top: 0 !important;
-  margin-bottom: min(18vh, 132px);
+  scroll-snap-align: start;
   transform-origin: 50% 0%;
-  will-change: transform, filter;
+  will-change: transform, filter, opacity;
   isolation: isolate;
   background-color: rgba(4, 8, 18, 0.22);
   box-shadow:
@@ -1449,69 +1453,67 @@ html, body {
   -webkit-backdrop-filter: blur(22px) saturate(1.04);
   filter: blur(0) brightness(1) saturate(1);
   opacity: 1;
+  transform: translateY(0) scale(1);
+  transition:
+    filter 180ms ease,
+    opacity 180ms ease,
+    transform 220ms cubic-bezier(0.2, 0.85, 0.2, 1);
 }
 
-.h-full.overflow-y-auto:has(> .space-y-5 > #execution_readiness) > .space-y-5 > #order_ticket {
+.layer1-stack-item > * {
+  min-height: var(--layer1-slide-height);
+}
+
+.layer1-stack-item[data-layer1-key="order_ticket"] {
   order: 99;
   z-index: 70;
 }
 
-.h-full.overflow-y-auto:has(> .space-y-5 > #execution_readiness) > .space-y-5 > :nth-child(1) {
+.layer1-stack-item[data-layer1-state="covered"] {
+  filter: blur(3.2px) brightness(0.62) saturate(0.78);
+  opacity: 0.58;
+  pointer-events: none;
+  transform: translateY(-10px) scale(0.988);
+}
+
+.layer1-stack-item[data-layer1-state="active"] {
+  filter: blur(0) brightness(1) saturate(1);
+  opacity: 1;
+  transform: translateY(0) scale(1);
+}
+
+.layer1-stack-item[data-layer1-state="queued"] {
+  filter: blur(0) brightness(1) saturate(1);
+  opacity: 1;
+  transform: translateY(0) scale(1);
+}
+
+.layer1-stack-item:nth-child(1) {
   z-index: 10;
 }
 
-.h-full.overflow-y-auto:has(> .space-y-5 > #execution_readiness) > .space-y-5 > :nth-child(2) {
+.layer1-stack-item:nth-child(2) {
   z-index: 20;
 }
 
-.h-full.overflow-y-auto:has(> .space-y-5 > #execution_readiness) > .space-y-5 > :nth-child(3) {
+.layer1-stack-item:nth-child(3) {
   z-index: 30;
 }
 
-.h-full.overflow-y-auto:has(> .space-y-5 > #execution_readiness) > .space-y-5 > :nth-child(4) {
+.layer1-stack-item:nth-child(4) {
   z-index: 40;
 }
 
-.h-full.overflow-y-auto:has(> .space-y-5 > #execution_readiness) > .space-y-5 > :nth-child(5) {
+.layer1-stack-item:nth-child(5) {
   z-index: 50;
 }
 
-.h-full.overflow-y-auto:has(> .space-y-5 > #execution_readiness) > .space-y-5 > :nth-child(6) {
+.layer1-stack-item:nth-child(6) {
   z-index: 60;
 }
 
-@supports (animation-timeline: scroll()) {
-  .h-full.overflow-y-auto:has(> .space-y-5 > #execution_readiness) > .space-y-5 > * {
-    animation-duration: 1ms;
-    animation-fill-mode: both;
-    animation-name: layer1-panel-retire;
-    animation-timeline: --layer1-stack-scroll;
-    animation-timing-function: linear;
-  }
-
-  .h-full.overflow-y-auto:has(> .space-y-5 > #execution_readiness) > .space-y-5 > :nth-child(1) {
-    animation-range: 7% 15%;
-  }
-
-  .h-full.overflow-y-auto:has(> .space-y-5 > #execution_readiness) > .space-y-5 > :nth-child(3) {
-    animation-range: 22% 31%;
-  }
-
-  .h-full.overflow-y-auto:has(> .space-y-5 > #execution_readiness) > .space-y-5 > :nth-child(4) {
-    animation-range: 40% 49%;
-  }
-
-  .h-full.overflow-y-auto:has(> .space-y-5 > #execution_readiness) > .space-y-5 > :nth-child(5) {
-    animation-range: 58% 67%;
-  }
-
-  .h-full.overflow-y-auto:has(> .space-y-5 > #execution_readiness) > .space-y-5 > :nth-child(6) {
-    animation-range: 76% 85%;
-  }
-
-  .h-full.overflow-y-auto:has(> .space-y-5 > #execution_readiness) > .space-y-5 > #order_ticket {
-    animation-name: none;
-  }
+.layer1-stack-item[data-layer1-key="order_ticket"] {
+  z-index: 70;
 }
 
 .quantum-panel {

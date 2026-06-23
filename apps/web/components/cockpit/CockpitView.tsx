@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { motion } from "framer-motion";
 
@@ -79,6 +79,11 @@ type LayerMeta = {
   shortTitle: string;
   subtitle: string;
   depth: string;
+};
+
+type Layer1StackItem = {
+  key: string;
+  node: ReactNode;
 };
 
 const LAYERS: LayerMeta[] = [
@@ -402,6 +407,85 @@ function LayerStage({
   );
 }
 
+function Layer1Stack({ items }: { items: Layer1StackItem[] }) {
+  const scrollerRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    const scroller = scrollerRef.current;
+    const stack = scroller?.querySelector<HTMLElement>(".layer1-stack");
+    if (!scroller || !stack) return;
+
+    let raf = 0;
+
+    const readItems = () =>
+      Array.from(stack.children)
+        .filter((node): node is HTMLElement => node instanceof HTMLElement)
+        .sort((a, b) => a.offsetTop - b.offsetTop);
+
+    const update = () => {
+      raf = 0;
+      const panels = readItems();
+      if (!panels.length) return;
+
+      const stickyTop = 20;
+      const cursor = scroller.scrollTop + stickyTop + 2;
+      let activeIndex = 0;
+
+      panels.forEach((panel, index) => {
+        if (panel.offsetTop <= cursor) activeIndex = index;
+      });
+
+      panels.forEach((panel, index) => {
+        const state =
+          index < activeIndex ? "covered" : index === activeIndex ? "active" : "queued";
+        panel.dataset.layer1State = state;
+      });
+    };
+
+    const schedule = () => {
+      if (raf) return;
+      raf = window.requestAnimationFrame(update);
+    };
+
+    const observer =
+      typeof ResizeObserver === "undefined"
+        ? null
+        : new ResizeObserver(() => {
+            schedule();
+          });
+
+    observer?.observe(scroller);
+    readItems().forEach((panel) => observer?.observe(panel));
+    scroller.addEventListener("scroll", schedule, { passive: true });
+    window.addEventListener("resize", schedule);
+    schedule();
+
+    return () => {
+      if (raf) window.cancelAnimationFrame(raf);
+      observer?.disconnect();
+      scroller.removeEventListener("scroll", schedule);
+      window.removeEventListener("resize", schedule);
+    };
+  }, [items.length]);
+
+  return (
+    <div ref={scrollerRef} className="layer1-stack-scroll h-full overflow-y-auto p-4 md:p-5">
+      <div className="layer1-stack">
+        {items.map((item) => (
+          <div
+            key={item.key}
+            className="layer1-stack-item"
+            data-layer1-key={item.key}
+            data-layer1-state="queued"
+          >
+            {item.node}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export function CockpitView() {
   const { data, isLoading } = useCockpitBrief();
   const { data: ticketList } = useTradeTickets();
@@ -569,22 +653,25 @@ export function CockpitView() {
       </div>
       );
   } else if (activeLayer === 1) {
+    const layer1Items: Layer1StackItem[] = [
+      { key: "execution_readiness", node: <ExecutionReadinessPanel /> },
+      { key: "order_ticket", node: <OrderTicketPanel /> },
+      { key: "holographic_signals", node: <HolographicSignalDeck brief={brief} /> },
+      {
+        key: "event_scenario",
+        node: (
+          <section className="quantum-panel-cluster grid grid-cols-1 gap-5 xl:grid-cols-2">
+            <EventCalendarPanel />
+            <ScenarioPanel />
+          </section>
+        ),
+      },
+      { key: "capital_rotation", node: <CapitalRotationPanel /> },
+      { key: "news", node: <NewsPanel defaultView="radar" /> },
+    ];
+
     layerContent = (
-        <div className="h-full overflow-y-auto p-4 md:p-5">
-          <div className="space-y-5">
-            <ExecutionReadinessPanel />
-            <OrderTicketPanel />
-            <HolographicSignalDeck brief={brief} />
-
-            <section className="quantum-panel-cluster grid grid-cols-1 gap-5 xl:grid-cols-2">
-              <EventCalendarPanel />
-              <ScenarioPanel />
-            </section>
-
-            <CapitalRotationPanel />
-            <NewsPanel defaultView="radar" />
-          </div>
-        </div>
+        <Layer1Stack items={layer1Items} />
       );
   } else if (activeLayer === 2) {
     layerContent = (
