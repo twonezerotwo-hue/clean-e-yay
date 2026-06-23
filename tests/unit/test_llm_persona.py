@@ -19,7 +19,9 @@ def llm_env(tmp_path, monkeypatch):
     """İzole bütçe/cache dosyaları + temiz LLM env."""
     monkeypatch.setenv("LLM_BUDGET_PATH", str(tmp_path / "budget.json"))
     monkeypatch.setenv("LLM_CACHE_PATH", str(tmp_path / "cache.json"))
+    monkeypatch.setenv("LLM_LOAD_DOTENV", "false")
     monkeypatch.delenv("GROQ_API_KEY", raising=False)
+    monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
     monkeypatch.delenv("LLM_MODE", raising=False)
     return tmp_path
 
@@ -59,6 +61,22 @@ def test_groq_without_key_no_network_no_crash(llm_env, no_network, monkeypatch) 
     assert llm_client.get_client() is None
 
 
+def test_openrouter_without_key_no_network_no_crash(llm_env, no_network, monkeypatch) -> None:
+    from packages.agent.llm import client as llm_client
+
+    monkeypatch.setenv("LLM_MODE", "openrouter")
+    # Anahtar yok → client None (urlopen'a hiç gidilmez; no_network bekçi).
+    assert llm_client.get_client() is None
+
+
+def test_mode_auto_prefers_openrouter_key(llm_env, monkeypatch) -> None:
+    from packages.agent.llm import client as llm_client
+
+    monkeypatch.setenv("OPENROUTER_API_KEY", "test-openrouter-key")
+    monkeypatch.setenv("GROQ_API_KEY", "test-groq-key")
+    assert llm_client.get_mode() == "openrouter"
+
+
 def test_groq_adapter_parses_mocked_response(llm_env, monkeypatch) -> None:
     import io
     import urllib.request
@@ -91,6 +109,54 @@ def test_groq_adapter_parses_mocked_response(llm_env, monkeypatch) -> None:
     assert comp is not None
     assert comp.text.startswith("SUMMARY:")
     assert comp.input_tokens == 100 and comp.output_tokens == 20
+
+
+def test_openrouter_adapter_parses_mocked_response(llm_env, monkeypatch) -> None:
+    import io
+    import json
+    import urllib.request
+
+    from packages.agent.llm import client as llm_client
+
+    monkeypatch.setenv("LLM_MODE", "openrouter")
+    monkeypatch.setenv("OPENROUTER_API_KEY", "test-key")
+    monkeypatch.setenv("OPENROUTER_MODEL", "openai/gpt-test")
+    monkeypatch.setenv("OPENROUTER_SITE_URL", "https://clean-e-yay.local")
+    monkeypatch.setenv("OPENROUTER_APP_NAME", "Clean E-yAy Test")
+
+    payload = {
+        "model": "openai/gpt-test",
+        "choices": [{"message": {"content": "SUMMARY: openrouter test"}}],
+        "usage": {"prompt_tokens": 77, "completion_tokens": 11},
+    }
+
+    class _Resp(io.BytesIO):
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+    captured = {}
+
+    def _urlopen(req, timeout=None):
+        captured["url"] = req.full_url
+        captured["auth"] = req.headers.get("Authorization")
+        captured["title"] = req.headers.get("X-openrouter-title")
+        captured["referer"] = req.headers.get("Http-referer")
+        return _Resp(json.dumps(payload).encode())
+
+    monkeypatch.setattr(urllib.request, "urlopen", _urlopen)
+    c = llm_client.get_client()
+    comp = c.complete("sys", "user", 100)
+    assert comp is not None
+    assert comp.text.startswith("SUMMARY:")
+    assert comp.model == "openai/gpt-test"
+    assert comp.input_tokens == 77 and comp.output_tokens == 11
+    assert captured["url"] == "https://openrouter.ai/api/v1/chat/completions"
+    assert captured["auth"] == "Bearer test-key"
+    assert captured["title"] == "Clean E-yAy Test"
+    assert captured["referer"] == "https://clean-e-yay.local"
 
 
 def test_groq_adapter_network_error_returns_none(llm_env, monkeypatch) -> None:
