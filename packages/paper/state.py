@@ -147,6 +147,22 @@ class RejectedSignal:
 
 
 @dataclass
+class PendingOrder:
+    """Owner bekleyen emir (limit / stop). Fiyat tetiğine gelince tick'te pozisyona
+    dönüşür. PAPER_SAFE — gerçek broker emri yok."""
+    id: str
+    symbol: str
+    side: str               # long / short
+    size_usd: float
+    order_type: str         # "limit" | "stop"
+    trigger_price: float
+    created_at: str
+    timeframe: str = "1d"
+    reason: str | None = None
+    sl_pct: float | None = None  # opsiyonel özel stop yüzdesi
+
+
+@dataclass
 class PaperState:
     equity_usd: float
     peak_equity_usd: float
@@ -157,6 +173,7 @@ class PaperState:
     daily_anchor_date: str = ""
     manual_ready: list[ManualReady] = field(default_factory=list)
     rejected_signals: list[RejectedSignal] = field(default_factory=list)
+    pending_orders: list[PendingOrder] = field(default_factory=list)
     # Tick yan ürünü: açık pozisyon başına recheck verdict listesi (read-only öneri).
     # Boş ise henüz tick atılmamış demektir; legacy kayıtlar default boş yüklenir.
     last_rechecks: list[dict] = field(default_factory=list)
@@ -174,6 +191,7 @@ class PaperState:
             "recent_trades": [asdict(t) for t in self.recent_trades[-200:]],
             "manual_ready": [asdict(m) for m in self.manual_ready],
             "rejected_signals": [asdict(r) for r in self.rejected_signals],
+            "pending_orders": [asdict(o) for o in self.pending_orders],
             "last_rechecks": list(self.last_rechecks),
             "last_recheck_at": self.last_recheck_at,
         }
@@ -207,6 +225,11 @@ class PaperState:
                 RejectedSignal(**_only_known(RejectedSignal, r))
                 for r in d.get("rejected_signals", [])
                 if isinstance(r, dict)
+            ],
+            pending_orders=[
+                PendingOrder(**_only_known(PendingOrder, o))
+                for o in d.get("pending_orders", [])
+                if isinstance(o, dict)
             ],
             last_rechecks=[
                 r for r in d.get("last_rechecks", []) if isinstance(r, dict)

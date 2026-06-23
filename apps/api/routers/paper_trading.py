@@ -5,6 +5,7 @@ from dataclasses import asdict
 from datetime import UTC, datetime
 
 from fastapi import APIRouter, HTTPException
+from pydantic import BaseModel, Field
 
 from packages.data.ingestion.pipeline import DEFAULT_SYMBOLS, get_cached_snapshot
 from packages.decision.engine import decide_matrix
@@ -12,6 +13,7 @@ from packages.paper import audit as paper_audit
 from packages.paper import maintenance, manual_queue, session_gate
 from packages.paper import state as paper_state
 from packages.paper.guards import price_sanity
+from packages.paper import manual_order, position_ops
 from packages.paper.lifecycle import (
     attempt_open,
     close_position,
@@ -334,6 +336,102 @@ def close_position_manual(position_id: str) -> dict:
         "exit_price": trade.exit_price,
         "pnl_usd": trade.pnl_usd,
     }
+
+
+class ManualOrderRequest(BaseModel):
+    symbol: str = Field(min_length=2, max_length=12)
+    side: str
+    size_usd: float = Field(gt=0)
+    entry_price: float | None = None
+    timeframe: str = "1d"
+
+
+@router.post("/paper-trading/positions/open")
+def open_position_manual(req: ManualOrderRequest) -> dict:
+    """Owner manuel emir — PATRON doğrudan pozisyon açar (AI değil, insan kararı).
+
+    RiskGate (NO_POSITION_INCREASE), sinyal motoru ve duplicate kontrolü BAYPAS
+    edilir — owner yetkisi. KORUNAN güvenlik (data integrity, owner bunları aşamaz):
+    gerçek fiyat şart (uydurma/mock YOK), price-sanity (geçersiz fiyat reddedilir),
+    bakiye sınırı. Paper-safe — GERÇEK broker emri YOK; sadece kâğıt pozisyon."""
+    try:
+        res = manual_order.place(
+            symbol=req.symbol, side=req.side, size_usd=req.size_usd,
+            entry_price=req.entry_price, timeframe=req.timeframe,
+        )
+    except manual_order.ManualOrderError as exc:
+        raise HTTPException(status_code=exc.code, detail=str(exc)) from exc
+    return {"status": "ok", **res}
+
+
+class ModifyRequest(BaseModel):
+    sl: float | None = None
+    tp: float | None = None
+
+
+class TrailingRequest(BaseModel):
+    distance_pct: float = Field(gt=0)
+    activate_pct: float | None = None
+
+
+class PartialCloseRequest(BaseModel):
+    fraction: float | None = None
+    size_usd: float | None = None
+
+
+class ScaleInRequest(BaseModel):
+    size_usd: float = Field(gt=0)
+
+
+def _pos_op(fn, *args, **kwargs) -> dict:
+    try:
+        return fn(*args, **kwargs)
+    except position_ops.PositionOpError as exc:
+        raise HTTPException(status_code=exc.code, detail=str(exc)) from exc
+
+
+@router.post("/paper-trading/positions/{pos_ref}/modify")
+def modify_position(pos_ref: str, req: ModifyRequest) -> dict:
+    return {"status": "ok", **_pos_op(position_ops.modify_sltp, pos_ref, sl=req.sl, tp=req.tp)}
+
+
+@router.post("/paper-trading/positions/{pos_ref}/trailing")
+def trailing_position(pos_ref: str, req: TrailingRequest) -> dict:
+    return {"status": "ok", **_pos_op(position_ops.set_trailing, pos_ref, req.distance_pct, req.activate_pct)}
+
+
+@router.post("/paper-trading/positions/{pos_ref}/partial-close")
+def partial_close_position(pos_ref: str, req: PartialCloseRequest) -> dict:
+    return {"status": "ok", **_pos_op(position_ops.partial_close, pos_ref, fraction=req.fraction, size_usd=req.size_usd)}
+
+
+@router.post("/paper-trading/positions/{pos_ref}/scale-in")
+def scale_in_position(pos_ref: str, req: ScaleInRequest) -> dict:
+    return {"status": "ok", **_pos_op(position_ops.scale_in, pos_ref, req.size_usd)}
+
+
+@router.post("/paper-trading/positions/{pos_ref}/flip")
+def flip_position(pos_ref: str) -> dict:
+    return {"status": "ok", **_pos_op(position_ops.flip, pos_ref)}
+
+
+@router.get("/paper-trading/orders")
+def list_pending_orders() -> dict:
+    """Owner bekleyen (limit/stop) emirleri."""
+    orders = manual_order.list_pending()
+    return {"orders": orders, "total": len(orders)}
+
+
+@router.delete("/paper-trading/orders/{order_id}")
+def cancel_pending_order(order_id: str) -> dict:
+    if not manual_order.cancel(order_id):
+        raise HTTPException(status_code=404, detail="order_not_found")
+    return {"status": "cancelled", "order_id": order_id}
+
+
+@router.delete("/paper-trading/orders")
+def cancel_all_pending_orders() -> dict:
+    return {"status": "cancelled", "count": manual_order.cancel_all()}
 
 
 @router.get("/paper-trading/manual-ready")

@@ -61,11 +61,13 @@ Start-Job -ScriptBlock {
     }
 } | Out-Null
 
-# 2) Web (Next.js dev, 4000). HTTP health; ölüyse port'u temizle + başlat.
+# 2) Web — PRODUCTION (next start), dev DEĞİL. next dev uzun çalışmada HMR ile
+# çürüyüp 200 dönse de hidrasyonu bozabiliyor (beyaz ekran). next start
+# önceden derlenmiş, stabil. FE değişince: `next build` (tek sefer) gerekir.
 if (-not (Test-Http "http://127.0.0.1:4000/")) {
     Free-Port 4000
     Start-Process -WindowStyle Hidden -FilePath $node `
-        -ArgumentList "node_modules/next/dist/bin/next","dev","--port","4000","--hostname","127.0.0.1" `
+        -ArgumentList "node_modules/next/dist/bin/next","start","-p","4000","-H","127.0.0.1" `
         -WorkingDirectory (Join-Path $root "apps\web") `
         -RedirectStandardOutput "$logs\web.out.log" -RedirectStandardError "$logs\web.err.log"
 }

@@ -7,6 +7,8 @@ deterministik yanıt döner; state'te olmayan şey UYDURULMAZ.
 from __future__ import annotations
 
 import hashlib
+import re
+import time
 
 from packages.agent.llm import budget, cache, guard
 from packages.agent.llm import client as llm_client
@@ -64,6 +66,25 @@ def _directional_threshold() -> float:
 _SCORE_DIRECTIONAL = _directional_threshold()
 
 _SIDE_TR = {"long": "alış", "short": "satış", "open_long": "alış", "open_short": "satış"}
+
+# Sesli okuma + Türkçe akıcılık için: İngilizce/teknik etiketleri Türkçeye çevir.
+_REGIME_TR = {
+    "OFFENSIVE": "atak", "NEUTRAL": "nötr", "DEFENSIVE": "savunmacı", "CRISIS": "kriz",
+}
+_RISK_ACTION_TR = {
+    "HOLD": "beklemede", "WATCH": "izlemede",
+    "NO_POSITION_INCREASE": "yeni pozisyon açma durduruldu",
+    "RISK_REDUCE": "riski azalt", "HEDGE_INCREASE": "korunmayı artır",
+    "KILL_SWITCH": "acil durdurma",
+}
+
+
+def _regime_tr(label: str | None) -> str:
+    return _REGIME_TR.get((label or "").upper(), label or "bilinmiyor")
+
+
+def _risk_tr(action: str | None) -> str:
+    return _RISK_ACTION_TR.get((action or "").upper(), action or "?")
 
 
 def _money(x) -> str:
@@ -174,12 +195,12 @@ def _suspended_note(ctx: dict) -> str | None:
     rg = ctx["matrix"]["risk_gate"] or {}
     if ctx["dqs"]["status"] == "BLOCKED":
         return (
-            f"Şu an aksiyon alınamaz: DQS BLOCKED (skor {ctx['dqs']['score']:.0f}) — "
-            "doğrulanmış veri yetersiz, yeni karar üretilmiyor."
+            f"Şu an işlem yapılamıyor: veri kalitesi engelli (puan {ctx['dqs']['score']:.0f}) — "
+            "doğrulanmış veri yetersiz olduğu için yeni karar üretilmiyor."
         )
     return (
-        f"Şu an aksiyon alınamaz: risk gate kısıtlayıcı ({rg.get('action')} — "
-        f"{rg.get('reason')})."
+        f"Şu an yeni işlem yapılamıyor: risk kapısı kısıtlayıcı — "
+        f"{_risk_tr(rg.get('action'))} ({rg.get('reason')})."
     )
 
 
@@ -325,7 +346,7 @@ def _overview_answer(ctx: dict) -> tuple[str, list[str]]:
     note = _suspended_note(ctx)
     parts: list[str] = ["Piyasa bülteni."]
 
-    parts.append(f"Küresel görünüm {m['regime']} rejiminde.")
+    parts.append(f"Piyasa rejimi {_regime_tr(m['regime'])}.")
 
     # Dünya piyasası & ekonomi manşetleri (gerçek, state'ten).
     if news:
@@ -541,10 +562,263 @@ def _notifications_answer() -> tuple[str, list[str]]:
     return "Son bildirimler: " + " | ".join(parts) + ".", ev
 
 
+# Bekleyen manuel emir (tek-owner sistem; süreç ömrü). Brain yön sorduğunda burada
+# saklanır; sonraki "al/sat" mesajı bununla tamamlanır. 3 dk sonra geçersiz.
+_PENDING_ORDER: dict | None = None
+_PENDING_TTL_SEC = 180
+
+
+def _bare_side(folded: str) -> str | None:
+    f = folded.strip().rstrip(".!? ").strip()
+    if f in ("al", "alış", "alis", "long", "buy", "alalım", "alalim", "uzun"):
+        return "long"
+    if f in ("sat", "satış", "satis", "short", "sell", "kısa", "kisa"):
+        return "short"
+    return None
+
+
+def _parse_amount(folded: str) -> float | None:
+    """'10 bin', '10k', '10000', '10.000' → dolar tutarı."""
+    m = re.search(r"(\d+(?:[.,]\d+)?)\s*(bin|k|milyon|m)\b", folded)
+    if m:
+        # Çarpan dalında nokta ONDALIK'tır (2.5 bin = 2500), thousand-sep değil.
+        base = float(m.group(1).replace(",", "."))
+        return base * (1_000_000 if m.group(2) in ("milyon", "m") else 1000)
+    m = re.search(r"(\d[\d.\s]{2,}\d|\d{3,})", folded)
+    if m:
+        digits = re.sub(r"[.\s]", "", m.group(1))
+        if digits.isdigit():
+            return float(digits)
+    return None
+
+
+_PRICE_RE = re.compile(r"(\d+(?:[.,]\d+)?)\s*(?:dolar|usd|\$)?\s*['’`]?(?:dan|den|tan|ten)\b")
+
+
+def _parse_entry_price(folded: str) -> float | None:
+    """'56 dolardan' / '56'dan' / '56 seviyesinden' → giriş (tetik) fiyatı."""
+    m = _PRICE_RE.search(folded)
+    if m:
+        return float(m.group(1).replace(",", "."))
+    m = re.search(r"(\d+(?:[.,]\d+)?)\s*(?:seviye|fiyat)", folded)
+    if m:
+        return float(m.group(1).replace(",", "."))
+    return None
+
+
+def _parse_manual_order(folded: str) -> dict | None:
+    """Owner emri mi? (sembol + tutar + emir niyeti). side belirsizse None döner
+    (sorulur). entry_price varsa limit/stop, yoksa market. Dönen: {symbol, side,
+    size_usd, entry_price}."""
+    if not re.search(r"\b(al|sat|aç|ac|emir|pozisyon|işlem aç|islem ac|long|short|buy|sell)\b", folded):
+        return None
+    sym = _detect_analyze_symbol(folded)
+    price = _parse_entry_price(folded)
+    # Tutar: fiyat token'ını ('56 dolardan') çıkardıktan sonra ara — karışmasın.
+    amt = _parse_amount(_PRICE_RE.sub(" ", folded) if price else folded)
+    if sym is None or amt is None:
+        return None
+    side: str | None = None
+    if "satın al" in folded or "satin al" in folded or "satınal" in folded:
+        side = "long"
+    elif re.search(r"\bsat\w*\b|\bshort\b|\bsell\b", folded):
+        side = "short"
+    elif re.search(r"\bal\b|\blong\b|\bbuy\b", folded):
+        side = "long"
+    return {"symbol": sym, "side": side, "size_usd": amt, "entry_price": price}
+
+
+def _manual_order_answer(parsed: dict) -> tuple[str, list[str]]:
+    from packages.paper import manual_order
+
+    sym = parsed["symbol"]
+    size = parsed["size_usd"]
+    side = parsed["side"]
+    price = parsed.get("entry_price")
+    if side is None:
+        global _PENDING_ORDER
+        _PENDING_ORDER = {"symbol": sym, "size": size, "price": price, "ts": time.time()}
+        return (
+            f"{sym} için {size:.0f} dolarlık emir anladım ama yönü belirsiz — "
+            "alış mı satış mı? 'al' ya da 'sat' diye yaz.",
+            ["manual_order:need_side"],
+        )
+    try:
+        r = manual_order.place(symbol=sym, side=side, size_usd=size, entry_price=price)
+    except manual_order.ManualOrderError as exc:
+        return (f"Emir açılamadı: {exc}.", ["manual_order:rejected"])
+    yon = "alış" if r["side"] == "long" else "satış"
+    if r["kind"] == "market":
+        return (
+            f"Emrini açtım (patron yetkisiyle, risk kapısını geçtim): {r['symbol']} {yon}, "
+            f"{r['size_usd']:.0f} dolar, giriş {r['entry_price']:.2f}. "
+            f"Zarar-kes {r['sl']:.2f}, kâr-al {r['tp']:.2f}. Kâğıt üzerinde pozisyon — gerçek emir yok.",
+            [f"manual_order:{r['position_id']}"],
+        )
+    tip = "limit" if r["kind"] == "limit" else "stop"
+    return (
+        f"Bekleyen {tip} emri kurdum: {r['symbol']} {yon}, {r['size_usd']:.0f} dolar, "
+        f"tetik fiyatı {r['trigger_price']:.2f} (şu an {r['market']:.2f}). "
+        f"Fiyat tetiğe gelince otomatik açılacak. 'emirleri listele' / 'iptal et' diyebilirsin.",
+        [f"pending_order:{r['order_id']}"],
+    )
+
+
+def _parse_pct(folded: str) -> float | None:
+    """'%2' / 'yüzde 2' / '2%' / '1.5' → yüzde değeri (2 = %2)."""
+    m = re.search(r"%\s*(\d+(?:[.,]\d+)?)|yüzde\s*(\d+(?:[.,]\d+)?)|(\d+(?:[.,]\d+)?)\s*%", folded)
+    if m:
+        return float(next(g for g in m.groups() if g).replace(",", "."))
+    m = re.search(r"\b(\d+(?:[.,]\d+)?)\b", folded)
+    return float(m.group(1).replace(",", ".")) if m else None
+
+
+def _parse_position_op(folded: str) -> dict | None:
+    """Pozisyon yönetimi komutu (sembol şart). op: flip|trailing|partial|scale|sltp."""
+    sym = _detect_analyze_symbol(folded)
+    if sym is None:
+        return None
+    if re.search(r"ters[ie]?\s*çevir|tersine|\bflip\b|yönünü değiştir", folded):
+        return {"op": "flip", "ref": sym}
+    if re.search(r"trailing|takip stop|iz süren|takip eden stop", folded):
+        pct = _parse_pct(folded)
+        return {"op": "trailing", "ref": sym, "pct": pct}
+    if re.search(r"\bekle\b|arttır|artır|büyüt|üstüne ekle|scale", folded):
+        amt = _parse_amount(folded)
+        return {"op": "scale", "ref": sym, "size_usd": amt}
+    if re.search(r"kapat|sat|azalt|küçült", folded) and re.search(
+        r"yarı|çeyrek|%|yüzde|kısmi|partial|\d", folded
+    ):
+        if "yarı" in folded:
+            return {"op": "partial", "ref": sym, "fraction": 0.5}
+        if "çeyrek" in folded:
+            return {"op": "partial", "ref": sym, "fraction": 0.25}
+        if re.search(r"%|yüzde", folded):
+            pct = _parse_pct(folded)
+            return {"op": "partial", "ref": sym, "fraction": (pct / 100) if pct else None}
+        amt = _parse_amount(folded)
+        if amt is not None:
+            return {"op": "partial", "ref": sym, "size_usd": amt}
+    if re.search(r"\bstop\b|\bsl\b|zarar.?kes|stop.?loss", folded):
+        return {"op": "sltp", "ref": sym, "sl": _parse_amount(folded)}
+    if re.search(r"\btp\b|kar.?al|kâr.?al|take.?profit|hedef", folded):
+        return {"op": "sltp", "ref": sym, "tp": _parse_amount(folded)}
+    return None
+
+
+def _position_op_answer(p: dict) -> tuple[str, list[str]]:
+    from packages.paper import position_ops as PO
+
+    ref = p["ref"]
+    op = p["op"]
+    try:
+        if op == "flip":
+            r = PO.flip(ref)
+            yon = "alış" if r["new_side"] == "long" else "satış"
+            return (
+                f"{r['symbol']} pozisyonunu ters çevirdim → şimdi {yon}, {r['size_usd']:.0f} dolar, "
+                f"giriş {r['entry_price']:.2f}. Kapanan kâr-zarar {r['closed_pnl_usd']:.2f} dolar.",
+                ["pos_op:flip"],
+            )
+        if op == "trailing":
+            if not p.get("pct"):
+                return ("Trailing mesafesini yüzde olarak yaz (ör. '%2').", ["pos_op:need_pct"])
+            r = PO.set_trailing(ref, distance_pct=p["pct"] / 100)
+            return (
+                f"{r['symbol']} pozisyonuna takip eden stop ekledim: %{p['pct']:.1f} "
+                f"(tepe {r['trail_peak']:.2f}). Lehe gidince kârı kilitler.",
+                ["pos_op:trailing"],
+            )
+        if op == "scale":
+            if not p.get("size_usd"):
+                return ("Ne kadar ekleyeyim? Tutarı yaz (ör. '2 bin').", ["pos_op:need_amt"])
+            r = PO.scale_in(ref, p["size_usd"])
+            return (
+                f"{r['symbol']} pozisyonuna ekledim → yeni boyut {r['size_usd']:.0f} dolar, "
+                f"ortalama giriş {r['avg_entry']:.2f}.",
+                ["pos_op:scale"],
+            )
+        if op == "partial":
+            r = PO.partial_close(ref, fraction=p.get("fraction"), size_usd=p.get("size_usd"))
+            return (
+                f"{r['symbol']} pozisyonundan {r['closed_usd']:.0f} dolar kapattım "
+                f"(kâr-zarar {r['pnl_usd']:.2f}). Kalan {r['remaining_usd']:.0f} dolar.",
+                ["pos_op:partial"],
+            )
+        if op == "sltp":
+            r = PO.modify_sltp(ref, sl=p.get("sl"), tp=p.get("tp"))
+            return (
+                f"{r['symbol']} pozisyonunu güncelledim: zarar-kes {r['sl']}, kâr-al {r['tp']}.",
+                ["pos_op:sltp"],
+            )
+    except PO.PositionOpError as exc:
+        return (f"İşlem yapılamadı: {exc}.", ["pos_op:rejected"])
+    return ("Komutu anlayamadım.", ["pos_op:unknown"])
+
+
+def _pending_orders_answer(folded: str) -> tuple[str, list[str]]:
+    from packages.paper import manual_order
+
+    # İptal mi?
+    if re.search(r"\bipt[ae]l\b|\bvazgeç\b|\bsil\b|\bkaldır\b", folded):
+        if re.search(r"\b(hep|tüm|tum|hepsi)\w*\b", folded):
+            n = manual_order.cancel_all()
+            return (f"{n} bekleyen emrin tümünü iptal ettim.", ["pending:cancel_all"])
+        # tek id
+        m = re.search(r"\b([0-9a-f]{6,10})\b", folded)
+        if m and manual_order.cancel(m.group(1)):
+            return (f"{m.group(1)} numaralı bekleyen emri iptal ettim.", ["pending:cancel"])
+        return (
+            "Hangi emri iptal edeyim? 'tümünü iptal' ya da emir numarasını yaz "
+            "('emirleri listele' ile görebilirsin).",
+            ["pending:cancel_need_id"],
+        )
+    # Listele
+    orders = manual_order.list_pending()
+    if not orders:
+        return ("Bekleyen emrin yok.", ["pending:none"])
+    lines = []
+    for o in orders[:8]:
+        yon = "alış" if o["side"] == "long" else "satış"
+        lines.append(
+            f"{o['id']}: {o['symbol']} {yon} {o['size_usd']:.0f}$, "
+            f"{o['order_type']} tetik {o['trigger_price']:.2f}"
+        )
+    return ("Bekleyen emirler: " + " | ".join(lines), ["pending:list"])
+
+
 def _grounded_answer(message: str, ctx: dict) -> tuple[str, list[str]]:
     folded = message.casefold()
     symbol = _detect_symbol(folded)
     timeframe = _detect_timeframe(folded)
+    # Bekleyen emir + sadece yön ("al"/"sat") → önceki emri tamamla (chat hafızası).
+    global _PENDING_ORDER
+    if _PENDING_ORDER is not None:
+        bs = _bare_side(folded)
+        if bs and (time.time() - _PENDING_ORDER["ts"] < _PENDING_TTL_SEC):
+            order = {
+                "symbol": _PENDING_ORDER["symbol"],
+                "side": bs,
+                "size_usd": _PENDING_ORDER["size"],
+                "entry_price": _PENDING_ORDER.get("price"),
+            }
+            _PENDING_ORDER = None
+            return _manual_order_answer(order)
+        if time.time() - _PENDING_ORDER["ts"] >= _PENDING_TTL_SEC:
+            _PENDING_ORDER = None
+    # Owner manuel emir — "BTC'ye 10 bin al" gibi komut. EN ÖNCE (action niyeti).
+    manual = _parse_manual_order(folded)
+    if manual is not None:
+        return _manual_order_answer(manual)
+    # Bekleyen emirleri listele / iptal.
+    if re.search(r"bekleyen emir|emirleri|emir listele|açık emir|acik emir", folded) or (
+        re.search(r"\bipt[ae]l\b", folded) and "emir" in folded
+    ):
+        return _pending_orders_answer(folded)
+    # Pozisyon yönetimi — SL/TP, trailing, kısmi kapat, scale-in, flip.
+    pos_op = _parse_position_op(folded)
+    if pos_op is not None:
+        return _position_op_answer(pos_op)
     if any(k in folded for k in ("ticket", "tiket", "sinyal listesi", "aktif sinyal")):
         return _tickets_answer(ctx)
     if any(k in folded for k in ("bildirim", "notification", "uyarı", "uyari", "alarm")):

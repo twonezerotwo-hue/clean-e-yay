@@ -83,18 +83,25 @@ def open_position(
     open_session_size_multiplier: float | None = None,
     open_session_primary_market_open: bool | None = None,
     open_session_evidence: str | None = None,
+    manual: bool = False,
+    size_usd_override: float | None = None,
 ) -> Position:
     # Konviksiyon kademesi (kalibre p(win) → risk çarpanları). Zayıf konviksiyon:
     # küçük boyut + YAKIN stop + KISA vade + sıkı trailing. Floor (min_open_confidence)
     # decide_for_symbol'da uygulanır; burası açılan pozisyonun risk profilini biçer.
-    tier = conviction.tier_for(predicted_confidence)
+    # MANUEL (owner) emir: kademe çarpanı uygulanmaz; boyutu owner belirler.
+    tier = conviction.tier_for(None) if manual else conviction.tier_for(predicted_confidence)
     sl_pct = _sl_pct_for(symbol) * tier.sl_mult
     tp_pct = sl_pct * _tp_rr()
-    # Canonical sizing: deterministic multiplier → USD (no AI boost; capped).
-    # Kademe size_mult tabanı yalnızca KÜÇÜLTÜR (≤1.0 kademelerde).
-    size = sizing.compute_size_usd(
-        size_multiplier * tier.size_mult, max_position_usd=_max_pos_usd()
-    )
+    if size_usd_override is not None:
+        # Owner manuel emir: tam dolar tutarı (kademe/sizing baypas).
+        size = max(0.0, float(size_usd_override))
+    else:
+        # Canonical sizing: deterministic multiplier → USD (no AI boost; capped).
+        # Kademe size_mult tabanı yalnızca KÜÇÜLTÜR (≤1.0 kademelerde).
+        size = sizing.compute_size_usd(
+            size_multiplier * tier.size_mult, max_position_usd=_max_pos_usd()
+        )
     opened_at = utc_iso()
     sl = entry_price * (1 - sl_pct) if side == "long" else entry_price * (1 + sl_pct)
     tp = entry_price * (1 + tp_pct) if side == "long" else entry_price * (1 - tp_pct)
@@ -137,7 +144,7 @@ def open_position(
         open_session_size_multiplier=open_session_size_multiplier,
         open_session_primary_market_open=open_session_primary_market_open,
         open_session_evidence=open_session_evidence,
-        tier=tier.name,
+        tier="MANUAL" if manual else tier.name,
         trail_distance_pct=tier.trail_distance,
         trail_activate_pct=conviction.trail_activate(),
         trail_peak=entry_price,
@@ -290,9 +297,20 @@ def attempt_open(
     return pos, decision
 
 
-def close_position(state: PaperState, pos: Position, *, exit_price: float, reason: str) -> Trade:
+def close_position(
+    state: PaperState,
+    pos: Position,
+    *,
+    exit_price: float,
+    reason: str,
+    close_size: float | None = None,
+) -> Trade:
+    # close_size verilmişse ve pozisyon boyutundan küçükse KISMİ kapatma: o kadar
+    # realize edilir, pozisyon kalan boyutla AÇIK kalır. Aksi halde tam kapatma.
+    full = close_size is None or close_size >= pos.size_usd - 1e-6
+    realized_size = pos.size_usd if full else float(close_size)
     # Realized fill P&L — formalized in execution_sim (no broker; paper fill math).
-    pnl = execution_sim.realized_pnl(pos.side, pos.entry_price, exit_price, pos.size_usd)
+    pnl = execution_sim.realized_pnl(pos.side, pos.entry_price, exit_price, realized_size)
     lifecycle_status = "FORCE_CLOSED" if reason in _FORCE_CLOSE_REASONS else "CLOSED"
     trade = Trade(
         id=pos.id,
@@ -326,7 +344,11 @@ def close_position(state: PaperState, pos: Position, *, exit_price: float, reaso
     # Signal attribution: kapanan trade'in karar izini kalıcı decision_log'a yaz
     # (best-effort; lifecycle'ı kesmez).
     decision_log.record_close(trade)
-    state.open_positions = [p for p in state.open_positions if p.id != pos.id]
+    if full:
+        state.open_positions = [p for p in state.open_positions if p.id != pos.id]
+    else:
+        # Kısmi: pozisyon kalan boyutla açık kalır (trailing peak/SL korunur).
+        pos.size_usd = round(pos.size_usd - realized_size, 2)
     state.realized_pnl_usd = round(state.realized_pnl_usd + trade.pnl_usd, 2)
     _ensure_daily_anchor(state)
     state.daily_pnl_usd = round(state.daily_pnl_usd + trade.pnl_usd, 2)
@@ -341,7 +363,7 @@ def close_position(state: PaperState, pos: Position, *, exit_price: float, reaso
         side=pos.side,
         reason=reason,
         price_used=round(exit_price, 4),
-        size=pos.size_usd,
+        size=realized_size,
         pnl=trade.pnl_usd,
         lifecycle_status=lifecycle_status,
         snapshot_id=pos.snapshot_id,
@@ -399,6 +421,48 @@ def _trailing_breached(pos: Position, price: float) -> bool:
     return bool(pos.trail_active and price >= pos.trail_peak * (1 + dist))
 
 
+def _pending_triggered(order, price: float) -> bool:
+    """Limit: long fiyat ≤ tetik / short ≥ tetik. Stop: long ≥ tetik / short ≤ tetik."""
+    if order.order_type == "limit":
+        return price <= order.trigger_price if order.side == "long" else price >= order.trigger_price
+    return price >= order.trigger_price if order.side == "long" else price <= order.trigger_price
+
+
+def trigger_pending_orders(
+    state: PaperState, prices: dict[str, float], now: datetime | None = None
+) -> list[Position]:
+    """Bekleyen limit/stop emirleri güncel fiyatla kontrol et; tetiklenenleri
+    pozisyona çevir (tetik fiyatından doldur) ve kuyruktan çıkar. Fiyat yoksa/
+    geçersizse atlanır (uydurma fiyat YOK)."""
+    opened: list[Position] = []
+    for o in list(state.pending_orders):
+        price = prices.get(o.symbol)
+        if price is None or price <= 0:
+            continue
+        if not price_sanity.tick_price_usable(o.symbol, price, o.trigger_price):
+            continue
+        if not _pending_triggered(o, float(price)):
+            continue
+        pos = open_position(
+            state,
+            symbol=o.symbol,
+            side=o.side,
+            entry_price=float(o.trigger_price),
+            size_multiplier=0.0,
+            manual=True,
+            size_usd_override=float(o.size_usd),
+            timeframe=o.timeframe,
+            open_reason=f"pending_{o.order_type}",
+        )
+        state.pending_orders = [x for x in state.pending_orders if x.id != o.id]
+        audit.record(
+            "PENDING_FILLED", position_id=pos.id, symbol=o.symbol, side=o.side,
+            price_used=pos.entry_price, size=pos.size_usd, reason=o.order_type,
+        )
+        opened.append(pos)
+    return opened
+
+
 def tick(
     state: PaperState,
     prices: dict[str, float],
@@ -412,6 +476,8 @@ def tick(
     tick'te tekrar denenir.
     """
     now = now or datetime.now(UTC)
+    # Önce bekleyen limit/stop emirleri tetikle (yeni pozisyonlar aynı tick'te yönetilir).
+    trigger_pending_orders(state, prices, now)
     closed: list[Trade] = []
     for pos in list(state.open_positions):
         # P1 — bozuk pozisyon → ERROR_STATE; kapatma denenmez (fake fiyat YOK).
