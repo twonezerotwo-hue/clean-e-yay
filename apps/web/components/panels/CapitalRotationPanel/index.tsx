@@ -70,23 +70,36 @@ function FlowMap({
   const half = Math.ceil(assets.length / 2);
   const left = assets.slice(0, half);
   const right = assets.slice(half);
-  const rowY = (index: number) => 42 + index * 58;
+  const rows = Math.max(left.length, right.length, 1);
+  const mapHeight = 320;
+  const rowGap = 12;
+  const rowHeight = (mapHeight - rowGap * Math.max(0, rows - 1)) / rows;
+  const rowY = (index: number) => rowHeight / 2 + index * (rowHeight + rowGap);
   const strongest = assets[0];
 
   return (
-    <div className="capital-rotation-map relative grid grid-cols-[minmax(0,1fr)_minmax(132px,168px)_minmax(0,1fr)] items-center gap-3">
+    <div
+      className="capital-rotation-map relative grid grid-cols-[minmax(0,1fr)_minmax(162px,200px)_minmax(0,1fr)] items-center gap-3"
+      style={
+        {
+          "--flow-row-count": rows,
+          "--flow-row-gap": `${rowGap}px`,
+          "--flow-map-height": `${mapHeight}px`,
+        } as CSSProperties
+      }
+    >
       <div className="capital-map-haze" aria-hidden="true" />
 
-      <div className="space-y-2">
+      <div className="capital-flow-column">
         {left.map((asset, index) => (
           <FlowNode key={asset.symbol} asset={asset} align="right" index={index} />
         ))}
       </div>
 
-      <div className="relative flex min-h-[318px] items-center justify-center">
+      <div className="capital-flow-axis relative flex items-center justify-center">
         <svg
-          className="capital-flow-svg absolute inset-y-0 left-1/2 h-full w-[230px] -translate-x-1/2"
-          viewBox="0 0 230 340"
+          className="capital-flow-svg absolute inset-y-0 left-1/2 h-full w-[250px] -translate-x-1/2"
+          viewBox={`0 0 230 ${mapHeight}`}
           aria-hidden="true"
         >
           <defs>
@@ -97,6 +110,28 @@ function FlowMap({
                 <feMergeNode in="SourceGraphic" />
               </feMerge>
             </filter>
+            <marker
+              id="capital-flow-arrow-in"
+              markerHeight="8"
+              markerWidth="8"
+              orient="auto"
+              refX="7"
+              refY="4"
+              viewBox="0 0 8 8"
+            >
+              <path d="M1 1.4 7 4 1 6.6Z" fill="#34d399" />
+            </marker>
+            <marker
+              id="capital-flow-arrow-out"
+              markerHeight="8"
+              markerWidth="8"
+              orient="auto-start-reverse"
+              refX="1"
+              refY="4"
+              viewBox="0 0 8 8"
+            >
+              <path d="M7 1.4 1 4 7 6.6Z" fill="#f87171" />
+            </marker>
           </defs>
 
           {assets.map((asset, index) => {
@@ -105,9 +140,15 @@ function FlowMap({
             const pressure = flowPressure(asset);
             const width = 1.2 + pressure * 3.2;
             const d = onLeft
-              ? `M0 ${y} C54 ${y - 6}, 56 170, 115 170`
-              : `M230 ${y} C176 ${y - 6}, 174 170, 115 170`;
+              ? `M4 ${y} C52 ${y}, 70 ${mapHeight / 2}, 115 ${mapHeight / 2}`
+              : `M226 ${y} C178 ${y}, 160 ${mapHeight / 2}, 115 ${mapHeight / 2}`;
             const pathId = `capital-flow-${index}-${asset.symbol.replace(/[^a-zA-Z0-9]/g, "")}`;
+            const markerProps =
+              asset.direction === "in"
+                ? { markerEnd: "url(#capital-flow-arrow-in)" }
+                : asset.direction === "out"
+                  ? { markerStart: "url(#capital-flow-arrow-out)" }
+                  : {};
 
             return (
               <g key={asset.symbol}>
@@ -121,6 +162,7 @@ function FlowMap({
                   strokeDasharray={asset.direction === "neutral" ? "3 10" : "10 8"}
                   opacity={asset.direction === "neutral" ? 0.42 : 0.74}
                   filter="url(#capital-flow-glow)"
+                  {...markerProps}
                   className={
                     asset.direction === "out"
                       ? "capital-flow-line-reverse"
@@ -156,13 +198,29 @@ function FlowMap({
             } as CSSProperties
           }
         >
+          <div className="capital-pool-backplate" aria-hidden="true" />
           <div className="capital-pool-orbit capital-pool-orbit-a" aria-hidden="true" />
           <div className="capital-pool-orbit capital-pool-orbit-b" aria-hidden="true" />
+          <div className="capital-pool-vault-ring" aria-hidden="true">
+            <span />
+            <span />
+            <span />
+            <span />
+          </div>
           <div className="capital-pool-liquid" aria-hidden="true">
             <span />
             <span />
           </div>
+          <div className="capital-pool-depth" aria-hidden="true" />
           <div className="capital-money-stack" aria-hidden="true">
+            <i />
+            <i />
+            <i />
+            <i />
+            <i />
+          </div>
+          <div className="capital-coin-field" aria-hidden="true">
+            <i />
             <i />
             <i />
             <i />
@@ -177,7 +235,7 @@ function FlowMap({
         </div>
       </div>
 
-      <div className="space-y-2">
+      <div className="capital-flow-column">
         {right.map((asset, index) => (
           <FlowNode
             key={asset.symbol}
@@ -336,7 +394,7 @@ export function CapitalRotationPanel() {
               <div className="space-y-1.5">
                 {rankedAssets.map((asset, index) => (
                   <div
-                    key={asset.symbol}
+                    key={`${active.window}-${asset.symbol}`}
                     className="capital-rank-row flex items-center gap-2"
                     style={
                       {
