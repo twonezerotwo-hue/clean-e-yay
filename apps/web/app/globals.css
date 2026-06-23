@@ -1465,7 +1465,6 @@ html, body {
 }
 
 .layer1-stack-item[data-layer1-key="order_ticket"] {
-  order: 99;
   z-index: 70;
 }
 
