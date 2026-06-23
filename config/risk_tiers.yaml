@@ -1,0 +1,18 @@
+# Konviksiyon-kademeli risk yönetimi — tek kaynak (owner-tunable).
+# Kalibre güven p(win) → kademe → boyut/stop/vade/trailing çarpanları.
+# p(win) < en düşük min_conf (ve consensus.min_open_confidence) → pozisyon AÇILMAZ.
+#
+# Çarpanlar TABAN değerlere uygulanır:
+#   size_mult  → sizing taban boyutu × size_mult  (zayıf = küçük)
+#   sl_mult    → sembol sl_pct × sl_mult           (zayıf = YAKIN stop)
+#   time_mult  → TF time-stop saati × time_mult    (zayıf = KISA vade)
+#   trail_distance → trailing stop, tepe fiyattan geri çekilme oranı
+version: "1.0.0"
+
+# Trailing stop: pozisyon lehe bu kadar hareket edince trailing DEVREYE girer.
+trail_activate: 0.01   # %1
+
+tiers:
+  - { name: WEAK,     min_conf: 0.20, size_mult: 0.3, sl_mult: 0.5, time_mult: 0.4, trail_distance: 0.008 }
+  - { name: MODERATE, min_conf: 0.30, size_mult: 0.6, sl_mult: 0.7, time_mult: 0.6, trail_distance: 0.012 }
+  - { name: STRONG,   min_conf: 0.45, size_mult: 1.0, sl_mult: 1.0, time_mult: 1.0, trail_distance: 0.020 }

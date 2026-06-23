@@ -15,7 +15,7 @@ from datetime import UTC, date, datetime, timedelta
 
 from packages.data.registry.loader import load_thresholds
 from packages.learning import decision_log
-from packages.paper import audit, execution_sim, sizing
+from packages.paper import audit, conviction, execution_sim, sizing
 from packages.paper.guards import price_sanity, state_anomaly
 from packages.paper.state import PaperState, Position, Trade, utc_iso
 
@@ -84,16 +84,23 @@ def open_position(
     open_session_primary_market_open: bool | None = None,
     open_session_evidence: str | None = None,
 ) -> Position:
-    sl_pct = _sl_pct_for(symbol)
+    # Konviksiyon kademesi (kalibre p(win) → risk çarpanları). Zayıf konviksiyon:
+    # küçük boyut + YAKIN stop + KISA vade + sıkı trailing. Floor (min_open_confidence)
+    # decide_for_symbol'da uygulanır; burası açılan pozisyonun risk profilini biçer.
+    tier = conviction.tier_for(predicted_confidence)
+    sl_pct = _sl_pct_for(symbol) * tier.sl_mult
     tp_pct = sl_pct * _tp_rr()
-    # Canonical sizing: deterministic multiplier → USD (no AI boost; capped). The
-    # multiplier passed in is already deterministic; sizing floors/caps it.
-    size = sizing.compute_size_usd(size_multiplier, max_position_usd=_max_pos_usd())
+    # Canonical sizing: deterministic multiplier → USD (no AI boost; capped).
+    # Kademe size_mult tabanı yalnızca KÜÇÜLTÜR (≤1.0 kademelerde).
+    size = sizing.compute_size_usd(
+        size_multiplier * tier.size_mult, max_position_usd=_max_pos_usd()
+    )
     opened_at = utc_iso()
     sl = entry_price * (1 - sl_pct) if side == "long" else entry_price * (1 + sl_pct)
     tp = entry_price * (1 + tp_pct) if side == "long" else entry_price * (1 - tp_pct)
     # T2 — TF time-stop: 15m kısa (6sa), 1d uzun (672sa); 0 → time-stop yok.
-    stop_hours = _timeframe_time_stop_hours(timeframe)
+    # Kademe time_mult ile kısalır (zayıf konviksiyon = kısa vade).
+    stop_hours = _timeframe_time_stop_hours(timeframe) * tier.time_mult
     valid_until = (
         (datetime.now(UTC) + timedelta(hours=stop_hours)).isoformat()
         if stop_hours > 0
@@ -130,6 +137,11 @@ def open_position(
         open_session_size_multiplier=open_session_size_multiplier,
         open_session_primary_market_open=open_session_primary_market_open,
         open_session_evidence=open_session_evidence,
+        tier=tier.name,
+        trail_distance_pct=tier.trail_distance,
+        trail_activate_pct=conviction.trail_activate(),
+        trail_peak=entry_price,
+        trail_active=False,
     )
     state.open_positions.append(pos)
     audit.record(
@@ -138,6 +150,7 @@ def open_position(
         symbol=symbol,
         timeframe=timeframe,
         side=side,
+        tier=tier.name,
         price_used=pos.entry_price,
         size=pos.size_usd,
         reason=open_reason,
@@ -363,6 +376,29 @@ def _time_stop_due(pos: Position, now: datetime) -> bool:
         return False
 
 
+def _trailing_breached(pos: Position, price: float) -> bool:
+    """Trailing stop: lehteki tepe fiyatı (highwater) izler. Pozisyon
+    trail_activate kadar lehe geçince DEVREYE girer; sonra tepe fiyattan
+    trail_distance kadar geri çekilirse exit verir. Sadece kârı korur —
+    açılış stop'unu (SL) gevşetmez, asla zarara doğru genişlemez."""
+    dist = pos.trail_distance_pct
+    if not dist or pos.entry_price <= 0:
+        return False
+    act = pos.trail_activate_pct or 0.0
+    if pos.side == "long":
+        if pos.trail_peak is None or price > pos.trail_peak:
+            pos.trail_peak = price
+        if (pos.trail_peak - pos.entry_price) / pos.entry_price >= act:
+            pos.trail_active = True
+        return bool(pos.trail_active and price <= pos.trail_peak * (1 - dist))
+    # short
+    if pos.trail_peak is None or price < pos.trail_peak:
+        pos.trail_peak = price
+    if (pos.entry_price - pos.trail_peak) / pos.entry_price >= act:
+        pos.trail_active = True
+    return bool(pos.trail_active and price >= pos.trail_peak * (1 + dist))
+
+
 def tick(
     state: PaperState,
     prices: dict[str, float],
@@ -420,6 +456,12 @@ def tick(
         if fill is not None:
             closed.append(
                 close_position(state, pos, exit_price=fill.fill_price, reason=fill.reason)
+            )
+            continue
+        # Trailing stop — SL/TP değmediyse kâr-koruma çıkışı (kademe trail_distance'ı).
+        if _trailing_breached(pos, price):
+            closed.append(
+                close_position(state, pos, exit_price=price, reason="TRAILING_STOP_EXIT")
             )
             continue
         if due:

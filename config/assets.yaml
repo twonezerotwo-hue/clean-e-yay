@@ -1,0 +1,28 @@
+# Tek kaynak — tüm varlıklar + rolleri + meta. Buraya ekle/çıkar → sistem
+# (snapshot evreni, işlem evreni, likidite sepeti) otomatik bunu okur.
+#
+# roles:
+#   trade      — işlem evreni (otomatik pozisyon yalnızca bunlarda; multi-TF teknik)
+#   macro      — snapshot bağlamı (fiyat çekilir, işlem açılmaz)
+#   liquidity  — Küresel Likidite Rotasyon sepeti
+# kind: risk | hedge | commodity | safe | cash | macro
+#
+# NOT: Yeni asset eklersen veri kaynağı (provider+ticker) da tanımlı olmalı
+# (yfinance/coingecko/fred). Tanımsızsa o asset DATA_UNAVAILABLE olur (mock yok).
+#
+# Sıra ÖNEMLİ: snapshot evreni bu sırayı korur (işlem 4'lüsü önce, sonra makro).
+version: "1.0.0"
+assets:
+  BTCUSD: { label: "BTC",         kind: risk,      roles: [trade, liquidity] }
+  ETHUSD: { label: "ETH",         kind: risk,      roles: [trade] }
+  XAUUSD: { label: "Altın",       kind: hedge,     roles: [trade, liquidity] }
+  XAGUSD: { label: "Gümüş",       kind: hedge,     roles: [trade, liquidity] }
+  DXY:    { label: "Nakit (DXY)", kind: cash,      roles: [macro, liquidity] }
+  US10Y:  { label: "US10Y",       kind: safe,      roles: [macro] }
+  US02Y:  { label: "US02Y",       kind: safe,      roles: [macro] }
+  VIX:    { label: "VIX",         kind: risk,      roles: [macro] }
+  CPI:    { label: "CPI",         kind: macro,     roles: [macro] }
+  # Yalnızca likidite sepeti (snapshot evreninde değil; OHLCV'den on-demand).
+  SP500:  { label: "Hisseler",    kind: risk,      roles: [liquidity] }
+  BRENT:  { label: "Brent",       kind: commodity, roles: [liquidity] }
+  TLT:    { label: "Tahvil",      kind: safe,      roles: [liquidity] }

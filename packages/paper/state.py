@@ -72,6 +72,12 @@ class Position:
     open_session_size_multiplier: float | None = None   # uygulanan seans çarpanı (≤ 1.0)
     open_session_primary_market_open: bool | None = None
     open_session_evidence: str | None = None            # "; "-joined evidence
+    # Konviksiyon-kademeli risk (additive): açılışta kademe + trailing parametreleri.
+    tier: str | None = None                  # WEAK | MODERATE | STRONG | NEUTRAL
+    trail_distance_pct: float | None = None  # trailing stop geri çekilme oranı
+    trail_activate_pct: float | None = None  # trailing'in devreye girdiği lehte hareket
+    trail_peak: float | None = None          # lehteki en uç fiyat (highwater)
+    trail_active: bool = False               # trailing devreye girdi mi
 
     @property
     def unrealized_pnl_usd(self) -> float:

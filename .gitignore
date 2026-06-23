@@ -52,3 +52,7 @@ contracts/codegen/typescript/
 # Cloudflare Worker tooling (account-scoped caches, generated)
 infra/worker-proxy/.wrangler/
 infra/worker-proxy/node_modules/
+
+# Ops: local tunnel binary + runtime logs (commit edilmez)
+tools/
+logs/

@@ -10,6 +10,10 @@ consensus:
   bearish_max: 45
   strong_bullish_min: 65
   strong_bearish_max: 35
+  # Minimum kalibre-güven tabanı (p(win) ∈ [0,1]). Skor eşiği geçilse bile
+  # kalibre güven bunun altındaysa pozisyon AÇILMAZ (hold). Düşük-güvenli
+  # nötr sinyallerle pozisyon açılmasını engeller. Owner-tunable; 0 = kapalı.
+  min_open_confidence: 0.20
 
 dqs:
   min_for_decision: 55

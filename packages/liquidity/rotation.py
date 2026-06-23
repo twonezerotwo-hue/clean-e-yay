@@ -15,17 +15,13 @@ import math
 from dataclasses import dataclass, field
 
 from packages.data.providers.ohlcv import cache
+from packages.data.registry import assets as _asset_registry
 
-# (symbol, label, kind). kind ∈ {risk, hedge, commodity, safe, cash}
-BASKET: list[tuple[str, str, str]] = [
-    ("BTCUSD", "BTC", "risk"),
-    ("SP500", "Hisseler", "risk"),
-    ("XAUUSD", "Altın", "hedge"),
-    ("XAGUSD", "Gümüş", "hedge"),
-    ("BRENT", "Brent", "commodity"),
-    ("TLT", "Tahvil", "safe"),
-    ("DXY", "Nakit (DXY)", "cash"),
-]
+
+def _basket() -> list[tuple[str, str, str]]:
+    """(symbol, label, kind) — config/assets.yaml'daki 'liquidity' rollü varlıklar.
+    Sepete ekle/çıkar = assets.yaml'ı düzenle."""
+    return _asset_registry.liquidity_basket()
 
 WINDOWS: dict[str, int] = {"1D": 1, "7D": 7, "30D": 30}
 
@@ -278,7 +274,8 @@ def compute() -> dict:
 
     OHLCV serileri TEK SEFER yüklenir (sembol başına 1 dosya); pencereler bu
     bellekteki seriler üstünden hesaplanır (tekrar disk/parse yok)."""
-    needed = {sym for (sym, _l, _k) in BASKET} | {"DXY", "VIX"}
+    basket = _basket()
+    needed = {sym for (sym, _l, _k) in basket} | {"DXY", "VIX"}
     series: Series = {}
     for sym in needed:
         s = _series(sym)
@@ -290,7 +287,7 @@ def compute() -> dict:
         macro = _macro_for_window(n, series)
         assets = [
             af
-            for (sym, label, kind) in BASKET
+            for (sym, label, kind) in basket
             if (af := _asset_flow(sym, label, kind, n, macro, series)) is not None
         ]
         assets.sort(key=lambda a: a.flow_score, reverse=True)
@@ -315,4 +312,4 @@ def compute() -> dict:
                 "contradictions": _contradictions(assets),
             }
         )
-    return {"windows": windows, "basket_size": len(BASKET)}
+    return {"windows": windows, "basket_size": len(basket)}

@@ -193,10 +193,12 @@ def build_compact_context() -> dict:
         for m in mistakes
     ][:5]
 
+    # "unknown" = hiç çağrılmamış sağlayıcı (ör. mock, calls=0) — SORUN DEĞİL,
+    # listelenmez. Yalnızca gerçek hata/degraded/stale durumları sorun sayılır.
     provider_issues = {
         name: meta
         for name, meta in (snap.provider_status or {}).items()
-        if (meta or {}).get("status") not in (None, "ok", "OK")
+        if (meta or {}).get("status") not in (None, "ok", "OK", "unknown", "UNKNOWN")
     }
 
     return {

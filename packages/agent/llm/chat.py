@@ -255,12 +255,26 @@ def _why_no_trade_answer(ctx: dict, symbol: str, timeframe: str | None) -> tuple
     )
 
 
+def _open_positions_clause(ctx: dict) -> str:
+    """'İşlem yok' yanılgısını giderir: kısıt yalnızca YENİ girişi durdurur,
+    mevcut pozisyonlar açık kalır ve yönetilir."""
+    n = len(ctx["paper"]["open_positions"])
+    if not n:
+        return ""
+    return (
+        f"Bu 'işlem yok', YALNIZCA yeni giriş yok demek — mevcut {n} pozisyonun "
+        "açık ve SL/TP/time-stop ile yönetiliyor."
+    )
+
+
 def _waiting_answer(ctx: dict) -> tuple[str, list[str]]:
     note = _suspended_note(ctx)
     if note:
         missing, _ = _missing_data_answer(ctx)
+        pos = _open_positions_clause(ctx)
+        body = f"{note} {pos}".strip()
         return (
-            f"{note} Agent'ın beklediği şey: kısıtların kalkması. {missing}",
+            f"{body} Agent'ın beklediği şey: kısıtların kalkması. {missing}",
             [f"dqs:{ctx['dqs']['status']}"],
         )
     actions = ctx["matrix"]["paper_actions"]
@@ -304,15 +318,21 @@ def _best_cell(ctx: dict) -> dict | None:
 
 
 def _overview_answer(ctx: dict) -> tuple[str, list[str]]:
-    """30 saniyelik patron brifingi — düz cümleler, jargon minimumda."""
+    """30 saniyelik piyasa bülteni — dünya piyasası/ekonomi haberi okuyan üslup;
+    yalnızca state'teki gerçek manşet + makro rejim + portföy (uydurma yok)."""
     m = ctx["matrix"]
+    news = [h for h in (ctx.get("news") or []) if h]
     note = _suspended_note(ctx)
-    parts: list[str] = []
+    parts: list[str] = ["Piyasa bülteni."]
+
+    parts.append(f"Küresel görünüm {m['regime']} rejiminde.")
+
+    # Dünya piyasası & ekonomi manşetleri (gerçek, state'ten).
+    if news:
+        parts.append("Masada öne çıkan başlıklar: " + " · ".join(h[:80] for h in news[:3]) + ".")
 
     if note:
         parts.append(note)
-    else:
-        parts.append(f"Patron, kısaca: piyasa {m['regime']} rejiminde ve risk kapısı açık.")
 
     best = _best_cell(ctx)
     if best:
@@ -329,8 +349,12 @@ def _overview_answer(ctx: dict) -> tuple[str, list[str]]:
                 f"eşiğe {gap:.1f} puan var — henüz tetik yok."
             )
 
-    parts.append(f"{_positions_phrase(ctx).capitalize()}; kasada {_money(ctx['paper']['equity_usd'])}.")
-    return " ".join(parts), [f"snapshot:{ctx['snapshot_id']}", f"dqs:{ctx['dqs']['status']}"]
+    parts.append(
+        f"Portföy tarafında {_positions_phrase(ctx)}; kasada {_money(ctx['paper']['equity_usd'])}."
+    )
+    evidence = [f"snapshot:{ctx['snapshot_id']}", f"dqs:{ctx['dqs']['status']}"]
+    evidence += [f"news:{h[:40]}" for h in news[:2]]
+    return " ".join(parts), evidence
 
 
 def _opportunity_answer(ctx: dict) -> tuple[str, list[str]]:

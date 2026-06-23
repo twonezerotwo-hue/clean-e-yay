@@ -6,7 +6,9 @@ hata durumunda DQS düşer ama exception kaçırılmaz.
 from __future__ import annotations
 
 import hashlib
+import threading
 import time
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 
@@ -18,6 +20,7 @@ from packages.data.providers import options as options_provider
 from packages.data.providers import price as price_provider
 from packages.data.providers import rotation as rot_provider
 from packages.data.providers import technical as tech_provider
+from packages.data.registry import assets as _asset_registry
 from packages.data.providers import volatility as vol_provider
 from packages.data.providers.news import catalyst as catalyst_engine
 from packages.data.quality.dqs import QualityReport
@@ -35,14 +38,14 @@ from packages.data.types import (
     VolatilitySnapshot,
 )
 
-DEFAULT_SYMBOLS = [
-    "BTCUSD", "ETHUSD", "XAUUSD", "XAGUSD",  # işlem evreni (ilk 4)
-    "DXY", "US10Y", "US02Y", "VIX", "CPI",   # makro bağlam (FRED/yfinance)
-]
+# Snapshot evreni + işlem evreni TEK KAYNAKTAN: config/assets.yaml.
+# Asset ekle/çıkar → tüm pipeline otomatik okur (eski hardcode liste kaldırıldı).
+# snapshot_symbols() = trade + macro rolleri; trade_symbols() = işlem evreni.
+DEFAULT_SYMBOLS = _asset_registry.snapshot_symbols()
 
-# T1 — multi-TF technicals yalnızca ana 4 sembol için üretilir (payload ve
-# rate-limit dengesi); kalan semboller legacy 1d teknik alır.
-MULTI_TF_SYMBOLS = frozenset(DEFAULT_SYMBOLS[:4])
+# T1 — multi-TF technicals yalnızca işlem evreni (trade) sembolleri için üretilir
+# (payload ve rate-limit dengesi); kalan semboller legacy 1d teknik alır.
+MULTI_TF_SYMBOLS = frozenset(_asset_registry.trade_symbols())
 
 
 @dataclass
@@ -82,10 +85,27 @@ def _make_id(now: datetime) -> str:
 def build_snapshot(symbols: list[str] | None = None) -> MarketSnapshot:
     syms = symbols or DEFAULT_SYMBOLS
     now = datetime.now(UTC)
-    prices = price_provider.get_quotes(syms)
-    # T1 — gerçek OHLCV'den multi-TF technicals; legacy `technicals` 1d'den
-    # beslenmeye devam eder (geriye uyum).
     tf_syms = [s for s in syms if s in MULTI_TF_SYMBOLS]
+
+    # Bağımsız ağ çağrılarını PARALEL çalıştır — seri toplam (~40s, provider'lar
+    # yavaşken) yerine en yavaş çağrı kadar (~max). Her provider kendi HTTP
+    # timeout'unu (4-8s) zaten uygular; havuz yalnızca eşzamanlılık ekler.
+    with ThreadPoolExecutor(max_workers=5) as _ex:
+        _f_prices = _ex.submit(price_provider.get_quotes, syms)
+        _f_news = _ex.submit(news_provider.list_headlines, 14)
+        _f_cal = _ex.submit(cal_provider.list_catalysts, 8)
+        _f_rot = _ex.submit(rot_provider.get_rotation)
+        _f_deriv = _ex.submit(
+            deriv_provider.get_derivatives,
+            [s for s in syms if s in deriv_provider.CRYPTO_SYMBOLS],
+        )
+        prices = _f_prices.result()
+        headlines = _f_news.result()
+        catalysts = _f_cal.result()
+        rotation = _f_rot.result()
+        derivatives = _f_deriv.result()
+
+    # T1 — gerçek OHLCV'den multi-TF technicals (disk cache — hızlı, seri).
     technicals_by_tf = {
         s: {tf: tech_provider.get_snapshot(s, tf) for tf in TIMEFRAMES}
         for s in tf_syms
@@ -98,18 +118,10 @@ def build_snapshot(symbols: list[str] | None = None) -> MarketSnapshot:
         )
         for s in syms
     }
-    headlines = news_provider.list_headlines(14)
+    # Bağımlı adımlar: catalyst_impacts←headlines, options←volatility (aşağıda).
     # v2.7 D5 — başlıkları deterministik catalyst etkilerine çevir (network yok).
-    # Yalnızca verified + yarı-ömrü dolmamış impact karar zincirine girer.
     catalyst_impacts = catalyst_engine.build_impacts(headlines, now=now)
-    catalysts = cal_provider.list_catalysts(8)
-    rotation = rot_provider.get_rotation()
-    # v2.7 D2 — kripto türev zekâsı (yalnızca crypto sembolleri için).
-    derivatives = deriv_provider.get_derivatives(
-        [s for s in syms if s in deriv_provider.CRYPTO_SYMBOLS]
-    )
-    # v2.7 D4 — realized volatility / rejim (mevcut OHLCV cache'inden, ekstra ağ
-    # yok). Multi-TF teknikleriyle aynı semboller × tüm timeframe'ler.
+    # v2.7 D4 — realized volatility / rejim (OHLCV cache'inden, ekstra ağ yok).
     volatility = vol_provider.get_volatility(tf_syms, list(TIMEFRAMES))
     # v2.7 D3 — options IV / skew / term structure (yalnızca BTC/ETH). IV-RV
     # spread için D4 realized vol (1d) beslenir; ekstra ağ sadece Deribit chain.
@@ -202,13 +214,38 @@ def build_snapshot(symbols: list[str] | None = None) -> MarketSnapshot:
 # Basit zaman cache — aynı saniye içinde yeniden hesaplamadan kaçınmak için
 _CACHE: dict[str, tuple[float, MarketSnapshot]] = {}
 _TTL_SEC = 30.0
+_REFRESHING: set[str] = set()
+_REFRESH_LOCK = threading.Lock()
+
+
+def _refresh_async(key: str, symbols: list[str] | None) -> None:
+    """Arka planda yeniden derle; başarısızsa eski cache korunur (mock yok)."""
+    try:
+        snap = build_snapshot(symbols)
+        _CACHE[key] = (time.monotonic(), snap)
+    except Exception:
+        pass
+    finally:
+        with _REFRESH_LOCK:
+            _REFRESHING.discard(key)
 
 
 def get_cached_snapshot(symbols: list[str] | None = None) -> MarketSnapshot:
+    """Stale-while-revalidate: taze cache anında döner; bayatsa ESKİ kopya yine
+    anında döner ve yenileme ARKA PLANDA yapılır — istek hiçbir zaman
+    build_snapshot'ı beklemez. Yalnızca cache hiç yoksa (ilk çağrı) senkron derler.
+    Bu, canlı provider yavaşladığında cockpit/brief'in donmasını engeller."""
     key = "|".join(symbols or DEFAULT_SYMBOLS)
     now = time.monotonic()
     cached = _CACHE.get(key)
-    if cached and (now - cached[0]) < _TTL_SEC:
+    if cached is not None:
+        if (now - cached[0]) >= _TTL_SEC:
+            with _REFRESH_LOCK:
+                if key not in _REFRESHING:
+                    _REFRESHING.add(key)
+                    threading.Thread(
+                        target=_refresh_async, args=(key, symbols), daemon=True
+                    ).start()
         return cached[1]
     snap = build_snapshot(symbols)
     _CACHE[key] = (now, snap)

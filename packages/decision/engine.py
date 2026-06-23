@@ -220,6 +220,27 @@ def decide_for_symbol(
             candidate_action=candidate,
         )
 
+    # ----- Minimum güven tabanı: skor eşiği geçse de kalibre p(win) düşükse açma -----
+    # (Nötr/düşük-güvenli sinyallerle pozisyon açılmasını engeller. RiskGate'i
+    #  bypass etmez; yalnızca ek kısıt. Owner config'ten ayarlanır.)
+    min_open_conf = float(th.get("min_open_confidence", 0.0))
+    if cal_conf < min_open_conf:
+        return TradeDecision(
+            symbol=symbol,
+            action="hold",
+            confidence=round(cal_conf, 3),
+            size_multiplier=0.0,
+            consensus=cons,
+            risk=risk,
+            reason=f"Düşük güven: p(win) %{cal_conf * 100:.0f} < taban %{min_open_conf * 100:.0f}",
+            raw_confidence=round(raw_conf, 4),
+            confidence_source=conf_source,
+            fingerprint=fp,
+            timeframe=timeframe,
+            candidate_action=candidate,
+            blocked_by=["confidence_floor"],
+        )
+
     # Confluence yoksa boyut yarıya iner
     if not cons.confluence_aligned:
         size *= 0.5
