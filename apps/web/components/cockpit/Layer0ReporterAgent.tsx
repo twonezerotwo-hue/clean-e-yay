@@ -736,7 +736,7 @@ export function Layer0ReporterAgent({
       </div>
 
       {/* ── Sutun 2: Human-computer model + karar hero ──────────────── */}
-      <div className="flex min-h-0 flex-col gap-4 overflow-y-auto pr-1">
+      <div className="layer0-center-stack flex min-h-0 flex-col gap-3">
         <div className="reporter-model-card shrink-0">
           <Layer0HumanComputerModel
             mode={modelMode}

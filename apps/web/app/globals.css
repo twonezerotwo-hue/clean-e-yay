@@ -357,6 +357,11 @@ html, body {
     0 18px 48px rgba(0, 0, 0, 0.24);
 }
 
+.layer0-center-stack {
+  overflow: hidden;
+  padding-right: 0;
+}
+
 .layer0-status-core {
   position: relative;
   overflow: hidden;
@@ -370,7 +375,7 @@ html, body {
     0 22px 56px rgba(0, 0, 0, 0.28),
     0 0 44px rgba(34, 211, 238, 0.1),
     inset 0 1px 0 rgba(255, 255, 255, 0.06);
-  padding: 1rem;
+  padding: 0.56rem;
 }
 
 .layer0-status-core::before {
@@ -406,12 +411,12 @@ html, body {
 .layer0-status-core__head {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
-  gap: 1rem;
+  gap: 0.5rem;
   align-items: start;
 }
 
 .layer0-status-core__kicker {
-  font-size: 0.64rem;
+  font-size: 0.54rem;
   font-weight: 800;
   letter-spacing: 0.18em;
   text-transform: uppercase;
@@ -419,9 +424,9 @@ html, body {
 }
 
 .layer0-status-core__title {
-  margin-top: 0.38rem;
+  margin-top: 0.18rem;
   font-family: var(--font-display, ui-sans-serif);
-  font-size: clamp(1.7rem, 4.2vw, 2.55rem);
+  font-size: clamp(1.15rem, 2.4vw, 1.55rem);
   font-weight: 900;
   line-height: 0.95;
   letter-spacing: 0;
@@ -429,18 +434,22 @@ html, body {
 }
 
 .layer0-status-core__detail {
-  margin-top: 0.55rem;
+  display: -webkit-box;
+  margin-top: 0.26rem;
+  overflow: hidden;
   color: rgba(226, 232, 240, 0.62);
-  font-size: 0.86rem;
-  line-height: 1.45;
+  font-size: 0.66rem;
+  line-height: 1.25;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 1;
 }
 
 .layer0-status-core__mode {
-  min-width: 98px;
+  min-width: 72px;
   border: 1px solid rgba(34, 211, 238, 0.24);
   border-radius: 0.9rem;
   background: rgba(2, 8, 18, 0.52);
-  padding: 0.62rem 0.72rem;
+  padding: 0.38rem 0.48rem;
   text-align: right;
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
 }
@@ -448,7 +457,7 @@ html, body {
 .layer0-status-core__mode span,
 .layer0-status-metric span {
   display: block;
-  font-size: 0.58rem;
+  font-size: 0.5rem;
   font-weight: 800;
   letter-spacing: 0.16em;
   text-transform: uppercase;
@@ -457,11 +466,11 @@ html, body {
 
 .layer0-status-core__mode strong {
   display: block;
-  margin-top: 0.32rem;
-  max-width: 120px;
+  margin-top: 0.2rem;
+  max-width: 92px;
   overflow: hidden;
   color: rgba(167, 243, 208, 0.95);
-  font-size: 0.75rem;
+  font-size: 0.62rem;
   font-weight: 900;
   letter-spacing: 0.08em;
   text-overflow: ellipsis;
@@ -472,8 +481,8 @@ html, body {
 .layer0-status-core__metrics {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 0.55rem;
-  margin-top: 0.9rem;
+  gap: 0.32rem;
+  margin-top: 0.44rem;
 }
 
 .layer0-status-metric {
@@ -482,15 +491,15 @@ html, body {
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 0.88rem;
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.045), rgba(255, 255, 255, 0.018));
-  padding: 0.62rem 0.7rem;
+  padding: 0.34rem 0.38rem;
 }
 
 .layer0-status-metric strong {
   display: block;
-  margin-top: 0.28rem;
+  margin-top: 0.14rem;
   overflow: hidden;
   font-family: var(--font-display, ui-sans-serif);
-  font-size: 1.05rem;
+  font-size: 0.76rem;
   font-weight: 900;
   line-height: 1;
   text-overflow: ellipsis;
@@ -499,23 +508,23 @@ html, body {
 
 .layer0-status-core__nodes {
   display: grid;
-  grid-template-columns: 1fr;
-  gap: 0.5rem;
-  margin-top: 0.8rem;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.32rem;
+  margin-top: 0.46rem;
 }
 
 .layer0-status-node {
   display: grid;
-  grid-template-columns: auto auto minmax(0, 1fr) auto;
+  grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
-  gap: 0.62rem;
+  gap: 0.36rem;
   min-width: 0;
   border: 1px solid rgba(255, 255, 255, 0.09);
-  border-radius: 0.95rem;
+  border-radius: 0.76rem;
   background:
     linear-gradient(90deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0.018)),
     rgba(2, 8, 18, 0.48);
-  padding: 0.58rem 0.68rem;
+  padding: 0.34rem 0.4rem;
   text-align: left;
   transition:
     border-color 180ms ease,
@@ -532,8 +541,8 @@ html, body {
 }
 
 .layer0-status-node__pulse {
-  width: 0.56rem;
-  height: 0.56rem;
+  width: 0.38rem;
+  height: 0.38rem;
   border-radius: 999px;
   background: currentColor;
   box-shadow: 0 0 16px currentColor;
@@ -548,7 +557,7 @@ html, body {
 }
 
 .layer0-status-node__index {
-  display: grid;
+  display: none;
   place-items: center;
   width: 1.72rem;
   height: 1.72rem;
@@ -575,15 +584,15 @@ html, body {
 
 .layer0-status-node__copy strong {
   color: rgba(248, 250, 252, 0.9);
-  font-size: 0.8rem;
+  font-size: 0.64rem;
   font-weight: 800;
 }
 
 .layer0-status-node__copy em {
-  margin-top: 0.14rem;
+  margin-top: 0.06rem;
   color: rgba(148, 163, 184, 0.66);
   font-family: var(--font-mono, monospace);
-  font-size: 0.65rem;
+  font-size: 0.5rem;
   font-style: normal;
   letter-spacing: 0.04em;
   text-transform: uppercase;
@@ -592,7 +601,7 @@ html, body {
 .layer0-status-node__state {
   color: currentColor;
   font-family: var(--font-mono, monospace);
-  font-size: 0.62rem;
+  font-size: 0.5rem;
   font-weight: 900;
   letter-spacing: 0.12em;
   text-transform: uppercase;
@@ -600,25 +609,25 @@ html, body {
 
 .layer0-status-core__watch {
   display: grid;
-  grid-template-columns: 1fr;
-  gap: 0.42rem;
-  margin-top: 0.76rem;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.32rem;
+  margin-top: 0.42rem;
 }
 
 .layer0-status-watch {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
   align-items: center;
-  gap: 0.56rem;
+  gap: 0.38rem;
   border: 1px solid rgba(251, 191, 36, 0.16);
-  border-radius: 0.82rem;
+  border-radius: 0.68rem;
   background: rgba(251, 191, 36, 0.045);
-  padding: 0.52rem 0.64rem;
+  padding: 0.3rem 0.38rem;
 }
 
 .layer0-status-watch span {
-  width: 0.48rem;
-  height: 0.48rem;
+  width: 0.34rem;
+  height: 0.34rem;
   border-radius: 999px;
   background: rgba(251, 191, 36, 0.86);
   box-shadow: 0 0 14px rgba(251, 191, 36, 0.52);
@@ -627,8 +636,8 @@ html, body {
 .layer0-status-watch p {
   overflow: hidden;
   color: rgba(254, 243, 199, 0.82);
-  font-size: 0.72rem;
-  line-height: 1.25;
+  font-size: 0.56rem;
+  line-height: 1.15;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -655,6 +664,11 @@ html, body {
     grid-template-columns: auto minmax(0, 1fr) auto;
   }
 
+  .layer0-status-core__nodes,
+  .layer0-status-core__watch {
+    grid-template-columns: 1fr;
+  }
+
   .layer0-status-node__index {
     display: none;
   }
@@ -662,8 +676,8 @@ html, body {
 
 .reporter-model-card {
   position: relative;
-  height: clamp(360px, 44vh, 520px);
-  min-height: 360px;
+  height: clamp(272px, 38vh, 430px);
+  min-height: 272px;
   overflow: hidden;
   border-radius: 1.25rem;
   border: 1px solid rgba(34, 211, 238, 0.24);
