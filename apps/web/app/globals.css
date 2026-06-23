@@ -2598,7 +2598,7 @@ html, body {
   pointer-events: none;
   background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.24), transparent);
   filter: blur(1px);
-  animation: fut-foil-sweep 5.2s ease-in-out infinite;
+  animation: fut-foil-sweep 8s ease-in-out infinite;
   animation-play-state: paused;
 }
 
@@ -2641,7 +2641,7 @@ html, body {
     linear-gradient(90deg, color-mix(in srgb, var(--fut-accent-2) 10%, transparent) 1px, transparent 1px);
   background-size: 38px 42px, 42px 36px;
   opacity: 0.16;
-  animation: fut-grid-drift 12s linear infinite;
+  animation: fut-grid-drift 18s linear infinite;
 }
 
 .fut-rating {
@@ -2660,7 +2660,7 @@ html, body {
   border-radius: 999px;
   border: 1px dashed color-mix(in srgb, var(--fut-accent) 48%, transparent);
   transform: translate(-50%, -50%);
-  animation: fut-orbit-spin 12s linear infinite;
+  animation: fut-orbit-spin 20s linear infinite;
 }
 
 .fut-orbit::before,
@@ -2695,7 +2695,7 @@ html, body {
   font-size: 26px;
   font-weight: 900;
   transform: translateZ(42px);
-  animation: fut-emblem-pulse 3.4s ease-in-out infinite;
+  animation: fut-emblem-pulse 5.2s ease-in-out infinite;
 }
 
 .fut-stat-box {

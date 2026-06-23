@@ -290,14 +290,14 @@ function archetype(row: DeckRow) {
 
 function deckTransform(offset: number): CSSProperties {
   const abs = Math.abs(offset);
-  const tx = offset === 0 ? 0 : (abs === 1 ? 188 : abs === 2 ? 330 : 450) * (offset > 0 ? 1 : -1);
-  const ty = abs === 0 ? -50 : abs === 1 ? -48 : -46;
-  const tz = offset === 0 ? 42 : -abs * 92;
-  const ry = offset * -14;
-  const rz = offset * 1.8;
-  const rx = abs === 0 ? -3 : -1;
-  const scale = abs === 0 ? 1.02 : abs === 1 ? 0.78 : abs === 2 ? 0.6 : 0.48;
-  const op = abs === 0 ? 1 : abs === 1 ? 0.76 : abs === 2 ? 0.38 : 0.14;
+  const tx = offset === 0 ? 0 : (abs === 1 ? 214 : abs === 2 ? 368 : 500) * (offset > 0 ? 1 : -1);
+  const ty = abs === 0 ? -50 : abs === 1 ? -49 : -47;
+  const tz = offset === 0 ? 64 : -abs * 118;
+  const ry = offset * -22;
+  const rz = offset * 2.4;
+  const rx = abs === 0 ? -5 : -2;
+  const scale = abs === 0 ? 1.06 : abs === 1 ? 0.74 : abs === 2 ? 0.56 : 0.44;
+  const op = abs === 0 ? 1 : abs === 1 ? 0.82 : abs === 2 ? 0.42 : 0.16;
   return {
     transform: `translate3d(calc(-50% + ${tx}px), ${ty}%, ${tz}px) rotateX(${rx}deg) rotateY(${ry}deg) rotateZ(${rz}deg) scale(${scale})`,
     opacity: op,
@@ -342,7 +342,7 @@ function DeckCard({
       type="button"
       onClick={onSelect}
       aria-pressed={active}
-      className={`fut-signal-card absolute left-1/2 top-1/2 w-[220px] border text-left transition-all duration-700 ${
+      className={`fut-signal-card absolute left-1/2 top-1/2 w-[220px] transform-gpu border text-left transition-all duration-[1200ms] sm:duration-[1050ms] ${
         active ? "fut-signal-card-active" : ""
       }`}
       style={style}
@@ -570,7 +570,7 @@ export function HolographicSignalDeck({ brief }: { brief: AgentBrief }) {
     if (rows.length <= 1 || paused || !animateRef.current) return;
     const t = setInterval(() => {
       setActiveIndex((i) => (i + 1) % rows.length);
-    }, 5000);
+    }, 7600);
     return () => clearInterval(t);
   }, [rows.length, paused]);
 
@@ -616,7 +616,7 @@ export function HolographicSignalDeck({ brief }: { brief: AgentBrief }) {
     <section
       id="layer1_holographic_signals"
       data-panel="layer1_holographic_signals"
-      className="quantum-panel quantum-holo-deck relative overflow-hidden rounded-lg border border-white/10 bg-[#090d14]/92 shadow-[0_18px_56px_rgba(0,0,0,0.30)]"
+      className="quantum-panel quantum-holo-deck relative flex h-full min-h-[700px] flex-col overflow-hidden rounded-lg border border-white/10 bg-[#090d14]/92 shadow-[0_18px_56px_rgba(0,0,0,0.30)]"
       style={getQuantumPanelStyle("layer1_holographic_signals", "#14b8a6", "#fbbf24")}
       onMouseEnter={() => setPaused(true)}
       onMouseLeave={() => setPaused(false)}
@@ -657,10 +657,10 @@ export function HolographicSignalDeck({ brief }: { brief: AgentBrief }) {
       </div>
 
       {/* Body grid */}
-      <div className="grid gap-0 lg:grid-cols-[minmax(0,1fr)_370px]">
+      <div className="grid min-h-0 flex-1 gap-0 lg:grid-cols-[minmax(0,1fr)_360px]">
         {/* Left — 3D deck */}
         <div
-          className="relative min-h-[390px] overflow-hidden border-r border-white/10 lg:min-h-[400px]"
+          className="relative min-h-[440px] overflow-hidden border-r border-white/10 lg:min-h-0"
           style={{
             background:
               "radial-gradient(circle at 50% 72%, rgba(20,184,166,0.13), transparent 34%), radial-gradient(circle at 52% 6%, rgba(251,191,36,0.07), transparent 28%), linear-gradient(180deg, rgba(12,17,27,0.92), rgba(5,8,14,0.98))",
@@ -728,7 +728,7 @@ export function HolographicSignalDeck({ brief }: { brief: AgentBrief }) {
 
           {/* 3D deck stage */}
           <div
-            className="relative mx-auto h-[280px] mt-4"
+            className="relative mx-auto mt-4 h-[330px] lg:h-[360px]"
             style={{ perspective: "2100px", perspectiveOrigin: "50% 40%" }}
           >
             {rows.map((r, i) => {
@@ -764,7 +764,7 @@ export function HolographicSignalDeck({ brief }: { brief: AgentBrief }) {
           </div>
 
           {/* AI Trading Operations podium */}
-          <div className="relative z-10 mt-1 mb-3 mx-auto h-[82px] w-[min(540px,84%)]">
+          <div className="relative z-10 mx-auto mb-4 mt-1 h-[88px] w-[min(540px,84%)]">
             {/* expanding rings */}
             <div
               aria-hidden="true"
@@ -797,8 +797,8 @@ export function HolographicSignalDeck({ brief }: { brief: AgentBrief }) {
         </div>
 
         {/* Right — Sinyal Detayı */}
-        <aside className="relative h-[390px] min-h-[390px] overflow-y-auto bg-black/20 p-3 lg:h-[400px] lg:min-h-[400px]">
-          <div className="space-y-2.5">
+        <aside className="relative min-h-[440px] overflow-hidden bg-black/20 p-3 lg:min-h-0">
+          <div className="space-y-2">
             <div className="flex items-center gap-2">
               <span className="h-1.5 w-1.5 rounded-full bg-teal-300 shadow-[0_0_8px_rgba(45,212,191,0.45)]" />
               <p className="text-[10px] uppercase tracking-[0.22em] text-slate-300/90">
