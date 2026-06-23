@@ -16,9 +16,7 @@ export function GlobalChrome() {
   useEventStream();
   return (
     <>
-      <div className="fixed top-3 right-3 z-50">
-        <NotificationBell />
-      </div>
+      <NotificationBell />
       <NotificationToast />
     </>
   );

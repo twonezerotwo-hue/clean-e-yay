@@ -79,23 +79,32 @@ export function NotificationBell() {
   const unread = data?.unread_count ?? 0;
 
   return (
-    <div className="relative" ref={ref}>
+    <div
+      className="floating-notification-dock"
+      data-open={open ? "true" : "false"}
+      ref={ref}
+    >
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="relative rounded-full p-1.5 hover:bg-white/10 text-white/80 transition-colors"
+        className="floating-notification-button"
         aria-label="Bildirimler"
       >
-        <span className="text-base">🔔</span>
+        <img
+          src="/icons/eyay-notification-bell.png"
+          alt=""
+          className="floating-notification-image"
+          draggable={false}
+        />
         {unread > 0 && (
-          <span className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] rounded-full bg-red-500 text-[10px] text-white font-mono font-bold flex items-center justify-center px-1">
+          <span className="floating-notification-badge">
             {unread > 99 ? "99+" : unread}
           </span>
         )}
       </button>
 
       {open && (
-        <div className="absolute right-0 mt-2 w-[360px] max-h-[480px] rounded-xl border border-white/15 bg-ink-800/95 backdrop-blur-lg shadow-2xl z-50 overflow-hidden flex flex-col">
+        <div className="floating-notification-panel">
           <div className="flex items-center justify-between px-3 py-2 border-b border-white/10">
             <div className="text-[11px] font-mono uppercase tracking-widest text-white/70">
               Bildirimler · {unread} okunmamış

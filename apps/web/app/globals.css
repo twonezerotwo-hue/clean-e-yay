@@ -12,6 +12,195 @@ html, body {
   font-family: Inter, system-ui, sans-serif;
 }
 
+.floating-notification-dock {
+  position: fixed;
+  top: clamp(72px, 9vh, 118px);
+  right: clamp(18px, 4vw, 64px);
+  z-index: 90;
+  width: 86px;
+  height: 86px;
+  animation: eyay-notification-drift 28s ease-in-out infinite;
+  transform-style: preserve-3d;
+}
+
+.floating-notification-dock:hover,
+.floating-notification-dock[data-open="true"] {
+  animation-play-state: paused;
+}
+
+.floating-notification-button {
+  position: relative;
+  display: grid;
+  width: 86px;
+  height: 86px;
+  place-items: center;
+  border: 1px solid rgba(34, 211, 238, 0.32);
+  border-radius: 999px;
+  background:
+    radial-gradient(circle at 50% 50%, rgba(34, 211, 238, 0.16), rgba(2, 6, 12, 0.54) 64%, rgba(0, 0, 0, 0.18));
+  box-shadow:
+    0 0 32px rgba(34, 211, 238, 0.22),
+    0 0 72px rgba(99, 102, 241, 0.13),
+    inset 0 1px 0 rgba(255, 255, 255, 0.16);
+  cursor: pointer;
+  outline: none;
+  transition: transform 180ms ease, border-color 180ms ease, box-shadow 180ms ease;
+}
+
+.floating-notification-button::before,
+.floating-notification-button::after {
+  content: "";
+  position: absolute;
+  inset: -11px;
+  border-radius: 999px;
+  pointer-events: none;
+  border: 1px solid rgba(34, 211, 238, 0.2);
+  transform: rotateX(62deg) rotateZ(0deg);
+  animation: eyay-notification-orbit 8s linear infinite;
+}
+
+.floating-notification-button::after {
+  inset: -15px;
+  border-color: rgba(167, 139, 250, 0.24);
+  transform: rotateX(64deg) rotateZ(76deg);
+  animation-duration: 11s;
+  animation-direction: reverse;
+}
+
+.floating-notification-button:hover {
+  border-color: rgba(103, 232, 249, 0.62);
+  transform: scale(1.06);
+  box-shadow:
+    0 0 42px rgba(34, 211, 238, 0.32),
+    0 0 96px rgba(167, 139, 250, 0.2),
+    inset 0 1px 0 rgba(255, 255, 255, 0.18);
+}
+
+.floating-notification-image {
+  position: relative;
+  z-index: 1;
+  width: 74px;
+  height: 74px;
+  user-select: none;
+  border-radius: 999px;
+  object-fit: cover;
+  filter: drop-shadow(0 0 18px rgba(34, 211, 238, 0.5));
+  animation: eyay-notification-breathe 3.8s ease-in-out infinite;
+}
+
+.floating-notification-badge {
+  position: absolute;
+  top: -4px;
+  right: -5px;
+  z-index: 4;
+  display: flex;
+  min-width: 24px;
+  height: 24px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  border-radius: 999px;
+  background: linear-gradient(135deg, #ef4444, #a855f7);
+  padding: 0 6px;
+  font-family: var(--font-mono, monospace);
+  font-size: 10px;
+  font-weight: 900;
+  color: #fff;
+  box-shadow: 0 0 20px rgba(248, 113, 113, 0.58);
+}
+
+.floating-notification-panel {
+  position: absolute;
+  top: calc(100% + 14px);
+  right: 0;
+  display: flex;
+  width: min(360px, calc(100vw - 24px));
+  max-height: min(480px, calc(100vh - 160px));
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid rgba(34, 211, 238, 0.22);
+  border-radius: 1rem;
+  background:
+    radial-gradient(circle at 90% 0%, rgba(34, 211, 238, 0.12), transparent 36%),
+    linear-gradient(180deg, rgba(6, 12, 24, 0.96), rgba(3, 7, 14, 0.94));
+  box-shadow:
+    0 24px 70px rgba(0, 0, 0, 0.42),
+    0 0 44px rgba(34, 211, 238, 0.16),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  backdrop-filter: blur(18px);
+}
+
+@keyframes eyay-notification-drift {
+  0%, 100% {
+    transform: translate3d(0, 0, 0);
+  }
+  22% {
+    transform: translate3d(-18vw, 14vh, 0);
+  }
+  48% {
+    transform: translate3d(-6vw, 38vh, 0);
+  }
+  72% {
+    transform: translate3d(-34vw, 26vh, 0);
+  }
+}
+
+@keyframes eyay-notification-orbit {
+  from {
+    transform: rotateX(62deg) rotateZ(0deg);
+  }
+  to {
+    transform: rotateX(62deg) rotateZ(360deg);
+  }
+}
+
+@keyframes eyay-notification-breathe {
+  0%, 100% {
+    transform: scale(0.96);
+    opacity: 0.86;
+  }
+  50% {
+    transform: scale(1.03);
+    opacity: 1;
+  }
+}
+
+@media (max-width: 700px) {
+  .floating-notification-dock {
+    top: 74px;
+    right: 16px;
+    width: 72px;
+    height: 72px;
+    animation-name: eyay-notification-drift-mobile;
+  }
+
+  .floating-notification-button {
+    width: 72px;
+    height: 72px;
+  }
+
+  .floating-notification-image {
+    width: 62px;
+    height: 62px;
+  }
+
+  .floating-notification-panel {
+    right: -4px;
+  }
+}
+
+@keyframes eyay-notification-drift-mobile {
+  0%, 100% {
+    transform: translate3d(0, 0, 0);
+  }
+  34% {
+    transform: translate3d(-18vw, 18vh, 0);
+  }
+  68% {
+    transform: translate3d(-4vw, 42vh, 0);
+  }
+}
+
 .panel {
   @apply rounded-2xl border border-ink-700/60 bg-ink-800/70 backdrop-blur p-4;
   position: relative;
