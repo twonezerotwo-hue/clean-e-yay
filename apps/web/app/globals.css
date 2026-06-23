@@ -1345,12 +1345,19 @@ html, body {
 
 @keyframes layer1-panel-cover {
   0% {
-    filter: brightness(0.76) saturate(0.9);
+    filter: blur(5px) brightness(0.66) saturate(0.82);
+    opacity: 0.74;
     transform: translateY(68px) scale(0.965) rotateX(1.2deg);
   }
-  100% {
-    filter: brightness(1) saturate(1);
+  12%, 66% {
+    filter: blur(0) brightness(1) saturate(1);
+    opacity: 1;
     transform: translateY(0) scale(1) rotateX(0deg);
+  }
+  100% {
+    filter: blur(4px) brightness(0.58) saturate(0.78);
+    opacity: 0.62;
+    transform: translateY(-18px) scale(0.985) rotateX(-0.6deg);
   }
 }
 
@@ -1422,7 +1429,8 @@ html, body {
 
 .h-full.overflow-y-auto:has(> .space-y-5 > #execution_readiness) > .space-y-5 {
   position: relative;
-  display: block;
+  display: flex;
+  flex-direction: column;
   min-height: 100%;
   padding-bottom: min(22vh, 160px);
   transform-style: preserve-3d;
@@ -1435,6 +1443,18 @@ html, body {
   margin-bottom: min(18vh, 132px);
   transform-origin: 50% 0%;
   will-change: transform, filter;
+  isolation: isolate;
+  background-color: rgba(4, 8, 18, 0.22);
+  box-shadow:
+    0 24px 76px rgba(0, 0, 0, 0.36),
+    inset 0 0 86px rgba(1, 8, 18, 0.28);
+  backdrop-filter: blur(22px) saturate(1.04);
+  -webkit-backdrop-filter: blur(22px) saturate(1.04);
+}
+
+.h-full.overflow-y-auto:has(> .space-y-5 > #execution_readiness) > .space-y-5 > #order_ticket {
+  order: 99;
+  z-index: 70;
 }
 
 .h-full.overflow-y-auto:has(> .space-y-5 > #execution_readiness) > .space-y-5 > :nth-child(1) {
@@ -1465,7 +1485,7 @@ html, body {
   .h-full.overflow-y-auto:has(> .space-y-5 > #execution_readiness) > .space-y-5 > * {
     animation: layer1-panel-cover both linear;
     animation-timeline: view(block);
-    animation-range: entry 0% cover 28%;
+    animation-range: entry 0% cover 100%;
   }
 }
 
