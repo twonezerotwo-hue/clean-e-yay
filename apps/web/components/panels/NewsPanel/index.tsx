@@ -81,12 +81,16 @@ function HeadlineItem({ h }: { h: Headline }) {
   );
 }
 
-export function NewsPanel() {
+type NewsPanelProps = {
+  defaultView?: "list" | "radar";
+};
+
+export function NewsPanel({ defaultView = "list" }: NewsPanelProps) {
   const { data, isLoading } = useRegimeReport();
   const items = selectHeadlines(data, 14);
   const head = items.slice(0, NEWS_HEAD);
   const rest = items.slice(NEWS_HEAD);
-  const [view, setView] = useState<"list" | "radar">("list");
+  const [view, setView] = useState<"list" | "radar">(defaultView);
   const hasItems = items.length > 0;
   return (
     <PanelFrame id="news">

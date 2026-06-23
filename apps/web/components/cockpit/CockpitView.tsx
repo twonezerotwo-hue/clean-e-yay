@@ -580,7 +580,7 @@ export function CockpitView() {
             </section>
 
             <CapitalRotationPanel />
-            <NewsPanel />
+            <NewsPanel defaultView="radar" />
           </div>
         </div>
       );
@@ -590,13 +590,13 @@ export function CockpitView() {
           <div className="space-y-6 pb-12">
             <LayerHeader
               meta={LAYERS[2]}
-              detail="Tum detay panelleri link veya tab olmadan burada acik durur. Bu katman okuma ve inceleme icin, emir uretmez."
+              detail="Katman 1'de gordugun 6 ana panelin veri kaynaklari burada kaynak gruplari halinde acik durur. Bu katman okuma ve inceleme icin, emir uretmez."
             >
               <DataQualityBadge dqs={dqs} generatedAt={data?.generated_at} />
             </LayerHeader>
 
             <div className="layer2-command-strip grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-              <HudMetric label="Grup" value="7" tone="text-accent-cyan" />
+              <HudMetric label="Grup" value="6" tone="text-accent-cyan" />
               <HudMetric
                 label="Sinyal"
                 value={`${actionableCount}/${candidates.length}`}
@@ -616,10 +616,13 @@ export function CockpitView() {
 
             <Layer2DetailGroup
               index="01"
-              title="Karar ve Agent Kaniti"
-              detail="Agent brief, final karar, AI raporu, karar izi, oy birligi ve shadow karsilastirmasi."
+              title="AI Agent Mode / Calibrating Kaynaklari"
+              detail="Katman 1'deki AI Agent kontrol dongusunu besleyen karar, risk, sistem, kalibrasyon, pozisyon ve ogrenme panelleri."
             >
               <DashboardGrid>
+                <GridCell span="full">
+                  <ExecutionReadinessPanel />
+                </GridCell>
                 <GridCell span="1">
                   <AgentBriefPanel />
                 </GridCell>
@@ -635,24 +638,6 @@ export function CockpitView() {
                 <GridCell span="1">
                   <AgentVotesPanel />
                 </GridCell>
-                <GridCell span="2">
-                  <AgentMatrixPanel />
-                </GridCell>
-                <GridCell span="1">
-                  <ShadowPanel />
-                </GridCell>
-              </DashboardGrid>
-            </Layer2DetailGroup>
-
-            <Layer2DetailGroup
-              index="02"
-              title="Islem ve Risk Kapisi"
-              detail="Trade ticket, RiskGate, drawdown guard, paper action, pozisyon kontrolleri ve seans uygunlugu."
-            >
-              <DashboardGrid>
-                <GridCell span="1">
-                  <TradeTicketPanel />
-                </GridCell>
                 <GridCell span="1">
                   <RiskDurumuPanel />
                 </GridCell>
@@ -666,18 +651,27 @@ export function CockpitView() {
                   <PositionChecksPanel />
                 </GridCell>
                 <GridCell span="1">
-                  <MarketSessionsPanel />
+                  <ShadowPanel />
                 </GridCell>
-                <GridCell span="2">
-                  <WatchConditionsPanel />
+                <GridCell span="1">
+                  <CalibrationPanel />
+                </GridCell>
+                <GridCell span="1">
+                  <MistakeMemoryPanel />
+                </GridCell>
+                <GridCell span="1">
+                  <LearningPanel />
+                </GridCell>
+                <GridCell span="1">
+                  <SystemHealthBar />
                 </GridCell>
               </DashboardGrid>
             </Layer2DetailGroup>
 
             <Layer2DetailGroup
-              index="03"
-              title="Sinyal ve Timeframe Yapisi"
-              detail="Komut sinyalleri, tum timeframe matrisi ve timeframe agirliklari tek akis icinde."
+              index="02"
+              title="Holographic Command Signals Kaynaklari"
+              detail="Katman 1'deki holografik sinyal sahnesini besleyen aday sinyaller, timeframe uyumu, ajan matrisi ve trade ticket verileri."
             >
               <DashboardGrid>
                 <GridCell span="full">
@@ -689,20 +683,47 @@ export function CockpitView() {
                 <GridCell span="1">
                   <TfWeightsPanel />
                 </GridCell>
+                <GridCell span="2">
+                  <AgentMatrixPanel />
+                </GridCell>
+                <GridCell span="2">
+                  <WatchConditionsPanel />
+                </GridCell>
+                <GridCell span="1">
+                  <TradeTicketPanel />
+                </GridCell>
+              </DashboardGrid>
+            </Layer2DetailGroup>
+
+            <Layer2DetailGroup
+              index="03"
+              title="Olay Takvimi Kaynaklari"
+              detail="Katman 1 olay takvimini besleyen ekonomik olaylar, seans uygunlugu ve olay riskini etkileyen volatilite verileri."
+            >
+              <DashboardGrid>
+                <GridCell span="1">
+                  <EventCalendarPanel />
+                </GridCell>
+                <GridCell span="1">
+                  <MarketSessionsPanel />
+                </GridCell>
+                <GridCell span="1">
+                  <VolatilityPanel />
+                </GridCell>
               </DashboardGrid>
             </Layer2DetailGroup>
 
             <Layer2DetailGroup
               index="04"
-              title="Piyasa Yapisi"
-              detail="Turev, volatilite, options, korelasyon ve sermaye rotasyonu panelleri."
+              title="Senaryo Paneli Kaynaklari"
+              detail="Katman 1 senaryo savasini besleyen risk-on/base/risk-off agirliklari, korelasyon, turev, options ve model agirliklari."
             >
               <DashboardGrid>
-                <GridCell span="1">
-                  <CryptoDerivativesPanel />
+                <GridCell span="2">
+                  <ScenarioPanel />
                 </GridCell>
                 <GridCell span="1">
-                  <VolatilityPanel />
+                  <CryptoDerivativesPanel />
                 </GridCell>
                 <GridCell span="1">
                   <OptionsVolPanel />
@@ -711,65 +732,23 @@ export function CockpitView() {
                   <CorrelationPanel />
                 </GridCell>
                 <GridCell span="1">
-                  <CapitalRotationPanel />
+                  <WeightProposalPanel />
+                </GridCell>
+                <GridCell span="1">
+                  <WeightHistoryPanel />
                 </GridCell>
               </DashboardGrid>
             </Layer2DetailGroup>
 
             <Layer2DetailGroup
               index="05"
-              title="Makro, Catalyst ve Haber"
-              detail="Haber radari, catalyst etkisi, olay takvimi ve senaryo analizi sekme olmadan ayni okuma sirasi icinde."
+              title="Kuresel Likidite Rotasyon Kaynaklari"
+              detail="Katman 1 likidite havuzunu besleyen fiyat, snapshot, provider, market data ve veri kalitesi omurgasi."
             >
               <DashboardGrid>
                 <GridCell span="full">
-                  <NewsPanel />
+                  <CapitalRotationPanel />
                 </GridCell>
-                <GridCell span="2">
-                  <CatalystImpactPanel />
-                </GridCell>
-                <GridCell span="1">
-                  <EventCalendarPanel />
-                </GridCell>
-                <GridCell span="2">
-                  <ScenarioPanel />
-                </GridCell>
-              </DashboardGrid>
-            </Layer2DetailGroup>
-
-            <Layer2DetailGroup
-              index="06"
-              title="Ogrenme ve Kalibrasyon"
-              detail="Paper/trading kaydi, ogrenme durumu, agirlik onerileri, kalibrasyon ve hata hafizasi."
-            >
-              <DashboardGrid>
-                <GridCell span="1">
-                  <TradingPanel />
-                </GridCell>
-                <GridCell span="1">
-                  <LearningPanel />
-                </GridCell>
-                <GridCell span="1">
-                  <WeightProposalPanel />
-                </GridCell>
-                <GridCell span="1">
-                  <WeightHistoryPanel />
-                </GridCell>
-                <GridCell span="1">
-                  <CalibrationPanel />
-                </GridCell>
-                <GridCell span="1">
-                  <MistakeMemoryPanel />
-                </GridCell>
-              </DashboardGrid>
-            </Layer2DetailGroup>
-
-            <Layer2DetailGroup
-              index="07"
-              title="Veri Kalitesi ve Operasyon"
-              detail="Provider, snapshot, market data, panel audit, sistem sagligi ve replay durumlari."
-            >
-              <DashboardGrid>
                 <GridCell span="1">
                   <DataQualityPanel />
                 </GridCell>
@@ -783,10 +762,25 @@ export function CockpitView() {
                   <MarketDataPanel />
                 </GridCell>
                 <GridCell span="1">
-                  <PanelAuditPanel />
+                  <TradingPanel />
+                </GridCell>
+              </DashboardGrid>
+            </Layer2DetailGroup>
+
+            <Layer2DetailGroup
+              index="06"
+              title="Olaylar ve Haber Radari Kaynaklari"
+              detail="Katman 1 haber/radar panelini besleyen haber akisi, catalyst etkisi ve panel/operasyon olay kayitlari."
+            >
+              <DashboardGrid>
+                <GridCell span="full">
+                  <NewsPanel defaultView="radar" />
+                </GridCell>
+                <GridCell span="2">
+                  <CatalystImpactPanel />
                 </GridCell>
                 <GridCell span="1">
-                  <SystemHealthBar />
+                  <PanelAuditPanel />
                 </GridCell>
                 <GridCell span="1">
                   <ReplayStatusPanel />
