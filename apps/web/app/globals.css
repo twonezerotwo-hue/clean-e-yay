@@ -1343,6 +1343,17 @@ html, body {
   }
 }
 
+@keyframes layer1-panel-cover {
+  0% {
+    filter: brightness(0.76) saturate(0.9);
+    transform: translateY(68px) scale(0.965) rotateX(1.2deg);
+  }
+  100% {
+    filter: brightness(1) saturate(1);
+    transform: translateY(0) scale(1) rotateX(0deg);
+  }
+}
+
 @keyframes layer0-dqs-heartbeat {
   0% {
     stroke-dashoffset: 280;
@@ -1381,6 +1392,7 @@ html, body {
   .layer0-human-model__scan,
   .layer0-status-core__scan,
   .layer0-human-model__ecg path,
+  .h-full.overflow-y-auto:has(> .space-y-5 > #execution_readiness) > .space-y-5 > *,
   .reporter-model-spectrum span {
     animation: none;
   }
@@ -1389,6 +1401,72 @@ html, body {
 .quantum-panel-cluster {
   perspective: 1600px;
   transform-style: preserve-3d;
+}
+
+.h-full.overflow-y-auto:has(> .space-y-5 > #execution_readiness) {
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
+  perspective: 1600px;
+  scroll-behavior: smooth;
+  scroll-padding-block: 1.25rem;
+  scroll-snap-type: none;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.h-full.overflow-y-auto:has(> .space-y-5 > #execution_readiness)::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+.h-full.overflow-y-auto:has(> .space-y-5 > #execution_readiness) > .space-y-5 {
+  position: relative;
+  display: block;
+  min-height: 100%;
+  padding-bottom: min(22vh, 160px);
+  transform-style: preserve-3d;
+}
+
+.h-full.overflow-y-auto:has(> .space-y-5 > #execution_readiness) > .space-y-5 > * {
+  position: sticky;
+  top: 1.25rem;
+  margin-top: 0 !important;
+  margin-bottom: min(18vh, 132px);
+  transform-origin: 50% 0%;
+  will-change: transform, filter;
+}
+
+.h-full.overflow-y-auto:has(> .space-y-5 > #execution_readiness) > .space-y-5 > :nth-child(1) {
+  z-index: 10;
+}
+
+.h-full.overflow-y-auto:has(> .space-y-5 > #execution_readiness) > .space-y-5 > :nth-child(2) {
+  z-index: 20;
+}
+
+.h-full.overflow-y-auto:has(> .space-y-5 > #execution_readiness) > .space-y-5 > :nth-child(3) {
+  z-index: 30;
+}
+
+.h-full.overflow-y-auto:has(> .space-y-5 > #execution_readiness) > .space-y-5 > :nth-child(4) {
+  z-index: 40;
+}
+
+.h-full.overflow-y-auto:has(> .space-y-5 > #execution_readiness) > .space-y-5 > :nth-child(5) {
+  z-index: 50;
+}
+
+.h-full.overflow-y-auto:has(> .space-y-5 > #execution_readiness) > .space-y-5 > :nth-child(6) {
+  z-index: 60;
+}
+
+@supports (animation-timeline: view()) {
+  .h-full.overflow-y-auto:has(> .space-y-5 > #execution_readiness) > .space-y-5 > * {
+    animation: layer1-panel-cover both linear;
+    animation-timeline: view(block);
+    animation-range: entry 0% cover 28%;
+  }
 }
 
 .quantum-panel {
