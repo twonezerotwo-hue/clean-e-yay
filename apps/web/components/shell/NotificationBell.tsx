@@ -1,7 +1,8 @@
 "use client";
 
-import type { FormEvent } from "react";
+import type { CSSProperties, FormEvent } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 
 import { api } from "@/lib/api/client";
 import {
@@ -174,7 +175,9 @@ export function NotificationBell() {
   const [voiceError, setVoiceError] = useState<string | null>(null);
   const [listening, setListening] = useState(false);
   const [micReady, setMicReady] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
+  const dockRef = useRef<HTMLDivElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
+  const [panelStyle, setPanelStyle] = useState<CSSProperties | null>(null);
   const seenIds = useRef<Set<string>>(new Set());
   const initialized = useRef(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -185,6 +188,37 @@ export function NotificationBell() {
   const items: Notification[] = data?.notifications ?? [];
   const unread = data?.unread_count ?? 0;
   const assistantBrief = useMemo(() => latestNotificationBrief(items, unread), [items, unread]);
+
+  const updatePanelPosition = useCallback(() => {
+    if (typeof window === "undefined") return;
+    const dock = dockRef.current;
+    if (!dock) return;
+
+    const rect = dock.getBoundingClientRect();
+    const margin = 12;
+    const gap = 14;
+    const viewportWidth = window.innerWidth;
+    const viewportHeight = window.innerHeight;
+    const panelWidth = Math.min(430, Math.max(300, viewportWidth - margin * 2));
+    const panelHeight = Math.min(620, Math.max(320, viewportHeight - margin * 2));
+    const dockCenterX = rect.left + rect.width / 2;
+    const dockCenterY = rect.top + rect.height / 2;
+    const openRight = dockCenterX < viewportWidth / 2;
+    const openDown = dockCenterY < viewportHeight / 2;
+
+    let left = openRight ? rect.right + gap : rect.left - panelWidth - gap;
+    let top = openDown ? rect.bottom + gap : rect.top - panelHeight - gap;
+    left = Math.min(Math.max(margin, left), viewportWidth - panelWidth - margin);
+    top = Math.min(Math.max(margin, top), viewportHeight - panelHeight - margin);
+
+    setPanelStyle({
+      left,
+      top,
+      width: panelWidth,
+      maxHeight: panelHeight,
+      transformOrigin: `${openRight ? "left" : "right"} ${openDown ? "top" : "bottom"}`,
+    });
+  }, []);
 
   const clearAudioPlayback = useCallback(() => {
     audioRef.current?.pause();
@@ -347,12 +381,30 @@ export function NotificationBell() {
 
   useEffect(() => {
     if (!open) return;
-    const onClick = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    let raf = 0;
+    const schedulePosition = () => {
+      if (raf) return;
+      raf = window.requestAnimationFrame(() => {
+        raf = 0;
+        updatePanelPosition();
+      });
     };
+    const onClick = (e: MouseEvent) => {
+      const target = e.target as Node;
+      if (dockRef.current?.contains(target) || panelRef.current?.contains(target)) return;
+      setOpen(false);
+    };
+    schedulePosition();
     window.addEventListener("mousedown", onClick);
-    return () => window.removeEventListener("mousedown", onClick);
-  }, [open]);
+    window.addEventListener("resize", schedulePosition);
+    window.addEventListener("scroll", schedulePosition, true);
+    return () => {
+      if (raf) window.cancelAnimationFrame(raf);
+      window.removeEventListener("mousedown", onClick);
+      window.removeEventListener("resize", schedulePosition);
+      window.removeEventListener("scroll", schedulePosition, true);
+    };
+  }, [open, updatePanelPosition]);
 
   useEffect(() => {
     const notifications = data?.notifications ?? [];
@@ -381,17 +433,26 @@ export function NotificationBell() {
     send(input);
   };
 
+  const toggleOpen = () => {
+    if (open) {
+      setOpen(false);
+      return;
+    }
+    updatePanelPosition();
+    setOpen(true);
+  };
+
   return (
     <div
       className="floating-notification-dock"
       data-open={open ? "true" : "false"}
       data-speaking={speaking || voiceLoading ? "true" : "false"}
       data-unread={unread > 0 ? "true" : "false"}
-      ref={ref}
+      ref={dockRef}
     >
-      <button
-        type="button"
-        onClick={() => setOpen((v) => !v)}
+        <button
+          type="button"
+          onClick={toggleOpen}
         className="floating-notification-button"
         aria-label="E-yAy bildirim ve konuşma asistanı"
       >
@@ -409,8 +470,12 @@ export function NotificationBell() {
         ) : null}
       </button>
 
-      {open ? (
-        <div className="floating-notification-panel">
+      {open && typeof document !== "undefined" ? createPortal(
+        <div
+          ref={panelRef}
+          className="floating-notification-panel"
+          style={panelStyle ?? { visibility: "hidden" }}
+        >
           <div className="floating-notification-head">
             <div>
               <div className="floating-notification-kicker">E-yAy Sentinel</div>
@@ -541,7 +606,8 @@ export function NotificationBell() {
               </form>
             </div>
           )}
-        </div>
+        </div>,
+        document.body,
       ) : null}
     </div>
   );

@@ -28,11 +28,6 @@ html, body {
   animation-play-state: paused;
 }
 
-.floating-notification-dock[data-open="true"] {
-  animation: none;
-  transform: translate3d(0, 0, 0) !important;
-}
-
 .floating-notification-button {
   position: relative;
   display: grid;
@@ -148,9 +143,8 @@ html, body {
 }
 
 .floating-notification-panel {
-  position: absolute;
-  top: calc(100% + 14px);
-  right: 0;
+  position: fixed;
+  z-index: 95;
   display: flex;
   width: min(430px, calc(100vw - 24px));
   max-height: min(620px, calc(100vh - 138px));
@@ -475,7 +469,6 @@ html, body {
   }
 
   .floating-notification-panel {
-    right: -4px;
     width: min(360px, calc(100vw - 22px));
   }
 }
