@@ -1700,9 +1700,9 @@ html, body {
   overflow-y: auto;
   overscroll-behavior-y: contain;
   perspective: 1600px;
-  scroll-behavior: smooth;
+  scroll-behavior: auto;
   scroll-padding-block: var(--layer1-sticky-top);
-  scroll-snap-type: y proximity;
+  scroll-snap-type: none;
   scrollbar-width: none;
   -ms-overflow-style: none;
 }
@@ -1742,9 +1742,16 @@ html, body {
   opacity: 1;
   transform: translateY(0) scale(1);
   transition:
-    filter 180ms ease,
-    opacity 180ms ease,
-    transform 220ms cubic-bezier(0.2, 0.85, 0.2, 1);
+    filter 420ms ease,
+    opacity 420ms ease,
+    transform 760ms cubic-bezier(0.2, 0.85, 0.2, 1);
+}
+
+.layer1-stack-scroll[data-layer1-settling="true"] .layer1-stack-item {
+  transition:
+    filter 520ms ease,
+    opacity 520ms ease,
+    transform 900ms cubic-bezier(0.2, 0.85, 0.2, 1);
 }
 
 .layer1-stack-item > * {

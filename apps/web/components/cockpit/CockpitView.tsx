@@ -409,67 +409,200 @@ function LayerStage({
 
 function Layer1Stack({ items }: { items: Layer1StackItem[] }) {
   const scrollerRef = useRef<HTMLDivElement | null>(null);
+  const [activeIndex, setActiveIndex] = useState(0);
 
   useEffect(() => {
     const scroller = scrollerRef.current;
     const stack = scroller?.querySelector<HTMLElement>(".layer1-stack");
     if (!scroller || !stack) return;
 
-    let raf = 0;
+    const AUTO_ADVANCE_MS = 7000;
+    const MANUAL_LOCK_MS = 1400;
+    const TRANSITION_MS = 1150;
 
     const readItems = () =>
       Array.from(stack.children)
-        .filter((node): node is HTMLElement => node instanceof HTMLElement)
-        .sort((a, b) => a.offsetTop - b.offsetTop);
+        .filter((node): node is HTMLElement => node instanceof HTMLElement);
 
-    const update = () => {
-      raf = 0;
+    const readGap = () => {
+      const value = Number.parseFloat(window.getComputedStyle(stack).gap);
+      return Number.isFinite(value) ? value : 0;
+    };
+
+    const readTargets = () => {
       const panels = readItems();
-      if (!panels.length) return;
-
-      const stickyTop = 20;
-      const cursor = scroller.scrollTop + stickyTop + 2;
-      let activeIndex = 0;
-
-      panels.forEach((panel, index) => {
-        if (panel.offsetTop <= cursor) activeIndex = index;
-      });
-
-      panels.forEach((panel, index) => {
-        const state =
-          index < activeIndex ? "covered" : index === activeIndex ? "active" : "queued";
-        panel.dataset.layer1State = state;
+      const gap = readGap();
+      let cursor = 0;
+      return panels.map((panel) => {
+        const target = cursor;
+        cursor += panel.offsetHeight + gap;
+        return target;
       });
     };
 
-    const schedule = () => {
-      if (raf) return;
-      raf = window.requestAnimationFrame(update);
+    const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    let active = 0;
+    let lockUntil = 0;
+    let autoTimer = 0;
+    let animationFrame = 0;
+    let animationDoneTimer = 0;
+    let resizeTimer = 0;
+    let programmatic = false;
+
+    const applyState = (nextActive: number) => {
+      const panels = readItems();
+      if (!panels.length) return;
+
+      panels.forEach((panel, index) => {
+        const state =
+          index < nextActive ? "covered" : index === nextActive ? "active" : "queued";
+        panel.dataset.layer1State = state;
+      });
+      scroller.dataset.layer1Active = String(nextActive + 1);
+      setActiveIndex(nextActive);
+    };
+
+    const finishSettling = () => {
+      programmatic = false;
+      scroller.dataset.layer1Settling = "false";
+    };
+
+    const animateScrollTo = (target: number, immediate = false) => {
+      if (animationFrame) window.cancelAnimationFrame(animationFrame);
+      if (animationDoneTimer) window.clearTimeout(animationDoneTimer);
+      animationFrame = 0;
+      animationDoneTimer = 0;
+      const start = scroller.scrollTop;
+      const distance = target - start;
+      const duration = reducedMotion ? 0 : TRANSITION_MS;
+      const startedAt = window.performance.now();
+
+      programmatic = true;
+      scroller.dataset.layer1Settling = "true";
+
+      if (immediate || duration === 0 || Math.abs(distance) < 1) {
+        scroller.scrollTop = target;
+        finishSettling();
+        return;
+      }
+
+      const ease = (t: number) => 1 - Math.pow(1 - t, 3);
+      const step = (now: number) => {
+        const progress = Math.min(1, (now - startedAt) / duration);
+        scroller.scrollTop = start + distance * ease(progress);
+        if (progress < 1) {
+          animationFrame = window.requestAnimationFrame(step);
+          return;
+        }
+        animationFrame = 0;
+        animationDoneTimer = window.setTimeout(() => {
+          animationDoneTimer = 0;
+          finishSettling();
+        }, 120);
+      };
+      animationFrame = window.requestAnimationFrame(step);
+    };
+
+    const moveTo = (nextIndex: number, mode: "auto" | "manual" | "sync") => {
+      const targets = readTargets();
+      if (!targets.length) return;
+      const bounded =
+        mode === "auto"
+          ? ((nextIndex % targets.length) + targets.length) % targets.length
+          : Math.min(targets.length - 1, Math.max(0, nextIndex));
+
+      active = bounded;
+      applyState(bounded);
+      animateScrollTo(targets[bounded], mode === "sync");
+    };
+
+    const scheduleAuto = () => {
+      if (autoTimer) window.clearTimeout(autoTimer);
+      autoTimer = window.setTimeout(() => {
+        moveTo(active + 1, "auto");
+        scheduleAuto();
+      }, AUTO_ADVANCE_MS);
+    };
+
+    const syncFromScroll = () => {
+      if (programmatic) return;
+      const targets = readTargets();
+      if (!targets.length) return;
+      const current = scroller.scrollTop;
+      let nearest = 0;
+      targets.forEach((target, index) => {
+        if (Math.abs(current - target) < Math.abs(current - targets[nearest])) {
+          nearest = index;
+        }
+      });
+      active = nearest;
+      applyState(nearest);
+    };
+
+    const onWheel = (event: WheelEvent) => {
+      const target = event.target as HTMLElement | null;
+      if (target?.closest("input, textarea, select, [contenteditable='true']")) return;
+      if (Math.abs(event.deltaY) < 8) return;
+
+      event.preventDefault();
+      const now = Date.now();
+      if (now < lockUntil) return;
+      lockUntil = now + MANUAL_LOCK_MS;
+      moveTo(active + (event.deltaY > 0 ? 1 : -1), "manual");
+      scheduleAuto();
+    };
+
+    const onScroll = () => {
+      window.requestAnimationFrame(syncFromScroll);
+    };
+
+    const scheduleLayoutSync = () => {
+      if (resizeTimer) window.clearTimeout(resizeTimer);
+      resizeTimer = window.setTimeout(() => {
+        resizeTimer = 0;
+        if (!programmatic) moveTo(active, "sync");
+      }, 180);
+    };
+
+    const onResize = () => {
+      scheduleLayoutSync();
     };
 
     const observer =
       typeof ResizeObserver === "undefined"
         ? null
         : new ResizeObserver(() => {
-            schedule();
+            scheduleLayoutSync();
           });
 
     observer?.observe(scroller);
     readItems().forEach((panel) => observer?.observe(panel));
-    scroller.addEventListener("scroll", schedule, { passive: true });
-    window.addEventListener("resize", schedule);
-    schedule();
+    scroller.addEventListener("wheel", onWheel, { passive: false });
+    scroller.addEventListener("scroll", onScroll, { passive: true });
+    window.addEventListener("resize", onResize);
+
+    moveTo(0, "sync");
+    scheduleAuto();
 
     return () => {
-      if (raf) window.cancelAnimationFrame(raf);
+      if (autoTimer) window.clearTimeout(autoTimer);
+      if (animationFrame) window.cancelAnimationFrame(animationFrame);
+      if (animationDoneTimer) window.clearTimeout(animationDoneTimer);
+      if (resizeTimer) window.clearTimeout(resizeTimer);
       observer?.disconnect();
-      scroller.removeEventListener("scroll", schedule);
-      window.removeEventListener("resize", schedule);
+      scroller.removeEventListener("wheel", onWheel);
+      scroller.removeEventListener("scroll", onScroll);
+      window.removeEventListener("resize", onResize);
     };
   }, [items.length]);
 
   return (
-    <div ref={scrollerRef} className="layer1-stack-scroll h-full overflow-y-auto p-4 md:p-5">
+    <div
+      ref={scrollerRef}
+      className="layer1-stack-scroll h-full overflow-y-auto p-4 md:p-5"
+      aria-live="polite"
+      aria-label={`Katman 1 panel ${activeIndex + 1} / ${items.length}`}
+    >
       <div className="layer1-stack">
         {items.map((item) => (
           <div
