@@ -201,6 +201,7 @@ export function Layer0ReporterAgent({
   const [voiceError, setVoiceError] = useState<string | null>(null);
   const [micReady, setMicReady] = useState(false);
   const [lastUserText, setLastUserText] = useState("");
+  const [streamedText, setStreamedText] = useState("");
   const dialogueModeRef = useRef(false);
   const listeningRef = useRef(false);
   const chatPendingRef = useRef(false);
@@ -493,9 +494,39 @@ export function Layer0ReporterAgent({
           : "Sistem state, haber, risk ve sinyal katmanlarini tararken bekle."
         : modelMode === "speaking"
           ? shortLine(latestAgentText, 132)
-          : dialogueMode
-            ? "Karsilikli mod acik. Konusma bitince tekrar dinlemeye donecegim."
-            : shortLine(latestAgentText, 132);
+        : dialogueMode
+          ? "Karsilikli mod acik. Konusma bitince tekrar dinlemeye donecegim."
+          : shortLine(latestAgentText, 132);
+  const recentMessages = messages.slice(-5);
+
+  useEffect(() => {
+    const text = latestAgentText.trim();
+    if (!text) {
+      setStreamedText("");
+      return;
+    }
+
+    let index = 0;
+    let cancelled = false;
+    const stride = modelMode === "speaking" ? 3 : modelMode === "thinking" ? 2 : 5;
+    const delay = modelMode === "speaking" ? 20 : modelMode === "thinking" ? 28 : 12;
+    setStreamedText("");
+
+    const tick = () => {
+      if (cancelled) return;
+      index = Math.min(text.length, index + stride);
+      setStreamedText(text.slice(0, index));
+      if (index < text.length) {
+        window.setTimeout(tick, delay);
+      }
+    };
+
+    const id = window.setTimeout(tick, 80);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(id);
+    };
+  }, [latestAgentText, modelMode]);
 
   return (
     <section className="grid h-full min-h-0 gap-4 lg:grid-cols-[minmax(310px,0.92fr)_minmax(340px,1.04fr)_minmax(320px,1fr)]">
@@ -707,15 +738,41 @@ export function Layer0ReporterAgent({
       </div>
 
       {/* ── Sutun 3: Konusma paneli ─────────────────────────────────── */}
-      <div className="layer0-card flex min-h-0 flex-col">
-        <div className="flex items-center justify-between gap-2 border-b border-white/[0.08] pb-3">
-          <div className="flex items-center gap-2 text-sm font-semibold uppercase tracking-[0.18em] text-white/85">
+      <div className={`reporter-agent-console layer0-voice-console layer0-voice-console--${modelMode}`}>
+        <div className="reporter-agent-grid" />
+        <div className="reporter-agent-orb" aria-hidden>
+          <span />
+          <span />
+          <span />
+        </div>
+        <div className="layer0-voice-beam" aria-hidden />
+
+        <div className="relative z-10 flex items-center justify-between gap-2 border-b border-white/[0.08] pb-3">
+          <div className="flex min-w-0 items-center gap-2 text-sm font-semibold uppercase tracking-[0.18em] text-white/85">
             <span className="grid h-6 w-6 place-items-center rounded-md border border-accent-cyan/30 bg-accent-cyan/10 text-accent-cyan">
               ▢
             </span>
-            Konusma Paneli
+            <span className="min-w-0">
+              <span className="block text-[9px] font-medium tracking-[0.26em] text-accent-cyan/70">
+                E-yAy voice stream
+              </span>
+              <span className="block truncate text-base normal-case tracking-normal text-white/90">
+                {subtitleSpeaker}
+              </span>
+            </span>
           </div>
           <div className="flex items-center gap-1.5">
+            <button
+              type="button"
+              onClick={toggleDialogueMode}
+              className={`rounded-lg border px-2 py-1 text-[10px] uppercase tracking-widest transition-colors disabled:opacity-40 ${
+                dialogueMode
+                  ? "border-accent-cyan/50 bg-accent-cyan/12 text-accent-cyan"
+                  : "border-white/10 bg-white/[0.035] text-white/45"
+              }`}
+            >
+              Diyalog
+            </button>
             <button
               type="button"
               onClick={() => setVoiceEnabled((value) => !value)}
@@ -749,56 +806,61 @@ export function Layer0ReporterAgent({
           </div>
         </div>
 
-        <div className="mt-3 text-[10px] uppercase tracking-widest text-white/38">Cevap kanali</div>
+        <div className="relative z-10 mt-3 flex items-center justify-between gap-3 text-[10px] uppercase tracking-widest text-white/38">
+          <span>Hologram transcript</span>
+          <span className="text-accent-cyan/60">
+            {voiceLoading ? "AUDIO RENDER" : speaking ? "VOICE OUT" : listening ? "MIC IN" : "STATE LINK"}
+          </span>
+        </div>
 
-        <div className="mt-2 min-h-0 flex-1 space-y-2 overflow-y-auto pr-1">
-          {messages.length === 0 ? (
-            <div className="rounded-2xl border border-accent-cyan/18 bg-accent-cyan/[0.045] p-4">
-              <div className="text-[10px] uppercase tracking-widest text-accent-cyan/72">
-                Son rapor
-              </div>
-              <p className="mt-2 text-sm leading-6 text-white/72">{latestAgentText}</p>
-              <button
-                type="button"
-                onClick={() => {
-                  if (speaking || voiceLoading) {
-                    stopSpeaking();
-                  } else {
-                    void speak(latestAgentText);
-                  }
-                }}
-                disabled={!voiceEnabled}
-                className="mt-3 rounded-full border border-accent-cyan/30 bg-accent-cyan/8 px-3 py-1.5 text-[10px] uppercase tracking-widest text-accent-cyan disabled:opacity-40"
-              >
-                {voiceLoading ? "Ses uretiliyor" : speaking ? "Durdur" : "Sesli oku"}
-              </button>
-              {voiceError ? (
-                <div className="mt-2 text-[10px] uppercase tracking-widest text-amber-300/80">
-                  {voiceError}
-                </div>
-              ) : null}
-            </div>
-          ) : (
-            messages.map((message, index) => (
+        <div className="layer0-voice-scroll mt-2 min-h-0 flex-1 space-y-2 overflow-y-auto pr-1">
+          <div className="layer0-voice-transcript">
+            <div className="layer0-voice-transcript-glow" aria-hidden />
+            <div className="layer0-voice-kicker">{subtitleText}</div>
+            <p className="layer0-voice-stream-text">
+              {streamedText}
+              <span className="layer0-voice-caret" aria-hidden />
+            </p>
+            <button
+              type="button"
+              onClick={() => {
+                if (speaking || voiceLoading) {
+                  stopSpeaking();
+                } else {
+                  void speak(latestAgentText);
+                }
+              }}
+              disabled={!voiceEnabled}
+              className="layer0-voice-read-button"
+            >
+              {voiceLoading ? "Ses uretiliyor" : speaking ? "Durdur" : "Sesli oku"}
+            </button>
+            {voiceError ? <div className="layer0-voice-error">{voiceError}</div> : null}
+          </div>
+          {recentMessages.length ? (
+            recentMessages.map((message, index) => (
               <div
                 key={`${message.role}-${index}`}
-                className={`rounded-2xl px-3 py-2 text-sm leading-6 ${
+                className={`layer0-voice-log-row ${
                   message.role === "user"
-                    ? "ml-6 border border-accent-cyan/28 bg-accent-cyan/10 text-cyan-100"
+                    ? "layer0-voice-log-row--user"
                     : message.meta?.refused
-                      ? "mr-6 border border-red-400/30 bg-red-400/10 text-red-100"
-                      : "mr-6 border border-white/10 bg-white/[0.045] text-white/74"
+                      ? "layer0-voice-log-row--blocked"
+                      : "layer0-voice-log-row--agent"
                 }`}
               >
-                {message.text}
+                <div className="layer0-voice-log-role">
+                  {message.role === "user" ? "Sen" : "E-yAy"}
+                </div>
+                <div className="layer0-voice-log-text">{message.text}</div>
                 {message.role === "agent" && message.meta?.evidence_used?.length ? (
-                  <div className="mt-2 text-[10px] uppercase tracking-widest text-white/32">
+                  <div className="layer0-voice-log-evidence">
                     kanit: {message.meta.evidence_used.slice(0, 3).join(" / ")}
                   </div>
                 ) : null}
               </div>
             ))
-          )}
+          ) : null}
           {chat.isPending ? (
             <div className="rounded-2xl border border-accent-cyan/20 bg-accent-cyan/8 px-3 py-2 text-xs uppercase tracking-widest text-accent-cyan/76">
               Sistem state okunuyor...
@@ -806,14 +868,13 @@ export function Layer0ReporterAgent({
           ) : null}
         </div>
 
-        <div className="mt-3 grid shrink-0 grid-cols-2 gap-2">
+        <div className="layer0-voice-prompts">
           {QUICK_PROMPTS.map((prompt) => (
             <button
               key={prompt}
               type="button"
               onClick={() => send(prompt)}
               disabled={chat.isPending}
-              className="min-h-[48px] rounded-xl border border-white/10 bg-white/[0.035] px-3 py-2 text-left text-[11px] leading-5 text-white/70 transition-colors hover:border-accent-cyan/30 hover:bg-accent-cyan/8 disabled:cursor-not-allowed disabled:opacity-40"
             >
               {prompt}
             </button>
@@ -825,19 +886,17 @@ export function Layer0ReporterAgent({
             event.preventDefault();
             send(input);
           }}
-          className="mt-3 flex shrink-0 gap-2"
+          className="layer0-voice-input"
         >
           <input
             value={input}
             onChange={(event) => setInput(event.target.value)}
             placeholder="Ornek: 15 dakikalik firsat var mi?"
             maxLength={2000}
-            className="min-w-0 flex-1 rounded-xl border border-white/10 bg-black/28 px-3 py-3 text-sm text-white/82 outline-none placeholder:text-white/30 focus:border-accent-cyan/45"
           />
           <button
             type="submit"
             disabled={chat.isPending || !input.trim()}
-            className="rounded-xl border border-accent-cyan/35 bg-accent-cyan/10 px-4 py-3 text-xs uppercase tracking-widest text-accent-cyan transition-colors hover:bg-accent-cyan/16 disabled:cursor-not-allowed disabled:opacity-40"
           >
             Sor
           </button>
