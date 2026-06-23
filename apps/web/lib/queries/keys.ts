@@ -23,4 +23,5 @@ export const qk = {
   notifications: ["notifications"] as const,
   agentBriefing: ["agent", "briefing"] as const,
   liquidityRotation: ["liquidity", "rotation"] as const,
+  pendingOrders: ["paper-trading", "orders"] as const,
 };

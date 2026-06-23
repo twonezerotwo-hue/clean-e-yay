@@ -53,9 +53,12 @@ def place(
     size_usd: float,
     entry_price: float | None = None,
     timeframe: str = "1d",
+    order_type: str | None = None,
+    limit_price: float | None = None,
 ) -> dict:
-    """Owner emri. entry_price yoksa/market'e eşitse MARKET (anında açar). Aksi
-    halde LIMIT/STOP bekleyen emir (fiyat tetiğine gelince tick'te dolar)."""
+    """Owner emri. order_type açıkça verilmezse: fiyat yoksa MARKET, varsa
+    LIMIT/STOP (market'e göre çıkarılır). order_type='stop_limit' → entry_price stop
+    tetiği, limit_price dolum fiyatı. Bekleyen emirler tick'te fiyatla dolar."""
     s = normalize_side(side)
     if s is None:
         raise ManualOrderError("yön long/short (al/sat) olmalı", 400)
@@ -73,8 +76,12 @@ def place(
             f"yetersiz bakiye: {size_usd:.0f} dolar > {ps.equity_usd:.0f} dolar"
         )
 
-    # MARKET: fiyat verilmemiş ya da market'e çok yakın → anında aç.
-    if not entry_price or entry_price <= 0 or abs(entry_price - market) / market < 0.001:
+    is_market = order_type == "market" or (
+        order_type is None
+        and (not entry_price or entry_price <= 0 or abs(entry_price - market) / market < 0.001)
+    )
+    # MARKET: anında aç.
+    if is_market:
         pos = open_position(
             ps, symbol=sym, side=s, entry_price=float(market), size_multiplier=0.0,
             manual=True, size_usd_override=float(size_usd), timeframe=timeframe,
@@ -92,13 +99,18 @@ def place(
             "sl": pos.sl, "tp": pos.tp,
         }
 
-    # LIMIT / STOP: bekleyen emir.
+    # LIMIT / STOP / STOP_LIMIT: bekleyen emir.
+    if not entry_price or entry_price <= 0:
+        raise ManualOrderError("limit/stop emir için tetik fiyatı gerekli", 400)
     if price_sanity.price_sane_reason(sym, float(entry_price)) is not None:
         raise ManualOrderError(f"{sym} için {entry_price:.2f} fiyatı geçersiz aralıkta")
-    otype = _infer_type(s, float(entry_price), float(market))
+    otype = order_type if order_type in ("limit", "stop", "stop_limit") else _infer_type(
+        s, float(entry_price), float(market)
+    )
+    lp = float(limit_price) if (otype == "stop_limit" and limit_price) else None
     order = PendingOrder(
         id=_new_id(sym), symbol=sym, side=s, size_usd=float(size_usd),
-        order_type=otype, trigger_price=float(entry_price),
+        order_type=otype, trigger_price=float(entry_price), limit_price=lp,
         created_at=datetime.now(UTC).isoformat(), timeframe=timeframe, reason="owner_manual",
     )
     ps.pending_orders.append(order)

@@ -32,6 +32,7 @@ import { DecisionTracePanel } from "@/components/panels/DecisionTracePanel";
 import { DrawdownGuardPanel } from "@/components/panels/DrawdownGuardPanel";
 import { EventCalendarPanel } from "@/components/panels/EventCalendarPanel";
 import { ExecutionReadinessPanel } from "@/components/panels/ExecutionReadinessPanel";
+import { OrderTicketPanel } from "@/components/panels/OrderTicketPanel";
 import { CatalystImpactPanel } from "@/components/panels/CatalystImpactPanel";
 import { LearningPanel } from "@/components/panels/LearningPanel";
 import { MarketDataPanel } from "@/components/panels/MarketDataPanel";
@@ -572,6 +573,7 @@ export function CockpitView() {
         <div className="h-full overflow-y-auto p-4 md:p-5">
           <div className="space-y-5">
             <ExecutionReadinessPanel />
+            <OrderTicketPanel />
             <HolographicSignalDeck brief={brief} />
 
             <section className="quantum-panel-cluster grid grid-cols-1 gap-5 xl:grid-cols-2">

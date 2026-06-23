@@ -422,7 +422,8 @@ def _trailing_breached(pos: Position, price: float) -> bool:
 
 
 def _pending_triggered(order, price: float) -> bool:
-    """Limit: long fiyat ≤ tetik / short ≥ tetik. Stop: long ≥ tetik / short ≤ tetik."""
+    """Limit: long fiyat ≤ tetik / short ≥ tetik. Stop & stop_limit: long ≥ tetik /
+    short ≤ tetik."""
     if order.order_type == "limit":
         return price <= order.trigger_price if order.side == "long" else price >= order.trigger_price
     return price >= order.trigger_price if order.side == "long" else price <= order.trigger_price
@@ -443,11 +444,15 @@ def trigger_pending_orders(
             continue
         if not _pending_triggered(o, float(price)):
             continue
+        # stop_limit: tetik sonrası limit fiyatından dolar; diğerleri tetik fiyatından.
+        fill_price = (
+            o.limit_price if (o.order_type == "stop_limit" and o.limit_price) else o.trigger_price
+        )
         pos = open_position(
             state,
             symbol=o.symbol,
             side=o.side,
-            entry_price=float(o.trigger_price),
+            entry_price=float(fill_price),
             size_multiplier=0.0,
             manual=True,
             size_usd_override=float(o.size_usd),

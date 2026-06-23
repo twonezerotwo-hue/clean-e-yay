@@ -244,6 +244,38 @@ export const useNotifications = () => {
   });
 };
 
+/** Owner bekleyen (limit/stop) emirleri. */
+export const usePendingOrders = () =>
+  useQuery({
+    queryKey: qk.pendingOrders,
+    queryFn: api.pendingOrders,
+    staleTime: 5_000,
+    refetchInterval: 8_000,
+  });
+
+/** Owner emir aç (market/limit/stop/stop_limit). */
+export const usePlaceOrder = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: api.placeOrder,
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: qk.pendingOrders });
+      void queryClient.invalidateQueries({ queryKey: qk.paperTradingState });
+    },
+  });
+};
+
+/** Bekleyen emir iptal. */
+export const useCancelOrder = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (orderId: string) => api.cancelOrder(orderId),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: qk.pendingOrders });
+    },
+  });
+};
+
 export const useAckNotification = () => {
   const queryClient = useQueryClient();
   return useMutation({

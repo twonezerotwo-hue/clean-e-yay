@@ -344,6 +344,8 @@ class ManualOrderRequest(BaseModel):
     size_usd: float = Field(gt=0)
     entry_price: float | None = None
     timeframe: str = "1d"
+    order_type: str | None = None  # market | limit | stop | stop_limit (None → otomatik)
+    limit_price: float | None = None  # stop_limit dolum fiyatı
 
 
 @router.post("/paper-trading/positions/open")
@@ -358,6 +360,7 @@ def open_position_manual(req: ManualOrderRequest) -> dict:
         res = manual_order.place(
             symbol=req.symbol, side=req.side, size_usd=req.size_usd,
             entry_price=req.entry_price, timeframe=req.timeframe,
+            order_type=req.order_type, limit_price=req.limit_price,
         )
     except manual_order.ManualOrderError as exc:
         raise HTTPException(status_code=exc.code, detail=str(exc)) from exc

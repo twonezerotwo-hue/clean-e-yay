@@ -51,6 +51,40 @@ export type ClosePositionResult = {
   pnl_usd: number;
 };
 
+export type OrderRequest = {
+  symbol: string;
+  side: string; // "long" | "short"
+  size_usd: number;
+  order_type?: string; // market | limit | stop | stop_limit
+  entry_price?: number | null;
+  limit_price?: number | null;
+};
+
+export type OrderResult = {
+  status: string;
+  kind: string; // market | limit | stop | stop_limit
+  symbol: string;
+  side: string;
+  size_usd: number;
+  position_id?: string;
+  order_id?: string;
+  entry_price?: number;
+  trigger_price?: number;
+  market?: number;
+  sl?: number;
+  tp?: number;
+};
+
+export type PendingOrder = {
+  id: string;
+  symbol: string;
+  side: string;
+  size_usd: number;
+  order_type: string;
+  trigger_price: number;
+  created_at: string;
+};
+
 async function fetchJSON<T>(path: string, init?: RequestInit): Promise<T> {
   const headers = new Headers(init?.headers);
   if (init?.body && !headers.has("content-type")) {
@@ -100,6 +134,21 @@ export const api = {
       `/api/v1/paper-trading/positions/${positionId}/close`,
       { method: "POST" },
     ),
+  placeOrder: (body: OrderRequest) =>
+    fetchJSON<OrderResult>("/api/v1/paper-trading/positions/open", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+  pendingOrders: () =>
+    fetchJSON<{ orders: PendingOrder[]; total: number }>("/api/v1/paper-trading/orders"),
+  cancelOrder: (orderId: string) =>
+    fetchJSON<{ status: string }>(`/api/v1/paper-trading/orders/${orderId}`, {
+      method: "DELETE",
+    }),
+  cancelAllOrders: () =>
+    fetchJSON<{ status: string; count: number }>("/api/v1/paper-trading/orders", {
+      method: "DELETE",
+    }),
   learningSummary: () =>
     fetchJSON<LearningSummary>("/api/v1/learning/summary"),
   dataSnapshot: () => fetchJSON<DataSnapshot>("/api/v1/data/snapshot"),

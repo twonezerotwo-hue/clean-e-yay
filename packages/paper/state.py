@@ -154,12 +154,13 @@ class PendingOrder:
     symbol: str
     side: str               # long / short
     size_usd: float
-    order_type: str         # "limit" | "stop"
+    order_type: str         # "limit" | "stop" | "stop_limit"
     trigger_price: float
     created_at: str
     timeframe: str = "1d"
     reason: str | None = None
     sl_pct: float | None = None  # opsiyonel özel stop yüzdesi
+    limit_price: float | None = None  # stop_limit: tetik (trigger) sonrası dolum fiyatı
 
 
 @dataclass
