@@ -359,13 +359,15 @@ html, body {
 
 .reporter-model-card {
   position: relative;
-  min-height: 340px;
+  height: clamp(360px, 44vh, 520px);
+  min-height: 360px;
   overflow: hidden;
   border-radius: 1.25rem;
   border: 1px solid rgba(34, 211, 238, 0.24);
   background:
-    radial-gradient(circle at 50% 76%, rgba(34, 211, 238, 0.18), transparent 34%),
-    radial-gradient(circle at 22% 24%, rgba(167, 139, 250, 0.13), transparent 34%),
+    radial-gradient(ellipse at 50% 72%, rgba(34, 211, 238, 0.22), transparent 38%),
+    radial-gradient(circle at 50% 42%, rgba(14, 165, 233, 0.14), transparent 42%),
+    radial-gradient(circle at 22% 24%, rgba(167, 139, 250, 0.12), transparent 34%),
     linear-gradient(180deg, rgba(4, 12, 23, 0.88), rgba(1, 5, 12, 0.96));
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.07),
@@ -381,9 +383,12 @@ html, body {
   pointer-events: none;
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.04), transparent 28%),
+    linear-gradient(90deg, rgba(34, 211, 238, 0.035) 1px, transparent 1px),
+    linear-gradient(180deg, rgba(34, 211, 238, 0.028) 1px, transparent 1px),
     repeating-linear-gradient(180deg, rgba(103, 232, 249, 0.04) 0 1px, transparent 1px 8px);
+  background-size: auto, 42px 42px, 42px 42px, auto;
   mix-blend-mode: screen;
-  opacity: 0.7;
+  opacity: 0.62;
 }
 
 .reporter-model-card::after {
@@ -391,7 +396,7 @@ html, body {
   position: absolute;
   left: 10%;
   right: 10%;
-  bottom: 8%;
+  bottom: 12%;
   z-index: 2;
   height: 30%;
   pointer-events: none;
@@ -414,9 +419,9 @@ html, body {
 .layer0-human-model__beam {
   position: absolute;
   left: 50%;
-  bottom: 6%;
-  width: 72%;
-  height: 62%;
+  bottom: 12%;
+  width: 68%;
+  height: 64%;
   transform: translateX(-50%);
   pointer-events: none;
   background: conic-gradient(from 180deg at 50% 100%, transparent, rgba(34, 211, 238, 0.1), rgba(167, 139, 250, 0.08), transparent);
@@ -439,12 +444,13 @@ html, body {
 .layer0-human-model__dqs {
   --dq-color: #34d399;
   position: absolute;
-  left: 1rem;
-  right: 1rem;
-  bottom: 1rem;
+  left: 50%;
+  bottom: 0.85rem;
+  width: min(76%, 420px);
   z-index: 3;
   pointer-events: none;
   overflow: hidden;
+  transform: translateX(-50%);
   border: 1px solid color-mix(in srgb, var(--dq-color) 34%, transparent);
   border-radius: 1rem;
   background:
@@ -453,7 +459,7 @@ html, body {
   box-shadow:
     0 0 28px color-mix(in srgb, var(--dq-color) 16%, transparent),
     inset 0 1px 0 rgba(255, 255, 255, 0.05);
-  padding: 0.45rem 0.6rem 0.55rem;
+  padding: 0.38rem 0.52rem 0.48rem;
   backdrop-filter: blur(9px);
 }
 
@@ -462,7 +468,7 @@ html, body {
 
 .layer0-human-model__ecg {
   position: relative;
-  height: 32px;
+  height: 28px;
   overflow: hidden;
   border-radius: 0.6rem;
   background:

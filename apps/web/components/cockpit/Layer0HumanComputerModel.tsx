@@ -34,11 +34,11 @@ const DQS_COLOR: Record<Layer0DataQualityPulse["status"], string> = {
 function NeuralParticles({ mode }: { mode: ModelMode }) {
   const points = useRef<THREE.Points>(null);
   const positions = useMemo(() => {
-    const data = new Float32Array(620 * 3);
-    for (let index = 0; index < 620; index += 1) {
-      const radius = 2.2 + Math.random() * 3.4;
+    const data = new Float32Array(760 * 3);
+    for (let index = 0; index < 760; index += 1) {
+      const radius = 1.86 + Math.random() * 2.92;
       const theta = Math.random() * Math.PI * 2;
-      const y = (Math.random() - 0.5) * 3.4;
+      const y = (Math.random() - 0.5) * 3.16;
       data[index * 3] = Math.cos(theta) * radius;
       data[index * 3 + 1] = y;
       data[index * 3 + 2] = Math.sin(theta) * radius * 0.72;
@@ -88,21 +88,21 @@ function HologramRings({ mode }: { mode: ModelMode }) {
   return (
     <group ref={group}>
       {[
-        { radius: 1.18, tube: 0.006, rotation: [Math.PI / 2.1, 0, 0.16] as Vec3, opacity: 0.52 },
-        { radius: 1.78, tube: 0.007, rotation: [1.1, 0.32, 0.82] as Vec3, opacity: 0.34 },
-        { radius: 2.34, tube: 0.005, rotation: [1.8, -0.46, -0.42] as Vec3, opacity: 0.26 },
+        { radius: 1.05, tube: 0.006, rotation: [Math.PI / 2.08, 0, 0.16] as Vec3, opacity: 0.58 },
+        { radius: 1.58, tube: 0.007, rotation: [1.08, 0.32, 0.82] as Vec3, opacity: 0.38 },
+        { radius: 2.08, tube: 0.005, rotation: [1.78, -0.46, -0.42] as Vec3, opacity: 0.28 },
       ].map((ring) => (
         <mesh key={`${ring.radius}-${ring.opacity}`} rotation={ring.rotation}>
           <torusGeometry args={[ring.radius, ring.tube, 8, 192]} />
           <meshBasicMaterial color={color} transparent opacity={ring.opacity} />
         </mesh>
       ))}
-      <mesh position={[0, -1.42, 0]} rotation={[Math.PI / 2, 0, 0]}>
-        <torusGeometry args={[1.54, 0.018, 10, 220]} />
+      <mesh position={[0, -1.34, 0]} rotation={[Math.PI / 2, 0, 0]}>
+        <torusGeometry args={[1.42, 0.018, 10, 220]} />
         <meshBasicMaterial color="#67e8f9" transparent opacity={0.44} />
       </mesh>
-      <mesh position={[0, -1.44, 0]} rotation={[Math.PI / 2, 0, 0]}>
-        <ringGeometry args={[0.42, 1.52, 180]} />
+      <mesh position={[0, -1.36, 0]} rotation={[Math.PI / 2, 0, 0]}>
+        <ringGeometry args={[0.38, 1.4, 180]} />
         <meshBasicMaterial
           color="#22d3ee"
           transparent
@@ -162,7 +162,7 @@ function DataQualityCore({
   });
 
   return (
-    <group ref={group} position={[0, 0.62, 0.58]}>
+    <group ref={group} position={[0, 0.44, 0.5]}>
       <mesh>
         <sphereGeometry args={[0.075 + Math.max(0, score) / 1600, 24, 24]} />
         <meshBasicMaterial
@@ -196,13 +196,12 @@ function HumanComputerBust({
   const cloud = useRef<THREE.Points>(null);
   const color = MODE_COLOR[mode];
 
-  // Symmetric head + shoulders silhouette built from a point cloud so it reads
-  // as a holographic bust from any angle (no lopsided wireframe artifacts).
+  // Layered robot bust: point cloud volume plus hard-surface translucent armor.
   const positions = useMemo(() => {
-    const HEAD = 2600;
-    const SHOULDER = 1600;
-    const NECK = 260;
-    const data = new Float32Array((HEAD + SHOULDER + NECK) * 3);
+    const HEAD = 2300;
+    const TORSO = 1800;
+    const NECK = 360;
+    const data = new Float32Array((HEAD + TORSO + NECK) * 3);
     let o = 0;
     const onSphere = (): Vec3 => {
       const theta = Math.random() * Math.PI * 2;
@@ -212,26 +211,65 @@ function HumanComputerBust({
     };
     for (let i = 0; i < HEAD; i += 1) {
       const [x, y, z] = onSphere();
-      const taper = y < 0 ? 1 + y * 0.22 : 1 - y * 0.05; // narrow jaw, round crown
-      data[o++] = x * 0.6 * taper;
-      data[o++] = y * 0.78 + 1.48;
-      data[o++] = z * 0.58 * taper;
+      const jaw = y < -0.22 ? 0.66 + (y + 1) * 0.2 : 1;
+      const crown = y > 0.38 ? 0.94 - (y - 0.38) * 0.11 : 1;
+      const taper = Math.max(0.56, jaw * crown);
+      data[o++] = x * 0.5 * taper;
+      data[o++] = y * 0.7 + 1.42;
+      data[o++] = z * 0.42 * taper;
     }
-    for (let i = 0; i < SHOULDER; i += 1) {
+    for (let i = 0; i < TORSO; i += 1) {
       const [x, y, z] = onSphere();
-      data[o++] = x * 1.08;
-      data[o++] = -Math.abs(y) * 0.36 + 0.64; // lower dome -> shoulders
-      data[o++] = z * 0.46;
+      const shoulder = 1 + Math.max(0, Math.abs(x) - 0.28) * 0.42;
+      data[o++] = x * 1.08 * shoulder;
+      data[o++] = -Math.abs(y) * 0.52 + 0.45;
+      data[o++] = z * 0.38;
     }
     for (let i = 0; i < NECK; i += 1) {
       const a = Math.random() * Math.PI * 2;
-      const r = 0.19 + Math.random() * 0.03;
+      const r = 0.16 + Math.random() * 0.035;
       data[o++] = Math.cos(a) * r;
-      data[o++] = 0.74 + Math.random() * 0.38;
+      data[o++] = 0.72 + Math.random() * 0.44;
       data[o++] = Math.sin(a) * r * 0.85;
     }
     return data;
   }, []);
+  const circuitLines = useMemo<Vec3[][]>(
+    () => [
+      [
+        [-0.32, 1.74, 0.43],
+        [-0.18, 1.82, 0.47],
+        [0, 1.86, 0.49],
+        [0.18, 1.82, 0.47],
+        [0.32, 1.74, 0.43],
+      ],
+      [
+        [-0.38, 1.36, 0.47],
+        [-0.22, 1.27, 0.51],
+        [0, 1.24, 0.53],
+        [0.22, 1.27, 0.51],
+        [0.38, 1.36, 0.47],
+      ],
+      [
+        [-0.52, 0.38, 0.38],
+        [-0.24, 0.14, 0.48],
+        [0, 0.44, 0.5],
+        [0.24, 0.14, 0.48],
+        [0.52, 0.38, 0.38],
+      ],
+      [
+        [-0.74, 0.54, 0.16],
+        [-0.44, 0.42, 0.38],
+        [-0.2, 0.36, 0.48],
+      ],
+      [
+        [0.74, 0.54, 0.16],
+        [0.44, 0.42, 0.38],
+        [0.2, 0.36, 0.48],
+      ],
+    ],
+    [],
+  );
 
   useFrame(({ clock }) => {
     const t = clock.elapsedTime;
@@ -271,18 +309,70 @@ function HumanComputerBust({
           blending={THREE.AdditiveBlending}
         />
       </points>
-      <mesh position={[0, 1.46, 0]} scale={[0.58, 0.78, 0.56]}>
-        <sphereGeometry args={[0.72, 32, 32]} />
-        <meshBasicMaterial color={color} transparent opacity={0.06} />
+      <mesh position={[0, 1.42, 0]} scale={[0.5, 0.72, 0.43]}>
+        <sphereGeometry args={[0.72, 48, 48]} />
+        <meshBasicMaterial
+          color={color}
+          transparent
+          opacity={0.1}
+          depthWrite={false}
+          blending={THREE.AdditiveBlending}
+        />
       </mesh>
-      <mesh position={[-0.2, 1.5, 0.5]}>
-        <sphereGeometry args={[0.04, 18, 18]} />
-        <meshBasicMaterial color="#e0f2fe" transparent opacity={0.95} />
+      <mesh position={[0, 1.45, 0.43]}>
+        <boxGeometry args={[0.64, 0.24, 0.026]} />
+        <meshBasicMaterial color="#7dd3fc" transparent opacity={0.18} depthWrite={false} />
       </mesh>
-      <mesh position={[0.2, 1.5, 0.5]}>
-        <sphereGeometry args={[0.04, 18, 18]} />
-        <meshBasicMaterial color="#e0f2fe" transparent opacity={0.95} />
+      <mesh position={[-0.17, 1.49, 0.452]}>
+        <boxGeometry args={[0.16, 0.034, 0.018]} />
+        <meshBasicMaterial color="#e0f2fe" transparent opacity={0.96} />
       </mesh>
+      <mesh position={[0.17, 1.49, 0.452]}>
+        <boxGeometry args={[0.16, 0.034, 0.018]} />
+        <meshBasicMaterial color="#e0f2fe" transparent opacity={0.96} />
+      </mesh>
+      <mesh position={[0, 1.24, 0.43]}>
+        <boxGeometry args={[0.34, 0.12, 0.026]} />
+        <meshBasicMaterial color="#38bdf8" transparent opacity={0.2} depthWrite={false} />
+      </mesh>
+      <mesh position={[-0.5, 1.45, 0.02]} rotation={[0, Math.PI / 2, 0]}>
+        <torusGeometry args={[0.12, 0.01, 8, 64]} />
+        <meshBasicMaterial color="#67e8f9" transparent opacity={0.52} />
+      </mesh>
+      <mesh position={[0.5, 1.45, 0.02]} rotation={[0, Math.PI / 2, 0]}>
+        <torusGeometry args={[0.12, 0.01, 8, 64]} />
+        <meshBasicMaterial color="#67e8f9" transparent opacity={0.52} />
+      </mesh>
+      <mesh position={[0, 0.8, 0]}>
+        <cylinderGeometry args={[0.17, 0.2, 0.5, 32, 1, true]} />
+        <meshBasicMaterial color="#67e8f9" transparent opacity={0.08} depthWrite={false} />
+      </mesh>
+      <mesh position={[0, 0.34, 0]} scale={[0.9, 0.54, 0.34]}>
+        <sphereGeometry args={[0.72, 48, 32]} />
+        <meshBasicMaterial color={color} transparent opacity={0.08} depthWrite={false} />
+      </mesh>
+      <mesh position={[0, 0.36, 0.38]}>
+        <boxGeometry args={[0.68, 0.48, 0.035]} />
+        <meshBasicMaterial color="#22d3ee" transparent opacity={0.09} depthWrite={false} />
+      </mesh>
+      <mesh position={[-0.84, 0.42, 0]} scale={[0.5, 0.22, 0.28]}>
+        <sphereGeometry args={[0.72, 32, 24]} />
+        <meshBasicMaterial color="#67e8f9" transparent opacity={0.07} depthWrite={false} />
+      </mesh>
+      <mesh position={[0.84, 0.42, 0]} scale={[0.5, 0.22, 0.28]}>
+        <sphereGeometry args={[0.72, 32, 24]} />
+        <meshBasicMaterial color="#67e8f9" transparent opacity={0.07} depthWrite={false} />
+      </mesh>
+      {circuitLines.map((line, index) => (
+        <Line
+          key={index}
+          points={line}
+          color={index === 2 ? "#fbbf24" : "#a5f3fc"}
+          transparent
+          opacity={index === 2 ? 0.55 : 0.36}
+          lineWidth={1}
+        />
+      ))}
       <VoiceAnalyzer mode={mode} />
       <DataQualityCore dataQuality={dataQuality} />
     </group>
@@ -347,7 +437,7 @@ function Scene({
       <pointLight position={[2.6, 3.2, 3.6]} color="#67e8f9" intensity={4.1} />
       <pointLight position={[-3.2, 1.2, 1.6]} color={color} intensity={2.2} />
       <pointLight position={[0, -1.2, 2.8]} color="#fbbf24" intensity={0.9} />
-      <group position={[0, -0.12, 0]}>
+      <group position={[0, -0.06, 0]} scale={0.96}>
         <NeuralParticles mode={mode} />
         <DataRibbons mode={mode} />
         <HologramRings mode={mode} />
@@ -386,7 +476,7 @@ export function Layer0HumanComputerModel({
       title="Katman 1'e geç"
     >
       <Canvas
-        camera={{ position: [0, 0.38, 4.55], fov: 42 }}
+        camera={{ position: [0, 0.32, 5.15], fov: 40 }}
         dpr={[1, 1.75]}
         gl={{ antialias: true, alpha: false, preserveDrawingBuffer: true }}
       >
