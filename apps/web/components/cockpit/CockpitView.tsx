@@ -71,6 +71,13 @@ import { WeightProposalPanel } from "@/components/panels/WeightProposalPanel";
 
 import { HolographicSignalDeck } from "./HolographicSignalDeck";
 import { Layer0ReporterAgent, type Layer0HeroProps } from "./Layer0ReporterAgent";
+import {
+  Layer2AssetDrilldownPanel,
+  Layer2AssetUniversePanel,
+  Layer2BacktestOutcomePanel,
+  Layer2FibonacciLabPanel,
+  Layer2SystemBriefArchivePanel,
+} from "./Layer2Labs";
 import { QuantumBackplaneScene } from "./QuantumBackplaneScene";
 import { SpaceBrainScene } from "./SpaceBrainScene";
 
@@ -116,7 +123,7 @@ const LAYERS: LayerMeta[] = [
   {
     index: 2,
     code: "02",
-    title: "Grup Detaylari",
+    title: "Analiz Lableri",
     shortTitle: "Detay",
     subtitle: "kanit, risk, piyasa yapisi ve analiz gruplari",
     depth: "analiz cekirdegi",
@@ -978,15 +985,15 @@ export function CockpitView() {
           <div className="space-y-6 pb-12">
             <LayerHeader
               meta={LAYERS[2]}
-              detail="Katman 1'de gordugun 6 ana panelin veri kaynaklari burada kaynak gruplari halinde acik durur. Bu katman okuma ve inceleme icin, emir uretmez."
+              detail="Katman 1'in kopyasi degil: backend'in sagladigi derin kanit ekranlari burada lab mantigiyla okunur. Siralama: asset drilldown, fibonacci, backtest, brief archive, universe."
             >
               <DataQualityBadge dqs={dqs} generatedAt={data?.generated_at} />
             </LayerHeader>
 
             <div className="layer2-command-strip grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-              <HudMetric label="Grup" value="6" tone="text-accent-cyan" />
+              <HudMetric label="Lab" value="5" tone="text-accent-cyan" />
               <HudMetric
-                label="Sinyal"
+                label="Aday"
                 value={`${actionableCount}/${candidates.length}`}
                 tone={actionableCount > 0 ? "text-signal-up" : "text-amber-300"}
               />
@@ -1004,176 +1011,42 @@ export function CockpitView() {
 
             <Layer2DetailGroup
               index="01"
-              title="Check List Kaynaklari"
-              detail="Katman 1'deki Check List panelini besleyen karar, risk, sistem, kalibrasyon, pozisyon ve ogrenme panelleri."
+              title="Asset Drilldown Terminal"
+              detail="Secilen varlik icin backend analysis/asset, timeframe teknikleri ve market-session karar kapisi tek terminalde okunur."
             >
-              <DashboardGrid>
-                <GridCell span="full">
-                  <ExecutionReadinessPanel />
-                </GridCell>
-                <GridCell span="1">
-                  <AgentBriefPanel />
-                </GridCell>
-                <GridCell span="1">
-                  <DecisionPanel />
-                </GridCell>
-                <GridCell span="1">
-                  <AIReportPanel />
-                </GridCell>
-                <GridCell span="2">
-                  <DecisionTracePanel />
-                </GridCell>
-                <GridCell span="1">
-                  <AgentVotesPanel />
-                </GridCell>
-                <GridCell span="1">
-                  <RiskDurumuPanel />
-                </GridCell>
-                <GridCell span="1">
-                  <DrawdownGuardPanel />
-                </GridCell>
-                <GridCell span="1">
-                  <PaperActionPanel />
-                </GridCell>
-                <GridCell span="1">
-                  <PositionChecksPanel />
-                </GridCell>
-                <GridCell span="1">
-                  <ShadowPanel />
-                </GridCell>
-                <GridCell span="1">
-                  <CalibrationPanel />
-                </GridCell>
-                <GridCell span="1">
-                  <MistakeMemoryPanel />
-                </GridCell>
-                <GridCell span="1">
-                  <LearningPanel />
-                </GridCell>
-                <GridCell span="1">
-                  <SystemHealthBar />
-                </GridCell>
-              </DashboardGrid>
+              <Layer2AssetDrilldownPanel />
             </Layer2DetailGroup>
 
             <Layer2DetailGroup
               index="02"
-              title="Asset Card Kaynaklari"
-              detail="Katman 1'deki Asset Card sahnesini besleyen aday sinyaller, timeframe uyumu, ajan matrisi ve trade ticket verileri."
+              title="Fibonacci / Level Lab"
+              detail="Backend technical/insight ciktilariyla 1D ve 4H fib seviyeleri, yakin bolgeler ve confluence skoru okunur."
             >
-              <DashboardGrid>
-                <GridCell span="full">
-                  <CommandSignalsPanel />
-                </GridCell>
-                <GridCell span="2">
-                  <TimeframeMatrixPanel />
-                </GridCell>
-                <GridCell span="1">
-                  <TfWeightsPanel />
-                </GridCell>
-                <GridCell span="2">
-                  <AgentMatrixPanel />
-                </GridCell>
-                <GridCell span="2">
-                  <WatchConditionsPanel />
-                </GridCell>
-                <GridCell span="1">
-                  <TradeTicketPanel />
-                </GridCell>
-              </DashboardGrid>
+              <Layer2FibonacciLabPanel />
             </Layer2DetailGroup>
 
             <Layer2DetailGroup
               index="03"
-              title="Olay Takvimi Kaynaklari"
-              detail="Katman 1 olay takvimini besleyen ekonomik olaylar, seans uygunlugu ve olay riskini etkileyen volatilite verileri."
+              title="Backtest / Outcome Lab"
+              detail="Replay store, son decision trace ve manuel tetiklenen deterministic backtest sonucunu ayni kanit ekraninda toplar."
             >
-              <DashboardGrid>
-                <GridCell span="1">
-                  <EventCalendarPanel />
-                </GridCell>
-                <GridCell span="1">
-                  <MarketSessionsPanel />
-                </GridCell>
-                <GridCell span="1">
-                  <VolatilityPanel />
-                </GridCell>
-              </DashboardGrid>
+              <Layer2BacktestOutcomePanel />
             </Layer2DetailGroup>
 
             <Layer2DetailGroup
               index="04"
-              title="Senaryo Paneli Kaynaklari"
-              detail="Katman 1 senaryo savasini besleyen risk-on/base/risk-off agirliklari, korelasyon, turev, options ve model agirliklari."
+              title="System Brief Archive"
+              detail="Agent briefing, bildirim akisi ve worker hafizasi tek arxiv gibi okunur; Katman 0 sohbetine kaynak olan ozet buradadir."
             >
-              <DashboardGrid>
-                <GridCell span="2">
-                  <ScenarioPanel />
-                </GridCell>
-                <GridCell span="1">
-                  <CryptoDerivativesPanel />
-                </GridCell>
-                <GridCell span="1">
-                  <OptionsVolPanel />
-                </GridCell>
-                <GridCell span="2">
-                  <CorrelationPanel />
-                </GridCell>
-                <GridCell span="1">
-                  <WeightProposalPanel />
-                </GridCell>
-                <GridCell span="1">
-                  <WeightHistoryPanel />
-                </GridCell>
-              </DashboardGrid>
+              <Layer2SystemBriefArchivePanel />
             </Layer2DetailGroup>
 
             <Layer2DetailGroup
               index="05"
-              title="Kuresel Likidite Rotasyon Kaynaklari"
-              detail="Katman 1 likidite havuzunu besleyen fiyat, snapshot, provider, market data ve veri kalitesi omurgasi."
+              title="Asset Universe Lab"
+              detail="Trade, snapshot, liquidity ve macro evreni backend asset registry uzerinden rol ve turlerine gore ayrilir."
             >
-              <DashboardGrid>
-                <GridCell span="full">
-                  <CapitalRotationPanel />
-                </GridCell>
-                <GridCell span="1">
-                  <DataQualityPanel />
-                </GridCell>
-                <GridCell span="1">
-                  <ProviderStatusPanel />
-                </GridCell>
-                <GridCell span="1">
-                  <SnapshotPanel />
-                </GridCell>
-                <GridCell span="1">
-                  <MarketDataPanel />
-                </GridCell>
-                <GridCell span="1">
-                  <TradingPanel />
-                </GridCell>
-              </DashboardGrid>
-            </Layer2DetailGroup>
-
-            <Layer2DetailGroup
-              index="06"
-              title="Olaylar ve Haber Radari Kaynaklari"
-              detail="Katman 1 haber/radar panelini besleyen haber akisi, catalyst etkisi ve panel/operasyon olay kayitlari."
-            >
-              <DashboardGrid>
-                <GridCell span="full">
-                  <NewsPanel defaultView="radar" />
-                </GridCell>
-                <GridCell span="2">
-                  <CatalystImpactPanel />
-                </GridCell>
-                <GridCell span="1">
-                  <PanelAuditPanel />
-                </GridCell>
-                <GridCell span="1">
-                  <ReplayStatusPanel />
-                </GridCell>
-              </DashboardGrid>
+              <Layer2AssetUniversePanel />
             </Layer2DetailGroup>
           </div>
         </div>

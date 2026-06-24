@@ -81,6 +81,49 @@ export const useMarketSessions = () => {
   });
 };
 
+export const useMarketSessionAsset = (symbol: string) => {
+  const policy = usePanelQueryPolicy(60_000);
+  return useQuery({
+    queryKey: qk.marketSessionAsset(symbol),
+    queryFn: () => api.marketSessionAsset(symbol),
+    enabled: Boolean(symbol),
+    staleTime: 60_000,
+    ...policy,
+  });
+};
+
+export const useAssetRegistry = () => {
+  const policy = usePanelQueryPolicy(5 * 60_000);
+  return useQuery({
+    queryKey: qk.assetRegistry,
+    queryFn: api.assetRegistry,
+    staleTime: 5 * 60_000,
+    ...policy,
+  });
+};
+
+export const useAssetAnalysis = (symbol: string) => {
+  const policy = usePanelQueryPolicy(60_000);
+  return useQuery({
+    queryKey: qk.assetAnalysis(symbol),
+    queryFn: () => api.assetAnalysis(symbol),
+    enabled: Boolean(symbol),
+    staleTime: 45_000,
+    ...policy,
+  });
+};
+
+export const useTechnicalInsight = (symbol: string) => {
+  const policy = usePanelQueryPolicy(60_000);
+  return useQuery({
+    queryKey: qk.technicalInsight(symbol),
+    queryFn: () => api.technicalInsight(symbol),
+    enabled: Boolean(symbol),
+    staleTime: 60_000,
+    ...policy,
+  });
+};
+
 export const useLearningSummary = () => {
   const policy = usePanelQueryPolicy();
   return useQuery({
@@ -216,6 +259,42 @@ export const useReplayStatus = () => {
   return useQuery({
     queryKey: qk.replayStatus,
     queryFn: api.replayStatus,
+    staleTime: 60_000,
+    ...policy,
+  });
+};
+
+export const useReplayBacktest = () => {
+  const policy = usePanelQueryPolicy();
+  return useQuery({
+    queryKey: qk.replayBacktest,
+    queryFn: api.replayBacktest,
+    enabled: false,
+    retry: false,
+    staleTime: 5 * 60_000,
+    ...policy,
+  });
+};
+
+export const useReplaySnapshot = (snapshotId?: string | null) => {
+  const id = snapshotId ?? "";
+  const policy = usePanelQueryPolicy(60_000);
+  return useQuery({
+    queryKey: qk.replaySnapshot(id),
+    queryFn: () => api.replaySnapshot(id),
+    enabled: Boolean(id),
+    staleTime: 60_000,
+    ...policy,
+  });
+};
+
+export const useReplayDecisionTrace = (snapshotId?: string | null) => {
+  const id = snapshotId ?? "";
+  const policy = usePanelQueryPolicy(60_000);
+  return useQuery({
+    queryKey: qk.replayDecisionTrace(id),
+    queryFn: () => api.replayDecisionTrace(id),
+    enabled: Boolean(id),
     staleTime: 60_000,
     ...policy,
   });

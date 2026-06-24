@@ -22,6 +22,9 @@ import type {
   NotificationList,
   PaperTradingState,
   RebalanceState,
+  ReplayBacktest,
+  ReplayDecisionTrace,
+  ReplaySnapshot,
   RegimeReport,
   ReplayStatus,
   ShadowComparison,
@@ -85,6 +88,106 @@ export type PendingOrder = {
   created_at: string;
 };
 
+export type AssetRegistryItem = {
+  symbol: string;
+  label: string;
+  kind: string;
+  roles: string[];
+};
+
+export type AssetRegistry = {
+  assets: AssetRegistryItem[];
+  trade: string[];
+  snapshot: string[];
+  liquidity: string[];
+};
+
+export type AssetAnalysisTimeframe = {
+  score?: number | null;
+  direction?: string | null;
+  rsi?: number | null;
+  ema_stack?: string | null;
+  atr?: number | null;
+  bars_used?: number | null;
+  status?: string | null;
+};
+
+export type AssetAnalysis = {
+  symbol: string;
+  available: boolean;
+  last_price?: number | null;
+  overall_score?: number | null;
+  overall_direction?: string | null;
+  timeframes?: Record<string, AssetAnalysisTimeframe>;
+  momentum_pct?: Record<string, number | null>;
+  note?: string | null;
+};
+
+export type FibonacciLevel = {
+  ratio?: number | null;
+  label?: string | null;
+  price?: number | null;
+  kind?: string | null;
+  role?: string | null;
+  distance_pct?: number | null;
+};
+
+export type FibonacciFrame = {
+  timeframe?: string | null;
+  swing_high?: number | null;
+  swing_low?: number | null;
+  swing_start?: string | null;
+  swing_end?: string | null;
+  trend_direction?: string | null;
+  levels?: FibonacciLevel[];
+  nearest_level?: FibonacciLevel | null;
+  nearest_distance_pct?: number | null;
+  zone?: string | null;
+  validity?: string | null;
+  diagnostics?: string[];
+};
+
+export type TechnicalInsight = {
+  symbol: string;
+  fib_1d?: FibonacciFrame | null;
+  fib_4h?: FibonacciFrame | null;
+  fib_confluence?: {
+    has_confluence?: boolean;
+    confluence_zone?: string | null;
+    nearest_1d_level?: FibonacciLevel | null;
+    nearest_4h_level?: FibonacciLevel | null;
+    distance_between_levels_pct?: number | null;
+    score?: number | null;
+    reason?: string | null;
+    diagnostics?: string[];
+  } | null;
+  fibonacci_score?: number | null;
+};
+
+export type MarketSessionAsset = {
+  generated_at?: string | null;
+  asset_code: string;
+  asset_context?: {
+    relevant_markets?: Array<Record<string, unknown>>;
+    any_relevant_market_open?: boolean;
+    primary_market_open?: boolean;
+    session_risk?: string | null;
+    reason?: string | null;
+    diagnostics?: string[];
+  } | null;
+  decision?: {
+    action?: string | null;
+    size_multiplier?: number | null;
+    reason?: string | null;
+    reason_code?: string | null;
+    evidence?: string[];
+    diagnostics?: string[];
+  } | null;
+  diagnostics?: string[];
+  paper_safe?: boolean;
+  no_execution?: boolean;
+};
+
 async function fetchJSON<T>(path: string, init?: RequestInit): Promise<T> {
   const headers = new Headers(init?.headers);
   if (init?.body && !headers.has("content-type")) {
@@ -127,6 +230,19 @@ export const api = {
     fetchJSON<PaperTradingState>("/api/v1/paper-trading/state"),
   marketSessions: () =>
     fetchJSON<MarketSessionsCurrentResponse>("/api/v1/market-sessions/current"),
+  marketSessionAsset: (symbol: string) =>
+    fetchJSON<MarketSessionAsset>(
+      `/api/v1/market-sessions/asset/${encodeURIComponent(symbol)}`,
+    ),
+  assetRegistry: () => fetchJSON<AssetRegistry>("/api/v1/assets"),
+  assetAnalysis: (symbol: string) =>
+    fetchJSON<AssetAnalysis>(
+      `/api/v1/analysis/asset/${encodeURIComponent(symbol)}`,
+    ),
+  technicalInsight: (symbol: string) =>
+    fetchJSON<TechnicalInsight>(
+      `/api/v1/technical/insight/${encodeURIComponent(symbol)}`,
+    ),
   paperTradingTick: () =>
     fetchJSON<TickResult>("/api/v1/paper-trading/tick", { method: "POST" }),
   closePaperPosition: (positionId: string) =>
@@ -190,6 +306,15 @@ export const api = {
     fetchJSON<ShadowComparison>("/api/v1/decision/shadow"),
   cockpitBrief: () => fetchJSON<CockpitBrief>("/api/v1/cockpit/brief"),
   replayStatus: () => fetchJSON<ReplayStatus>("/api/v1/replay/status"),
+  replayBacktest: () => fetchJSON<ReplayBacktest>("/api/v1/replay/backtest"),
+  replaySnapshot: (snapshotId: string) =>
+    fetchJSON<ReplaySnapshot>(
+      `/api/v1/replay/${encodeURIComponent(snapshotId)}`,
+    ),
+  replayDecisionTrace: (snapshotId: string) =>
+    fetchJSON<ReplayDecisionTrace>(
+      `/api/v1/replay/${encodeURIComponent(snapshotId)}/decision-trace`,
+    ),
   chat: (message: string) =>
     fetchJSON<ChatResponse>("/api/v1/chat", {
       method: "POST",

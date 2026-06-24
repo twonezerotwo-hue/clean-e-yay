@@ -6,6 +6,12 @@ export const qk = {
   aiReport: ["ai-report"] as const,
   paperTradingState: ["paper-trading", "state"] as const,
   marketSessions: ["market-sessions", "current"] as const,
+  marketSessionAsset: (symbol: string) =>
+    ["market-sessions", "asset", symbol] as const,
+  assetRegistry: ["assets", "registry"] as const,
+  assetAnalysis: (symbol: string) => ["analysis", "asset", symbol] as const,
+  technicalInsight: (symbol: string) =>
+    ["technical", "insight", symbol] as const,
   learningSummary: ["learning", "summary"] as const,
   dataSnapshot: ["data", "snapshot"] as const,
   rebalanceProposal: ["learning", "rebalance"] as const,
@@ -19,6 +25,10 @@ export const qk = {
   shadowComparison: ["decision", "shadow"] as const,
   cockpitBrief: ["cockpit", "brief"] as const,
   replayStatus: ["replay", "status"] as const,
+  replayBacktest: ["replay", "backtest"] as const,
+  replaySnapshot: (snapshotId: string) => ["replay", "snapshot", snapshotId] as const,
+  replayDecisionTrace: (snapshotId: string) =>
+    ["replay", "decision-trace", snapshotId] as const,
   tradeTickets: ["paper-trading", "tickets"] as const,
   notifications: ["notifications"] as const,
   agentBriefing: ["agent", "briefing"] as const,
