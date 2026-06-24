@@ -10,7 +10,7 @@ import hashlib
 import re
 import time
 
-from packages.agent.llm import budget, cache, guard, web_search
+from packages.agent.llm import budget, cache, guard, system_memory, web_search
 from packages.agent.llm import client as llm_client
 from packages.agent.llm import context as ctx_mod
 from packages.notifications import list_recent as list_notifications
@@ -893,6 +893,9 @@ def _grounded_answer(message: str, ctx: dict) -> tuple[str, list[str]]:
         return _tickets_answer(ctx)
     if any(k in folded for k in ("bildirim", "notification", "uyarı", "uyari", "alarm")):
         return _notifications_answer()
+    memory = system_memory.answer(message)
+    if memory is not None:
+        return memory
     # Fırsat / en yakın aday — sembolden bağımsız "işleme yakın olan ne?" sorusu.
     if any(
         k in folded

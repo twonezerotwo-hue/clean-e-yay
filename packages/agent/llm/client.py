@@ -1,7 +1,8 @@
-"""LLM provider abstraction — LLM_MODE=off|mock|groq|openrouter.
+"""LLM provider abstraction — LLM_MODE=off|mock|groq|openrouter|ollama.
 
 Kurallar:
 - Anahtar yoksa (groq/openrouter modunda) network çağrısı YAPILMAZ → None döner.
+- Ollama local-first'tir; çalışmazsa openrouter/groq fallback denenebilir.
 - Network/API hatası exception KAÇIRMAZ → None döner (graceful degrade).
 - Çağıran taraf None'ı deterministik fallback narrative ile karşılar.
 """
@@ -16,8 +17,10 @@ from pathlib import Path
 
 GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions"
 OPENROUTER_API_URL = "https://openrouter.ai/api/v1/chat/completions"
+OLLAMA_API_URL = "http://127.0.0.1:11434/api/chat"
 DEFAULT_GROQ_MODEL = "llama-3.3-70b-versatile"
 DEFAULT_OPENROUTER_MODEL = "~openai/gpt-latest"
+DEFAULT_OLLAMA_MODEL = "llama3.1:8b"
 TIMEOUT_SEC = 12.0
 _DOTENV_LOADED = False
 
@@ -53,14 +56,14 @@ class LLMCompletion:
     model: str
     input_tokens: int
     output_tokens: int
-    source: str  # "groq" | "openrouter" | "mock"
+    source: str  # "groq" | "openrouter" | "ollama" | "mock"
 
 
 def get_mode() -> str:
-    """off|mock|groq|openrouter — env LLM_MODE; set değilse anahtara göre auto."""
+    """off|mock|groq|openrouter|ollama — env LLM_MODE; set değilse anahtara göre auto."""
     _load_repo_dotenv_once()
     mode = (os.environ.get("LLM_MODE") or "").strip().lower()
-    if mode in {"off", "mock", "groq", "openrouter"}:
+    if mode in {"off", "mock", "groq", "openrouter", "ollama"}:
         return mode
     if os.environ.get("OPENROUTER_API_KEY"):
         return "openrouter"
@@ -201,8 +204,89 @@ class OpenRouterClient:
             return None  # crash yok — fallback narrative devreye girer
 
 
-def get_client() -> MockLLMClient | GroqClient | OpenRouterClient | None:
-    """Aktif mod için client; off (veya groq+anahtarsız) → None."""
+class OllamaClient:
+    """Local Ollama chat adapter; no API key required."""
+
+    name = "ollama"
+
+    def __init__(self) -> None:
+        _load_repo_dotenv_once()
+        self.model = os.environ.get("OLLAMA_MODEL", DEFAULT_OLLAMA_MODEL).strip()
+        self.api_url = os.environ.get("OLLAMA_API_URL", OLLAMA_API_URL).strip()
+
+    def complete(self, system: str, user: str, max_tokens: int) -> LLMCompletion | None:
+        body = json.dumps(
+            {
+                "model": self.model,
+                "stream": False,
+                "messages": [
+                    {"role": "system", "content": system},
+                    {"role": "user", "content": user},
+                ],
+                "options": {
+                    "temperature": 0.2,
+                    "num_predict": int(max_tokens),
+                },
+            }
+        ).encode("utf-8")
+        req = urllib.request.Request(
+            self.api_url,
+            data=body,
+            headers={
+                "Content-Type": "application/json",
+                "User-Agent": "clean-e-yay/2.7",
+            },
+            method="POST",
+        )
+        try:
+            with urllib.request.urlopen(req, timeout=TIMEOUT_SEC) as resp:
+                data = json.loads(resp.read().decode("utf-8"))
+            msg = data.get("message") or {}
+            text = msg.get("content") if isinstance(msg, dict) else None
+            if not isinstance(text, str) or not text.strip():
+                return None
+            return LLMCompletion(
+                text=text.strip(),
+                model=str(data.get("model") or self.model),
+                input_tokens=int(data.get("prompt_eval_count") or 0),
+                output_tokens=int(data.get("eval_count") or 0),
+                source="ollama",
+            )
+        except (urllib.error.URLError, TimeoutError, OSError, KeyError,
+                TypeError, ValueError, json.JSONDecodeError):
+            return None
+
+
+class FallbackLLMClient:
+    """Try LLM clients in order; used for Ollama local-first mode."""
+
+    name = "fallback"
+
+    def __init__(self, clients: list[MockLLMClient | GroqClient | OpenRouterClient | OllamaClient]) -> None:
+        self.clients = clients
+        self.model = " -> ".join(c.model for c in clients)
+
+    def complete(self, system: str, user: str, max_tokens: int) -> LLMCompletion | None:
+        for client in self.clients:
+            comp = client.complete(system, user, max_tokens)
+            if comp is not None:
+                return comp
+        return None
+
+
+def _remote_fallback_clients() -> list[OpenRouterClient | GroqClient]:
+    clients: list[OpenRouterClient | GroqClient] = []
+    openrouter = OpenRouterClient()
+    if openrouter.api_key:
+        clients.append(openrouter)
+    groq = GroqClient()
+    if groq.api_key:
+        clients.append(groq)
+    return clients
+
+
+def get_client() -> MockLLMClient | GroqClient | OpenRouterClient | OllamaClient | FallbackLLMClient | None:
+    """Aktif mod için client; off (veya anahtarsız remote) → None."""
     mode = get_mode()
     if mode == "mock":
         return MockLLMClient()
@@ -212,4 +296,6 @@ def get_client() -> MockLLMClient | GroqClient | OpenRouterClient | None:
     if mode == "openrouter":
         c = OpenRouterClient()
         return c if c.api_key else None
+    if mode == "ollama":
+        return FallbackLLMClient([OllamaClient(), *_remote_fallback_clients()])
     return None

@@ -159,6 +159,92 @@ def test_openrouter_adapter_parses_mocked_response(llm_env, monkeypatch) -> None
     assert captured["referer"] == "https://clean-e-yay.local"
 
 
+def test_ollama_adapter_parses_mocked_response(llm_env, monkeypatch) -> None:
+    import io
+    import json
+    import urllib.request
+
+    from packages.agent.llm import client as llm_client
+
+    monkeypatch.setenv("LLM_MODE", "ollama")
+    monkeypatch.setenv("OLLAMA_MODEL", "llama3.1:test")
+
+    payload = {
+        "model": "llama3.1:test",
+        "message": {"content": "SUMMARY: ollama test"},
+        "prompt_eval_count": 40,
+        "eval_count": 8,
+    }
+
+    class _Resp(io.BytesIO):
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+    captured = {}
+
+    def _urlopen(req, timeout=None):
+        captured["url"] = req.full_url
+        captured["body"] = json.loads(req.data.decode("utf-8"))
+        return _Resp(json.dumps(payload).encode())
+
+    monkeypatch.setattr(urllib.request, "urlopen", _urlopen)
+    c = llm_client.get_client()
+    comp = c.complete("sys", "user", 100)
+    assert comp is not None
+    assert comp.source == "ollama"
+    assert comp.text.startswith("SUMMARY:")
+    assert comp.input_tokens == 40 and comp.output_tokens == 8
+    assert captured["url"] == "http://127.0.0.1:11434/api/chat"
+    assert captured["body"]["stream"] is False
+
+
+def test_ollama_mode_falls_back_to_openrouter(llm_env, monkeypatch) -> None:
+    import io
+    import json
+    import urllib.error
+    import urllib.request
+
+    from packages.agent.llm import client as llm_client
+
+    monkeypatch.setenv("LLM_MODE", "ollama")
+    monkeypatch.setenv("OPENROUTER_API_KEY", "test-key")
+    monkeypatch.setenv("OPENROUTER_MODEL", "openai/fallback-test")
+
+    payload = {
+        "model": "openai/fallback-test",
+        "choices": [{"message": {"content": "SUMMARY: remote fallback"}}],
+        "usage": {"prompt_tokens": 10, "completion_tokens": 4},
+    }
+
+    class _Resp(io.BytesIO):
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+    urls: list[str] = []
+
+    def _urlopen(req, timeout=None):
+        urls.append(req.full_url)
+        if req.full_url.endswith("/api/chat"):
+            raise urllib.error.URLError("ollama down")
+        return _Resp(json.dumps(payload).encode())
+
+    monkeypatch.setattr(urllib.request, "urlopen", _urlopen)
+    comp = llm_client.get_client().complete("sys", "user", 100)
+    assert comp is not None
+    assert comp.source == "openrouter"
+    assert comp.text.startswith("SUMMARY:")
+    assert urls == [
+        "http://127.0.0.1:11434/api/chat",
+        "https://openrouter.ai/api/v1/chat/completions",
+    ]
+
+
 def test_groq_adapter_network_error_returns_none(llm_env, monkeypatch) -> None:
     import urllib.error
     import urllib.request
@@ -662,6 +748,93 @@ def test_chat_live_web_missing_key_falls_back_to_state_news(monkeypatch) -> None
     assert "TAVILY_API_KEY" in ans
     assert "State headline from backend" in ans
     assert "web:tavily:missing_api_key" in ev
+
+
+def _seed_closed_trade(tmp_path, monkeypatch):
+    from datetime import UTC, datetime, timedelta
+
+    from packages.learning import decision_log
+    from packages.paper import audit as paper_audit
+    from packages.paper import state as paper_state
+
+    monkeypatch.setattr(paper_state, "STATE_PATH", tmp_path / "paper_state.json")
+    monkeypatch.setenv("PAPER_AUDIT_PATH", str(tmp_path / "paper_audit.jsonl"))
+    monkeypatch.setenv("DECISION_LOG_PATH", str(tmp_path / "decision_log.jsonl"))
+    trade = paper_state.Trade(
+        id="pos-1",
+        symbol="BTCUSD",
+        side="long",
+        entry_price=100.0,
+        exit_price=95.0,
+        pnl_usd=-50.0,
+        opened_at=(datetime.now(UTC) - timedelta(hours=2)).isoformat(),
+        closed_at=datetime.now(UTC).isoformat(),
+        close_reason="SL_HIT",
+        fingerprint="btc|4h|breakout",
+        data_verified=True,
+        timeframe="4h",
+        open_reason="breakout failed confirmation",
+        snapshot_id="snap-1",
+        open_dqs=88.0,
+        open_risk_action="ALLOW",
+    )
+    ps = paper_state.PaperState(
+        equity_usd=9950.0,
+        peak_equity_usd=10000.0,
+        realized_pnl_usd=-50.0,
+        daily_pnl_usd=-50.0,
+        recent_trades=[trade],
+    )
+    paper_state.save(ps)
+    paper_audit.record(
+        "CLOSED",
+        position_id=trade.id,
+        symbol=trade.symbol,
+        timeframe=trade.timeframe,
+        side=trade.side,
+        reason=trade.close_reason,
+        price_used=trade.exit_price,
+        size=1000.0,
+        pnl=trade.pnl_usd,
+        snapshot_id=trade.snapshot_id,
+        open_reason=trade.open_reason,
+    )
+    decision_log.record_close(trade)
+    return trade
+
+
+def test_chat_system_memory_explains_last_close(tmp_path, monkeypatch) -> None:
+    from packages.agent.llm import chat as llm_chat
+
+    trade = _seed_closed_trade(tmp_path, monkeypatch)
+    ans, ev = llm_chat._grounded_answer("son pozisyon neden kapandı?", _fake_ctx())
+    assert trade.symbol in ans
+    assert "SL_HIT" in ans
+    assert "breakout failed confirmation" in ans
+    assert any(e == f"paper:trade:{trade.id}" for e in ev)
+    assert any(e.startswith("decision_log:") for e in ev)
+
+
+def test_chat_system_memory_reports_today_turnover(tmp_path, monkeypatch) -> None:
+    from packages.agent.llm import chat as llm_chat
+
+    _seed_closed_trade(tmp_path, monkeypatch)
+    ans, ev = llm_chat._grounded_answer("bugünün cirosu nedir?", _fake_ctx())
+    assert "1 kapanış" in ans
+    assert "$1,000.00" in ans
+    assert "daily PnL" in ans
+    assert "paper_audit:today_closed:1" in ev
+
+
+def test_chat_system_memory_reports_bad_trade(tmp_path, monkeypatch) -> None:
+    from packages.agent.llm import chat as llm_chat
+
+    trade = _seed_closed_trade(tmp_path, monkeypatch)
+    ans, ev = llm_chat._grounded_answer("hangi hatalı işlemi açtın sebebi neydi?", _fake_ctx())
+    assert "Son kayıplı işlem" in ans
+    assert trade.fingerprint in ans
+    assert "SL_HIT" in ans
+    assert any(e == f"paper:loss_trade:{trade.id}" for e in ev)
 
 
 def test_chat_deep_data_endpoint_state_grounded(llm_env, no_network, monkeypatch) -> None:
