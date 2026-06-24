@@ -10,7 +10,7 @@ import hashlib
 import re
 import time
 
-from packages.agent.llm import budget, cache, guard
+from packages.agent.llm import budget, cache, guard, web_search
 from packages.agent.llm import client as llm_client
 from packages.agent.llm import context as ctx_mod
 from packages.notifications import list_recent as list_notifications
@@ -412,6 +412,76 @@ def _news_answer(ctx: dict) -> tuple[str, list[str]]:
         f"Öne çıkan başlıklar: {listing}. Haber yalnızca bağlamdır; sembol etkisi "
         "doğrulanmadan tek başına işlem açtırmaz.",
         [f"news:{h[:40]}" for h in news[:3]],
+    )
+
+
+_LIVE_WEB_DIRECT = (
+    "son dakika", "son haber", "son 1 saat", "son bir saat", "guncel haber",
+    "güncel haber", "latest news", "breaking news",
+)
+_LIVE_WEB_NEWS_WORDS = ("haber", "news", "manset", "manşet", "baslik", "başlık", "guncel", "güncel")
+_LIVE_WEB_TIME_WORDS = ("bugun", "bugün", "son", "yeni", "az once", "az önce", "simdi", "şimdi")
+_LIVE_WEB_SUBJECTS = (
+    "trump", "israil", "israel", "iran", "abd", "amerika", "fed", "fomc",
+    "powell", "rusya", "russia", "ukrayna", "ukraine", "cin", "china",
+    "bitcoin", "btc", "altin", "altın", "petrol", "oil",
+)
+_LIVE_WEB_SPEECH = ("ne dedi", "aciklama", "açıklama", "konustu", "konuştu", "statement", "said")
+
+
+def _is_live_web_question(folded: str) -> bool:
+    """Only route genuinely current/public-world questions to live web search."""
+    if any(k in folded for k in _LIVE_WEB_DIRECT):
+        return True
+    has_news_word = any(k in folded for k in _LIVE_WEB_NEWS_WORDS)
+    has_time_word = any(k in folded for k in _LIVE_WEB_TIME_WORDS)
+    has_subject = any(k in folded for k in _LIVE_WEB_SUBJECTS)
+    has_speech = any(k in folded for k in _LIVE_WEB_SPEECH)
+    return (has_news_word and (has_time_word or has_subject)) or (has_subject and has_speech)
+
+
+def _web_topic_for(folded: str) -> str:
+    if any(k in folded for k in ("btc", "bitcoin", "borsa", "fed", "fomc", "piyasa", "market", "altin", "altın", "petrol", "oil")):
+        return "finance"
+    return "news"
+
+
+def _web_news_answer(message: str, ctx: dict) -> tuple[str, list[str]]:
+    """Live public news answer; read-only and source-linked."""
+    folded = message.casefold()
+    result = web_search.search(
+        message,
+        topic=_web_topic_for(folded),
+        time_range="day" if any(k in folded for k in ("son", "bugun", "bugün", "simdi", "şimdi")) else "week",
+        max_results=5,
+    )
+    fallback, fallback_ev = _news_answer(ctx)
+    if result.error:
+        if result.error == "missing_api_key":
+            prefix = "Canli web aramasi kapali: TAVILY_API_KEY backend env'de yok."
+        else:
+            prefix = f"Canli web aramasi su an alinamadi ({result.error})."
+        return (
+            f"{prefix} Mevcut backend haber akisi: {fallback}",
+            [f"web:tavily:{result.error}", *fallback_ev],
+        )
+    if not result.answer and not result.results:
+        return (
+            f"Canli web aramasi bu soru icin sonuc dondurmedi. Mevcut backend haber akisi: {fallback}",
+            ["web:tavily:no_results", *fallback_ev],
+        )
+
+    lines: list[str] = []
+    if result.answer:
+        lines.append(f"Kisa sonuc: {result.answer}")
+    for idx, hit in enumerate(result.results[:3], 1):
+        stamp = f" ({hit.published_date})" if hit.published_date else ""
+        snippet = f" - {hit.content[:180].rstrip()}" if hit.content else ""
+        lines.append(f"{idx}. {hit.title}{stamp}{snippet} Kaynak: {hit.url}")
+    usage = f" Tavily kredi: {result.usage_credits}." if result.usage_credits is not None else ""
+    return (
+        "Canli web ozeti (emir/karar uretmez): " + " ".join(lines) + usage,
+        ["web:tavily:live_search", *[f"web:{hit.url}" for hit in result.results[:3]]],
     )
 
 
@@ -830,6 +900,8 @@ def _grounded_answer(message: str, ctx: dict) -> tuple[str, list[str]]:
                   "yakın aday", "yakin aday", "aday hangi", "işleme yakın", "isleme yakin")
     ):
         return _opportunity_answer(ctx)
+    if _is_live_web_question(folded):
+        return _web_news_answer(message, ctx)
     if any(k in folded for k in ("haber", "news", "manşet", "manset", "başlık", "baslik")):
         return _news_answer(ctx)
     if any(k in folded for k in ("eksik", "missing", "hangi veri")):
@@ -889,6 +961,7 @@ def answer(message: str) -> dict:
 
     ctx = ctx_mod.build_compact_context()
     grounded, evidence = _grounded_answer(message, ctx)
+    live_evidence = any(e.startswith("web:tavily") or e.startswith("web:http") for e in evidence)
     mode = llm_client.get_mode()
     base = {
         "refused": False,
@@ -907,20 +980,29 @@ def answer(message: str) -> dict:
 
     digest = ctx_mod.context_digest(ctx)
     msg_hash = hashlib.sha1(message.casefold().strip().encode("utf-8")).hexdigest()[:12]
-    cache_key = f"chat|{mode}|{digest}|{msg_hash}"
+    live_bucket = f"|live:{int(time.time() // 900)}" if live_evidence else ""
+    cache_key = f"chat|{mode}|{digest}|{msg_hash}{live_bucket}"
     cached = cache.get(cache_key)
     if cached is not None:
         return {**base, **cached, "llm": {**(cached.get("llm") or {}), "cached": True}}
 
     system = guard.SYSTEM_RULES
+    source_label = (
+        "STATE BAGLAMI + deterministik yanitta kaynak URL'leri verilen CANLI WEB BULGULARI"
+        if live_evidence else "STATE BAGLAMI"
+    )
+    scope_rule = (
+        "Yanitini YALNIZCA state baglami ve kaynakli web bulgularina dayandir."
+        if live_evidence else "Yanitini YALNIZCA bu state baglamina dayandir."
+    )
     user = (
-        "STATE BAĞLAMI (tek bilgi kaynağın budur):\n"
+        f"{source_label}:\n"
         f"{ctx_mod.context_for_prompt(ctx)}\n\n"
-        "Deterministik motorun bu soru için çıkardığı kanıt-temelli yanıt:\n"
+        "Deterministik motorun bu soru icin cikardigi kanit-temelli yanit:\n"
         f"{grounded}\n\n"
         f"KULLANICI SORUSU: {message}\n\n"
-        "Yanıtını YALNIZCA bu bağlama dayandır; bağlamda olmayanı 'state'te yok' "
-        "diye belirt. Karar/işlem önerme. Kısa Türkçe yanıt ver."
+        f"{scope_rule} Baglamda olmayan seyi 'state'te yok' diye belirt. "
+        "Karar/islem onerme. Kisa Turkce yanit ver."
     )
     max_out = budget.max_tokens_per_request()
     est = (len(system) + len(user)) // 4 + max_out

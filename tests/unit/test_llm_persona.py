@@ -608,6 +608,62 @@ def test_chat_riskgate_question_not_misrouted_to_deep_data() -> None:
     assert any(e.startswith("risk_gate:") for e in ev)
 
 
+def test_web_search_missing_key_does_not_call_network(no_network, monkeypatch) -> None:
+    from packages.agent.llm import web_search
+
+    monkeypatch.setenv("TAVILY_LOAD_DOTENV", "false")
+    monkeypatch.delenv("TAVILY_API_KEY", raising=False)
+    result = web_search.search("Trump ne dedi?", max_results=1)
+    assert result.error == "missing_api_key"
+    assert result.results == []
+
+
+def test_chat_live_web_intent_uses_tavily(monkeypatch) -> None:
+    from packages.agent.llm import chat as llm_chat
+    from packages.agent.llm import web_search
+
+    def _fake_search(query, *, topic="news", time_range="day", max_results=None):
+        assert query == "Trump ne dedi?"
+        assert topic == "news"
+        return web_search.WebSearchResult(
+            query=query,
+            provider="tavily",
+            answer="Trump son aciklamasinda teknoloji ve piyasa gundemine degindi.",
+            results=[
+                web_search.WebSearchHit(
+                    title="Reuters test headline",
+                    url="https://example.com/reuters-test",
+                    content="Short sourced snippet.",
+                    published_date="2026-06-24",
+                )
+            ],
+            usage_credits=1,
+        )
+
+    monkeypatch.setattr(llm_chat.web_search, "search", _fake_search)
+    ans, ev = llm_chat._grounded_answer("Trump ne dedi?", _fake_ctx())
+    assert "Canli web ozeti" in ans
+    assert "Reuters test headline" in ans
+    assert any(e == "web:tavily:live_search" for e in ev)
+    assert any(e == "web:https://example.com/reuters-test" for e in ev)
+
+
+def test_chat_live_web_missing_key_falls_back_to_state_news(monkeypatch) -> None:
+    from packages.agent.llm import chat as llm_chat
+    from packages.agent.llm import web_search
+
+    def _fake_search(query, *, topic="news", time_range="day", max_results=None):
+        return web_search.WebSearchResult(query, "tavily", None, [], error="missing_api_key")
+
+    ctx = _fake_ctx()
+    ctx["news"] = ["State headline from backend"]
+    monkeypatch.setattr(llm_chat.web_search, "search", _fake_search)
+    ans, ev = llm_chat._grounded_answer("son dakika haberi var mi?", ctx)
+    assert "TAVILY_API_KEY" in ans
+    assert "State headline from backend" in ans
+    assert "web:tavily:missing_api_key" in ev
+
+
 def test_chat_deep_data_endpoint_state_grounded(llm_env, no_network, monkeypatch) -> None:
     """Endpoint üzerinden options sorusu — state-grounded, refused değil."""
     monkeypatch.setenv("LLM_MODE", "off")
