@@ -88,6 +88,29 @@ def test_consensus_degraded_technicals_neutral_touche() -> None:
     assert any("degraded" in w for w in c.warnings)
 
 
+def test_consensus_degraded_technicals_dampens_direction_score() -> None:
+    from packages.consensus.engine import build
+    snap = build_snapshot(["BTCUSD"])
+    regime = classify(snap)
+    snap.technicals_by_tf["BTCUSD"]["15m"] = TechnicalSnapshot(
+        symbol="BTCUSD",
+        timeframe="15m",
+        rsi=58.0,
+        macd=0.4,
+        atr=1.0,
+        ema_stack=None,
+        score=95.0,
+        direction_score=80.0,
+        status="DEGRADED",
+        bars_used=120,
+    )
+    c = build("BTCUSD", snap, regime, "15m")
+    touche = next(m for m in c.modules if m.name == "touche")
+    assert touche.score == pytest.approx(74.0)
+    assert any("touche_degraded_dampened" in w for w in c.warnings)
+    assert any("raw=80.00" in w and "factor=0.80" in w for w in c.warnings)
+
+
 # ---------------- decision matrix ----------------
 
 def _force_bullish(snap, symbol: str = "BTCUSD") -> None:
@@ -212,6 +235,7 @@ def test_matrix_view_actionable_cell_shape(paper_env) -> None:
     for key in (
         "action", "candidate_action", "blocked_by", "reason",
         "actionable", "status", "paper_action", "score", "direction",
+        "warnings",
     ):
         assert key in cell_1d
     if cell_1d["actionable"]:

@@ -783,6 +783,7 @@ def matrix_view(
                 "size_multiplier": d.size_multiplier,
                 "reason": d.reason,
                 "blocked_by": list(d.blocked_by),
+                "warnings": list(getattr(d.consensus, "warnings", []) or []),
                 "actionable": actionable,
                 "status": status,
                 "paper_action": d.action if actionable else "none",
