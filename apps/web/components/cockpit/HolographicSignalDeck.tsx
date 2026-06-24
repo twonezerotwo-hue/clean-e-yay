@@ -640,7 +640,7 @@ export function HolographicSignalDeck({ brief }: { brief: AgentBrief }) {
           <span className="w-1 h-3.5 rounded-full bg-teal-300/70" aria-hidden="true" />
           <div>
             <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-200/90">
-              Holographic Command Signals
+              Asset Card
             </p>
             <p className="text-[10px] text-slate-500 mt-0.5">
               {rows.length} ana asset · {supports.length} destek göstergesi · PAPER_SAFE

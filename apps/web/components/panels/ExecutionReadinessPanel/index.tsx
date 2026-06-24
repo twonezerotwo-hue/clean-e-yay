@@ -386,8 +386,8 @@ export function ExecutionReadinessPanel() {
       <div className="rc-stage">
         {/* sol üst — agent modu */}
         <div className="rc-mode">
-          <span className="rc-mode-top">AI AGENT</span>
-          <span className="rc-mode-mid">MODE ×</span>
+          <span className="rc-mode-top">CHECK LIST</span>
+          <span className="rc-mode-mid">READ ONLY</span>
           <strong className={`rc-mode-state ${allPassed ? "rc-mode-state-ok" : ""}`}>
             {allPassed ? "READY" : "CALIBRATING"}
           </strong>

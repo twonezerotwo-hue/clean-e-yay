@@ -580,37 +580,28 @@ function Layer1Stack({ items }: { items: Layer1StackItem[] }) {
     if (!scroller || !stack) return;
 
     const AUTO_ADVANCE_MS = 7000;
-    const MANUAL_LOCK_MS = 1400;
-    const TRANSITION_MS = 1150;
+    const TRANSITION_MS = 1120;
+    const MANUAL_LOCK_MS = TRANSITION_MS + 260;
 
     const readItems = () =>
       Array.from(stack.children)
         .filter((node): node is HTMLElement => node instanceof HTMLElement);
 
-    const readGap = () => {
-      const value = Number.parseFloat(window.getComputedStyle(stack).gap);
-      return Number.isFinite(value) ? value : 0;
-    };
-
-    const readTargets = () => {
-      const panels = readItems();
-      const gap = readGap();
-      let cursor = 0;
-      return panels.map((panel) => {
-        const target = cursor;
-        cursor += panel.offsetHeight + gap;
-        return target;
-      });
-    };
-
     const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     let active = 0;
+    let targets: number[] = [];
     let lockUntil = 0;
     let autoTimer = 0;
     let animationFrame = 0;
     let animationDoneTimer = 0;
     let resizeTimer = 0;
+    let scrollSyncFrame = 0;
     let programmatic = false;
+
+    const recalcTargets = () => {
+      targets = readItems().map((panel) => Math.max(0, panel.offsetTop));
+      return targets;
+    };
 
     const applyState = (nextActive: number) => {
       const panels = readItems();
@@ -628,6 +619,7 @@ function Layer1Stack({ items }: { items: Layer1StackItem[] }) {
     const finishSettling = () => {
       programmatic = false;
       scroller.dataset.layer1Settling = "false";
+      applyState(active);
     };
 
     const animateScrollTo = (target: number, immediate = false) => {
@@ -658,6 +650,7 @@ function Layer1Stack({ items }: { items: Layer1StackItem[] }) {
           return;
         }
         animationFrame = 0;
+        scroller.scrollTop = target;
         animationDoneTimer = window.setTimeout(() => {
           animationDoneTimer = 0;
           finishSettling();
@@ -667,21 +660,25 @@ function Layer1Stack({ items }: { items: Layer1StackItem[] }) {
     };
 
     const moveTo = (nextIndex: number, mode: "auto" | "manual" | "sync") => {
-      const targets = readTargets();
-      if (!targets.length) return;
+      const currentTargets = recalcTargets();
+      if (!currentTargets.length) return;
       const bounded =
         mode === "auto"
-          ? ((nextIndex % targets.length) + targets.length) % targets.length
-          : Math.min(targets.length - 1, Math.max(0, nextIndex));
+          ? ((nextIndex % currentTargets.length) + currentTargets.length) % currentTargets.length
+          : Math.min(currentTargets.length - 1, Math.max(0, nextIndex));
 
       active = bounded;
       applyState(bounded);
-      animateScrollTo(targets[bounded], mode === "sync");
+      animateScrollTo(currentTargets[bounded], mode === "sync");
     };
 
     const scheduleAuto = () => {
       if (autoTimer) window.clearTimeout(autoTimer);
       autoTimer = window.setTimeout(() => {
+        if (document.hidden) {
+          scheduleAuto();
+          return;
+        }
         moveTo(active + 1, "auto");
         scheduleAuto();
       }, AUTO_ADVANCE_MS);
@@ -689,7 +686,7 @@ function Layer1Stack({ items }: { items: Layer1StackItem[] }) {
 
     const syncFromScroll = () => {
       if (programmatic) return;
-      const targets = readTargets();
+      if (!targets.length) recalcTargets();
       if (!targets.length) return;
       const current = scroller.scrollTop;
       let nearest = 0;
@@ -716,13 +713,18 @@ function Layer1Stack({ items }: { items: Layer1StackItem[] }) {
     };
 
     const onScroll = () => {
-      window.requestAnimationFrame(syncFromScroll);
+      if (scrollSyncFrame) return;
+      scrollSyncFrame = window.requestAnimationFrame(() => {
+        scrollSyncFrame = 0;
+        syncFromScroll();
+      });
     };
 
     const scheduleLayoutSync = () => {
       if (resizeTimer) window.clearTimeout(resizeTimer);
       resizeTimer = window.setTimeout(() => {
         resizeTimer = 0;
+        recalcTargets();
         if (!programmatic) moveTo(active, "sync");
       }, 180);
     };
@@ -752,6 +754,7 @@ function Layer1Stack({ items }: { items: Layer1StackItem[] }) {
       if (animationFrame) window.cancelAnimationFrame(animationFrame);
       if (animationDoneTimer) window.clearTimeout(animationDoneTimer);
       if (resizeTimer) window.clearTimeout(resizeTimer);
+      if (scrollSyncFrame) window.cancelAnimationFrame(scrollSyncFrame);
       observer?.disconnect();
       scroller.removeEventListener("wheel", onWheel);
       scroller.removeEventListener("scroll", onScroll);
@@ -950,9 +953,8 @@ export function CockpitView() {
       );
   } else if (activeLayer === 1) {
     const layer1Items: Layer1StackItem[] = [
-      { key: "execution_readiness", node: <ExecutionReadinessPanel /> },
-      { key: "order_ticket", node: <OrderTicketPanel /> },
-      { key: "holographic_signals", node: <HolographicSignalDeck brief={brief} /> },
+      { key: "asset_card", node: <HolographicSignalDeck brief={brief} /> },
+      { key: "news", node: <NewsPanel defaultView="radar" /> },
       {
         key: "event_scenario",
         node: (
@@ -963,7 +965,8 @@ export function CockpitView() {
         ),
       },
       { key: "capital_rotation", node: <CapitalRotationPanel /> },
-      { key: "news", node: <NewsPanel defaultView="radar" /> },
+      { key: "check_list", node: <ExecutionReadinessPanel /> },
+      { key: "order_ticket", node: <OrderTicketPanel /> },
     ];
 
     layerContent = (
@@ -1001,8 +1004,8 @@ export function CockpitView() {
 
             <Layer2DetailGroup
               index="01"
-              title="AI Agent Mode / Calibrating Kaynaklari"
-              detail="Katman 1'deki AI Agent kontrol dongusunu besleyen karar, risk, sistem, kalibrasyon, pozisyon ve ogrenme panelleri."
+              title="Check List Kaynaklari"
+              detail="Katman 1'deki Check List panelini besleyen karar, risk, sistem, kalibrasyon, pozisyon ve ogrenme panelleri."
             >
               <DashboardGrid>
                 <GridCell span="full">
@@ -1055,8 +1058,8 @@ export function CockpitView() {
 
             <Layer2DetailGroup
               index="02"
-              title="Holographic Command Signals Kaynaklari"
-              detail="Katman 1'deki holografik sinyal sahnesini besleyen aday sinyaller, timeframe uyumu, ajan matrisi ve trade ticket verileri."
+              title="Asset Card Kaynaklari"
+              detail="Katman 1'deki Asset Card sahnesini besleyen aday sinyaller, timeframe uyumu, ajan matrisi ve trade ticket verileri."
             >
               <DashboardGrid>
                 <GridCell span="full">

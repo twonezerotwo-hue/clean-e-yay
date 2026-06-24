@@ -88,7 +88,7 @@ export function OrderTicketPanel() {
   return (
     <PanelFrame id="order_ticket" className="border-accent-cyan/25">
       <PanelHeader
-        title="İşlem Aç (Owner Emri)"
+        title="Order Ticket"
         subtitle="market / limit / stop / stop-limit — kâğıt üzerinde, gerçek emir yok"
       />
 

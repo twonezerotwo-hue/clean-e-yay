@@ -77,7 +77,7 @@ export default function HomePage() {
         </div>
       </section>
 
-      <PanelGroup title="Islem Kontrol Dongusu" hint="10 kontrol / 30 saniye / read-only">
+      <PanelGroup title="Check List" hint="10 kontrol / 30 saniye / read-only">
         <GridCell span="full" lazy={false}><ExecutionReadinessPanel /></GridCell>
       </PanelGroup>
 
