@@ -308,10 +308,38 @@ export function Layer0ReporterAgent({
       .join(". ");
   }, [briefingData?.headlines, executive]);
 
+  const activeExchange = useMemo(() => {
+    let agentIndex = -1;
+    for (let index = messages.length - 1; index >= 0; index -= 1) {
+      if (messages[index]?.role === "agent") {
+        agentIndex = index;
+        break;
+      }
+    }
+
+    const questionSearchLimit = agentIndex >= 0 ? agentIndex : messages.length;
+    let userIndex = -1;
+    for (let index = questionSearchLimit - 1; index >= 0; index -= 1) {
+      if (messages[index]?.role === "user") {
+        userIndex = index;
+        break;
+      }
+    }
+
+    const pendingUserIndex =
+      agentIndex < 0 && messages[messages.length - 1]?.role === "user" ? messages.length - 1 : -1;
+
+    return {
+      agent: agentIndex >= 0 ? messages[agentIndex] : null,
+      agentIndex,
+      user: userIndex >= 0 ? messages[userIndex] : pendingUserIndex >= 0 ? messages[pendingUserIndex] : null,
+      userIndex: userIndex >= 0 ? userIndex : pendingUserIndex,
+    };
+  }, [messages]);
+
   const latestAgentText = useMemo(() => {
-    const last = [...messages].reverse().find((item) => item.role === "agent");
-    return last?.text ?? briefingText;
-  }, [briefingText, messages]);
+    return activeExchange.agent?.text ?? briefingText;
+  }, [activeExchange.agent?.text, briefingText]);
 
   const dataQualityPulse = useMemo<Layer0DataQualityPulse | null>(() => {
     const dqs = selectDqs(snapshot.data);
@@ -549,7 +577,11 @@ export function Layer0ReporterAgent({
         : dialogueMode
           ? "Karsilikli mod acik. Konusma bitince tekrar dinlemeye donecegim."
           : shortLine(latestAgentText, 132);
-  const recentMessages = messages.slice(-5);
+  const activeQuestionText = activeExchange.user?.text ?? lastUserText;
+  const activeEvidence = activeExchange.agent?.meta?.evidence_used?.slice(0, 4) ?? [];
+  const historyMessages = messages
+    .filter((_, index) => index !== activeExchange.agentIndex && index !== activeExchange.userIndex)
+    .slice(-4);
 
   useEffect(() => {
     const text = latestAgentText.trim();
@@ -813,7 +845,7 @@ export function Layer0ReporterAgent({
         </div>
 
         <div className="relative z-10 mt-3 flex items-center justify-between gap-3 text-[10px] uppercase tracking-widest text-white/38">
-          <span>SON RAPOR</span>
+          <span>CANLI ANALIZ</span>
           <span className="text-accent-cyan/60">
             {voiceLoading ? "AUDIO RENDER" : speaking ? "VOICE OUT" : listening ? "MIC IN" : subtitleSpeaker}
           </span>
@@ -823,10 +855,24 @@ export function Layer0ReporterAgent({
           <div className="layer0-voice-transcript">
             <div className="layer0-voice-transcript-glow" aria-hidden />
             <div className="layer0-voice-kicker">{subtitleText}</div>
+            {activeQuestionText ? (
+              <div className="layer0-voice-question-chip">
+                <span>Sen</span>
+                <p>{activeQuestionText}</p>
+              </div>
+            ) : null}
             <p className="layer0-voice-stream-text">
               {streamedText}
               <span className="layer0-voice-caret" aria-hidden />
             </p>
+            {activeEvidence.length ? (
+              <div className="layer0-voice-evidence">
+                <span className="layer0-voice-evidence__label">kanit</span>
+                {activeEvidence.map((item) => (
+                  <span key={item}>{item}</span>
+                ))}
+              </div>
+            ) : null}
             <button
               type="button"
               onClick={() => {
@@ -843,8 +889,10 @@ export function Layer0ReporterAgent({
             </button>
             {voiceError ? <div className="layer0-voice-error">{voiceError}</div> : null}
           </div>
-          {recentMessages.length ? (
-            recentMessages.map((message, index) => (
+          {historyMessages.length ? (
+            <>
+              <div className="layer0-voice-history-label">Onceki konusmalar</div>
+              {historyMessages.map((message, index) => (
               <div
                 key={`${message.role}-${index}`}
                 className={`layer0-voice-log-row ${
@@ -865,7 +913,8 @@ export function Layer0ReporterAgent({
                   </div>
                 ) : null}
               </div>
-            ))
+              ))}
+            </>
           ) : null}
           {chat.isPending ? (
             <div className="rounded-2xl border border-accent-cyan/20 bg-accent-cyan/8 px-3 py-2 text-xs uppercase tracking-widest text-accent-cyan/76">
