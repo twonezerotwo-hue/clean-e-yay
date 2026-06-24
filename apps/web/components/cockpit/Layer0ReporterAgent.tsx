@@ -5,7 +5,6 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import {
   useAgentBriefing,
   useChat,
-  useClosePaperPosition,
   useDataSnapshot,
   usePaperTradingState,
 } from "@/lib/queries/hooks";
@@ -68,7 +67,8 @@ type AgentBriefingWithExecutive = AgentBriefing & {
 };
 
 /** Center "ilk ekran" karar paneli için CockpitView'den gelen hazır veriler. */
-type ScanItem = { label: string; value: string; ok: boolean; href?: string };
+type ScanState = "OK" | "IZLE" | "ENGEL";
+type ScanItem = { label: string; value: string; ok: boolean; state?: ScanState; href?: string };
 export type Layer0HeroProps = {
   title: string;
   detail: string;
@@ -183,8 +183,13 @@ function Layer0StatusCore({
 
       <div className="layer0-status-core__nodes">
         {nodes.map(({ key, item, index, onClick }) => {
+          const state = item.state ?? (item.ok ? "OK" : "IZLE");
           const cls = `layer0-status-node ${
-            item.ok ? "layer0-status-node--ok" : "layer0-status-node--watch"
+            state === "OK"
+              ? "layer0-status-node--ok"
+              : state === "ENGEL"
+                ? "layer0-status-node--block"
+                : "layer0-status-node--watch"
           }`;
           const content = (
             <>
@@ -194,7 +199,7 @@ function Layer0StatusCore({
                 <strong>{item.label}</strong>
                 <em>{item.value}</em>
               </span>
-              <span className="layer0-status-node__state">{item.ok ? "OK" : "IZLE"}</span>
+              <span className="layer0-status-node__state">{state}</span>
             </>
           );
           if (item.href) {
@@ -237,8 +242,6 @@ export function Layer0ReporterAgent({
   const chat = useChat();
   const paper = usePaperTradingState();
   const snapshot = useDataSnapshot();
-  const closePosition = useClosePaperPosition();
-  const [confirmCloseId, setConfirmCloseId] = useState<string | null>(null);
   const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
   const [messages, setMessages] = useState<ReporterMessage[]>([]);
   const [input, setInput] = useState("");
@@ -578,7 +581,7 @@ export function Layer0ReporterAgent({
   }, [latestAgentText, modelMode]);
 
   return (
-    <section className="grid h-full min-h-0 gap-4 lg:grid-cols-[minmax(310px,0.92fr)_minmax(340px,1.04fr)_minmax(320px,1fr)]">
+    <section className="grid h-full min-h-0 gap-4 xl:grid-cols-[minmax(360px,1fr)_minmax(380px,1fr)_minmax(360px,1fr)]">
       {/* ── Sutun 1: Acik pozisyonlar + sistem durumu ───────────────── */}
       <div className="flex min-h-0 flex-col gap-4">
         <div className="layer0-card flex min-h-0 flex-1 flex-col">
@@ -604,15 +607,13 @@ export function Layer0ReporterAgent({
                     <th className="py-2 pr-2 font-medium">Zaman</th>
                     <th className="py-2 pr-2 font-medium">Boyut</th>
                     <th className="py-2 pr-2 text-right font-medium">P&amp;L (USD)</th>
-                    <th className="py-2 text-right font-medium">Islem</th>
+                    <th className="py-2 text-right font-medium">Durum</th>
                   </tr>
                 </thead>
                 <tbody>
                   {positions.map((pos) => {
                     const pnl = pos.unrealized_pnl_usd ?? 0;
                     const up = pnl >= 0;
-                    const confirming = confirmCloseId === pos.id;
-                    const closingThis = closePosition.isPending && confirming;
                     return (
                       <tr
                         key={pos.id}
@@ -644,29 +645,9 @@ export function Layer0ReporterAgent({
                           {up ? "+" : ""}${Math.round(pnl).toLocaleString()}
                         </td>
                         <td className="py-2 text-right">
-                          <button
-                            type="button"
-                            onClick={() => {
-                              if (!confirming) {
-                                setConfirmCloseId(pos.id);
-                                return;
-                              }
-                              closePosition.mutate(pos.id, {
-                                onSettled: () => setConfirmCloseId(null),
-                              });
-                            }}
-                            onBlur={() =>
-                              confirming && !closePosition.isPending && setConfirmCloseId(null)
-                            }
-                            disabled={closePosition.isPending}
-                            className={`rounded-md border px-2 py-1 text-[10px] font-semibold uppercase tracking-widest transition-colors disabled:opacity-40 ${
-                              confirming
-                                ? "border-red-400/55 bg-red-400/15 text-red-200"
-                                : "border-white/12 bg-white/[0.04] text-white/55 hover:border-red-400/35 hover:text-red-200"
-                            }`}
-                          >
-                            {closingThis ? "..." : confirming ? "Onayla" : "Kapat"}
-                          </button>
+                          <span className="rounded-md border border-amber-300/18 bg-amber-300/8 px-2 py-1 text-[10px] font-semibold uppercase tracking-widest text-amber-200">
+                            PAPER_SAFE
+                          </span>
                         </td>
                       </tr>
                     );
@@ -775,10 +756,10 @@ export function Layer0ReporterAgent({
             </span>
             <span className="min-w-0">
               <span className="block text-[9px] font-medium tracking-[0.26em] text-accent-cyan/70">
-                E-yAy voice stream
+                CEVAP KANALI
               </span>
               <span className="block truncate text-base normal-case tracking-normal text-white/90">
-                {subtitleSpeaker}
+                KONUŞMA PANELİ
               </span>
             </span>
           </div>
@@ -786,51 +767,55 @@ export function Layer0ReporterAgent({
             <button
               type="button"
               onClick={toggleDialogueMode}
-              className={`rounded-lg border px-2 py-1 text-[10px] uppercase tracking-widest transition-colors disabled:opacity-40 ${
+              title="Karsilikli konusma modu"
+              className={`grid h-7 w-7 place-items-center rounded-lg border text-[10px] uppercase tracking-widest transition-colors disabled:opacity-40 ${
                 dialogueMode
                   ? "border-accent-cyan/50 bg-accent-cyan/12 text-accent-cyan"
                   : "border-white/10 bg-white/[0.035] text-white/45"
               }`}
             >
-              Diyalog
+              IO
             </button>
             <button
               type="button"
               onClick={() => setVoiceEnabled((value) => !value)}
-              className={`rounded-lg border px-2 py-1 text-[10px] uppercase tracking-widest transition-colors disabled:opacity-40 ${
+              title="Sesli cevap"
+              className={`grid h-7 w-7 place-items-center rounded-lg border text-[10px] uppercase tracking-widest transition-colors disabled:opacity-40 ${
                 voiceEnabled
                   ? "border-emerald-400/40 bg-emerald-400/10 text-emerald-300"
                   : "border-white/10 bg-white/[0.035] text-white/45"
               }`}
             >
-              Ses
+              VO
             </button>
             <button
               type="button"
               onClick={startListening}
               disabled={!micReady || listening || chat.isPending}
-              className={`rounded-lg border px-2 py-1 text-[10px] uppercase tracking-widest transition-colors disabled:opacity-40 ${
+              title="Mikrofon"
+              className={`grid h-7 w-7 place-items-center rounded-lg border text-[10px] uppercase tracking-widest transition-colors disabled:opacity-40 ${
                 listening
                   ? "border-red-400/45 bg-red-400/10 text-red-300"
                   : "border-accent-cyan/35 bg-accent-cyan/8 text-accent-cyan"
               }`}
             >
-              {listening ? "..." : "Mik"}
+              {listening ? "..." : "MI"}
             </button>
             <button
               type="button"
               onClick={stopSpeaking}
-              className="rounded-lg border border-white/10 bg-white/[0.035] px-2 py-1 text-[10px] uppercase tracking-widest text-white/55 transition-colors hover:border-white/20 hover:text-white"
+              title="Sesi durdur"
+              className="grid h-7 w-7 place-items-center rounded-lg border border-white/10 bg-white/[0.035] text-[10px] uppercase tracking-widest text-white/55 transition-colors hover:border-white/20 hover:text-white"
             >
-              Sus
+              ST
             </button>
           </div>
         </div>
 
         <div className="relative z-10 mt-3 flex items-center justify-between gap-3 text-[10px] uppercase tracking-widest text-white/38">
-          <span>Hologram transcript</span>
+          <span>SON RAPOR</span>
           <span className="text-accent-cyan/60">
-            {voiceLoading ? "AUDIO RENDER" : speaking ? "VOICE OUT" : listening ? "MIC IN" : "STATE LINK"}
+            {voiceLoading ? "AUDIO RENDER" : speaking ? "VOICE OUT" : listening ? "MIC IN" : subtitleSpeaker}
           </span>
         </div>
 
@@ -854,7 +839,7 @@ export function Layer0ReporterAgent({
               disabled={!voiceEnabled}
               className="layer0-voice-read-button"
             >
-              {voiceLoading ? "Ses uretiliyor" : speaking ? "Durdur" : "Sesli oku"}
+              {voiceLoading ? "SES URETILIYOR" : speaking ? "DURDUR" : "SESLI OKU"}
             </button>
             {voiceError ? <div className="layer0-voice-error">{voiceError}</div> : null}
           </div>

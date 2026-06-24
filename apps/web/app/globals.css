@@ -843,6 +843,10 @@ html, body {
   color: #fbbf24;
 }
 
+.layer0-status-node--block {
+  color: #f87171;
+}
+
 .layer0-status-node__index {
   display: none;
   place-items: center;
@@ -963,8 +967,8 @@ html, body {
 
 .reporter-model-card {
   position: relative;
-  height: clamp(272px, 38vh, 430px);
-  min-height: 272px;
+  flex: 1 1 0;
+  min-height: 280px;
   overflow: hidden;
   border-radius: 1.25rem;
   border: 1px solid rgba(34, 211, 238, 0.24);
@@ -1839,6 +1843,46 @@ html, body {
 
 .layer1-stack-item[data-layer1-key="order_ticket"] {
   z-index: 70;
+}
+
+.layer1-summary-scroll {
+  overscroll-behavior-y: contain;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(34, 211, 238, 0.28) transparent;
+}
+
+.layer1-summary-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 1rem;
+  padding-bottom: 2.5rem;
+}
+
+@media (min-width: 1280px) {
+  .layer1-summary-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .layer1-summary-card[data-layer1-key="holographic_signals"],
+  .layer1-summary-card[data-layer1-key="news"] {
+    grid-column: span 2 / span 2;
+  }
+}
+
+.layer1-summary-card {
+  min-width: 0;
+  overflow: hidden;
+  border-radius: 1rem;
+  background: rgba(4, 8, 18, 0.22);
+  box-shadow:
+    0 18px 58px rgba(0, 0, 0, 0.24),
+    inset 0 0 54px rgba(1, 8, 18, 0.18);
+  backdrop-filter: blur(18px) saturate(1.03);
+  -webkit-backdrop-filter: blur(18px) saturate(1.03);
+}
+
+.layer1-summary-card > * {
+  min-height: 100%;
 }
 
 .quantum-panel {

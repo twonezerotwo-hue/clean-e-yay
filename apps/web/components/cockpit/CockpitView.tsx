@@ -1,11 +1,10 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
 import { motion } from "framer-motion";
 
 import { DataQualityBadge } from "@/components/shell/DataQualityBadge";
-import { DashboardGrid, GridCell } from "@/components/shell/DashboardGrid";
 import { EmptyState } from "@/components/shell/EmptyState";
 import { LoadingState } from "@/components/shell/LoadingState";
 import { PanelFrame } from "@/components/shell/PanelFrame";
@@ -14,60 +13,26 @@ import {
   useAgentMatrix,
   useCockpitBrief,
   useDashboardState,
+  useDataSnapshot,
   usePaperTradingState,
+  useReplayStatus,
+  useSystemHealth,
   useTradeTickets,
 } from "@/lib/queries/hooks";
 import {
   AGENT_STATUS_LABEL,
   AGENT_STATUS_TONE,
-  BLOCKER_TONE,
   DATA_MODE_TONE,
   selectAgentBrief,
 } from "@/lib/selectors/cockpit";
 
-import { AgentBriefPanel } from "@/components/panels/AgentBriefPanel";
-import { AgentMatrixPanel } from "@/components/panels/AgentMatrixPanel";
-import { AgentNarratorPanel } from "@/components/panels/AgentNarratorPanel";
-import { AgentVotesPanel } from "@/components/panels/AgentVotesPanel";
-import { AIReportPanel } from "@/components/panels/AIReportPanel";
-import { CalibrationPanel } from "@/components/panels/CalibrationPanel";
 import { CapitalRotationPanel } from "@/components/panels/CapitalRotationPanel";
-import { ChatPanel } from "@/components/panels/ChatPanel";
-import { CommandSignalsPanel } from "@/components/panels/CommandSignalsPanel";
-import { CorrelationPanel } from "@/components/panels/CorrelationPanel";
-import { CryptoDerivativesPanel } from "@/components/panels/CryptoDerivativesPanel";
-import { DataQualityPanel } from "@/components/panels/DataQualityPanel";
-import { DecisionPanel } from "@/components/panels/DecisionPanel";
-import { DecisionTracePanel } from "@/components/panels/DecisionTracePanel";
-import { DrawdownGuardPanel } from "@/components/panels/DrawdownGuardPanel";
 import { EventCalendarPanel } from "@/components/panels/EventCalendarPanel";
 import { ExecutionReadinessPanel } from "@/components/panels/ExecutionReadinessPanel";
 import { OrderTicketPanel } from "@/components/panels/OrderTicketPanel";
-import { CatalystImpactPanel } from "@/components/panels/CatalystImpactPanel";
-import { LearningPanel } from "@/components/panels/LearningPanel";
-import { MarketDataPanel } from "@/components/panels/MarketDataPanel";
-import { MarketSessionsPanel } from "@/components/panels/MarketSessionsPanel";
-import { MistakeMemoryPanel } from "@/components/panels/MistakeMemoryPanel";
 import { NewsPanel } from "@/components/panels/NewsPanel";
-import { OptionsVolPanel } from "@/components/panels/OptionsVolPanel";
-import { PanelAuditPanel } from "@/components/panels/PanelAuditPanel";
-import { PaperActionPanel } from "@/components/panels/PaperActionPanel";
-import { PositionChecksPanel } from "@/components/panels/PositionChecksPanel";
-import { ProviderStatusPanel } from "@/components/panels/ProviderStatusPanel";
-import { ReplayStatusPanel } from "@/components/panels/ReplayStatusPanel";
-import { RiskDurumuPanel } from "@/components/panels/RiskDurumuPanel";
 import { ScenarioPanel } from "@/components/panels/ScenarioPanel";
-import { ShadowPanel } from "@/components/panels/ShadowPanel";
-import { SnapshotPanel } from "@/components/panels/SnapshotPanel";
-import { SystemHealthBar } from "@/components/panels/SystemHealthBar";
-import { TfWeightsPanel } from "@/components/panels/TfWeightsPanel";
-import { TimeframeMatrixPanel } from "@/components/panels/TimeframeMatrixPanel";
-import { TradeTicketPanel } from "@/components/panels/TradeTicketPanel";
-import { TradingPanel } from "@/components/panels/TradingPanel";
-import { VolatilityPanel } from "@/components/panels/VolatilityPanel";
-import { WatchConditionsPanel } from "@/components/panels/WatchConditionsPanel";
-import { WeightHistoryPanel } from "@/components/panels/WeightHistoryPanel";
-import { WeightProposalPanel } from "@/components/panels/WeightProposalPanel";
+import type { CockpitBrief } from "@/types/generated/api";
 
 import { HolographicSignalDeck } from "./HolographicSignalDeck";
 import { Layer0ReporterAgent, type Layer0HeroProps } from "./Layer0ReporterAgent";
@@ -260,6 +225,183 @@ function DataSpineCard({
       <div className="text-[10px] uppercase tracking-widest text-white/38">{label}</div>
       <div className={`mt-2 font-display text-2xl leading-none ${tone}`}>{value}</div>
       <p className="mt-2 text-xs leading-5 text-white/50">{detail}</p>
+    </div>
+  );
+}
+
+function RawJsonPanel({
+  title,
+  detail,
+  data,
+}: {
+  title: string;
+  detail: string;
+  data: unknown;
+}) {
+  return (
+    <section className="rounded-xl border border-white/10 bg-black/24 p-4">
+      <div className="flex items-start justify-between gap-3 border-b border-white/[0.08] pb-3">
+        <div>
+          <div className="text-[10px] uppercase tracking-[0.22em] text-accent-cyan/70">
+            raw json
+          </div>
+          <h3 className="mt-1 font-display text-lg text-white/90">{title}</h3>
+          <p className="mt-1 text-xs leading-5 text-white/45">{detail}</p>
+        </div>
+        <span className="rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1 text-[10px] uppercase tracking-widest text-white/45">
+          read-only
+        </span>
+      </div>
+      <pre className="mt-3 max-h-[420px] overflow-auto rounded-lg border border-white/8 bg-[#02050a]/80 p-3 font-mono text-[11px] leading-5 text-cyan-50/68">
+        {JSON.stringify(data ?? { status: "loading" }, null, 2)}
+      </pre>
+    </section>
+  );
+}
+
+function RawDataRow({
+  label,
+  value,
+  detail,
+}: {
+  label: string;
+  value: string;
+  detail?: string;
+}) {
+  return (
+    <div className="rounded-lg border border-white/10 bg-white/[0.035] p-3">
+      <div className="text-[10px] uppercase tracking-widest text-white/36">{label}</div>
+      <div className="mt-1 break-words font-mono text-sm text-white/82">{value}</div>
+      {detail ? <div className="mt-1 text-xs leading-5 text-white/42">{detail}</div> : null}
+    </div>
+  );
+}
+
+function Layer3RawSpine({ cockpit }: { cockpit?: CockpitBrief }) {
+  const snapshot = useDataSnapshot();
+  const systemHealth = useSystemHealth();
+  const replayStatus = useReplayStatus();
+  const snapshotData = snapshot.data;
+  const dqs = snapshotData?.dqs;
+  const providerRows = Object.entries(snapshotData?.provider_status ?? {});
+  const priceRows = snapshotData?.prices ?? [];
+  const evidenceRefs = cockpit?.decision_trace?.evidence_refs ?? [];
+  const blockedBy = cockpit?.decision_trace?.blocked_by ?? [];
+
+  return (
+    <div className="h-full min-h-0 overflow-y-auto p-4 md:p-5">
+      <div className="space-y-5 pb-12">
+        <LayerHeader
+          meta={LAYERS[3]}
+          detail="Raw backend/provider/contract spine. Bu katmanda input, chat veya aksiyon yok; sadece gelen ViewModel ve veri omurgasi okunur."
+        >
+          <DataQualityBadge
+            dqs={dqs?.score ?? cockpit?.agent_brief?.dqs?.score ?? undefined}
+            generatedAt={snapshotData?.meta?.generated_at ?? cockpit?.generated_at}
+          />
+        </LayerHeader>
+
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <DataSpineCard
+            label="Endpoint status"
+            value={systemHealth.data?.api_status ?? "loading"}
+            detail={`paper_safe ${systemHealth.data?.paper_safe ? "true" : "false"} / no_execution ${systemHealth.data?.no_execution ? "true" : "false"}`}
+            tone="text-accent-cyan"
+          />
+          <DataSpineCard
+            label="Snapshot"
+            value={snapshotData?.meta?.snapshot_id ?? "loading"}
+            detail={`generated_at ${snapshotData?.meta?.generated_at ?? cockpit?.generated_at ?? "--"}`}
+            tone="text-white"
+          />
+          <DataSpineCard
+            label="Contract"
+            value={`schema ${formatScore(replayStatus.data?.schema_version)}`}
+            detail={`replay ${replayStatus.data?.status ?? "--"} / mode ${replayStatus.data?.mode ?? "--"}`}
+            tone="text-amber-200"
+          />
+          <DataSpineCard
+            label="Audit trace"
+            value={`${evidenceRefs.length} refs`}
+            detail={blockedBy.length ? `blocked_by ${blockedBy.join(", ")}` : "blocked_by none"}
+            tone="text-signal-up"
+          />
+        </div>
+
+        <Layer2DetailGroup
+          index="A"
+          title="Provider Health / Timestamp / Source"
+          detail="Saglayici durumlari, fiyat source alanlari ve available timestamp bilgileri ham snapshot uzerinden okunur."
+        >
+          <div className="grid gap-4 xl:grid-cols-[0.9fr_1.1fr]">
+            <div className="grid gap-2 sm:grid-cols-2">
+              {providerRows.map(([name, provider]) => (
+                <RawDataRow
+                  key={name}
+                  label={name}
+                  value={provider.status}
+                  detail={`last ${provider.last_success_at ?? "--"} / calls ${provider.calls} / fallbacks ${provider.fallbacks}${provider.last_error ? ` / error ${provider.last_error}` : ""}`}
+                />
+              ))}
+              {!providerRows.length ? (
+                <RawDataRow label="provider_status" value="loading" detail="Snapshot bekleniyor." />
+              ) : null}
+            </div>
+            <div className="grid gap-2 sm:grid-cols-2">
+              {priceRows.slice(0, 10).map((price) => (
+                <RawDataRow
+                  key={price.symbol}
+                  label={price.symbol}
+                  value={price.status}
+                  detail={`source ${price.source} / ts ${price.ts} / verified ${price.verified ? "true" : "false"}`}
+                />
+              ))}
+            </div>
+          </div>
+        </Layer2DetailGroup>
+
+        <Layer2DetailGroup
+          index="B"
+          title="DQS Breakdown"
+          detail="DQS alanlari frontendde yeniden hesaplanmaz; backend snapshot icindeki breakdown aynen gosterilir."
+        >
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+            <RawDataRow label="Freshness" value={formatScore(dqs?.freshness)} />
+            <RawDataRow label="Completeness" value={formatScore(dqs?.completeness)} />
+            <RawDataRow label="Drift" value={formatScore(dqs?.drift)} />
+            <RawDataRow label="Reconciliation" value={formatScore(dqs?.reconciliation)} />
+            <RawDataRow label="Decision usage" value={formatScore(dqs?.decision_usage)} />
+          </div>
+          {dqs?.notes?.length ? (
+            <div className="mt-3 rounded-lg border border-amber-300/18 bg-amber-300/8 p-3 text-xs leading-5 text-amber-100/75">
+              {dqs.notes.join(" / ")}
+            </div>
+          ) : null}
+        </Layer2DetailGroup>
+
+        <div className="grid gap-5 xl:grid-cols-2">
+          <RawJsonPanel
+            title="Cockpit ViewModel"
+            detail="/api/v1/cockpit/brief response body"
+            data={cockpit}
+          />
+          <RawJsonPanel
+            title="Data Snapshot"
+            detail="/api/v1/data/snapshot response body"
+            data={snapshotData}
+          />
+          <RawJsonPanel
+            title="System Health"
+            detail="/api/v1/system/health response body"
+            data={systemHealth.data}
+          />
+          <RawJsonPanel
+            title="Replay / Contract Status"
+            detail="/api/v1/replay/status response body"
+            data={replayStatus.data}
+          />
+        </div>
+      </div>
     </div>
   );
 }
@@ -462,12 +604,12 @@ function LayerControls({
   const next = activeLayer < 3 ? ((activeLayer + 1) as LayerIndex) : null;
 
   return (
-    <div className="pointer-events-auto fixed bottom-12 left-1/2 z-40 flex -translate-x-1/2 items-center gap-2 rounded-full border border-white/10 bg-black/40 p-2 shadow-[0_22px_70px_rgba(0,0,0,0.34)] backdrop-blur-xl">
+    <div className="pointer-events-auto flex items-center gap-2 rounded-full border border-white/10 bg-black/40 p-1.5 shadow-[0_18px_48px_rgba(0,0,0,0.3)] backdrop-blur-xl">
       <button
         type="button"
         disabled={previous == null}
         onClick={() => previous != null && onSelect(previous)}
-        className="rounded-full border border-white/10 px-3 py-2 text-xs text-white/62 transition-colors hover:border-white/24 hover:text-white disabled:cursor-not-allowed disabled:opacity-30"
+        className="rounded-full border border-white/10 px-3 py-1.5 text-xs text-white/62 transition-colors hover:border-white/24 hover:text-white disabled:cursor-not-allowed disabled:opacity-30"
       >
         Geri
       </button>
@@ -490,7 +632,7 @@ function LayerControls({
         type="button"
         disabled={next == null}
         onClick={() => next != null && onSelect(next)}
-        className="rounded-full border border-accent-cyan/35 bg-accent-cyan/8 px-3 py-2 text-xs text-accent-cyan transition-colors hover:bg-accent-cyan/14 disabled:cursor-not-allowed disabled:opacity-30"
+        className="rounded-full border border-accent-cyan/35 bg-accent-cyan/8 px-3 py-1.5 text-xs text-accent-cyan transition-colors hover:bg-accent-cyan/14 disabled:cursor-not-allowed disabled:opacity-30"
       >
         Iceri gir
       </button>
@@ -548,7 +690,7 @@ function LayerStage({
 }) {
   return (
     <div
-      className="relative z-10 mx-auto h-screen max-w-7xl px-4 pb-20 pt-[68px] md:px-6 md:pb-20 md:pt-[72px] xl:pl-24"
+      className="relative z-10 mx-auto h-full min-h-0 w-full max-w-7xl px-4 py-3 md:px-6 md:py-4 xl:pl-24"
       style={{ perspective: 1800 }}
     >
       <motion.section
@@ -577,212 +719,19 @@ function LayerStage({
   );
 }
 
-function Layer1Stack({ items }: { items: Layer1StackItem[] }) {
-  const scrollerRef = useRef<HTMLDivElement | null>(null);
-  const [activeIndex, setActiveIndex] = useState(0);
-
-  useEffect(() => {
-    const scroller = scrollerRef.current;
-    const stack = scroller?.querySelector<HTMLElement>(".layer1-stack");
-    if (!scroller || !stack) return;
-
-    const AUTO_ADVANCE_MS = 7000;
-    const TRANSITION_MS = 1120;
-    const MANUAL_LOCK_MS = TRANSITION_MS + 260;
-
-    const readItems = () =>
-      Array.from(stack.children)
-        .filter((node): node is HTMLElement => node instanceof HTMLElement);
-
-    const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    let active = 0;
-    let targets: number[] = [];
-    let lockUntil = 0;
-    let autoTimer = 0;
-    let animationFrame = 0;
-    let animationDoneTimer = 0;
-    let resizeTimer = 0;
-    let scrollSyncFrame = 0;
-    let programmatic = false;
-
-    const recalcTargets = () => {
-      targets = readItems().map((panel) => Math.max(0, panel.offsetTop));
-      return targets;
-    };
-
-    const applyState = (nextActive: number) => {
-      const panels = readItems();
-      if (!panels.length) return;
-
-      panels.forEach((panel, index) => {
-        const state =
-          index < nextActive ? "covered" : index === nextActive ? "active" : "queued";
-        panel.dataset.layer1State = state;
-      });
-      scroller.dataset.layer1Active = String(nextActive + 1);
-      setActiveIndex(nextActive);
-    };
-
-    const finishSettling = () => {
-      programmatic = false;
-      scroller.dataset.layer1Settling = "false";
-      applyState(active);
-    };
-
-    const animateScrollTo = (target: number, immediate = false) => {
-      if (animationFrame) window.cancelAnimationFrame(animationFrame);
-      if (animationDoneTimer) window.clearTimeout(animationDoneTimer);
-      animationFrame = 0;
-      animationDoneTimer = 0;
-      const start = scroller.scrollTop;
-      const distance = target - start;
-      const duration = reducedMotion ? 0 : TRANSITION_MS;
-      const startedAt = window.performance.now();
-
-      programmatic = true;
-      scroller.dataset.layer1Settling = "true";
-
-      if (immediate || duration === 0 || Math.abs(distance) < 1) {
-        scroller.scrollTop = target;
-        finishSettling();
-        return;
-      }
-
-      const ease = (t: number) => 1 - Math.pow(1 - t, 3);
-      const step = (now: number) => {
-        const progress = Math.min(1, (now - startedAt) / duration);
-        scroller.scrollTop = start + distance * ease(progress);
-        if (progress < 1) {
-          animationFrame = window.requestAnimationFrame(step);
-          return;
-        }
-        animationFrame = 0;
-        scroller.scrollTop = target;
-        animationDoneTimer = window.setTimeout(() => {
-          animationDoneTimer = 0;
-          finishSettling();
-        }, 120);
-      };
-      animationFrame = window.requestAnimationFrame(step);
-    };
-
-    const moveTo = (nextIndex: number, mode: "auto" | "manual" | "sync") => {
-      const currentTargets = recalcTargets();
-      if (!currentTargets.length) return;
-      const bounded =
-        mode === "auto"
-          ? ((nextIndex % currentTargets.length) + currentTargets.length) % currentTargets.length
-          : Math.min(currentTargets.length - 1, Math.max(0, nextIndex));
-
-      active = bounded;
-      applyState(bounded);
-      animateScrollTo(currentTargets[bounded], mode === "sync");
-    };
-
-    const scheduleAuto = () => {
-      if (autoTimer) window.clearTimeout(autoTimer);
-      autoTimer = window.setTimeout(() => {
-        if (document.hidden) {
-          scheduleAuto();
-          return;
-        }
-        moveTo(active + 1, "auto");
-        scheduleAuto();
-      }, AUTO_ADVANCE_MS);
-    };
-
-    const syncFromScroll = () => {
-      if (programmatic) return;
-      if (!targets.length) recalcTargets();
-      if (!targets.length) return;
-      const current = scroller.scrollTop;
-      let nearest = 0;
-      targets.forEach((target, index) => {
-        if (Math.abs(current - target) < Math.abs(current - targets[nearest])) {
-          nearest = index;
-        }
-      });
-      active = nearest;
-      applyState(nearest);
-    };
-
-    const onWheel = (event: WheelEvent) => {
-      const target = event.target as HTMLElement | null;
-      if (target?.closest("input, textarea, select, [contenteditable='true']")) return;
-      if (Math.abs(event.deltaY) < 8) return;
-
-      event.preventDefault();
-      const now = Date.now();
-      if (now < lockUntil) return;
-      lockUntil = now + MANUAL_LOCK_MS;
-      moveTo(active + (event.deltaY > 0 ? 1 : -1), "manual");
-      scheduleAuto();
-    };
-
-    const onScroll = () => {
-      if (scrollSyncFrame) return;
-      scrollSyncFrame = window.requestAnimationFrame(() => {
-        scrollSyncFrame = 0;
-        syncFromScroll();
-      });
-    };
-
-    const scheduleLayoutSync = () => {
-      if (resizeTimer) window.clearTimeout(resizeTimer);
-      resizeTimer = window.setTimeout(() => {
-        resizeTimer = 0;
-        recalcTargets();
-        if (!programmatic) moveTo(active, "sync");
-      }, 180);
-    };
-
-    const onResize = () => {
-      scheduleLayoutSync();
-    };
-
-    const observer =
-      typeof ResizeObserver === "undefined"
-        ? null
-        : new ResizeObserver(() => {
-            scheduleLayoutSync();
-          });
-
-    observer?.observe(scroller);
-    readItems().forEach((panel) => observer?.observe(panel));
-    scroller.addEventListener("wheel", onWheel, { passive: false });
-    scroller.addEventListener("scroll", onScroll, { passive: true });
-    window.addEventListener("resize", onResize);
-
-    moveTo(0, "sync");
-    scheduleAuto();
-
-    return () => {
-      if (autoTimer) window.clearTimeout(autoTimer);
-      if (animationFrame) window.cancelAnimationFrame(animationFrame);
-      if (animationDoneTimer) window.clearTimeout(animationDoneTimer);
-      if (resizeTimer) window.clearTimeout(resizeTimer);
-      if (scrollSyncFrame) window.cancelAnimationFrame(scrollSyncFrame);
-      observer?.disconnect();
-      scroller.removeEventListener("wheel", onWheel);
-      scroller.removeEventListener("scroll", onScroll);
-      window.removeEventListener("resize", onResize);
-    };
-  }, [items.length]);
-
+function Layer1SummaryGrid({ items }: { items: Layer1StackItem[] }) {
   return (
     <div
-      ref={scrollerRef}
-      className="layer1-stack-scroll h-full overflow-y-auto p-4 md:p-5"
+      className="layer1-summary-scroll h-full min-h-0 overflow-y-auto p-4 md:p-5"
       aria-live="polite"
-      aria-label={`Katman 1 panel ${activeIndex + 1} / ${items.length}`}
+      aria-label={`Katman 1 summary grid ${items.length} panel`}
     >
-      <div className="layer1-stack">
+      <div className="layer1-summary-grid">
         {items.map((item) => (
           <div
             key={item.key}
-            className="layer1-stack-item"
+            className="layer1-summary-card"
             data-layer1-key={item.key}
-            data-layer1-state="queued"
           >
             {item.node}
           </div>
@@ -914,6 +863,18 @@ export function CockpitView() {
   let layerContent: ReactNode;
   const dqsTone =
     (dqs ?? 0) >= 80 ? "text-signal-up" : (dqs ?? 0) >= 60 ? "text-amber-300" : "text-signal-down";
+  const riskScanState =
+    riskAction === "HOLD"
+      ? "OK"
+      : riskAction === "NO_POSITION_INCREASE"
+        ? "IZLE"
+        : riskAction === "KILL_SWITCH" ||
+            riskAction === "RISK_REDUCE" ||
+            riskAction === "BLOCKED"
+          ? "ENGEL"
+          : riskClear
+            ? "OK"
+            : "IZLE";
   const heroProps: Layer0HeroProps = {
     title: decisionTitle,
     detail: decisionDetail,
@@ -930,22 +891,26 @@ export function CockpitView() {
         label: "Veri omurgasi",
         value: `DQS ${formatScore(dqs)} / ${brief.data_mode}`,
         ok: dataTrusted,
+        state: dataTrusted ? "OK" : "ENGEL",
       },
       risk: {
         label: "Risk kapisi",
         value: riskAction,
         ok: riskClear,
+        state: riskScanState,
         href: "/dashboard#risk_gate",
       },
       sinyal: {
         label: "Sinyal adaylari",
         value: `${actionableCount} actionable / ${candidates.length} izlenen`,
         ok: actionableCount > 0,
+        state: actionableCount > 0 ? "OK" : "IZLE",
       },
       ticket: {
         label: "Trade ticket",
         value: activeTicket ? activeTicket.symbol : "ticket yok",
         ok: Boolean(activeTicket),
+        state: activeTicket ? "OK" : "IZLE",
         href: "/dashboard#trade_ticket",
       },
     },
@@ -960,8 +925,9 @@ export function CockpitView() {
       );
   } else if (activeLayer === 1) {
     const layer1Items: Layer1StackItem[] = [
-      { key: "asset_card", node: <HolographicSignalDeck brief={brief} /> },
-      { key: "news", node: <NewsPanel defaultView="radar" /> },
+      { key: "execution_readiness", node: <ExecutionReadinessPanel /> },
+      { key: "order_ticket", node: <OrderTicketPanel /> },
+      { key: "holographic_signals", node: <HolographicSignalDeck brief={brief} /> },
       {
         key: "event_scenario",
         node: (
@@ -972,12 +938,11 @@ export function CockpitView() {
         ),
       },
       { key: "capital_rotation", node: <CapitalRotationPanel /> },
-      { key: "check_list", node: <ExecutionReadinessPanel /> },
-      { key: "order_ticket", node: <OrderTicketPanel /> },
+      { key: "news", node: <NewsPanel defaultView="radar" /> },
     ];
 
     layerContent = (
-        <Layer1Stack items={layer1Items} />
+        <Layer1SummaryGrid items={layer1Items} />
       );
   } else if (activeLayer === 2) {
     layerContent = (
@@ -1023,6 +988,9 @@ export function CockpitView() {
               detail="Backend technical/insight ciktilariyla 1D ve 4H fib seviyeleri, yakin bolgeler ve confluence skoru okunur."
             >
               <Layer2FibonacciLabPanel />
+              <div className="mt-4">
+                <PatternsAnchorPanel />
+              </div>
             </Layer2DetailGroup>
 
             <Layer2DetailGroup
@@ -1052,175 +1020,14 @@ export function CockpitView() {
         </div>
       );
   } else {
-    layerContent = (
-      <div className="h-full overflow-y-auto p-4 md:p-5">
-        <div className="space-y-5">
-          <LayerHeader
-            meta={LAYERS[3]}
-            detail="Backendten gelen viewmodel, provider, snapshot ve sistem sagligi burada toplanir. Frontend bu veriyi degistirmez."
-          />
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            <DataSpineCard
-              label="Cockpit ViewModel"
-              value={AGENT_STATUS_LABEL[brief.status] ?? brief.status}
-              detail={`snapshot ${formatGeneratedAt(data?.generated_at)}`}
-              tone={AGENT_STATUS_TONE[brief.status]}
-            />
-            <DataSpineCard
-              label="Data Quality"
-              value={`DQS ${formatScore(dqs)}`}
-              detail={`mode ${brief.data_mode}`}
-              tone={DATA_MODE_TONE[brief.data_mode]}
-            />
-            <DataSpineCard
-              label="Main Blocker"
-              value={brief.main_blocker.label}
-              detail={brief.main_blocker.detail ?? brief.recommended_stance}
-              tone={BLOCKER_TONE[brief.main_blocker.code]}
-            />
-            <DataSpineCard
-              label="Signal Feed"
-              value={topSymbols}
-              detail={`${candidates.length} aday / ${actionableCount} actionable`}
-              tone="text-accent-cyan"
-            />
-          </div>
-          <Layer2DetailGroup
-            index="A"
-            title="ViewModel ve Karar Izleri"
-            detail="Katman 3 link listesi degil; backendten gelen agent ozeti, karar izi ve data contract burada dogrudan okunur."
-          >
-            <DashboardGrid>
-              <GridCell span="1">
-                <AgentBriefPanel />
-              </GridCell>
-              <GridCell span="1">
-                <DecisionPanel />
-              </GridCell>
-              <GridCell span="2">
-                <DecisionTracePanel />
-              </GridCell>
-              <GridCell span="1">
-                <AgentVotesPanel />
-              </GridCell>
-              <GridCell span="2">
-                <AgentMatrixPanel />
-              </GridCell>
-            </DashboardGrid>
-          </Layer2DetailGroup>
-
-          <Layer2DetailGroup
-            index="B"
-            title="Provider, Snapshot ve Data Quality"
-            detail="Saglayici durumu, DQS, snapshot ve market data panelleri artik ayri link arkasinda degil."
-          >
-            <DashboardGrid>
-              <GridCell span="1">
-                <DataQualityPanel />
-              </GridCell>
-              <GridCell span="1">
-                <ProviderStatusPanel />
-              </GridCell>
-              <GridCell span="1">
-                <SnapshotPanel />
-              </GridCell>
-              <GridCell span="1">
-                <MarketDataPanel />
-              </GridCell>
-            </DashboardGrid>
-          </Layer2DetailGroup>
-
-          <Layer2DetailGroup
-            index="C"
-            title="Risk, Execution ve Operasyon"
-            detail="Risk kapisi, trade ticket, paper action, sistem sagligi, panel audit ve replay omurgasi tek sayfada acik."
-          >
-            <DashboardGrid>
-              <GridCell span="1">
-                <RiskGateAnchorPanel />
-              </GridCell>
-              <GridCell span="1">
-                <TradeTicketPanel />
-              </GridCell>
-              <GridCell span="1">
-                <RiskDurumuPanel />
-              </GridCell>
-              <GridCell span="1">
-                <PaperActionPanel />
-              </GridCell>
-              <GridCell span="1">
-                <PositionChecksPanel />
-              </GridCell>
-              <GridCell span="1">
-                <SystemHealthBar />
-              </GridCell>
-              <GridCell span="1">
-                <PanelAuditPanel />
-              </GridCell>
-              <GridCell span="1">
-                <ReplayStatusPanel />
-              </GridCell>
-            </DashboardGrid>
-          </Layer2DetailGroup>
-
-          <Layer2DetailGroup
-            index="D"
-            title="Dashboard-Only Agent Yuzeyleri"
-            detail="Dashboard registry'de olup cockpit'e birebir tasinmamis agent_narrator ve chat panelleri burada dogrudan okunur."
-          >
-            <DashboardGrid>
-              <GridCell span="full">
-                <AgentNarratorPanel />
-              </GridCell>
-              <GridCell span="full">
-                <ChatPanel />
-              </GridCell>
-            </DashboardGrid>
-          </Layer2DetailGroup>
-
-          <Layer2DetailGroup
-            id="haberler_catalyst"
-            index="E"
-            title="Haberler & Catalyst"
-            detail="dashboard#haberler_catalyst karsiligi: haber akisi, catalyst etkisi, olay takvimi ve senaryo tek Katman 3 grubunda."
-          >
-            <DashboardGrid>
-              <GridCell span="full">
-                <NewsPanel defaultView="radar" />
-              </GridCell>
-              <GridCell span="2">
-                <CatalystImpactPanel />
-              </GridCell>
-              <GridCell span="1">
-                <EventCalendarPanel />
-              </GridCell>
-              <GridCell span="full">
-                <ScenarioPanel />
-              </GridCell>
-            </DashboardGrid>
-          </Layer2DetailGroup>
-
-          <Layer2DetailGroup
-            index="F"
-            title="Grafik Desenleri ve Eksik Anchorlar"
-            detail="dashboard#patterns artik Katman 3'te Agent Matrix'in pattern/reversal kanitlarini read-only olarak gosterir."
-          >
-            <DashboardGrid>
-              <GridCell span="full">
-                <PatternsAnchorPanel />
-              </GridCell>
-            </DashboardGrid>
-          </Layer2DetailGroup>
-        </div>
-      </div>
-    );
+    layerContent = <Layer3RawSpine cockpit={data} />;
   }
 
   return (
-    <main className="relative h-screen overflow-hidden bg-[#02030a] text-white">
+    <main className="relative grid h-dvh grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden bg-[#02030a] text-white">
       <LayerDepthBackdrop activeLayer={activeLayer} brief={brief} />
 
-      <div className="pointer-events-none fixed inset-x-0 top-0 z-30 border-b border-white/[0.08] bg-black/24 backdrop-blur-md">
+      <header className="pointer-events-none relative z-30 border-b border-white/[0.08] bg-black/24 backdrop-blur-md">
         <div className="mx-auto flex max-w-7xl items-center justify-between gap-3 px-4 py-2.5 md:px-6 xl:pl-24">
           <div className="flex min-w-0 items-center gap-3">
             <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-accent-cyan/35 bg-accent-cyan/10 font-display text-sm text-accent-cyan shadow-[0_0_28px_rgba(34,211,238,0.16)]">
@@ -1271,17 +1078,17 @@ export function CockpitView() {
             </button>
           </div>
         </div>
-      </div>
+      </header>
 
       <LayerRail activeLayer={activeLayer} onSelect={activateLayer} />
-      <LayerControls activeLayer={activeLayer} onSelect={activateLayer} />
 
       <LayerStage activeLayer={activeLayer} direction={direction}>
         {layerContent}
       </LayerStage>
 
-      <div className="pointer-events-none fixed inset-x-0 bottom-0 z-30 border-t border-white/[0.08] bg-black/30 backdrop-blur-md">
+      <footer className="pointer-events-none relative z-30 border-t border-white/[0.08] bg-black/30 backdrop-blur-md">
         <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-x-6 gap-y-1 px-4 py-2 md:px-6 xl:pl-24">
+          <LayerControls activeLayer={activeLayer} onSelect={activateLayer} />
           <StatusCell
             label="Baglanti"
             value={brief.data_mode.startsWith("LIVE") ? "CANLI" : brief.data_mode}
@@ -1309,7 +1116,7 @@ export function CockpitView() {
             tone={AGENT_STATUS_TONE[brief.status]}
           />
         </div>
-      </div>
+      </footer>
     </main>
   );
 }
