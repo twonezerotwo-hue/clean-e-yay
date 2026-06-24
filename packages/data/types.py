@@ -77,6 +77,17 @@ class TechnicalSnapshot(BaseModel):
     atr: float | None = None
     ema_stack: Literal["bullish", "bearish", "mixed"] | None = None
     score: float = 0.0
+    # Top-down GATED direction (0–100, 50 = neutral): momentum trigger gated by
+    # location/pattern/volume evidence (build_timeframe_result). None when momentum
+    # is insufficient (DATA_POLICY). Consensus `_touche` prefers this over `score`;
+    # `score` (legacy RSI+MACD) stays for backward-compat / fallback.
+    direction_score: float | None = None
+    # Top-down location gate multiplier (1.0 neutral, <1 penalty e.g. shorting into
+    # support, >1 confirm) + the compact location evidence behind it (fib zone /
+    # confluence / pattern / reversal). Surfaced so the LLM can EXPLAIN the gate in
+    # plain language ("bearish momentum but sitting on support — don't short here").
+    location_gate: float | None = None
+    location_evidence: list[str] = Field(default_factory=list)
     ts: datetime = Field(default_factory=utcnow)
     # T1 additive — bar yetersiz/stale ise DEGRADED; alanlar None kalır.
     status: TechnicalStatus = "OK"
@@ -190,6 +201,10 @@ class TechnicalScoreOverview(BaseModel):
 
     direction_score: float | None = None
     strength_score: float | None = None
+    # Diagnostic (NOT a collapsed score): how much the top-down location/pattern/
+    # volume gate scaled momentum conviction. 1.0 = neutral, <1 penalty (e.g. longing
+    # into resistance), >1 mild confirm. None when momentum/evidence insufficient.
+    location_gate_multiplier: float | None = None
 
 
 class TechnicalKeyLevels(BaseModel):

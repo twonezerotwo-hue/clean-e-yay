@@ -123,8 +123,14 @@ def test_matrix_viewmodel_shape():
     assert vm["timeframes"][0] == "15m"
     row = vm["symbols"][0]
     assert row["symbol"] == "BTCUSD"
-    assert {"stance", "consensus", "decision", "economics"} <= set(row)
+    assert {"stance", "consensus", "decision", "economics", "per_timeframe"} <= set(row)
     assert row["economics"]["allow"] is True
+    # C — per-TF gated direction + location-gate diagnostic surfaced for the panel.
+    cells = {c["timeframe"]: c for c in row["per_timeframe"]}
+    assert {"1d", "1h"} <= set(cells)
+    assert cells["1h"]["direction_score"] == 70.0
+    assert cells["1h"]["bias"] == "BULLISH"
+    assert "location_gate" in cells["1h"]
 
 
 # ── Determinism (timestamps excepted) ─────────────────────────────────────────

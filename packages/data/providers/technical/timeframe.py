@@ -28,7 +28,9 @@ from packages.data.types import (
     TechnicalBias,
     TechnicalConfluenceZone,
     TechnicalDataQuality,
+    TechnicalChartPatterns,
     TechnicalKeyLevels,
+    TechnicalReversalSignals,
     TechnicalScoreOverview,
     TechnicalTimeframeResult,
     TechnicalTimeframeSummary,
@@ -66,6 +68,16 @@ class TechnicalConfig:
     pivot_right: int = 3
     stop_atr_mult: float = 1.5
     target_rr: float = 2.0
+    # Top-down location gate (§4.5 evidence → direction). Momentum (RSI/MACD/EMA)
+    # stays the directional spine/TRIGGER; location/pattern/volume evidence only
+    # tilts conviction. Asymmetric by design: agreement gives a mild confirm,
+    # conflict ("longing into resistance / premium") bites harder — never boosts a
+    # neutral momentum into a fake signal (DATA_POLICY).
+    tilt_weights: dict[str, float] = field(
+        default_factory=lambda: {"location": 0.60, "pattern": 0.25, "volume": 0.15}
+    )
+    tilt_confirm_gain: float = 0.15   # max conviction *1.15 when evidence agrees
+    tilt_penalty_gain: float = 0.40   # max conviction *0.60 when evidence conflicts
 
 
 def load_config() -> TechnicalConfig:
@@ -74,6 +86,7 @@ def load_config() -> TechnicalConfig:
     vol = t.get("volatility", {}) or {}
     piv = t.get("swing_pivot", {}) or {}
     warm = t.get("warmup_min_bars", {}) or {}
+    tlt = t.get("direction_tilt", {}) or {}
     return TechnicalConfig(
         bull_cut=float(cuts.get("bull", 60)),
         bear_cut=float(cuts.get("bear", 40)),
@@ -91,6 +104,13 @@ def load_config() -> TechnicalConfig:
         pivot_right=int(piv.get("right", 3)),
         stop_atr_mult=float(t.get("stop_atr_mult", 1.5)),
         target_rr=float(t.get("target_rr", 2.0)),
+        tilt_weights={
+            "location": float(tlt.get("location", 0.60)),
+            "pattern": float(tlt.get("pattern", 0.25)),
+            "volume": float(tlt.get("volume", 0.15)),
+        },
+        tilt_confirm_gain=float(tlt.get("confirm_gain", 0.15)),
+        tilt_penalty_gain=float(tlt.get("penalty_gain", 0.40)),
     )
 
 
@@ -113,10 +133,14 @@ def _ema_stack(emas: list[float | None]) -> str | None:
     return "mixed"
 
 
-def _direction_score(
+def _momentum_score(
     rsi_v: float | None, macd_norm: float | None, ema_stack: str | None
 ) -> float | None:
-    """0–100 (50 = neutral). None = insufficient evidence — NOT a neutral 50."""
+    """Momentum/trend TRIGGER axis (0–100, 50 = neutral). None = insufficient.
+
+    RSI + MACD + EMA stack are correlated reads of one momentum axis; averaged as a
+    SINGLE group so they are not triple-counted against the location/pattern/volume
+    evidence that the top-down gate folds in afterwards."""
     comps: list[float] = []
     if rsi_v is not None:
         comps.append(_clamp(rsi_v, 0.0, 100.0))
@@ -127,6 +151,114 @@ def _direction_score(
     if not comps:
         return None
     return sum(comps) / len(comps)
+
+
+# Fib zone → bullish-favorable location (+) vs bearish-favorable (−). Aligned to the
+# momentum direction later: longing near_support/breakout is good; into near_resistance
+# is bad (the "where am I / is it cheap" read the score used to ignore).
+_FIB_ZONE_BULL: dict[str, float] = {
+    "near_support": 0.8, "breakout": 1.0, "mid_range": 0.0,
+    "near_resistance": -0.8, "breakdown": -1.0, "unknown": 0.0,
+}
+_BIAS_BULL: dict[str, float] = {"BULLISH": 1.0, "BEARISH": -1.0, "NEUTRAL": 0.0}
+
+
+def _location_alignment(
+    dir_sign: float,
+    fib: FibonacciAnalysis | None,
+    zones: list[TechnicalConfluenceZone],
+) -> float | None:
+    """How well current LOCATION favors the momentum direction (−1..+1). None = no
+    location evidence. + = good entry location for this side, − = chasing into S/R."""
+    comps: list[float] = []
+    if fib is not None and fib.validity != "unavailable" and fib.zone != "unknown":
+        comps.append(_FIB_ZONE_BULL.get(fib.zone, 0.0) * dir_sign)
+    if zones:
+        # _confluence_zones already keys support<current / resistance>current.
+        sup = any(z.kind == "support" for z in zones)
+        res = any(z.kind == "resistance" for z in zones)
+        struct_bull = _clamp((0.6 if sup else 0.0) - (0.6 if res else 0.0), -1.0, 1.0)
+        if sup or res:
+            comps.append(struct_bull * dir_sign)
+    return sum(comps) / len(comps) if comps else None
+
+
+def _pattern_alignment(
+    dir_sign: float,
+    reversal: TechnicalReversalSignals | None,
+    chart: TechnicalChartPatterns | None,
+) -> float | None:
+    """Reversal + chart-pattern bias agreement with the momentum direction (−1..+1).
+    A bearish reversal under a long trigger (e.g. divergence at the top) → penalty."""
+    comps: list[float] = []
+    if reversal is not None and reversal.bias != "NEUTRAL":
+        comps.append(_BIAS_BULL[reversal.bias] * dir_sign)
+    if chart is not None and chart.bias != "NEUTRAL":
+        comps.append(_BIAS_BULL[chart.bias] * dir_sign)
+    return sum(comps) / len(comps) if comps else None
+
+
+def _volume_alignment(
+    dir_sign: float, vwap_v: float | None, current: float | None
+) -> float | None:
+    """VWAP confirmation aligned to direction (−1..+1). None on non-intraday TF."""
+    if vwap_v is None or current is None or vwap_v <= 0:
+        return None
+    return (1.0 if current > vwap_v else -1.0) * dir_sign
+
+
+def _direction_score(
+    rsi_v: float | None,
+    macd_norm: float | None,
+    ema_stack: str | None,
+    *,
+    fib: FibonacciAnalysis | None = None,
+    zones: list[TechnicalConfluenceZone] | None = None,
+    reversal: TechnicalReversalSignals | None = None,
+    chart: TechnicalChartPatterns | None = None,
+    vwap_v: float | None = None,
+    current: float | None = None,
+    cfg: TechnicalConfig | None = None,
+) -> tuple[float | None, dict[str, float]]:
+    """Top-down directional read (0–100, 50 = neutral). None = insufficient momentum.
+
+    Order = the way a trader reads it: momentum is the TRIGGER, then location
+    ("where am I / is it cheap"), pattern and volume GATE conviction around it. The
+    gate is asymmetric — agreement confirms mildly, conflict bites hard — and never
+    manufactures a direction from neutral momentum (DATA_POLICY). Returns the score
+    plus a diagnostics map (evidence chain rule)."""
+    cfg = cfg or load_config()
+    core = _momentum_score(rsi_v, macd_norm, ema_stack)
+    diag: dict[str, float] = {}
+    if core is None:
+        return None, diag
+    diag["momentum"] = round(core, 2)
+
+    dir_sign = 1.0 if core > 50.0 else (-1.0 if core < 50.0 else 0.0)
+    if dir_sign == 0.0:
+        return core, diag  # neutral trigger — evidence does not fabricate a side
+
+    loc = _location_alignment(dir_sign, fib, zones or [])
+    pat = _pattern_alignment(dir_sign, reversal, chart)
+    vol = _volume_alignment(dir_sign, vwap_v, current)
+    parts = (("location", loc), ("pattern", pat), ("volume", vol))
+
+    num = den = 0.0
+    for name, val in parts:
+        if val is None:
+            continue
+        diag[name] = round(val, 3)
+        wt = cfg.tilt_weights.get(name, 0.0)
+        num += val * wt
+        den += wt
+    agreement = num / den if den > 0 else 0.0  # −1..+1, evidence vs momentum side
+
+    gain = cfg.tilt_confirm_gain if agreement >= 0 else cfg.tilt_penalty_gain
+    mult = 1.0 + gain * agreement
+    diag["gate_mult"] = round(mult, 3)
+
+    final = 50.0 + (core - 50.0) * mult
+    return _clamp(final, 0.0, 100.0), diag
 
 
 def _strength_score(adx_v: float | None, direction_score: float | None) -> float | None:
@@ -356,10 +488,7 @@ def build_timeframe_result(
     reversal_signals = reversal.detect(bars, left=cfg.pivot_left, right=cfg.pivot_right)
     chart_patterns = patterns.detect(bars, left=cfg.pivot_left, right=cfg.pivot_right)
 
-    # ── scoring (SEPARATE axes) + summary ─────────────────────────────────────
-    direction = _direction_score(rsi_v, macd_norm, ema_stack)
-    strength = _strength_score(adx_v, direction)
-    bias = _bias(direction, cfg)
+    # ── structure first (location is read BEFORE the momentum trigger) ────────
     key_levels = _key_levels(current, pivots, atr_v, atr_pct, cfg)
     trend = _trend_strength(adx_t, cfg)
     vol_regime = _volatility_regime(adx_v, bb_w, cfg)
@@ -367,9 +496,22 @@ def build_timeframe_result(
         current, atr_pct, key_levels.support, key_levels.resistance, vwap_v, fib
     )
 
+    # ── scoring (SEPARATE axes) — top-down: momentum trigger gated by location/
+    #    pattern/volume evidence (§4.5 now feeds direction, no longer evidence-only).
+    direction, dir_diag = _direction_score(
+        rsi_v, macd_norm, ema_stack,
+        fib=fib, zones=zones, reversal=reversal_signals, chart=chart_patterns,
+        vwap_v=vwap_v, current=current, cfg=cfg,
+    )
+    strength = _strength_score(adx_v, direction)
+    bias = _bias(direction, cfg)
+
     evidence: list[str] = []
     if direction is not None:
         evidence.append(f"direction_score={direction:.1f}")
+        gm = dir_diag.get("gate_mult")
+        if gm is not None and abs(gm - 1.0) >= 0.01:
+            evidence.append(f"location_gate=×{gm}")
     else:
         evidence.append("direction_unavailable_insufficient_data")
     if trend.label != "UNKNOWN":
@@ -397,6 +539,7 @@ def build_timeframe_result(
         score_overview=TechnicalScoreOverview(
             direction_score=round(direction, 2) if direction is not None else None,
             strength_score=round(strength, 2) if strength is not None else None,
+            location_gate_multiplier=dir_diag.get("gate_mult"),
         ),
         key_levels=key_levels,
         confirmation_signals=_confirmations(rsi_v, macd_t, ema_stack, current, vwap_v),

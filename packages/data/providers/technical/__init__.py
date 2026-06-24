@@ -74,6 +74,21 @@ def compute_snapshot(
         score += _clamp(macd_norm, -3.0, 3.0) * 5.0
     score = _clamp(score, 0.0, 100.0)
 
+    # Top-down GATED direction (the score the decision engine actually consumes via
+    # consensus `_touche`): momentum trigger gated by location/pattern/volume evidence.
+    # Lazy import avoids a package-init cycle (timeframe imports sibling submodules).
+    from packages.data.providers.technical.timeframe import build_timeframe_result
+
+    tf_result = build_timeframe_result(symbol, timeframe, bars, now=now)
+    direction_score = tf_result.score_overview.direction_score
+    location_gate = tf_result.score_overview.location_gate_multiplier
+    # Compact location evidence (the "where am I" read behind the gate) — fib zone,
+    # confluence, chart pattern, reversal. Surfaced for LLM narration / fallback.
+    _LOC_PREFIXES = ("fib_zone=", "reversal_bias=", "pattern=", "confluence:")
+    location_evidence = [
+        e for e in tf_result.timeframe_summary.evidence if e.startswith(_LOC_PREFIXES)
+    ][:3]
+
     stale = bool(bars) and (
         (now - bars[-1].ts).total_seconds() > STALE_AFTER_SEC[timeframe]
     )
@@ -93,6 +108,9 @@ def compute_snapshot(
         atr=round(atr_v, 4) if atr_v is not None else None,
         ema_stack=ema_stack,  # type: ignore[arg-type]
         score=round(score, 2),
+        direction_score=round(direction_score, 2) if direction_score is not None else None,
+        location_gate=round(location_gate, 3) if location_gate is not None else None,
+        location_evidence=location_evidence,
         ts=bars[-1].ts if bars else now,
         status="DEGRADED" if degraded else "OK",
         source=bars[-1].source if bars else "none",

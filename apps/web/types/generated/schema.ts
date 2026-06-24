@@ -106,6 +106,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/voice/speak": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** High quality TTS proxy (provider key never reaches frontend) */
+        post: operations["postVoiceSpeak"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/paper-trading/state": {
         parameters: {
             query?: never;
@@ -134,6 +151,23 @@ export interface paths {
         put?: never;
         /** Manuel tick (yan etkili — açma/kapatma yapabilir) */
         post: operations["postPaperTradingTick"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/paper-trading/positions/{position_id}/close": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Owner — tek açık pozisyonu manuel kapat (MANUAL exit; paper-safe, broker yok) */
+        post: operations["postPaperTradingPositionClose"];
         delete?: never;
         options?: never;
         head?: never;
@@ -983,6 +1017,11 @@ export interface components {
         ChatRequest: {
             message: string;
         };
+        VoiceSpeakRequest: {
+            text: string;
+            voice?: string | null;
+            provider?: string | null;
+        };
         /** @description v2.6 — state-grounded yanıt. refused=true → injection/bypass guard devrede. evidence_used yanıtın dayandığı state kanıtları. */
         ChatResponse: {
             answer: string;
@@ -1521,6 +1560,12 @@ export interface components {
             /** @enum {string|null} */
             ema_stack?: "bullish" | "bearish" | "mixed" | null;
             score: number;
+            /** @description Top-down GATED direction (0–100, 50 = neutral) — momentum trigger gated by location/pattern/volume evidence. The decision engine (consensus `_touche`) consumes this; `score` is the legacy RSI+MACD fallback. */
+            direction_score?: number | null;
+            /** @description Location gate multiplier (1.0 neutral, <1 penalty e.g. shorting into support, >1 confirm) — how the top-down location/pattern/volume read reshaped momentum conviction. */
+            location_gate?: number | null;
+            /** @description Compact 'where am I' evidence behind the gate (fib zone / confluence / pattern / reversal) — surfaced so the LLM can explain it in plain language. */
+            location_evidence?: string[];
             /** @enum {string} */
             status: "OK" | "DEGRADED";
             source?: string;
@@ -2199,6 +2244,8 @@ export interface components {
         TechnicalScoreOverview: {
             direction_score?: number | null;
             strength_score?: number | null;
+            /** @description Diagnostic (NOT a collapsed score): how much the top-down location/ pattern/volume gate scaled momentum conviction. 1.0 neutral, <1 penalty (e.g. longing into resistance), >1 mild confirm. */
+            location_gate_multiplier?: number | null;
         };
         TechnicalKeyLevels: {
             support?: number | null;
@@ -2372,6 +2419,17 @@ export interface components {
             /** @enum {string|null} */
             reversal_bias?: "BULLISH" | "BEARISH" | "NEUTRAL" | null;
             pattern?: string | null;
+            /** @description Per-TF gated direction + location-gate diagnostic (visibility). EVIDENCE only — the gate already shaped direction_score and bias; this surfaces the 'where am I' read per timeframe alongside the aggregated consensus. */
+            per_timeframe?: components["schemas"]["AgentTimeframeCell"][];
+        };
+        AgentTimeframeCell: {
+            /** @enum {string} */
+            timeframe: "15m" | "1h" | "4h" | "1d" | "1w";
+            direction_score?: number | null;
+            strength_score?: number | null;
+            /** @enum {string} */
+            bias: "BULLISH" | "BEARISH" | "NEUTRAL";
+            location_gate?: number | null;
         };
         /** @description Read-only multi-TF agent pipeline matrix (steps 1–6). Global RiskGate action is applied first; the per-trade cost + R:R gate is final. Frontend renders only. */
         AgentMatrix: {
@@ -2436,11 +2494,38 @@ export interface components {
             title: string;
             detail?: string | null;
         };
-        /** @description Raporcu agent — sistem state'ini her cycle tarayıp başlık başlık özet üretir. LLM gerektirmez; karar vermez (observer). */
+        /** @description Karar motorunun (tick worker) gerçek tazeliği — render zamanı değil. */
+        AgentBriefingEngine: {
+            status: string;
+            age_seconds?: number | null;
+            cycle_count?: number;
+            stale: boolean;
+        };
+        /** @description Genel müdür → CEO brifingi. Deterministik sentez; tek cümle sonuç + kısa anlatı + tavsiye + önceliklendirilmiş risk bayrakları. Karar vermez. */
+        AgentBriefingExecutive: {
+            /** @enum {string} */
+            stance: "halt" | "stale" | "blocked" | "data_gap" | "signal" | "watching" | "calm";
+            stance_label: string;
+            /** @enum {string} */
+            tone: "ok" | "info" | "warn" | "alert";
+            headline: string;
+            narrative: string;
+            recommendation: string;
+            flags: string[];
+        };
+        AgentBriefingDqs: {
+            score: number;
+            status: string;
+        };
+        /** @description Raporcu agent — sistem state'ini her cycle tarayıp yönetici özeti + başlık başlık özet üretir. LLM gerektirmez; karar vermez (observer). */
         AgentBriefing: {
             generated_at: string;
             snapshot_id?: string | null;
             regime_label?: string | null;
+            stale?: boolean;
+            executive?: components["schemas"]["AgentBriefingExecutive"];
+            engine?: components["schemas"]["AgentBriefingEngine"];
+            dqs?: components["schemas"]["AgentBriefingDqs"];
             headlines: components["schemas"]["AgentBriefingHeadline"][];
         };
     };
@@ -2576,6 +2661,44 @@ export interface operations {
             };
         };
     };
+    postVoiceSpeak: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VoiceSpeakRequest"];
+            };
+        };
+        responses: {
+            /** @description MPEG audio */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "audio/mpeg": string;
+                };
+            };
+            /** @description Empty text */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description TTS provider not configured or unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     getPaperTradingState: {
         parameters: {
             query?: never;
@@ -2613,6 +2736,49 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["TickResult"];
                 };
+            };
+        };
+    };
+    postPaperTradingPositionClose: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                position_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Kapatıldı (realized trade) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        status?: string;
+                        position_id?: string;
+                        symbol?: string;
+                        side?: string;
+                        exit_price?: number;
+                        pnl_usd?: number;
+                    };
+                };
+            };
+            /** @description position_not_found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Fiyat yok / price-insane — kapatma yapılmadı (DATA_POLICY) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };

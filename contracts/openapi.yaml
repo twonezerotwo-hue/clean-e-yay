@@ -1806,6 +1806,26 @@ components:
           enum: [bullish, bearish, mixed]
           nullable: true
         score: { type: number }
+        direction_score:
+          type: number
+          nullable: true
+          description: >
+            Top-down GATED direction (0–100, 50 = neutral) — momentum trigger gated
+            by location/pattern/volume evidence. The decision engine (consensus
+            `_touche`) consumes this; `score` is the legacy RSI+MACD fallback.
+        location_gate:
+          type: number
+          nullable: true
+          description: >
+            Location gate multiplier (1.0 neutral, <1 penalty e.g. shorting into
+            support, >1 confirm) — how the top-down location/pattern/volume read
+            reshaped momentum conviction.
+        location_evidence:
+          type: array
+          items: { type: string }
+          description: >
+            Compact 'where am I' evidence behind the gate (fib zone / confluence /
+            pattern / reversal) — surfaced so the LLM can explain it in plain language.
         status: { type: string, enum: [OK, DEGRADED] }
         source: { type: string }
         bars_used: { type: integer }
@@ -2812,6 +2832,13 @@ components:
       properties:
         direction_score: { type: number, nullable: true }
         strength_score: { type: number, nullable: true }
+        location_gate_multiplier:
+          type: number
+          nullable: true
+          description: >
+            Diagnostic (NOT a collapsed score): how much the top-down location/
+            pattern/volume gate scaled momentum conviction. 1.0 neutral, <1 penalty
+            (e.g. longing into resistance), >1 mild confirm.
 
     TechnicalKeyLevels:
       type: object
@@ -3089,6 +3116,23 @@ components:
             - type: "null"
         reversal_bias: { type: string, enum: [BULLISH, BEARISH, NEUTRAL], nullable: true }
         pattern: { type: string, nullable: true }
+        per_timeframe:
+          type: array
+          description: >
+            Per-TF gated direction + location-gate diagnostic (visibility). EVIDENCE
+            only — the gate already shaped direction_score and bias; this surfaces the
+            'where am I' read per timeframe alongside the aggregated consensus.
+          items: { $ref: "#/components/schemas/AgentTimeframeCell" }
+
+    AgentTimeframeCell:
+      type: object
+      required: [timeframe, bias]
+      properties:
+        timeframe: { type: string, enum: ["15m", "1h", "4h", "1d", "1w"] }
+        direction_score: { type: number, nullable: true }
+        strength_score: { type: number, nullable: true }
+        bias: { type: string, enum: [BULLISH, BEARISH, NEUTRAL] }
+        location_gate: { type: number, nullable: true }
 
     AgentMatrix:
       type: object

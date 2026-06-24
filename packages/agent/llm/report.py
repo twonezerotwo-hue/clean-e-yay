@@ -43,7 +43,10 @@ _PERSONA_BRIEFS = {
     "analyst": (
         "Market Analyst olarak decision matrix'in en güçlü hücrelerini, "
         "candidate vs final farklarını ve timeframe'ler arası tutarlılığı "
-        "değerlendir."
+        "değerlendir. `technical_gate` ham verisini (momentum_lean = gate öncesi "
+        "ham yön, gated_bias, direction_score, location_gate, location_evidence) "
+        "ilgiliyse kendi cümlelerinle yorumla; location_gate <1 konum cezası, >1 "
+        "teyit anlamına gelir ve yalnızca güveni şekillendirir, trade açmaz."
     ),
     "risk_officer": (
         "Risk Officer olarak RiskGate, halt, korelasyon cluster'ları ve "
@@ -114,6 +117,13 @@ def _evidence_for(persona: str, ctx: dict) -> list[str]:
             f"matrix:{c['symbol']}:{c['timeframe']} {c['candidate']}→{c['final']} ({c['score']:.0f})"
             for c in m["top_cells"][:4]
         ]
+        # Top-down konum kapısı kanıtı (koddan; LLM uyduramaz).
+        for g in (ctx.get("technical_gate") or [])[:3]:
+            loc = " ".join(g.get("location_evidence") or []) or "konum"
+            ev.append(
+                f"gate:{g['symbol']}:{g['timeframe']} {g['momentum_lean']} momentum ×"
+                f"{g['location_gate']:.2f} {g['effect']} [{loc}]"
+            )
     elif persona == "risk_officer":
         rg = m["risk_gate"] or {}
         ev.append(f"risk_gate:{rg.get('action')} — {rg.get('reason')}")
@@ -237,6 +247,10 @@ def _fallback_concerns(persona: str, ctx: dict) -> list[str]:
                 f"{d['symbol']} {d['timeframe']}: {d['candidate']} adayı "
                 f"{d['final']}'a düştü ({', '.join(d['blocked_by']) or d['reason']})"
             )
+        # Top-down konum kapısı — YALNIZCA LLM kapalı fallback'te deterministik
+        # insan cümlesi üretilir (LLM yolunda model ham faktlardan kendi yorumunu yapar).
+        for g in (ctx.get("technical_gate") or [])[:2]:
+            concerns.append(ctx_mod._humanize_gate(g))
     elif persona == "risk_officer":
         concerns += [f"blocked_by: {b}" for b in m["blocked_by_reasons"][:3]]
         for cl in (ctx["correlation_clusters"] or [])[:2]:

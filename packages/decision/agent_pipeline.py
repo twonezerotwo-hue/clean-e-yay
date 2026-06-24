@@ -176,6 +176,36 @@ def _reversal_pattern_summary(view: SymbolAgentView) -> tuple[str | None, str | 
     return rev_bias, pattern
 
 
+# ConsensusSnapshot key (m15…w1) → Timeframe label, for the per-TF cell list.
+_KEY_TO_TF: dict[str, Timeframe] = {v: k for k, v in _TF_TO_KEY.items()}
+
+
+def _per_timeframe_cells(view: SymbolAgentView) -> list[dict]:
+    """Per-TF gated direction + location-gate diagnostic (visibility for the panel).
+
+    EVIDENCE only — the gate already shaped `direction_score` and the per-TF `bias`;
+    this just surfaces them so the matrix can show 'where am I' per timeframe instead
+    of only the aggregated consensus."""
+    per_tf = getattr(view.agent, "per_timeframe", {}) or {}
+    cells: list[dict] = []
+    for key, res in per_tf.items():
+        tf = _KEY_TO_TF.get(key)
+        if tf is None or res is None:
+            continue
+        ov = res.score_overview
+        cells.append(
+            {
+                "timeframe": tf,
+                "direction_score": ov.direction_score,
+                "strength_score": ov.strength_score,
+                "bias": res.timeframe_summary.bias,
+                "location_gate": ov.location_gate_multiplier,
+            }
+        )
+    cells.sort(key=lambda c: PIPELINE_TFS.index(c["timeframe"]))
+    return cells
+
+
 def matrix_viewmodel(
     views: list[SymbolAgentView], *, risk_action: str | None = None
 ) -> dict:
@@ -192,6 +222,7 @@ def matrix_viewmodel(
                 "economics": asdict(v.economics) if v.economics is not None else None,
                 "reversal_bias": rev_bias,
                 "pattern": pattern,
+                "per_timeframe": _per_timeframe_cells(v),
             }
         )
     return {

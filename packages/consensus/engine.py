@@ -82,6 +82,13 @@ def _touche(
     if getattr(t, "status", "OK") == "DEGRADED":
         warnings.append(f"touche_degraded_neutral:{symbol}:{t.timeframe}")
         return 50.0, warnings
+    # Top-down gated direction (momentum trigger + location/pattern/volume gate) is
+    # the authoritative technical read; fall back to legacy `score` (RSI+MACD only)
+    # when the gated score is unavailable (older snapshots / insufficient momentum).
+    ds = getattr(t, "direction_score", None)
+    if ds is not None:
+        return ds, warnings
+    warnings.append(f"touche_legacy_score_fallback:{symbol}:{t.timeframe}")
     return t.score, warnings
 
 

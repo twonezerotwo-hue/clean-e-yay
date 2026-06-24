@@ -224,6 +224,16 @@ technical:
   swing_pivot: { left: 3, right: 3 }
   stop_atr_mult: 1.5
   target_rr: 2.0
+  # Top-down location gate: momentum (RSI/MACD/EMA) yön tetiğidir; konum (fib/S-R),
+  # formasyon ve hacim YALNIZCA güveni eğer. Asimetrik — uyum hafif teyit (×≤1.15),
+  # çelişki ("dirence long / premium'dan alım") sert ceza (×≥0.60). Nötr momentumdan
+  # asla yön ÜRETMEZ (DATA_POLICY). Ağırlıklar mevcut olan kanıt üzerinde normalize.
+  direction_tilt:
+    location: 0.60      # fib zone + swing confluence (neredeyim / ucuz mu)
+    pattern: 0.25       # reversal + chart pattern bias
+    volume: 0.15        # VWAP teyidi (yalnız intraday)
+    confirm_gain: 0.15  # kanıt momentumla uyumluysa max +%15 güven
+    penalty_gain: 0.40  # kanıt çelişiyorsa max −%40 güven
 
 # T2 — AgentDecision (deterministic). ConsensusSnapshot + RiskGate aksiyonu →
 # tek yüksek-seviye aksiyon + entry_timeframe. EVIDENCE→aksiyon köprüsü; trade

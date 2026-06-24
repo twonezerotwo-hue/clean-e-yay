@@ -6,6 +6,7 @@
 import type {
   AgentMatrix,
   AgentMatrixRow,
+  AgentTimeframeCell,
   TechnicalBias,
   Timeframe,
 } from "@/types/generated/api";
@@ -59,6 +60,32 @@ const BIAS_GLYPH: Record<string, string> = {
 
 export function biasFor(row: AgentMatrixRow, tf: Timeframe): TechnicalBias | undefined {
   return row.consensus.per_timeframe_bias?.[TF_TO_KEY[tf]];
+}
+
+/** Per-TF gated cell (direction_score + location gate) for the matrix tooltip. */
+export function tfCellFor(row: AgentMatrixRow, tf: Timeframe): AgentTimeframeCell | undefined {
+  return row.per_timeframe?.find((c) => c.timeframe === tf);
+}
+
+/** Per-TF cell tooltip: gated direction + how the location gate shaped it. */
+export function tfCellTitle(tf: Timeframe, cell?: AgentTimeframeCell): string {
+  if (!cell) return `${tf}: —`;
+  const lines = [`${tf}: ${cell.bias}`];
+  if (cell.direction_score != null)
+    lines.push(`dir ${cell.direction_score.toFixed(1)} (50=nötr)`);
+  if (cell.location_gate != null && Math.abs(cell.location_gate - 1) >= 0.01)
+    lines.push(
+      `konum kapısı ×${cell.location_gate.toFixed(2)} ` +
+        (cell.location_gate < 1 ? "(kötü konum cezası)" : "(teyit)"),
+    );
+  return lines.join("\n");
+}
+
+/** Marker when the location gate meaningfully moved conviction (penalty/confirm). */
+export function gateGlyph(cell?: AgentTimeframeCell): string {
+  const g = cell?.location_gate;
+  if (g == null || Math.abs(g - 1) < 0.01) return "";
+  return g < 1 ? "⚠" : "✓";
 }
 
 export function biasGlyph(bias?: TechnicalBias | string): string {

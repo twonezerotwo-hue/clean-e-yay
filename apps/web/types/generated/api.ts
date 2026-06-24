@@ -1663,6 +1663,15 @@ export type TradeEconomics = {
 };
 
 // ── T2 step 7 — composed per-symbol agent pipeline row + matrix ───────────────
+// Per-TF gated direction + location-gate diagnostic (visibility for the matrix).
+export type AgentTimeframeCell = {
+  timeframe: Timeframe;
+  direction_score?: number | null;
+  strength_score?: number | null;
+  bias: TechnicalBias;
+  location_gate?: number | null;
+};
+
 export type AgentMatrixRow = {
   symbol: string;
   stance: TechnicalStance;
@@ -1671,6 +1680,7 @@ export type AgentMatrixRow = {
   economics?: TradeEconomics | null;
   reversal_bias?: TechnicalBias | null;
   pattern?: string | null;
+  per_timeframe?: AgentTimeframeCell[];
 };
 
 export type AgentMatrix = {

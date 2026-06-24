@@ -14,11 +14,14 @@ import {
   biasGlyph,
   biasTone,
   economicsSummary,
+  gateGlyph,
   isRiskRestrictive,
   patternLabel,
   reversalGlyph,
   reversalTone,
   selectAgentRows,
+  tfCellFor,
+  tfCellTitle,
 } from "@/lib/selectors/agent-matrix";
 import type { AgentMatrixRow } from "@/types/generated/api";
 
@@ -51,13 +54,24 @@ function AgentRow({ row, suspended }: { row: AgentMatrixRow; suspended: boolean 
       <td className="p-1 font-medium">{row.symbol}</td>
       {AGENT_TF_ORDER.map((tf) => {
         const bias = biasFor(row, tf);
+        const cell = tfCellFor(row, tf);
+        const gate = gateGlyph(cell);
         return (
           <td key={tf} className="p-1">
             <div
-              className={`rounded border px-1 py-0.5 text-center text-[11px] leading-none ${biasTone(bias)}`}
-              title={`${tf}: ${bias ?? "—"}`}
+              className={`relative rounded border px-1 py-0.5 text-center text-[11px] leading-none ${biasTone(bias)}`}
+              title={tfCellTitle(tf, cell)}
             >
               {biasGlyph(bias)}
+              {gate ? (
+                <span
+                  className={`absolute -right-0.5 -top-1 text-[7px] ${
+                    gate === "⚠" ? "text-signal-down" : "text-signal-up"
+                  }`}
+                >
+                  {gate}
+                </span>
+              ) : null}
             </div>
           </td>
         );
