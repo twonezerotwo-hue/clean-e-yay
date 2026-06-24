@@ -815,6 +815,32 @@ def test_chat_system_memory_explains_last_close(tmp_path, monkeypatch) -> None:
     assert any(e.startswith("decision_log:") for e in ev)
 
 
+def test_chat_system_memory_uses_audit_fallback_when_state_is_empty(tmp_path, monkeypatch) -> None:
+    from packages.agent.llm import chat as llm_chat
+    from packages.paper import state as paper_state
+
+    trade = _seed_closed_trade(tmp_path, monkeypatch)
+    paper_state.save(
+        paper_state.PaperState(
+            equity_usd=10000.0,
+            peak_equity_usd=10000.0,
+            realized_pnl_usd=0.0,
+            daily_pnl_usd=0.0,
+            recent_trades=[],
+        )
+    )
+
+    ans, ev = llm_chat._grounded_answer("son islem neden kapandi?", _fake_ctx())
+    assert "audit fallback" in ans
+    assert trade.symbol in ans
+    assert "SL_HIT" in ans
+    assert "$-50.00" in ans
+    assert "breakout failed confirmation" in ans
+    assert "paper:recent_trades:empty" in ev
+    assert any(e.startswith("paper_audit:") for e in ev)
+    assert any(e.startswith("decision_log:") for e in ev)
+
+
 def test_chat_system_memory_reports_today_turnover(tmp_path, monkeypatch) -> None:
     from packages.agent.llm import chat as llm_chat
 

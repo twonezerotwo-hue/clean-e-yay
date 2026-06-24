@@ -60,6 +60,16 @@ def _latest_audit_event(trade_id: str, *, actions: set[str] | None = None) -> di
     return matches[-1] if matches else None
 
 
+def _latest_close_audit_event() -> dict | None:
+    events = [
+        e for e in paper_audit.read_recent(1000)
+        if str(e.get("action")) in _CLOSE_ACTIONS
+    ]
+    if not events:
+        return None
+    return max(events, key=lambda e: _as_dt(e.get("timestamp")) or datetime.min.replace(tzinfo=UTC))
+
+
 def _today_close_events() -> list[dict]:
     today = datetime.now(UTC).date()
     out: list[dict] = []
@@ -72,10 +82,51 @@ def _today_close_events() -> list[dict]:
     return out
 
 
+def _last_close_from_audit_answer(event: dict) -> tuple[str, list[str]]:
+    trade_id = str(event.get("position_id") or "")
+    record = _latest_decision_record(trade_id) if trade_id else None
+    record_dict = record if isinstance(record, dict) else {}
+    opening = (record or {}).get("opening_signal") or {}
+    outcome = (record or {}).get("outcome") or {}
+    exit_info = (record or {}).get("exit") or {}
+    symbol = event.get("symbol") or record_dict.get("symbol")
+    side = event.get("side") or record_dict.get("side")
+    timeframe = event.get("timeframe") or record_dict.get("timeframe")
+    reason = event.get("reason") or exit_info.get("reason") or "unknown"
+    entry = outcome.get("entry_price")
+    exit_price = event.get("price_used") or outcome.get("exit_price")
+    exit_display = exit_price or "state'te yok"
+    pnl = event.get("pnl") if event.get("pnl") is not None else outcome.get("pnl_usd")
+    open_reason = event.get("open_reason") or opening.get("reason") or "state'te yok"
+    size = event.get("size")
+    entry_part = f"Giriş {entry}, " if entry is not None else ""
+    size_part = f", kapanan büyüklük {_fmt_usd(size)}" if size is not None else ""
+    diagnostics = record.get("diagnostics") if isinstance(record, dict) else None
+    diag_part = (
+        f" Eksik attribution: {', '.join(diagnostics)}."
+        if isinstance(diagnostics, list) and diagnostics else ""
+    )
+    answer = (
+        f"Paper state onarılmış ve recent_trades boş; bu yüzden audit fallback kullandım. "
+        f"Son kapanış {symbol or '?'} {side or '?'} {timeframe or '?'}: {reason} nedeniyle kapandı. "
+        f"{entry_part}çıkış {exit_display}, realized PnL {_fmt_usd(pnl)}{size_part}. "
+        f"Açılış gerekçesi: {open_reason}.{diag_part} Emir üretmez; sadece audit/decision log okumasıdır."
+    )
+    evidence = ["paper:recent_trades:empty", f"paper_audit:{event.get('event_id') or event.get('action')}"]
+    if record:
+        evidence.append(f"decision_log:{record.get('record_id')}")
+        if outcome.get("pnl_usd") is not None:
+            evidence.append(f"outcome:pnl:{outcome.get('pnl_usd')}")
+    return answer, evidence
+
+
 def _last_close_answer() -> tuple[str, list[str]]:
     ps = paper_state.load()
     trade = _latest_trade(ps)
     if trade is None:
+        audit_close = _latest_close_audit_event()
+        if audit_close is not None:
+            return _last_close_from_audit_answer(audit_close)
         return (
             "State'te kapanmış paper trade yok. Kontrol yeri: paper state recent_trades ve paper_audit CLOSED olayları.",
             ["paper:recent_trades:none", "paper_audit:closed:none"],
