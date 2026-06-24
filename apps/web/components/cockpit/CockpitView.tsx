@@ -8,7 +8,15 @@ import { DataQualityBadge } from "@/components/shell/DataQualityBadge";
 import { DashboardGrid, GridCell } from "@/components/shell/DashboardGrid";
 import { EmptyState } from "@/components/shell/EmptyState";
 import { LoadingState } from "@/components/shell/LoadingState";
-import { useCockpitBrief, usePaperTradingState, useTradeTickets } from "@/lib/queries/hooks";
+import { PanelFrame } from "@/components/shell/PanelFrame";
+import { PanelHeader } from "@/components/shell/PanelHeader";
+import {
+  useAgentMatrix,
+  useCockpitBrief,
+  useDashboardState,
+  usePaperTradingState,
+  useTradeTickets,
+} from "@/lib/queries/hooks";
 import {
   AGENT_STATUS_LABEL,
   AGENT_STATUS_TONE,
@@ -19,10 +27,12 @@ import {
 
 import { AgentBriefPanel } from "@/components/panels/AgentBriefPanel";
 import { AgentMatrixPanel } from "@/components/panels/AgentMatrixPanel";
+import { AgentNarratorPanel } from "@/components/panels/AgentNarratorPanel";
 import { AgentVotesPanel } from "@/components/panels/AgentVotesPanel";
 import { AIReportPanel } from "@/components/panels/AIReportPanel";
 import { CalibrationPanel } from "@/components/panels/CalibrationPanel";
 import { CapitalRotationPanel } from "@/components/panels/CapitalRotationPanel";
+import { ChatPanel } from "@/components/panels/ChatPanel";
 import { CommandSignalsPanel } from "@/components/panels/CommandSignalsPanel";
 import { CorrelationPanel } from "@/components/panels/CorrelationPanel";
 import { CryptoDerivativesPanel } from "@/components/panels/CryptoDerivativesPanel";
@@ -195,15 +205,17 @@ function Layer2DetailGroup({
   index,
   title,
   detail,
+  id,
   children,
 }: {
   index: string;
   title: string;
   detail: string;
+  id?: string;
   children: ReactNode;
 }) {
   return (
-    <section className="layer2-detail-group">
+    <section id={id} className="layer2-detail-group">
       <div className="layer2-detail-scan" />
       <header className="relative z-10 mb-4 flex flex-col gap-3 border-b border-white/[0.08] pb-3 md:flex-row md:items-end md:justify-between">
         <div className="min-w-0">
@@ -242,6 +254,157 @@ function DataSpineCard({
       <div className={`mt-2 font-display text-2xl leading-none ${tone}`}>{value}</div>
       <p className="mt-2 text-xs leading-5 text-white/50">{detail}</p>
     </div>
+  );
+}
+
+function MiniStatusLine({
+  label,
+  value,
+  detail,
+  tone = "text-white/90",
+}: {
+  label: string;
+  value: string;
+  detail?: string;
+  tone?: string;
+}) {
+  return (
+    <div className="flex items-start justify-between gap-3 rounded-lg border border-white/10 bg-black/24 px-3 py-2 text-xs">
+      <span className="shrink-0 text-[10px] uppercase tracking-widest text-white/38">{label}</span>
+      <div className="min-w-0 text-right">
+        <div className={`font-mono font-semibold ${tone}`}>{value}</div>
+        {detail ? <div className="mt-0.5 truncate text-[10px] text-white/42">{detail}</div> : null}
+      </div>
+    </div>
+  );
+}
+
+function riskGateTone(action?: string | null) {
+  if (action === "HOLD") return "text-emerald-300";
+  if (action === "KILL_SWITCH" || action === "RISK_REDUCE") return "text-red-300";
+  if (action === "NO_POSITION_INCREASE") return "text-amber-300";
+  return "text-white/80";
+}
+
+function RiskGateAnchorPanel() {
+  const { data, isLoading } = useDashboardState();
+  const riskGate = data?.risk_gate;
+  return (
+    <PanelFrame id="risk_gate">
+      <PanelHeader title="Risk Kapisi" subtitle="dashboard#risk_gate karsiligi / read-only" />
+      {isLoading ? (
+        <LoadingState />
+      ) : !riskGate ? (
+        <EmptyState message="RiskGate verisi yok." />
+      ) : (
+        <div className="space-y-2">
+          <MiniStatusLine
+            label="Karar"
+            value={riskGate.action}
+            detail={riskGate.reason}
+            tone={riskGateTone(riskGate.action)}
+          />
+          <MiniStatusLine
+            label="Durum"
+            value={riskGate.action === "HOLD" ? "Yeni girise engel yok" : "Kisitlayici"}
+            tone={riskGate.action === "HOLD" ? "text-emerald-300" : riskGateTone(riskGate.action)}
+          />
+          {riskGate.evidence?.length ? (
+            <div className="rounded-lg border border-white/10 bg-white/[0.035] px-3 py-2">
+              <div className="text-[10px] uppercase tracking-widest text-white/38">Kanıt</div>
+              <div className="mt-1 space-y-1 text-xs leading-5 text-white/58">
+                {riskGate.evidence.slice(0, 5).map((item) => (
+                  <div key={item}>{item}</div>
+                ))}
+              </div>
+            </div>
+          ) : null}
+        </div>
+      )}
+    </PanelFrame>
+  );
+}
+
+const PATTERN_LABEL: Record<string, string> = {
+  uptrend_structure: "Yukselen yapi",
+  downtrend_structure: "Dusen yapi",
+  ranging: "Range / yatay",
+};
+
+function patternTone(pattern?: string | null) {
+  if (pattern === "uptrend_structure") return "text-emerald-300";
+  if (pattern === "downtrend_structure") return "text-red-300";
+  return "text-white/62";
+}
+
+function reversalTone(bias?: string | null) {
+  if (bias === "BULLISH") return "text-emerald-300";
+  if (bias === "BEARISH") return "text-red-300";
+  return "text-white/45";
+}
+
+function PatternsAnchorPanel() {
+  const { data, isLoading } = useAgentMatrix();
+  const rows = data?.symbols ?? [];
+  const hasEvidence = rows.some((row) => row.pattern || row.reversal_bias);
+  return (
+    <PanelFrame id="patterns">
+      <PanelHeader
+        title="Grafik Desenleri"
+        subtitle="chart pattern + reversal evidence / backend passthrough"
+      />
+      {isLoading ? (
+        <LoadingState />
+      ) : !rows.length ? (
+        <EmptyState message="Pattern verisi yok." />
+      ) : (
+        <div className="space-y-2">
+          {!hasEvidence ? (
+            <div className="rounded-lg border border-white/10 bg-white/[0.035] px-3 py-2 text-xs leading-5 text-white/52">
+              Aktif desen veya reversal kaniti yok. Bu panel sadece backend Agent Matrix
+              alanlarini okur; frontend teknik hesap yapmaz.
+            </div>
+          ) : null}
+          {rows.map((row) => (
+            <div key={row.symbol} className="rounded-lg border border-white/10 bg-black/24 px-3 py-2">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <div className="font-display text-sm text-white/90">{row.symbol}</div>
+                  <div className="mt-0.5 text-[10px] uppercase tracking-widest text-white/36">
+                    {row.decision.action}
+                  </div>
+                </div>
+                <div className="text-right">
+                  <div className={`text-xs font-semibold ${patternTone(row.pattern)}`}>
+                    {row.pattern ? PATTERN_LABEL[row.pattern] ?? row.pattern : "Desen yok"}
+                  </div>
+                  <div className={`mt-0.5 text-[10px] uppercase tracking-widest ${reversalTone(row.reversal_bias)}`}>
+                    reversal {row.reversal_bias ?? "NEUTRAL"}
+                  </div>
+                </div>
+              </div>
+              {row.per_timeframe?.length ? (
+                <div className="mt-2 flex flex-wrap gap-1.5">
+                  {row.per_timeframe.map((cell) => (
+                    <span
+                      key={`${row.symbol}-${cell.timeframe}`}
+                      className="rounded border border-white/10 bg-white/[0.035] px-1.5 py-0.5 text-[10px] uppercase tracking-wider text-white/55"
+                      title={
+                        cell.location_gate == null
+                          ? `${cell.timeframe}: ${cell.bias}`
+                          : `${cell.timeframe}: ${cell.bias} / location gate x${cell.location_gate.toFixed(2)}`
+                      }
+                    >
+                      {cell.timeframe} {cell.bias}
+                    </span>
+                  ))}
+                </div>
+              ) : null}
+            </div>
+          ))}
+        </div>
+      )}
+    </PanelFrame>
   );
 }
 
@@ -1098,6 +1261,9 @@ export function CockpitView() {
           >
             <DashboardGrid>
               <GridCell span="1">
+                <RiskGateAnchorPanel />
+              </GridCell>
+              <GridCell span="1">
                 <TradeTicketPanel />
               </GridCell>
               <GridCell span="1">
@@ -1117,6 +1283,55 @@ export function CockpitView() {
               </GridCell>
               <GridCell span="1">
                 <ReplayStatusPanel />
+              </GridCell>
+            </DashboardGrid>
+          </Layer2DetailGroup>
+
+          <Layer2DetailGroup
+            index="D"
+            title="Dashboard-Only Agent Yuzeyleri"
+            detail="Dashboard registry'de olup cockpit'e birebir tasinmamis agent_narrator ve chat panelleri burada dogrudan okunur."
+          >
+            <DashboardGrid>
+              <GridCell span="full">
+                <AgentNarratorPanel />
+              </GridCell>
+              <GridCell span="full">
+                <ChatPanel />
+              </GridCell>
+            </DashboardGrid>
+          </Layer2DetailGroup>
+
+          <Layer2DetailGroup
+            id="haberler_catalyst"
+            index="E"
+            title="Haberler & Catalyst"
+            detail="dashboard#haberler_catalyst karsiligi: haber akisi, catalyst etkisi, olay takvimi ve senaryo tek Katman 3 grubunda."
+          >
+            <DashboardGrid>
+              <GridCell span="full">
+                <NewsPanel defaultView="radar" />
+              </GridCell>
+              <GridCell span="2">
+                <CatalystImpactPanel />
+              </GridCell>
+              <GridCell span="1">
+                <EventCalendarPanel />
+              </GridCell>
+              <GridCell span="full">
+                <ScenarioPanel />
+              </GridCell>
+            </DashboardGrid>
+          </Layer2DetailGroup>
+
+          <Layer2DetailGroup
+            index="F"
+            title="Grafik Desenleri ve Eksik Anchorlar"
+            detail="dashboard#patterns artik Katman 3'te Agent Matrix'in pattern/reversal kanitlarini read-only olarak gosterir."
+          >
+            <DashboardGrid>
+              <GridCell span="full">
+                <PatternsAnchorPanel />
               </GridCell>
             </DashboardGrid>
           </Layer2DetailGroup>
