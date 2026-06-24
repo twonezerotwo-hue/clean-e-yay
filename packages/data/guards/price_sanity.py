@@ -19,7 +19,11 @@ prices.
 """
 from __future__ import annotations
 
+from packages.data.providers.ohlcv import cache as ohlcv_cache
 from packages.data.registry.loader import load_thresholds
+
+
+_REFERENCE_TFS = ("15m", "1h", "1d")
 
 
 def _cfg() -> dict:
@@ -44,6 +48,8 @@ def price_sane_reason(
     price: float | None,
     *,
     previous_price: float | None = None,
+    reference_price: float | None = None,
+    reference_label: str = "reference",
 ) -> str | None:
     """OPEN-time sanity: return None if sane, else a short machine-readable reason."""
     if price is None or price <= 0:
@@ -55,6 +61,10 @@ def price_sane_reason(
         pct = abs(price - previous_price) / previous_price * 100.0
         if pct > _max_jump_pct():
             return f"jump_{pct:.0f}pct_gt_{_max_jump_pct():g}pct"
+    if reference_price is not None and reference_price > 0:
+        pct = abs(price - reference_price) / reference_price * 100.0
+        if pct > _max_jump_pct():
+            return f"{reference_label}_jump_{pct:.0f}pct_gt_{_max_jump_pct():g}pct"
     return None
 
 
@@ -63,8 +73,51 @@ def is_price_sane(
     price: float | None,
     *,
     previous_price: float | None = None,
+    reference_price: float | None = None,
 ) -> bool:
-    return price_sane_reason(symbol, price, previous_price=previous_price) is None
+    return price_sane_reason(
+        symbol,
+        price,
+        previous_price=previous_price,
+        reference_price=reference_price,
+    ) is None
+
+
+def ohlcv_reference_price(symbol: str, preferred_timeframe: str = "15m") -> tuple[float | None, str | None]:
+    """Latest cached real OHLCV close for quote-scale validation.
+
+    Disk cache only: this guard must not perform network I/O or invent a price.
+    """
+    tfs = [preferred_timeframe, *_REFERENCE_TFS]
+    seen: set[str] = set()
+    for tf in tfs:
+        if tf in seen:
+            continue
+        seen.add(tf)
+        cached = ohlcv_cache.load(symbol, tf)  # type: ignore[arg-type]
+        if cached is None or not cached.bars:
+            continue
+        bar = cached.bars[-1]
+        if bar.close and bar.close > 0:
+            return float(bar.close), f"ohlcv:{tf}"
+    return None, None
+
+
+def price_sane_with_ohlcv_reason(
+    symbol: str,
+    price: float | None,
+    *,
+    timeframe: str = "15m",
+    previous_price: float | None = None,
+) -> str | None:
+    reference, label = ohlcv_reference_price(symbol, timeframe)
+    return price_sane_reason(
+        symbol,
+        price,
+        previous_price=previous_price,
+        reference_price=reference,
+        reference_label=label or "ohlcv",
+    )
 
 
 def tick_price_usable(
@@ -75,8 +128,9 @@ def tick_price_usable(
     """Manage/close gate for an existing position. See module docstring."""
     if price is None or price <= 0:
         return False
-    if _in_bounds(symbol, price):
-        return True
     if last_price and last_price > 0:
-        return abs(price - last_price) / last_price * 100.0 <= _max_jump_pct()
-    return False
+        pct = abs(price - last_price) / last_price * 100.0
+        if pct > _max_jump_pct():
+            return False
+        return True
+    return _in_bounds(symbol, price)

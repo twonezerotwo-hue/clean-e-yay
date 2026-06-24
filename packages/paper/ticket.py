@@ -23,6 +23,7 @@ from typing import Any
 
 from packages.data.ingestion.pipeline import MarketSnapshot
 from packages.decision.engine import TradeDecision
+from packages.paper.guards import price_sanity
 from packages.paper.state import PaperState
 from packages.risk.trade_economics import compute_adaptive_targets
 
@@ -351,6 +352,26 @@ def build_ticket(
         if q.symbol == decision.symbol and q.price:
             entry = float(q.price)
             break
+    sane_reason = price_sanity.price_sane_with_ohlcv_reason(
+        decision.symbol, entry, timeframe=decision.timeframe
+    )
+    if sane_reason is not None:
+        return TradeTicket(
+            id=ticket_id,
+            symbol=decision.symbol,
+            side=side,
+            timeframe=decision.timeframe,
+            status="invalid",
+            expires_at=expires_at.isoformat(),
+            ttl_seconds=int(tf_hours * 3600),
+            technical_detail={
+                "safety_checks": {
+                    "blocked_by": ["price_sanity"],
+                    "price_sanity_reason": sane_reason,
+                    "entry_price": round(entry, 4) if entry > 0 else entry,
+                }
+            },
+        )
 
     tech = None
     if snap.technicals_by_tf and decision.symbol in snap.technicals_by_tf:

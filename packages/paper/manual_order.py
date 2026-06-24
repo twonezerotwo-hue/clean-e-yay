@@ -10,7 +10,7 @@ from __future__ import annotations
 import hashlib
 from datetime import UTC, datetime
 
-from packages.data.ingestion.pipeline import get_cached_snapshot
+from packages.data.ingestion.pipeline import build_snapshot
 from packages.paper import audit as paper_audit
 from packages.paper import state as paper_state
 from packages.paper.guards import price_sanity
@@ -66,11 +66,14 @@ def place(
         raise ManualOrderError("tutar sıfırdan büyük olmalı", 400)
     sym = (symbol or "").strip().upper()
     ps = paper_state.load()
-    snap = get_cached_snapshot()
+    snap = build_snapshot()
     prices = {q.symbol: q.price for q in snap.prices if q.price is not None}
     market = prices.get(sym)
     if market is None or market <= 0:
         raise ManualOrderError(f"{sym} için güncel fiyat yok — emir verilemez (uydurma fiyat yok)")
+    market_sane = price_sanity.price_sane_with_ohlcv_reason(sym, float(market), timeframe=timeframe)
+    if market_sane is not None:
+        raise ManualOrderError(f"{sym} guncel fiyati tutarsiz: {market_sane}")
     if size_usd > ps.equity_usd:
         raise ManualOrderError(
             f"yetersiz bakiye: {size_usd:.0f} dolar > {ps.equity_usd:.0f} dolar"
@@ -102,7 +105,10 @@ def place(
     # LIMIT / STOP / STOP_LIMIT: bekleyen emir.
     if not entry_price or entry_price <= 0:
         raise ManualOrderError("limit/stop emir için tetik fiyatı gerekli", 400)
-    if price_sanity.price_sane_reason(sym, float(entry_price)) is not None:
+    entry_sane = price_sanity.price_sane_with_ohlcv_reason(
+        sym, float(entry_price), timeframe=timeframe
+    )
+    if entry_sane is not None:
         raise ManualOrderError(f"{sym} için {entry_price:.2f} fiyatı geçersiz aralıkta")
     otype = order_type if order_type in ("limit", "stop", "stop_limit") else _infer_type(
         s, float(entry_price), float(market)

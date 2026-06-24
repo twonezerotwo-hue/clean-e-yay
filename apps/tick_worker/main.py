@@ -10,17 +10,20 @@ API ile aynı state.json dosyasını paylaşır; HTTP'ye ihtiyacı yok.
 from __future__ import annotations
 
 import asyncio
+import atexit
+import ctypes
 import logging
 import os
 import signal
 import time
 import uuid
 from datetime import UTC, datetime
+from pathlib import Path
 
 # httpx üzerinden API'yi çağırmak yerine paketleri doğrudan çağırıyoruz —
 # böylece worker API'ye bağımlı değil.
 from packages.data import snapshot_store
-from packages.data.ingestion.pipeline import DEFAULT_SYMBOLS, get_cached_snapshot
+from packages.data.ingestion.pipeline import DEFAULT_SYMBOLS, build_snapshot
 from packages.data.provenance import data_provenance
 from packages.decision import shadow, shadow_activation
 from packages.decision.engine import decide_matrix, matrix_view
@@ -35,6 +38,8 @@ from packages.risk.engine import RiskInput
 
 MATRIX_SYMBOLS = DEFAULT_SYMBOLS[:4]
 WORKER_NAME = "tick_worker"
+LOCK_PATH = Path(os.environ.get("TICK_WORKER_LOCK_PATH", "data/runtime/tick_worker.lock"))
+_LOCK_FD: int | None = None
 
 
 def _utc_iso() -> str:
@@ -47,6 +52,64 @@ def _provider_degraded(snap) -> bool:
         if str(raw or "").lower() in {"degraded", "down"}:
             return True
     return False
+
+
+def _pid_alive(pid: int) -> bool:
+    if pid <= 0:
+        return False
+    if os.name == "nt":
+        handle = ctypes.windll.kernel32.OpenProcess(0x1000, False, pid)
+        if handle:
+            ctypes.windll.kernel32.CloseHandle(handle)
+            return True
+        return False
+    try:
+        os.kill(pid, 0)
+    except (OSError, SystemError):
+        return False
+    return True
+
+
+def _release_single_instance() -> None:
+    global _LOCK_FD
+    if _LOCK_FD is not None:
+        try:
+            os.close(_LOCK_FD)
+        except OSError:
+            pass
+        _LOCK_FD = None
+    try:
+        raw = LOCK_PATH.read_text(encoding="utf-8").strip()
+        if raw.split("|", 1)[0] == str(os.getpid()):
+            LOCK_PATH.unlink(missing_ok=True)
+    except OSError:
+        pass
+
+
+def _acquire_single_instance() -> None:
+    """Prevent parallel tick workers from writing divergent paper state."""
+    if os.environ.get("TICK_WORKER_DISABLE_LOCK", "").strip().lower() in {"1", "true", "yes"}:
+        return
+    global _LOCK_FD
+    LOCK_PATH.parent.mkdir(parents=True, exist_ok=True)
+    while True:
+        try:
+            _LOCK_FD = os.open(str(LOCK_PATH), os.O_CREAT | os.O_EXCL | os.O_RDWR)
+            os.write(_LOCK_FD, f"{os.getpid()}|{_utc_iso()}".encode("utf-8"))
+            atexit.register(_release_single_instance)
+            return
+        except FileExistsError:
+            try:
+                raw = LOCK_PATH.read_text(encoding="utf-8").strip()
+                pid = int((raw.split("|", 1)[0] or "0"))
+            except (OSError, ValueError):
+                pid = 0
+            if _pid_alive(pid):
+                raise RuntimeError(f"tick_worker already running pid={pid}")
+            try:
+                LOCK_PATH.unlink(missing_ok=True)
+            except OSError as exc:
+                raise RuntimeError(f"stale tick_worker lock cannot be removed: {LOCK_PATH}") from exc
 
 
 def _snapshot_record(snap, view: dict, risk, ps) -> dict:
@@ -124,7 +187,7 @@ async def run_once() -> None:
     paper_actions = 0
     snapshots_written = 0
     try:
-        snap = get_cached_snapshot()
+        snap = build_snapshot()
         ps = paper_state.load()
         prices = {q.symbol: q.price for q in snap.prices if q.price is not None}
         verified_flags = {q.symbol: q.verified for q in snap.prices}
@@ -349,4 +412,8 @@ if __name__ == "__main__":
         level=logging.INFO,
         format="%(asctime)s %(levelname)s %(name)s %(message)s",
     )
-    asyncio.run(run())
+    _acquire_single_instance()
+    try:
+        asyncio.run(run())
+    finally:
+        _release_single_instance()

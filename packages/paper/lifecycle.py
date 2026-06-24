@@ -248,7 +248,9 @@ def attempt_open(
         return None, decision
     # Price sanity (absolute bounds): cross-pair contamination / absurd price must
     # not open a position. Restrictive-only; never opens.
-    sane_reason = price_sanity.price_sane_reason(symbol, entry_price)
+    sane_reason = price_sanity.price_sane_with_ohlcv_reason(
+        symbol, entry_price, timeframe=timeframe
+    )
     if sane_reason is not None:
         decision = {"allowed": False, "duplicate": False, "reason": "price_insane"}
         audit.record(

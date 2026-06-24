@@ -5,9 +5,10 @@ PAPER_SAFE / NO_EXECUTION — gerçek broker emri yok.
 """
 from __future__ import annotations
 
-from packages.data.ingestion.pipeline import get_cached_snapshot
+from packages.data.ingestion.pipeline import build_snapshot
 from packages.paper import audit as paper_audit
 from packages.paper import state as paper_state
+from packages.paper.guards import price_sanity
 from packages.paper.lifecycle import close_position, open_position
 
 
@@ -18,9 +19,12 @@ class PositionOpError(Exception):
 
 
 def _market_price(symbol: str):
-    snap = get_cached_snapshot()
+    snap = build_snapshot()
     for q in snap.prices:
         if q.symbol == symbol and q.price:
+            reason = price_sanity.price_sane_with_ohlcv_reason(symbol, float(q.price))
+            if reason is not None:
+                return None, snap
             return float(q.price), snap
     return None, snap
 

@@ -7,7 +7,7 @@ from datetime import UTC, datetime
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
-from packages.data.ingestion.pipeline import DEFAULT_SYMBOLS, get_cached_snapshot
+from packages.data.ingestion.pipeline import DEFAULT_SYMBOLS, build_snapshot, get_cached_snapshot
 from packages.decision.engine import decide_matrix
 from packages.paper import audit as paper_audit
 from packages.paper import maintenance, manual_queue, session_gate
@@ -154,7 +154,7 @@ def ack_all_notifications() -> dict:
 def post_paper_tick() -> dict:
     ps = paper_state.load()
     now = datetime.now(UTC)
-    snap = get_cached_snapshot()
+    snap = build_snapshot()
     # None fiyatlar lifecycle'a aktarılmaz; mock fiyat dağıtılmaz.
     prices = {q.symbol: q.price for q in snap.prices if q.price is not None}
     verified_flags = {q.symbol: q.verified for q in snap.prices}
@@ -319,12 +319,12 @@ def close_position_manual(position_id: str) -> dict:
     pos = next((p for p in ps.open_positions if p.id == position_id), None)
     if pos is None:
         raise HTTPException(status_code=404, detail="position_not_found")
-    snap = get_cached_snapshot()
+    snap = build_snapshot()
     prices = {q.symbol: q.price for q in snap.prices if q.price is not None}
     price = prices.get(pos.symbol)
     if price is None or price <= 0:
         raise HTTPException(status_code=409, detail="no_price_cannot_close")
-    if price_sanity.price_sane_reason(pos.symbol, price) is not None:
+    if price_sanity.price_sane_with_ohlcv_reason(pos.symbol, price, timeframe=pos.timeframe) is not None:
         raise HTTPException(status_code=409, detail="price_insane_cannot_close")
     trade = close_position(ps, pos, exit_price=price, reason="MANUAL")
     paper_state.save(ps)
@@ -452,7 +452,7 @@ def approve_manual_ready(manual_id: str) -> dict:
     """P2 — owner onayı. Karar/guard mantığı manual_queue'da; RiskGate/DQS/KillSwitch
     açılış anında YENİDEN kontrol edilir (kuyrukta olmak otomatik güvenli değildir)."""
     ps = paper_state.load()
-    snap = get_cached_snapshot()
+    snap = build_snapshot()
     prices = {q.symbol: q.price for q in snap.prices if q.price is not None}
     risk_in = RiskInput(
         dqs_score=snap.quality.score,

@@ -35,6 +35,20 @@ def test_jump_guard_rejects_absurd_move() -> None:
     assert price_sanity.is_price_sane("BTCUSD", 64_500.0, previous_price=64_000.0) is True
 
 
+def test_reference_price_guard_rejects_same_symbol_scale_mismatch() -> None:
+    # XAGUSD 27.95 is within absolute bounds, but not sane vs a 57.48 OHLCV close.
+    reason = price_sanity.price_sane_reason(
+        "XAGUSD", 27.95, reference_price=57.48, reference_label="ohlcv:15m"
+    )
+    assert reason is not None and "ohlcv:15m_jump" in reason
+    assert price_sanity.is_price_sane("XAGUSD", 57.50, reference_price=57.48) is True
+
+
+def test_tick_price_usable_rejects_in_bounds_scale_jump() -> None:
+    assert price_sanity.tick_price_usable("XAGUSD", 27.95, last_price=57.48) is False
+    assert price_sanity.tick_price_usable("XAGUSD", 57.50, last_price=57.48) is True
+
+
 def test_unbounded_symbol_positivity_only() -> None:
     assert price_sanity.is_price_sane("ETHUSD", 3_000.0) is True
     assert price_sanity.is_price_sane("ETHUSD", 0.0) is False
