@@ -1939,7 +1939,103 @@ html, body {
   }
 }
 
-@media (max-width: 767px) {
+@media (max-width: 768px) {
+  .floating-notification-dock {
+    top: 42dvh;
+    right: 0.5rem;
+    z-index: 26;
+    width: 44px;
+    height: 44px;
+    animation: none;
+  }
+
+  .floating-notification-button {
+    width: 44px;
+    height: 44px;
+  }
+
+  .floating-notification-button::before {
+    inset: -6px;
+  }
+
+  .floating-notification-button::after {
+    inset: -8px;
+  }
+
+  .floating-notification-image {
+    width: 38px;
+    height: 38px;
+  }
+
+  .floating-notification-status-dot {
+    right: 6px;
+    bottom: 7px;
+    width: 8px;
+    height: 8px;
+  }
+
+  .floating-notification-badge {
+    min-width: 18px;
+    height: 18px;
+    padding: 0 5px;
+    font-size: 8px;
+  }
+
+  .floating-notification-panel {
+    width: min(360px, calc(100vw - 22px));
+    max-height: min(70dvh, 560px);
+  }
+
+  .layer0-mobile-flow {
+    scroll-snap-type: y proximity;
+    overscroll-behavior-y: contain;
+    scrollbar-width: none;
+    padding-bottom: calc(0.75rem + env(safe-area-inset-bottom));
+  }
+
+  .layer0-mobile-flow::-webkit-scrollbar {
+    display: none;
+  }
+
+  .layer0-mobile-flow > * {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+  }
+
+  .layer0-mobile-flow .layer0-center-stack,
+  .layer0-mobile-flow .layer0-voice-console,
+  .layer0-mobile-flow .layer0-position-center {
+    height: calc(100dvh - 7.15rem);
+    max-height: calc(100dvh - 7.15rem);
+    min-height: calc(100dvh - 7.15rem);
+  }
+
+  .layer0-mobile-flow .layer0-center-stack {
+    overflow: hidden;
+  }
+
+  .layer0-mobile-flow .reporter-model-card {
+    flex: 0 0 auto;
+    min-height: clamp(260px, 42dvh, 420px);
+    max-height: clamp(260px, 42dvh, 420px);
+  }
+
+  .layer0-mobile-flow .layer0-status-core {
+    flex: 1 1 auto;
+    min-height: 0;
+    max-height: none;
+    overflow-y: auto;
+  }
+
+  .layer0-mobile-flow .layer0-voice-console {
+    overflow: hidden;
+  }
+
+  .layer0-mobile-flow .layer0-card {
+    overflow: hidden;
+  }
+
   .layer1-stack-scroll {
     --layer1-stack-gap: 0px;
     --layer1-sticky-top: 0px;
@@ -5588,4 +5684,205 @@ html, body {
   .rc-node-title { max-width: 140px; }
   .rc-ticket-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .rc-ticket-spark { display: none; }
+}
+
+@media (max-width: 768px) {
+  .readiness-panel.rc-panel {
+    overflow: hidden;
+  }
+
+  .rc-stage {
+    display: grid;
+    grid-template-areas:
+      "mode cycle"
+      "figure figure"
+      "orbit orbit";
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 0.65rem;
+    min-height: 0;
+    padding: 0.75rem;
+  }
+
+  .rc-mode {
+    position: relative;
+    top: auto;
+    left: auto;
+    grid-area: mode;
+    align-self: start;
+    max-width: 100%;
+    padding: 0.44rem 0.62rem;
+  }
+
+  .rc-mode-top {
+    font-size: 8px;
+    letter-spacing: 0.2em;
+  }
+
+  .rc-mode-mid {
+    font-size: 7px;
+    letter-spacing: 0.22em;
+  }
+
+  .rc-mode-state {
+    font-size: 9px;
+    letter-spacing: 0.16em;
+  }
+
+  .rc-cyclehud {
+    position: relative;
+    top: auto;
+    right: auto;
+    grid-area: cycle;
+    align-self: start;
+  }
+
+  .rc-cyclehud-pass {
+    font-size: 1.65rem;
+  }
+
+  .rc-cyclehud-sep,
+  .rc-cyclehud-total {
+    font-size: 1rem;
+  }
+
+  .rc-cyclehud-label {
+    font-size: 8px;
+    letter-spacing: 0.14em;
+  }
+
+  .rc-figure {
+    position: relative;
+    inset: auto;
+    grid-area: figure;
+    width: 100%;
+    height: clamp(260px, 42dvh, 420px);
+    min-height: 260px;
+    overflow: hidden;
+    border: 1px solid rgba(34, 211, 238, 0.16);
+    border-radius: 1rem;
+    background:
+      radial-gradient(circle at 50% 56%, rgba(34, 211, 238, 0.12), transparent 56%),
+      linear-gradient(180deg, rgba(3, 10, 20, 0.26), rgba(3, 7, 14, 0.72));
+    opacity: 1;
+    transform: none;
+  }
+
+  .rc-figure .readiness-agent-hologram {
+    width: min(100%, 390px);
+    max-width: 100%;
+    height: 100%;
+    margin: 0 auto;
+    transform: none;
+  }
+
+  .rc-orbit {
+    position: relative;
+    inset: auto;
+    grid-area: orbit;
+    display: grid;
+    width: 100%;
+    height: auto;
+    gap: 0.5rem;
+    overflow: visible;
+    pointer-events: auto;
+  }
+
+  .rc-node {
+    position: relative;
+    top: auto !important;
+    left: auto !important;
+    right: auto !important;
+    width: 100%;
+    max-width: 100%;
+    display: grid;
+    grid-template-columns: auto auto minmax(0, 1fr);
+    gap: 0.45rem;
+    padding: 0.52rem 0.6rem;
+    border-radius: 0.76rem;
+    transform: none !important;
+  }
+
+  .rc-node-num {
+    width: 24px;
+    height: 24px;
+    font-size: 10px;
+  }
+
+  .rc-node-mark {
+    width: 7px;
+    height: 7px;
+  }
+
+  .rc-node-title,
+  .rc-node-scanning .rc-node-title {
+    max-width: none;
+    font-size: 0.72rem;
+    line-height: 1.1;
+  }
+
+  .rc-node-state {
+    font-size: 0.58rem;
+  }
+
+  .rc-node-reason {
+    margin-top: 0.12rem;
+    font-size: 0.62rem;
+    line-height: 1.2;
+    -webkit-line-clamp: 2;
+  }
+
+  .rc-node-pending {
+    opacity: 0.34;
+  }
+
+  .rc-node-scanning {
+    box-shadow: 0 0 18px rgba(34, 211, 238, 0.24), inset 0 0 14px rgba(34, 211, 238, 0.1);
+  }
+
+  .rc-ticket {
+    margin: 0 0.75rem 0.85rem;
+    max-width: calc(100% - 1.5rem);
+    min-height: 0;
+    padding: 0.85rem;
+    border-radius: 1rem;
+  }
+
+  .rc-ticket-head {
+    gap: 0.65rem;
+  }
+
+  .rc-ticket-title {
+    font-size: 1.05rem;
+  }
+
+  .rc-ticket-sub {
+    font-size: 0.62rem;
+  }
+
+  .rc-ticket-badge {
+    padding: 0.25rem 0.55rem;
+    font-size: 0.58rem;
+  }
+
+  .rc-ticket-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.55rem;
+  }
+
+  .rc-ticket-label {
+    font-size: 0.5rem;
+  }
+
+  .rc-ticket-value {
+    font-size: 0.72rem;
+  }
+
+  .rc-ticket-spark {
+    display: none;
+  }
+
+  .rc-ticket-foot {
+    margin-top: 0.65rem;
+    padding-top: 0.6rem;
+  }
 }

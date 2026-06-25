@@ -711,11 +711,11 @@ function LayerStage({
   children: ReactNode;
 }) {
   const [mobileStage, setMobileStage] = useState(
-    () => typeof window !== "undefined" && window.matchMedia("(max-width: 767px)").matches,
+    () => typeof window !== "undefined" && window.matchMedia("(max-width: 768px)").matches,
   );
 
   useEffect(() => {
-    const query = window.matchMedia("(max-width: 767px)");
+    const query = window.matchMedia("(max-width: 768px)");
     const sync = () => setMobileStage(query.matches);
     sync();
     if (query.addEventListener) {
@@ -728,7 +728,7 @@ function LayerStage({
 
   return (
     <div
-      className="relative z-10 mx-auto h-full min-h-0 w-full max-w-7xl px-2 py-2 sm:px-4 sm:py-3 md:px-6 md:py-4 xl:pl-24"
+      className="relative z-10 mx-auto h-full min-h-0 w-full min-w-0 max-w-7xl overflow-hidden px-2 py-2 sm:px-4 sm:py-3 md:px-6 md:py-4 xl:pl-24"
       style={{ perspective: 1800 }}
     >
       <motion.section
@@ -1257,20 +1257,20 @@ export function CockpitView() {
   }
 
   return (
-    <main className="relative grid h-dvh grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden bg-[#02030a] text-white">
+    <main className="relative grid h-dvh min-w-0 grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden bg-[#02030a] text-white">
       <LayerDepthBackdrop activeLayer={activeLayer} brief={brief} />
 
-      <header className="pointer-events-none relative z-30 border-b border-white/[0.08] bg-black/24 backdrop-blur-md">
-        <div className="mx-auto flex max-w-7xl items-center justify-between gap-3 px-4 py-2.5 md:px-6 xl:pl-24">
-          <div className="flex min-w-0 items-center gap-3">
-            <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-accent-cyan/35 bg-accent-cyan/10 font-display text-sm text-accent-cyan shadow-[0_0_28px_rgba(34,211,238,0.16)]">
+      <header className="pointer-events-none relative z-30 min-w-0 overflow-hidden border-b border-white/[0.08] bg-black/24 backdrop-blur-md">
+        <div className="mx-auto flex max-w-7xl items-center justify-between gap-2 px-3 py-1.5 sm:gap-3 sm:px-4 sm:py-2.5 md:px-6 xl:pl-24">
+          <div className="flex min-w-0 items-center gap-2 sm:gap-3">
+            <div className="grid h-8 w-8 shrink-0 place-items-center rounded-xl border border-accent-cyan/35 bg-accent-cyan/10 font-display text-xs text-accent-cyan shadow-[0_0_28px_rgba(34,211,238,0.16)] sm:h-10 sm:w-10 sm:text-sm">
               EY
             </div>
             <div className="min-w-0">
-              <div className="truncate font-display text-sm leading-tight text-white/92">
+              <div className="truncate font-display text-xs leading-tight text-white/92 sm:text-sm">
                 E-yAy Brain
               </div>
-              <div className="text-[10px] uppercase tracking-[0.22em] text-white/42">
+              <div className="hidden text-[10px] uppercase tracking-[0.22em] text-white/42 sm:block">
                 Human-AI Interface
               </div>
             </div>
@@ -1284,7 +1284,7 @@ export function CockpitView() {
           ) : (
             <div className="hidden min-w-0 flex-1 md:block" />
           )}
-          <div className="flex shrink-0 items-center gap-2">
+          <div className="flex shrink-0 items-center gap-1 sm:gap-2">
             <span className="hidden items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1 text-[10px] uppercase tracking-widest text-white/72 sm:inline-flex">
               <span
                 className={`h-1.5 w-1.5 rounded-full shadow-[0_0_10px_currentColor] ${
@@ -1295,9 +1295,10 @@ export function CockpitView() {
               />
               {brief.data_mode}
             </span>
-            <span className="inline-flex items-center gap-1.5 rounded-full border border-amber-400/20 bg-amber-400/8 px-2.5 py-1 text-[10px] uppercase tracking-widest text-amber-300">
+            <span className="inline-flex items-center gap-1 rounded-full border border-amber-400/20 bg-amber-400/8 px-1.5 py-1 text-[8px] uppercase tracking-normal text-amber-300 sm:gap-1.5 sm:px-2.5 sm:text-[10px] sm:tracking-widest">
               <span className="h-1.5 w-1.5 rounded-full bg-amber-400 shadow-[0_0_10px_currentColor]" />
-              No_Execution
+              <span className="sm:hidden">NX</span>
+              <span className="hidden sm:inline">No_Execution</span>
             </span>
             <span className="hidden text-right leading-tight md:block">
               <span className="block text-[9px] uppercase tracking-widest text-white/40">
@@ -1309,7 +1310,7 @@ export function CockpitView() {
               type="button"
               onClick={() => activateLayer(3)}
               title="Sistem / veri omurgasi"
-              className="pointer-events-auto grid h-9 w-9 shrink-0 place-items-center rounded-xl border border-white/10 bg-white/[0.04] text-white/60 transition-colors hover:border-accent-cyan/35 hover:text-accent-cyan"
+              className="pointer-events-auto grid h-8 w-8 shrink-0 place-items-center rounded-xl border border-white/10 bg-white/[0.04] text-white/60 transition-colors hover:border-accent-cyan/35 hover:text-accent-cyan sm:h-9 sm:w-9"
             >
               <span className="text-base leading-none">⚙</span>
             </button>
@@ -1323,8 +1324,8 @@ export function CockpitView() {
         {layerContent}
       </LayerStage>
 
-      <footer className="pointer-events-none relative z-30 border-t border-white/[0.08] bg-black/30 backdrop-blur-md">
-        <div className="mx-auto flex max-w-7xl items-center justify-center gap-x-6 gap-y-1 px-3 py-1.5 md:justify-between md:px-6 md:py-2 xl:pl-24">
+      <footer className="pointer-events-none relative z-30 min-w-0 overflow-hidden border-t border-white/[0.08] bg-black/30 backdrop-blur-md">
+        <div className="mx-auto flex max-w-7xl items-center justify-center gap-x-6 gap-y-1 px-3 pb-[calc(0.375rem+env(safe-area-inset-bottom))] pt-1.5 md:justify-between md:px-6 md:py-2 xl:pl-24">
           <LayerControls activeLayer={activeLayer} onSelect={activateLayer} />
           <div className="hidden flex-wrap items-center justify-end gap-x-6 gap-y-1 md:flex">
             <StatusCell

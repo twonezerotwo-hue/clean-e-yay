@@ -338,15 +338,40 @@ function archetype(row: DeckRow) {
 
 // ── 3D card ───────────────────────────────────────────────────────────────────
 
-function deckTransform(offset: number): CSSProperties {
+function deckTransform(offset: number, compact = false): CSSProperties {
   const abs = Math.abs(offset);
-  const tx = offset === 0 ? 0 : (abs === 1 ? 214 : abs === 2 ? 368 : 500) * (offset > 0 ? 1 : -1);
+  const txStep = compact
+    ? abs === 1
+      ? 124
+      : abs === 2
+        ? 210
+        : 286
+    : abs === 1
+      ? 214
+      : abs === 2
+        ? 368
+        : 500;
+  const tx = offset === 0 ? 0 : txStep * (offset > 0 ? 1 : -1);
   const ty = abs === 0 ? -50 : abs === 1 ? -49 : -47;
-  const tz = offset === 0 ? 64 : -abs * 118;
-  const ry = offset * -22;
-  const rz = offset * 2.4;
+  const tz = offset === 0 ? (compact ? 44 : 64) : -abs * (compact ? 82 : 118);
+  const ry = offset * (compact ? -14 : -22);
+  const rz = offset * (compact ? 1.4 : 2.4);
   const rx = abs === 0 ? -5 : -2;
-  const scale = abs === 0 ? 1.06 : abs === 1 ? 0.74 : abs === 2 ? 0.56 : 0.44;
+  const scale = compact
+    ? abs === 0
+      ? 0.94
+      : abs === 1
+        ? 0.62
+        : abs === 2
+          ? 0.48
+          : 0.36
+    : abs === 0
+      ? 1.06
+      : abs === 1
+        ? 0.74
+        : abs === 2
+          ? 0.56
+          : 0.44;
   const op = abs === 0 ? 1 : abs === 1 ? 0.82 : abs === 2 ? 0.42 : 0.16;
   return {
     transform: `translate3d(calc(-50% + ${tx}px), ${ty}%, ${tz}px) rotateX(${rx}deg) rotateY(${ry}deg) rotateZ(${rz}deg) scale(${scale})`,
@@ -361,11 +386,13 @@ function DeckCard({
   row,
   active,
   offset,
+  compact = false,
   onSelect,
 }: {
   row: DeckRow;
   active: boolean;
   offset: number;
+  compact?: boolean;
   onSelect: () => void;
 }) {
   const value = round(row.best.score);
@@ -374,13 +401,15 @@ function DeckCard({
   const direction = (row.best.direction ?? "neutral") as Direction;
   const theme = cardTheme(value, direction);
   const style = {
-    ...deckTransform(offset),
+    ...deckTransform(offset, compact),
     "--fut-accent": theme.accent,
     "--fut-accent-2": theme.accent2,
     "--fut-shadow": theme.shadow,
     "--fut-foil": theme.foil,
     transitionTimingFunction: "cubic-bezier(0.22, 1, 0.36, 1)",
+    transitionDuration: compact ? "900ms" : undefined,
     transformStyle: "preserve-3d",
+    width: compact ? 190 : undefined,
     borderColor: active ? theme.accent : "rgba(71,85,105,0.38)",
     boxShadow: active
       ? `0 20px 58px -18px ${theme.shadow}, 0 0 0 1px ${theme.accent}45, inset 0 1px 0 rgba(255,255,255,0.10)`
@@ -605,6 +634,7 @@ export function HolographicSignalDeck({ brief }: { brief: AgentBrief }) {
   const [activeIndex, setActiveIndex] = useState(0);
   const [paused, setPaused] = useState(false);
   const [selectedTf, setSelectedTf] = useState<Timeframe | null>(null);
+  const [compactDeck, setCompactDeck] = useState(false);
   const animateRef = useRef(true);
 
   useEffect(() => {
@@ -614,6 +644,15 @@ export function HolographicSignalDeck({ brief }: { brief: AgentBrief }) {
     const onMQ = () => { animateRef.current = !mq.matches; };
     mq.addEventListener?.("change", onMQ);
     return () => mq.removeEventListener?.("change", onMQ);
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const mq = window.matchMedia("(max-width: 768px)");
+    const sync = () => setCompactDeck(mq.matches);
+    sync();
+    mq.addEventListener?.("change", sync);
+    return () => mq.removeEventListener?.("change", sync);
   }, []);
 
   // Auto-rotate
@@ -667,7 +706,7 @@ export function HolographicSignalDeck({ brief }: { brief: AgentBrief }) {
     <section
       id="layer1_holographic_signals"
       data-panel="layer1_holographic_signals"
-      className="quantum-panel quantum-holo-deck relative flex h-full min-h-[700px] flex-col overflow-hidden rounded-lg border border-white/10 bg-[#090d14]/92 shadow-[0_18px_56px_rgba(0,0,0,0.30)]"
+      className="quantum-panel quantum-holo-deck relative flex h-full min-h-0 flex-col overflow-hidden rounded-lg border border-white/10 bg-[#090d14]/92 shadow-[0_18px_56px_rgba(0,0,0,0.30)] lg:min-h-[700px]"
       style={getQuantumPanelStyle("layer1_holographic_signals", "#14b8a6", "#fbbf24")}
       onMouseEnter={() => setPaused(true)}
       onMouseLeave={() => setPaused(false)}
@@ -711,7 +750,7 @@ export function HolographicSignalDeck({ brief }: { brief: AgentBrief }) {
       <div className="grid min-h-0 flex-1 gap-0 lg:grid-cols-[minmax(0,1fr)_360px]">
         {/* Left — 3D deck */}
         <div
-          className="relative min-h-[440px] overflow-hidden border-r border-white/10 lg:min-h-0"
+          className="relative min-h-[360px] overflow-hidden border-r border-white/10 sm:min-h-[420px] lg:min-h-0"
           style={{
             background:
               "radial-gradient(circle at 50% 72%, rgba(20,184,166,0.13), transparent 34%), radial-gradient(circle at 52% 6%, rgba(251,191,36,0.07), transparent 28%), linear-gradient(180deg, rgba(12,17,27,0.92), rgba(5,8,14,0.98))",
@@ -779,7 +818,7 @@ export function HolographicSignalDeck({ brief }: { brief: AgentBrief }) {
 
           {/* 3D deck stage */}
           <div
-            className="relative mx-auto mt-4 h-[330px] lg:h-[360px]"
+            className="relative mx-auto mt-4 h-[280px] sm:h-[330px] lg:h-[360px]"
             style={{ perspective: "2100px", perspectiveOrigin: "50% 40%" }}
           >
             {rows.map((r, i) => {
@@ -793,6 +832,7 @@ export function HolographicSignalDeck({ brief }: { brief: AgentBrief }) {
                   row={r}
                   active={i === activeIndex}
                   offset={offset}
+                  compact={compactDeck}
                   onSelect={() => setActiveIndex(i)}
                 />
               );
@@ -848,7 +888,7 @@ export function HolographicSignalDeck({ brief }: { brief: AgentBrief }) {
         </div>
 
         {/* Right — Sinyal Detayı */}
-        <aside className="relative min-h-[440px] overflow-hidden bg-black/20 p-3 lg:min-h-0">
+        <aside className="relative min-h-0 overflow-hidden bg-black/20 p-3">
           <div className="space-y-2">
             <div className="flex items-center gap-2">
               <span className="h-1.5 w-1.5 rounded-full bg-teal-300 shadow-[0_0_8px_rgba(45,212,191,0.45)]" />
