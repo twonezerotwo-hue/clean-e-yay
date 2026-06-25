@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { motion } from "framer-motion";
 
@@ -719,19 +719,212 @@ function LayerStage({
   );
 }
 
-function Layer1SummaryGrid({ items }: { items: Layer1StackItem[] }) {
+function Layer1Stack({ items }: { items: Layer1StackItem[] }) {
+  const scrollerRef = useRef<HTMLDivElement | null>(null);
+  const [activeIndex, setActiveIndex] = useState(0);
+
+  useEffect(() => {
+    const scroller = scrollerRef.current;
+    const stack = scroller?.querySelector<HTMLElement>(".layer1-stack");
+    if (!scroller || !stack) return;
+
+    const AUTO_ADVANCE_MS = 7000;
+    const MANUAL_LOCK_MS = 1400;
+    const TRANSITION_MS = 1150;
+
+    const readItems = () =>
+      Array.from(stack.children).filter(
+        (node): node is HTMLElement => node instanceof HTMLElement,
+      );
+
+    const readGap = () => {
+      const value = Number.parseFloat(window.getComputedStyle(stack).gap);
+      return Number.isFinite(value) ? value : 0;
+    };
+
+    const readTargets = () => {
+      const panels = readItems();
+      const gap = readGap();
+      let cursor = 0;
+      return panels.map((panel) => {
+        const target = cursor;
+        cursor += panel.offsetHeight + gap;
+        return target;
+      });
+    };
+
+    const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    let active = 0;
+    let lockUntil = 0;
+    let autoTimer = 0;
+    let animationFrame = 0;
+    let animationDoneTimer = 0;
+    let resizeTimer = 0;
+    let programmatic = false;
+
+    const applyState = (nextActive: number) => {
+      const panels = readItems();
+      if (!panels.length) return;
+
+      panels.forEach((panel, index) => {
+        const state =
+          index < nextActive ? "covered" : index === nextActive ? "active" : "queued";
+        panel.dataset.layer1State = state;
+      });
+      scroller.dataset.layer1Active = String(nextActive + 1);
+      setActiveIndex(nextActive);
+    };
+
+    const finishSettling = () => {
+      programmatic = false;
+      scroller.dataset.layer1Settling = "false";
+    };
+
+    const animateScrollTo = (target: number, immediate = false) => {
+      if (animationFrame) window.cancelAnimationFrame(animationFrame);
+      if (animationDoneTimer) window.clearTimeout(animationDoneTimer);
+      animationFrame = 0;
+      animationDoneTimer = 0;
+
+      const start = scroller.scrollTop;
+      const distance = target - start;
+      const duration = reducedMotion ? 0 : TRANSITION_MS;
+      const startedAt = window.performance.now();
+
+      programmatic = true;
+      scroller.dataset.layer1Settling = "true";
+
+      if (immediate || duration === 0 || Math.abs(distance) < 1) {
+        scroller.scrollTop = target;
+        finishSettling();
+        return;
+      }
+
+      const ease = (t: number) => 1 - Math.pow(1 - t, 3);
+      const step = (now: number) => {
+        const progress = Math.min(1, (now - startedAt) / duration);
+        scroller.scrollTop = start + distance * ease(progress);
+        if (progress < 1) {
+          animationFrame = window.requestAnimationFrame(step);
+          return;
+        }
+        animationFrame = 0;
+        animationDoneTimer = window.setTimeout(() => {
+          animationDoneTimer = 0;
+          finishSettling();
+        }, 120);
+      };
+      animationFrame = window.requestAnimationFrame(step);
+    };
+
+    const moveTo = (nextIndex: number, mode: "auto" | "manual" | "sync") => {
+      const targets = readTargets();
+      if (!targets.length) return;
+      const bounded =
+        mode === "auto"
+          ? ((nextIndex % targets.length) + targets.length) % targets.length
+          : Math.min(targets.length - 1, Math.max(0, nextIndex));
+
+      active = bounded;
+      applyState(bounded);
+      animateScrollTo(targets[bounded], mode === "sync");
+    };
+
+    const scheduleAuto = () => {
+      if (autoTimer) window.clearTimeout(autoTimer);
+      autoTimer = window.setTimeout(() => {
+        moveTo(active + 1, "auto");
+        scheduleAuto();
+      }, AUTO_ADVANCE_MS);
+    };
+
+    const syncFromScroll = () => {
+      if (programmatic) return;
+      const targets = readTargets();
+      if (!targets.length) return;
+
+      const current = scroller.scrollTop;
+      let nearest = 0;
+      targets.forEach((target, index) => {
+        if (Math.abs(current - target) < Math.abs(current - targets[nearest])) {
+          nearest = index;
+        }
+      });
+      active = nearest;
+      applyState(nearest);
+    };
+
+    const onWheel = (event: WheelEvent) => {
+      const target = event.target as HTMLElement | null;
+      if (target?.closest("input, textarea, select, [contenteditable='true']")) return;
+      if (Math.abs(event.deltaY) < 8) return;
+
+      event.preventDefault();
+      const now = Date.now();
+      if (now < lockUntil) return;
+      lockUntil = now + MANUAL_LOCK_MS;
+      moveTo(active + (event.deltaY > 0 ? 1 : -1), "manual");
+      scheduleAuto();
+    };
+
+    const onScroll = () => {
+      window.requestAnimationFrame(syncFromScroll);
+    };
+
+    const scheduleLayoutSync = () => {
+      if (resizeTimer) window.clearTimeout(resizeTimer);
+      resizeTimer = window.setTimeout(() => {
+        resizeTimer = 0;
+        if (!programmatic) moveTo(active, "sync");
+      }, 180);
+    };
+
+    const onResize = () => {
+      scheduleLayoutSync();
+    };
+
+    const observer =
+      typeof ResizeObserver === "undefined"
+        ? null
+        : new ResizeObserver(() => {
+            scheduleLayoutSync();
+          });
+
+    observer?.observe(scroller);
+    readItems().forEach((panel) => observer?.observe(panel));
+    scroller.addEventListener("wheel", onWheel, { passive: false });
+    scroller.addEventListener("scroll", onScroll, { passive: true });
+    window.addEventListener("resize", onResize);
+
+    moveTo(0, "sync");
+    scheduleAuto();
+
+    return () => {
+      if (autoTimer) window.clearTimeout(autoTimer);
+      if (animationFrame) window.cancelAnimationFrame(animationFrame);
+      if (animationDoneTimer) window.clearTimeout(animationDoneTimer);
+      if (resizeTimer) window.clearTimeout(resizeTimer);
+      observer?.disconnect();
+      scroller.removeEventListener("wheel", onWheel);
+      scroller.removeEventListener("scroll", onScroll);
+      window.removeEventListener("resize", onResize);
+    };
+  }, [items.length]);
+
   return (
     <div
-      className="layer1-summary-scroll h-full min-h-0 overflow-y-auto p-4 md:p-5"
+      ref={scrollerRef}
+      className="layer1-stack-scroll h-full overflow-y-auto p-4 md:p-5"
       aria-live="polite"
-      aria-label={`Katman 1 summary grid ${items.length} panel`}
+      aria-label={`Katman 1 panel ${activeIndex + 1} / ${items.length}`}
     >
-      <div className="layer1-summary-grid">
+      <div className="layer1-stack">
         {items.map((item) => (
           <div
             key={item.key}
-            className="layer1-summary-card"
+            className="layer1-stack-item"
             data-layer1-key={item.key}
+            data-layer1-state="queued"
           >
             {item.node}
           </div>
@@ -926,8 +1119,9 @@ export function CockpitView() {
   } else if (activeLayer === 1) {
     const layer1Items: Layer1StackItem[] = [
       { key: "execution_readiness", node: <ExecutionReadinessPanel /> },
-      { key: "order_ticket", node: <OrderTicketPanel /> },
       { key: "holographic_signals", node: <HolographicSignalDeck brief={brief} /> },
+      { key: "capital_rotation", node: <CapitalRotationPanel /> },
+      { key: "news", node: <NewsPanel defaultView="radar" /> },
       {
         key: "event_scenario",
         node: (
@@ -937,12 +1131,11 @@ export function CockpitView() {
           </section>
         ),
       },
-      { key: "capital_rotation", node: <CapitalRotationPanel /> },
-      { key: "news", node: <NewsPanel defaultView="radar" /> },
+      { key: "order_ticket", node: <OrderTicketPanel /> },
     ];
 
     layerContent = (
-        <Layer1SummaryGrid items={layer1Items} />
+        <Layer1Stack items={layer1Items} />
       );
   } else if (activeLayer === 2) {
     layerContent = (
