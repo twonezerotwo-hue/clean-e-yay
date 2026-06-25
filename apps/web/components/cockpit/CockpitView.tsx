@@ -728,7 +728,6 @@ function Layer1Stack({ items }: { items: Layer1StackItem[] }) {
     const stack = scroller?.querySelector<HTMLElement>(".layer1-stack");
     if (!scroller || !stack) return;
 
-    const AUTO_ADVANCE_MS = 7000;
     const MANUAL_LOCK_MS = 1400;
     const TRANSITION_MS = 1150;
 
@@ -756,7 +755,6 @@ function Layer1Stack({ items }: { items: Layer1StackItem[] }) {
     const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     let active = 0;
     let lockUntil = 0;
-    let autoTimer = 0;
     let animationFrame = 0;
     let animationDoneTimer = 0;
     let resizeTimer = 0;
@@ -817,25 +815,14 @@ function Layer1Stack({ items }: { items: Layer1StackItem[] }) {
       animationFrame = window.requestAnimationFrame(step);
     };
 
-    const moveTo = (nextIndex: number, mode: "auto" | "manual" | "sync") => {
+    const moveTo = (nextIndex: number, mode: "manual" | "sync") => {
       const targets = readTargets();
       if (!targets.length) return;
-      const bounded =
-        mode === "auto"
-          ? ((nextIndex % targets.length) + targets.length) % targets.length
-          : Math.min(targets.length - 1, Math.max(0, nextIndex));
+      const bounded = Math.min(targets.length - 1, Math.max(0, nextIndex));
 
       active = bounded;
       applyState(bounded);
       animateScrollTo(targets[bounded], mode === "sync");
-    };
-
-    const scheduleAuto = () => {
-      if (autoTimer) window.clearTimeout(autoTimer);
-      autoTimer = window.setTimeout(() => {
-        moveTo(active + 1, "auto");
-        scheduleAuto();
-      }, AUTO_ADVANCE_MS);
     };
 
     const syncFromScroll = () => {
@@ -864,7 +851,6 @@ function Layer1Stack({ items }: { items: Layer1StackItem[] }) {
       if (now < lockUntil) return;
       lockUntil = now + MANUAL_LOCK_MS;
       moveTo(active + (event.deltaY > 0 ? 1 : -1), "manual");
-      scheduleAuto();
     };
 
     const onScroll = () => {
@@ -897,10 +883,8 @@ function Layer1Stack({ items }: { items: Layer1StackItem[] }) {
     window.addEventListener("resize", onResize);
 
     moveTo(0, "sync");
-    scheduleAuto();
 
     return () => {
-      if (autoTimer) window.clearTimeout(autoTimer);
       if (animationFrame) window.cancelAnimationFrame(animationFrame);
       if (animationDoneTimer) window.clearTimeout(animationDoneTimer);
       if (resizeTimer) window.clearTimeout(resizeTimer);
@@ -1112,7 +1096,7 @@ export function CockpitView() {
 
   if (activeLayer === 0) {
     layerContent = (
-      <div className="h-full overflow-hidden p-3 md:p-4">
+      <div className="h-full overflow-y-auto p-3 md:p-4 xl:overflow-hidden">
         <Layer0ReporterAgent hero={heroProps} onNavigate={activateLayer} />
       </div>
       );
