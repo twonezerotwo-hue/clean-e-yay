@@ -710,6 +710,22 @@ function LayerStage({
   direction: number;
   children: ReactNode;
 }) {
+  const [mobileStage, setMobileStage] = useState(
+    () => typeof window !== "undefined" && window.matchMedia("(max-width: 767px)").matches,
+  );
+
+  useEffect(() => {
+    const query = window.matchMedia("(max-width: 767px)");
+    const sync = () => setMobileStage(query.matches);
+    sync();
+    if (query.addEventListener) {
+      query.addEventListener("change", sync);
+      return () => query.removeEventListener("change", sync);
+    }
+    query.addListener(sync);
+    return () => query.removeListener(sync);
+  }, []);
+
   return (
     <div
       className="relative z-10 mx-auto h-full min-h-0 w-full max-w-7xl px-2 py-2 sm:px-4 sm:py-3 md:px-6 md:py-4 xl:pl-24"
@@ -719,10 +735,10 @@ function LayerStage({
         key={activeLayer}
         initial={{
           opacity: 0,
-          scale: direction >= 0 ? 1.16 : 0.84,
-          z: direction >= 0 ? -360 : 260,
-          rotateX: direction >= 0 ? 7 : -5,
-          filter: "blur(18px)",
+          scale: mobileStage ? 1 : direction >= 0 ? 1.16 : 0.84,
+          z: mobileStage ? 0 : direction >= 0 ? -360 : 260,
+          rotateX: mobileStage ? 0 : direction >= 0 ? 7 : -5,
+          filter: mobileStage ? "blur(0px)" : "blur(18px)",
         }}
         animate={{
           opacity: 1,
@@ -780,6 +796,7 @@ function Layer1Stack({ items }: { items: Layer1StackItem[] }) {
     let animationFrame = 0;
     let animationDoneTimer = 0;
     let resizeTimer = 0;
+    let scrollSettleTimer = 0;
     let programmatic = false;
 
     const applyState = (nextActive: number) => {
@@ -848,9 +865,9 @@ function Layer1Stack({ items }: { items: Layer1StackItem[] }) {
     };
 
     const syncFromScroll = () => {
-      if (programmatic) return;
+      if (programmatic) return active;
       const targets = readTargets();
-      if (!targets.length) return;
+      if (!targets.length) return active;
 
       const current = scroller.scrollTop;
       let nearest = 0;
@@ -861,6 +878,7 @@ function Layer1Stack({ items }: { items: Layer1StackItem[] }) {
       });
       active = nearest;
       applyState(nearest);
+      return nearest;
     };
 
     const onWheel = (event: WheelEvent) => {
@@ -877,6 +895,15 @@ function Layer1Stack({ items }: { items: Layer1StackItem[] }) {
 
     const onScroll = () => {
       window.requestAnimationFrame(syncFromScroll);
+      if (programmatic) return;
+      if (scrollSettleTimer) window.clearTimeout(scrollSettleTimer);
+      scrollSettleTimer = window.setTimeout(() => {
+        scrollSettleTimer = 0;
+        if (!programmatic) {
+          const nearest = syncFromScroll();
+          moveTo(nearest, "manual");
+        }
+      }, 180);
     };
 
     const scheduleLayoutSync = () => {
@@ -910,6 +937,7 @@ function Layer1Stack({ items }: { items: Layer1StackItem[] }) {
       if (animationFrame) window.cancelAnimationFrame(animationFrame);
       if (animationDoneTimer) window.clearTimeout(animationDoneTimer);
       if (resizeTimer) window.clearTimeout(resizeTimer);
+      if (scrollSettleTimer) window.clearTimeout(scrollSettleTimer);
       observer?.disconnect();
       scroller.removeEventListener("wheel", onWheel);
       scroller.removeEventListener("scroll", onScroll);

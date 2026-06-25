@@ -1941,23 +1941,56 @@ html, body {
 
 @media (max-width: 767px) {
   .layer1-stack-scroll {
-    --layer1-stack-gap: clamp(28px, 8dvh, 56px);
-    --layer1-sticky-top: 0.35rem;
-    --layer1-slide-height: calc(100dvh - 7.8rem);
-    padding: 0.5rem;
+    --layer1-stack-gap: 0px;
+    --layer1-sticky-top: 0px;
+    --layer1-slide-height: calc(100dvh - 7.25rem);
+    width: 100%;
+    max-width: 100%;
+    overflow-x: hidden;
+    padding: 0;
+    scroll-padding-block: 0;
+    scroll-snap-type: y mandatory;
   }
 
   .layer1-stack {
-    padding-bottom: clamp(72px, 18dvh, 140px);
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+    gap: 0;
+    padding-bottom: 0;
   }
 
   .layer1-stack-item {
+    position: relative;
+    top: auto;
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
     border-radius: 0.875rem;
+    scroll-snap-align: start;
+    scroll-snap-stop: always;
+    transform: translate3d(0, 0, 0) scale(1) !important;
+    filter: none !important;
+    opacity: 1 !important;
+    pointer-events: auto !important;
+    contain: layout paint style;
+  }
+
+  .layer1-stack-item::after {
+    display: none;
   }
 
   .layer1-stack-item > * {
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
     overflow-y: auto;
+    overflow-x: hidden;
     scrollbar-width: none;
+  }
+
+  .layer1-stack-item :where(canvas, svg, img, video) {
+    max-width: 100%;
   }
 
   .layer1-stack-item > *::-webkit-scrollbar {
@@ -1971,7 +2004,7 @@ html, body {
   }
 
   .layer1-stack-scroll {
-    --layer1-slide-height: calc(100dvh - 7.2rem);
+    --layer1-slide-height: calc(100dvh - 6.85rem);
   }
 }
 
