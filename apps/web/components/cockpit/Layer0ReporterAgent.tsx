@@ -1105,7 +1105,7 @@ export function Layer0ReporterAgent({
   return (
     <section className="grid min-h-full gap-4 xl:h-full xl:min-h-0 xl:grid-cols-[minmax(360px,1fr)_minmax(380px,1fr)_minmax(360px,1fr)]">
       {/* ── Sutun 1: Acik pozisyon yonetim merkezi ───────────────── */}
-      <div className="flex min-h-[520px] flex-col xl:min-h-0">
+      <div className="order-3 flex h-[calc(100dvh-8rem)] min-h-0 snap-start flex-col xl:order-1 xl:h-full xl:min-h-0">
         <Layer0PositionManager
           positions={positions}
           totalPnl={totalPnl}
@@ -1114,7 +1114,7 @@ export function Layer0ReporterAgent({
       </div>
 
       {/* ── Sutun 2: Human-computer model + karar hero ──────────────── */}
-      <div className="layer0-center-stack flex min-h-[760px] flex-col gap-3 xl:min-h-0">
+      <div className="layer0-center-stack order-1 flex h-[calc(100dvh-8rem)] min-h-0 snap-start flex-col gap-3 xl:order-2 xl:h-full xl:min-h-0">
         <div className="reporter-model-card shrink-0">
           <Layer0HumanComputerModel
             mode={modelMode}
@@ -1137,7 +1137,7 @@ export function Layer0ReporterAgent({
       </div>
 
       {/* ── Sutun 3: Konusma paneli ─────────────────────────────────── */}
-      <div className={`reporter-agent-console layer0-voice-console layer0-voice-console--${modelMode} min-h-[680px] xl:min-h-0`}>
+      <div className={`reporter-agent-console layer0-voice-console layer0-voice-console--${modelMode} order-2 h-[calc(100dvh-8rem)] min-h-0 snap-start xl:order-3 xl:h-full xl:min-h-0`}>
         <div className="reporter-agent-grid" />
         <div className="reporter-agent-orb" aria-hidden>
           <span />

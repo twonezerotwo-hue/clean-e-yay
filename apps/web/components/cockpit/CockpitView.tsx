@@ -712,7 +712,7 @@ function LayerStage({
 }) {
   return (
     <div
-      className="relative z-10 mx-auto h-full min-h-0 w-full max-w-7xl px-4 py-3 md:px-6 md:py-4 xl:pl-24"
+      className="relative z-10 mx-auto h-full min-h-0 w-full max-w-7xl px-2 py-2 sm:px-4 sm:py-3 md:px-6 md:py-4 xl:pl-24"
       style={{ perspective: 1800 }}
     >
       <motion.section
@@ -1124,7 +1124,7 @@ export function CockpitView() {
 
   if (activeLayer === 0) {
     layerContent = (
-      <div className="h-full overflow-y-auto p-3 md:p-4 xl:overflow-hidden">
+      <div className="h-full snap-y snap-mandatory overflow-y-auto scroll-smooth p-2 sm:p-3 md:p-4 xl:snap-none xl:overflow-hidden">
         <Layer0ReporterAgent hero={heroProps} onNavigate={activateLayer} />
       </div>
       );
@@ -1296,34 +1296,36 @@ export function CockpitView() {
       </LayerStage>
 
       <footer className="pointer-events-none relative z-30 border-t border-white/[0.08] bg-black/30 backdrop-blur-md">
-        <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-x-6 gap-y-1 px-4 py-2 md:px-6 xl:pl-24">
+        <div className="mx-auto flex max-w-7xl items-center justify-center gap-x-6 gap-y-1 px-3 py-1.5 md:justify-between md:px-6 md:py-2 xl:pl-24">
           <LayerControls activeLayer={activeLayer} onSelect={activateLayer} />
-          <StatusCell
-            label="Baglanti"
-            value={brief.data_mode.startsWith("LIVE") ? "CANLI" : brief.data_mode}
-            tone={brief.data_mode.startsWith("LIVE") ? "text-signal-up" : "text-amber-300"}
-          />
-          <StatusCell label="Veri kalitesi" value={`DQS ${formatScore(dqs)}`} tone={dqsTone} />
-          <StatusCell
-            label="Risk modu"
-            value={riskAction}
-            tone={riskClear ? "text-signal-up" : "text-signal-down"}
-          />
-          <StatusCell
-            label="Piyasa rejimi"
-            value={brief.regime ?? "okunuyor"}
-            tone="text-accent-cyan"
-          />
-          <StatusCell
-            label="Pozisyon"
-            value={String(openPaperPositions)}
-            tone="text-amber-200"
-          />
-          <StatusCell
-            label="Durum"
-            value={AGENT_STATUS_LABEL[brief.status] ?? brief.status}
-            tone={AGENT_STATUS_TONE[brief.status]}
-          />
+          <div className="hidden flex-wrap items-center justify-end gap-x-6 gap-y-1 md:flex">
+            <StatusCell
+              label="Baglanti"
+              value={brief.data_mode.startsWith("LIVE") ? "CANLI" : brief.data_mode}
+              tone={brief.data_mode.startsWith("LIVE") ? "text-signal-up" : "text-amber-300"}
+            />
+            <StatusCell label="Veri kalitesi" value={`DQS ${formatScore(dqs)}`} tone={dqsTone} />
+            <StatusCell
+              label="Risk modu"
+              value={riskAction}
+              tone={riskClear ? "text-signal-up" : "text-signal-down"}
+            />
+            <StatusCell
+              label="Piyasa rejimi"
+              value={brief.regime ?? "okunuyor"}
+              tone="text-accent-cyan"
+            />
+            <StatusCell
+              label="Pozisyon"
+              value={String(openPaperPositions)}
+              tone="text-amber-200"
+            />
+            <StatusCell
+              label="Durum"
+              value={AGENT_STATUS_LABEL[brief.status] ?? brief.status}
+              tone={AGENT_STATUS_TONE[brief.status]}
+            />
+          </div>
         </div>
       </footer>
     </main>
