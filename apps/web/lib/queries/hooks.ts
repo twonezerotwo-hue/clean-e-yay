@@ -2,7 +2,7 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-import { api } from "@/lib/api/client";
+import { api, type UpdateRiskPlanRequest } from "@/lib/api/client";
 import { usePanelQueryPolicy } from "@/lib/panel-runtime";
 import { qk } from "./keys";
 
@@ -67,6 +67,24 @@ export const useClosePaperPosition = () => {
     mutationFn: (positionId: string) => api.closePaperPosition(positionId),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: qk.paperTradingState });
+      void queryClient.invalidateQueries({ queryKey: qk.cockpitBrief });
+    },
+  });
+};
+
+export const useUpdatePaperPositionRiskPlan = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      positionId,
+      body,
+    }: {
+      positionId: string;
+      body: UpdateRiskPlanRequest;
+    }) => api.updatePaperPositionRiskPlan(positionId, body),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: qk.paperTradingState });
+      void queryClient.invalidateQueries({ queryKey: qk.cockpitBrief });
     },
   });
 };

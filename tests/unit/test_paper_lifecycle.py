@@ -333,3 +333,102 @@ def test_state_endpoint_surfaces_lifecycle_and_audit(paper_env, monkeypatch) -> 
     assert "audit_summary" in body
     assert "recent_audit_events" in body
     assert body["open_positions"][0]["lifecycle_status"] == "OPEN"
+
+
+def test_risk_plan_update_long_success_and_audit(paper_env) -> None:
+    from apps.api.main import app
+    from packages.paper import lifecycle
+
+    ps = paper_env["state"]._initial_state()
+    pos = _open(lifecycle, ps, symbol="BTCUSD", side="long", entry=100.0)
+    pos.current_price = 110.0
+    paper_env["state"].save(ps)
+
+    r = TestClient(app).patch(
+        f"/api/v1/paper-trading/positions/{pos.id}/risk-plan",
+        json={"sl": 105.0, "tp": 125.0},
+    )
+
+    assert r.status_code == 200
+    body = r.json()
+    assert body["status"] == "updated"
+    assert body["paper_safe"] is True
+    assert body["no_execution"] is True
+    loaded = paper_env["state"].load()
+    assert loaded.open_positions[0].sl == 105.0
+    assert loaded.open_positions[0].tp == 125.0
+    assert any(
+        e["action"] == "MANUAL_RISK_PLAN_UPDATE"
+        for e in paper_env["audit"].read_recent()
+    )
+
+
+def test_risk_plan_update_rejects_invalid_long_sl(paper_env) -> None:
+    from apps.api.main import app
+    from packages.paper import lifecycle
+
+    ps = paper_env["state"]._initial_state()
+    pos = _open(lifecycle, ps, symbol="BTCUSD", side="long", entry=100.0)
+    pos.current_price = 110.0
+    paper_env["state"].save(ps)
+
+    r = TestClient(app).patch(
+        f"/api/v1/paper-trading/positions/{pos.id}/risk-plan",
+        json={"sl": 112.0, "tp": 125.0},
+    )
+
+    assert r.status_code == 400
+    assert r.json()["reason"] == "LONG pozisyonda stop loss current/entry fiyatının altında olmalı."
+
+
+def test_risk_plan_update_short_success_and_rejects_invalid_tp(paper_env) -> None:
+    from apps.api.main import app
+    from packages.paper import lifecycle
+
+    ps = paper_env["state"]._initial_state()
+    pos = _open(lifecycle, ps, symbol="ETHUSD", side="short", entry=100.0)
+    pos.current_price = 90.0
+    paper_env["state"].save(ps)
+
+    client = TestClient(app)
+    ok = client.patch(
+        f"/api/v1/paper-trading/positions/{pos.id}/risk-plan",
+        json={"sl": 98.0, "tp": 82.0},
+    )
+    assert ok.status_code == 200
+
+    bad = client.patch(
+        f"/api/v1/paper-trading/positions/{pos.id}/risk-plan",
+        json={"sl": 98.0, "tp": 95.0},
+    )
+    assert bad.status_code == 400
+    assert bad.json()["reason"] == "SHORT pozisyonda take profit current/entry fiyatının altında olmalı."
+
+
+def test_risk_plan_update_rejects_non_number_and_closed_position(paper_env) -> None:
+    from apps.api.main import app
+    from packages.paper import lifecycle
+
+    ps = paper_env["state"]._initial_state()
+    pos = _open(lifecycle, ps, symbol="XAUUSD", side="long", entry=100.0)
+    pos.current_price = 110.0
+    paper_env["state"].save(ps)
+    client = TestClient(app)
+
+    bad_number = client.patch(
+        f"/api/v1/paper-trading/positions/{pos.id}/risk-plan",
+        json={"sl": "abc", "tp": None},
+    )
+    assert bad_number.status_code == 400
+    assert bad_number.json()["reason"] == "SL geçerli bir sayı olmalı."
+
+    ps = paper_env["state"].load()
+    closed_trade = lifecycle.close_position(ps, ps.open_positions[0], exit_price=111.0, reason="MANUAL")
+    paper_env["state"].save(ps)
+
+    closed = client.patch(
+        f"/api/v1/paper-trading/positions/{closed_trade.id}/risk-plan",
+        json={"sl": 105.0, "tp": 125.0},
+    )
+    assert closed.status_code == 400
+    assert closed.json()["reason"] == "Pozisyon kapalı olduğu için risk planı güncellenemez."

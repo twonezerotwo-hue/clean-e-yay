@@ -54,6 +54,21 @@ export type ClosePositionResult = {
   pnl_usd: number;
 };
 
+export type UpdateRiskPlanRequest = {
+  sl: number | null;
+  tp: number | null;
+};
+
+export type UpdateRiskPlanResult = {
+  status: string;
+  position_id: string;
+  symbol: string;
+  sl: number | null;
+  tp: number | null;
+  paper_safe?: boolean;
+  no_execution?: boolean;
+};
+
 export type OrderRequest = {
   symbol: string;
   side: string; // "long" | "short"
@@ -199,7 +214,31 @@ async function fetchJSON<T>(path: string, init?: RequestInit): Promise<T> {
     headers,
   });
   if (!res.ok) {
-    throw new Error(`API ${res.status} ${path}: ${await res.text().catch(() => "")}`);
+    const raw = await res.text().catch(() => "");
+    let reason: string | null = null;
+    try {
+      const payload = JSON.parse(raw) as {
+        reason?: unknown;
+        detail?: unknown;
+      };
+      reason =
+        typeof payload.reason === "string"
+          ? payload.reason
+          : typeof payload.detail === "string"
+            ? payload.detail
+            : payload.detail &&
+                typeof payload.detail === "object" &&
+                "reason" in payload.detail &&
+                typeof (payload.detail as { reason?: unknown }).reason === "string"
+              ? (payload.detail as { reason: string }).reason
+              : null;
+    } catch {
+      reason = null;
+    }
+    if (reason?.trim()) {
+      throw new Error(reason);
+    }
+    throw new Error(`API ${res.status} ${path}: ${raw}`);
   }
   return res.json() as Promise<T>;
 }
@@ -249,6 +288,14 @@ export const api = {
     fetchJSON<ClosePositionResult>(
       `/api/v1/paper-trading/positions/${positionId}/close`,
       { method: "POST" },
+    ),
+  updatePaperPositionRiskPlan: (
+    positionId: string,
+    body: UpdateRiskPlanRequest,
+  ) =>
+    fetchJSON<UpdateRiskPlanResult>(
+      `/api/v1/paper-trading/positions/${positionId}/risk-plan`,
+      { method: "PATCH", body: JSON.stringify(body) },
     ),
   placeOrder: (body: OrderRequest) =>
     fetchJSON<OrderResult>("/api/v1/paper-trading/positions/open", {

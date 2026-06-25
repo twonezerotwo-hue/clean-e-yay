@@ -3,8 +3,10 @@ from __future__ import annotations
 
 from dataclasses import asdict
 from datetime import UTC, datetime
+import math
 
 from fastapi import APIRouter, HTTPException
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
 from packages.data.ingestion.pipeline import DEFAULT_SYMBOLS, build_snapshot, get_cached_snapshot
@@ -335,6 +337,121 @@ def close_position_manual(position_id: str) -> dict:
         "side": trade.side,
         "exit_price": trade.exit_price,
         "pnl_usd": trade.pnl_usd,
+    }
+
+
+class RiskPlanRequest(BaseModel):
+    sl: object | None = None
+    tp: object | None = None
+
+
+def _risk_plan_error(status_code: int, reason: str) -> JSONResponse:
+    return JSONResponse(
+        status_code=status_code,
+        content={"status": "error", "reason": reason},
+    )
+
+
+def _parse_risk_price(value: object | None, field_name: str) -> tuple[float | None, str | None]:
+    if value is None:
+        return None, None
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return None, f"{field_name} geçerli bir sayı olmalı."
+    price = float(value)
+    if not math.isfinite(price):
+        return None, f"{field_name} geçerli bir sayı olmalı."
+    if price <= 0:
+        return None, f"{field_name} sıfırdan büyük olmalı."
+    return price, None
+
+
+def _risk_plan_reference(pos: paper_state.Position) -> float:
+    current = getattr(pos, "current_price", None)
+    if isinstance(current, (int, float)) and math.isfinite(float(current)) and float(current) > 0:
+        return float(current)
+    return float(pos.entry_price)
+
+
+def _risk_plan_side_reason(
+    pos: paper_state.Position,
+    *,
+    sl: float | None,
+    tp: float | None,
+) -> str | None:
+    side = str(pos.side or "").lower()
+    ref = _risk_plan_reference(pos)
+    if side == "long":
+        if sl is not None and sl >= ref:
+            return "LONG pozisyonda stop loss current/entry fiyatının altında olmalı."
+        if tp is not None and tp <= ref:
+            return "LONG pozisyonda take profit current/entry fiyatının üstünde olmalı."
+        return None
+    if side == "short":
+        if sl is not None and sl <= ref:
+            return "SHORT pozisyonda stop loss current/entry fiyatının üstünde olmalı."
+        if tp is not None and tp >= ref:
+            return "SHORT pozisyonda take profit current/entry fiyatının altında olmalı."
+        return None
+    return "Pozisyon yönü okunamadığı için risk planı güncellenemez."
+
+
+@router.patch("/paper-trading/positions/{position_id}/risk-plan")
+def update_position_risk_plan(position_id: str, req: RiskPlanRequest):
+    """Owner risk plan update for paper positions only.
+
+    PAPER_SAFE / NO_EXECUTION: sadece local paper state SL/TP alanlarını günceller;
+    broker emri üretmez ve karar motoru mantığına dokunmaz.
+    """
+    ps = paper_state.load()
+    pos = next((p for p in ps.open_positions if p.id == position_id), None)
+    if pos is None:
+        if any(t.id == position_id for t in ps.recent_trades):
+            return _risk_plan_error(
+                400,
+                "Pozisyon kapalı olduğu için risk planı güncellenemez.",
+            )
+        return _risk_plan_error(404, "position_not_found")
+    if getattr(pos, "lifecycle_status", "OPEN") != "OPEN":
+        return _risk_plan_error(400, "Pozisyon açık durumda olmadığı için risk planı güncellenemez.")
+
+    sl, sl_error = _parse_risk_price(req.sl, "SL")
+    if sl_error:
+        return _risk_plan_error(400, sl_error)
+    tp, tp_error = _parse_risk_price(req.tp, "TP")
+    if tp_error:
+        return _risk_plan_error(400, tp_error)
+
+    side_reason = _risk_plan_side_reason(pos, sl=sl, tp=tp)
+    if side_reason:
+        return _risk_plan_error(400, side_reason)
+
+    old_sl = pos.sl
+    old_tp = pos.tp
+    pos.sl = sl
+    pos.tp = tp
+    paper_audit.record(
+        "MANUAL_RISK_PLAN_UPDATE",
+        position_id=pos.id,
+        symbol=pos.symbol,
+        timeframe=pos.timeframe,
+        side=pos.side,
+        old_sl=old_sl,
+        old_tp=old_tp,
+        sl=pos.sl,
+        tp=pos.tp,
+        reference_price=_risk_plan_reference(pos),
+        paper_safe=True,
+        no_execution=True,
+    )
+    paper_state.save(ps)
+    return {
+        "status": "updated",
+        "position_id": pos.id,
+        "symbol": pos.symbol,
+        "sl": pos.sl,
+        "tp": pos.tp,
+        "paper_safe": True,
+        "no_execution": True,
     }
 
 

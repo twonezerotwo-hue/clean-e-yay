@@ -7,6 +7,7 @@ import {
   useChat,
   useDataSnapshot,
   useClosePaperPosition,
+  useUpdatePaperPositionRiskPlan,
   usePaperTradingState,
 } from "@/lib/queries/hooks";
 import { api } from "@/lib/api/client";
@@ -161,6 +162,51 @@ function normalizeDecimalInput(value: string) {
   return value.replace(",", ".").replace(/[^\d.-]/g, "");
 }
 
+function parseRiskDraft(value: string) {
+  const trimmed = value.trim().replace(",", ".");
+  if (!trimmed) return { value: null as number | null, error: null as string | null };
+  const parsed = Number(trimmed);
+  if (!Number.isFinite(parsed)) {
+    return { value: null, error: "Geçerli sayı gir." };
+  }
+  return { value: parsed, error: null };
+}
+
+function mutationErrorMessage(error: unknown, fallback: string) {
+  return error instanceof Error && error.message.trim() ? error.message : fallback;
+}
+
+function breakEvenState(position: Position) {
+  const side = String(position.side ?? "").toLowerCase();
+  if (side !== "long" && side !== "short") {
+    return {
+      enabled: false,
+      reason: "Pozisyon yönü okunamadığı için break-even uygulanamaz.",
+    };
+  }
+  const current = position.current_price;
+  if (current == null || !Number.isFinite(current)) {
+    return { enabled: false, reason: "Break-even için güncel fiyat gerekli." };
+  }
+  const entry = position.entry_price;
+  if (!Number.isFinite(entry)) {
+    return { enabled: false, reason: "Break-even için güncel fiyat gerekli." };
+  }
+  if (side === "long" && current <= entry) {
+    return {
+      enabled: false,
+      reason: "Break-even için LONG pozisyon önce kâra geçmeli.",
+    };
+  }
+  if (side === "short" && current >= entry) {
+    return {
+      enabled: false,
+      reason: "Break-even için SHORT pozisyon önce kâra geçmeli.",
+    };
+  }
+  return { enabled: true, reason: null };
+}
+
 function positionSideLabel(side: Position["side"]) {
   return side === "long" ? "LONG" : "SHORT";
 }
@@ -184,6 +230,7 @@ function Layer0PositionManager({
   loading: boolean;
 }) {
   const closePosition = useClosePaperPosition();
+  const updateRiskPlan = useUpdatePaperPositionRiskPlan();
   const [selectedPosition, setSelectedPosition] = useState<Position | null>(null);
   const [expandedIds, setExpandedIds] = useState<Set<string>>(() => new Set());
 
@@ -273,6 +320,7 @@ function Layer0PositionManager({
         <PositionManageModal
           position={selectedPosition}
           closePosition={closePosition}
+          updateRiskPlan={updateRiskPlan}
           onClose={() => setSelectedPosition(null)}
         />
       ) : null}
@@ -429,10 +477,12 @@ function PositionField({
 function PositionManageModal({
   position,
   closePosition,
+  updateRiskPlan,
   onClose,
 }: {
   position: Position;
   closePosition: ReturnType<typeof useClosePaperPosition>;
+  updateRiskPlan: ReturnType<typeof useUpdatePaperPositionRiskPlan>;
   onClose: () => void;
 }) {
   const [slDraft, setSlDraft] = useState(numericDraft(position.sl));
@@ -451,6 +501,37 @@ function PositionManageModal({
     setError(null);
   }, [position]);
 
+  const beState = breakEvenState(position);
+
+  const saveRiskPlan = () => {
+    const parsedSl = parseRiskDraft(slDraft);
+    const parsedTp = parseRiskDraft(tpDraft);
+    if (parsedSl.error || parsedTp.error) {
+      setNotice(null);
+      setError(parsedSl.error ?? parsedTp.error);
+      return;
+    }
+    setError(null);
+    updateRiskPlan.mutate(
+      {
+        positionId: position.id,
+        body: { sl: parsedSl.value, tp: parsedTp.value },
+      },
+      {
+        onSuccess: (result) => {
+          setSlDraft(numericDraft(result.sl));
+          setTpDraft(numericDraft(result.tp));
+          setNotice("Risk planı güncellendi.");
+          setConfirmClose(false);
+        },
+        onError: (mutationError) => {
+          setNotice(null);
+          setError(mutationErrorMessage(mutationError, "Risk planı güncellenemedi."));
+        },
+      },
+    );
+  };
+
   const fullClose = () => {
     if (!confirmClose) {
       setConfirmClose(true);
@@ -464,18 +545,14 @@ function PositionManageModal({
         onClose();
       },
       onError: (mutationError) => {
-        const message =
-          mutationError instanceof Error
-            ? mutationError.message
-            : "Pozisyon kapatma başarısız oldu.";
-        setError(message);
+        setError(mutationErrorMessage(mutationError, "Pozisyon kapatma başarısız oldu."));
       },
     });
   };
 
   return (
-    <div className="fixed inset-0 z-[120] flex items-end justify-center bg-black/62 p-3 backdrop-blur-sm sm:items-center">
-      <div className="max-h-[92dvh] w-full max-w-2xl overflow-hidden rounded-2xl border border-accent-cyan/20 bg-[#040b14]/95 shadow-[0_28px_90px_rgba(0,0,0,0.55),0_0_60px_rgba(34,211,238,0.13)]">
+    <div className="fixed inset-0 z-[120] flex items-end justify-center bg-black/62 px-3 pb-[calc(0.75rem_+_env(safe-area-inset-bottom))] pt-16 backdrop-blur-sm sm:items-center sm:p-3">
+      <div className="max-h-[calc(100dvh_-_6.5rem_-_env(safe-area-inset-bottom))] w-full max-w-2xl overflow-hidden rounded-2xl border border-accent-cyan/20 bg-[#040b14]/95 shadow-[0_28px_90px_rgba(0,0,0,0.55),0_0_60px_rgba(34,211,238,0.13)] sm:max-h-[92dvh]">
         <div className="flex items-start justify-between gap-3 border-b border-white/[0.08] px-4 py-3">
           <div>
             <div className="text-sm font-semibold uppercase tracking-[0.2em] text-white/88">
@@ -495,7 +572,7 @@ function PositionManageModal({
           </button>
         </div>
 
-        <div className="max-h-[calc(92dvh-64px)] overflow-y-auto p-4">
+        <div className="max-h-[calc(100dvh_-_11rem_-_env(safe-area-inset-bottom))] overflow-y-auto p-4 pb-[calc(80px_+_env(safe-area-inset-bottom))] sm:max-h-[calc(92dvh_-_64px)] sm:pb-4">
           <div className="grid gap-2 sm:grid-cols-3">
             <PositionMetric label="Entry" value={fmtPrice(position.entry_price)} />
             <PositionMetric label="Current" value={fmtPrice(position.current_price)} />
@@ -542,34 +619,35 @@ function PositionManageModal({
             </label>
           </div>
 
-          <div className="mt-3 rounded-xl border border-amber-300/20 bg-amber-300/10 px-3 py-2 text-xs leading-5 text-amber-100/72">
-            SL/TP güncelleme endpoint'i backend'de hazır olduğunda aktifleşecek.
-          </div>
-
-          <div className="mt-4 flex flex-wrap items-center gap-2">
+          <div className="mt-4 grid gap-2 sm:flex sm:flex-wrap sm:items-center">
             <button
               type="button"
-              disabled
-              className="rounded-xl border border-white/10 bg-white/[0.035] px-3 py-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-white/32"
+              onClick={saveRiskPlan}
+              disabled={updateRiskPlan.isPending}
+              className="w-full rounded-xl border border-accent-cyan/30 bg-accent-cyan/10 px-3 py-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-accent-cyan transition-colors hover:border-accent-cyan/50 disabled:cursor-not-allowed disabled:border-white/10 disabled:bg-white/[0.035] disabled:text-white/32 sm:w-auto"
             >
-              Risk Planı Kaydet
+              {updateRiskPlan.isPending ? "Kaydediliyor..." : "Risk Planı Kaydet"}
             </button>
             <button
               type="button"
               onClick={() => {
+                if (!beState.enabled) return;
                 setSlDraft(numericDraft(position.entry_price));
-                setNotice("Break-even SL alanına yazıldı. Kaydetmek için backend risk-plan endpoint'i gerekir.");
+                setNotice("Break-even SL alanına yazıldı. Kaydetmek için Risk Planı Kaydet'e bas.");
+                setError(null);
                 setConfirmClose(false);
               }}
-              className="rounded-xl border border-emerald-300/30 bg-emerald-300/10 px-3 py-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-emerald-200 transition-colors hover:border-emerald-300/40"
+              disabled={!beState.enabled}
+              title={beState.enabled ? "Stop loss'u entry seviyesine hazırla." : beState.reason ?? undefined}
+              className="w-full rounded-xl border border-emerald-300/30 bg-emerald-300/10 px-3 py-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-emerald-200 transition-colors hover:border-emerald-300/40 disabled:cursor-not-allowed disabled:border-white/10 disabled:bg-white/[0.035] disabled:text-white/30 sm:w-auto"
             >
               Break-even
             </button>
-            <div className="relative">
+            <div className="relative w-full sm:w-auto">
               <button
                 type="button"
                 onClick={() => setActionOpen((value) => !value)}
-                className="rounded-xl border border-red-300/30 bg-red-300/10 px-3 py-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-red-200 transition-colors hover:border-red-300/40"
+                className="w-full rounded-xl border border-red-300/30 bg-red-300/10 px-3 py-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-red-200 transition-colors hover:border-red-300/40 sm:w-auto"
               >
                 Kapat / Azalt
               </button>
@@ -611,6 +689,12 @@ function PositionManageModal({
               ) : null}
             </div>
           </div>
+
+          {!beState.enabled && beState.reason ? (
+            <div className="mt-2 rounded-xl border border-white/[0.08] bg-white/[0.03] px-3 py-2 text-xs text-white/46">
+              {beState.reason}
+            </div>
+          ) : null}
 
           {notice ? (
             <div className="mt-3 rounded-xl border border-accent-cyan/20 bg-accent-cyan/10 px-3 py-2 text-xs text-accent-cyan/80">
