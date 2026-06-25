@@ -5,6 +5,7 @@ import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react"
 import { QuantumPanelField, getQuantumPanelStyle } from "@/components/shell/QuantumPanelField";
 import {
   useDataSnapshot,
+  useDecisionMatrix,
   useRegimeReport,
   useTradeTickets,
 } from "@/lib/queries/hooks";
@@ -15,6 +16,7 @@ import type {
   LivePrice,
   TechnicalTf,
   Timeframe,
+  TimeframeDecision,
   TradeTicket,
 } from "@/types/generated/api";
 
@@ -58,12 +60,24 @@ function tfIndex(tf?: Timeframe | string | null): number {
 
 type Direction = "bullish" | "bearish" | "neutral";
 
+type SignalCell = {
+  symbol?: string;
+  timeframe?: Timeframe;
+  direction?: Direction;
+  score?: number;
+  candidate_action?: string;
+  final_action?: string;
+  action?: TimeframeDecision["action"];
+  actionable?: boolean;
+  status?: AgentBriefCandidate["status"] | TimeframeDecision["status"];
+};
+
 type DeckRow = {
   symbol: string;
   icon: string;
   name: string;
   unit: string;
-  best: AgentBriefCandidate;
+  best: SignalCell;
   perTf: AgentBriefCandidate[];   // tüm TF adayları
   price: number | null;
 };
@@ -71,6 +85,7 @@ type DeckRow = {
 function pickDeckRows(
   candidates: AgentBriefCandidate[],
   prices: LivePrice[] | undefined,
+  matrixCells: TimeframeDecision[] | undefined,
 ): DeckRow[] {
   const priceBy = new Map<string, number>();
   for (const p of prices ?? []) {
@@ -85,12 +100,38 @@ function pickDeckRows(
     list.push(c);
     groups.set(sym, list);
   }
+
+  const bestByScore = (items: AgentBriefCandidate[]): AgentBriefCandidate =>
+    items.reduce((a, b) => ((b.score ?? 0) > (a.score ?? 0) ? b : a));
+  const sortByTf = (items: AgentBriefCandidate[]): AgentBriefCandidate[] =>
+    [...items].sort((a, b) => tfIndex(a.timeframe) - tfIndex(b.timeframe));
+
+  const matrixGroups = new Map<string, AgentBriefCandidate[]>();
+  for (const cell of matrixCells ?? []) {
+    const sym = cell.symbol ?? "";
+    if (!sym) continue;
+    const list = matrixGroups.get(sym) ?? [];
+    list.push({
+      symbol: cell.symbol,
+      timeframe: cell.timeframe,
+      direction: cell.direction,
+      score: cell.score,
+      candidate_action: cell.candidate_action ?? cell.action,
+      final_action: cell.action,
+      actionable: cell.actionable,
+      status: cell.status,
+    });
+    matrixGroups.set(sym, list);
+  }
+
   const rows: DeckRow[] = [];
   // PRIMARY sırası tercihi
   for (const p of PRIMARY) {
-    const all = groups.get(p.code);
-    if (!all || !all.length) continue;
-    const best = all.reduce((a, b) => ((b.score ?? 0) > (a.score ?? 0) ? b : a));
+    const candidateRows = groups.get(p.code) ?? [];
+    const matrixRows = matrixGroups.get(p.code) ?? [];
+    const all = matrixRows.length ? sortByTf(matrixRows) : sortByTf(candidateRows);
+    if (!all.length && !candidateRows.length) continue;
+    const best = candidateRows.length ? bestByScore(candidateRows) : bestByScore(all);
     rows.push({
       symbol: p.code,
       icon: p.icon,
@@ -101,10 +142,19 @@ function pickDeckRows(
       price: priceBy.get(p.code) ?? null,
     });
     groups.delete(p.code);
+    matrixGroups.delete(p.code);
   }
   // Geriye kalan semboller (skor sırasıyla)
-  const remaining = [...groups.entries()].map(([symbol, all]) => {
-    const best = all.reduce((a, b) => ((b.score ?? 0) > (a.score ?? 0) ? b : a));
+  const remainingSymbols = new Set<string>([
+    ...groups.keys(),
+    ...matrixGroups.keys(),
+  ]);
+  const remaining = [...remainingSymbols].flatMap((symbol) => {
+    const candidateRows = groups.get(symbol) ?? [];
+    const matrixRows = matrixGroups.get(symbol) ?? [];
+    const all = matrixRows.length ? sortByTf(matrixRows) : sortByTf(candidateRows);
+    if (!all.length && !candidateRows.length) return [];
+    const best = candidateRows.length ? bestByScore(candidateRows) : bestByScore(all);
     return {
       symbol,
       icon: "◇",
@@ -211,7 +261,7 @@ function ScoreRing({
 
 // ── Action badges ─────────────────────────────────────────────────────────────
 
-function statusBadge(c: AgentBriefCandidate): { label: string; cls: string } {
+function statusBadge(c: SignalCell): { label: string; cls: string } {
   const dir = (c.direction ?? "neutral") as Direction;
   const act = (c.candidate_action ?? "").toUpperCase();
   if (act.includes("ACTIONABLE") || c.actionable) {
@@ -225,7 +275,7 @@ function statusBadge(c: AgentBriefCandidate): { label: string; cls: string } {
   return { label: "NÖTR", cls: "bg-slate-500/15 border-slate-400/40 text-slate-300" };
 }
 
-function actionBadge(c: AgentBriefCandidate): { label: string; cls: string } {
+function actionBadge(c: SignalCell): { label: string; cls: string } {
   const dir = (c.direction ?? "neutral") as Direction;
   const actionable = c.actionable;
   if (actionable && dir === "bullish") return { label: "▲ LONG", cls: "bg-emerald-500/20 text-emerald-100 border-emerald-400/50" };
@@ -539,12 +589,13 @@ function TradePlanBlock({ ticket, symbol }: { ticket: TradeTicket | undefined; s
 
 export function HolographicSignalDeck({ brief }: { brief: AgentBrief }) {
   const { data: snap } = useDataSnapshot();
+  const { data: decisionMatrix } = useDecisionMatrix();
   const { data: regime } = useRegimeReport();
   const { data: ticketList } = useTradeTickets();
 
   const rows = useMemo(
-    () => pickDeckRows(brief.top_candidates ?? [], snap?.prices),
-    [brief.top_candidates, snap?.prices],
+    () => pickDeckRows(brief.top_candidates ?? [], snap?.prices, decisionMatrix?.cells),
+    [brief.top_candidates, decisionMatrix?.cells, snap?.prices],
   );
   const supports = useMemo(
     () => pickSupports(regime?.assets, snap?.prices),
