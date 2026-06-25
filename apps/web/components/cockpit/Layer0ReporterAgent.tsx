@@ -185,6 +185,7 @@ function Layer0PositionManager({
 }) {
   const closePosition = useClosePaperPosition();
   const [selectedPosition, setSelectedPosition] = useState<Position | null>(null);
+  const [expandedIds, setExpandedIds] = useState<Set<string>>(() => new Set());
 
   const totalSize = useMemo(
     () => positions.reduce((sum, position) => sum + (position.size_usd ?? 0), 0),
@@ -199,23 +200,44 @@ function Layer0PositionManager({
     [positions],
   );
 
+  useEffect(() => {
+    setExpandedIds((current) => {
+      const validIds = new Set(positions.map((position) => position.id));
+      const next = new Set([...current].filter((id) => validIds.has(id)));
+      return next.size === current.size ? current : next;
+    });
+  }, [positions]);
+
+  const toggleExpanded = (positionId: string) => {
+    setExpandedIds((current) => {
+      const next = new Set(current);
+      if (next.has(positionId)) {
+        next.delete(positionId);
+      } else {
+        next.add(positionId);
+      }
+      return next;
+    });
+  };
+
   return (
-    <div className="layer0-card layer0-position-center flex min-h-0 flex-1 flex-col">
-      <div className="flex items-start justify-between gap-3 border-b border-white/[0.08] pb-3">
+    <div className="layer0-card layer0-position-center relative flex min-h-0 flex-1 flex-col overflow-hidden border-accent-cyan/20 bg-[radial-gradient(circle_at_82%_10%,rgba(34,211,238,0.12),transparent_34%),linear-gradient(180deg,rgba(3,12,24,0.88),rgba(2,6,13,0.96))] shadow-[0_0_54px_rgba(34,211,238,0.08),inset_0_1px_0_rgba(255,255,255,0.05)]">
+      <div className="pointer-events-none absolute inset-x-4 top-0 h-px bg-gradient-to-r from-transparent via-accent-cyan/45 to-transparent" />
+      <div className="relative flex items-start justify-between gap-3 border-b border-accent-cyan/10 pb-3">
         <div>
-          <div className="text-sm font-semibold uppercase tracking-[0.18em] text-white/85">
+          <div className="text-[15px] font-semibold uppercase tracking-[0.18em] text-white/88">
             Açık Pozisyonlar
           </div>
           <div className="mt-1 text-[10px] uppercase tracking-widest text-white/36">
             paper-safe pozisyon yönetim merkezi
           </div>
         </div>
-        <div className="rounded-full border border-amber-300/20 bg-amber-300/10 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-widest text-amber-200">
+        <div className="rounded-full border border-white/10 bg-white/[0.035] px-2.5 py-1 text-[9px] font-semibold uppercase tracking-widest text-white/42">
           PAPER_SAFE
         </div>
       </div>
 
-      <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3">
+      <div className="relative mt-3 grid grid-cols-2 gap-1.5 sm:grid-cols-5">
         <PositionMetric label="Açık" value={loading ? "..." : String(positions.length)} />
         <PositionMetric
           label="Açık P&L"
@@ -227,13 +249,15 @@ function Layer0PositionManager({
         <PositionMetric label="TP eksik" value={loading ? "..." : String(missingTp)} tone={missingTp ? "text-amber-200" : "text-emerald-300"} />
       </div>
 
-      <div className="mt-3 min-h-0 flex-1 overflow-y-auto pr-1">
+      <div className="relative mt-3 min-h-0 flex-1 overflow-y-auto pr-1">
         {positions.length ? (
-          <div className="space-y-2">
+          <div className="space-y-1.5">
             {positions.map((position) => (
               <PositionCard
                 key={position.id}
                 position={position}
+                expanded={expandedIds.has(position.id)}
+                onToggle={() => toggleExpanded(position.id)}
                 onManage={() => setSelectedPosition(position)}
               />
             ))}
@@ -266,9 +290,9 @@ function PositionMetric({
   tone?: string;
 }) {
   return (
-    <div className="rounded-xl border border-white/[0.08] bg-white/[0.035] px-2.5 py-2">
-      <div className="text-[9px] uppercase tracking-[0.18em] text-white/35">{label}</div>
-      <div className={`mt-1 truncate font-mono text-sm font-bold tabular-nums ${tone}`}>
+    <div className="rounded-lg border border-accent-cyan/15 bg-cyan-950/20 px-2 py-1.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.035)]">
+      <div className="text-[8px] uppercase tracking-[0.18em] text-white/34">{label}</div>
+      <div className={`mt-0.5 truncate font-mono text-[13px] font-bold tabular-nums ${tone}`}>
         {value}
       </div>
     </div>
@@ -277,65 +301,109 @@ function PositionMetric({
 
 function PositionCard({
   position,
+  expanded,
+  onToggle,
   onManage,
 }: {
   position: Position;
+  expanded: boolean;
+  onToggle: () => void;
   onManage: () => void;
 }) {
   const pnl = position.unrealized_pnl_usd ?? 0;
+  const isLong = position.side === "long";
+  const accentClass = isLong
+    ? "border-emerald-300/25 bg-[radial-gradient(circle_at_0%_0%,rgba(16,185,129,0.13),transparent_36%),linear-gradient(135deg,rgba(4,18,18,0.88),rgba(1,7,13,0.94))] shadow-[0_0_22px_rgba(16,185,129,0.08),inset_0_1px_0_rgba(255,255,255,0.04)]"
+    : "border-rose-300/30 bg-[radial-gradient(circle_at_0%_0%,rgba(244,63,94,0.14),transparent_36%),linear-gradient(135deg,rgba(20,6,16,0.88),rgba(1,7,13,0.94))] shadow-[0_0_22px_rgba(244,63,94,0.08),inset_0_1px_0_rgba(255,255,255,0.04)]";
+  const badgeClass = isLong
+    ? "border-emerald-300/35 bg-emerald-300/10 text-emerald-200 shadow-[0_0_16px_rgba(16,185,129,0.14)]"
+    : "border-rose-300/35 bg-rose-300/10 text-rose-200 shadow-[0_0_16px_rgba(244,63,94,0.14)]";
+
   return (
-    <article className="rounded-2xl border border-white/[0.08] bg-black/25 p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
+    <article
+      onClick={onToggle}
+      className={`group cursor-pointer rounded-xl border p-2.5 transition-[border-color,box-shadow,transform] duration-200 hover:-translate-y-0.5 ${accentClass}`}
+    >
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
-            <span className="text-base font-semibold text-white/92">{position.symbol}</span>
+            <span className="text-[15px] font-bold text-white/94">{position.symbol}</span>
             <span
-              className={`rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-widest ${
-                position.side === "long"
-                  ? "bg-emerald-400/15 text-emerald-300"
-                  : "bg-red-400/15 text-red-300"
-              }`}
+              className={`rounded-md border px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-widest ${badgeClass}`}
             >
               {positionSideLabel(position.side)}
             </span>
             <span className="rounded border border-accent-cyan/30 bg-accent-cyan/10 px-1.5 py-0.5 text-[10px] uppercase tracking-widest text-accent-cyan/80">
-              {position.timeframe ?? "--"}
+              {String(position.timeframe ?? "--").toUpperCase()}
             </span>
           </div>
-          <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-white/46">
-            <span>entry {fmtPrice(position.entry_price)}</span>
-            <span>şimdi {fmtPrice(position.current_price)}</span>
-            <span>${fmtMoney(position.size_usd)} açık</span>
+          <div className="mt-2 grid grid-cols-3 gap-1.5">
+            <PositionMiniValue label="Entry" value={fmtPrice(position.entry_price)} />
+            <PositionMiniValue label="Current" value={fmtPrice(position.current_price)} />
+            <PositionMiniValue label="Size" value={`$${fmtMoney(position.size_usd)}`} />
           </div>
         </div>
         <div className="text-right">
-          <div className={`font-mono text-sm font-bold tabular-nums ${positionPnlTone(pnl)}`}>
+          <div className={`font-mono text-base font-black tabular-nums ${positionPnlTone(pnl)}`}>
             {fmtSignedMoney(pnl)}
           </div>
-          <div className="mt-1 text-[9px] uppercase tracking-widest text-white/32">P&L</div>
+          <div className="mt-0.5 text-[9px] uppercase tracking-widest text-white/32">Açık P&L</div>
         </div>
       </div>
 
-      <div className="mt-3 grid grid-cols-2 gap-2 text-[11px]">
-        <PositionField label="SL" value={fmtPrice(position.sl)} tone={position.sl == null ? "text-amber-200" : "text-white/76"} />
-        <PositionField label="TP" value={fmtPrice(position.tp)} tone={position.tp == null ? "text-amber-200" : "text-white/76"} />
-        <PositionField label="Lifecycle" value={statusText(position.lifecycle_status)} />
-        <PositionField label="Time-stop" value={statusText(position.time_stop_status)} />
-      </div>
-
-      <div className="mt-3 flex items-center justify-between gap-3">
-        <span className="rounded-md border border-amber-300/20 bg-amber-300/10 px-2 py-1 text-[10px] font-semibold uppercase tracking-widest text-amber-200">
-          PAPER_SAFE
-        </span>
+      <div className="mt-2 flex items-center justify-between gap-3">
         <button
           type="button"
-          onClick={onManage}
+          onClick={(event) => {
+            event.stopPropagation();
+            onToggle();
+          }}
+          className="rounded-lg border border-white/10 bg-white/[0.035] px-2.5 py-1.5 text-[9px] font-semibold uppercase tracking-[0.18em] text-white/46 transition-colors hover:border-accent-cyan/30 hover:text-accent-cyan"
+        >
+          {expanded ? "Detay Kapat" : "Detay"}
+        </button>
+        <button
+          type="button"
+          onClick={(event) => {
+            event.stopPropagation();
+            onManage();
+          }}
           className="rounded-lg border border-accent-cyan/30 bg-accent-cyan/10 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-[0.18em] text-accent-cyan transition-colors hover:border-accent-cyan/50 hover:bg-accent-cyan/20"
         >
           Yönet
         </button>
       </div>
+
+      {expanded ? (
+        <div className="mt-2 border-t border-white/[0.07] pt-2">
+          <div className="grid grid-cols-2 gap-1.5 text-[11px]">
+            <PositionField label="SL" value={fmtPrice(position.sl)} tone={position.sl == null ? "text-amber-200" : "text-white/76"} />
+            <PositionField label="TP" value={fmtPrice(position.tp)} tone={position.tp == null ? "text-amber-200" : "text-white/76"} />
+            <PositionField label="Lifecycle" value={statusText(position.lifecycle_status)} />
+            <PositionField label="Time-stop" value={statusText(position.time_stop_status)} />
+          </div>
+          <div className="mt-2 flex items-center justify-between gap-2 text-[9px] uppercase tracking-widest">
+            <span className="rounded border border-white/10 bg-white/[0.03] px-2 py-1 text-white/38">
+              PAPER_SAFE
+            </span>
+            <span className="min-w-0 truncate font-mono text-white/30">
+              ID {position.id}
+            </span>
+          </div>
+        </div>
+      ) : null}
     </article>
+  );
+}
+
+function PositionMiniValue({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="min-w-0 rounded-lg border border-white/[0.06] bg-black/18 px-2 py-1">
+      <div className="text-[8px] uppercase tracking-[0.16em] text-white/30">{label}</div>
+      <div className="mt-0.5 truncate font-mono text-[11px] font-semibold tabular-nums text-white/74">
+        {value}
+      </div>
+    </div>
   );
 }
 
