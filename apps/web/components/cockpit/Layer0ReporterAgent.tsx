@@ -6,12 +6,12 @@ import {
   useAgentBriefing,
   useChat,
   useDataSnapshot,
+  useClosePaperPosition,
   usePaperTradingState,
 } from "@/lib/queries/hooks";
 import { api } from "@/lib/api/client";
-import { fmtRelative } from "@/lib/format";
 import { selectDqs, selectSnapshotMeta } from "@/lib/selectors/snapshot";
-import type { AgentBriefing, ChatResponse } from "@/types/generated/api";
+import type { AgentBriefing, ChatResponse, Position } from "@/types/generated/api";
 import {
   Layer0HumanComputerModel,
   type Layer0DataQualityPulse,
@@ -101,13 +101,6 @@ const CATEGORY_LABEL: Record<string, string> = {
   system: "Sistem",
 };
 
-const TONE_DOT: Record<string, string> = {
-  alert: "bg-red-400",
-  warn: "bg-amber-400",
-  ok: "bg-emerald-400",
-  info: "bg-accent-cyan",
-};
-
 function fmtAge(seconds: number | null | undefined): string {
   if (seconds == null) return "bilinmiyor";
   if (seconds < 90) return `${Math.round(seconds)} sn`;
@@ -134,6 +127,437 @@ function cleanForVoice(text: string) {
 function shortLine(text: string, max = 148) {
   const clean = text.replace(/\s+/g, " ").trim();
   return clean.length > max ? `${clean.slice(0, max - 1)}...` : clean;
+}
+
+function fmtMoney(value: number | null | undefined, digits = 0) {
+  if (value == null || !Number.isFinite(value)) return "---";
+  return value.toLocaleString("en-US", {
+    maximumFractionDigits: digits,
+    minimumFractionDigits: digits,
+  });
+}
+
+function fmtSignedMoney(value: number | null | undefined) {
+  if (value == null || !Number.isFinite(value)) return "---";
+  const prefix = value >= 0 ? "+" : "";
+  return `${prefix}$${fmtMoney(value)}`;
+}
+
+function fmtPrice(value: number | null | undefined) {
+  if (value == null || !Number.isFinite(value)) return "---";
+  const digits = Math.abs(value) >= 100 ? 2 : 4;
+  return value.toLocaleString("en-US", {
+    maximumFractionDigits: digits,
+    minimumFractionDigits: digits,
+  });
+}
+
+function numericDraft(value: number | null | undefined) {
+  if (value == null || !Number.isFinite(value)) return "";
+  return String(value);
+}
+
+function normalizeDecimalInput(value: string) {
+  return value.replace(",", ".").replace(/[^\d.-]/g, "");
+}
+
+function positionSideLabel(side: Position["side"]) {
+  return side === "long" ? "LONG" : "SHORT";
+}
+
+function positionPnlTone(value: number | null | undefined) {
+  if (value == null) return "text-white/62";
+  return value >= 0 ? "text-emerald-300" : "text-red-300";
+}
+
+function statusText(value: string | null | undefined) {
+  return value ? value.replace(/_/g, " ") : "---";
+}
+
+function Layer0PositionManager({
+  positions,
+  totalPnl,
+  loading,
+}: {
+  positions: Position[];
+  totalPnl: number;
+  loading: boolean;
+}) {
+  const closePosition = useClosePaperPosition();
+  const [selectedPosition, setSelectedPosition] = useState<Position | null>(null);
+
+  const totalSize = useMemo(
+    () => positions.reduce((sum, position) => sum + (position.size_usd ?? 0), 0),
+    [positions],
+  );
+  const missingSl = useMemo(
+    () => positions.filter((position) => position.sl == null).length,
+    [positions],
+  );
+  const missingTp = useMemo(
+    () => positions.filter((position) => position.tp == null).length,
+    [positions],
+  );
+
+  return (
+    <div className="layer0-card layer0-position-center flex min-h-0 flex-1 flex-col">
+      <div className="flex items-start justify-between gap-3 border-b border-white/[0.08] pb-3">
+        <div>
+          <div className="text-sm font-semibold uppercase tracking-[0.18em] text-white/85">
+            Açık Pozisyonlar
+          </div>
+          <div className="mt-1 text-[10px] uppercase tracking-widest text-white/36">
+            paper-safe pozisyon yönetim merkezi
+          </div>
+        </div>
+        <div className="rounded-full border border-amber-300/20 bg-amber-300/10 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-widest text-amber-200">
+          PAPER_SAFE
+        </div>
+      </div>
+
+      <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3">
+        <PositionMetric label="Açık" value={loading ? "..." : String(positions.length)} />
+        <PositionMetric
+          label="Açık P&L"
+          value={loading ? "..." : fmtSignedMoney(totalPnl)}
+          tone={positionPnlTone(totalPnl)}
+        />
+        <PositionMetric label="Büyüklük" value={loading ? "..." : `$${fmtMoney(totalSize)}`} />
+        <PositionMetric label="SL eksik" value={loading ? "..." : String(missingSl)} tone={missingSl ? "text-amber-200" : "text-emerald-300"} />
+        <PositionMetric label="TP eksik" value={loading ? "..." : String(missingTp)} tone={missingTp ? "text-amber-200" : "text-emerald-300"} />
+      </div>
+
+      <div className="mt-3 min-h-0 flex-1 overflow-y-auto pr-1">
+        {positions.length ? (
+          <div className="space-y-2">
+            {positions.map((position) => (
+              <PositionCard
+                key={position.id}
+                position={position}
+                onManage={() => setSelectedPosition(position)}
+              />
+            ))}
+          </div>
+        ) : (
+          <div className="rounded-xl border border-white/10 bg-white/[0.035] px-3 py-3 text-sm text-white/50">
+            Açık pozisyon yok. Bu alan sadece mevcut backend paper state'inden gelen açık pozisyonları gösterir.
+          </div>
+        )}
+      </div>
+
+      {selectedPosition ? (
+        <PositionManageModal
+          position={selectedPosition}
+          closePosition={closePosition}
+          onClose={() => setSelectedPosition(null)}
+        />
+      ) : null}
+    </div>
+  );
+}
+
+function PositionMetric({
+  label,
+  value,
+  tone = "text-white/88",
+}: {
+  label: string;
+  value: string;
+  tone?: string;
+}) {
+  return (
+    <div className="rounded-xl border border-white/[0.08] bg-white/[0.035] px-2.5 py-2">
+      <div className="text-[9px] uppercase tracking-[0.18em] text-white/35">{label}</div>
+      <div className={`mt-1 truncate font-mono text-sm font-bold tabular-nums ${tone}`}>
+        {value}
+      </div>
+    </div>
+  );
+}
+
+function PositionCard({
+  position,
+  onManage,
+}: {
+  position: Position;
+  onManage: () => void;
+}) {
+  const pnl = position.unrealized_pnl_usd ?? 0;
+  return (
+    <article className="rounded-2xl border border-white/[0.08] bg-black/25 p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-base font-semibold text-white/92">{position.symbol}</span>
+            <span
+              className={`rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-widest ${
+                position.side === "long"
+                  ? "bg-emerald-400/15 text-emerald-300"
+                  : "bg-red-400/15 text-red-300"
+              }`}
+            >
+              {positionSideLabel(position.side)}
+            </span>
+            <span className="rounded border border-accent-cyan/30 bg-accent-cyan/10 px-1.5 py-0.5 text-[10px] uppercase tracking-widest text-accent-cyan/80">
+              {position.timeframe ?? "--"}
+            </span>
+          </div>
+          <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-white/46">
+            <span>entry {fmtPrice(position.entry_price)}</span>
+            <span>şimdi {fmtPrice(position.current_price)}</span>
+            <span>${fmtMoney(position.size_usd)} açık</span>
+          </div>
+        </div>
+        <div className="text-right">
+          <div className={`font-mono text-sm font-bold tabular-nums ${positionPnlTone(pnl)}`}>
+            {fmtSignedMoney(pnl)}
+          </div>
+          <div className="mt-1 text-[9px] uppercase tracking-widest text-white/32">P&L</div>
+        </div>
+      </div>
+
+      <div className="mt-3 grid grid-cols-2 gap-2 text-[11px]">
+        <PositionField label="SL" value={fmtPrice(position.sl)} tone={position.sl == null ? "text-amber-200" : "text-white/76"} />
+        <PositionField label="TP" value={fmtPrice(position.tp)} tone={position.tp == null ? "text-amber-200" : "text-white/76"} />
+        <PositionField label="Lifecycle" value={statusText(position.lifecycle_status)} />
+        <PositionField label="Time-stop" value={statusText(position.time_stop_status)} />
+      </div>
+
+      <div className="mt-3 flex items-center justify-between gap-3">
+        <span className="rounded-md border border-amber-300/20 bg-amber-300/10 px-2 py-1 text-[10px] font-semibold uppercase tracking-widest text-amber-200">
+          PAPER_SAFE
+        </span>
+        <button
+          type="button"
+          onClick={onManage}
+          className="rounded-lg border border-accent-cyan/30 bg-accent-cyan/10 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-[0.18em] text-accent-cyan transition-colors hover:border-accent-cyan/50 hover:bg-accent-cyan/20"
+        >
+          Yönet
+        </button>
+      </div>
+    </article>
+  );
+}
+
+function PositionField({
+  label,
+  value,
+  tone = "text-white/68",
+}: {
+  label: string;
+  value: string;
+  tone?: string;
+}) {
+  return (
+    <div className="min-w-0 rounded-lg border border-white/[0.06] bg-white/[0.025] px-2 py-1.5">
+      <div className="text-[8px] uppercase tracking-[0.18em] text-white/30">{label}</div>
+      <div className={`mt-0.5 truncate font-mono text-[11px] tabular-nums ${tone}`}>
+        {value}
+      </div>
+    </div>
+  );
+}
+
+function PositionManageModal({
+  position,
+  closePosition,
+  onClose,
+}: {
+  position: Position;
+  closePosition: ReturnType<typeof useClosePaperPosition>;
+  onClose: () => void;
+}) {
+  const [slDraft, setSlDraft] = useState(numericDraft(position.sl));
+  const [tpDraft, setTpDraft] = useState(numericDraft(position.tp));
+  const [actionOpen, setActionOpen] = useState(false);
+  const [confirmClose, setConfirmClose] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    setSlDraft(numericDraft(position.sl));
+    setTpDraft(numericDraft(position.tp));
+    setActionOpen(false);
+    setConfirmClose(false);
+    setNotice(null);
+    setError(null);
+  }, [position]);
+
+  const fullClose = () => {
+    if (!confirmClose) {
+      setConfirmClose(true);
+      setNotice("Tam kapatma için ikinci onay gerekiyor.");
+      return;
+    }
+    setError(null);
+    closePosition.mutate(position.id, {
+      onSuccess: () => {
+        setNotice("Pozisyon kapatma isteği backend'e iletildi.");
+        onClose();
+      },
+      onError: (mutationError) => {
+        const message =
+          mutationError instanceof Error
+            ? mutationError.message
+            : "Pozisyon kapatma başarısız oldu.";
+        setError(message);
+      },
+    });
+  };
+
+  return (
+    <div className="fixed inset-0 z-[120] flex items-end justify-center bg-black/62 p-3 backdrop-blur-sm sm:items-center">
+      <div className="max-h-[92dvh] w-full max-w-2xl overflow-hidden rounded-2xl border border-accent-cyan/20 bg-[#040b14]/95 shadow-[0_28px_90px_rgba(0,0,0,0.55),0_0_60px_rgba(34,211,238,0.13)]">
+        <div className="flex items-start justify-between gap-3 border-b border-white/[0.08] px-4 py-3">
+          <div>
+            <div className="text-sm font-semibold uppercase tracking-[0.2em] text-white/88">
+              Pozisyon Yönet
+            </div>
+            <div className="mt-1 text-[11px] uppercase tracking-widest text-accent-cyan/70">
+              {position.symbol} · {positionSideLabel(position.side)} · {position.timeframe ?? "--"}
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="grid h-8 w-8 place-items-center rounded-lg border border-white/10 bg-white/[0.035] text-white/58 transition-colors hover:border-white/22 hover:text-white"
+            aria-label="Kapat"
+          >
+            ×
+          </button>
+        </div>
+
+        <div className="max-h-[calc(92dvh-64px)] overflow-y-auto p-4">
+          <div className="grid gap-2 sm:grid-cols-3">
+            <PositionMetric label="Entry" value={fmtPrice(position.entry_price)} />
+            <PositionMetric label="Current" value={fmtPrice(position.current_price)} />
+            <PositionMetric label="Size" value={`$${fmtMoney(position.size_usd)}`} />
+            <PositionMetric
+              label="P&L"
+              value={fmtSignedMoney(position.unrealized_pnl_usd)}
+              tone={positionPnlTone(position.unrealized_pnl_usd)}
+            />
+            <PositionMetric label="SL" value={fmtPrice(position.sl)} tone={position.sl == null ? "text-amber-200" : "text-white/88"} />
+            <PositionMetric label="TP" value={fmtPrice(position.tp)} tone={position.tp == null ? "text-amber-200" : "text-white/88"} />
+          </div>
+
+          {position.lifecycle_status ? (
+            <div className="mt-3 rounded-xl border border-white/[0.08] bg-white/[0.025] px-3 py-2 text-[11px] uppercase tracking-widest text-white/42">
+              lifecycle: <span className="text-white/72">{statusText(position.lifecycle_status)}</span>
+            </div>
+          ) : null}
+
+          <div className="mt-4 grid gap-3 sm:grid-cols-2">
+            <label className="space-y-1.5">
+              <span className="text-[10px] uppercase tracking-[0.18em] text-white/40">
+                Stop Loss
+              </span>
+              <input
+                value={slDraft}
+                onChange={(event) => setSlDraft(normalizeDecimalInput(event.target.value))}
+                inputMode="decimal"
+                placeholder="örn. 63800.5"
+                className="w-full rounded-xl border border-white/10 bg-black/28 px-3 py-2 font-mono text-sm text-white/86 outline-none transition-colors focus:border-accent-cyan/45"
+              />
+            </label>
+            <label className="space-y-1.5">
+              <span className="text-[10px] uppercase tracking-[0.18em] text-white/40">
+                Take Profit
+              </span>
+              <input
+                value={tpDraft}
+                onChange={(event) => setTpDraft(normalizeDecimalInput(event.target.value))}
+                inputMode="decimal"
+                placeholder="örn. 67250"
+                className="w-full rounded-xl border border-white/10 bg-black/28 px-3 py-2 font-mono text-sm text-white/86 outline-none transition-colors focus:border-accent-cyan/45"
+              />
+            </label>
+          </div>
+
+          <div className="mt-3 rounded-xl border border-amber-300/20 bg-amber-300/10 px-3 py-2 text-xs leading-5 text-amber-100/72">
+            SL/TP güncelleme endpoint'i backend'de hazır olduğunda aktifleşecek.
+          </div>
+
+          <div className="mt-4 flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              disabled
+              className="rounded-xl border border-white/10 bg-white/[0.035] px-3 py-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-white/32"
+            >
+              Risk Planı Kaydet
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setSlDraft(numericDraft(position.entry_price));
+                setNotice("Break-even SL alanına yazıldı. Kaydetmek için backend risk-plan endpoint'i gerekir.");
+                setConfirmClose(false);
+              }}
+              className="rounded-xl border border-emerald-300/30 bg-emerald-300/10 px-3 py-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-emerald-200 transition-colors hover:border-emerald-300/40"
+            >
+              Break-even
+            </button>
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setActionOpen((value) => !value)}
+                className="rounded-xl border border-red-300/30 bg-red-300/10 px-3 py-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-red-200 transition-colors hover:border-red-300/40"
+              >
+                Kapat / Azalt
+              </button>
+              {actionOpen ? (
+                <div className="absolute bottom-full left-0 z-10 mb-2 w-64 overflow-hidden rounded-xl border border-white/10 bg-[#050b14] shadow-2xl">
+                  <button
+                    type="button"
+                    disabled
+                    className="block w-full px-3 py-2 text-left text-xs text-white/30"
+                  >
+                    %25 azalt
+                    <span className="mt-0.5 block text-[10px] text-white/24">
+                      Partial close backend endpoint bekleniyor.
+                    </span>
+                  </button>
+                  <button
+                    type="button"
+                    disabled
+                    className="block w-full border-t border-white/[0.06] px-3 py-2 text-left text-xs text-white/30"
+                  >
+                    %50 azalt
+                    <span className="mt-0.5 block text-[10px] text-white/24">
+                      Partial close backend endpoint bekleniyor.
+                    </span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={fullClose}
+                    disabled={closePosition.isPending}
+                    className="block w-full border-t border-white/[0.06] px-3 py-2 text-left text-xs font-semibold text-red-200 transition-colors hover:bg-red-400/10 disabled:opacity-50"
+                  >
+                    {closePosition.isPending
+                      ? "Kapatılıyor..."
+                      : confirmClose
+                        ? "Onayla"
+                        : "Tamamını kapat"}
+                  </button>
+                </div>
+              ) : null}
+            </div>
+          </div>
+
+          {notice ? (
+            <div className="mt-3 rounded-xl border border-accent-cyan/20 bg-accent-cyan/10 px-3 py-2 text-xs text-accent-cyan/80">
+              {notice}
+            </div>
+          ) : null}
+          {error ? (
+            <div className="mt-3 rounded-xl border border-red-300/20 bg-red-400/10 px-3 py-2 text-xs text-red-200">
+              {error}
+            </div>
+          ) : null}
+        </div>
+      </div>
+    </div>
+  );
 }
 
 /** Layer 0 orta sutundaki karar, metrik ve tarama HUD'u. */
@@ -294,7 +718,6 @@ export function Layer0ReporterAgent({
 
   const briefingData = briefing.data as AgentBriefingWithExecutive | undefined;
   const executive = briefingData?.executive ?? null;
-  const engine = briefingData?.engine ?? null;
 
   const briefingText = useMemo(() => {
     if (executive) {
@@ -543,7 +966,6 @@ export function Layer0ReporterAgent({
     }
   };
 
-  const headlines = briefingData?.headlines ?? [];
   const modelMode = listening
     ? "listening"
     : chat.isPending
@@ -614,138 +1036,13 @@ export function Layer0ReporterAgent({
 
   return (
     <section className="grid h-full min-h-0 gap-4 xl:grid-cols-[minmax(360px,1fr)_minmax(380px,1fr)_minmax(360px,1fr)]">
-      {/* ── Sutun 1: Acik pozisyonlar + sistem durumu ───────────────── */}
-      <div className="flex min-h-0 flex-col gap-4">
-        <div className="layer0-card flex min-h-0 flex-1 flex-col">
-          <div className="flex items-center justify-between gap-3 border-b border-white/[0.08] pb-3">
-            <div className="text-sm font-semibold uppercase tracking-[0.18em] text-white/85">
-              Acik Pozisyonlar
-            </div>
-            <div className="text-[11px] uppercase tracking-widest text-white/45">
-              {paper.data
-                ? `${positions.length} acik / sonuc ${totalPnl >= 0 ? "+" : ""}$${Math.round(
-                    totalPnl,
-                  ).toLocaleString()}`
-                : "yukleniyor"}
-            </div>
-          </div>
-          <div className="min-h-0 flex-1 overflow-y-auto pr-1">
-            {positions.length ? (
-              <table className="w-full border-collapse text-sm">
-                <thead className="sticky top-0 z-10 bg-[#040910]">
-                  <tr className="text-left text-[10px] uppercase tracking-widest text-white/35">
-                    <th className="py-2 pr-2 font-medium">Yon</th>
-                    <th className="py-2 pr-2 font-medium">Sembol</th>
-                    <th className="py-2 pr-2 font-medium">Zaman</th>
-                    <th className="py-2 pr-2 font-medium">Boyut</th>
-                    <th className="py-2 pr-2 text-right font-medium">P&amp;L (USD)</th>
-                    <th className="py-2 text-right font-medium">Durum</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {positions.map((pos) => {
-                    const pnl = pos.unrealized_pnl_usd ?? 0;
-                    const up = pnl >= 0;
-                    return (
-                      <tr
-                        key={pos.id}
-                        className="border-b border-white/[0.05] last:border-0"
-                      >
-                        <td className="py-2 pr-2">
-                          <span
-                            className={`rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-widest ${
-                              pos.side === "long"
-                                ? "bg-emerald-400/15 text-emerald-300"
-                                : "bg-red-400/15 text-red-300"
-                            }`}
-                          >
-                            {pos.side === "long" ? "AL" : "SAT"}
-                          </span>
-                        </td>
-                        <td className="py-2 pr-2 font-semibold text-white/88">{pos.symbol}</td>
-                        <td className="py-2 pr-2 text-[11px] uppercase tracking-widest text-white/45">
-                          {pos.timeframe ?? "--"}
-                        </td>
-                        <td className="py-2 pr-2 text-[11px] tabular-nums text-white/55">
-                          ${Math.round(pos.size_usd).toLocaleString()}
-                        </td>
-                        <td
-                          className={`py-2 pr-2 text-right text-sm font-semibold tabular-nums ${
-                            up ? "text-emerald-300" : "text-red-300"
-                          }`}
-                        >
-                          {up ? "+" : ""}${Math.round(pnl).toLocaleString()}
-                        </td>
-                        <td className="py-2 text-right">
-                          <span className="rounded-md border border-amber-300/18 bg-amber-300/8 px-2 py-1 text-[10px] font-semibold uppercase tracking-widest text-amber-200">
-                            PAPER_SAFE
-                          </span>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            ) : (
-              <div className="mt-2 rounded-xl border border-white/10 bg-white/[0.035] px-3 py-3 text-sm text-white/50">
-                Acik pozisyon yok. (Trade Ticket farkli: yeni sinyalin broker&apos;a devri;
-                pozisyon = zaten acik islem.)
-              </div>
-            )}
-          </div>
-        </div>
-
-        <div className="layer0-card">
-          <div className="flex items-center justify-between gap-3 border-b border-white/[0.08] pb-3">
-            <div className="text-sm font-semibold uppercase tracking-[0.18em] text-white/85">
-              Sistem Durumu
-            </div>
-            <div className="text-right">
-              <div
-                className={`text-[10px] font-semibold uppercase tracking-widest ${
-                  engine?.stale ? "text-red-300" : "text-emerald-300"
-                }`}
-              >
-                {briefing.isLoading
-                  ? "yukleniyor"
-                  : engine
-                    ? `Motor ${engine.stale ? "BAYAT" : "CANLI"}`
-                    : "cycle bekleniyor"}
-              </div>
-              <div className="mt-0.5 text-[10px] uppercase tracking-widest text-white/36">
-                {engine
-                  ? `son cycle ${fmtAge(engine.age_seconds)} once`
-                  : briefingData?.generated_at
-                    ? fmtRelative(briefingData.generated_at)
-                    : ""}
-              </div>
-            </div>
-          </div>
-          <div className="mt-3 space-y-2">
-            {headlines.slice(0, 4).map((item, index) => (
-              <div
-                key={`${item.category}-${index}`}
-                className="rounded-xl border border-white/10 bg-white/[0.035] px-3 py-2"
-              >
-                <div className="flex items-center gap-2 text-[10px] uppercase tracking-widest text-white/55">
-                  <span
-                    className={`h-1.5 w-1.5 rounded-full ${TONE_DOT[item.tone] ?? TONE_DOT.info} shadow-[0_0_12px_currentColor]`}
-                  />
-                  {CATEGORY_LABEL[item.category] ?? item.category}
-                </div>
-                <div className="mt-1 text-sm leading-5 text-white/84">{item.title}</div>
-                {item.detail ? (
-                  <div className="mt-1 text-xs leading-5 text-white/48">{item.detail}</div>
-                ) : null}
-              </div>
-            ))}
-            {!headlines.length ? (
-              <div className="rounded-xl border border-white/10 bg-white/[0.035] px-3 py-3 text-sm text-white/50">
-                Briefing bekleniyor. Backend cycle tamamlaninca burada basliklar gorunur.
-              </div>
-            ) : null}
-          </div>
-        </div>
+      {/* ── Sutun 1: Acik pozisyon yonetim merkezi ───────────────── */}
+      <div className="flex min-h-0 flex-col">
+        <Layer0PositionManager
+          positions={positions}
+          totalPnl={totalPnl}
+          loading={paper.isLoading}
+        />
       </div>
 
       {/* ── Sutun 2: Human-computer model + karar hero ──────────────── */}
