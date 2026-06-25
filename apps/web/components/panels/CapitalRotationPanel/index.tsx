@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState, type CSSProperties } from "react";
 
 import { PanelFrame } from "@/components/shell/PanelFrame";
 import { PanelHeader } from "@/components/shell/PanelHeader";
+import { MobileFlipCard } from "@/components/cockpit/MobileFlipCard";
 import { api } from "@/lib/api/client";
 import { useLiquidityRotation } from "@/lib/queries/hooks";
 import type {
@@ -325,7 +326,9 @@ export function CapitalRotationPanel() {
   }, [data, fallbackData]);
 
   return (
-    <PanelFrame id="capital_rotation" className="border-accent-cyan/20">
+    <>
+    <div className="hidden h-full min-[769px]:block">
+    <PanelFrame id="capital_rotation" className="h-full border-accent-cyan/20">
       <PanelHeader
         title="Kuresel Likidite Rotasyon Haritasi"
         subtitle="nakit nereye akiyor? - fiyat + hacim + makro (DXY/VIX)"
@@ -457,5 +460,144 @@ export function CapitalRotationPanel() {
         </div>
       )}
     </PanelFrame>
+    </div>
+    <MobileFlipCard
+      className="min-[769px]:hidden"
+      title="Küresel Likidite Rotasyonu"
+      front={
+        <div className="mobile-capital-front">
+          <div className="mobile-back-head">
+            <div>
+              <p className="mobile-kicker">Küresel Likidite Rotasyonu</p>
+              <strong>{active ? REGIME_LABEL[active.regime] : "Veri yok"}</strong>
+            </div>
+            <span>{active?.window ?? win}</span>
+          </div>
+
+          <div className="mobile-window-tabs" data-no-flip>
+            {WINDOWS.map((window) => (
+              <button
+                key={window}
+                type="button"
+                onClick={() => setWin(window)}
+                className={(active?.window ?? "1D") === window ? "is-active" : ""}
+              >
+                {window}
+              </button>
+            ))}
+          </div>
+
+          {isLoading && !active ? (
+            <p className="mobile-summary-line">Yükleniyor...</p>
+          ) : !active ? (
+            <p className="mobile-summary-line">Veri yok.</p>
+          ) : (
+            <>
+              <div className="mobile-capital-pool">
+                <div className="capital-money-pool capital-core" data-regime={active.regime}>
+                  <div className="capital-pool-backplate" aria-hidden="true" />
+                  <div className="capital-pool-liquid" aria-hidden="true">
+                    <span />
+                    <span />
+                  </div>
+                  <div className="capital-money-stack" aria-hidden="true">
+                    <i />
+                    <i />
+                    <i />
+                    <i />
+                    <i />
+                  </div>
+                  <div className="capital-pool-label">
+                    <span>Likidite</span>
+                    <strong>Havuzu</strong>
+                  </div>
+                </div>
+              </div>
+              <div className="mobile-rank-list">
+                {rankedAssets.slice(0, 3).map((asset, index) => (
+                  <MobileCapitalRow key={asset.symbol} asset={asset} index={index} />
+                ))}
+              </div>
+              <p className="mobile-summary-line">
+                Ana giriş: {inflow.length ? inflow.slice(0, 2).join(", ") : "--"} / Ana çıkış:{" "}
+                {outflow.length ? outflow.slice(0, 2).join(", ") : "--"}
+              </p>
+            </>
+          )}
+          <p className="mobile-flip-hint">Detay için dokun</p>
+        </div>
+      }
+      back={
+        <div className="mobile-flip-card__scroll mobile-capital-back">
+          <div className="mobile-back-head">
+            <div>
+              <p className="mobile-kicker">Rotasyon sıralaması</p>
+              <strong>{active ? REGIME_LABEL[active.regime] : "Veri yok"}</strong>
+            </div>
+            <span>flow / getiri</span>
+          </div>
+
+          {active ? (
+            <>
+              <div className="mobile-rank-list mobile-rank-list--full">
+                {rankedAssets.map((asset, index) => (
+                  <MobileCapitalRow key={`${active.window}-${asset.symbol}`} asset={asset} index={index} />
+                ))}
+              </div>
+              {active.regime_reasons.length ? (
+                <div className="mobile-reason-box">
+                  <p className="mobile-kicker">Rejim nedenleri</p>
+                  {active.regime_reasons.map((reason, index) => (
+                    <span key={index}>{reason}</span>
+                  ))}
+                </div>
+              ) : null}
+              {active.contradictions.length ? (
+                <div className="mobile-reason-box is-warning">
+                  <p className="mobile-kicker">Çelişkiler</p>
+                  {active.contradictions.map((item, index) => (
+                    <span key={index}>{item}</span>
+                  ))}
+                </div>
+              ) : null}
+            </>
+          ) : (
+            <p className="mobile-summary-line">Veri yok.</p>
+          )}
+        </div>
+      }
+    />
+    </>
+  );
+}
+
+function MobileCapitalRow({
+  asset,
+  index,
+}: {
+  asset: LiquidityAssetFlow;
+  index: number;
+}) {
+  return (
+    <div
+      className="mobile-capital-row"
+      style={
+        {
+          "--rank-color": DIR_COLOR[asset.direction],
+          "--rank-delay": `${index * 0.08}s`,
+        } as CSSProperties
+      }
+    >
+      <span>{index + 1}</span>
+      <div>
+        <strong>{asset.label}</strong>
+        <em>{DIR_LABEL[asset.direction]}</em>
+      </div>
+      <div className="mobile-capital-bar">
+        <i style={{ width: `${Math.max(4, Math.min(100, asset.flow_score))}%` }} />
+      </div>
+      <b>{Math.round(asset.flow_score)}</b>
+      <small>{fmtPct(asset.return_pct)}</small>
+    </div>
   );
 }

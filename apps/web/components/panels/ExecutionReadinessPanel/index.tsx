@@ -5,6 +5,7 @@ import type { CSSProperties } from "react";
 
 import { PanelFrame } from "@/components/shell/PanelFrame";
 import { HoloHeadScene } from "@/components/cockpit/HoloHeadScene";
+import { MobileFlipCard } from "@/components/cockpit/MobileFlipCard";
 import {
   useAgentMatrix,
   useCalibration,
@@ -380,9 +381,18 @@ export function ExecutionReadinessPanel() {
     .map((check, offset) => ({ check, index: visibleStart + offset }));
   const hiddenBefore = visibleStart;
   const hiddenAfter = Math.max(0, checks.length - visibleStart - visibleChecks.length);
+  const mobileStart = Math.min(
+    Math.max(activeIndex - 1, 0),
+    Math.max(0, checks.length - 3),
+  );
+  const mobileChecks = checks
+    .slice(mobileStart, mobileStart + 3)
+    .map((check, offset) => ({ check, index: mobileStart + offset }));
 
   return (
-    <PanelFrame id="execution_readiness" className="readiness-panel rc-panel">
+    <>
+    <div className="hidden h-full min-[769px]:block">
+    <PanelFrame id="execution_readiness" className="readiness-panel rc-panel h-full">
       <div className="rc-stage">
         {/* sol üst — agent modu */}
         <div className="rc-mode">
@@ -459,6 +469,95 @@ export function ExecutionReadinessPanel() {
       {/* alt — trade ticket şeridi */}
       <TradeTicketStrip ticket={activeTicket} />
     </PanelFrame>
+    </div>
+    <MobileFlipCard
+      className="min-[769px]:hidden"
+      title="Check List"
+      front={
+        <div className="mobile-check-front">
+          <div className="mobile-check-head">
+            <div>
+              <p className="mobile-kicker">CHECK LIST</p>
+              <p className="mobile-subline">READ ONLY</p>
+              <strong className={allPassed ? "text-emerald-300" : "text-amber-300"}>
+                {allPassed ? "READY" : "CALIBRATING"}
+              </strong>
+            </div>
+            <div className="mobile-check-score">
+              <span>{passedCount}</span>
+              <em>/ {checks.length}</em>
+              <small>{formatTime(cycleRemaining)}</small>
+            </div>
+          </div>
+
+          <div className="mobile-check-active">
+            <span>{String(activeIndex + 1).padStart(2, "0")}</span>
+            <div>
+              <strong>{activeCheck.title}</strong>
+              <p>{activeCheck.detail}</p>
+            </div>
+          </div>
+
+          <div className="mobile-check-list">
+            {mobileChecks.map(({ check, index }) => (
+              <MobileCheckRow
+                key={check.id}
+                check={check}
+                index={index}
+                active={index === activeIndex}
+              />
+            ))}
+          </div>
+
+          <p className="mobile-flip-hint">Detay için dokun</p>
+        </div>
+      }
+      back={
+        <div className="mobile-flip-card__scroll mobile-check-back">
+          <div className="mobile-back-head">
+            <div>
+              <p className="mobile-kicker">10 kontrol</p>
+              <strong>{passedCount} onay</strong>
+            </div>
+            <span>{allPassed ? "READY" : "CALIBRATING"}</span>
+          </div>
+          <div className="mobile-check-list mobile-check-list--all">
+            {checks.map((check, index) => (
+              <MobileCheckRow
+                key={check.id}
+                check={check}
+                index={index}
+                active={index === activeIndex}
+              />
+            ))}
+          </div>
+          <TradeTicketStrip ticket={activeTicket} />
+        </div>
+      }
+    />
+    </>
+  );
+}
+
+function MobileCheckRow({
+  check,
+  index,
+  active,
+}: {
+  check: CheckItem;
+  index: number;
+  active: boolean;
+}) {
+  return (
+    <div className={`mobile-check-row ${active ? "is-active" : ""} ${check.passed ? "is-ok" : "is-bad"}`}>
+      <span className="mobile-check-row__num">{String(index + 1).padStart(2, "0")}</span>
+      <span className="mobile-check-row__mark">{check.passed ? "✓" : "X"}</span>
+      <div className="min-w-0">
+        <strong>{check.title}</strong>
+        <p>{check.metric ?? check.detail}</p>
+      </div>
+      <em>{check.passed ? "HAZIR" : "ENGEL"}</em>
+    </div>
   );
 }
 

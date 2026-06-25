@@ -6,6 +6,7 @@ import { PanelFrame } from "@/components/shell/PanelFrame";
 import { PanelHeader } from "@/components/shell/PanelHeader";
 import { LoadingState } from "@/components/shell/LoadingState";
 import { EmptyState } from "@/components/shell/EmptyState";
+import { MobileFlipCard } from "@/components/cockpit/MobileFlipCard";
 import { useRegimeReport } from "@/lib/queries/hooks";
 import { headlineImpactBadges, selectHeadlines } from "@/lib/selectors/regime";
 import { fmtRelative } from "@/lib/format";
@@ -92,8 +93,13 @@ export function NewsPanel({ defaultView = "list" }: NewsPanelProps) {
   const rest = items.slice(NEWS_HEAD);
   const [view, setView] = useState<"list" | "radar">(defaultView);
   const hasItems = items.length > 0;
+  const primary = items[0];
+  const primaryBadges = primary ? headlineImpactBadges(primary.asset_impact).slice(0, 2) : [];
+  const eventRisk = data?.event_risk?.level ?? "clear";
   return (
-    <PanelFrame id="news">
+    <>
+    <div className="hidden h-full min-[769px]:block">
+    <PanelFrame id="news" className="h-full">
       <PanelHeader
         title="Haberler"
         subtitle={`${items.length} başlık`}
@@ -154,5 +160,90 @@ export function NewsPanel({ defaultView = "list" }: NewsPanelProps) {
         </>
       )}
     </PanelFrame>
+    </div>
+    <MobileFlipCard
+      className="min-[769px]:hidden"
+      title="Haberler"
+      front={
+        <div className="mobile-news-front">
+          <div className="mobile-back-head">
+            <div>
+              <p className="mobile-kicker">Haberler</p>
+              <strong>{items.length} başlık</strong>
+            </div>
+            <span>Risk: {String(eventRisk)}</span>
+          </div>
+          <div className="mobile-news-map-preview" aria-hidden="true">
+            <span />
+            <i />
+            <b />
+          </div>
+          {isLoading ? (
+            <p className="mobile-summary-line">Yükleniyor...</p>
+          ) : !primary ? (
+            <p className="mobile-summary-line">Aktif son dakika haber kaydı yok.</p>
+          ) : (
+            <div className="mobile-news-main">
+              <p>{primary.source} · {fmtRelative(primary.ts)}</p>
+              <strong>{primary.title_tr || primary.title}</strong>
+              <div>
+                {primaryBadges.length ? (
+                  primaryBadges.map((badge) => (
+                    <span key={badge.symbol}>
+                      {badge.symbol} {badge.arrow}
+                    </span>
+                  ))
+                ) : (
+                  <span>yalnızca bağlam</span>
+                )}
+              </div>
+            </div>
+          )}
+          <p className="mobile-flip-hint">Detay için dokun</p>
+        </div>
+      }
+      back={
+        <div className="mobile-flip-card__scroll mobile-news-back">
+          <div className="mobile-back-head">
+            <div>
+              <p className="mobile-kicker">Haber detayı</p>
+              <strong>{view === "radar" ? "Radar" : "Liste"}</strong>
+            </div>
+            <div className="mobile-window-tabs" data-no-flip>
+              <button
+                type="button"
+                onClick={() => setView("list")}
+                className={view === "list" ? "is-active" : ""}
+              >
+                Liste
+              </button>
+              <button
+                type="button"
+                onClick={() => setView("radar")}
+                className={view === "radar" ? "is-active" : ""}
+              >
+                Radar
+              </button>
+            </div>
+          </div>
+          {isLoading ? (
+            <LoadingState />
+          ) : !hasItems ? (
+            <EmptyState />
+          ) : view === "radar" ? (
+            <div className="mobile-news-radar-shell">
+              <NewsMapRadarLayer headlines={items} />
+            </div>
+          ) : (
+            <ul className="space-y-2 text-sm">
+              {items.map((h) => (
+                <HeadlineItem key={h.id} h={h} />
+              ))}
+            </ul>
+          )}
+        </div>
+      }
+    />
+    </>
   );
 }

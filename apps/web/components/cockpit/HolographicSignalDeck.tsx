@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 
 import { QuantumPanelField, getQuantumPanelStyle } from "@/components/shell/QuantumPanelField";
+import { MobileFlipCard } from "@/components/cockpit/MobileFlipCard";
 import {
   useDataSnapshot,
   useDecisionMatrix,
@@ -634,7 +635,9 @@ export function HolographicSignalDeck({ brief }: { brief: AgentBrief }) {
   const [activeIndex, setActiveIndex] = useState(0);
   const [paused, setPaused] = useState(false);
   const [selectedTf, setSelectedTf] = useState<Timeframe | null>(null);
-  const [compactDeck, setCompactDeck] = useState(false);
+  const [compactDeck, setCompactDeck] = useState(
+    () => typeof window !== "undefined" && window.matchMedia("(max-width: 768px)").matches,
+  );
   const animateRef = useRef(true);
 
   useEffect(() => {
@@ -699,6 +702,109 @@ export function HolographicSignalDeck({ brief }: { brief: AgentBrief }) {
         <QuantumPanelField id="layer1_holographic_signals" density="compact" />
         <span className="relative z-10">Aktif aday sinyal yok.</span>
       </section>
+    );
+  }
+
+  if (compactDeck) {
+    const activeScore = round(active?.score);
+    return (
+      <MobileFlipCard
+        title="Asset Card"
+        front={
+          <div className="mobile-asset-front">
+            <div className="mobile-back-head">
+              <div>
+                <p className="mobile-kicker">ASSET CARD</p>
+                <strong>{activeSymbol}</strong>
+              </div>
+              <span className={blocked ? "text-amber-300" : "text-emerald-300"}>
+                {blocked ? "BLOCKED" : "GATE CLEAR"}
+              </span>
+            </div>
+
+            <div className="mobile-asset-hero">
+              <div>
+                <span className="mobile-asset-icon">{activeRow?.icon}</span>
+                <p>{activeRow?.name}</p>
+              </div>
+              <ScoreRing score={activeScore} size={96} active />
+            </div>
+
+            <div className="mobile-metric-grid">
+              <div>
+                <span>Fiyat</span>
+                <strong>{fmtPx(activeRow?.price)} {activeRow?.unit}</strong>
+              </div>
+              <div>
+                <span>Durum</span>
+                <strong>{activeAction.label}</strong>
+              </div>
+              <div>
+                <span>Yön</span>
+                <strong>{activeDirection}</strong>
+              </div>
+              <div>
+                <span>TF</span>
+                <strong>{active?.timeframe ?? "--"}</strong>
+              </div>
+            </div>
+
+            <p className="mobile-summary-line">{brief.recommended_stance}</p>
+            <p className="mobile-flip-hint">Detay için dokun</p>
+          </div>
+        }
+        back={
+          <div className="mobile-flip-card__scroll mobile-asset-back">
+            <div className="mobile-back-head">
+              <div>
+                <p className="mobile-kicker">Sinyal detayı</p>
+                <strong>{activeRow?.icon} {activeSymbol}</strong>
+              </div>
+              <span>{activeScore}</span>
+            </div>
+
+            <TfMatrix rows={activeRow?.perTf ?? []} />
+
+            <div className="mobile-tf-buttons" data-no-flip>
+              {TF_ORDER.filter((tf) => techForSymbol?.[tf]).map((tf) => (
+                <button
+                  key={tf}
+                  type="button"
+                  onClick={() => setSelectedTf(tf)}
+                  className={effectiveTf === tf ? "is-active" : ""}
+                >
+                  {tf}
+                </button>
+              ))}
+            </div>
+            <TechnicalsBlock tech={tech} />
+            <TradePlanBlock ticket={activeTicket} symbol={activeSymbol} />
+
+            <div className="mobile-metric-grid">
+              <div>
+                <span>DQS</span>
+                <strong>{Math.round(brief.dqs?.score ?? 0)}</strong>
+              </div>
+              <div>
+                <span>Mode</span>
+                <strong>{brief.data_mode}</strong>
+              </div>
+            </div>
+
+            {supports.length > 0 ? (
+              <div className="mobile-support-list">
+                <p className="mobile-kicker">Piyasa göstergeleri</p>
+                {supports.slice(0, 5).map((support) => (
+                  <div key={support.symbol}>
+                    <span>{support.symbol}</span>
+                    <strong>{fmtPx(support.price)} {support.unit}</strong>
+                  </div>
+                ))}
+              </div>
+            ) : null}
+          </div>
+        }
+      />
     );
   }
 
