@@ -124,6 +124,28 @@ function formatScore(value?: number | null) {
   return value == null ? "--" : String(Math.round(value));
 }
 
+function formatLayer0WatchCondition(item: { key: string; label: string; detail?: string }) {
+  if (item.key === "provider_restored") return null;
+
+  const text = `${item.label} ${item.detail ?? ""}`.toLowerCase();
+  if (item.key === "catalyst_halflife") {
+    if (text.includes("geopolitical_escalation")) return "Jeopolitik risk normalleşsin";
+    if (text.includes("geopolitical_deescalation")) return "Jeopolitik yumuşama netleşsin";
+    if (text.includes("inflation_data")) return "Enflasyon verisi sindirilsin";
+    if (text.includes("jobs_data")) return "İstihdam verisi sindirilsin";
+    if (text.includes("central_bank")) return "Merkez bankası etkisi sindirilsin";
+    if (text.includes("oil_supply") || text.includes("oil_inventory")) {
+      return "Petrol arz etkisi sakinleşsin";
+    }
+    if (text.includes("crypto_etf_flow")) return "ETF akışı netleşsin";
+    if (text.includes("funding_oi_squeeze")) return "Kaldıraç baskısı sönsün";
+    if (text.includes("rumor_unverified")) return "Doğrulanmamış haber netleşsin";
+    return "Catalyst etkisi sakinleşsin";
+  }
+
+  return item.label;
+}
+
 function LayerBadge({ index, label }: { index: string; label: string }) {
   return (
     <div className="inline-flex items-center gap-2 rounded-full border border-white/12 bg-white/[0.04] px-3 py-1 text-[10px] uppercase tracking-widest text-white/58">
@@ -990,7 +1012,13 @@ export function CockpitView() {
   const candidates = brief.top_candidates ?? [];
   const activeTicket = ticketList?.tickets?.find((ticket) => ticket.status === "active");
   const dqs = brief.dqs?.score ?? undefined;
-  const watch = brief.next_watch_conditions?.slice(0, 3) ?? [];
+  const watch = (brief.next_watch_conditions ?? [])
+    .map((item) => {
+      const label = formatLayer0WatchCondition(item);
+      return label ? { key: item.key, label } : null;
+    })
+    .filter((item): item is { key: string; label: string } => Boolean(item))
+    .slice(0, 3);
   const openPaperPositions =
     brief.paper_state_summary?.open_positions ?? brief.open_paper_positions ?? 0;
   const actionableCount = candidates.filter((candidate) => candidate.actionable).length;
@@ -1091,7 +1119,7 @@ export function CockpitView() {
         href: "/dashboard#trade_ticket",
       },
     },
-    watch: watch.map((item) => ({ key: item.key, label: item.label })),
+    watch,
   };
 
   if (activeLayer === 0) {
@@ -1219,11 +1247,15 @@ export function CockpitView() {
               </div>
             </div>
           </div>
+          {activeLayer !== 0 ? (
           <div className="hidden min-w-0 flex-1 justify-center md:flex">
             <div className="truncate rounded-full border border-white/10 bg-white/[0.035] px-4 py-1.5 text-[10px] uppercase tracking-[0.2em] text-white/55">
               {currentMeta.subtitle}
             </div>
           </div>
+          ) : (
+            <div className="hidden min-w-0 flex-1 md:block" />
+          )}
           <div className="flex shrink-0 items-center gap-2">
             <span className="hidden items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1 text-[10px] uppercase tracking-widest text-white/72 sm:inline-flex">
               <span
