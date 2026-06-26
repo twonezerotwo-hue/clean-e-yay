@@ -27,7 +27,7 @@ def _ticket_short(t: dict[str, Any]) -> str:
     conf = s.get("confidence_calibrated")
     parts = [t.get("timeframe", "?").upper()]
     if entry is not None:
-        parts.append(f"entry {entry:,.2f}")
+        parts.append(f"giriş {entry:,.2f}")
     if conf is not None:
         parts.append(f"güven {_format_pct(conf)}")
     return f"{t.get('symbol', '?')} {side_label} · " + " · ".join(parts)
@@ -57,10 +57,10 @@ def detect_new_tickets(
             body_short=_ticket_short(t),
             body_long=(
                 f"{t.get('symbol')} sembolünde {t.get('timeframe', '?').upper()} "
-                f"timeframe'inde {side_label} sinyali oluştu. "
+                f"zaman diliminde {side_label} sinyali oluştu. "
                 f"Giriş: {s.get('entry_price')}, "
-                f"Zarar kes: {s.get('stop_loss')}, "
-                f"Kâr al: {s.get('take_profit')}, "
+                f"Zarar Durdur: {s.get('stop_loss')}, "
+                f"Kâr Al: {s.get('take_profit')}, "
                 f"R/R: 1:{s.get('rr_ratio', 0):.1f}, "
                 f"Güven: {_format_pct(s.get('confidence_calibrated', 0))}."
             ),
@@ -132,10 +132,10 @@ def detect_recheck_changes(
                 type="recheck_exit_recommend",
                 priority="high",
                 title=f"Çıkış önerisi: {r.get('symbol')} {side_label}",
-                body_short=f"{r.get('symbol')} {r.get('timeframe', '?').upper()} sinyali TERS döndü",
+                body_short=f"{r.get('symbol')} {r.get('timeframe', '?').upper()} sinyali tersine döndü",
                 body_long=(
                     f"Açık {r.get('symbol')} {side_label} pozisyonun için sistem "
-                    f"sinyalin {verdict}'a döndüğünü tespit etti. Sebep: {r.get('reason', '-')}."
+                    f"sinyalin çıkış önerisine döndüğünü tespit etti. Sebep: {r.get('reason', '-')}."
                 ),
                 position_id=pid,
             ))
@@ -146,7 +146,7 @@ def detect_recheck_changes(
                 type="recheck_reduce",
                 priority="medium",
                 title=f"Boyut azaltma önerisi: {r.get('symbol')} {side_label}",
-                body_short=f"{r.get('symbol')} {r.get('timeframe', '?').upper()} RiskGate sıkıştı",
+                body_short=f"{r.get('symbol')} {r.get('timeframe', '?').upper()} risk kontrolü kısıtlama uyguluyor",
                 body_long=(
                     f"Açık {r.get('symbol')} {side_label} pozisyonun için risk kontrolleri "
                     f"yeni girişe izin vermiyor — mevcut boyutu azaltmayı öner. "
@@ -183,15 +183,32 @@ def detect_risk_gate_change(
         "RISK_REDUCE": "Risk: boyut azaltılmalı",
         "KILL_SWITCH": "Risk: tüm girişler durduruldu",
     }
+    # Ham enum değerleri (KILL_SWITCH, RISK_REDUCE, ...) kullanıcıya hiç
+    # gösterilmez — body_short/body_long her zaman Türkçe etiket kullanır.
+    short_label_map = {
+        "NO_POSITION_INCREASE": "Yeni giriş durduruldu",
+        "RISK_REDUCE": "Boyut azaltma gerekiyor",
+        "KILL_SWITCH": "Tüm girişler durduruldu",
+    }
+    long_label_map = {
+        "ALLOW_NORMAL": "normal",
+        "NO_POSITION_INCREASE": "yeni giriş durduruldu",
+        "RISK_REDUCE": "boyut azaltma gerekiyor",
+        "KILL_SWITCH": "tüm girişler durduruldu",
+    }
     return [Notification(
         id=make_id("risk_gate"),
         ts=now.isoformat(),
         type="risk_gate_changed" if current_action != "KILL_SWITCH" else "risk_kill_switch",
         priority=priority,
         title=title_map.get(current_action, "Risk seviyesi değişti"),
-        body_short=f"{current_action} aktif — {current_reason or 'detay yok'}",
+        body_short=(
+            f"{short_label_map.get(current_action, 'Risk seviyesi değişti')} "
+            f"— {current_reason or 'detay yok'}"
+        ),
         body_long=(
-            f"Risk motoru seviyesi {prev_action or 'belirsiz'} → {current_action} olarak değişti. "
+            f"Risk motoru seviyesi {long_label_map.get(prev_action or '', 'belirsiz')} → "
+            f"{long_label_map.get(current_action, current_action)} olarak değişti. "
             f"Sebep: {current_reason or 'detay yok'}."
         ),
     )]

@@ -235,11 +235,6 @@ function zoneMid(zone?: PriceZone | null): number | null {
 
 function zoneRangeLabel(zone?: PriceZone | null): string {
   if (!zone) return "—";
-  const low = zone.price_low;
-  const high = zone.price_high;
-  if (low != null && high != null && Math.abs(high - low) > 0.0001) {
-    return `${fmtPx(low)}-${fmtPx(high)}`;
-  }
   return fmtPx(zoneMid(zone));
 }
 
@@ -257,15 +252,24 @@ function formatFibChip(evidence?: TfEvidence): string {
   const fib = evidence.fib;
   const level = fib?.nearest_level;
   if (!fib) return "—";
-  if (!level) return `${fib.timeframe ?? "Fib"} ${fib.zone ?? "--"}`;
-  return `${fib.timeframe ?? "Fib"} ${level.label ?? "level"} ${fmtPx(level.price)}`;
+  if (!level) return fib.zone?.replaceAll("_", " ") ?? "--";
+  return `${level.label ?? "level"} ${fmtPx(level.price)}`;
 }
 
 function formatElliottChip(evidence?: TfEvidence): string {
   if (!evidence) return "—";
   if (evidence.loading && !evidence.elliott) return "okunuyor";
   const rawScenario = evidence.elliott?.primary_scenario ?? "NO_COUNT";
-  const scenario = rawScenario === "NO_VALID_COUNT" ? "NO COUNT" : rawScenario.replaceAll("_", " ");
+  const scenario =
+    rawScenario === "NO_VALID_COUNT"
+      ? "NO COUNT"
+      : rawScenario.includes("ABC")
+        ? "ABC"
+        : rawScenario.includes("BULLISH") && rawScenario.includes("IMPULSE")
+          ? "BULL IMP"
+          : rawScenario.includes("BEARISH") && rawScenario.includes("IMPULSE")
+            ? "BEAR IMP"
+            : rawScenario.replaceAll("_", " ").slice(0, 9);
   const confidence = evidence.elliott?.confidence;
   return confidence == null ? scenario : `${scenario} ${Math.round(confidence)}`;
 }
@@ -668,9 +672,9 @@ function TechnicalMetric({
   tone?: string;
 }) {
   return (
-    <div className="min-w-0 rounded border border-white/[0.08] bg-slate-950/55 px-2 py-1.5">
-      <p className="truncate text-[8px] uppercase tracking-[0.13em] text-slate-500">{label}</p>
-      <p className={`mt-0.5 truncate font-mono text-[11px] font-semibold leading-4 ${tone}`} title={value}>
+    <div className="min-w-0 rounded border border-white/[0.08] bg-slate-950/55 px-1.5 py-1">
+      <p className="truncate text-[7px] uppercase tracking-[0.1em] text-slate-500">{label}</p>
+      <p className={`mt-0.5 truncate font-mono text-[10px] font-semibold leading-[14px] ${tone}`} title={value}>
         {value}
       </p>
     </div>
@@ -696,13 +700,12 @@ function TechnicalsBlock({ tech, evidence }: { tech: TechnicalTf | undefined; ev
         ? "text-rose-300"
         : "text-slate-300";
   return (
-    <div className="rounded-md border border-slate-700/45 bg-black/42 p-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]">
-      <div className="grid grid-cols-3 gap-1.5">
+    <div className="rounded-md border border-slate-700/45 bg-black/42 p-1.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]">
+      <div className="grid grid-cols-4 gap-1.5">
         <TechnicalMetric label="RSI 14" value={tech?.rsi != null ? String(Math.round(tech.rsi)) : "—"} tone={rsiTone} />
         <TechnicalMetric label="MACD" value={tech?.macd != null ? tech.macd.toFixed(2) : "—"} />
         <TechnicalMetric label="ATR" value={tech?.atr != null ? tech.atr.toFixed(2) : "—"} />
         <TechnicalMetric label="EMA" value={tech?.ema_stack ?? "—"} tone={emaTone} />
-        <TechnicalMetric label="Skor" value={tech ? `${round(tech.score)}/100` : "—"} tone={tech ? scoreTone(round(tech.score)) : "text-slate-400"} />
         <TechnicalMetric
           label="Fib"
           value={formatFibChip(evidence)}
@@ -731,7 +734,7 @@ function TechnicalsBlock({ tech, evidence }: { tech: TechnicalTf | undefined; ev
 function TradePlanBlock({ ticket, symbol }: { ticket: TradeTicket | undefined; symbol: string }) {
   if (!ticket) {
     return (
-      <div className="rounded-md border border-slate-700/40 bg-black/30 p-2.5">
+    <div className="rounded-md border border-slate-700/40 bg-black/30 p-2">
         <p className="text-[10px] uppercase tracking-widest text-slate-500">Trade plan</p>
         <p className="mt-1 text-[11px] text-slate-500">
           {symbol} için aktif ticket yok — yeni giriş açılmıyor.
@@ -745,7 +748,7 @@ function TradePlanBlock({ ticket, symbol }: { ticket: TradeTicket | undefined; s
     : ticket.side === "short" ? "text-rose-300 border-rose-500/40"
     : "text-amber-300 border-amber-500/40";
   return (
-    <div className="rounded-md border border-teal-300/20 bg-teal-500/[0.035] p-2.5 space-y-2">
+    <div className="rounded-md border border-teal-300/20 bg-teal-500/[0.035] p-2 space-y-1.5">
       <div className="flex items-center justify-between">
         <span className="text-[10px] uppercase tracking-widest text-teal-200/85">
           Trade plan
@@ -1163,8 +1166,8 @@ export function HolographicSignalDeck({ brief }: { brief: AgentBrief }) {
         </div>
 
         {/* Right — Sinyal Detayı */}
-        <aside className="relative min-h-0 overflow-hidden bg-black/20 p-3">
-          <div className="space-y-2">
+        <aside className="relative min-h-0 overflow-hidden bg-black/20 p-2.5">
+          <div className="space-y-1.5">
             <div className="flex items-center gap-2">
               <span className="h-1.5 w-1.5 rounded-full bg-teal-300 shadow-[0_0_8px_rgba(45,212,191,0.45)]" />
               <p className="text-[10px] uppercase tracking-[0.22em] text-slate-300/90">
@@ -1186,16 +1189,16 @@ export function HolographicSignalDeck({ brief }: { brief: AgentBrief }) {
             </div>
 
             {/* Price */}
-            <div className="rounded-md border border-slate-700/40 bg-black/30 p-2.5">
+            <div className="rounded-md border border-slate-700/40 bg-black/30 p-2">
               <p className="text-[10px] uppercase tracking-widest text-slate-500">Fiyat</p>
-              <p className="mt-0.5 font-display text-xl font-semibold text-slate-100">
+                <p className="mt-0.5 font-display text-lg font-semibold text-slate-100">
                 {fmtPx(activeRow?.price)} <span className="text-[10px] text-slate-400">{activeRow?.unit}</span>
               </p>
             </div>
 
             {/* All TFs */}
             <div>
-              <div className="mb-1.5 flex items-center justify-between">
+              <div className="mb-1 flex items-center justify-between">
                 <p className="text-[10px] uppercase tracking-widest text-slate-500">
                   Tüm timeframeler
                 </p>
@@ -1208,7 +1211,7 @@ export function HolographicSignalDeck({ brief }: { brief: AgentBrief }) {
 
             {/* TF chips + teknik */}
             <div>
-              <div className="mb-1.5 flex items-center justify-between">
+              <div className="mb-1 flex items-center justify-between">
                 <p className="text-[10px] uppercase tracking-widest text-slate-500">
                   Teknik {effectiveTf ? `· ${effectiveTf}` : ""}
                 </p>
@@ -1234,33 +1237,6 @@ export function HolographicSignalDeck({ brief }: { brief: AgentBrief }) {
 
             {/* Trade plan */}
             <TradePlanBlock ticket={activeTicket} symbol={activeSymbol} />
-
-            {/* Footer mini stats */}
-            <div className="grid grid-cols-2 gap-2 text-[11px]">
-              <div className="rounded border border-slate-700/40 bg-black/30 p-2">
-                <p className="uppercase tracking-widest text-slate-500 text-[9px]">DQS</p>
-                <p className="font-mono text-teal-300">{Math.round(brief.dqs?.score ?? 0)}</p>
-              </div>
-              <div className="rounded border border-slate-700/40 bg-black/30 p-2">
-                <p className="uppercase tracking-widest text-slate-500 text-[9px]">Mode</p>
-                <p className="font-mono text-amber-200">{brief.data_mode}</p>
-              </div>
-            </div>
-
-            <div className="rounded border border-slate-700/40 bg-white/[0.02] p-2.5">
-              <div className="flex items-center gap-2">
-                <span className={`h-1.5 w-1.5 rounded-full ${
-                  activeDirection === "bullish" ? "bg-emerald-300" :
-                  activeDirection === "bearish" ? "bg-rose-300" : "bg-amber-300"
-                }`} />
-                <span className="text-[10px] uppercase tracking-widest text-slate-500">
-                  Agent interpretation
-                </span>
-              </div>
-              <p className="mt-1.5 text-[11px] leading-relaxed text-slate-300/90">
-                {brief.recommended_stance}
-              </p>
-            </div>
           </div>
         </aside>
       </div>

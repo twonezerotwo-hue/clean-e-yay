@@ -137,6 +137,7 @@ function NotifRow({
 }
 
 function ChatBubble({ item }: { item: AssistantMessage }) {
+  const isFallback = item.role === "agent" && item.meta?.llm?.source === "fallback";
   return (
     <div
       className={`floating-notification-chat-row ${
@@ -149,6 +150,11 @@ function ChatBubble({ item }: { item: AssistantMessage }) {
     >
       <div className="floating-notification-chat-role">
         {item.role === "user" ? "Sen" : "E-yAy"}
+        {isFallback ? (
+          <span className="ml-1.5 normal-case tracking-normal text-amber-300/70">
+            · deterministik özet (LLM şu an kullanılamıyor)
+          </span>
+        ) : null}
       </div>
       <div>{item.text}</div>
       {item.role === "agent" && item.meta?.evidence_used?.length ? (
@@ -177,6 +183,7 @@ export function NotificationBell() {
   const [micReady, setMicReady] = useState(false);
   const dockRef = useRef<HTMLDivElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
+  const chatLogRef = useRef<HTMLDivElement>(null);
   const [panelStyle, setPanelStyle] = useState<CSSProperties | null>(null);
   const seenIds = useRef<Set<string>>(new Set());
   const initialized = useRef(false);
@@ -319,6 +326,11 @@ export function NotificationBell() {
     setVoiceLoading(false);
   }, [clearAudioPlayback]);
 
+  const resetChat = useCallback(() => {
+    setMessages([]);
+    setInput("");
+  }, []);
+
   const send = useCallback((message: string) => {
     const text = message.trim();
     if (!text || chat.isPending) return;
@@ -366,6 +378,12 @@ export function NotificationBell() {
     setListening(true);
     recognition.start();
   }, [chat.isPending, listening, send]);
+
+  useEffect(() => {
+    const log = chatLogRef.current;
+    if (!log) return;
+    log.scrollTo({ top: log.scrollHeight, behavior: "smooth" });
+  }, [messages, chat.isPending]);
 
   useEffect(() => {
     setMicReady(Boolean(getSpeechRecognition()));
@@ -527,7 +545,12 @@ export function NotificationBell() {
             >
               E-yAy'a sor
             </button>
-            {unread > 0 ? (
+            {mode === "ask" && messages.length > 0 ? (
+              <button type="button" onClick={resetChat} className="ml-auto">
+                yeni sohbet
+              </button>
+            ) : null}
+            {mode === "feed" && unread > 0 ? (
               <button
                 type="button"
                 onClick={() => ackAllMutation.mutate()}
@@ -558,7 +581,7 @@ export function NotificationBell() {
             </div>
           ) : (
             <div className="floating-notification-chat">
-              <div className="floating-notification-chat-log">
+              <div className="floating-notification-chat-log" ref={chatLogRef}>
                 {messages.length === 0 ? (
                   <div className="space-y-2">
                     <div className="text-xs leading-relaxed text-white/55">

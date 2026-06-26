@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import urllib.error
 import urllib.request
 from dataclasses import dataclass
@@ -156,9 +157,7 @@ class OpenRouterClient:
         self.site_url = os.environ.get("OPENROUTER_SITE_URL", "").strip()
         self.app_name = os.environ.get("OPENROUTER_APP_NAME", "Clean E-yAy").strip()
 
-    def complete(self, system: str, user: str, max_tokens: int) -> LLMCompletion | None:
-        if not self.api_key:
-            return None  # anahtar yok → network çağrısı yok
+    def _request(self, system: str, user: str, max_tokens: int) -> urllib.request.Request:
         body = json.dumps(
             {
                 "model": self.model,
@@ -179,29 +178,48 @@ class OpenRouterClient:
             headers["HTTP-Referer"] = self.site_url
         if self.app_name:
             headers["X-OpenRouter-Title"] = self.app_name
-        req = urllib.request.Request(
-            self.api_url,
-            data=body,
-            headers=headers,
-            method="POST",
-        )
-        try:
-            with urllib.request.urlopen(req, timeout=TIMEOUT_SEC) as resp:
-                data = json.loads(resp.read().decode("utf-8"))
-            text = data["choices"][0]["message"]["content"]
-            usage = data.get("usage") or {}
-            if not isinstance(text, str) or not text.strip():
+        return urllib.request.Request(self.api_url, data=body, headers=headers, method="POST")
+
+    def complete(self, system: str, user: str, max_tokens: int) -> LLMCompletion | None:
+        if not self.api_key:
+            return None  # anahtar yok → network çağrısı yok
+        attempt_tokens = int(max_tokens)
+        # 402 (yetersiz kredi) → hesabın o anda "karşılayabildiği" token sayısına
+        # düşüp BİR kez yeniden dene. Düşük bakiyede de chat çalışsın diye;
+        # kredi tamamen biterse zaten son denemede de None döner (fallback devreye girer).
+        for _ in range(2):
+            req = self._request(system, user, attempt_tokens)
+            try:
+                with urllib.request.urlopen(req, timeout=TIMEOUT_SEC) as resp:
+                    data = json.loads(resp.read().decode("utf-8"))
+                text = data["choices"][0]["message"]["content"]
+                usage = data.get("usage") or {}
+                if not isinstance(text, str) or not text.strip():
+                    return None
+                return LLMCompletion(
+                    text=text.strip(),
+                    model=str(data.get("model") or self.model),
+                    input_tokens=int(usage.get("prompt_tokens") or 0),
+                    output_tokens=int(usage.get("completion_tokens") or 0),
+                    source="openrouter",
+                )
+            except urllib.error.HTTPError as e:
+                if e.code == 402:
+                    try:
+                        err = json.loads(e.read().decode("utf-8"))
+                        msg = str((err.get("error") or {}).get("message") or "")
+                        m = re.search(r"can only afford (\d+)", msg)
+                        affordable = int(m.group(1)) if m else None
+                    except (ValueError, TypeError, json.JSONDecodeError, AttributeError):
+                        affordable = None
+                    if affordable and affordable > 16 and affordable < attempt_tokens:
+                        attempt_tokens = affordable - 8  # küçük güvenlik payı
+                        continue
                 return None
-            return LLMCompletion(
-                text=text.strip(),
-                model=str(data.get("model") or self.model),
-                input_tokens=int(usage.get("prompt_tokens") or 0),
-                output_tokens=int(usage.get("completion_tokens") or 0),
-                source="openrouter",
-            )
-        except (urllib.error.URLError, TimeoutError, OSError, KeyError,
-                IndexError, TypeError, ValueError):
-            return None  # crash yok — fallback narrative devreye girer
+            except (urllib.error.URLError, TimeoutError, OSError, KeyError,
+                    IndexError, TypeError, ValueError):
+                return None  # crash yok — fallback narrative devreye girer
+        return None
 
 
 class OllamaClient:

@@ -159,6 +159,108 @@ def test_openrouter_adapter_parses_mocked_response(llm_env, monkeypatch) -> None
     assert captured["referer"] == "https://clean-e-yay.local"
 
 
+def test_openrouter_402_retries_with_affordable_tokens(llm_env, monkeypatch) -> None:
+    """OpenRouter 402 (yetersiz kredi) verince, hesabın 'karşılayabildiği' token
+    sayısına düşüp BİR kez yeniden dener — düşük bakiyede de chat çalışır."""
+    import io
+    import json
+    import urllib.error
+    import urllib.request
+
+    from packages.agent.llm import client as llm_client
+
+    monkeypatch.setenv("LLM_MODE", "openrouter")
+    monkeypatch.setenv("OPENROUTER_API_KEY", "test-key")
+
+    payload = {
+        "model": "openai/gpt-test",
+        "choices": [{"message": {"content": "kisa cevap"}}],
+        "usage": {"prompt_tokens": 50, "completion_tokens": 5},
+    }
+
+    class _Resp(io.BytesIO):
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+    calls: list[int] = []
+
+    def _urlopen(req, timeout=None):
+        body = json.loads(req.data.decode("utf-8"))
+        calls.append(body["max_tokens"])
+        if len(calls) == 1:
+            err_body = json.dumps(
+                {"error": {"message": "...can only afford 88 tokens..."}}
+            ).encode("utf-8")
+            raise urllib.error.HTTPError(
+                req.full_url, 402, "Payment Required", {}, io.BytesIO(err_body)
+            )
+        return _Resp(json.dumps(payload).encode())
+
+    monkeypatch.setattr(urllib.request, "urlopen", _urlopen)
+    c = llm_client.get_client()
+    comp = c.complete("sys", "user", 600)
+    assert comp is not None
+    assert comp.text == "kisa cevap"
+    assert calls == [600, 80]  # 88 - 8 güvenlik payı
+
+
+def test_openrouter_402_unparseable_message_gives_up(llm_env, monkeypatch) -> None:
+    import io
+    import urllib.error
+    import urllib.request
+
+    from packages.agent.llm import client as llm_client
+
+    monkeypatch.setenv("LLM_MODE", "openrouter")
+    monkeypatch.setenv("OPENROUTER_API_KEY", "test-key")
+
+    calls: list[int] = []
+
+    def _urlopen(req, timeout=None):
+        calls.append(1)
+        raise urllib.error.HTTPError(
+            req.full_url, 402, "Payment Required", {}, io.BytesIO(b"not json")
+        )
+
+    monkeypatch.setattr(urllib.request, "urlopen", _urlopen)
+    c = llm_client.get_client()
+    comp = c.complete("sys", "user", 600)
+    assert comp is None
+    assert len(calls) == 1  # mesaj parse edilemezse yeniden denemez
+
+
+def test_openrouter_402_zero_credit_no_infinite_retry(llm_env, monkeypatch) -> None:
+    import io
+    import json
+    import urllib.error
+    import urllib.request
+
+    from packages.agent.llm import client as llm_client
+
+    monkeypatch.setenv("LLM_MODE", "openrouter")
+    monkeypatch.setenv("OPENROUTER_API_KEY", "test-key")
+
+    calls: list[int] = []
+
+    def _urlopen(req, timeout=None):
+        calls.append(1)
+        err_body = json.dumps(
+            {"error": {"message": "...can only afford 0 tokens..."}}
+        ).encode("utf-8")
+        raise urllib.error.HTTPError(
+            req.full_url, 402, "Payment Required", {}, io.BytesIO(err_body)
+        )
+
+    monkeypatch.setattr(urllib.request, "urlopen", _urlopen)
+    c = llm_client.get_client()
+    comp = c.complete("sys", "user", 600)
+    assert comp is None
+    assert len(calls) == 1  # affordable=0 → retry koşulu sağlanmaz
+
+
 def test_ollama_adapter_parses_mocked_response(llm_env, monkeypatch) -> None:
     import io
     import json
