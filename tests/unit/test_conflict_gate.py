@@ -92,13 +92,28 @@ def test_missing_verdict_treated_as_no_trade():
     assert (r.route, r.effective_multiplier) == ("open", 0.5)
 
 
-def test_load_config_defaults_disabled_with_expected_profile_modes():
-    cfg = conflict_gate.load_config()
-    assert cfg.enabled is False
-    assert cfg.profile_modes == {
+def test_default_profile_modes_constant_is_the_full_graduated_ladder():
+    # Modülün kod-içi varsayılanı (config'te profile_modes hiç verilmezse düşülen
+    # taban) — şu anki ŞİPLENMİŞ config'ten bağımsız, kademeli tasarımın referansı.
+    assert conflict_gate._DEFAULT_PROFILE_MODES == {
         "SCALP": "OFF",
         "INTRADAY": "SOFT",
         "TACTICAL": "SOFT_PLUS",
         "SWING": "HARD",
+        "POSITION": "HARD_MANUAL",
+    }
+
+
+def test_load_config_reflects_shipped_position_pilot():
+    # 2026-06-26: POSITION pilotu aktif (owner onayı, ARCHITECTURE.md §7.5) —
+    # diğer profiller veri birikene kadar kasıtlı OFF. Bu test config/thresholds
+    # değiştiğinde bilinçli güncellenmeli; sürpriz drift'i yakalar.
+    cfg = conflict_gate.load_config()
+    assert cfg.enabled is True
+    assert cfg.profile_modes == {
+        "SCALP": "OFF",
+        "INTRADAY": "OFF",
+        "TACTICAL": "OFF",
+        "SWING": "OFF",
         "POSITION": "HARD_MANUAL",
     }

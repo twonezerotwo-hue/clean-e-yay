@@ -80,7 +80,9 @@ def test_matches_by_snapshot_and_symbol_buckets_by_route(tmp_path):
         _outcome(trade_id="t1", symbol="BTCUSD", timeframe="1d", pnl=10.0, snapshot_id="snap1"),
         _outcome(trade_id="t2", symbol="BTCUSD", timeframe="1d", pnl=-5.0, snapshot_id="snap2"),
     ]
-    report = conflict_gate_backtest.validation_report(outcomes=outcomes, shadow_path=shadow_path)
+    report = conflict_gate_backtest.validation_report(
+        outcomes=outcomes, shadow_path=shadow_path, profile_modes={"SWING": "HARD"}
+    )
     # SWING profile (1d) HARD mode: CANDIDATE_OPEN -> open ; BLOCKED -> block
     assert report["SWING"]["open"] == {"n": 1, "win_rate": 1.0, "avg_pnl": 10.0}
     assert report["SWING"]["block"] == {"n": 1, "win_rate": 0.0, "avg_pnl": -5.0}
@@ -94,7 +96,9 @@ def test_soft_mode_reduced_bucket_is_distinct_from_open(tmp_path):
         [_shadow_record("snap1", "ETHUSD", setup_type="TREND_LONG", conflict_final_action="NO_TRADE")],
     )
     outcomes = [_outcome(trade_id="t1", symbol="ETHUSD", timeframe="1h", pnl=3.0, snapshot_id="snap1")]
-    report = conflict_gate_backtest.validation_report(outcomes=outcomes, shadow_path=shadow_path)
+    report = conflict_gate_backtest.validation_report(
+        outcomes=outcomes, shadow_path=shadow_path, profile_modes={"INTRADAY": "SOFT"}
+    )
     # INTRADAY (1h) SOFT mode: NO_TRADE -> open_reduced
     assert report["INTRADAY"]["open_reduced"] == {"n": 1, "win_rate": 1.0, "avg_pnl": 3.0}
 

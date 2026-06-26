@@ -474,7 +474,7 @@ Veri Snapshot (build_snapshot)
             Conflict Gate (Faz 8)
       packages/decision/gates.py::apply_gates
       profil bazlı kademeli birleştirme
-      şu an: conflict_gate.enabled = false (KAPALI)
+      şu an: enabled=true, SADECE POSITION (HARD_MANUAL) — diğerleri OFF
                     │
         ┌───────────┴───────────┐
         ▼                       ▼
@@ -489,26 +489,28 @@ tabanında sadece `apps/tick_worker/main.py::run_once()` içinde bir kez
 conflict_resolver_activation — hepsi bu tek kapıdan önce sıraya girer veya
 `manual_ready`'e yönlendirir; hiçbiri paralel bir ikinci açılış yolu açmaz.
 
-### Config anahtarları (hepsi varsayılan KAPALI, `config/thresholds_v1.0.yaml`)
+### Config anahtarları (`config/thresholds_v1.0.yaml`)
 
-| Flag | Açıksa ne olur |
-|---|---|
-| `shadow.affect_decision` | Shadow karar zincirini etkiler (Faz B köprüsü) |
-| `conflict_resolver_activation.enabled` | Conflict Resolver'ın CANDIDATE_OPEN dediği **yeni** girişler (eski sistem hiç önermemiş olsa bile) manual_ready'e eklenir |
-| `conflict_gate.enabled` | Eski sistemin önerisi, trade_profile bazlı kademeli sıkılıkla süzülür (aşağıdaki tablo) |
+| Flag | Açıksa ne olur | Şu an |
+|---|---|---|
+| `shadow.affect_decision` | Shadow karar zincirini etkiler (Faz B köprüsü) | **false** |
+| `conflict_resolver_activation.enabled` | Conflict Resolver'ın CANDIDATE_OPEN dediği **yeni** girişler (eski sistem hiç önermemiş olsa bile) manual_ready'e eklenir | **false** |
+| `conflict_gate.enabled` | Eski sistemin önerisi, trade_profile bazlı kademeli sıkılıkla süzülür (aşağıdaki tablo) | **true** — ama sadece POSITION etkin |
 
-Üçü de kapalıyken davranış, bu modüller hiç yazılmamış gibi **birebir
-aynıdır** (fail-open tasarım, testlerle doğrulanmıştır).
+### Conflict Gate — profil bazlı kademeli sıkılık
 
-### Conflict Gate — profil bazlı kademeli sıkılık (`conflict_gate.enabled=true` olduğunda)
+**2026-06-26: POSITION pilotu başladı.** Diğer 4 profil veri birikene kadar
+(Faz 9A raporu — `GET /api/v1/learning/conflict-gate-validation`) kasıtlı
+olarak `OFF`. POSITION asla otomatik açmaz (`HARD_MANUAL`), bu yüzden risk
+sıfıra yakın — owner onayı olmadan paper'a hiçbir şey girmez.
 
-| Trade Profile | TF | Mod | Davranış |
-|---|---|---|---|
-| SCALP | SCALP_* setup, TF bağımsız | OFF | Conflict Resolver'a bakılmaz |
-| INTRADAY | 15m, 1h | SOFT | NO_TRADE/BLOCKED → size %50; WATCH/CANDIDATE_OPEN → normal |
-| TACTICAL | 4h | SOFT_PLUS | BLOCKED → açılmaz; NO_TRADE → size %50; WATCH/CANDIDATE_OPEN → normal |
-| SWING | 1d | HARD | Sadece CANDIDATE_OPEN → açılır |
-| POSITION | 1w | HARD_MANUAL | CANDIDATE_OPEN bile olsa otomatik açılmaz, manual_ready'e gider |
+| Trade Profile | TF | Mod (tasarım) | **Şu an gerçek** | Davranış |
+|---|---|---|---|---|
+| SCALP | SCALP_* setup, TF bağımsız | OFF | OFF | Conflict Resolver'a bakılmaz |
+| INTRADAY | 15m, 1h | SOFT | **OFF** (pilot bekliyor) | NO_TRADE/BLOCKED → size %50; WATCH/CANDIDATE_OPEN → normal |
+| TACTICAL | 4h | SOFT_PLUS | **OFF** (pilot bekliyor) | BLOCKED → açılmaz; NO_TRADE → size %50; WATCH/CANDIDATE_OPEN → normal |
+| SWING | 1d | HARD | **OFF** (pilot bekliyor) | Sadece CANDIDATE_OPEN → açılır |
+| POSITION | 1w | HARD_MANUAL | **HARD_MANUAL (AKTİF)** | CANDIDATE_OPEN bile olsa otomatik açılmaz, manual_ready'e gider |
 
 Kod: `packages/decision/conflict_gate.py::evaluate()`. Retrospektif doğrulama
 (gate açık olsaydı bloklananların gerçek win-rate'i ne çıkardı):

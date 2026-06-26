@@ -1,15 +1,27 @@
 "use client";
 
+import { useQueries } from "@tanstack/react-query";
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 
 import { QuantumPanelField, getQuantumPanelStyle } from "@/components/shell/QuantumPanelField";
 import { MobileFlipCard } from "@/components/cockpit/MobileFlipCard";
 import {
+  api,
+  type ElliottAnalysis,
+  type FibonacciFrame,
+  type PriceZone,
+  type TechnicalInsight,
+  type ZoneAnalysis,
+} from "@/lib/api/client";
+import { usePanelQueryPolicy } from "@/lib/panel-runtime";
+import {
   useDataSnapshot,
   useDecisionMatrix,
   useRegimeReport,
+  useTechnicalInsight,
   useTradeTickets,
 } from "@/lib/queries/hooks";
+import { qk } from "@/lib/queries/keys";
 import type {
   AgentBrief,
   AgentBriefCandidate,
@@ -82,6 +94,19 @@ type DeckRow = {
   perTf: AgentBriefCandidate[];   // tüm TF adayları
   price: number | null;
 };
+
+type TfEvidence = {
+  timeframe: Timeframe;
+  fib?: FibonacciFrame | null;
+  fibLoading?: boolean;
+  elliott?: ElliottAnalysis | null;
+  zones?: ZoneAnalysis | null;
+  support?: PriceZone | null;
+  resistance?: PriceZone | null;
+  loading?: boolean;
+};
+
+type TfEvidenceMap = Partial<Record<Timeframe, TfEvidence>>;
 
 function pickDeckRows(
   candidates: AgentBriefCandidate[],
@@ -192,6 +217,101 @@ function pickSupports(assets: AssetSignal[] | undefined, prices: LivePrice[] | u
     });
   }
   return out;
+}
+
+function fibFrameForTf(insight: TechnicalInsight | null | undefined, tf: Timeframe): FibonacciFrame | null {
+  if (!insight) return null;
+  if (tf === "1d" || tf === "1w") return insight.fib_1d ?? null;
+  return insight.fib_4h ?? insight.fib_1d ?? null;
+}
+
+function zoneMid(zone?: PriceZone | null): number | null {
+  if (!zone) return null;
+  if (zone.price_low != null && zone.price_high != null) {
+    return (zone.price_low + zone.price_high) / 2;
+  }
+  return zone.price_low ?? zone.price_high ?? null;
+}
+
+function zoneRangeLabel(zone?: PriceZone | null): string {
+  if (!zone) return "—";
+  const low = zone.price_low;
+  const high = zone.price_high;
+  if (low != null && high != null && Math.abs(high - low) > 0.0001) {
+    return `${fmtPx(low)}-${fmtPx(high)}`;
+  }
+  return fmtPx(zoneMid(zone));
+}
+
+function pickZone(analysis: ZoneAnalysis | null | undefined, kind: "support" | "resistance"): PriceZone | null {
+  const zones = analysis?.zones?.filter((zone) => zone.kind === kind) ?? [];
+  if (analysis?.nearest_zone?.kind === kind) return analysis.nearest_zone;
+  return zones
+    .slice()
+    .sort((a, b) => Math.abs(a.distance_pct ?? Number.POSITIVE_INFINITY) - Math.abs(b.distance_pct ?? Number.POSITIVE_INFINITY))[0] ?? null;
+}
+
+function formatFibChip(evidence?: TfEvidence): string {
+  if (!evidence) return "—";
+  if (evidence.fibLoading) return "okunuyor";
+  const fib = evidence.fib;
+  const level = fib?.nearest_level;
+  if (!fib) return "—";
+  if (!level) return `${fib.timeframe ?? "Fib"} ${fib.zone ?? "--"}`;
+  return `${fib.timeframe ?? "Fib"} ${level.label ?? "level"} ${fmtPx(level.price)}`;
+}
+
+function formatElliottChip(evidence?: TfEvidence): string {
+  if (!evidence) return "—";
+  if (evidence.loading && !evidence.elliott) return "okunuyor";
+  const rawScenario = evidence.elliott?.primary_scenario ?? "NO_COUNT";
+  const scenario = rawScenario === "NO_VALID_COUNT" ? "NO COUNT" : rawScenario.replaceAll("_", " ");
+  const confidence = evidence.elliott?.confidence;
+  return confidence == null ? scenario : `${scenario} ${Math.round(confidence)}`;
+}
+
+function useLayer2TfEvidence(
+  symbol: string,
+  insight: TechnicalInsight | null | undefined,
+  fibLoading: boolean,
+): TfEvidenceMap {
+  const policy = usePanelQueryPolicy(60_000);
+  const querySymbol = symbol && symbol !== "—" ? symbol : "";
+  const elliottQueries = useQueries({
+    queries: TF_ORDER.map((tf) => ({
+      queryKey: qk.elliottScenario(querySymbol, tf),
+      queryFn: () => api.elliottScenario(querySymbol, tf),
+      enabled: Boolean(querySymbol),
+      staleTime: 60_000,
+      ...policy,
+    })),
+  });
+  const zoneQueries = useQueries({
+    queries: TF_ORDER.map((tf) => ({
+      queryKey: qk.zoneAnalysis(querySymbol, tf),
+      queryFn: () => api.zoneAnalysis(querySymbol, tf),
+      enabled: Boolean(querySymbol),
+      staleTime: 60_000,
+      ...policy,
+    })),
+  });
+
+  return TF_ORDER.reduce<TfEvidenceMap>((acc, tf, index) => {
+    const elliott = elliottQueries[index];
+    const zones = zoneQueries[index];
+    const zoneData = zones?.data;
+    acc[tf] = {
+      timeframe: tf,
+      fib: fibFrameForTf(insight, tf),
+      fibLoading,
+      elliott: elliott?.data,
+      zones: zoneData,
+      support: pickZone(zoneData, "support"),
+      resistance: pickZone(zoneData, "resistance"),
+      loading: Boolean(elliott?.isLoading || elliott?.isFetching || zones?.isLoading || zones?.isFetching),
+    };
+    return acc;
+  }, {});
 }
 
 // ── Score ring (animated) ────────────────────────────────────────────────────
@@ -538,31 +658,72 @@ function TfMatrix({ rows }: { rows: AgentBriefCandidate[] }) {
   );
 }
 
-function TechnicalsBlock({ tech }: { tech: TechnicalTf | undefined }) {
-  if (!tech) {
+function TechnicalMetric({
+  label,
+  value,
+  tone = "text-slate-100",
+}: {
+  label: string;
+  value: string;
+  tone?: string;
+}) {
+  return (
+    <div className="min-w-0 rounded border border-white/[0.08] bg-slate-950/55 px-2 py-1.5">
+      <p className="truncate text-[8px] uppercase tracking-[0.13em] text-slate-500">{label}</p>
+      <p className={`mt-0.5 truncate font-mono text-[11px] font-semibold leading-4 ${tone}`} title={value}>
+        {value}
+      </p>
+    </div>
+  );
+}
+
+function TechnicalsBlock({ tech, evidence }: { tech: TechnicalTf | undefined; evidence?: TfEvidence }) {
+  if (!tech && !evidence) {
     return (
       <p className="text-[11px] italic text-slate-500">Teknik veri yok.</p>
     );
   }
-  const rows: Array<[string, string, string]> = [
-    ["RSI 14", String(tech.rsi != null ? Math.round(tech.rsi) : "—"), tech.rsi != null && tech.rsi >= 60 ? "text-emerald-300" : tech.rsi != null && tech.rsi <= 40 ? "text-rose-300" : "text-slate-200"],
-    ["MACD", tech.macd != null ? tech.macd.toFixed(2) : "—", "text-slate-200"],
-    ["ATR", tech.atr != null ? tech.atr.toFixed(2) : "—", "text-slate-200"],
-    ["EMA Dizilim", tech.ema_stack ?? "—", tech.ema_stack === "bullish" ? "text-emerald-300" : tech.ema_stack === "bearish" ? "text-rose-300" : "text-slate-300"],
-    ["Skor", `${round(tech.score)}/100`, scoreTone(round(tech.score))],
-  ];
+  const rsiTone =
+    tech?.rsi != null && tech.rsi >= 60
+      ? "text-emerald-300"
+      : tech?.rsi != null && tech.rsi <= 40
+        ? "text-rose-300"
+        : "text-slate-100";
+  const emaTone =
+    tech?.ema_stack === "bullish"
+      ? "text-emerald-300"
+      : tech?.ema_stack === "bearish"
+        ? "text-rose-300"
+        : "text-slate-300";
   return (
-    <div className="rounded-md border border-slate-700/40 bg-black/40 overflow-hidden">
-      <table className="w-full text-[11px]">
-        <tbody>
-          {rows.map(([k, v, cls], i) => (
-            <tr key={k} className={i ? "border-t border-white/5" : ""}>
-              <td className="px-2 py-1 text-slate-500">{k}</td>
-              <td className={`px-2 py-1 text-right font-mono ${cls}`}>{v}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+    <div className="rounded-md border border-slate-700/45 bg-black/42 p-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]">
+      <div className="grid grid-cols-3 gap-1.5">
+        <TechnicalMetric label="RSI 14" value={tech?.rsi != null ? String(Math.round(tech.rsi)) : "—"} tone={rsiTone} />
+        <TechnicalMetric label="MACD" value={tech?.macd != null ? tech.macd.toFixed(2) : "—"} />
+        <TechnicalMetric label="ATR" value={tech?.atr != null ? tech.atr.toFixed(2) : "—"} />
+        <TechnicalMetric label="EMA" value={tech?.ema_stack ?? "—"} tone={emaTone} />
+        <TechnicalMetric label="Skor" value={tech ? `${round(tech.score)}/100` : "—"} tone={tech ? scoreTone(round(tech.score)) : "text-slate-400"} />
+        <TechnicalMetric
+          label="Fib"
+          value={formatFibChip(evidence)}
+          tone="text-cyan-100"
+        />
+        <TechnicalMetric
+          label="Elliott"
+          value={formatElliottChip(evidence)}
+          tone="text-violet-100"
+        />
+        <TechnicalMetric
+          label="Destek"
+          value={evidence?.loading && !evidence.support ? "okunuyor" : zoneRangeLabel(evidence?.support)}
+          tone="text-emerald-100"
+        />
+        <TechnicalMetric
+          label="Direnç"
+          value={evidence?.loading && !evidence.resistance ? "okunuyor" : zoneRangeLabel(evidence?.resistance)}
+          tone="text-amber-100"
+        />
+      </div>
     </div>
   );
 }
@@ -678,6 +839,7 @@ export function HolographicSignalDeck({ brief }: { brief: AgentBrief }) {
   const activeRow = rows[activeIndex];
   const active = activeRow?.best;
   const activeSymbol = activeRow?.symbol ?? "—";
+  const activeSymbolQuery = activeRow?.symbol ?? "";
   const activeDirection = (active?.direction ?? "neutral") as Direction;
   const activeAction = active ? actionBadge(active) : { label: "—", cls: "" };
 
@@ -685,6 +847,13 @@ export function HolographicSignalDeck({ brief }: { brief: AgentBrief }) {
   const effectiveTf: Timeframe | null =
     selectedTf ?? (active?.timeframe as Timeframe | undefined) ?? null;
   const tech = effectiveTf ? techForSymbol?.[effectiveTf] : undefined;
+  const technicalInsight = useTechnicalInsight(activeSymbolQuery);
+  const evidenceByTf = useLayer2TfEvidence(
+    activeSymbolQuery,
+    technicalInsight.data,
+    Boolean(technicalInsight.isLoading || technicalInsight.isFetching),
+  );
+  const effectiveEvidence = effectiveTf ? evidenceByTf[effectiveTf] : undefined;
 
   const activeTicket = useMemo(
     () => ticketList?.tickets.find((t) => t.symbol === activeSymbol && t.status === "active"),
@@ -777,7 +946,7 @@ export function HolographicSignalDeck({ brief }: { brief: AgentBrief }) {
                 </button>
               ))}
             </div>
-            <TechnicalsBlock tech={tech} />
+            <TechnicalsBlock tech={tech} evidence={effectiveEvidence} />
             <TradePlanBlock ticket={activeTicket} symbol={activeSymbol} />
 
             <div className="mobile-metric-grid">
@@ -1060,7 +1229,7 @@ export function HolographicSignalDeck({ brief }: { brief: AgentBrief }) {
                   ))}
                 </div>
               </div>
-              <TechnicalsBlock tech={tech} />
+              <TechnicalsBlock tech={tech} evidence={effectiveEvidence} />
             </div>
 
             {/* Trade plan */}

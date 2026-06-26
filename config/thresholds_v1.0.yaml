@@ -391,11 +391,16 @@ conflict_resolver_activation:
 # süzer (conflict_resolver_activation'dan FARKLI — bkz. packages/decision/conflict_gate.py
 # docstring). enabled=false (varsayılan) → her zaman fail-open, eski sistemin
 # açılış davranışı DEĞİŞMEZ. Owner'ın açık onayı olmadan etkisizdir.
+# 2026-06-26: POSITION pilotu başlatıldı (owner onayı, ARCHITECTURE.md §7.5).
+# HARD_MANUAL hiçbir zaman otomatik açmaz — yalnızca manual_ready'e kuyruklar,
+# owner onaylamadan paper'a hiçbir şey girmez. Diğer profiller veri birikene
+# kadar (Faz 9A raporu) kasıtlı olarak "OFF" — YAML'da quote ZORUNLU, bare
+# OFF/ON YAML 1.1'de boolean'a parse olur (bkz. openapi.yaml'daki aynı hata).
 conflict_gate:
-  enabled: false
+  enabled: true
   profile_modes:
-    SCALP: OFF
-    INTRADAY: SOFT
-    TACTICAL: SOFT_PLUS
-    SWING: HARD
-    POSITION: HARD_MANUAL
+    SCALP: "OFF"
+    INTRADAY: "OFF"
+    TACTICAL: "OFF"
+    SWING: "OFF"
+    POSITION: "HARD_MANUAL"

@@ -8,16 +8,15 @@ import { HoloHeadScene } from "@/components/cockpit/HoloHeadScene";
 import { MobileFlipCard } from "@/components/cockpit/MobileFlipCard";
 import {
   useAgentMatrix,
-  useCalibration,
   useCockpitBrief,
+  useConflictGateStatus,
+  useConflictGateValidation,
   useDashboardState,
   useDataSnapshot,
   useDecisionMatrix,
-  useMistakes,
   usePaperTradingState,
   useRegimeReport,
   useRiskHalts,
-  useShadowComparison,
   useSystemHealth,
   useTradeTickets,
 } from "@/lib/queries/hooks";
@@ -69,9 +68,8 @@ export function ExecutionReadinessPanel() {
   const agentMatrix = useAgentMatrix();
   const regime = useRegimeReport();
   const paper = usePaperTradingState();
-  const calibration = useCalibration();
-  const mistakes = useMistakes();
-  const shadow = useShadowComparison();
+  const conflictGateStatus = useConflictGateStatus();
+  const conflictGateValidation = useConflictGateValidation();
 
   useEffect(() => {
     const interval = window.setInterval(() => setNow(Date.now()), 1_000);
@@ -88,25 +86,24 @@ export function ExecutionReadinessPanel() {
       () => Promise.all([snapshot.refetch(), system.refetch()]),
       () => Promise.all([system.refetch(), halts.refetch()]),
       () => Promise.all([dashboard.refetch(), halts.refetch(), cockpit.refetch()]),
+      () => Promise.all([conflictGateStatus.refetch(), conflictGateValidation.refetch()]),
       () => cockpit.refetch(),
       () => tickets.refetch(),
       () => matrix.refetch(),
       () => Promise.all([dashboard.refetch(), agentMatrix.refetch()]),
       () => Promise.all([regime.refetch(), matrix.refetch()]),
-      () => Promise.all([paper.refetch(), calibration.refetch(), mistakes.refetch(), shadow.refetch()]),
-      () => tickets.refetch(),
+      () => Promise.all([paper.refetch(), tickets.refetch()]),
     ],
     [
       agentMatrix,
-      calibration,
+      conflictGateStatus,
+      conflictGateValidation,
       cockpit,
       dashboard,
       halts,
       matrix,
-      mistakes,
       paper,
       regime,
-      shadow,
       snapshot,
       system,
       tickets,
@@ -160,25 +157,37 @@ export function ExecutionReadinessPanel() {
       (row) => row.verdict === "REDUCE" || row.verdict === "EXIT_RECOMMEND",
     ).length ?? 0;
     const duplicateWarnings = paper.data?.duplicate_warning?.length ?? 0;
-    const calibrationData = calibration.data;
-    const calibrationReady = calibrationData
-      ? calibrationData.params.status === "fitted" ||
-        calibrationData.samples_in_state >= calibrationData.min_required
-      : false;
-    const avoidMistakes = mistakes.data?.verdicts?.filter((verdict) => verdict.action === "AVOID").length ?? 0;
-    const shadowConflicts = shadow.data
-      ? shadow.data.summary.disagree_direction +
-        shadow.data.summary.live_only_entry +
-        shadow.data.summary.shadow_only_entry
-      : 0;
+    const newEntriesDisabled = paper.data?.new_entries_disabled === true;
+    const paperBlocksTicket = newEntriesDisabled || duplicateWarnings > 0 || positionAlerts > 0;
     const agentMatrixBlocks = isHardRiskAction(agentMatrix.data?.risk_action);
     const ticketSummary = activeTicket?.summary;
     const ticketPassed =
       Boolean(activeTicket) &&
+      Boolean(paper.data) &&
       !ticketExpired &&
       ticketSafetyErrors === 0 &&
+      !paperBlocksTicket &&
       (ticketSummary?.rr_ratio ?? 0) >= 1.5 &&
       (ticketSummary?.confidence_calibrated ?? 0) >= 0.5;
+    const gateModes = conflictGateStatus.data?.profile_modes ?? {};
+    const restrictedGateProfiles = Object.entries(gateModes).filter(([, mode]) => mode !== "OFF");
+    const validationReport = conflictGateValidation.data;
+    const validationProfiles = validationReport
+      ? Object.entries(validationReport).filter(
+          ([profile, value]) =>
+            profile !== "_unmatched_no_shadow_data" &&
+            value !== null &&
+            typeof value === "object",
+        )
+      : [];
+    const unmatchedShadowRows =
+      typeof validationReport?._unmatched_no_shadow_data === "number"
+        ? validationReport._unmatched_no_shadow_data
+        : 0;
+    const conflictGateEnabled = Boolean(conflictGateStatus.data?.enabled);
+    const conflictGatePassed =
+      Boolean(conflictGateStatus.data) &&
+      (!conflictGateEnabled || restrictedGateProfiles.length === 0 || validationProfiles.length > 0);
 
     return [
       {
@@ -231,6 +240,24 @@ export function ExecutionReadinessPanel() {
           : brief?.main_blocker?.code !== "NONE"
               ? brief?.main_blocker?.detail ?? brief?.main_blocker?.label ?? "Ana engel temiz değil."
               : "Risk kapısı yeni giriş için açık görünüyor.",
+      },
+      {
+        id: "conflict_gate",
+        title: "Conflict Gate hazır mı?",
+        source: "Conflict Gate / Validation",
+        passed: conflictGatePassed,
+        metric: conflictGateEnabled
+          ? `${restrictedGateProfiles.length} profil · ${validationProfiles.length} rapor`
+          : "kapalı · fail-open",
+        detail: !conflictGateStatus.data
+          ? "Conflict Gate config okunamıyor."
+          : !conflictGateEnabled
+            ? "Conflict Gate kapalı; eski karar yolu davranışı değişmiyor."
+            : restrictedGateProfiles.length === 0
+              ? "Gate aktif ama tüm profiller OFF; eski karar yolu açık."
+              : validationProfiles.length === 0
+                ? `Gate aktif (${restrictedGateProfiles.map(([profile, mode]) => `${profile}:${mode}`).join(", ")}) ama retrospektif doğrulama raporu boş.`
+                : `Gate aktif; ${validationProfiles.length} profil doğrulandı, eşleşmeyen shadow kaydı ${unmatchedShadowRows}.`,
       },
       {
         id: "agent_permission",
@@ -306,30 +333,6 @@ export function ExecutionReadinessPanel() {
             : "Haber, volatilite ve piyasa yapısında sert engel görünmüyor.",
       },
       {
-        id: "position_learning",
-        title: "Pozisyon ve öğrenme tarafı temiz mi?",
-        source: "PositionChecks / Calibration / Mistake / Shadow",
-        passed:
-          Boolean(paper.data && calibration.data && mistakes.data) &&
-          paper.data?.new_entries_disabled !== true &&
-          duplicateWarnings === 0 &&
-          positionAlerts === 0 &&
-          calibrationReady &&
-          avoidMistakes === 0 &&
-          shadowConflicts === 0,
-        metric: `pos alert ${positionAlerts} · avoid ${avoidMistakes} · shadow ${shadowConflicts}`,
-        detail:
-          paper.data?.new_entries_disabled === true
-            ? "Paper state yeni girişleri kapatmış."
-            : !calibrationReady
-              ? "Sistem bu rejimde yeterince öğrenmiş değil."
-              : avoidMistakes > 0
-                ? "Geçmiş hata hafızası bu kurulumu kaçın diyor."
-                : shadowConflicts > 0
-                  ? "Shadow ve canlı karar arasında yön çatışması var."
-                  : "Pozisyon, öğrenme ve shadow kontrolleri temiz.",
-      },
-      {
         id: "ticket_integrity",
         title: "Broker'a girilecek ticket hazır mı?",
         source: "TradeTicket",
@@ -339,28 +342,35 @@ export function ExecutionReadinessPanel() {
           : "ticket yok",
         detail: !activeTicket
           ? "Entry, stop, hedef ve büyüklük içeren aktif ticket yok."
+          : !paper.data
+            ? "Paper state okunmuyor; ticket son kontrolü tamamlanmadı."
           : ticketExpired
             ? "Ticket süresi dolmuş."
           : ticketSafetyErrors > 0
               ? "Ticket güvenlik satırlarında hata var."
-              : ticketPassed
-                ? "Entry, stop, hedef, R:R ve güvenlik kontrolleri hazır."
-                : "Ticket var ama R:R veya güven skoru yetersiz.",
+              : newEntriesDisabled
+                ? "Paper state yeni girişleri kapatmış."
+                : duplicateWarnings > 0
+                  ? "Aynı yönde duplicate uyarısı var."
+                  : positionAlerts > 0
+                    ? "Açık pozisyon kontrolü REDUCE/EXIT uyarısı veriyor."
+                    : ticketPassed
+                      ? "Entry, stop, hedef, R:R ve güvenlik kontrolleri hazır."
+                      : "Ticket var ama R:R veya güven skoru yetersiz.",
       },
     ];
   }, [
     activeTicket,
     agentMatrix.data,
     brief,
-    calibration.data,
+    conflictGateStatus.data,
+    conflictGateValidation.data,
     cockpit.data,
     dashboard.data,
     halts.data,
     matrix.data,
-    mistakes.data,
     paper.data,
     regime.data,
-    shadow.data,
     snapshot.data,
     system.data,
     ticketExpired,
