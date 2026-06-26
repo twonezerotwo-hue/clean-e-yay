@@ -448,6 +448,28 @@ paths:
                 type: object
                 description: similarity_weights + HistoricalEdgeResult (additive) — sample_count, win_rate, avg_pnl, edge_confidence.
 
+  /api/v1/learning/conflict-gate-validation:
+    get:
+      operationId: getConflictGateValidation
+      summary: Faz 9A — Conflict Gate retrospektif doğrulama raporu (read-only)
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ConflictGateValidationReport" }
+
+  /api/v1/learning/conflict-gate-status:
+    get:
+      operationId: getConflictGateStatus
+      summary: Faz 8 — Conflict Gate config durumu (enabled + profil bazlı mod tablosu, read-only)
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ConflictGateStatus" }
+
   /api/v1/learning/rebalance/proposal:
     get:
       operationId: getLearningRebalanceProposal
@@ -3423,6 +3445,37 @@ components:
         rows:
           type: array
           items: { $ref: "#/components/schemas/ShadowRow" }
+
+    ConflictGateRouteStats:
+      type: object
+      description: Faz 9A — bir (trade_profile, route) hücresinin gerçekleşmiş trade istatistiği.
+      required: [n, win_rate, avg_pnl]
+      properties:
+        n: { type: integer }
+        win_rate: { type: number }
+        avg_pnl: { type: number }
+
+    ConflictGateStatus:
+      type: object
+      description: Faz 8 — Conflict Gate config durumu (read-only; karar zincirine etkisi enabled flag'iyle koşullu).
+      required: [enabled, profile_modes]
+      properties:
+        enabled: { type: boolean }
+        profile_modes:
+          type: object
+          additionalProperties: { type: string, enum: ["OFF", "SOFT", "SOFT_PLUS", "HARD", "HARD_MANUAL"] }
+
+    ConflictGateValidationReport:
+      type: object
+      description: >
+        trade_profile (SCALP/INTRADAY/TACTICAL/SWING/POSITION) → route
+        (open/open_reduced/manual_ready/block) → ConflictGateRouteStats.
+        `_unmatched_no_shadow_data` ayrı bir tamsayı sayaçtır.
+      properties:
+        _unmatched_no_shadow_data: { type: integer }
+      additionalProperties:
+        type: object
+        additionalProperties: { $ref: "#/components/schemas/ConflictGateRouteStats" }
 
     AgentBriefingHeadline:
       type: object

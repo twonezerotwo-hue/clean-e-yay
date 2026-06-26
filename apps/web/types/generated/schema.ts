@@ -514,6 +514,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/learning/conflict-gate-validation": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Faz 9A — Conflict Gate retrospektif doğrulama raporu (read-only) */
+        get: operations["getConflictGateValidation"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/learning/conflict-gate-status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Faz 8 — Conflict Gate config durumu (enabled + profil bazlı mod tablosu, read-only) */
+        get: operations["getConflictGateStatus"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/learning/rebalance/proposal": {
         parameters: {
             query?: never;
@@ -2645,6 +2679,27 @@ export interface components {
             calibration: components["schemas"]["ShadowCalibration"];
             rows: components["schemas"]["ShadowRow"][];
         };
+        /** @description Faz 9A — bir (trade_profile, route) hücresinin gerçekleşmiş trade istatistiği. */
+        ConflictGateRouteStats: {
+            n: number;
+            win_rate: number;
+            avg_pnl: number;
+        };
+        /** @description Faz 8 — Conflict Gate config durumu (read-only; karar zincirine etkisi enabled flag'iyle koşullu). */
+        ConflictGateStatus: {
+            enabled: boolean;
+            profile_modes: {
+                [key: string]: "OFF" | "SOFT" | "SOFT_PLUS" | "HARD" | "HARD_MANUAL";
+            };
+        };
+        /** @description trade_profile (SCALP/INTRADAY/TACTICAL/SWING/POSITION) → route (open/open_reduced/manual_ready/block) → ConflictGateRouteStats. `_unmatched_no_shadow_data` ayrı bir tamsayı sayaçtır. */
+        ConflictGateValidationReport: {
+            _unmatched_no_shadow_data?: number;
+        } & {
+            [key: string]: {
+                [key: string]: components["schemas"]["ConflictGateRouteStats"];
+            };
+        };
         /** @description Raporcu agent tek başlığı (deterministik; karar vermez). */
         AgentBriefingHeadline: {
             /** @enum {string} */
@@ -3377,6 +3432,46 @@ export interface operations {
                 };
                 content: {
                     "application/json": Record<string, never>;
+                };
+            };
+        };
+    };
+    getConflictGateValidation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConflictGateValidationReport"];
+                };
+            };
+        };
+    };
+    getConflictGateStatus: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConflictGateStatus"];
                 };
             };
         };

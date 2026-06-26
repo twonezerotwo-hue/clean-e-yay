@@ -1752,6 +1752,24 @@ export type ShadowComparison = {
   rows: ShadowRow[];
 };
 
+// Faz 8/9A — Conflict Gate (packages/decision/conflict_gate.py + conflict_gate_backtest.py)
+export type ConflictGateMode = "OFF" | "SOFT" | "SOFT_PLUS" | "HARD" | "HARD_MANUAL";
+
+export type ConflictGateStatus = {
+  enabled: boolean;
+  profile_modes: Record<string, ConflictGateMode>;
+};
+
+export type ConflictGateRouteStats = {
+  n: number;
+  win_rate: number;
+  avg_pnl: number;
+};
+
+export type ConflictGateValidationReport = {
+  [profile: string]: Record<string, ConflictGateRouteStats> | number;
+};
+
 export type AgentBriefingTone = "ok" | "info" | "warn" | "alert";
 
 export type AgentBriefingHeadline = {

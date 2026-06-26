@@ -25,11 +25,11 @@ from pathlib import Path
 from packages.data import snapshot_store
 from packages.data.ingestion.pipeline import DEFAULT_SYMBOLS, build_snapshot
 from packages.data.provenance import data_provenance
-from packages.decision import conflict_resolver_activation, shadow, shadow_activation
+from packages.decision import agent_pipeline, conflict_gate, conflict_resolver_activation, gates, shadow, shadow_activation
 from packages.decision.engine import decide_matrix, matrix_view
 from packages.learning import tf_calibration, tf_weight_trainer
 from packages.ops import heartbeat
-from packages.paper import manual_queue, session_gate
+from packages.paper import manual_queue
 from packages.paper import state as paper_state
 from packages.paper.lifecycle import attempt_open, flatten_all
 from packages.paper.lifecycle import tick as price_tick
@@ -229,25 +229,44 @@ async def run_once() -> None:
         )
         decisions_generated = len(decisions)
         now = datetime.now(UTC)
+
+        # Faz 8 — Conflict Gate: eski sistemin önerisini yeni Conflict Resolver'ın
+        # verdict'iyle, trade_profile bazlı kademeli sıkılıkla süzer. enabled=false
+        # (varsayılan) ise hiçbir şey hesaplanmaz, davranış değişmez (fail-open).
+        gate_cfg = conflict_gate.load_config()
+        conflict_by_symbol: dict[str, dict] = {}
+        if gate_cfg.enabled:
+            try:
+                gate_views = agent_pipeline.build_agent_matrix(MATRIX_SYMBOLS, risk_action=_risk.action)
+                for gv in gate_views:
+                    gv_symbol = getattr(gv, "symbol", None)
+                    if gv_symbol:
+                        conflict_by_symbol[gv_symbol] = shadow.evaluate_symbol(
+                            gv, fingerprint=None, risk_action=_risk.action, dqs_status=snap.quality.status
+                        )
+            except Exception:
+                log.exception("conflict gate precompute failed (tick devam ediyor, fail-open)")
+                conflict_by_symbol = {}
+
         for d in decisions:
             if d.action in {"blocked", "hold"}:
                 continue
             side = "long" if d.action == "open_long" else "short"
-            # Market-session gate (restrictive: block / manual_ready / size clamp ≤ 1.0).
-            # RiskGate already applied in decide_matrix; sessions only restrict further.
-            gate = session_gate.evaluate_open(
-                d.symbol, side, d.timeframe, now_utc=now,
-                regime=_regime, risk_action=d.risk.action,
+            # Tek rotalama noktası: session_gate (RiskGate sonrası seans kısıtı) +
+            # Faz 8 Conflict Gate — sıralama/öncelik bkz. packages/decision/gates.py.
+            routed = gates.apply_gates(
+                d, side=side, now=now, regime=_regime,
+                gate_cfg=gate_cfg, conflict_by_symbol=conflict_by_symbol,
             )
-            if gate.route == "block":
+            if routed.route == "block":
                 continue
-            session_mult = gate.effective_multiplier
-            if gate.route == "manual_ready":
+            if routed.route == "manual_ready":
                 manual_queue.route_to_manual_ready(
                     ps, symbol=d.symbol, timeframe=d.timeframe, side=side,
-                    size_multiplier=d.size_multiplier * session_mult,
+                    size_multiplier=d.size_multiplier * routed.effective_multiplier,
                     requested_price=prices.get(d.symbol),
-                    reason=gate.reason_code, fingerprint=d.fingerprint,
+                    reason=routed.reason,
+                    fingerprint=d.fingerprint,
                     snapshot_id=snap.snapshot_id,
                 )
                 continue
@@ -258,7 +277,7 @@ async def run_once() -> None:
                 symbol=d.symbol,
                 side=side,
                 entry_price=prices.get(d.symbol),
-                size_multiplier=d.size_multiplier * session_mult,
+                size_multiplier=d.size_multiplier * routed.effective_multiplier,
                 timeframe=d.timeframe,
                 open_reason=d.reason,
                 snapshot_id=snap.snapshot_id,
@@ -267,7 +286,7 @@ async def run_once() -> None:
                 predicted_confidence=d.confidence,
                 raw_confidence=d.raw_confidence,
                 confidence_source=d.confidence_source,
-                **gate.attribution(),
+                **routed.session_attribution,
             )
             if pos is not None:
                 paper_actions += 1

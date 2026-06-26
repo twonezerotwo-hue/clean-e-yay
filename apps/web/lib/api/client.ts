@@ -9,6 +9,8 @@ import type {
   CockpitBrief,
   DecisionMatrix,
   CalibrationState,
+  ConflictGateStatus,
+  ConflictGateValidationReport,
   CorrelationState,
   DashboardState,
   HaltResetResult,
@@ -493,6 +495,10 @@ export const api = {
     fetchJSON<AgentMatrix>("/api/v1/technical/agent-matrix"),
   shadowComparison: () =>
     fetchJSON<ShadowComparison>("/api/v1/decision/shadow"),
+  conflictGateStatus: () =>
+    fetchJSON<ConflictGateStatus>("/api/v1/learning/conflict-gate-status"),
+  conflictGateValidation: () =>
+    fetchJSON<ConflictGateValidationReport>("/api/v1/learning/conflict-gate-validation"),
   cockpitBrief: () => fetchJSON<CockpitBrief>("/api/v1/cockpit/brief"),
   replayStatus: () => fetchJSON<ReplayStatus>("/api/v1/replay/status"),
   replayBacktest: () => fetchJSON<ReplayBacktest>("/api/v1/replay/backtest"),

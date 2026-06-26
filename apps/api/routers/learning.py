@@ -7,6 +7,7 @@ from dataclasses import asdict
 
 from fastapi import APIRouter
 
+from packages.decision import conflict_gate, conflict_gate_backtest
 from packages.learning import (
     calibration_store,
     calibration_trainer,
@@ -99,3 +100,22 @@ def get_historical_edge(fingerprint: str) -> dict:
         "similarity_weights": historical_edge.active_similarity_weights(),
         "result": historical_edge.edge_to_dict(result),
     }
+
+
+@router.get("/learning/conflict-gate-validation")
+def get_conflict_gate_validation() -> dict:
+    """Faz 9A — retrospektif rapor: gerçekleşmiş trade'ler, açıldıkları anda
+    kaydedilmiş shadow gözlemindeki Conflict Resolver verdict'iyle eşleştirilip
+    trade_profile bazında route (open/open_reduced/manual_ready/block) başına
+    gerçek win-rate/avg_pnl gösterir. Read-only; karar zincirini etkilemez —
+    profil aktivasyon kararına (conflict_gate.enabled) veri sağlar."""
+    return conflict_gate_backtest.validation_report()
+
+
+@router.get("/learning/conflict-gate-status")
+def get_conflict_gate_status() -> dict:
+    """Faz 8 — Conflict Gate'in şu anki config durumu (enabled + profil bazlı
+    mod tablosu). Read-only; sadece config'i yansıtır, karar zincirine etkisi
+    yoktur (etki zaten enabled flag'i ile koşullu — bkz. packages/decision/gates.py)."""
+    cfg = conflict_gate.load_config()
+    return {"enabled": cfg.enabled, "profile_modes": cfg.profile_modes}

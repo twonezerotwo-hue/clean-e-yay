@@ -22,6 +22,8 @@ import {
   useAgentBriefing,
   useAssetAnalysis,
   useAssetRegistry,
+  useConflictGateStatus,
+  useConflictGateValidation,
   useDataSnapshot,
   useElliottScenario,
   useExhaustionScore,
@@ -40,6 +42,11 @@ import {
   useVwapAnalysis,
   useZoneAnalysis,
 } from "@/lib/queries/hooks";
+import type {
+  ConflictGateRouteStats,
+  ConflictGateStatus,
+  ConflictGateValidationReport,
+} from "@/types/generated/api";
 
 const DEFAULT_SYMBOLS = ["BTCUSD", "ETHUSD", "XAUUSD", "XAGUSD"];
 
@@ -889,6 +896,116 @@ export function Layer2SetupConflictLabPanel() {
         Bu altı motor (Volume/VWAP/Liquidity Sweep/Exhaustion/Location/Trigger) EVIDENCE
         only'dir; hiçbir karar zincirine bağlı değildir. Setup Classifier + Conflict
         Resolver çıktısı için "Elliott / Zone Lab" panelindeki Shadow kanıt tablosuna bakın.
+      </div>
+    </div>
+  );
+}
+
+function modeTone(mode: string) {
+  switch (mode) {
+    case "OFF":
+      return "text-white/45";
+    case "SOFT":
+      return "text-cyan-100";
+    case "SOFT_PLUS":
+      return "text-amber-100";
+    case "HARD":
+      return "text-orange-100";
+    case "HARD_MANUAL":
+      return "text-rose-100";
+    default:
+      return "text-white/72";
+  }
+}
+
+const PROFILE_ORDER = ["SCALP", "INTRADAY", "TACTICAL", "SWING", "POSITION"];
+
+function ConflictGateStatusPanel({ status }: { status?: ConflictGateStatus | null }) {
+  const modes = status?.profile_modes ?? {};
+  return (
+    <div className="rounded-2xl border border-white/10 bg-black/22 p-4">
+      <div className="flex items-start justify-between gap-3">
+        <div className="text-[10px] uppercase tracking-[0.24em] text-white/42">Conflict Gate durumu</div>
+        <StatusPill value={status?.enabled ? "ENABLED" : "DISABLED"} />
+      </div>
+      <div className="mt-2 font-display text-lg text-white">
+        {status?.enabled ? "Aktif — eski sistemi süzüyor" : "Kapalı — eski sistem tek başına karar veriyor"}
+      </div>
+      <div className="mt-3 space-y-1.5">
+        {PROFILE_ORDER.filter((p) => modes[p]).map((profile) => (
+          <div key={profile} className="flex items-center justify-between text-xs">
+            <span className="text-white/55">{profile}</span>
+            <span className={`font-mono ${modeTone(modes[profile])}`}>{modes[profile]}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function ConflictGateValidationPanel({ report }: { report?: ConflictGateValidationReport | null }) {
+  const unmatched = typeof report?._unmatched_no_shadow_data === "number" ? report._unmatched_no_shadow_data : 0;
+  const profiles = PROFILE_ORDER.filter(
+    (p) => report && typeof report[p] === "object" && report[p] !== null,
+  );
+
+  return (
+    <div className="rounded-2xl border border-white/10 bg-black/22 p-4">
+      <div className="text-[10px] uppercase tracking-[0.24em] text-white/42">
+        Faz 9A — retrospektif doğrulama
+      </div>
+      <div className="mt-1 text-xs text-white/45">
+        Gate açık olsaydı bloklanan/küçültülen işlemlerin gerçek win-rate'i ne çıkardı.
+      </div>
+      <div className="mt-3 space-y-3">
+        {profiles.length === 0 ? (
+          <div className="rounded-lg border border-white/10 bg-white/[0.035] p-3 text-sm text-white/45">
+            Henüz eşleşen veri yok (shadow gözlem kaydı yetersiz).
+          </div>
+        ) : (
+          profiles.map((profile) => {
+            const routes = report?.[profile] as Record<string, ConflictGateRouteStats>;
+            return (
+              <div key={profile}>
+                <div className="text-[11px] uppercase tracking-widest text-white/55">{profile}</div>
+                <div className="mt-1 grid gap-1.5">
+                  {Object.entries(routes).map(([route, stats]) => (
+                    <div
+                      key={route}
+                      className="flex items-center justify-between rounded-lg border border-white/10 bg-white/[0.035] px-3 py-1.5 text-xs"
+                    >
+                      <span className="font-mono text-white/72">{route}</span>
+                      <span className="text-white/45">
+                        n={stats.n} · winrate={formatPct(stats.win_rate * 100)} · avgPnL=
+                        {formatNumber(stats.avg_pnl, 2)}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            );
+          })
+        )}
+        <div className="text-[11px] text-white/35">_unmatched_no_shadow_data = {unmatched}</div>
+      </div>
+    </div>
+  );
+}
+
+export function Layer2ConflictGateLabPanel() {
+  const status = useConflictGateStatus();
+  const validation = useConflictGateValidation();
+
+  return (
+    <div className="space-y-4">
+      <div className="grid gap-4 xl:grid-cols-2">
+        <ConflictGateStatusPanel status={status.data} />
+        <ConflictGateValidationPanel report={validation.data} />
+      </div>
+      <div className="rounded-xl border border-white/10 bg-white/[0.035] p-3 text-xs leading-5 text-white/45">
+        Conflict Gate (Faz 8), eski sistemin (decide_matrix) önerisini Conflict Resolver'ın
+        verdict'iyle trade_profile bazlı kademeli sıkılıkla birleştirir — packages/decision/gates.py
+        TEK rotalama noktasıdır. enabled=false olduğu sürece davranış değişmez (fail-open).
       </div>
     </div>
   );

@@ -39,6 +39,8 @@ export const qk = {
   decisionMatrix: ["decision", "matrix"] as const,
   agentMatrix: ["technical", "agent-matrix"] as const,
   shadowComparison: ["decision", "shadow"] as const,
+  conflictGateStatus: ["learning", "conflict-gate-status"] as const,
+  conflictGateValidation: ["learning", "conflict-gate-validation"] as const,
   cockpitBrief: ["cockpit", "brief"] as const,
   replayStatus: ["replay", "status"] as const,
   replayBacktest: ["replay", "backtest"] as const,

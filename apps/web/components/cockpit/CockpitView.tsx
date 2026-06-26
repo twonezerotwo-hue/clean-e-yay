@@ -40,6 +40,7 @@ import {
   Layer2AssetDrilldownPanel,
   Layer2AssetUniversePanel,
   Layer2BacktestOutcomePanel,
+  Layer2ConflictGateLabPanel,
   Layer2ElliottZoneLabPanel,
   Layer2FibonacciLabPanel,
   Layer2SetupConflictLabPanel,
@@ -1266,6 +1267,14 @@ export function CockpitView() {
               detail="Trade, snapshot, liquidity ve macro evreni backend asset registry uzerinden rol ve turlerine gore ayrilir."
             >
               <Layer2AssetUniversePanel />
+            </Layer2DetailGroup>
+
+            <Layer2DetailGroup
+              index="08"
+              title="Conflict Gate Lab"
+              detail="Faz 8 birlestirme katmaninin guncel config durumu (enabled + profil bazli mod) ve Faz 9A retrospektif dogrulama raporu."
+            >
+              <Layer2ConflictGateLabPanel />
             </Layer2DetailGroup>
           </div>
         </div>

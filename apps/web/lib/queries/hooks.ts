@@ -340,6 +340,26 @@ export const useShadowComparison = () => {
   });
 };
 
+export const useConflictGateStatus = () => {
+  const policy = usePanelQueryPolicy(60_000);
+  return useQuery({
+    queryKey: qk.conflictGateStatus,
+    queryFn: api.conflictGateStatus,
+    staleTime: 30_000,
+    ...policy,
+  });
+};
+
+export const useConflictGateValidation = () => {
+  const policy = usePanelQueryPolicy(60_000);
+  return useQuery({
+    queryKey: qk.conflictGateValidation,
+    queryFn: api.conflictGateValidation,
+    staleTime: 30_000,
+    ...policy,
+  });
+};
+
 export const useCockpitBrief = () => {
   const policy = usePanelQueryPolicy(30_000);
   return useQuery({

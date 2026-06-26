@@ -385,3 +385,17 @@ shadow:
 # açık onayı (bu config'i elle true yapması) olmadan davranış DEĞİŞMEZ.
 conflict_resolver_activation:
   enabled: false
+
+# Faz 8 — Conflict Gate (spec v2.3 §28 devamı): eski decide_matrix önerisini
+# yeni Conflict Resolver'ın verdict'iyle, trade_profile bazlı KADEMELİ sıkılıkla
+# süzer (conflict_resolver_activation'dan FARKLI — bkz. packages/decision/conflict_gate.py
+# docstring). enabled=false (varsayılan) → her zaman fail-open, eski sistemin
+# açılış davranışı DEĞİŞMEZ. Owner'ın açık onayı olmadan etkisizdir.
+conflict_gate:
+  enabled: false
+  profile_modes:
+    SCALP: OFF
+    INTRADAY: SOFT
+    TACTICAL: SOFT_PLUS
+    SWING: HARD
+    POSITION: HARD_MANUAL

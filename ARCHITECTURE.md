@@ -449,6 +449,106 @@ Technical ALLOW ama macro CAUTION ise sadece SCOUT.
 
 ---
 
+## 7.5. Decision Merge Layer — GERÇEK mevcut durum (Faz 1-9)
+
+> Yukarıdaki §7 vizyondu; bu bölüm **şu an kodda çalışan gerçek** birleşme
+> katmanını anlatır. Kod değiştikçe bu bölüm güncellenmeli.
+
+İki paralel zincir var, **tek birleşme noktasında** buluşuyor:
+
+```text
+Veri Snapshot (build_snapshot)
+        │
+        ├──────────────────────┐
+        ▼                      ▼
+  decide_matrix          Conflict Resolver
+  (ESKİ — canlı)          (YENİ — shadow)
+  action + size öner      Setup Classifier + 12 adım authority order
+        │                      │
+        ▼                      ▼
+  RiskGate + Session      Verdict: CANDIDATE_OPEN / WATCH /
+  Gate (block/manual/     NO_TRADE / BLOCKED
+  size kısıtla)                 │
+        └──────────┬───────────┘
+                    ▼
+            Conflict Gate (Faz 8)
+      packages/decision/gates.py::apply_gates
+      profil bazlı kademeli birleştirme
+      şu an: conflict_gate.enabled = false (KAPALI)
+                    │
+        ┌───────────┴───────────┐
+        ▼                       ▼
+   Paper Trading            manual_ready
+   attempt_open()           owner onayı bekler
+   (TEK gerçek açılış)      (approve() RiskGate'i yeniden çalıştırır)
+```
+
+**Değişmez kural:** `attempt_open()` (packages/paper/lifecycle.py) kod
+tabanında sadece `apps/tick_worker/main.py::run_once()` içinde bir kez
+çağrılır. Conflict Resolver, Conflict Gate, session_gate,
+conflict_resolver_activation — hepsi bu tek kapıdan önce sıraya girer veya
+`manual_ready`'e yönlendirir; hiçbiri paralel bir ikinci açılış yolu açmaz.
+
+### Config anahtarları (hepsi varsayılan KAPALI, `config/thresholds_v1.0.yaml`)
+
+| Flag | Açıksa ne olur |
+|---|---|
+| `shadow.affect_decision` | Shadow karar zincirini etkiler (Faz B köprüsü) |
+| `conflict_resolver_activation.enabled` | Conflict Resolver'ın CANDIDATE_OPEN dediği **yeni** girişler (eski sistem hiç önermemiş olsa bile) manual_ready'e eklenir |
+| `conflict_gate.enabled` | Eski sistemin önerisi, trade_profile bazlı kademeli sıkılıkla süzülür (aşağıdaki tablo) |
+
+Üçü de kapalıyken davranış, bu modüller hiç yazılmamış gibi **birebir
+aynıdır** (fail-open tasarım, testlerle doğrulanmıştır).
+
+### Conflict Gate — profil bazlı kademeli sıkılık (`conflict_gate.enabled=true` olduğunda)
+
+| Trade Profile | TF | Mod | Davranış |
+|---|---|---|---|
+| SCALP | SCALP_* setup, TF bağımsız | OFF | Conflict Resolver'a bakılmaz |
+| INTRADAY | 15m, 1h | SOFT | NO_TRADE/BLOCKED → size %50; WATCH/CANDIDATE_OPEN → normal |
+| TACTICAL | 4h | SOFT_PLUS | BLOCKED → açılmaz; NO_TRADE → size %50; WATCH/CANDIDATE_OPEN → normal |
+| SWING | 1d | HARD | Sadece CANDIDATE_OPEN → açılır |
+| POSITION | 1w | HARD_MANUAL | CANDIDATE_OPEN bile olsa otomatik açılmaz, manual_ready'e gider |
+
+Kod: `packages/decision/conflict_gate.py::evaluate()`. Retrospektif doğrulama
+(gate açık olsaydı bloklananların gerçek win-rate'i ne çıkardı):
+`packages/decision/conflict_gate_backtest.py`,
+`GET /api/v1/learning/conflict-gate-validation`.
+
+### `manual_ready` kuyruğuna giren 3 farklı yol
+
+Hepsi `packages/paper/manual_queue.py::route_to_manual_ready()`'i çağırır;
+`approve()` anında RiskGate **yeniden** çalışır — hiçbiri otomatik açılışı
+bypass etmez. `reason` alanı kaynağı ayırt eder:
+
+| Kaynak | `reason` öneki | Tetikleyici |
+|---|---|---|
+| `session_gate` | `gate.reason_code` (örn. `market_session_closing_window`) | Piyasa seansı kısıtlaması (en eski mekanizma) |
+| `conflict_gate` (Faz 8) | `conflict_gate:{trade_profile}` | POSITION profili CANDIDATE_OPEN derse (HARD_MANUAL) |
+| `conflict_resolver_activation` (Faz 7) | `conflict_resolver_activation:{setup_type}` | Conflict Resolver, eski sistemin **önermediği** yeni bir CANDIDATE_OPEN bulursa |
+
+### Faz 1-9 kod haritası
+
+| Modül | Sorumluluk |
+|---|---|
+| `packages/decision/shadow.py` | Shadow gözlem: evidence + Setup Classifier + Conflict Resolver sonucunu kayda yazar |
+| `packages/setup/classifier.py` | 15 tipli setup taksonomisi (TREND_*, REVERSAL_*, SCALP_*, ...) |
+| `packages/decision/conflict_resolver.py` | 12 adım authority order, DQS_DEGRADED profil-bazlı matris |
+| `packages/mode/profile_selector.py` | setup_type + entry_timeframe → trade_profile |
+| `packages/decision/conflict_gate.py` | Faz 8 — profil bazlı kademeli birleştirme (saf fonksiyon) |
+| `packages/decision/gates.py` | **TEK rotalama noktası** — session_gate + conflict_gate sırasını uygular |
+| `packages/decision/conflict_resolver_activation.py` | Faz 7 — CANDIDATE_OPEN'ı yeni girişler için manual_ready'e köprüler |
+| `packages/decision/conflict_gate_backtest.py` | Faz 9A — retrospektif doğrulama raporu |
+| `packages/learning/historical_edge.py` | Fuzzy-similarity geçmiş setup win-rate'i (sinyal bazlı güven) |
+
+### Kademeli aktivasyon yol haritası
+
+Faz 9 (retrospektif + canlı doğrulama) → Faz 10 (telemetri paneli) → Faz 11
+(kademeli aç: POSITION → SWING → TACTICAL → INTRADAY) → Faz 12 (otomatik
+güvenlik switch'i). Hiçbiri owner'ın açık config onayı olmadan devreye girmez.
+
+---
+
 ## 8. `packages/risk`
 
 ```text
