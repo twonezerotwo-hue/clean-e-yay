@@ -430,6 +430,24 @@ paths:
               schema:
                 $ref: "#/components/schemas/MistakesState"
 
+  /api/v1/learning/historical-edge:
+    get:
+      operationId: getHistoricalEdge
+      summary: Fuzzy-similarity historical edge — read-only; mistake_memory exact-match gate'inin tamamlayıcısı
+      parameters:
+        - name: fingerprint
+          in: query
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                description: similarity_weights + HistoricalEdgeResult (additive) — sample_count, win_rate, avg_pnl, edge_confidence.
+
   /api/v1/learning/rebalance/proposal:
     get:
       operationId: getLearningRebalanceProposal
@@ -651,6 +669,182 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/AgentMatrix"
+
+  /api/v1/technical/elliott/{asset_code}:
+    get:
+      operationId: getElliottScenario
+      summary: Elliott Wave senaryosu (EVIDENCE only) — read-only; hiçbir karar zincirine bağlı değil
+      parameters:
+        - name: asset_code
+          in: path
+          required: true
+          schema: { type: string }
+        - name: timeframe
+          in: query
+          required: false
+          schema: { type: string, default: "1d" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                description: ElliottAnalysis (additive) — primary_scenario, confidence, wave_points, invalidation_price, target_zone, bias, rules_passed/failed, diagnostics.
+
+  /api/v1/technical/zones/{asset_code}:
+    get:
+      operationId: getZoneAnalysis
+      summary: Support/resistance zone analizi (EVIDENCE only) — read-only; hiçbir karar zincirine bağlı değil
+      parameters:
+        - name: asset_code
+          in: path
+          required: true
+          schema: { type: string }
+        - name: timeframe
+          in: query
+          required: false
+          schema: { type: string, default: "1d" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                description: ZoneAnalysis (additive) — zones, nearest_zone, location, range_high/low, validity, diagnostics.
+
+  /api/v1/technical/volume/{asset_code}:
+    get:
+      operationId: getVolumeAnalysis
+      summary: Hacim doğrulama analizi (EVIDENCE only) — read-only; hiçbir karar zincirine bağlı değil
+      parameters:
+        - name: asset_code
+          in: path
+          required: true
+          schema: { type: string }
+        - name: timeframe
+          in: query
+          required: false
+          schema: { type: string, default: "1d" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                description: VolumeAnalysis (additive) — state, volume_ratio, price_direction, trend_direction, validity, diagnostics.
+
+  /api/v1/technical/vwap/{asset_code}:
+    get:
+      operationId: getVwapAnalysis
+      summary: VWAP / Anchored VWAP analizi (EVIDENCE only) — read-only; hiçbir karar zincirine bağlı değil
+      parameters:
+        - name: asset_code
+          in: path
+          required: true
+          schema: { type: string }
+        - name: timeframe
+          in: query
+          required: false
+          schema: { type: string, default: "1d" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                description: VWAPAnalysis (additive) — session_vwap, location, deviation_pct, reclaim, rejection, anchored, validity, diagnostics.
+
+  /api/v1/technical/liquidity-sweep/{asset_code}:
+    get:
+      operationId: getLiquiditySweepAnalysis
+      summary: Liquidity sweep / stop-hunt tespiti (EVIDENCE only) — read-only; hiçbir karar zincirine bağlı değil
+      parameters:
+        - name: asset_code
+          in: path
+          required: true
+          schema: { type: string }
+        - name: timeframe
+          in: query
+          required: false
+          schema: { type: string, default: "1d" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                description: LiquiditySweepAnalysis (additive) — state, swing_high/low, sweep_price, reclaim_price, bias, validity, diagnostics.
+
+  /api/v1/technical/exhaustion/{asset_code}:
+    get:
+      operationId: getExhaustionScore
+      summary: Exhaustion Score (EVIDENCE only, yön skoru değil) — read-only; hiçbir karar zincirine bağlı değil
+      parameters:
+        - name: asset_code
+          in: path
+          required: true
+          schema: { type: string }
+        - name: timeframe
+          in: query
+          required: false
+          schema: { type: string, default: "1d" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                description: ExhaustionAnalysis (additive) — score (0-100, 50=nötr), rsi, recent_return_pct, contributions, validity, diagnostics.
+
+  /api/v1/technical/location-score/{asset_code}:
+    get:
+      operationId: getLocationScore
+      summary: Location Score (EVIDENCE only) — read-only; hiçbir karar zincirine bağlı değil
+      parameters:
+        - name: asset_code
+          in: path
+          required: true
+          schema: { type: string }
+        - name: timeframe
+          in: query
+          required: false
+          schema: { type: string, default: "1d" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                description: LocationScoreAnalysis (additive) — score (0-100), location_class, contributions, validity, diagnostics.
+
+  /api/v1/technical/trigger/{asset_code}:
+    get:
+      operationId: getTriggerAnalysis
+      summary: Trigger Engine (EVIDENCE only) — read-only; hiçbir karar zincirine bağlı değil
+      parameters:
+        - name: asset_code
+          in: path
+          required: true
+          schema: { type: string }
+        - name: timeframe
+          in: query
+          required: false
+          schema: { type: string, default: "1d" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                description: TriggerAnalysis (additive) — state, trigger_score, matched_triggers, validity, diagnostics.
 
   /api/v1/decision/shadow:
     get:
@@ -995,7 +1189,7 @@ components:
       type: object
       description: v2.6 — LLM çağrı meta'sı; source=fallback → deterministik narrative.
       properties:
-        mode: { type: string, enum: ["off", mock, groq] }
+        mode: { type: string, enum: ["off", mock, groq, openrouter] }
         model: { type: string, nullable: true }
         source: { type: string, enum: [llm, fallback, guard] }
         fallback_reason: { type: string, nullable: true }
@@ -3201,6 +3395,14 @@ components:
         shadow_direction: { type: string, nullable: true }
         shadow_entry_timeframe: { type: string, nullable: true }
         shadow_stance: { type: string, nullable: true }
+        # Additive — bkz. packages/decision/shadow.py::_evidence_for_symbol.
+        # Karar zincirini etkilemez; yalnızca gözlem amaçlı ek kanıt.
+        elliott_scenario: { type: string, nullable: true }
+        elliott_confidence: { type: number, nullable: true }
+        elliott_bias: { type: string, nullable: true }
+        historical_edge_sample_count: { type: integer, nullable: true }
+        historical_edge_win_rate: { type: number, nullable: true }
+        historical_edge_confidence: { type: string, nullable: true }
 
     ShadowComparison:
       type: object

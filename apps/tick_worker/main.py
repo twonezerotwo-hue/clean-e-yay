@@ -25,7 +25,7 @@ from pathlib import Path
 from packages.data import snapshot_store
 from packages.data.ingestion.pipeline import DEFAULT_SYMBOLS, build_snapshot
 from packages.data.provenance import data_provenance
-from packages.decision import shadow, shadow_activation
+from packages.decision import conflict_resolver_activation, shadow, shadow_activation
 from packages.decision.engine import decide_matrix, matrix_view
 from packages.learning import tf_calibration, tf_weight_trainer
 from packages.ops import heartbeat
@@ -308,6 +308,7 @@ async def run_once() -> None:
                         cfg=shadow_cfg,
                         calibration=cal_summary,
                         tf_weights=live_tf_weights,
+                        dqs_status=snap.quality.status,
                     )
                 )
                 if shadow.affects_paper(shadow_cfg):
@@ -330,6 +331,30 @@ async def run_once() -> None:
                         )
         except Exception:
             log.exception("shadow observe failed (tick devam ediyor)")
+
+        # Faz 7 — Conflict Resolver'ın kontrollü aktivasyonu. `shadow.affect_decision`'dan
+        # TAMAMEN BAĞIMSIZ ayrı bir kapı (conflict_resolver_activation.enabled).
+        # Varsayılan kapalı: cfg.enabled=false olduğu sürece activate() her zaman
+        # boş liste döner — manual_ready'e hiçbir şey eklenmez, davranış değişmez.
+        try:
+            cr_cfg = conflict_resolver_activation.load_config()
+            if cr_cfg.enabled:
+                cr_queued = conflict_resolver_activation.activate(
+                    ps,
+                    MATRIX_SYMBOLS,
+                    risk_action=_risk.action,
+                    dqs_status=snap.quality.status,
+                    prices=prices,
+                    snapshot_id=snap.snapshot_id,
+                    cfg=cr_cfg,
+                )
+                if cr_queued:
+                    paper_state.save(ps)
+                    log.info(
+                        "conflict resolver activation: %d entry → manual_ready", len(cr_queued)
+                    )
+        except Exception:
+            log.exception("conflict resolver activation failed (tick devam ediyor)")
 
         # R1 — kararı disk snapshot store'a kaydet (replay temeli). Store yazımı
         # ASLA tick'i patlatmaz; başarısızsa loglanır ve döngü devam eder.

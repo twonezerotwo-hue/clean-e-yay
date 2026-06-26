@@ -12,6 +12,22 @@ export const qk = {
   assetAnalysis: (symbol: string) => ["analysis", "asset", symbol] as const,
   technicalInsight: (symbol: string) =>
     ["technical", "insight", symbol] as const,
+  elliottScenario: (symbol: string, timeframe: string) =>
+    ["technical", "elliott", symbol, timeframe] as const,
+  zoneAnalysis: (symbol: string, timeframe: string) =>
+    ["technical", "zones", symbol, timeframe] as const,
+  volumeAnalysis: (symbol: string, timeframe: string) =>
+    ["technical", "volume", symbol, timeframe] as const,
+  vwapAnalysis: (symbol: string, timeframe: string) =>
+    ["technical", "vwap", symbol, timeframe] as const,
+  liquiditySweepAnalysis: (symbol: string, timeframe: string) =>
+    ["technical", "liquidity-sweep", symbol, timeframe] as const,
+  exhaustionScore: (symbol: string, timeframe: string) =>
+    ["technical", "exhaustion", symbol, timeframe] as const,
+  locationScore: (symbol: string, timeframe: string) =>
+    ["technical", "location-score", symbol, timeframe] as const,
+  triggerAnalysis: (symbol: string, timeframe: string) =>
+    ["technical", "trigger", symbol, timeframe] as const,
   learningSummary: ["learning", "summary"] as const,
   dataSnapshot: ["data", "snapshot"] as const,
   rebalanceProposal: ["learning", "rebalance"] as const,

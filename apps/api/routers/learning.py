@@ -10,6 +10,7 @@ from fastapi import APIRouter
 from packages.learning import (
     calibration_store,
     calibration_trainer,
+    historical_edge,
     mistake_memory,
     tf_weight_trainer,
 )
@@ -85,4 +86,16 @@ def get_mistakes() -> dict:
         "verdicts": verdicts,
         "flagged_count": len(flagged),
         "total_fingerprints": len(items),
+    }
+
+
+@router.get("/learning/historical-edge")
+def get_historical_edge(fingerprint: str) -> dict:
+    """Fuzzy-similarity historical edge — verilen fingerprint'e benzer geçmiş
+    trade'lerin winrate/avg_pnl özeti. Read-only; karar zincirini etkilemez
+    (mistake_memory exact-match gate'inin tamamlayıcısı, ondan ayrı)."""
+    result = historical_edge.compute_edge(fingerprint)
+    return {
+        "similarity_weights": historical_edge.active_similarity_weights(),
+        "result": historical_edge.edge_to_dict(result),
     }

@@ -133,24 +133,38 @@ def _ema_stack(emas: list[float | None]) -> str | None:
     return "mixed"
 
 
+# Momentum bileşen ağırlıkları: trend (EMA dizilimi) yapısaldır, RSI ve MACD
+# ivmeyi söyler. Her bileşen 50 etrafında merkezlenir (−1..+1 lean) ve ağırlıklı
+# birleşir — eşit ortalama DEĞİL, yoksa hepsi aynı yöne baksa bile skor nötre
+# çekilirdi (çakılan piyasanın ~42 kalması bu yüzdendi).
+_MOM_WEIGHTS = {"trend": 0.40, "rsi": 0.30, "macd": 0.30}
+# |MACD histogramı| bu kadar ATR olunca tam (±1) katkı. ATR-normalize: histogram
+# fiyata oranlanınca (~±0.1) atıl kalıyordu — ivmeyi gerçekten ölçmüyordu.
+_MACD_ATR_FULL = 1.0
+
+
 def _momentum_score(
-    rsi_v: float | None, macd_norm: float | None, ema_stack: str | None
+    rsi_v: float | None, macd_atr: float | None, ema_stack: str | None
 ) -> float | None:
     """Momentum/trend TRIGGER axis (0–100, 50 = neutral). None = insufficient.
 
-    RSI + MACD + EMA stack are correlated reads of one momentum axis; averaged as a
-    SINGLE group so they are not triple-counted against the location/pattern/volume
-    evidence that the top-down gate folds in afterwards."""
-    comps: list[float] = []
-    if rsi_v is not None:
-        comps.append(_clamp(rsi_v, 0.0, 100.0))
-    if macd_norm is not None:
-        comps.append(_clamp(50.0 + _clamp(macd_norm, -3.0, 3.0) * (50.0 / 3.0), 0.0, 100.0))
+    RSI + MACD + EMA stack are ONE momentum axis (so they are not triple-counted
+    against the location/pattern/volume gate). Each is centred at 50 as a −1..+1 lean
+    and combined by weight — NOT a plain average — so a unanimous bullish/bearish read
+    scores strongly directional instead of being diluted toward neutral. MACD uses an
+    ATR-relative histogram (price-relative was effectively inert)."""
+    leans: list[tuple[float, float]] = []
     if ema_stack is not None:
-        comps.append({"bullish": 75.0, "bearish": 25.0, "mixed": 50.0}[ema_stack])
-    if not comps:
+        leans.append(({"bullish": 1.0, "bearish": -1.0, "mixed": 0.0}[ema_stack], _MOM_WEIGHTS["trend"]))
+    if rsi_v is not None:
+        leans.append((_clamp((rsi_v - 50.0) / 50.0, -1.0, 1.0), _MOM_WEIGHTS["rsi"]))
+    if macd_atr is not None:
+        leans.append((_clamp(macd_atr / _MACD_ATR_FULL, -1.0, 1.0), _MOM_WEIGHTS["macd"]))
+    if not leans:
         return None
-    return sum(comps) / len(comps)
+    num = sum(lean * wt for lean, wt in leans)
+    den = sum(wt for _, wt in leans)
+    return _clamp(50.0 + (num / den) * 50.0, 0.0, 100.0)
 
 
 # Fib zone → bullish-favorable location (+) vs bearish-favorable (−). Aligned to the
@@ -209,7 +223,7 @@ def _volume_alignment(
 
 def _direction_score(
     rsi_v: float | None,
-    macd_norm: float | None,
+    macd_atr: float | None,
     ema_stack: str | None,
     *,
     fib: FibonacciAnalysis | None = None,
@@ -228,7 +242,7 @@ def _direction_score(
     manufactures a direction from neutral momentum (DATA_POLICY). Returns the score
     plus a diagnostics map (evidence chain rule)."""
     cfg = cfg or load_config()
-    core = _momentum_score(rsi_v, macd_norm, ema_stack)
+    core = _momentum_score(rsi_v, macd_atr, ema_stack)
     diag: dict[str, float] = {}
     if core is None:
         return None, diag
@@ -450,6 +464,8 @@ def build_timeframe_result(
     vwap_v = indicators.vwap(bars) if timeframe in INTRADAY_TF else None
 
     macd_norm = macd_t[2] / current * 100.0 if (macd_t is not None and current and current > 0) else None
+    # ATR-relative MACD histogram for the momentum score (price-relative was inert).
+    macd_atr = macd_t[2] / atr_v if (macd_t is not None and atr_v and atr_v > 0) else None
     ema_stack = _ema_stack(emas)
     adx_v = adx_t[0] if adx_t is not None else None
 
@@ -499,7 +515,7 @@ def build_timeframe_result(
     # ── scoring (SEPARATE axes) — top-down: momentum trigger gated by location/
     #    pattern/volume evidence (§4.5 now feeds direction, no longer evidence-only).
     direction, dir_diag = _direction_score(
-        rsi_v, macd_norm, ema_stack,
+        rsi_v, macd_atr, ema_stack,
         fib=fib, zones=zones, reversal=reversal_signals, chart=chart_patterns,
         vwap_v=vwap_v, current=current, cfg=cfg,
     )

@@ -200,6 +200,109 @@ learning:
   retrain_every_n_closes: 5
   walk_forward_train_ratio: 0.7
 
+# Historical Edge Engine (packages/learning/historical_edge.py) — fuzzy-similarity
+# geçmiş setup performansı. mistake_memory.py'nin (exact fingerprint match) AYRI ve
+# tamamlayıcısı; read-only, hiçbir karar zincirine bağlı değil. similarity_weights
+# toplamı 1.0 olmalı; sample-count bandları similarity_similar_min eşiğine göre sayılır.
+historical_edge:
+  similarity_weights:
+    symbol: 0.25
+    timeframe: 0.20
+    regime: 0.15
+    direction: 0.15
+    score_bucket: 0.15
+    confluence: 0.05
+    dominant_module: 0.05
+  similarity_similar_min: 0.70
+  similarity_strong_min: 0.85
+  min_sample_observe_only: 20
+  min_sample_usable: 50
+  min_sample_strong: 100
+  strong_negative_winrate_max: 0.45
+
+# Elliott Wave Scenario Engine (packages/elliott/) — EVIDENCE only, read-only API
+# (GET /technical/elliott/{asset_code}). Hiçbir karar zincirine bağlı değil. Fraktal
+# pivot penceresi + fib projeksiyon oranları buradan okunur (kod içinde hardcode değil).
+elliott:
+  pivot_left: 3
+  pivot_right: 3
+  fib_projection: [0.618, 1.0, 1.618]
+
+# Zone Engine (packages/zones/) — EVIDENCE only, read-only API
+# (GET /technical/zones/{asset_code}). Hiçbir karar zincirine bağlı değil.
+# Genel support/resistance zone kümeleme; supply/demand bu sürümün kapsamı
+# DIŞINDA (bilinçli olarak eklenmedi — bkz. packages/zones/engine.py docstring).
+zones:
+  lookback_bars: 120
+  min_bars: 20
+  pivot_left: 3
+  pivot_right: 3
+  cluster_proximity_pct: 1.0
+
+# Volume Validation Engine (packages/volume/) — EVIDENCE only, read-only API
+# (GET /technical/volume/{asset_code}). Hiçbir karar zincirine bağlı değil.
+volume_validation:
+  lookback_bars: 20
+  min_bars: 10
+  climax_ratio: 2.0
+  confirmation_ratio: 1.2
+  weakening_ratio: 0.7
+
+# VWAP / Anchored VWAP Engine (packages/vwap/) — EVIDENCE only, read-only API
+# (GET /technical/vwap/{asset_code}). Hiçbir karar zincirine bağlı değil.
+vwap:
+  lookback_bars: 60
+  min_bars: 10
+  neutral_eps: 0.0015
+  deviation_extreme_pct: 2.0
+  cross_lookback_bars: 5
+
+# Liquidity Sweep Engine (packages/liquidity/sweep.py) — EVIDENCE only,
+# read-only API (GET /technical/liquidity-sweep/{asset_code}). Hiçbir karar
+# zincirine bağlı değil. packages/liquidity/rotation.py'dan ayrı/bağımsız.
+liquidity_sweep:
+  lookback_bars: 40
+  recent_bars: 5
+  min_bars: 15
+
+# Exhaustion Score (packages/scoring/exhaustion.py) — EVIDENCE only, yön
+# skoru DEĞİLDİR (spec §17). Hiçbir karar zincirine bağlı değil.
+exhaustion:
+  min_bars: 20
+  return_lookback_bars: 5
+  rsi_extreme_high: 70.0
+  rsi_extreme_low: 30.0
+  return_extreme_pct: 5.0
+
+# Location Score (packages/scoring/location.py) — EVIDENCE only (spec §18).
+# Zone Engine + Fibonacci + VWAP + Liquidity Sweep birleşimi.
+location_score:
+  good_location_min: 70.0
+  mid_range_min: 40.0
+
+# Trigger Engine (packages/scoring/trigger.py) — EVIDENCE only (spec §22).
+trigger_engine:
+  min_bars: 3
+  confirmed_min: 70.0
+  pin_bar_wick_ratio: 2.0
+
+# Agent Mode Control (packages/mode/) — spec §5/§40. Henüz HİÇBİR karar
+# zincirine bağlı değil (yalnızca shadow gözlem kaydında okunur). Default'lar
+# bilinçli olarak muhafazakâr: hiçbir profili/stratejiyi kısıtlamaz — bu
+# config aktive edilene kadar davranış DEĞİŞMEZ.
+agent_mode_control:
+  enabled_trade_profiles: []   # boş = hepsi serbest (allowlist değil)
+  disabled_trade_profiles: []
+  focus_mode: null
+  allow_counter_context_trades: true
+  allow_reversal_trades: true
+  allow_trend_follow_trades: true
+  allow_range_trades: true
+  allow_breakout_trades: true
+  watch_disabled_profiles: true
+  close_disabled_profile_positions: false
+  close_requires_riskgate_pass: true
+
 agent:
   personas: [analyst, risk_officer, macro_strategist]
   quorum_required: 2          # 3'ten en az 2 hemfikir
@@ -274,3 +377,11 @@ shadow:
   enabled: true
   affect_decision: false
   manual_ready_only: true
+
+# Faz 7 — Conflict Resolver'ın kontrollü aktivasyonu (spec v2.3 §28).
+# `shadow.affect_decision`'dan TAMAMEN BAĞIMSIZ, ayrı bir aktivasyon kapısı.
+# enabled=false (varsayılan) → packages/decision/conflict_resolver_activation.py
+# her çağrıda boş liste döner, manual_ready'e HİÇBİR ŞEY eklenmez. Owner'ın
+# açık onayı (bu config'i elle true yapması) olmadan davranış DEĞİŞMEZ.
+conflict_resolver_activation:
+  enabled: false

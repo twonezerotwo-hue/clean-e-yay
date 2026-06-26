@@ -40,7 +40,9 @@ import {
   Layer2AssetDrilldownPanel,
   Layer2AssetUniversePanel,
   Layer2BacktestOutcomePanel,
+  Layer2ElliottZoneLabPanel,
   Layer2FibonacciLabPanel,
+  Layer2SetupConflictLabPanel,
   Layer2SystemBriefArchivePanel,
 } from "./Layer2Labs";
 import { QuantumBackplaneScene } from "./QuantumBackplaneScene";
@@ -1228,6 +1230,22 @@ export function CockpitView() {
 
             <Layer2DetailGroup
               index="03"
+              title="Elliott / Zone Lab"
+              detail="Backend Elliott Wave senaryosu (EVIDENCE only) ve support/resistance zone analizi; ayrica shadow gozlem kaydindan gelen Elliott + historical-edge ek kaniti. Hicbir karar zincirine bagli degildir."
+            >
+              <Layer2ElliottZoneLabPanel />
+            </Layer2DetailGroup>
+
+            <Layer2DetailGroup
+              index="04"
+              title="Volume / VWAP / Liquidity Lab"
+              detail="Volume Validation, VWAP/Anchored VWAP, Liquidity Sweep, Exhaustion, Location ve Trigger motorlarinin EVIDENCE only ciktilari — hicbir karar zincirine bagli degildir."
+            >
+              <Layer2SetupConflictLabPanel />
+            </Layer2DetailGroup>
+
+            <Layer2DetailGroup
+              index="05"
               title="Backtest / Outcome Lab"
               detail="Replay store, son decision trace ve manuel tetiklenen deterministic backtest sonucunu ayni kanit ekraninda toplar."
             >
@@ -1235,7 +1253,7 @@ export function CockpitView() {
             </Layer2DetailGroup>
 
             <Layer2DetailGroup
-              index="04"
+              index="06"
               title="System Brief Archive"
               detail="Agent briefing, bildirim akisi ve worker hafizasi tek arxiv gibi okunur; Katman 0 sohbetine kaynak olan ozet buradadir."
             >
@@ -1243,7 +1261,7 @@ export function CockpitView() {
             </Layer2DetailGroup>
 
             <Layer2DetailGroup
-              index="05"
+              index="07"
               title="Asset Universe Lab"
               detail="Trade, snapshot, liquidity ve macro evreni backend asset registry uzerinden rol ve turlerine gore ayrilir."
             >

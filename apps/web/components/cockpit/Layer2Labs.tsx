@@ -6,21 +6,39 @@ import { motion } from "framer-motion";
 import type {
   AssetAnalysisTimeframe,
   AssetRegistryItem,
+  ElliottAnalysis,
+  ExhaustionAnalysis,
   FibonacciFrame,
   FibonacciLevel,
+  LiquiditySweepAnalysis,
+  LocationScoreAnalysis,
+  PriceZone,
+  TriggerAnalysis,
+  VolumeAnalysis,
+  VWAPAnalysis,
+  ZoneAnalysis,
 } from "@/lib/api/client";
 import {
   useAgentBriefing,
   useAssetAnalysis,
   useAssetRegistry,
   useDataSnapshot,
+  useElliottScenario,
+  useExhaustionScore,
+  useLiquiditySweepAnalysis,
+  useLocationScore,
   useMarketSessionAsset,
   useNotifications,
   useReplayBacktest,
   useReplayDecisionTrace,
   useReplayStatus,
+  useShadowComparison,
   useSystemHealth,
   useTechnicalInsight,
+  useTriggerAnalysis,
+  useVolumeAnalysis,
+  useVwapAnalysis,
+  useZoneAnalysis,
 } from "@/lib/queries/hooks";
 
 const DEFAULT_SYMBOLS = ["BTCUSD", "ETHUSD", "XAUUSD", "XAGUSD"];
@@ -517,6 +535,360 @@ export function Layer2FibonacciLabPanel() {
             ) : null}
           </div>
         </div>
+      </div>
+    </div>
+  );
+}
+
+function ElliottScenarioPanel({ analysis }: { analysis?: ElliottAnalysis | null }) {
+  const target = analysis?.target_zone;
+  return (
+    <div className="rounded-2xl border border-white/10 bg-black/22 p-4">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <div className="text-[10px] uppercase tracking-[0.24em] text-white/42">
+            Elliott senaryosu
+          </div>
+          <div className="mt-2 font-display text-xl text-white">
+            {analysis?.primary_scenario ?? "NO_VALID_COUNT"}
+          </div>
+        </div>
+        <StatusPill value={analysis?.bias} />
+      </div>
+      <div className="mt-4 grid grid-cols-2 gap-3">
+        <LabMetric
+          label="Confidence"
+          value={formatNumber(analysis?.confidence, 0)}
+          tone="text-cyan-100"
+        />
+        <LabMetric
+          label="Invalidation"
+          value={formatNumber(analysis?.invalidation_price, 2)}
+          tone="text-rose-100"
+        />
+      </div>
+      {target ? (
+        <div className="mt-4 rounded-xl border border-emerald-300/14 bg-emerald-300/[0.04] p-3">
+          <div className="text-[10px] uppercase tracking-widest text-emerald-100/55">
+            Target zone
+          </div>
+          <div className="mt-2 font-mono text-sm text-white">
+            {formatNumber(target[0], 2)} — {formatNumber(target[1], 2)}
+          </div>
+        </div>
+      ) : null}
+      <div className="mt-4 grid gap-2">
+        {(analysis?.wave_points ?? []).map((wp, index) => (
+          <div
+            key={`${wp.label}-${index}`}
+            className="flex items-center justify-between rounded-lg border border-white/10 bg-white/[0.035] px-3 py-2 text-xs"
+          >
+            <span className="font-semibold text-white/78">{wp.label}</span>
+            <span className="font-mono text-cyan-100">{formatNumber(wp.price, 2)}</span>
+          </div>
+        ))}
+      </div>
+      {(analysis?.diagnostics ?? []).length > 0 ? (
+        <div className="mt-3 text-xs leading-5 text-white/45">
+          {(analysis?.diagnostics ?? []).join(", ")}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function ZoneRow({ zone }: { zone: PriceZone }) {
+  const tone = zone.kind === "support" ? "text-emerald-100" : "text-amber-100";
+  return (
+    <div className="flex items-center justify-between rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2 text-xs">
+      <span className={`uppercase tracking-widest ${tone}`}>{zone.kind ?? "--"}</span>
+      <span className="font-mono text-white/70">
+        {formatNumber(zone.price_low, 2)} — {formatNumber(zone.price_high, 2)}
+      </span>
+      <span className="text-white/40">touches={zone.touches ?? 0}</span>
+    </div>
+  );
+}
+
+function ZoneAnalysisPanel({ analysis }: { analysis?: ZoneAnalysis | null }) {
+  const zones = analysis?.zones ?? [];
+  return (
+    <div className="rounded-2xl border border-white/10 bg-black/22 p-4">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <div className="text-[10px] uppercase tracking-[0.24em] text-white/42">
+            Zone analizi
+          </div>
+          <div className="mt-2 font-display text-xl text-white">
+            {analysis?.location ?? "unknown"}
+          </div>
+        </div>
+        <StatusPill value={analysis?.validity} />
+      </div>
+      <div className="mt-4 grid grid-cols-2 gap-3">
+        <LabMetric
+          label="Range high"
+          value={formatNumber(analysis?.range_high, 2)}
+          tone="text-cyan-100"
+        />
+        <LabMetric
+          label="Range low"
+          value={formatNumber(analysis?.range_low, 2)}
+          tone="text-emerald-100"
+        />
+      </div>
+      <div className="mt-4 space-y-2">
+        {zones.length > 0 ? (
+          zones
+            .slice()
+            .sort((a, b) => (a.distance_pct ?? 0) - (b.distance_pct ?? 0))
+            .slice(0, 6)
+            .map((zone, index) => <ZoneRow key={`${zone.kind}-${index}`} zone={zone} />)
+        ) : (
+          <div className="rounded-lg border border-white/10 bg-white/[0.035] p-3 text-sm text-white/45">
+            Zone bulunamadi (supply/demand bu surumun kapsami disinda).
+          </div>
+        )}
+      </div>
+      {(analysis?.diagnostics ?? []).length > 0 ? (
+        <div className="mt-3 text-xs leading-5 text-white/45">
+          {(analysis?.diagnostics ?? []).join(", ")}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function ShadowEvidenceRow({
+  row,
+}: {
+  row: {
+    symbol?: string | null;
+    elliott_scenario?: string | null;
+    elliott_confidence?: number | null;
+    elliott_bias?: string | null;
+    historical_edge_sample_count?: number | null;
+    historical_edge_win_rate?: number | null;
+    historical_edge_confidence?: string | null;
+    setup_type?: string | null;
+    trade_profile?: string | null;
+    mode_filter_passed?: boolean | null;
+    mode_filter_blocked_reason?: string | null;
+    conflict_final_action?: string | null;
+    conflict_blocked_by?: string[];
+  };
+}) {
+  return (
+    <div className="grid gap-2 rounded-xl border border-white/10 bg-white/[0.035] p-3 md:grid-cols-[0.5fr_0.9fr_0.9fr_0.9fr_0.9fr]">
+      <div>
+        <div className="text-[10px] uppercase tracking-widest text-white/32">symbol</div>
+        <div className="mt-1 font-display text-white">{row.symbol ?? "--"}</div>
+      </div>
+      <div>
+        <div className="text-[10px] uppercase tracking-widest text-white/32">elliott</div>
+        <div className="mt-1 font-mono text-cyan-100">
+          {row.elliott_scenario ?? "--"} ({formatNumber(row.elliott_confidence, 0)})
+        </div>
+        <div className="mt-1 text-[11px] text-white/45">{row.elliott_bias ?? "--"}</div>
+      </div>
+      <div>
+        <div className="text-[10px] uppercase tracking-widest text-white/32">historical edge</div>
+        <div className="mt-1 font-mono text-emerald-100">
+          N={row.historical_edge_sample_count ?? 0} / {formatPct(
+            row.historical_edge_win_rate == null ? null : row.historical_edge_win_rate * 100,
+          )}
+        </div>
+        <div className="mt-1 text-[11px] text-white/45">{row.historical_edge_confidence ?? "--"}</div>
+      </div>
+      <div>
+        <div className="text-[10px] uppercase tracking-widest text-white/32">setup / profile</div>
+        <div className="mt-1 font-mono text-amber-100">{row.setup_type ?? "--"}</div>
+        <div className="mt-1 text-[11px] text-white/45">
+          {row.trade_profile ?? "--"} {row.mode_filter_passed === false ? "(mode: blocked)" : ""}
+        </div>
+      </div>
+      <div>
+        <div className="text-[10px] uppercase tracking-widest text-white/32">conflict resolver</div>
+        <div className="mt-1 font-mono text-white/82">{row.conflict_final_action ?? "--"}</div>
+        <div className="mt-1 text-[11px] text-white/45 truncate">
+          {(row.conflict_blocked_by ?? []).join(", ") || "--"}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export function Layer2ElliottZoneLabPanel() {
+  const registry = useAssetRegistry();
+  const [selected, setSelected] = useState("BTCUSD");
+  const tradeAssets = selectedAssetList(registry.data?.assets, registry.data?.trade);
+  const activeSymbol =
+    tradeAssets.some((asset) => asset.symbol === selected) || tradeAssets.length === 0
+      ? selected
+      : tradeAssets[0].symbol;
+  const elliott = useElliottScenario(activeSymbol);
+  const zones = useZoneAnalysis(activeSymbol);
+  const shadow = useShadowComparison();
+  const shadowRows = shadow.data?.rows ?? [];
+
+  return (
+    <div className="space-y-4">
+      <AssetSelector assets={tradeAssets} activeSymbol={activeSymbol} onSelect={setSelected} />
+      <div className="grid gap-4 xl:grid-cols-2">
+        <ElliottScenarioPanel analysis={elliott.data} />
+        <ZoneAnalysisPanel analysis={zones.data} />
+      </div>
+      <div className="rounded-2xl border border-white/10 bg-black/22 p-4">
+        <div className="text-[10px] uppercase tracking-[0.24em] text-white/42">
+          Shadow kanit ozeti (gozlem modu)
+        </div>
+        <div className="mt-1 text-xs text-white/45">
+          Bu satirlar packages/decision/shadow.py'nin gozlem kaydindan gelir; canli
+          karari etkilemez (affect_decision={String(shadow.data?.affect_decision ?? false)}).
+        </div>
+        <div className="mt-3 space-y-2">
+          {shadowRows.length > 0 ? (
+            shadowRows.map((row, index) => (
+              <ShadowEvidenceRow key={`${row.symbol}-${index}`} row={row} />
+            ))
+          ) : (
+            <div className="rounded-lg border border-white/10 bg-white/[0.035] p-3 text-sm text-white/45">
+              Shadow kaydi yok veya henuz uretilmedi.
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function VolumePanel({ analysis }: { analysis?: VolumeAnalysis | null }) {
+  return (
+    <div className="rounded-2xl border border-white/10 bg-black/22 p-4">
+      <div className="flex items-start justify-between gap-3">
+        <div className="text-[10px] uppercase tracking-[0.24em] text-white/42">Volume</div>
+        <StatusPill value={analysis?.validity} />
+      </div>
+      <div className="mt-2 font-display text-lg text-white">{analysis?.state ?? "VOLUME_NEUTRAL"}</div>
+      <div className="mt-3 grid grid-cols-2 gap-3">
+        <LabMetric label="Ratio" value={formatNumber(analysis?.volume_ratio, 2)} tone="text-cyan-100" />
+        <LabMetric label="Price dir" value={analysis?.price_direction ?? "--"} tone="text-emerald-100" />
+      </div>
+    </div>
+  );
+}
+
+function VWAPPanel({ analysis }: { analysis?: VWAPAnalysis | null }) {
+  return (
+    <div className="rounded-2xl border border-white/10 bg-black/22 p-4">
+      <div className="flex items-start justify-between gap-3">
+        <div className="text-[10px] uppercase tracking-[0.24em] text-white/42">VWAP</div>
+        <StatusPill value={analysis?.validity} />
+      </div>
+      <div className="mt-2 font-display text-lg text-white">{analysis?.location ?? "unknown"}</div>
+      <div className="mt-3 grid grid-cols-2 gap-3">
+        <LabMetric label="VWAP" value={formatNumber(analysis?.session_vwap, 2)} tone="text-cyan-100" />
+        <LabMetric label="Deviation" value={formatPct(analysis?.deviation_pct)} tone="text-amber-100" />
+      </div>
+      <div className="mt-2 text-[11px] text-white/45">
+        reclaim={String(analysis?.reclaim ?? false)} / rejection={String(analysis?.rejection ?? false)}
+      </div>
+    </div>
+  );
+}
+
+function LiquiditySweepPanel({ analysis }: { analysis?: LiquiditySweepAnalysis | null }) {
+  return (
+    <div className="rounded-2xl border border-white/10 bg-black/22 p-4">
+      <div className="flex items-start justify-between gap-3">
+        <div className="text-[10px] uppercase tracking-[0.24em] text-white/42">Liquidity sweep</div>
+        <StatusPill value={analysis?.validity} />
+      </div>
+      <div className="mt-2 font-display text-lg text-white">{analysis?.state ?? "NO_SWEEP"}</div>
+      <div className="mt-3 grid grid-cols-2 gap-3">
+        <LabMetric label="Swing high" value={formatNumber(analysis?.swing_high, 2)} tone="text-rose-100" />
+        <LabMetric label="Swing low" value={formatNumber(analysis?.swing_low, 2)} tone="text-emerald-100" />
+      </div>
+      <div className="mt-2 text-[11px] text-white/45">bias={analysis?.bias ?? "unknown"}</div>
+    </div>
+  );
+}
+
+function ExhaustionPanel({ analysis }: { analysis?: ExhaustionAnalysis | null }) {
+  return (
+    <div className="rounded-2xl border border-white/10 bg-black/22 p-4">
+      <div className="flex items-start justify-between gap-3">
+        <div className="text-[10px] uppercase tracking-[0.24em] text-white/42">Exhaustion score</div>
+        <StatusPill value={analysis?.validity} />
+      </div>
+      <div className="mt-3">
+        <ScoreBar label="0=downside / 100=upside" value={analysis?.score} detail={`RSI ${formatNumber(analysis?.rsi, 1)}`} />
+      </div>
+      <div className="mt-2 text-[11px] text-white/45">{(analysis?.contributions ?? []).join(", ") || "--"}</div>
+    </div>
+  );
+}
+
+function LocationScorePanel({ analysis }: { analysis?: LocationScoreAnalysis | null }) {
+  return (
+    <div className="rounded-2xl border border-white/10 bg-black/22 p-4">
+      <div className="flex items-start justify-between gap-3">
+        <div className="text-[10px] uppercase tracking-[0.24em] text-white/42">Location score</div>
+        <StatusPill value={analysis?.location_class} />
+      </div>
+      <div className="mt-3">
+        <ScoreBar label="0=bad / 100=good" value={analysis?.score} />
+      </div>
+      <div className="mt-2 text-[11px] text-white/45">{(analysis?.contributions ?? []).join(", ") || "--"}</div>
+    </div>
+  );
+}
+
+function TriggerPanel({ analysis }: { analysis?: TriggerAnalysis | null }) {
+  return (
+    <div className="rounded-2xl border border-white/10 bg-black/22 p-4">
+      <div className="flex items-start justify-between gap-3">
+        <div className="text-[10px] uppercase tracking-[0.24em] text-white/42">Trigger engine</div>
+        <StatusPill value={analysis?.state} />
+      </div>
+      <div className="mt-3">
+        <ScoreBar label="trigger score" value={analysis?.trigger_score} />
+      </div>
+      <div className="mt-2 text-[11px] text-white/45">{(analysis?.matched_triggers ?? []).join(", ") || "--"}</div>
+    </div>
+  );
+}
+
+export function Layer2SetupConflictLabPanel() {
+  const registry = useAssetRegistry();
+  const [selected, setSelected] = useState("BTCUSD");
+  const tradeAssets = selectedAssetList(registry.data?.assets, registry.data?.trade);
+  const activeSymbol =
+    tradeAssets.some((asset) => asset.symbol === selected) || tradeAssets.length === 0
+      ? selected
+      : tradeAssets[0].symbol;
+  const volume = useVolumeAnalysis(activeSymbol);
+  const vwap = useVwapAnalysis(activeSymbol);
+  const sweep = useLiquiditySweepAnalysis(activeSymbol);
+  const exhaustion = useExhaustionScore(activeSymbol);
+  const location = useLocationScore(activeSymbol);
+  const trigger = useTriggerAnalysis(activeSymbol);
+
+  return (
+    <div className="space-y-4">
+      <AssetSelector assets={tradeAssets} activeSymbol={activeSymbol} onSelect={setSelected} />
+      <div className="grid gap-4 xl:grid-cols-3">
+        <VolumePanel analysis={volume.data} />
+        <VWAPPanel analysis={vwap.data} />
+        <LiquiditySweepPanel analysis={sweep.data} />
+        <ExhaustionPanel analysis={exhaustion.data} />
+        <LocationScorePanel analysis={location.data} />
+        <TriggerPanel analysis={trigger.data} />
+      </div>
+      <div className="rounded-xl border border-white/10 bg-white/[0.035] p-3 text-xs leading-5 text-white/45">
+        Bu altı motor (Volume/VWAP/Liquidity Sweep/Exhaustion/Location/Trigger) EVIDENCE
+        only'dir; hiçbir karar zincirine bağlı değildir. Setup Classifier + Conflict
+        Resolver çıktısı için "Elliott / Zone Lab" panelindeki Shadow kanıt tablosuna bakın.
       </div>
     </div>
   );

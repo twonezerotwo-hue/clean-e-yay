@@ -42,6 +42,14 @@ _OPEN_LONG = "open_long"
 _OPEN_SHORT = "open_short"
 _NO_EXEC = "no_live_execution"
 
+# Missed-opportunity significance eşiği (additive). Mevcut `missed`/`false_negative`
+# (cf_return > 0) hiçbir ufak hareketi elemez — gürültü dahildir ve davranışı
+# DEĞİŞTİRMEDEN korunur. `significant_missed*` alanları bunun yanına eklenir:
+# yalnızca counterfactual getiri bu eşiği aşan bloklamalar "gerçek kaçırılan
+# fırsat" sayılır (spec'teki min_missed_r'nin sinyal-getirisi karşılığı —
+# per-trade R hesaplamak için SL mesafesi bu hücrelerde kayıtlı değil).
+MIN_SIGNIFICANT_RETURN_PCT = 0.01
+
 STATUS_OK = "ok"
 STATUS_NO_SNAPSHOTS = "insufficient_snapshots"
 STATUS_NO_FUTURE = "insufficient_future_data"
@@ -112,6 +120,10 @@ def _empty_metrics() -> dict:
         "avg_return": None,
         "max_drawdown": None,
         "blocked_decision_accuracy": None,
+        # Additive — bkz. MIN_SIGNIFICANT_RETURN_PCT yorumu.
+        "significant_missed": 0,
+        "significant_missed_rate": None,
+        "min_significant_return_pct": MIN_SIGNIFICANT_RETURN_PCT,
     }
 
 
@@ -142,6 +154,11 @@ def _metrics(signals: list[dict], suppressed: list[dict]) -> dict:
     sup_n = len(suppressed)
     fn = sum(1 for s in suppressed if s["missed"])
     blocked_correct = sum(1 for s in suppressed if s["blocked_correct"])
+    # Additive — yalnızca anlamlı (>= MIN_SIGNIFICANT_RETURN_PCT) kaçırılan
+    # fırsatlar. `missed`/`fn` üstündeki davranışı değiştirmez, yanına eklenir.
+    significant_missed = sum(
+        1 for s in suppressed if s["missed"] and s["cf_return"] >= MIN_SIGNIFICANT_RETURN_PCT
+    )
 
     return {
         "signals_evaluated": n,
@@ -157,6 +174,11 @@ def _metrics(signals: list[dict], suppressed: list[dict]) -> dict:
         "blocked_decision_accuracy": (
             round(blocked_correct / sup_n, 4) if sup_n else None
         ),
+        "significant_missed": significant_missed,
+        "significant_missed_rate": (
+            round(significant_missed / sup_n, 4) if sup_n else None
+        ),
+        "min_significant_return_pct": MIN_SIGNIFICANT_RETURN_PCT,
     }
 
 

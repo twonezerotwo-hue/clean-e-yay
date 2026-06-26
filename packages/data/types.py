@@ -699,3 +699,221 @@ class RotationView(BaseModel):
     source: str = "unknown"
     verified: bool = False
     error: str | None = None
+
+
+# --------------------------------------------------------------------------
+# Elliott Wave Scenario Engine — EVIDENCE only (packages/elliott).
+#
+# Gerçek OHLCV barlarından fraktal pivot dizisi + Elliott impulse/correction
+# kural kontrolü ile bir senaryo üretir. NEVER opens a trade, NEVER bypasses
+# RiskGate, NEVER feeds a single aggregate score — Fibonacci provider'ın
+# (packages/data/providers/technical/fibonacci.py) izlediği "evidence only,
+# validity/diagnostics, uydurma seviye yok" desenini birebir takip eder.
+# Hiçbir setup'ın ön koşulu DEĞİLDİR: NO_VALID_COUNT dönerse çağıran taraf
+# (decision/agent_pipeline) diğer kanıtlarla devam edebilir — bu modül bunu
+# zorlamaz, sadece kendi kanıtını üretir.
+# --------------------------------------------------------------------------
+
+ElliottScenarioType = Literal[
+    "IMPULSE_1_2_3_4_5",
+    "IMPULSE_5_ENDING",
+    "ABC_CORRECTION",
+    "NO_VALID_COUNT",
+]
+ElliottBias = Literal["REVERSAL_LONG", "REVERSAL_SHORT", "CONTINUATION", "unknown"]
+ElliottDegree = Literal["minor", "intermediate", "unknown"]
+
+
+class ElliottWavePoint(BaseModel):
+    """Senaryoyu oluşturan tek pivot — dizideki sırasıyla (P0..P5 veya A/B/C)."""
+
+    label: str
+    bar_index: int
+    price: float
+    ts: str | None = None
+
+
+class ElliottAnalysis(BaseModel):
+    timeframe: str
+    primary_scenario: ElliottScenarioType = "NO_VALID_COUNT"
+    confidence: float = 0.0  # 0-100; rule-pass oranından türetilir
+    wave_points: list[ElliottWavePoint] = Field(default_factory=list)
+    invalidation_price: float | None = None
+    target_zone: tuple[float, float] | None = None
+    bias: ElliottBias = "unknown"
+    degree: ElliottDegree = "unknown"
+    rules_passed: list[str] = Field(default_factory=list)
+    rules_failed: list[str] = Field(default_factory=list)
+    diagnostics: list[str] = Field(default_factory=list)
+
+
+# --------------------------------------------------------------------------
+# Zone Engine — EVIDENCE only (packages/zones).
+#
+# Genel support/resistance zone tespiti: yakın fraktal swing pivotları
+# kümeleyerek bölge (tek seviye değil, fiyat aralığı) üretir. Spec §12'deki
+# "tek fiyat seviyesi yerine bölge mantığı" prensibini, mevcut Fibonacci
+# provider'ın (fib_cluster_zone hariç — o zaten fibonacci.py'de var) izlediği
+# "evidence only, validity/diagnostics, uydurma seviye yok" deseniyle
+# tamamlar. Supply/demand zone tespiti bu MVP'nin kapsamı DIŞINDADIR (ayrı,
+# daha büyük bir iş — bilinçli olarak eklenmedi, "weak"/"unavailable" ile
+# karıştırılmasın diye burada açıkça not edilir).
+# --------------------------------------------------------------------------
+
+ZoneKind = Literal["support", "resistance"]
+ZoneLocation = Literal[
+    "near_support", "near_resistance", "mid_range", "breakout", "breakdown", "unknown"
+]
+ZoneValidity = Literal["sane", "weak", "unavailable"]
+
+
+class PriceZone(BaseModel):
+    kind: ZoneKind
+    price_low: float
+    price_high: float
+    touches: int = 1
+    distance_pct: float | None = None
+
+
+class ZoneAnalysis(BaseModel):
+    timeframe: str
+    zones: list[PriceZone] = Field(default_factory=list)
+    nearest_zone: PriceZone | None = None
+    location: ZoneLocation = "unknown"
+    range_high: float | None = None
+    range_low: float | None = None
+    validity: ZoneValidity = "unavailable"
+    diagnostics: list[str] = Field(default_factory=list)
+
+
+# --------------------------------------------------------------------------
+# Volume Validation Engine — EVIDENCE only (packages/volume). Spec §15.
+# --------------------------------------------------------------------------
+
+VolumeState = Literal[
+    "VOLUME_CLIMAX", "VOLUME_CONFIRMATION", "VOLUME_WEAKENING", "VOLUME_CONFLICT", "VOLUME_NEUTRAL"
+]
+VolumeValidity = Literal["sane", "weak", "unavailable"]
+
+
+class VolumeAnalysis(BaseModel):
+    timeframe: str
+    state: VolumeState = "VOLUME_NEUTRAL"
+    volume_ratio: float | None = None  # son bar hacmi / önceki ortalama
+    price_direction: Literal["up", "down", "flat", "unknown"] = "unknown"
+    trend_direction: Literal["up", "down", "flat", "unknown"] = "unknown"
+    validity: VolumeValidity = "unavailable"
+    diagnostics: list[str] = Field(default_factory=list)
+
+
+# --------------------------------------------------------------------------
+# VWAP / Anchored VWAP Engine — EVIDENCE only (packages/vwap). Spec §16.
+# --------------------------------------------------------------------------
+
+VWAPLocation = Literal["above", "below", "at", "unknown"]
+VWAPValidity = Literal["sane", "weak", "unavailable"]
+
+
+class AnchoredVWAPLevel(BaseModel):
+    anchor: Literal["major_high", "major_low", "volume_climax"]
+    anchor_bar_index: int
+    vwap_price: float
+    location: VWAPLocation = "unknown"
+    distance_pct: float | None = None
+
+
+class VWAPAnalysis(BaseModel):
+    timeframe: str
+    session_vwap: float | None = None
+    location: VWAPLocation = "unknown"
+    deviation_pct: float | None = None
+    deviation_extreme: bool = False
+    reclaim: bool = False  # son N barda alttan üste geçiş
+    rejection: bool = False  # son N barda üstten dokunup geri altına dönüş
+    anchored: list[AnchoredVWAPLevel] = Field(default_factory=list)
+    validity: VWAPValidity = "unavailable"
+    diagnostics: list[str] = Field(default_factory=list)
+
+
+# --------------------------------------------------------------------------
+# Liquidity Sweep Engine — EVIDENCE only (packages/liquidity/sweep.py). Spec §13.
+# --------------------------------------------------------------------------
+
+LiquiditySweepState = Literal[
+    "NO_SWEEP", "LOW_SWEEP_RECLAIMED", "HIGH_SWEEP_RECLAIMED", "LOW_SWEEP_PENDING", "HIGH_SWEEP_PENDING"
+]
+LiquiditySweepValidity = Literal["sane", "weak", "unavailable"]
+
+
+class LiquiditySweepAnalysis(BaseModel):
+    timeframe: str
+    state: LiquiditySweepState = "NO_SWEEP"
+    swing_high: float | None = None
+    swing_low: float | None = None
+    sweep_price: float | None = None
+    reclaim_price: float | None = None
+    bias: Literal["REVERSAL_LONG", "REVERSAL_SHORT", "unknown"] = "unknown"
+    validity: LiquiditySweepValidity = "unavailable"
+    diagnostics: list[str] = Field(default_factory=list)
+
+
+# --------------------------------------------------------------------------
+# Exhaustion Score — EVIDENCE only (packages/scoring/exhaustion.py). Spec §17.
+#
+# Yön skoru DEĞİLDİR: 0 downside exhaustion (long reversal bölgesi), 50 nötr,
+# 100 upside exhaustion (short reversal bölgesi). RSI extreme + son-N-bar
+# getirisi + volume climax + liquidity sweep kanıtlarını birleştirir.
+# --------------------------------------------------------------------------
+
+ExhaustionValidity = Literal["sane", "weak", "unavailable"]
+
+
+class ExhaustionAnalysis(BaseModel):
+    timeframe: str
+    score: float = 50.0  # 0..100
+    rsi: float | None = None
+    recent_return_pct: float | None = None
+    contributions: list[str] = Field(default_factory=list)
+    validity: ExhaustionValidity = "unavailable"
+    diagnostics: list[str] = Field(default_factory=list)
+
+
+# --------------------------------------------------------------------------
+# Location Score — EVIDENCE only (packages/scoring/location.py). Spec §18.
+#
+# Zone Engine + Fibonacci + VWAP + Liquidity Sweep kanıtlarını birleştirip
+# 0-100 tek bir "giriş kalitesi" skoruna indirger. Supply/demand zone bu
+# sürümün kapsamı dışında (Zone Engine'le aynı bilinçli sınırlama).
+# --------------------------------------------------------------------------
+
+LocationClass = Literal["GOOD_LOCATION", "MID_RANGE", "BAD_LOCATION", "unknown"]
+LocationScoreValidity = Literal["sane", "weak", "unavailable"]
+
+
+class LocationScoreAnalysis(BaseModel):
+    score: float = 50.0  # 0..100
+    location_class: LocationClass = "unknown"
+    contributions: list[str] = Field(default_factory=list)
+    validity: LocationScoreValidity = "unavailable"
+    diagnostics: list[str] = Field(default_factory=list)
+
+
+# --------------------------------------------------------------------------
+# Trigger Engine — EVIDENCE only (packages/scoring/trigger.py). Spec §22.
+#
+# Mum formasyonu (engulfing/pin bar) + hacim teyidi + VWAP reclaim/rejection +
+# liquidity sweep reclaim kanıtlarını birleştirip tek bir trigger_score (0-100)
+# ve TRIGGER_CONFIRMED/MISSING/FAILED durumuna indirger.
+# --------------------------------------------------------------------------
+
+TriggerState = Literal["TRIGGER_CONFIRMED", "TRIGGER_MISSING", "TRIGGER_FAILED"]
+TriggerValidity = Literal["sane", "weak", "unavailable"]
+
+
+class TriggerAnalysis(BaseModel):
+    timeframe: str
+    state: TriggerState = "TRIGGER_MISSING"
+    trigger_score: float = 0.0  # 0..100
+    matched_triggers: list[str] = Field(default_factory=list)
+    validity: TriggerValidity = "unavailable"
+    diagnostics: list[str] = Field(default_factory=list)

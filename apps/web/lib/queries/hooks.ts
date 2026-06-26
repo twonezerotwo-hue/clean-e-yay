@@ -142,6 +142,94 @@ export const useTechnicalInsight = (symbol: string) => {
   });
 };
 
+export const useElliottScenario = (symbol: string, timeframe = "1d") => {
+  const policy = usePanelQueryPolicy(60_000);
+  return useQuery({
+    queryKey: qk.elliottScenario(symbol, timeframe),
+    queryFn: () => api.elliottScenario(symbol, timeframe),
+    enabled: Boolean(symbol),
+    staleTime: 60_000,
+    ...policy,
+  });
+};
+
+export const useZoneAnalysis = (symbol: string, timeframe = "1d") => {
+  const policy = usePanelQueryPolicy(60_000);
+  return useQuery({
+    queryKey: qk.zoneAnalysis(symbol, timeframe),
+    queryFn: () => api.zoneAnalysis(symbol, timeframe),
+    enabled: Boolean(symbol),
+    staleTime: 60_000,
+    ...policy,
+  });
+};
+
+export const useVolumeAnalysis = (symbol: string, timeframe = "1d") => {
+  const policy = usePanelQueryPolicy(60_000);
+  return useQuery({
+    queryKey: qk.volumeAnalysis(symbol, timeframe),
+    queryFn: () => api.volumeAnalysis(symbol, timeframe),
+    enabled: Boolean(symbol),
+    staleTime: 60_000,
+    ...policy,
+  });
+};
+
+export const useVwapAnalysis = (symbol: string, timeframe = "1d") => {
+  const policy = usePanelQueryPolicy(60_000);
+  return useQuery({
+    queryKey: qk.vwapAnalysis(symbol, timeframe),
+    queryFn: () => api.vwapAnalysis(symbol, timeframe),
+    enabled: Boolean(symbol),
+    staleTime: 60_000,
+    ...policy,
+  });
+};
+
+export const useLiquiditySweepAnalysis = (symbol: string, timeframe = "1d") => {
+  const policy = usePanelQueryPolicy(60_000);
+  return useQuery({
+    queryKey: qk.liquiditySweepAnalysis(symbol, timeframe),
+    queryFn: () => api.liquiditySweepAnalysis(symbol, timeframe),
+    enabled: Boolean(symbol),
+    staleTime: 60_000,
+    ...policy,
+  });
+};
+
+export const useExhaustionScore = (symbol: string, timeframe = "1d") => {
+  const policy = usePanelQueryPolicy(60_000);
+  return useQuery({
+    queryKey: qk.exhaustionScore(symbol, timeframe),
+    queryFn: () => api.exhaustionScore(symbol, timeframe),
+    enabled: Boolean(symbol),
+    staleTime: 60_000,
+    ...policy,
+  });
+};
+
+export const useLocationScore = (symbol: string, timeframe = "1d") => {
+  const policy = usePanelQueryPolicy(60_000);
+  return useQuery({
+    queryKey: qk.locationScore(symbol, timeframe),
+    queryFn: () => api.locationScore(symbol, timeframe),
+    enabled: Boolean(symbol),
+    staleTime: 60_000,
+    ...policy,
+  });
+};
+
+export const useTriggerAnalysis = (symbol: string, timeframe = "1d") => {
+  const policy = usePanelQueryPolicy(60_000);
+  return useQuery({
+    queryKey: qk.triggerAnalysis(symbol, timeframe),
+    queryFn: () => api.triggerAnalysis(symbol, timeframe),
+    enabled: Boolean(symbol),
+    staleTime: 60_000,
+    ...policy,
+  });
+};
+
 export const useLearningSummary = () => {
   const policy = usePanelQueryPolicy();
   return useQuery({

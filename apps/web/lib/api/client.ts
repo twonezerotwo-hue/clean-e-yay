@@ -179,6 +179,116 @@ export type TechnicalInsight = {
   fibonacci_score?: number | null;
 };
 
+export type ElliottWavePoint = {
+  label?: string | null;
+  bar_index?: number | null;
+  price?: number | null;
+  ts?: string | null;
+};
+
+export type ElliottAnalysis = {
+  timeframe?: string | null;
+  primary_scenario?: string | null;
+  confidence?: number | null;
+  wave_points?: ElliottWavePoint[];
+  invalidation_price?: number | null;
+  target_zone?: [number, number] | null;
+  bias?: string | null;
+  degree?: string | null;
+  rules_passed?: string[];
+  rules_failed?: string[];
+  diagnostics?: string[];
+};
+
+export type PriceZone = {
+  kind?: string | null;
+  price_low?: number | null;
+  price_high?: number | null;
+  touches?: number | null;
+  distance_pct?: number | null;
+};
+
+export type ZoneAnalysis = {
+  timeframe?: string | null;
+  zones?: PriceZone[];
+  nearest_zone?: PriceZone | null;
+  location?: string | null;
+  range_high?: number | null;
+  range_low?: number | null;
+  validity?: string | null;
+  diagnostics?: string[];
+};
+
+export type VolumeAnalysis = {
+  timeframe?: string | null;
+  state?: string | null;
+  volume_ratio?: number | null;
+  price_direction?: string | null;
+  trend_direction?: string | null;
+  validity?: string | null;
+  diagnostics?: string[];
+};
+
+export type AnchoredVWAPLevel = {
+  anchor?: string | null;
+  anchor_bar_index?: number | null;
+  vwap_price?: number | null;
+  location?: string | null;
+  distance_pct?: number | null;
+};
+
+export type VWAPAnalysis = {
+  timeframe?: string | null;
+  session_vwap?: number | null;
+  location?: string | null;
+  deviation_pct?: number | null;
+  deviation_extreme?: boolean;
+  reclaim?: boolean;
+  rejection?: boolean;
+  anchored?: AnchoredVWAPLevel[];
+  validity?: string | null;
+  diagnostics?: string[];
+};
+
+export type LiquiditySweepAnalysis = {
+  timeframe?: string | null;
+  state?: string | null;
+  swing_high?: number | null;
+  swing_low?: number | null;
+  sweep_price?: number | null;
+  reclaim_price?: number | null;
+  bias?: string | null;
+  validity?: string | null;
+  diagnostics?: string[];
+};
+
+export type ExhaustionAnalysis = {
+  timeframe?: string | null;
+  score?: number | null;
+  rsi?: number | null;
+  recent_return_pct?: number | null;
+  contributions?: string[];
+  validity?: string | null;
+  diagnostics?: string[];
+};
+
+export type LocationScoreAnalysis = {
+  score?: number | null;
+  location_class?: string | null;
+  contributions?: string[];
+  validity?: string | null;
+  diagnostics?: string[];
+};
+
+export type TriggerAnalysis = {
+  timeframe?: string | null;
+  state?: string | null;
+  trigger_score?: number | null;
+  matched_triggers?: string[];
+  validity?: string | null;
+  diagnostics?: string[];
+};
+
 export type MarketSessionAsset = {
   generated_at?: string | null;
   asset_code: string;
@@ -281,6 +391,38 @@ export const api = {
   technicalInsight: (symbol: string) =>
     fetchJSON<TechnicalInsight>(
       `/api/v1/technical/insight/${encodeURIComponent(symbol)}`,
+    ),
+  elliottScenario: (symbol: string, timeframe = "1d") =>
+    fetchJSON<ElliottAnalysis>(
+      `/api/v1/technical/elliott/${encodeURIComponent(symbol)}?timeframe=${encodeURIComponent(timeframe)}`,
+    ),
+  zoneAnalysis: (symbol: string, timeframe = "1d") =>
+    fetchJSON<ZoneAnalysis>(
+      `/api/v1/technical/zones/${encodeURIComponent(symbol)}?timeframe=${encodeURIComponent(timeframe)}`,
+    ),
+  volumeAnalysis: (symbol: string, timeframe = "1d") =>
+    fetchJSON<VolumeAnalysis>(
+      `/api/v1/technical/volume/${encodeURIComponent(symbol)}?timeframe=${encodeURIComponent(timeframe)}`,
+    ),
+  vwapAnalysis: (symbol: string, timeframe = "1d") =>
+    fetchJSON<VWAPAnalysis>(
+      `/api/v1/technical/vwap/${encodeURIComponent(symbol)}?timeframe=${encodeURIComponent(timeframe)}`,
+    ),
+  liquiditySweepAnalysis: (symbol: string, timeframe = "1d") =>
+    fetchJSON<LiquiditySweepAnalysis>(
+      `/api/v1/technical/liquidity-sweep/${encodeURIComponent(symbol)}?timeframe=${encodeURIComponent(timeframe)}`,
+    ),
+  exhaustionScore: (symbol: string, timeframe = "1d") =>
+    fetchJSON<ExhaustionAnalysis>(
+      `/api/v1/technical/exhaustion/${encodeURIComponent(symbol)}?timeframe=${encodeURIComponent(timeframe)}`,
+    ),
+  locationScore: (symbol: string, timeframe = "1d") =>
+    fetchJSON<LocationScoreAnalysis>(
+      `/api/v1/technical/location-score/${encodeURIComponent(symbol)}?timeframe=${encodeURIComponent(timeframe)}`,
+    ),
+  triggerAnalysis: (symbol: string, timeframe = "1d") =>
+    fetchJSON<TriggerAnalysis>(
+      `/api/v1/technical/trigger/${encodeURIComponent(symbol)}?timeframe=${encodeURIComponent(timeframe)}`,
     ),
   paperTradingTick: () =>
     fetchJSON<TickResult>("/api/v1/paper-trading/tick", { method: "POST" }),

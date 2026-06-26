@@ -189,7 +189,7 @@ export type TimeframeSummary = {
 };
 
 export type LLMMeta = {
-  mode?: "off" | "mock" | "groq";
+  mode?: "off" | "mock" | "groq" | "openrouter";
   model?: string | null;
   source?: "llm" | "fallback" | "guard";
   fallback_reason?: string | null;
@@ -1732,6 +1732,12 @@ export type ShadowRow = {
   shadow_direction?: string | null;
   shadow_entry_timeframe?: string | null;
   shadow_stance?: string | null;
+  elliott_scenario?: string | null;
+  elliott_confidence?: number | null;
+  elliott_bias?: string | null;
+  historical_edge_sample_count?: number | null;
+  historical_edge_win_rate?: number | null;
+  historical_edge_confidence?: string | null;
 };
 
 export type ShadowComparison = {

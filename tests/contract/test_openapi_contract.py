@@ -98,7 +98,17 @@ def _documented_get_endpoints():
     for p, item in SPEC["paths"].items():
         if "get" not in item or "{" in p:  # path-param'lı GET ayrı test edilir
             continue
-        content = item["get"].get("responses", {}).get("200", {}).get("content", {})
+        get_op = item["get"]
+        # Zorunlu query param'lı GET'ler argümansız client.get(path) ile çağrılamaz
+        # (422 döner — bu bir contract ihlali değil, sadece bu testin kapsamı dışında;
+        # path-param'lı GET'lerle aynı mantık). Örn. /learning/historical-edge?fingerprint=...
+        required_query = any(
+            pp.get("in") == "query" and pp.get("required")
+            for pp in get_op.get("parameters", [])
+        )
+        if required_query:
+            continue
+        content = get_op.get("responses", {}).get("200", {}).get("content", {})
         # SSE / streaming endpoint'leri request-response değil — blocking
         # client.get() ile test edilemez (akış kopana dek bekler). Conformance
         # dışında tutulur.

@@ -497,6 +497,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/learning/historical-edge": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Fuzzy-similarity historical edge — read-only; mistake_memory exact-match gate'inin tamamlayıcısı */
+        get: operations["getHistoricalEdge"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/learning/rebalance/proposal": {
         parameters: {
             query?: never;
@@ -727,6 +744,142 @@ export interface paths {
         };
         /** New multi-timeframe agent pipeline (steps 1–6) per-symbol matrix — read-only */
         get: operations["getAgentMatrix"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/technical/elliott/{asset_code}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Elliott Wave senaryosu (EVIDENCE only) — read-only; hiçbir karar zincirine bağlı değil */
+        get: operations["getElliottScenario"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/technical/zones/{asset_code}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Support/resistance zone analizi (EVIDENCE only) — read-only; hiçbir karar zincirine bağlı değil */
+        get: operations["getZoneAnalysis"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/technical/volume/{asset_code}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Hacim doğrulama analizi (EVIDENCE only) — read-only; hiçbir karar zincirine bağlı değil */
+        get: operations["getVolumeAnalysis"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/technical/vwap/{asset_code}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** VWAP / Anchored VWAP analizi (EVIDENCE only) — read-only; hiçbir karar zincirine bağlı değil */
+        get: operations["getVwapAnalysis"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/technical/liquidity-sweep/{asset_code}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Liquidity sweep / stop-hunt tespiti (EVIDENCE only) — read-only; hiçbir karar zincirine bağlı değil */
+        get: operations["getLiquiditySweepAnalysis"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/technical/exhaustion/{asset_code}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Exhaustion Score (EVIDENCE only, yön skoru değil) — read-only; hiçbir karar zincirine bağlı değil */
+        get: operations["getExhaustionScore"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/technical/location-score/{asset_code}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Location Score (EVIDENCE only) — read-only; hiçbir karar zincirine bağlı değil */
+        get: operations["getLocationScore"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/technical/trigger/{asset_code}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Trigger Engine (EVIDENCE only) — read-only; hiçbir karar zincirine bağlı değil */
+        get: operations["getTriggerAnalysis"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1006,7 +1159,7 @@ export interface components {
         /** @description v2.6 — LLM çağrı meta'sı; source=fallback → deterministik narrative. */
         LLMMeta: {
             /** @enum {string} */
-            mode?: "off" | "mock" | "groq";
+            mode?: "off" | "mock" | "groq" | "openrouter";
             model?: string | null;
             /** @enum {string} */
             source?: "llm" | "fallback" | "guard";
@@ -2473,6 +2626,12 @@ export interface components {
             shadow_direction?: string | null;
             shadow_entry_timeframe?: string | null;
             shadow_stance?: string | null;
+            elliott_scenario?: string | null;
+            elliott_confidence?: number | null;
+            elliott_bias?: string | null;
+            historical_edge_sample_count?: number | null;
+            historical_edge_win_rate?: number | null;
+            historical_edge_confidence?: string | null;
         };
         /** @description Step 9 controlled activation (observation mode). Latest comparison of the live decide_matrix engine vs the NEW agent pipeline running in shadow. affected_paper is always false in Phase A — the shadow never moves paper; this is read-only. */
         ShadowComparison: {
@@ -3200,6 +3359,28 @@ export interface operations {
             };
         };
     };
+    getHistoricalEdge: {
+        parameters: {
+            query: {
+                fingerprint: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
+                };
+            };
+        };
+    };
     getLearningRebalanceProposal: {
         parameters: {
             query?: never;
@@ -3514,6 +3695,198 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AgentMatrix"];
+                };
+            };
+        };
+    };
+    getElliottScenario: {
+        parameters: {
+            query?: {
+                timeframe?: string;
+            };
+            header?: never;
+            path: {
+                asset_code: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
+                };
+            };
+        };
+    };
+    getZoneAnalysis: {
+        parameters: {
+            query?: {
+                timeframe?: string;
+            };
+            header?: never;
+            path: {
+                asset_code: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
+                };
+            };
+        };
+    };
+    getVolumeAnalysis: {
+        parameters: {
+            query?: {
+                timeframe?: string;
+            };
+            header?: never;
+            path: {
+                asset_code: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
+                };
+            };
+        };
+    };
+    getVwapAnalysis: {
+        parameters: {
+            query?: {
+                timeframe?: string;
+            };
+            header?: never;
+            path: {
+                asset_code: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
+                };
+            };
+        };
+    };
+    getLiquiditySweepAnalysis: {
+        parameters: {
+            query?: {
+                timeframe?: string;
+            };
+            header?: never;
+            path: {
+                asset_code: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
+                };
+            };
+        };
+    };
+    getExhaustionScore: {
+        parameters: {
+            query?: {
+                timeframe?: string;
+            };
+            header?: never;
+            path: {
+                asset_code: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
+                };
+            };
+        };
+    };
+    getLocationScore: {
+        parameters: {
+            query?: {
+                timeframe?: string;
+            };
+            header?: never;
+            path: {
+                asset_code: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
+                };
+            };
+        };
+    };
+    getTriggerAnalysis: {
+        parameters: {
+            query?: {
+                timeframe?: string;
+            };
+            header?: never;
+            path: {
+                asset_code: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
                 };
             };
         };

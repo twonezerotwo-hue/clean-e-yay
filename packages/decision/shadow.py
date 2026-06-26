@@ -27,9 +27,22 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+from packages.data.providers import ohlcv
 from packages.data.registry.loader import load_thresholds
-from packages.decision import agent_pipeline
-from packages.learning import tf_contribution
+from packages.decision import agent_pipeline, conflict_resolver
+from packages.elliott import engine as elliott_engine
+from packages.learning import historical_edge, tf_contribution
+from packages.liquidity import sweep as liquidity_sweep_engine
+from packages.mode import config as mode_config
+from packages.mode import filter as mode_filter
+from packages.mode import profile_selector
+from packages.scoring import exhaustion as exhaustion_engine
+from packages.setup import classifier as setup_classifier
+from packages.volume import engine as volume_engine
+from packages.zones import engine as zone_engine
+
+# ConsensusSnapshot/per_timeframe key naming (m15..w1) → entry timeframe label.
+_KEY_BY_TF = {"15m": "m15", "1h": "h1", "4h": "h4", "1d": "d1", "1w": "w1"}
 
 DEFAULT_PATH = "data/runtime/shadow_decisions.jsonl"
 DEFAULT_MAX_READ = 200
@@ -115,7 +128,177 @@ def _live_for_symbol(symbol: str, live_decisions: Sequence[Any]) -> dict:
         "confidence": float(getattr(top, "confidence", 0.0) or 0.0) if top is not None else 0.0,
         "entry_cells": len(entries),
         "evaluated_cells": len(cells),
+        # Additive — historical_edge lookup anahtarı (bkz. _evidence_for_symbol).
+        "fingerprint": getattr(top, "fingerprint", None) if top is not None else None,
     }
+
+
+def _evidence_for_symbol(symbol: str | None, *, fingerprint: str | None, timeframe: str | None) -> dict:
+    """Additive, read-only kanıt özeti: Elliott senaryosu + fuzzy historical edge.
+
+    Bu fonksiyon `agreement`/`wants_entry` hesabını ETKİLEMEZ — yalnızca shadow
+    kaydına ekstra gözlem alanı ekler. Her adım defensive: bar/veri yoksa veya
+    bir hesap patlarsa boş dict döner, observe() ASLA bundan dolayı çökmez
+    (mevcut "observation never breaks the tick" sözleşmesi, bkz. modül docstring).
+    """
+    if not symbol:
+        return {}
+    tf = timeframe or "1d"
+    out: dict = {}
+    try:
+        bars = ohlcv.get_bars(symbol, tf) or []
+        elliott = elliott_engine.analyze(bars, timeframe=tf)
+        out["elliott"] = {
+            "primary_scenario": elliott.primary_scenario,
+            "confidence": elliott.confidence,
+            "bias": elliott.bias,
+        }
+    except Exception:
+        out["elliott"] = {}
+    try:
+        if fingerprint:
+            edge = historical_edge.compute_edge(fingerprint)
+            out["historical_edge"] = {
+                "sample_count": edge.sample_count,
+                "win_rate": edge.win_rate,
+                "edge_confidence": edge.edge_confidence,
+            }
+        else:
+            out["historical_edge"] = {}
+    except Exception:
+        out["historical_edge"] = {}
+    return out
+
+
+def _entry_tf_result(view: Any, entry_timeframe: str | None) -> Any | None:
+    """view.agent.per_timeframe[key] için entry_timeframe karşılığı (yoksa None)."""
+    key = _KEY_BY_TF.get(entry_timeframe or "")
+    if key is None:
+        return None
+    per_tf = getattr(getattr(view, "agent", None), "per_timeframe", None) or {}
+    return per_tf.get(key)
+
+
+def _setup_and_conflict_for_symbol(
+    view: Any,
+    *,
+    fingerprint: str | None,
+    risk_action: str | None,
+    dqs_status: str,
+) -> dict:
+    """Setup Classifier + Conflict Resolver — additive, gözlem amaçlı (spec v2.3 §19/§28).
+
+    Sadece zaten hesaplanmış kanıtları (consensus, decision, economics, entry TF
+    technical result, Elliott, historical edge) okur. Hiçbir karar zincirini
+    etkilemez; bu fonksiyonun çıktısı sadece shadow kaydına eklenir. Her adım
+    defensive — hesap patlarsa boş dict döner, observe() ASLA çökmez.
+    """
+    try:
+        consensus = getattr(view, "consensus", None)
+        decision = getattr(view, "decision", None)
+        economics = getattr(view, "economics", None)
+        entry_tf = getattr(decision, "entry_timeframe", None)
+        entry_result = _entry_tf_result(view, entry_tf)
+
+        chart_patterns = getattr(entry_result, "chart_pattern_analysis", None)
+        reversal = getattr(entry_result, "reversal_signals", None)
+        trend = getattr(entry_result, "trend_strength", None)
+
+        symbol = getattr(view, "symbol", None)
+        tf = entry_tf or "1d"
+        bars = ohlcv.get_bars(symbol, tf) or [] if symbol else []
+        elliott = elliott_engine.analyze(bars, timeframe=tf)
+
+        # Faz 4 — additive: Faz 1/2 motorlarından (Volume/Liquidity-Sweep/
+        # Exhaustion/Zone) kanıt üretip Setup Classifier'a besle.
+        current_price = bars[-1].close if bars else None
+        volume = volume_engine.analyze(bars, timeframe=tf)
+        sweep = liquidity_sweep_engine.analyze(bars, timeframe=tf)
+        exhaustion = exhaustion_engine.analyze(bars, timeframe=tf, volume=volume, sweep=sweep)
+        zone = zone_engine.analyze(bars, timeframe=tf, current_price=current_price)
+
+        setup_inputs = setup_classifier.SetupInputs(
+            direction_score=getattr(consensus, "direction_score", None),
+            alignment_status=getattr(consensus, "alignment_status", "CONFLICTED"),
+            is_countertrend=bool(getattr(consensus, "is_countertrend", False)),
+            entry_timeframe=entry_tf,
+            volatility_regime=getattr(entry_result, "volatility_regime", "UNKNOWN"),
+            trend_label=getattr(trend, "label", "UNKNOWN"),
+            is_trending=bool(getattr(trend, "is_trending", False)),
+            chart_pattern_names=tuple(
+                p.name for p in (getattr(chart_patterns, "active_patterns", None) or [])
+            ),
+            reversal_bias=getattr(reversal, "bias", "NEUTRAL"),
+            zone_location=zone.location if zone.validity != "unavailable" else None,
+            elliott_scenario=elliott.primary_scenario,
+            elliott_bias=elliott.bias,
+            elliott_confidence=elliott.confidence,
+            liquidity_sweep_bias=sweep.bias if sweep.validity != "unavailable" else "unknown",
+            exhaustion_score=exhaustion.score if exhaustion.validity != "unavailable" else None,
+            volume_state=volume.state if volume.validity != "unavailable" else None,
+            volume_price_direction=volume.price_direction if volume.validity != "unavailable" else None,
+        )
+        setup_result = setup_classifier.classify(setup_inputs)
+
+        edge_strong_negative = False
+        if fingerprint:
+            edge = historical_edge.compute_edge(fingerprint)
+            edge_strong_negative = historical_edge.is_strong_negative(edge)
+
+        # Faz 4 — additive: Trade Profile Selector + Agent Mode Filter.
+        trade_profile = profile_selector.select_profile(setup_result.setup_type, entry_tf)
+        mode_cfg = mode_config.load_config()
+        mode_result = mode_filter.evaluate(
+            setup_type=setup_result.setup_type,
+            trade_profile=trade_profile,
+            is_countertrend=bool(getattr(consensus, "is_countertrend", False)),
+            cfg=mode_cfg,
+        )
+
+        conflict_inputs = conflict_resolver.ConflictInputs(
+            dqs_status="BAD" if dqs_status == "BLOCKED" else dqs_status,
+            risk_gate_action=risk_action or "HOLD",
+            trigger_confirmed=getattr(decision, "action", None) == "SCOUT_ALLOWED",
+            sl_tp_rr_valid=bool(getattr(economics, "allow", False)) if economics is not None else False,
+            setup_type=setup_result.setup_type,
+            historical_edge_strong_negative=edge_strong_negative,
+            size_multiplier=float(getattr(decision, "size_multiplier", 0.0) or 0.0),
+            alignment_status=getattr(consensus, "alignment_status", "CONFLICTED"),
+            elliott_scenario=elliott.primary_scenario,
+            elliott_confidence=elliott.confidence,
+            mode_filter_passed=mode_result.passed,
+            mode_filter_blocked_reason=mode_result.blocked_reason,
+            trade_profile=trade_profile,
+        )
+        resolution = conflict_resolver.resolve(conflict_inputs)
+
+        return {
+            "setup_type": setup_result.setup_type,
+            "setup_reason": setup_result.reason,
+            "setup_direction": setup_result.direction,
+            "trade_profile": trade_profile,
+            "mode_filter_passed": mode_result.passed,
+            "mode_filter_blocked_reason": mode_result.blocked_reason,
+            "conflict_final_action": resolution.final_action,
+            "conflict_blocked_by": list(resolution.blocked_by),
+            "conflict_path": list(resolution.conflict_resolution_path),
+        }
+    except Exception:
+        return {}
+
+
+def evaluate_symbol(
+    view: Any, *, fingerprint: str | None, risk_action: str | None, dqs_status: str
+) -> dict:
+    """Public giriş noktası — Setup Classifier + Conflict Resolver'ı tek bir sembol
+    view'i için değerlendirir (Faz 7 — `conflict_resolver_activation.py` bunu kullanır).
+
+    `build_comparison()`'ın her satır için zaten yaptığı hesabın aynısıdır; burada
+    sadece dışarıdan çağrılabilir hale getirilmiştir. Read-only, paper'a dokunmaz.
+    """
+    return _setup_and_conflict_for_symbol(
+        view, fingerprint=fingerprint, risk_action=risk_action, dqs_status=dqs_status
+    )
 
 
 def _shadow_for_symbol(view: Any) -> dict:
@@ -153,6 +336,7 @@ def build_comparison(
     calibration: dict | None = None,
     tf_weights: dict[str, float] | None = None,
     now: datetime | None = None,
+    dqs_status: str = "OK",
 ) -> dict:
     """Pure comparison record: per-symbol live-vs-shadow intent + agreement summary.
 
@@ -179,8 +363,24 @@ def build_comparison(
         shadow = _shadow_for_symbol(view)
         agreement = _agreement(live, shadow)
         counts[agreement] = counts.get(agreement, 0) + 1
+        # Additive — agreement/wants_entry hesabını etkilemez (bkz. _evidence_for_symbol).
+        evidence = _evidence_for_symbol(
+            symbol, fingerprint=live.get("fingerprint"), timeframe=live.get("timeframe")
+        )
+        # Additive — Setup Classifier + Conflict Resolver (spec v2.3 §19/§28),
+        # tamamen gözlem amaçlı; agreement/wants_entry hesabını etkilemez.
+        setup_conflict = _setup_and_conflict_for_symbol(
+            view, fingerprint=live.get("fingerprint"), risk_action=risk_action, dqs_status=dqs_status
+        )
         rows.append(
-            {"symbol": symbol, "live": live, "shadow": shadow, "agreement": agreement}
+            {
+                "symbol": symbol,
+                "live": live,
+                "shadow": shadow,
+                "agreement": agreement,
+                "evidence": evidence,
+                "setup_conflict": setup_conflict,
+            }
         )
         # Per-TF contribution share — empty when nothing pushed (no faking).
         share = tf_contribution.compute_snapshot(view, tf_weights=tf_weights)
@@ -248,6 +448,7 @@ def observe(
     calibration: dict | None = None,
     tf_weights: dict[str, float] | None = None,
     build_views: Callable[..., Sequence[Any]] | None = None,
+    dqs_status: str = "OK",
 ) -> dict:
     """Run the shadow pipeline and build the comparison record (no paper access).
 
@@ -256,7 +457,8 @@ def observe(
     NEVER opens, sizes, or queues a trade — it only composes the new pipeline's view
     and compares it to the live decisions. `calibration` is an opaque trust verdict
     supplied by the caller (which owns paper state); it is embedded, never recomputed
-    here, so this module stays paper-free.
+    here, so this module stays paper-free. `dqs_status` (OK/DEGRADED/BLOCKED) feeds
+    the additive Conflict Resolver evidence only — never the agreement calculation.
     """
     cfg = cfg or load_config()
     builder = build_views or agent_pipeline.build_agent_matrix
@@ -273,6 +475,7 @@ def observe(
         cfg=cfg,
         calibration=calibration,
         tf_weights=tf_weights,
+        dqs_status=dqs_status,
     )
 
 
@@ -312,6 +515,12 @@ def comparison_viewmodel(record: dict | None) -> dict:
     for s in record.get("symbols") or []:
         live = s.get("live") or {}
         shadow_ = s.get("shadow") or {}
+        # Additive — bkz. _evidence_for_symbol; eski kayıtlarda alan yoksa boş kalır.
+        evidence = s.get("evidence") or {}
+        elliott_ev = evidence.get("elliott") or {}
+        edge_ev = evidence.get("historical_edge") or {}
+        # Additive — bkz. _setup_and_conflict_for_symbol; eski kayıtlarda yoksa boş kalır.
+        setup_conflict = s.get("setup_conflict") or {}
         rows.append(
             {
                 "symbol": s.get("symbol"),
@@ -325,6 +534,19 @@ def comparison_viewmodel(record: dict | None) -> dict:
                 "shadow_direction": shadow_.get("direction"),
                 "shadow_entry_timeframe": shadow_.get("entry_timeframe"),
                 "shadow_stance": shadow_.get("stance"),
+                "elliott_scenario": elliott_ev.get("primary_scenario"),
+                "elliott_confidence": elliott_ev.get("confidence"),
+                "elliott_bias": elliott_ev.get("bias"),
+                "historical_edge_sample_count": edge_ev.get("sample_count"),
+                "historical_edge_win_rate": edge_ev.get("win_rate"),
+                "historical_edge_confidence": edge_ev.get("edge_confidence"),
+                "setup_type": setup_conflict.get("setup_type"),
+                "setup_reason": setup_conflict.get("setup_reason"),
+                "trade_profile": setup_conflict.get("trade_profile"),
+                "mode_filter_passed": setup_conflict.get("mode_filter_passed"),
+                "mode_filter_blocked_reason": setup_conflict.get("mode_filter_blocked_reason"),
+                "conflict_final_action": setup_conflict.get("conflict_final_action"),
+                "conflict_blocked_by": list(setup_conflict.get("conflict_blocked_by") or []),
             }
         )
     return {
