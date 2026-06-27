@@ -889,6 +889,89 @@ function TriggerPanel({ analysis }: { analysis?: TriggerAnalysis | null }) {
   );
 }
 
+function plainSweepBias(state: string | null | undefined, bias: string | null | undefined): string {
+  if (state === "LOW_SWEEP_PENDING") return "likidite süpürmesi (stop avı) henüz olmadı, bekleniyor";
+  if (state?.includes("SWEEP") && state?.includes("CONFIRMED")) {
+    return `likidite süpürüldü — yön: ${bias === "bullish" ? "yukarı" : bias === "bearish" ? "aşağı" : "belirsiz"}`;
+  }
+  return "likidite durumu net değil";
+}
+
+function plainExhaustion(score: number | null | undefined, rsi: number | null | undefined): string {
+  if (score == null) return "tükenme verisi yok";
+  if (score >= 70) return `yukarı yönde tükenme belirtisi var (${score}/100)${rsi != null ? `, RSI ${rsi}` : ""}`;
+  if (score <= 30) return `aşağı yönde tükenme belirtisi var (${score}/100)${rsi != null ? `, RSI ${rsi}` : ""}`;
+  return `ne alıcı ne satıcı tükenmiş — orta bölge (${score}/100)${rsi != null ? `, RSI ${rsi}` : ""}`;
+}
+
+function plainLocation(score: number | null | undefined, locationClass: string | null | undefined): string {
+  if (score == null) return "konum verisi yok";
+  if (score >= 65) return `iyi konum (${score}/100) — destek/direnç netliği var`;
+  if (score <= 35) return `kötü konum (${score}/100) — fiyat orta bölgede, ne destekte ne dirençte (${locationClass ?? "mid_range"})`;
+  return `orta konum (${score}/100)`;
+}
+
+function plainTrigger(state: string | null | undefined, matched: string[] | null | undefined): string {
+  if (state === "TRIGGER_MISSING" || !matched || matched.length === 0) {
+    return "hiçbir tetikleyici sinyal yok — şimdi gir diyen bir motor yok";
+  }
+  return `tetikleyici(ler) eşleşti: ${matched.join(", ")}`;
+}
+
+function plainVerdict(
+  volume?: VolumeAnalysis | null,
+  location?: LocationScoreAnalysis | null,
+  trigger?: TriggerAnalysis | null,
+): string {
+  const weakVolume = !volume?.volume_ratio || volume.volume_ratio < 1.2;
+  const badLocation = (location?.score ?? 50) <= 35;
+  const noTrigger = !trigger?.matched_triggers || trigger.matched_triggers.length === 0;
+  if (weakVolume && badLocation && noTrigger) {
+    return "Şu an belirsiz/orta bölge: hacim zayıf, konum net değil, tetik yok — sistem bu yüzden işlem açmıyor. Bu, veri eksikliği değil, net bir sinyal olmadığının göstergesi.";
+  }
+  if (!noTrigger) {
+    return "En az bir tetikleyici eşleşti — diğer motorlarla birlikte değerlendirilmeli.";
+  }
+  return "Karışık sinyaller var — tek bir motor net konuşmuyor.";
+}
+
+function PlainLanguageSummary({
+  symbol,
+  volume,
+  vwap,
+  sweep,
+  exhaustion,
+  location,
+  trigger,
+}: {
+  symbol: string;
+  volume?: VolumeAnalysis | null;
+  vwap?: VWAPAnalysis | null;
+  sweep?: LiquiditySweepAnalysis | null;
+  exhaustion?: ExhaustionAnalysis | null;
+  location?: LocationScoreAnalysis | null;
+  trigger?: TriggerAnalysis | null;
+}) {
+  return (
+    <div className="rounded-xl border border-cyan-400/20 bg-cyan-400/[0.04] p-3 text-xs leading-6 text-white/78">
+      <div className="text-[10px] uppercase tracking-[0.22em] text-cyan-200/60">
+        {symbol} — sade özet
+      </div>
+      <ul className="mt-1.5 list-disc space-y-1 pl-4">
+        <li>Hacim: {volume?.volume_ratio != null ? `${volume.volume_ratio.toFixed(2)}x ortalama — ${volume.volume_ratio < 1.2 ? "yön doğrulayacak kadar güçlü değil" : "güçlü, yönü destekliyor"}` : "veri yok"}.</li>
+        <li>VWAP: {vwap?.location && vwap.location !== "unknown" ? `fiyat VWAP'a göre ${vwap.location}` : "hesaplanamadı (yetersiz veri)"}{vwap?.reclaim ? ", reclaim oldu" : ""}{vwap?.rejection ? ", reddedildi" : ""}.</li>
+        <li>Likidite: {plainSweepBias(sweep?.state, sweep?.bias)}.</li>
+        <li>Tükenme: {plainExhaustion(exhaustion?.score, exhaustion?.rsi)}.</li>
+        <li>Konum: {plainLocation(location?.score, location?.location_class)}.</li>
+        <li>Tetik: {plainTrigger(trigger?.state, trigger?.matched_triggers)}.</li>
+      </ul>
+      <div className="mt-2 border-t border-white/10 pt-2 text-white/85">
+        {plainVerdict(volume, location, trigger)}
+      </div>
+    </div>
+  );
+}
+
 export function Layer2SetupConflictLabPanel() {
   const registry = useAssetRegistry();
   const [selected, setSelected] = useState("BTCUSD");
@@ -907,6 +990,15 @@ export function Layer2SetupConflictLabPanel() {
   return (
     <div className="space-y-4">
       <AssetSelector assets={tradeAssets} activeSymbol={activeSymbol} onSelect={setSelected} />
+      <PlainLanguageSummary
+        symbol={activeSymbol}
+        volume={volume.data}
+        vwap={vwap.data}
+        sweep={sweep.data}
+        exhaustion={exhaustion.data}
+        location={location.data}
+        trigger={trigger.data}
+      />
       <div className="grid gap-4 xl:grid-cols-3">
         <VolumePanel analysis={volume.data} />
         <VWAPPanel analysis={vwap.data} />

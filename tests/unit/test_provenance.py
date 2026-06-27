@@ -47,6 +47,9 @@ def _patch_live_fail(monkeypatch, price_mod) -> None:
     monkeypatch.setattr(price_mod.coingecko, "get_quote", lambda s: None)
     monkeypatch.setattr(price_mod.yfinance, "get_quote", lambda s: None)
     monkeypatch.setattr(price_mod.fred, "get_quote", lambda s: None)
+    monkeypatch.setattr(price_mod.twelvedata, "get_quote", lambda s: None)
+    monkeypatch.setattr(price_mod.alphavantage, "get_quote", lambda s: None)
+    monkeypatch.setattr(price_mod.finnhub, "get_quote", lambda s: None)
 
 
 # ---------- provenance helper ----------

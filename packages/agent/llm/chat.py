@@ -49,7 +49,12 @@ _ANALYZE_ALIASES = {
 _ANALYZE_INTENT = (
     "analiz", "teknik", "incele", "yorumla", "yorum", "rsi", "trend",
     "nasıl görün", "nasil gorun", "ne durumda", "grafik", "momentum",
+    "fiyat", "kaç para", "kac para", "ne kadar", "değer", "deger", "kaça",
 )
+
+# Destek/direnç niyeti — sembol + bu kelimelerden biri → multi-TF Fibonacci
+# destek/direnç taraması (gerçek OHLCV swing'lerinden, uydurma seviye yok).
+_SR_INTENT = ("destek", "direnç", "direnc", "support", "resistance")
 
 _TIMEFRAMES = ("15m", "1h", "4h", "1d", "1w")
 
@@ -158,6 +163,59 @@ def _asset_analysis_answer(symbol: str) -> tuple[str, list[str]]:
     parts.append("Not: işlem evreni dışı / gözlemci — otomatik işlem yok.")
     evidence = [f"analysis:{symbol}", f"score:{a['overall_score']}"]
     evidence += [f"tf:{t}:{d['score']}" for t, d in tf.items()]
+    return " ".join(parts), evidence
+
+
+def _support_resistance_answer(symbol: str) -> tuple[str, list[str]]:
+    """Tüm zaman dilimlerinde gerçek OHLCV swing'lerinden destek/direnç taraması.
+
+    packages/data/providers/technical/fibonacci.py kullanır — uydurma seviye
+    yok, veri yetersizse o zaman dilimi atlanır (DATA_POLICY).
+    """
+    from packages.data.providers.ohlcv import get_bars
+    from packages.data.providers.technical import fibonacci
+
+    fib_tf_map = {"4h": "4H", "1d": "1D"}
+    parts = [f"{symbol} destek/direnç (gerçek swing'lerden, tüm zaman dilimleri):"]
+    evidence = [f"sr:{symbol}"]
+    found_any = False
+    for tf, fib_tf in fib_tf_map.items():
+        bars = get_bars(symbol, tf)
+        if not bars:
+            continue
+        current = float(bars[-1].close) if bars[-1].close is not None else None
+        result = fibonacci.analyze(bars, timeframe=fib_tf, current_price=current)
+        if result.validity == "unavailable" or not result.levels:
+            parts.append(f"{tf}: yeterli veri/swing yok.")
+            continue
+        found_any = True
+        supports = sorted(
+            (lvl for lvl in result.levels if lvl.role == "support"),
+            key=lambda lvl: lvl.distance_pct or 9e9,
+        )
+        resistances = sorted(
+            (lvl for lvl in result.levels if lvl.role == "resistance"),
+            key=lambda lvl: lvl.distance_pct or 9e9,
+        )
+        bits = []
+        if supports:
+            s = supports[0]
+            bits.append(f"en yakın destek {s.price:,.4f} (%{s.distance_pct:.2f} aşağıda)")
+            evidence.append(f"sr:{symbol}:{tf}:support:{s.price}")
+        if resistances:
+            r = resistances[0]
+            bits.append(f"en yakın direnç {r.price:,.4f} (%{r.distance_pct:.2f} yukarıda)")
+            evidence.append(f"sr:{symbol}:{tf}:resistance:{r.price}")
+        if bits:
+            parts.append(f"{tf} ({result.trend_direction or 'bilinmiyor'}): " + ", ".join(bits) + ".")
+        else:
+            parts.append(f"{tf}: seviyeler nötr bölgede, anlamlı destek/direnç ayrışmıyor.")
+    if not found_any:
+        return (
+            f"{symbol} için destek/direnç hesaplanamadı — yeterli OHLCV verisi yok.",
+            [f"sr:{symbol}:unavailable"],
+        )
+    parts.append("Not: gözlemci teknik kanıt — otomatik işlem üretmez.")
     return " ".join(parts), evidence
 
 
@@ -941,6 +999,8 @@ def _grounded_answer(message: str, ctx: dict) -> tuple[str, list[str]]:
     # Geçici teknik analiz: desteklenen sembol + analiz niyeti, VEYA işlem
     # evreni dışı bir sembol (onun için "neden işlem yok" mantığı yoktur).
     analyze_sym = _detect_analyze_symbol(folded)
+    if analyze_sym and any(k in folded for k in _SR_INTENT):
+        return _support_resistance_answer(analyze_sym)
     if analyze_sym and (
         any(k in folded for k in _ANALYZE_INTENT) or analyze_sym not in _TRADE_UNIVERSE
     ):

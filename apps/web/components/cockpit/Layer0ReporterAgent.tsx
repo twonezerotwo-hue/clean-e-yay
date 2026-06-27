@@ -76,8 +76,10 @@ export type Layer0HeroProps = {
   tone: string;
   status: { label: string; tone: string };
   dqs: { value: string; tone: string };
+  pnl: { value: string; tone: string };
   candidates: number;
   positions: number;
+  topSymbols: string;
   scans: { veri: ScanItem; risk: ScanItem; sinyal: ScanItem; ticket: ScanItem };
   watch: { key: string; label: string }[];
 };
@@ -720,23 +722,43 @@ function Layer0StatusCore({
   hero: Layer0HeroProps;
   onNavigate: (layer: 0 | 1 | 2 | 3) => void;
 }) {
-  const metrics = [
-    { label: "Durum", value: hero.status.label, tone: hero.status.tone },
-    { label: "DQS", value: hero.dqs.value, tone: hero.dqs.tone },
-    { label: "Aday", value: String(hero.candidates), tone: "text-emerald-200" },
-    { label: "Pozisyon", value: String(hero.positions), tone: "text-amber-200" },
+  const scanEntries = [
+    { key: "veri", item: hero.scans.veri, target: "Energy" },
+    { key: "risk", item: hero.scans.risk, target: "Risk" },
+    { key: "sinyal", item: hero.scans.sinyal, target: "Heart" },
+    { key: "ticket", item: hero.scans.ticket, target: "Ticket" },
   ];
-  const nodes = [
-    { key: "veri", item: hero.scans.veri, index: "01", onClick: () => onNavigate(3) },
-    { key: "risk", item: hero.scans.risk, index: "02" },
-    { key: "sinyal", item: hero.scans.sinyal, index: "03", onClick: () => onNavigate(1) },
-    { key: "ticket", item: hero.scans.ticket, index: "04" },
+  const readState = (item: ScanItem) => item.state ?? (item.ok ? "OK" : "IZLE");
+  const blocked = scanEntries.filter(({ item }) => readState(item) === "ENGEL");
+  const watching = scanEntries.filter(({ item }) => readState(item) === "IZLE");
+  const primary = blocked[0] ?? watching[0] ?? scanEntries[0];
+  const readyCount = scanEntries.filter(({ item }) => readState(item) === "OK").length;
+  const actionLabel =
+    hero.positions > 0
+      ? "Acik islemi yonet"
+      : hero.scans.ticket.ok
+        ? "Ticket kontrol et"
+        : hero.scans.sinyal.ok
+          ? "Sinyali dogrula"
+          : blocked.length
+            ? "Yeni giris kapali"
+            : "Radari izle";
+  const actionDetail =
+    primary && readState(primary.item) !== "OK"
+      ? `${primary.item.label}: ${primary.item.value}`
+      : hero.detail;
+  const nextWatch = hero.watch[0]?.label ?? "Yeni sinyal, risk veya ticket degisimi bekleniyor.";
+  const decisionTiles = [
+    { label: "P&L", value: hero.pnl.value, tone: hero.pnl.tone },
+    { label: "Risk", value: hero.scans.risk.value, tone: readState(hero.scans.risk) === "OK" ? "text-emerald-300" : "text-amber-200" },
+    { label: "Sinyal", value: hero.scans.sinyal.value, tone: hero.scans.sinyal.ok ? "text-emerald-300" : "text-amber-200" },
+    { label: "Ticket", value: hero.scans.ticket.value, tone: hero.scans.ticket.ok ? "text-emerald-300" : "text-slate-300" },
   ];
 
   return (
     <div className="layer0-status-core shrink-0">
       <div className="layer0-status-core__scan" aria-hidden />
-      <div className="layer0-status-core__head">
+      <div className="layer0-status-core__head layer0-decision-head">
         <div className="min-w-0">
           <div className="layer0-status-core__kicker">Canli karar cekirdegi</div>
           <div className={`layer0-status-core__title ${hero.tone}`}>{hero.title}</div>
@@ -748,61 +770,51 @@ function Layer0StatusCore({
         </div>
       </div>
 
-      <div className="layer0-status-core__metrics">
-        {metrics.map((metric) => (
-          <div key={metric.label} className="layer0-status-metric">
+      <div className="layer0-decision-brief">
+        <div className="layer0-decision-main">
+          <span>Simdi ne yapilmali?</span>
+          <strong>{actionLabel}</strong>
+          <p>{actionDetail}</p>
+        </div>
+        <div className="layer0-decision-score">
+          <span>Hazirlik</span>
+          <strong>{readyCount}/4</strong>
+          <em>DQS {hero.dqs.value}</em>
+        </div>
+      </div>
+
+      <div className="layer0-decision-strip">
+        {decisionTiles.map((metric) => (
+          <div key={metric.label} className="layer0-decision-tile">
             <span>{metric.label}</span>
             <strong className={metric.tone}>{metric.value}</strong>
           </div>
         ))}
       </div>
 
-      <div className="layer0-status-core__nodes">
-        {nodes.map(({ key, item, index, onClick }) => {
-          const state = item.state ?? (item.ok ? "OK" : "IZLE");
-          const cls = `layer0-status-node ${
-            state === "OK"
-              ? "layer0-status-node--ok"
-              : state === "ENGEL"
-                ? "layer0-status-node--block"
-                : "layer0-status-node--watch"
-          }`;
-          const content = (
-            <>
-              <span className="layer0-status-node__pulse" aria-hidden />
-              <span className="layer0-status-node__index">{index}</span>
-              <span className="layer0-status-node__copy">
-                <strong>{item.label}</strong>
-                <em>{item.value}</em>
-              </span>
-              <span className="layer0-status-node__state">{state}</span>
-            </>
-          );
-          if (item.href) {
-            return (
-              <a key={key} href={item.href} className={cls}>
-                {content}
-              </a>
-            );
-          }
-          return (
-            <button key={key} type="button" onClick={onClick} className={cls}>
-              {content}
-            </button>
-          );
-        })}
+      <div className="layer0-decision-focus">
+        <div>
+          <span>{readState(primary.item) === "ENGEL" ? "Ana engel" : "Sirada izlenecek"}</span>
+          <strong>{primary.item.label}</strong>
+          <p>{primary.item.value}</p>
+        </div>
+        <div>
+          <span>Radar</span>
+          <strong>{hero.topSymbols}</strong>
+          <p>{nextWatch}</p>
+        </div>
       </div>
 
-      {hero.watch.length ? (
-        <div className="layer0-status-core__watch">
-          {hero.watch.slice(0, 2).map((item) => (
-            <div key={item.key} className="layer0-status-watch">
-              <span aria-hidden />
-              <p>{item.label}</p>
-            </div>
-          ))}
-        </div>
-      ) : null}
+      <div className="layer0-decision-actions">
+        <button type="button" onClick={() => onNavigate(1)}>
+          Heart radar
+        </button>
+        <button type="button" onClick={() => onNavigate(3)}>
+          Energy veri
+        </button>
+        {hero.scans.risk.href ? <a href={hero.scans.risk.href}>Risk gate</a> : null}
+        {hero.scans.ticket.href ? <a href={hero.scans.ticket.href}>Ticket</a> : null}
+      </div>
     </div>
   );
 }

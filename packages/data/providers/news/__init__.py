@@ -18,10 +18,10 @@ import threading
 import time
 from datetime import UTC, datetime
 
-from packages.data.providers.news import fixtures, rss
+from packages.data.providers.news import fixtures, gdelt, rss
 from packages.data.types import NewsHeadline
 
-_PROVIDER_NAMES = ("news", "geo_news")
+_PROVIDER_NAMES = ("news", "geo_news", "gdelt")
 
 _LOCK = threading.Lock()
 _STATUS: dict[str, dict] = {
@@ -119,6 +119,7 @@ def list_headlines(limit: int = 14, fetch_fn: rss.FetchFn | None = None) -> list
 
     market, market_ok, market_err = rss.fetch_feed_group(rss.MARKET_FEEDS, fetch_fn=fetch_fn)
     geo, geo_ok, geo_err = rss.fetch_feed_group(rss.GEO_FEEDS, geo=True, fetch_fn=fetch_fn)
+    gdelt_headlines, gdelt_err = gdelt.fetch_headlines()
     _mark(
         "news",
         ok=market_ok > 0,
@@ -129,8 +130,13 @@ def list_headlines(limit: int = 14, fetch_fn: rss.FetchFn | None = None) -> list
         ok=geo_ok > 0,
         error=geo_err or ("no fresh geo headlines" if not geo else None),
     )
+    _mark(
+        "gdelt",
+        ok=bool(gdelt_headlines),
+        error=gdelt_err or ("no fresh gdelt headlines" if not gdelt_headlines else None),
+    )
 
-    merged = _dedup(market + geo)
+    merged = _dedup(market + geo + gdelt_headlines)
     merged.sort(key=_sort_key)
 
     if fetch_fn is None:

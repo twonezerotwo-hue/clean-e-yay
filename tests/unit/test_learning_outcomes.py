@@ -197,6 +197,7 @@ def test_15m_outcome_does_not_affect_1d_bucket() -> None:
 @pytest.fixture
 def learn_env(tmp_path, monkeypatch):
     monkeypatch.setenv("PAPER_STATE_PATH", str(tmp_path / "paper.json"))
+    monkeypatch.setenv("DECISION_LOG_PATH", str(tmp_path / "decision_log.jsonl"))
     monkeypatch.setenv("CALIBRATION_STORE_PATH", str(tmp_path / "platt.json"))
     monkeypatch.setenv("REBALANCE_STORE_PATH", str(tmp_path / "rebalance.json"))
     monkeypatch.setenv("WEIGHTS_MANIFEST_PATH", str(tmp_path / "weights_active.json"))

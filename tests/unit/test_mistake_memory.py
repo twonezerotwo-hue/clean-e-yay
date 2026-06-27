@@ -302,6 +302,9 @@ def test_decision_dqs_blocked_with_boost_still_no_trade(fresh_env, monkeypatch) 
     monkeypatch.setattr(price.coingecko, "get_quote", lambda s: None)
     monkeypatch.setattr(price.yfinance, "get_quote", lambda s: None)
     monkeypatch.setattr(price.fred, "get_quote", lambda s: None)
+    monkeypatch.setattr(price.twelvedata, "get_quote", lambda s: None)
+    monkeypatch.setattr(price.alphavantage, "get_quote", lambda s: None)
+    monkeypatch.setattr(price.finnhub, "get_quote", lambda s: None)
 
     from packages.data.ingestion import pipeline as pl
     pl._CACHE.clear()

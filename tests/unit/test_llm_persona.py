@@ -847,7 +847,7 @@ def test_chat_live_web_missing_key_falls_back_to_state_news(monkeypatch) -> None
     ctx["news"] = ["State headline from backend"]
     monkeypatch.setattr(llm_chat.web_search, "search", _fake_search)
     ans, ev = llm_chat._grounded_answer("son dakika haberi var mi?", ctx)
-    assert "TAVILY_API_KEY" in ans
+    assert "aktif degil" in ans
     assert "State headline from backend" in ans
     assert "web:tavily:missing_api_key" in ev
 

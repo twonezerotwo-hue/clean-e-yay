@@ -22,6 +22,7 @@ from fastapi.testclient import TestClient
 def ops_env(tmp_path, monkeypatch):
     monkeypatch.setenv("WORKER_HEARTBEAT_PATH", str(tmp_path / "heartbeats.json"))
     monkeypatch.setenv("PAPER_STATE_PATH", str(tmp_path / "paper_state.json"))
+    monkeypatch.setenv("DECISION_LOG_PATH", str(tmp_path / "decision_log.jsonl"))
     monkeypatch.setenv("PAPER_AUDIT_PATH", str(tmp_path / "paper_audit.jsonl"))
     monkeypatch.setenv("RISK_HALT_PATH", str(tmp_path / "risk_halts.json"))
     monkeypatch.setenv("SNAPSHOT_STORE_PATH", str(tmp_path / "snapshots"))

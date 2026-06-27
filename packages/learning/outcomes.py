@@ -11,6 +11,7 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass, field
 from datetime import datetime
 
+from packages.learning import decision_log
 from packages.learning import fingerprint as fp
 from packages.paper import state as paper_state
 from packages.paper.state import Trade
@@ -115,11 +116,80 @@ def build_outcome(t: Trade) -> CanonicalOutcome:
     )
 
 
+def build_outcome_from_log_entry(entry: dict) -> CanonicalOutcome:
+    """Tek decision_log kaydı → CanonicalOutcome (build_outcome'un dict ikizi).
+
+    decision_log.jsonl, paper_state.recent_trades'in kalıcı (append-only) eşidir
+    — recent_trades sadece son 200'lük bir penceredir ve state dosyası bozulup
+    sıfırlanırsa (bkz. paper_state.corrupt-*.json yedekleri) bu pencere kaybolur.
+    decision_log hiçbir zaman sıfırlanmaz, bu yüzden öğrenme verisinin asıl
+    kaynağı budur; recent_trades sadece yazma hatası durumunda yedektir.
+    """
+    opening = entry.get("opening_signal") or {}
+    exit_ = entry.get("exit") or {}
+    outcome = entry.get("outcome") or {}
+    fingerprint = opening.get("fingerprint")
+    parsed = fp.parse(fingerprint)
+    side = entry.get("side") or "?"
+    timeframe = entry.get("timeframe") or parsed["timeframe"] or "1d"
+    verified = bool(opening.get("data_verified", False))
+    final = _final_action(side)
+    entry_price = outcome.get("entry_price")
+    exit_price = outcome.get("exit_price")
+    return CanonicalOutcome(
+        trade_id=str(entry.get("trade_id") or ""),
+        symbol=str(entry.get("symbol") or ""),
+        timeframe=timeframe,
+        opened_at=entry.get("opened_at"),
+        closed_at=entry.get("closed_at"),
+        duration_seconds=_duration_seconds(entry.get("opened_at"), entry.get("closed_at")),
+        direction=side,
+        open_price=entry_price,
+        close_price=exit_price,
+        pnl=float(outcome.get("pnl_usd") or 0.0),
+        pnl_pct=_pnl_pct(entry_price, exit_price, side),
+        open_reason=opening.get("reason"),
+        close_reason=exit_.get("reason"),
+        fingerprint=fingerprint,
+        regime=parsed["regime"] or "UNKNOWN",
+        dominant_module=parsed["dominant_module"] or "unknown",
+        candidate_action=final,
+        final_action=final,
+        blocked_by=[],
+        gates_applied=[],
+        snapshot_id=opening.get("snapshot_id"),
+        decision_id=None,
+        data_verified=verified,
+        source_quality="verified" if verified else "unverified",
+        paper_only=True,
+    )
+
+
 def outcomes_from_state(
     state: paper_state.PaperState | None = None,
 ) -> list[CanonicalOutcome]:
+    """recent_trades (volatile pencere) + decision_log (kalıcı kayıt) birleşimi.
+
+    recent_trades öncelikli kaynaktır (mevcut davranış birebir korunur — id
+    çakışsa bile hepsi sayılır). decision_log her kapanışta recent_trades ile
+    birlikte yazılır (bkz. packages/paper/lifecycle.py); recent_trades'te
+    OLMAYAN trade_id'leri (örn. paper_state.json bozulup sıfırlandıysa, bkz.
+    paper_state.corrupt-*.json yedekleri) decision_log'dan kurtarıp ekliyoruz —
+    veri kaybı yok.
+    """
     s = state if state is not None else paper_state.load()
-    return [build_outcome(t) for t in s.recent_trades]
+    primary = [build_outcome(t) for t in s.recent_trades]
+    known_ids = {o.trade_id for o in primary if o.trade_id}
+    recovered: list[CanonicalOutcome] = []
+    for raw in decision_log.read_recent(limit=decision_log.DEFAULT_MAX_READ):
+        try:
+            o = build_outcome_from_log_entry(raw)
+        except Exception:  # bozuk/eksik kayıt → atla, worker patlamasın
+            continue
+        if o.trade_id and o.trade_id not in known_ids:
+            known_ids.add(o.trade_id)
+            recovered.append(o)
+    return primary + recovered
 
 
 def outcome_to_dict(o: CanonicalOutcome) -> dict:

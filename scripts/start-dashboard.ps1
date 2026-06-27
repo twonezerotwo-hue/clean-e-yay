@@ -48,6 +48,15 @@ if (-not $workerRunning) {
         -RedirectStandardOutput "$logs\worker.out.log" -RedirectStandardError "$logs\worker.err.log"
 }
 
+# 1b2) learning_worker — AYRI süreç (kalibrasyon/öneri döngüsü, 5 dakikada bir).
+$learningRunning = Get-CimInstance Win32_Process -Filter "name='python.exe'" -ErrorAction SilentlyContinue |
+    Where-Object { $_.CommandLine -like '*learning_worker.loop*' }
+if (-not $learningRunning) {
+    Start-Process -WindowStyle Hidden -FilePath $py `
+        -ArgumentList "-m","apps.learning_worker.loop" -WorkingDirectory $root `
+        -RedirectStandardOutput "$logs\learning.out.log" -RedirectStandardError "$logs\learning.err.log"
+}
+
 # 1c) Cold cache ısıtma — API health gelince bir kez cockpit/brief tetikle (fire-and-forget).
 #     İlk snapshot derlemesi arka planda olsun; kullanıcı ilk açılışta beklemesin.
 Start-Job -ScriptBlock {
@@ -66,6 +75,9 @@ Start-Job -ScriptBlock {
 # önceden derlenmiş, stabil. FE değişince: `next build` (tek sefer) gerekir.
 if (-not (Test-Http "http://127.0.0.1:4000/")) {
     Free-Port 4000
+    # NEXT_DIST_DIR=.next-prod — platformun otomatik önizleme dev sunucusu
+    # (next dev, varsayılan .next klasörü) ile build klasörü ÇAKIŞMASIN.
+    $env:NEXT_DIST_DIR = ".next-prod"
     Start-Process -WindowStyle Hidden -FilePath $node `
         -ArgumentList "node_modules/next/dist/bin/next","start","-p","4000","-H","127.0.0.1" `
         -WorkingDirectory (Join-Path $root "apps\web") `

@@ -17,7 +17,15 @@ import os
 import threading
 from datetime import UTC, datetime
 
-from packages.data.providers.price import coingecko, fred, mock, yfinance
+from packages.data.providers.price import (
+    alphavantage,
+    coingecko,
+    finnhub,
+    fred,
+    mock,
+    twelvedata,
+    yfinance,
+)
 from packages.data.types import PriceQuote
 
 # Sembol → birincil sağlayıcı modülü.
@@ -27,7 +35,24 @@ _PRIMARY = {
     **{s: fred for s in fred.SUPPORTED},
 }
 
-_PROVIDER_NAMES = ("coingecko", "yfinance", "fred", "mock")
+# Sembol → birincil başarısız olursa sırayla denenecek fallback modülleri.
+# Sadece kripto/değerli metal — birincil sağlayıcı (coingecko/yfinance)
+# rate-limit veya geçici hata verirse devreye girer.
+_FALLBACK_CHAIN = (twelvedata, alphavantage, finnhub)
+_FALLBACK: dict[str, list] = {}
+for _mod in _FALLBACK_CHAIN:
+    for _s in _mod.SUPPORTED:
+        _FALLBACK.setdefault(_s, []).append(_mod)
+
+_PROVIDER_NAMES = (
+    "coingecko",
+    "yfinance",
+    "fred",
+    "twelvedata",
+    "alphavantage",
+    "finnhub",
+    "mock",
+)
 
 _LOCK = threading.Lock()
 _STATUS: dict[str, dict] = {
@@ -153,6 +178,9 @@ def _try_live(symbol: str) -> PriceQuote:
     except Exception as exc:
         msg = str(exc)[:200] or "provider raised"
         _mark(name, ok=False, error=msg)
+        fb = _try_fallback(symbol)
+        if fb is not None:
+            return fb
         return _data_unavailable(symbol, source=name, error=msg)
     if q is None:
         # Provider veri getiremedi. Sebep CONFIG eksikliği mi (örn. API key
@@ -163,12 +191,37 @@ def _try_live(symbol: str) -> PriceQuote:
         cfg_err = _config_missing(name)
         if cfg_err:
             _mark_disabled(name, error=cfg_err)
-            return _data_unavailable(symbol, source=name, error=cfg_err)
-        reason = _explain_none(name)
-        _mark(name, ok=False, error=reason)
-        return _data_unavailable(symbol, source=name, error=reason)
+        else:
+            reason = _explain_none(name)
+            _mark(name, ok=False, error=reason)
+        fb = _try_fallback(symbol)
+        if fb is not None:
+            return fb
+        last_error = cfg_err or _explain_none(name)
+        return _data_unavailable(symbol, source=name, error=last_error)
     _mark(name, ok=True)
     return q
+
+
+def _try_fallback(symbol: str) -> PriceQuote | None:
+    """Birincil sağlayıcı veri getiremediğinde sırayla fallback'leri dener."""
+    for mod in _FALLBACK.get(symbol, []):
+        name = _provider_name(mod)
+        try:
+            q = mod.get_quote(symbol)
+        except Exception as exc:
+            _mark(name, ok=False, error=str(exc)[:200] or "provider raised")
+            continue
+        if q is None:
+            cfg_err = _config_missing(name)
+            if cfg_err:
+                _mark_disabled(name, error=cfg_err)
+            else:
+                _mark(name, ok=False, error=_explain_none(name))
+            continue
+        _mark(name, ok=True, fallback=True)
+        return q
+    return None
 
 
 def _config_missing(provider_name: str) -> str | None:
@@ -178,6 +231,12 @@ def _config_missing(provider_name: str) -> str | None:
     """
     if provider_name == "fred" and not os.environ.get("FRED_API_KEY"):
         return "FRED_API_KEY missing (set to enable Fed/macro series)"
+    if provider_name == "twelvedata" and not os.environ.get("TWELVEDATA_API_KEY"):
+        return "TWELVEDATA_API_KEY missing (fallback disabled)"
+    if provider_name == "alphavantage" and not os.environ.get("ALPHAVANTAGE_API_KEY"):
+        return "ALPHAVANTAGE_API_KEY missing (fallback disabled)"
+    if provider_name == "finnhub" and not os.environ.get("FINNHUB_API_KEY"):
+        return "FINNHUB_API_KEY missing (fallback disabled)"
     return None
 
 

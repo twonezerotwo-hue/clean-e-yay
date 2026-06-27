@@ -542,16 +542,18 @@ export function NotificationBell() {
             </div>
           </div>
 
-          <div className="floating-notification-oracle">
-            <div className="floating-notification-oracle-pulse" aria-hidden />
-            <div className="min-w-0">
-              <div className="text-[10px] uppercase tracking-[0.22em] text-cyan-200/60">
-                canlı özet
+          {mode === "feed" ? (
+            <div className="floating-notification-oracle">
+              <div className="floating-notification-oracle-pulse" aria-hidden />
+              <div className="min-w-0">
+                <div className="text-[10px] uppercase tracking-[0.22em] text-cyan-200/60">
+                  canlı özet
+                </div>
+                <p>{assistantBrief}</p>
+                {voiceError ? <div className="floating-notification-voice-error">{voiceError}</div> : null}
               </div>
-              <p>{assistantBrief}</p>
-              {voiceError ? <div className="floating-notification-voice-error">{voiceError}</div> : null}
             </div>
-          </div>
+          ) : null}
 
           <div className="floating-notification-tabs">
             <button

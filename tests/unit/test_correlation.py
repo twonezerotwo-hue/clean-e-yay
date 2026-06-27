@@ -274,6 +274,9 @@ def test_dqs_blocked_no_trade_with_open_positions(fresh_env, monkeypatch) -> Non
     monkeypatch.setattr(price.coingecko, "get_quote", lambda s: None)
     monkeypatch.setattr(price.yfinance, "get_quote", lambda s: None)
     monkeypatch.setattr(price.fred, "get_quote", lambda s: None)
+    monkeypatch.setattr(price.twelvedata, "get_quote", lambda s: None)
+    monkeypatch.setattr(price.alphavantage, "get_quote", lambda s: None)
+    monkeypatch.setattr(price.finnhub, "get_quote", lambda s: None)
 
     from packages.data.ingestion import pipeline as pl
     pl._CACHE.clear()

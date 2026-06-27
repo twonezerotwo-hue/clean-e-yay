@@ -75,7 +75,7 @@ const LAYERS: LayerMeta[] = [
   {
     index: 0,
     code: "00",
-    title: "E-yAy Brain",
+    title: "Brain",
     shortTitle: "Brain",
     subtitle: "ilk acilis / kendi kendine tarama / iletisim",
     depth: "dis yuzey",
@@ -83,24 +83,24 @@ const LAYERS: LayerMeta[] = [
   {
     index: 1,
     code: "01",
-    title: "Ozet Odasi",
-    shortTitle: "Ozet",
+    title: "Heart",
+    shortTitle: "Heart",
     subtitle: "6 ana karar yuzeyi / operasyon bakisi",
     depth: "operasyon odasi",
   },
   {
     index: 2,
     code: "02",
-    title: "Analiz Lableri",
-    shortTitle: "Detay",
+    title: "Soul",
+    shortTitle: "Soul",
     subtitle: "kanit, risk, piyasa yapisi ve analiz gruplari",
     depth: "analiz cekirdegi",
   },
   {
     index: 3,
     code: "03",
-    title: "Veri Omurgasi",
-    shortTitle: "Veri",
+    title: "Energy",
+    shortTitle: "Energy",
     subtitle: "backend viewmodel / provider / snapshot / sistem sagligi",
     depth: "makine odasi",
   },
@@ -1120,8 +1120,23 @@ export function CockpitView() {
       tone: AGENT_STATUS_TONE[brief.status],
     },
     dqs: { value: formatScore(dqs), tone: dqsTone },
+    pnl: {
+      value: hasOpenPositions
+        ? `${unrealizedPnl >= 0 ? "+" : ""}$${Math.round(unrealizedPnl).toLocaleString()}`
+        : activeTicket
+          ? `R:R ${ticketRr != null ? ticketRr.toFixed(2) : "--"}`
+          : "flat",
+      tone: hasOpenPositions
+        ? unrealizedPnl >= 0
+          ? "text-emerald-200"
+          : "text-red-200"
+        : activeTicket
+          ? "text-emerald-200"
+          : "text-slate-300",
+    },
     candidates: candidates.length,
     positions: openPaperPositions,
+    topSymbols,
     scans: {
       veri: {
         label: "Veri omurgasi",
