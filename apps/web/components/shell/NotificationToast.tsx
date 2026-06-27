@@ -60,11 +60,11 @@ export function NotificationToast() {
 
   if (visible.length === 0) return null;
   return (
-    <div className="fixed bottom-6 right-6 z-[100] flex flex-col gap-2 pointer-events-none">
+    <div className="notification-toast-stack fixed bottom-6 right-6 z-[100] flex flex-col gap-2 pointer-events-none">
       {visible.map((n) => (
         <div
           key={n.id}
-          className={`pointer-events-auto rounded-xl border backdrop-blur-md px-4 py-3 shadow-2xl w-[340px] ${bgFor(n.priority)}`}
+          className={`notification-toast-card pointer-events-auto rounded-xl border backdrop-blur-md px-4 py-3 shadow-2xl w-[340px] ${bgFor(n.priority)}`}
           role="status"
         >
           <div className="flex items-start gap-2">

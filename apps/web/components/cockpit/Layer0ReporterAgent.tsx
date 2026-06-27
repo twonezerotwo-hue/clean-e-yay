@@ -744,68 +744,54 @@ function Layer0StatusCore({
             ? "Yeni giris kapali"
             : "Radari izle";
   const actionDetail =
-    primary && readState(primary.item) !== "OK"
-      ? `${primary.item.label}: ${primary.item.value}`
-      : hero.detail;
+    hero.positions > 0 || hero.scans.ticket.ok
+      ? hero.detail
+      : primary && readState(primary.item) !== "OK"
+        ? `${primary.item.label}: ${primary.item.value}`
+        : hero.detail;
   const nextWatch = hero.watch[0]?.label ?? "Yeni sinyal, risk veya ticket degisimi bekleniyor.";
-  const decisionTiles = [
-    { label: "P&L", value: hero.pnl.value, tone: hero.pnl.tone },
-    { label: "Risk", value: hero.scans.risk.value, tone: readState(hero.scans.risk) === "OK" ? "text-emerald-300" : "text-amber-200" },
-    { label: "Sinyal", value: hero.scans.sinyal.value, tone: hero.scans.sinyal.ok ? "text-emerald-300" : "text-amber-200" },
-    { label: "Ticket", value: hero.scans.ticket.value, tone: hero.scans.ticket.ok ? "text-emerald-300" : "text-slate-300" },
+  const matrixItems = [
+    { label: "Canli durum", value: hero.title, detail: hero.detail, tone: hero.tone, wide: true },
+    { label: "P&L", value: hero.pnl.value, detail: hero.positions > 0 ? "Acik pozisyon izleniyor" : "Portfoy flat", tone: hero.pnl.tone },
+    { label: "Risk", value: hero.scans.risk.value, detail: readState(hero.scans.risk) === "OK" ? "Kapi acik" : "Kontrol gerekli", tone: readState(hero.scans.risk) === "OK" ? "text-emerald-300" : "text-amber-200" },
+    {
+      label: "Sinyal",
+      value: hero.scans.sinyal.ok ? "aktif" : `${hero.candidates} izleniyor`,
+      detail: hero.scans.sinyal.value,
+      tone: hero.scans.sinyal.ok ? "text-emerald-300" : "text-amber-200",
+    },
+    { label: "Ticket", value: hero.scans.ticket.value, detail: hero.scans.ticket.ok ? "Broker onayi bekler" : "Emir uretme yok", tone: hero.scans.ticket.ok ? "text-emerald-300" : "text-slate-300" },
+    { label: readState(primary.item) === "ENGEL" ? "Ana engel" : "Siradaki takip", value: primary.item.label, detail: primary.item.value, tone: readState(primary.item) === "ENGEL" ? "text-red-200" : "text-cyan-100" },
+    { label: "Radar", value: hero.topSymbols, detail: nextWatch, tone: "text-cyan-100" },
   ];
 
   return (
-    <div className="layer0-status-core shrink-0">
+    <div className="layer0-status-core layer0-brain-matrix shrink-0">
       <div className="layer0-status-core__scan" aria-hidden />
-      <div className="layer0-status-core__head layer0-decision-head">
-        <div className="min-w-0">
-          <div className="layer0-status-core__kicker">Canli karar cekirdegi</div>
-          <div className={`layer0-status-core__title ${hero.tone}`}>{hero.title}</div>
-          <div className="layer0-status-core__detail">{hero.detail}</div>
-        </div>
-        <div className="layer0-status-core__mode">
-          <span>MOD</span>
-          <strong>{hero.status.label}</strong>
-        </div>
-      </div>
-
-      <div className="layer0-decision-brief">
-        <div className="layer0-decision-main">
-          <span>Simdi ne yapilmali?</span>
-          <strong>{actionLabel}</strong>
+      <div className="brain-matrix-top">
+        <div>
+          <div className="brain-matrix-kicker">Brain karar matrisi</div>
+          <strong className={hero.tone}>{actionLabel}</strong>
           <p>{actionDetail}</p>
         </div>
-        <div className="layer0-decision-score">
+        <div className="brain-matrix-readiness">
           <span>Hazirlik</span>
           <strong>{readyCount}/4</strong>
           <em>DQS {hero.dqs.value}</em>
         </div>
       </div>
 
-      <div className="layer0-decision-strip">
-        {decisionTiles.map((metric) => (
-          <div key={metric.label} className="layer0-decision-tile">
-            <span>{metric.label}</span>
-            <strong className={metric.tone}>{metric.value}</strong>
+      <div className="brain-matrix-grid">
+        {matrixItems.map((item) => (
+          <div key={item.label} className={`brain-matrix-cell ${item.wide ? "brain-matrix-cell--wide" : ""}`}>
+            <span>{item.label}</span>
+            <strong className={item.tone}>{item.value}</strong>
+            <p>{item.detail}</p>
           </div>
         ))}
       </div>
 
-      <div className="layer0-decision-focus">
-        <div>
-          <span>{readState(primary.item) === "ENGEL" ? "Ana engel" : "Sirada izlenecek"}</span>
-          <strong>{primary.item.label}</strong>
-          <p>{primary.item.value}</p>
-        </div>
-        <div>
-          <span>Radar</span>
-          <strong>{hero.topSymbols}</strong>
-          <p>{nextWatch}</p>
-        </div>
-      </div>
-
-      <div className="layer0-decision-actions">
+      <div className="brain-matrix-actions">
         <button type="button" onClick={() => onNavigate(1)}>
           Heart radar
         </button>

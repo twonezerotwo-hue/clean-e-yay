@@ -19,6 +19,7 @@ import urllib.error
 import urllib.request
 
 from packages.data.providers import coingecko_auth
+from packages.data.registry import custom_assets
 from packages.data.types import PriceQuote, utcnow
 
 API = "https://api.coingecko.com/api/v3/simple/price"
@@ -30,7 +31,7 @@ _SYMBOL_MAP = {
     "ETHUSD": "ethereum",
 }
 
-SUPPORTED = frozenset(_SYMBOL_MAP.keys())
+SUPPORTED = custom_assets.DynamicSymbolSet(frozenset(_SYMBOL_MAP.keys()), "coingecko")
 
 # Aylık ücretsiz limiti korumak için modül-seviyesi TTL cache.
 _DEFAULT_TTL_SEC = 900
@@ -68,7 +69,7 @@ def _fetch(symbol: str, cg_id: str) -> PriceQuote | None:
 
 
 def get_quote(symbol: str) -> PriceQuote | None:
-    cg_id = _SYMBOL_MAP.get(symbol)
+    cg_id = _SYMBOL_MAP.get(symbol) or custom_assets.ticker_for(symbol, "coingecko")
     if cg_id is None:
         return None
     ttl = _ttl_sec()

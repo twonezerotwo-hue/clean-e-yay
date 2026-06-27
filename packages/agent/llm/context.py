@@ -15,11 +15,11 @@ import json
 import re
 
 from packages.data.ingestion.pipeline import (
-    DEFAULT_SYMBOLS,
     MarketSnapshot,
     get_cached_snapshot,
 )
 from packages.data.provenance import data_provenance
+from packages.data.registry import assets as asset_registry
 from packages.decision.engine import decide_matrix, matrix_view
 from packages.learning import mistake_memory
 from packages.paper import state as paper_state
@@ -27,7 +27,6 @@ from packages.risk import correlation
 from packages.risk import halt as halt_store
 from packages.risk.engine import RiskInput
 
-MATRIX_SYMBOLS = DEFAULT_SYMBOLS[:4]
 TOP_CELL_COUNT = 8
 
 
@@ -306,11 +305,12 @@ def _matrix_summary(view: dict) -> dict:
 def build_compact_context() -> dict:
     snap = get_cached_snapshot()
     ps = paper_state.load()
+    matrix_symbols = asset_registry.trade_symbols()
     risk_in = _risk_input(ps, snap)
     regime, risk, decisions = decide_matrix(
-        MATRIX_SYMBOLS, snap, risk_in, open_positions=ps.open_positions
+        matrix_symbols, snap, risk_in, open_positions=ps.open_positions
     )
-    view = matrix_view(regime, risk, decisions, snap, MATRIX_SYMBOLS)
+    view = matrix_view(regime, risk, decisions, snap, matrix_symbols)
 
     halt_state = halt_store.load()
     active_halts = [
@@ -319,7 +319,7 @@ def build_compact_context() -> dict:
     ]
 
     corr_entries = correlation.matrix(
-        sorted({*MATRIX_SYMBOLS, *(p.symbol for p in ps.open_positions)})
+        sorted({*matrix_symbols, *(p.symbol for p in ps.open_positions)})
     )
     clusters = correlation.open_clusters(ps.open_positions, ps.equity_usd, corr_entries)
 
@@ -399,7 +399,6 @@ def no_actionable_decision(ctx: dict) -> bool:
 
 
 __all__ = [
-    "MATRIX_SYMBOLS",
     "build_compact_context",
     "context_digest",
     "context_for_prompt",

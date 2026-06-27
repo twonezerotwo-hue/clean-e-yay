@@ -8,7 +8,7 @@ from dataclasses import asdict
 
 from fastapi import APIRouter
 
-from packages.data.ingestion.pipeline import DEFAULT_SYMBOLS
+from packages.data.registry import assets as asset_registry
 from packages.data.registry.loader import load_thresholds
 from packages.paper import state as paper_state
 from packages.risk import correlation
@@ -57,8 +57,8 @@ def post_halts_reset() -> dict:
 def get_correlation() -> dict:
     ps = paper_state.load()
     gates = load_thresholds()["risk_gates"]
-    # Trade evreni (ilk 4) + açık pozisyon sembolleri
-    symbols = sorted({*DEFAULT_SYMBOLS[:4], *(p.symbol for p in ps.open_positions)})
+    # Trade evreni (statik + custom) + açık pozisyon sembolleri
+    symbols = sorted({*asset_registry.trade_symbols(), *(p.symbol for p in ps.open_positions)})
     entries = correlation.matrix(symbols)
     clusters = correlation.open_clusters(ps.open_positions, ps.equity_usd, entries)
     insufficient = sorted(

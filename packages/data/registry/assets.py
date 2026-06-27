@@ -11,6 +11,7 @@ from functools import lru_cache
 
 import yaml
 
+from packages.data.registry import custom_assets
 from packages.data.registry.loader import CONFIG_DIR
 
 
@@ -23,7 +24,7 @@ class Asset:
 
 
 @lru_cache(maxsize=1)
-def _load() -> tuple[Asset, ...]:
+def _load_yaml() -> tuple[Asset, ...]:
     path = CONFIG_DIR / "assets.yaml"
     raw = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
     out: list[Asset] = []
@@ -38,6 +39,19 @@ def _load() -> tuple[Asset, ...]:
             )
         )
     return tuple(out)
+
+
+def _load() -> tuple[Asset, ...]:
+    """YAML (statik, cache'li) + kullanıcı custom asset overlay (her çağrıda
+    taze okunur) — yeni eklenen asset anında snapshot/işlem evrenine girer."""
+    yaml_assets = list(_load_yaml())
+    yaml_symbols = {a.symbol for a in yaml_assets}
+    custom = [
+        Asset(symbol=c.symbol, label=c.label, kind=c.kind, roles=c.roles)
+        for c in custom_assets.all_custom()
+        if c.symbol not in yaml_symbols
+    ]
+    return tuple(yaml_assets + custom)
 
 
 def all_assets() -> list[Asset]:

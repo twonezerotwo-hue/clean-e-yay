@@ -26,6 +26,7 @@ import urllib.request
 from datetime import UTC, datetime
 
 from packages.data.providers import coingecko_auth
+from packages.data.registry import custom_assets
 from packages.data.types import OHLCVBar, Timeframe
 
 API = "https://api.coingecko.com/api/v3/coins"
@@ -51,7 +52,7 @@ _SYMBOL_MAP = {
     "ETHUSD": "ethereum",
 }
 
-SUPPORTED = frozenset(_SYMBOL_MAP.keys())
+SUPPORTED = custom_assets.DynamicSymbolSet(frozenset(_SYMBOL_MAP.keys()), "coingecko")
 
 # TF → (days, bucket_seconds, source etiketi)
 _TF_PLAN: dict[str, tuple[int, int, str]] = {
@@ -115,9 +116,17 @@ def _points_to_bars(
 
 
 def get_bars(symbol: str, timeframe: Timeframe) -> list[OHLCVBar] | None:
-    cg_id = _SYMBOL_MAP.get(symbol)
+    cg_id = _SYMBOL_MAP.get(symbol) or custom_assets.ticker_for(symbol, "coingecko")
+    if cg_id is None:
+        return None
+    return fetch_by_ticker(cg_id, symbol, timeframe)
+
+
+def fetch_by_ticker(cg_id: str, symbol: str, timeframe: Timeframe) -> list[OHLCVBar] | None:
+    """`_SYMBOL_MAP`'i atlayıp doğrudan CoinGecko id'si ile çeker — yeni asset
+    eklenmeden önce id'yi doğrulamak (probe) için kullanılır."""
     plan = _TF_PLAN.get(timeframe)
-    if cg_id is None or plan is None:
+    if plan is None:
         return None
     key = (symbol, timeframe)
     ttl = _ohlcv_ttl_sec()

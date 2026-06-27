@@ -117,6 +117,21 @@ export type AssetRegistry = {
   trade: string[];
   snapshot: string[];
   liquidity: string[];
+  custom: string[];
+};
+
+export type AddCustomAssetRequest = {
+  symbol: string;
+  label: string;
+  provider: "yfinance" | "coingecko";
+  ticker: string;
+  kind?: string;
+};
+
+export type AddCustomAssetResponse = {
+  ok: boolean;
+  symbol: string;
+  bars_probed: number;
 };
 
 export type AssetAnalysisTimeframe = {
@@ -386,6 +401,16 @@ export const api = {
       `/api/v1/market-sessions/asset/${encodeURIComponent(symbol)}`,
     ),
   assetRegistry: () => fetchJSON<AssetRegistry>("/api/v1/assets"),
+  addCustomAsset: (body: AddCustomAssetRequest) =>
+    fetchJSON<AddCustomAssetResponse>("/api/v1/assets/custom", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+  removeCustomAsset: (symbol: string) =>
+    fetchJSON<{ ok: boolean; symbol: string }>(
+      `/api/v1/assets/custom/${encodeURIComponent(symbol)}`,
+      { method: "DELETE" },
+    ),
   assetAnalysis: (symbol: string) =>
     fetchJSON<AssetAnalysis>(
       `/api/v1/analysis/asset/${encodeURIComponent(symbol)}`,

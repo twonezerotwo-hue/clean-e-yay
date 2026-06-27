@@ -8,10 +8,11 @@ from __future__ import annotations
 
 from fastapi import APIRouter
 
-from packages.data.ingestion.pipeline import DEFAULT_SYMBOLS, get_cached_snapshot
+from packages.data.ingestion.pipeline import get_cached_snapshot
 from packages.data.providers import ohlcv
 from packages.data.providers import technical as tech_provider
 from packages.data.providers.technical import fibonacci
+from packages.data.registry import assets as asset_registry
 from packages.decision import agent_pipeline
 from packages.elliott import engine as elliott_engine
 from packages.learning import tf_weight_trainer
@@ -26,8 +27,6 @@ from packages.vwap import engine as vwap_engine
 from packages.zones import engine as zone_engine
 
 router = APIRouter(tags=["technical"])
-
-_MATRIX_SYMBOLS = DEFAULT_SYMBOLS[:4]
 
 
 @router.get("/technical/insight/{asset_code}")
@@ -165,6 +164,6 @@ def get_agent_matrix() -> dict:
     except Exception:
         tf_weights = None
     views = agent_pipeline.build_agent_matrix(
-        _MATRIX_SYMBOLS, risk_action=risk.action, tf_weights=tf_weights,
+        asset_registry.trade_symbols(), risk_action=risk.action, tf_weights=tf_weights,
     )
     return agent_pipeline.matrix_viewmodel(views, risk_action=risk.action)

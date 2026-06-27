@@ -28,12 +28,17 @@ from packages.data.providers.price import (
 )
 from packages.data.types import PriceQuote
 
-# Sembol → birincil sağlayıcı modülü.
-_PRIMARY = {
-    **{s: coingecko for s in coingecko.SUPPORTED},
-    **{s: yfinance for s in yfinance.SUPPORTED},
-    **{s: fred for s in fred.SUPPORTED},
-}
+# Sembol → birincil sağlayıcı modülü. Fonksiyon (sabit dict DEĞİL) — kullanıcı
+# runtime'da yeni bir custom asset eklediğinde (custom_assets.add) SUPPORTED
+# kümeleri anında genişler; statik dict olsaydı yeniden import gerekirdi.
+def _primary_for(symbol: str):
+    if symbol in coingecko.SUPPORTED:
+        return coingecko
+    if symbol in yfinance.SUPPORTED:
+        return yfinance
+    if symbol in fred.SUPPORTED:
+        return fred
+    return None
 
 # Sembol → birincil başarısız olursa sırayla denenecek fallback modülleri.
 # Sadece kripto/değerli metal — birincil sağlayıcı (coingecko/yfinance)
@@ -164,7 +169,7 @@ def _try_live(symbol: str) -> PriceQuote:
 
     Asla mock'a düşmez.
     """
-    primary = _PRIMARY.get(symbol)
+    primary = _primary_for(symbol)
     if primary is None:
         _mark("mock", ok=False, error="no_live_provider_mapped")
         return _data_unavailable(

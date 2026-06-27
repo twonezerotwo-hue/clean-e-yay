@@ -9,6 +9,7 @@ import json
 import urllib.error
 import urllib.request
 
+from packages.data.registry import custom_assets
 from packages.data.types import PriceQuote, utcnow
 
 API = "https://query1.finance.yahoo.com/v8/finance/chart"
@@ -25,11 +26,11 @@ _SYMBOL_MAP = {
     "QQQ":    "QQQ",
 }
 
-SUPPORTED = frozenset(_SYMBOL_MAP.keys())
+SUPPORTED = custom_assets.DynamicSymbolSet(frozenset(_SYMBOL_MAP.keys()), "yfinance")
 
 
 def get_quote(symbol: str) -> PriceQuote | None:
-    ticker = _SYMBOL_MAP.get(symbol)
+    ticker = _SYMBOL_MAP.get(symbol) or custom_assets.ticker_for(symbol, "yfinance")
     if ticker is None:
         return None
     url = f"{API}/{ticker}?interval=1d&range=1d"

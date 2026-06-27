@@ -12,6 +12,31 @@ html, body {
   font-family: Inter, system-ui, sans-serif;
 }
 
+@media (max-width: 768px) {
+  .notification-toast-stack {
+    top: calc(3.9rem + env(safe-area-inset-top));
+    right: 0.75rem;
+    bottom: auto;
+    left: 0.75rem;
+    gap: 0.38rem;
+  }
+
+  .notification-toast-card {
+    width: auto;
+    border-radius: 0.85rem;
+    padding: 0.56rem 0.72rem;
+  }
+
+  .notification-toast-card:nth-child(n + 2) {
+    display: none;
+  }
+
+  .notification-toast-card .text-sm {
+    font-size: 0.76rem;
+    line-height: 1.1;
+  }
+}
+
 .floating-notification-dock {
   position: fixed;
   top: clamp(74px, 9vh, 112px);
@@ -920,6 +945,147 @@ html, body {
   white-space: nowrap;
 }
 
+.layer0-brain-matrix {
+  padding: 0.64rem;
+  border-color: rgba(45, 212, 191, 0.34);
+  background:
+    radial-gradient(circle at 88% 14%, rgba(45, 212, 191, 0.18), transparent 30%),
+    radial-gradient(circle at 14% 88%, rgba(250, 204, 21, 0.1), transparent 28%),
+    linear-gradient(145deg, rgba(2, 13, 24, 0.94), rgba(2, 6, 13, 0.97));
+}
+
+.brain-matrix-top {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 72px;
+  gap: 0.56rem;
+  align-items: stretch;
+  padding-bottom: 0.52rem;
+  border-bottom: 1px solid rgba(45, 212, 191, 0.18);
+}
+
+.brain-matrix-kicker,
+.brain-matrix-cell span,
+.brain-matrix-readiness span {
+  display: block;
+  color: rgba(125, 211, 252, 0.66);
+  font-size: 0.5rem;
+  font-weight: 900;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.brain-matrix-top strong {
+  display: block;
+  margin-top: 0.14rem;
+  overflow: hidden;
+  font-family: var(--font-display, ui-sans-serif);
+  font-size: 1.22rem;
+  font-weight: 950;
+  line-height: 0.98;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-shadow: 0 0 20px currentColor;
+}
+
+.brain-matrix-top p,
+.brain-matrix-cell p {
+  display: -webkit-box;
+  margin-top: 0.16rem;
+  overflow: hidden;
+  color: rgba(203, 213, 225, 0.68);
+  font-size: 0.56rem;
+  line-height: 1.2;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.brain-matrix-readiness {
+  display: grid;
+  align-content: center;
+  min-width: 0;
+  border: 1px solid rgba(34, 211, 238, 0.2);
+  border-radius: 0.86rem;
+  background: rgba(3, 27, 38, 0.64);
+  padding: 0.34rem;
+  text-align: center;
+}
+
+.brain-matrix-readiness strong {
+  margin-top: 0.06rem;
+  color: #67e8f9;
+  font-family: var(--font-mono, monospace);
+  font-size: 1rem;
+  text-shadow: none;
+}
+
+.brain-matrix-readiness em {
+  margin-top: 0.08rem;
+  color: rgba(148, 163, 184, 0.78);
+  font-family: var(--font-mono, monospace);
+  font-size: 0.5rem;
+  font-style: normal;
+}
+
+.brain-matrix-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.32rem;
+  margin-top: 0.44rem;
+}
+
+.brain-matrix-cell {
+  min-width: 0;
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 0.76rem;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.018)),
+    rgba(2, 8, 18, 0.5);
+  padding: 0.34rem 0.4rem;
+}
+
+.brain-matrix-cell--wide {
+  grid-column: span 2;
+  border-color: rgba(45, 212, 191, 0.22);
+  background:
+    linear-gradient(135deg, rgba(20, 184, 166, 0.1), rgba(255, 255, 255, 0.02)),
+    rgba(2, 8, 18, 0.58);
+}
+
+.brain-matrix-cell strong {
+  display: block;
+  margin-top: 0.12rem;
+  overflow: hidden;
+  font-family: var(--font-display, ui-sans-serif);
+  font-size: 0.72rem;
+  font-weight: 950;
+  line-height: 1;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.brain-matrix-actions {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.32rem;
+  margin-top: 0.44rem;
+}
+
+.brain-matrix-actions :where(button, a) {
+  overflow: hidden;
+  border: 1px solid rgba(45, 212, 191, 0.24);
+  border-radius: 0.72rem;
+  background: rgba(15, 118, 110, 0.18);
+  padding: 0.36rem 0.3rem;
+  color: rgba(204, 251, 241, 0.92);
+  font-size: 0.55rem;
+  font-weight: 950;
+  letter-spacing: 0.08em;
+  text-align: center;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
 @media (max-width: 760px) {
   .layer0-status-core__head,
   .layer0-decision-brief,
@@ -941,6 +1107,14 @@ html, body {
 
   .layer0-decision-strip,
   .layer0-decision-actions {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .brain-matrix-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .brain-matrix-actions {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }

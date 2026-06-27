@@ -23,8 +23,9 @@ from pathlib import Path
 # httpx üzerinden API'yi çağırmak yerine paketleri doğrudan çağırıyoruz —
 # böylece worker API'ye bağımlı değil.
 from packages.data import snapshot_store
-from packages.data.ingestion.pipeline import DEFAULT_SYMBOLS, build_snapshot
+from packages.data.ingestion.pipeline import build_snapshot
 from packages.data.provenance import data_provenance
+from packages.data.registry import assets as asset_registry
 from packages.decision import agent_pipeline, conflict_gate, conflict_resolver_activation, gates, shadow, shadow_activation
 from packages.decision.engine import decide_matrix, matrix_view
 from packages.learning import tf_calibration, tf_weight_trainer
@@ -36,7 +37,6 @@ from packages.paper.lifecycle import tick as price_tick
 from packages.risk import halt as halt_store
 from packages.risk.engine import RiskInput
 
-MATRIX_SYMBOLS = DEFAULT_SYMBOLS[:4]
 WORKER_NAME = "tick_worker"
 LOCK_PATH = Path(os.environ.get("TICK_WORKER_LOCK_PATH", "data/runtime/tick_worker.lock"))
 _LOCK_FD: int | None = None
@@ -186,6 +186,9 @@ async def run_once() -> None:
     decisions_generated = 0
     paper_actions = 0
     snapshots_written = 0
+    # Her tick'te taze okunur — kullanıcı runtime'da custom trade asset
+    # eklerse bir sonraki cycle'da otomatik dahil olur (process restart gerekmez).
+    MATRIX_SYMBOLS = asset_registry.trade_symbols()
     try:
         snap = build_snapshot()
         ps = paper_state.load()

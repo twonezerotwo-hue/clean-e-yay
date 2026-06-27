@@ -1,6 +1,6 @@
 "use client";
 
-import { useQueries } from "@tanstack/react-query";
+import { useQueries, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 
 import { QuantumPanelField, getQuantumPanelStyle } from "@/components/shell/QuantumPanelField";
@@ -865,6 +865,108 @@ function TradePlanBlock({ ticket, symbol }: { ticket: TradeTicket | undefined; s
   );
 }
 
+// ── Add Asset ─────────────────────────────────────────────────────────────────
+
+function AddAssetForm({ onClose }: { onClose: () => void }) {
+  const queryClient = useQueryClient();
+  const [symbol, setSymbol] = useState("");
+  const [label, setLabel] = useState("");
+  const [provider, setProvider] = useState<"yfinance" | "coingecko">("yfinance");
+  const [ticker, setTicker] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!symbol.trim() || !label.trim() || !ticker.trim()) return;
+    setBusy(true);
+    setError(null);
+    setSuccess(null);
+    try {
+      const res = await api.addCustomAsset({
+        symbol: symbol.trim().toUpperCase(),
+        label: label.trim(),
+        provider,
+        ticker: ticker.trim(),
+      });
+      setSuccess(`${res.symbol} eklendi — ${res.bars_probed} gerçek bar doğrulandı.`);
+      setSymbol("");
+      setLabel("");
+      setTicker("");
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: qk.assetRegistry }),
+        queryClient.invalidateQueries({ queryKey: qk.dataSnapshot }),
+        queryClient.invalidateQueries({ queryKey: qk.decisionMatrix }),
+        queryClient.invalidateQueries({ queryKey: qk.cockpitBrief }),
+      ]);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Eklenemedi.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="absolute right-2 top-[calc(100%+6px)] z-30 w-[min(320px,92vw)] rounded-lg border border-teal-300/30 bg-[#0a0f18]/97 p-3 shadow-[0_18px_44px_rgba(0,0,0,0.45)]">
+      <div className="mb-2 flex items-center justify-between">
+        <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-teal-200/80">
+          Asset Ekle
+        </p>
+        <button
+          type="button"
+          onClick={onClose}
+          className="text-[11px] text-slate-500 hover:text-slate-300"
+        >
+          ✕
+        </button>
+      </div>
+      <form onSubmit={handleSubmit} className="space-y-2">
+        <input
+          value={symbol}
+          onChange={(e) => setSymbol(e.target.value)}
+          placeholder="Sembol (örn. NVDA, SOLUSD)"
+          className="w-full rounded border border-white/10 bg-black/40 px-2 py-1.5 text-[11px] text-slate-100 placeholder:text-slate-500 focus:border-teal-300/50 focus:outline-none"
+        />
+        <input
+          value={label}
+          onChange={(e) => setLabel(e.target.value)}
+          placeholder="Görünen ad (örn. Nvidia)"
+          className="w-full rounded border border-white/10 bg-black/40 px-2 py-1.5 text-[11px] text-slate-100 placeholder:text-slate-500 focus:border-teal-300/50 focus:outline-none"
+        />
+        <div className="flex gap-2">
+          <select
+            value={provider}
+            onChange={(e) => setProvider(e.target.value as "yfinance" | "coingecko")}
+            className="rounded border border-white/10 bg-black/40 px-2 py-1.5 text-[11px] text-slate-100 focus:border-teal-300/50 focus:outline-none"
+          >
+            <option value="yfinance">Yahoo Finance</option>
+            <option value="coingecko">CoinGecko</option>
+          </select>
+          <input
+            value={ticker}
+            onChange={(e) => setTicker(e.target.value)}
+            placeholder={provider === "yfinance" ? "Ticker (örn. NVDA)" : "CoinGecko id (örn. solana)"}
+            className="flex-1 rounded border border-white/10 bg-black/40 px-2 py-1.5 text-[11px] text-slate-100 placeholder:text-slate-500 focus:border-teal-300/50 focus:outline-none"
+          />
+        </div>
+        {error && <p className="text-[10px] text-rose-300">{error}</p>}
+        {success && <p className="text-[10px] text-emerald-300">{success}</p>}
+        <button
+          type="submit"
+          disabled={busy}
+          className="w-full rounded border border-teal-300/40 bg-teal-300/10 py-1.5 text-[11px] font-semibold uppercase tracking-widest text-teal-100 hover:bg-teal-300/20 disabled:opacity-50"
+        >
+          {busy ? "Doğrulanıyor..." : "Ekle ve Doğrula"}
+        </button>
+        <p className="text-[9px] leading-4 text-slate-500">
+          Eklerken gerçek veri çekilebildiği doğrulanır — ticker yanlışsa reddedilir (mock üretilmez).
+        </p>
+      </form>
+    </div>
+  );
+}
+
 // ── Main ──────────────────────────────────────────────────────────────────────
 
 export function HolographicSignalDeck({ brief }: { brief: AgentBrief }) {
@@ -886,6 +988,7 @@ export function HolographicSignalDeck({ brief }: { brief: AgentBrief }) {
   const [paused, setPaused] = useState(false);
   const [selectedTf, setSelectedTf] = useState<Timeframe | null>(null);
   const [mobileCardBackOpen, setMobileCardBackOpen] = useState(false);
+  const [addAssetOpen, setAddAssetOpen] = useState(false);
   const [compactDeck, setCompactDeck] = useState(
     () => typeof window !== "undefined" && window.matchMedia("(max-width: 768px)").matches,
   );
@@ -1012,13 +1115,23 @@ export function HolographicSignalDeck({ brief }: { brief: AgentBrief }) {
             </p>
           </div>
         </div>
-        <span className={`rounded border px-2 py-1 text-[10px] uppercase tracking-widest ${
-          blocked
-            ? "border-amber-400/40 bg-amber-400/10 text-amber-200"
-            : "border-emerald-400/40 bg-emerald-400/10 text-emerald-200"
-        }`}>
-          {blocked ? "RISK GATED" : "GATE CLEAR"}
-        </span>
+        <div className="relative flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setAddAssetOpen((open) => !open)}
+            className="rounded border border-white/15 bg-white/[0.04] px-2 py-1 text-[10px] uppercase tracking-widest text-slate-300 hover:bg-white/[0.08]"
+          >
+            + Asset Ekle
+          </button>
+          <span className={`rounded border px-2 py-1 text-[10px] uppercase tracking-widest ${
+            blocked
+              ? "border-amber-400/40 bg-amber-400/10 text-amber-200"
+              : "border-emerald-400/40 bg-emerald-400/10 text-emerald-200"
+          }`}>
+            {blocked ? "RISK GATED" : "GATE CLEAR"}
+          </span>
+          {addAssetOpen && <AddAssetForm onClose={() => setAddAssetOpen(false)} />}
+        </div>
       </div>
 
       {/* Body grid */}

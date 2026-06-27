@@ -83,9 +83,13 @@ def _make_id(now: datetime) -> str:
 
 
 def build_snapshot(symbols: list[str] | None = None) -> MarketSnapshot:
-    syms = symbols or DEFAULT_SYMBOLS
+    # Taze okunur (modül-seviyesi DEFAULT_SYMBOLS/MULTI_TF_SYMBOLS DEĞİL) —
+    # kullanıcı runtime'da custom trade asset eklerse bir sonraki snapshot'ta
+    # otomatik dahil olur (process restart gerekmez).
+    syms = symbols or _asset_registry.snapshot_symbols()
     now = datetime.now(UTC)
-    tf_syms = [s for s in syms if s in MULTI_TF_SYMBOLS]
+    multi_tf_syms = frozenset(_asset_registry.trade_symbols())
+    tf_syms = [s for s in syms if s in multi_tf_syms]
 
     # Bağımsız ağ çağrılarını PARALEL çalıştır — seri toplam (~40s, provider'lar
     # yavaşken) yerine en yavaş çağrı kadar (~max). Her provider kendi HTTP

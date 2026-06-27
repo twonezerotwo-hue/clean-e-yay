@@ -13,6 +13,7 @@ import urllib.error
 import urllib.request
 from datetime import UTC, datetime
 
+from packages.data.registry import custom_assets
 from packages.data.types import OHLCVBar, Timeframe
 
 API = "https://query1.finance.yahoo.com/v8/finance/chart"
@@ -34,7 +35,7 @@ _SYMBOL_MAP = {
     "LQD":    "LQD",        # Yatırım yapılabilir (IG) kredi
 }
 
-SUPPORTED = frozenset(_SYMBOL_MAP.keys())
+SUPPORTED = custom_assets.DynamicSymbolSet(frozenset(_SYMBOL_MAP.keys()), "yfinance")
 
 # TF → (yahoo interval, range)
 _TF_PLAN: dict[str, tuple[str, str]] = {
@@ -48,9 +49,17 @@ NATIVE_TFS = frozenset(_TF_PLAN.keys())
 
 
 def get_bars(symbol: str, timeframe: Timeframe) -> list[OHLCVBar] | None:
-    ticker = _SYMBOL_MAP.get(symbol)
+    ticker = _SYMBOL_MAP.get(symbol) or custom_assets.ticker_for(symbol, "yfinance")
+    if ticker is None:
+        return None
+    return fetch_by_ticker(ticker, symbol, timeframe)
+
+
+def fetch_by_ticker(ticker: str, symbol: str, timeframe: Timeframe) -> list[OHLCVBar] | None:
+    """`_SYMBOL_MAP`'i atlayıp doğrudan Yahoo ticker'ı ile çeker — yeni asset
+    eklenmeden önce ticker'ı doğrulamak (probe) için kullanılır."""
     plan = _TF_PLAN.get(timeframe)
-    if ticker is None or plan is None:
+    if plan is None:
         return None
     interval, rng = plan
     url = f"{API}/{ticker}?interval={interval}&range={rng}"

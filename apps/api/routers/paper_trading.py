@@ -9,7 +9,8 @@ from fastapi import APIRouter, HTTPException
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
-from packages.data.ingestion.pipeline import DEFAULT_SYMBOLS, build_snapshot, get_cached_snapshot
+from packages.data.ingestion.pipeline import build_snapshot, get_cached_snapshot
+from packages.data.registry import assets as asset_registry
 from packages.decision.engine import decide_matrix
 from packages.paper import audit as paper_audit
 from packages.paper import maintenance, manual_queue, session_gate
@@ -191,7 +192,7 @@ def post_paper_tick() -> dict:
     # T2 — (symbol, timeframe) karar uzayı. 1w decide_matrix içinde zaten
     # paper_execution=false ile hold'a düşer; fingerprint TF segmenti taşır.
     _regime, _risk, decisions = decide_matrix(
-        DEFAULT_SYMBOLS[:4], snap, risk_in, open_positions=ps.open_positions
+        asset_registry.trade_symbols(), snap, risk_in, open_positions=ps.open_positions
     )
 
     # Recheck — açık pozisyonları fresh karara karşı değerlendir (read-only öneri).

@@ -9,8 +9,9 @@ from __future__ import annotations
 
 from fastapi import APIRouter
 
-from packages.data.ingestion.pipeline import DEFAULT_SYMBOLS, get_cached_snapshot
+from packages.data.ingestion.pipeline import get_cached_snapshot
 from packages.data.provenance import data_provenance
+from packages.data.registry import assets as asset_registry
 from packages.decision import shadow
 from packages.decision.engine import decide_matrix, matrix_view
 from packages.paper import state as paper_state
@@ -18,13 +19,12 @@ from packages.risk.engine import RiskInput
 
 router = APIRouter(tags=["decision"])
 
-MATRIX_SYMBOLS = DEFAULT_SYMBOLS[:4]
-
 
 @router.get("/decision/matrix")
 def get_decision_matrix() -> dict:
     snap = get_cached_snapshot()
     ps = paper_state.load()
+    matrix_symbols = asset_registry.trade_symbols()
     risk_in = RiskInput(
         dqs_score=snap.quality.score,
         equity_usd=ps.equity_usd,
@@ -33,9 +33,9 @@ def get_decision_matrix() -> dict:
         open_position_count=len(ps.open_positions),
     )
     regime, risk, decisions = decide_matrix(
-        MATRIX_SYMBOLS, snap, risk_in, open_positions=ps.open_positions
+        matrix_symbols, snap, risk_in, open_positions=ps.open_positions
     )
-    view = matrix_view(regime, risk, decisions, snap, MATRIX_SYMBOLS)
+    view = matrix_view(regime, risk, decisions, snap, matrix_symbols)
     view["mode"] = data_provenance(snap)
     return view
 

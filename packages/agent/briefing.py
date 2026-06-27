@@ -12,7 +12,8 @@ from dataclasses import asdict, dataclass
 from datetime import UTC, datetime
 from typing import Any, Literal
 
-from packages.data.ingestion.pipeline import DEFAULT_SYMBOLS, get_cached_snapshot
+from packages.data.ingestion.pipeline import get_cached_snapshot
+from packages.data.registry import assets as asset_registry
 from packages.decision.engine import decide_matrix, matrix_view
 from packages.notifications import list_recent as list_notifications
 from packages.ops import heartbeat
@@ -112,7 +113,7 @@ def _safe_cells(snap):
             daily_pnl_usd=ps.daily_pnl_usd,
             open_position_count=len(ps.open_positions),
         )
-        symbols = DEFAULT_SYMBOLS[:4]
+        symbols = asset_registry.trade_symbols()
         regime, risk, decisions = decide_matrix(
             symbols, snap, risk_in, open_positions=ps.open_positions
         )
