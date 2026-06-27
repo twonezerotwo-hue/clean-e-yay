@@ -2,7 +2,7 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-import { api, type UpdateRiskPlanRequest } from "@/lib/api/client";
+import { api, type ChartTimeframe, type UpdateRiskPlanRequest } from "@/lib/api/client";
 import { usePanelQueryPolicy } from "@/lib/panel-runtime";
 import { qk } from "./keys";
 
@@ -138,6 +138,21 @@ export const useTechnicalInsight = (symbol: string) => {
     queryFn: () => api.technicalInsight(symbol),
     enabled: Boolean(symbol),
     staleTime: 60_000,
+    ...policy,
+  });
+};
+
+export const useTechnicalChart = (
+  symbol: string,
+  timeframe: ChartTimeframe = "1d",
+  limit = 180,
+) => {
+  const policy = usePanelQueryPolicy(60_000);
+  return useQuery({
+    queryKey: qk.technicalChart(symbol, timeframe, limit),
+    queryFn: () => api.technicalChart(symbol, timeframe, limit),
+    enabled: Boolean(symbol && timeframe),
+    staleTime: 45_000,
     ...policy,
   });
 };

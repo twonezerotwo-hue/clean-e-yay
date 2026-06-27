@@ -1,11 +1,25 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { motion } from "framer-motion";
+import {
+  CandlestickSeries,
+  ColorType,
+  CrosshairMode,
+  HistogramSeries,
+  createChart,
+  type CandlestickData,
+  type HistogramData,
+  type MouseEventParams,
+  type Time,
+  type UTCTimestamp,
+} from "lightweight-charts";
 
 import type {
   AssetAnalysisTimeframe,
   AssetRegistryItem,
+  ChartBar,
+  ChartTimeframe,
   ElliottAnalysis,
   ExhaustionAnalysis,
   FibonacciFrame,
@@ -25,6 +39,7 @@ import {
   useConflictGateStatus,
   useConflictGateValidation,
   useDataSnapshot,
+  useDecisionMatrix,
   useElliottScenario,
   useExhaustionScore,
   useLiquiditySweepAnalysis,
@@ -34,8 +49,10 @@ import {
   useReplayBacktest,
   useReplayDecisionTrace,
   useReplayStatus,
+  useRegimeReport,
   useShadowComparison,
   useSystemHealth,
+  useTechnicalChart,
   useTechnicalInsight,
   useTriggerAnalysis,
   useVolumeAnalysis,
@@ -43,12 +60,16 @@ import {
   useZoneAnalysis,
 } from "@/lib/queries/hooks";
 import type {
+  AgentBrief,
+  AgentBriefCandidate,
   ConflictGateRouteStats,
   ConflictGateStatus,
   ConflictGateValidationReport,
+  TimeframeDecision,
 } from "@/types/generated/api";
 
 const DEFAULT_SYMBOLS = ["BTCUSD", "ETHUSD", "XAUUSD", "XAGUSD"];
+const CHART_TIMEFRAMES: ChartTimeframe[] = ["15m", "1h", "4h", "1d", "1w"];
 
 function clampScore(value?: number | null) {
   if (value == null || Number.isNaN(value)) return 0;
@@ -60,6 +81,14 @@ function formatNumber(value?: number | null, digits = 2) {
   return new Intl.NumberFormat("en-US", {
     maximumFractionDigits: digits,
     minimumFractionDigits: digits === 0 ? 0 : undefined,
+  }).format(value);
+}
+
+function formatCompactNumber(value?: number | null) {
+  if (value == null || Number.isNaN(value)) return "--";
+  return new Intl.NumberFormat("en-US", {
+    notation: "compact",
+    maximumFractionDigits: 1,
   }).format(value);
 }
 
@@ -142,51 +171,6 @@ function StatusPill({ value }: { value?: string | null }) {
   );
 }
 
-function AssetSelector({
-  assets,
-  activeSymbol,
-  onSelect,
-}: {
-  assets: AssetRegistryItem[];
-  activeSymbol: string;
-  onSelect: (symbol: string) => void;
-}) {
-  const visibleAssets =
-    assets.length > 0
-      ? assets
-      : DEFAULT_SYMBOLS.map((symbol) => ({
-          symbol,
-          label: symbol,
-          kind: "trade",
-          roles: ["trade"],
-        }));
-
-  return (
-    <div className="flex flex-wrap gap-2">
-      {visibleAssets.map((asset) => {
-        const active = asset.symbol === activeSymbol;
-        return (
-          <button
-            key={asset.symbol}
-            type="button"
-            onClick={() => onSelect(asset.symbol)}
-            className={`rounded-xl border px-3 py-2 text-left transition ${
-              active
-                ? "border-cyan-300/55 bg-cyan-300/14 text-white shadow-[0_0_24px_rgba(34,211,238,0.16)]"
-                : "border-white/10 bg-white/[0.035] text-white/62 hover:border-cyan-300/28 hover:text-white"
-            }`}
-          >
-            <div className="font-display text-sm leading-none">{asset.symbol}</div>
-            <div className="mt-1 text-[10px] uppercase tracking-widest text-white/38">
-              {asset.label} / {asset.kind}
-            </div>
-          </button>
-        );
-      })}
-    </div>
-  );
-}
-
 function ScoreBar({
   label,
   value,
@@ -253,32 +237,309 @@ function TimeframeCard({
   );
 }
 
-function selectedAssetList(registryAssets?: AssetRegistryItem[], symbols?: string[]) {
-  const assets = registryAssets ?? [];
-  if (symbols?.length) {
-    return symbols.map((symbol) => {
-      return (
-        assets.find((asset) => asset.symbol === symbol) ?? {
-          symbol,
-          label: symbol,
-          kind: "trade",
-          roles: ["trade"],
-        }
-      );
-    });
+function buildLayer2ChartGeometry(bars: ChartBar[]) {
+  const visible = bars.slice(-96);
+  if (visible.length === 0) {
+    return {
+      visible,
+      points: [],
+      closePath: "",
+      yTicks: [],
+      candleWidth: 4,
+      latestY: 0,
+      rangeHigh: null,
+      rangeLow: null,
+    };
   }
-  return assets;
+  const rangeHigh = Math.max(...visible.map((bar) => bar.high));
+  const rangeLow = Math.min(...visible.map((bar) => bar.low));
+  const rawRange = Math.max(rangeHigh - rangeLow, Math.abs(rangeHigh) * 0.002, 1);
+  const topBound = rangeHigh + rawRange * 0.08;
+  const lowBound = rangeLow - rawRange * 0.08;
+  const priceTop = 24;
+  const priceHeight = 198;
+  const volumeBase = 298;
+  const volumeHeight = 44;
+  const left = 38;
+  const width = 824;
+  const maxVolume = Math.max(1, ...visible.map((bar) => bar.volume ?? 0));
+  const yFor = (value: number) =>
+    priceTop + ((topBound - value) / Math.max(topBound - lowBound, 0.000001)) * priceHeight;
+  const points = visible.map((bar, index) => {
+    const x = left + (visible.length === 1 ? width / 2 : (index / (visible.length - 1)) * width);
+    return {
+      bar,
+      x,
+      openY: yFor(bar.open),
+      highY: yFor(bar.high),
+      lowY: yFor(bar.low),
+      closeY: yFor(bar.close),
+      volumeY: volumeBase - ((bar.volume ?? 0) / maxVolume) * volumeHeight,
+      volumeHeight: ((bar.volume ?? 0) / maxVolume) * volumeHeight,
+      up: bar.close >= bar.open,
+    };
+  });
+  const closePath = points
+    .map((point, index) => `${index === 0 ? "M" : "L"} ${point.x.toFixed(1)} ${point.closeY.toFixed(1)}`)
+    .join(" ");
+  const latest = points[points.length - 1];
+  const yTicks = [topBound, (topBound + lowBound) / 2, lowBound].map((value) => ({
+    value,
+    y: yFor(value),
+  }));
+
+  return {
+    visible,
+    points,
+    closePath,
+    yTicks,
+    candleWidth: Math.max(3, Math.min(9, width / Math.max(visible.length, 1) * 0.54)),
+    latestY: latest?.closeY ?? 0,
+    rangeHigh,
+    rangeLow,
+  };
 }
 
-export function Layer2AssetDrilldownPanel() {
+type ExchangeChartPoint = CandlestickData<Time> & {
+  volume?: number | null;
+};
+
+type ExchangeHoverBar = {
+  time: Time;
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+  volume?: number | null;
+};
+
+type ChartWindowMode = "fit" | "90" | "180";
+
+function toUtcTimestamp(value: string): UTCTimestamp | null {
+  const ms = new Date(value).getTime();
+  if (!Number.isFinite(ms)) return null;
+  return Math.floor(ms / 1000) as UTCTimestamp;
+}
+
+function toExchangeChartData(bars: ChartBar[]) {
+  const byTime = new Map<number, ExchangeChartPoint>();
+  bars.forEach((bar) => {
+    const time = toUtcTimestamp(bar.ts);
+    if (time == null) return;
+    byTime.set(time as number, {
+      time,
+      open: bar.open,
+      high: bar.high,
+      low: bar.low,
+      close: bar.close,
+      volume: bar.volume ?? null,
+    });
+  });
+  return [...byTime.values()].sort((a, b) => Number(a.time) - Number(b.time));
+}
+
+function formatChartTime(value?: Time | null) {
+  if (value == null) return "--";
+  if (typeof value === "number") return formatDateTime(new Date(value * 1000).toISOString());
+  if (typeof value === "string") return formatDateTime(value);
+  return `${String(value.day).padStart(2, "0")}/${String(value.month).padStart(2, "0")} ${value.year}`;
+}
+
+function latestChartWindowRange(length: number, mode: ChartWindowMode, compact = false) {
+  if (mode === "fit") return null;
+  const size = mode === "90" ? (compact ? 45 : 90) : compact ? 90 : 180;
+  return {
+    from: Math.max(0, length - size),
+    to: length + (compact ? 4 : 8),
+  };
+}
+
+type Layer2AssetPanelProps = {
+  selectedSymbol: string;
+};
+
+type Layer2AssetOption = {
+  symbol: string;
+  label: string;
+  kind: string;
+  roles: string[];
+  price?: number | null;
+  score?: number | null;
+  direction?: string | null;
+  action?: string | null;
+  source: string;
+  order: number;
+};
+
+function normalizeSymbol(symbol?: string | null) {
+  return (symbol ?? "").trim().toUpperCase();
+}
+
+function resolveActiveSymbol(selectedSymbol?: string | null) {
+  return normalizeSymbol(selectedSymbol) || DEFAULT_SYMBOLS[0];
+}
+
+function rowMatchesSymbol(row: Record<string, unknown>, symbol: string) {
+  const normalized = normalizeSymbol(symbol);
+  return ["symbol", "asset", "asset_code"].some(
+    (key) => normalizeSymbol(String(row[key] ?? "")) === normalized,
+  );
+}
+
+function textMentionsSymbol(symbol: string, ...values: Array<string | null | undefined>) {
+  const normalized = normalizeSymbol(symbol);
+  if (!normalized) return false;
+  return values.some((value) => normalizeSymbol(value).includes(normalized));
+}
+
+function bestCandidateBySymbol(candidates: AgentBriefCandidate[]) {
+  return candidates.reduce<Record<string, AgentBriefCandidate>>((acc, candidate) => {
+    const symbol = normalizeSymbol(candidate.symbol);
+    if (!symbol) return acc;
+    const current = acc[symbol];
+    if (!current || (candidate.score ?? 0) > (current.score ?? 0)) acc[symbol] = candidate;
+    return acc;
+  }, {});
+}
+
+function bestMatrixBySymbol(cells: TimeframeDecision[]) {
+  return cells.reduce<Record<string, TimeframeDecision>>((acc, cell) => {
+    const symbol = normalizeSymbol(cell.symbol);
+    if (!symbol) return acc;
+    const current = acc[symbol];
+    if (!current || (cell.score ?? 0) > (current.score ?? 0)) acc[symbol] = cell;
+    return acc;
+  }, {});
+}
+
+export function Layer2SoulAssetStrip({
+  brief,
+  selectedSymbol,
+  onSelectSymbol,
+}: {
+  brief: AgentBrief;
+  selectedSymbol: string;
+  onSelectSymbol: (symbol: string) => void;
+}) {
   const registry = useAssetRegistry();
-  const [selected, setSelected] = useState("BTCUSD");
-  const tradeAssets = selectedAssetList(registry.data?.assets, registry.data?.trade);
-  const activeSymbol =
-    tradeAssets.some((asset) => asset.symbol === selected) || tradeAssets.length === 0
-      ? selected
-      : tradeAssets[0].symbol;
-  const activeAsset = tradeAssets.find((asset) => asset.symbol === activeSymbol);
+  const snapshot = useDataSnapshot();
+  const decisionMatrix = useDecisionMatrix();
+  const regime = useRegimeReport();
+  const options = useMemo(() => {
+    const registryBy = new Map(
+      (registry.data?.assets ?? []).map((asset) => [normalizeSymbol(asset.symbol), asset]),
+    );
+    const priceBy = new Map(
+      (snapshot.data?.prices ?? [])
+        .filter((price) => price.price != null && Number.isFinite(price.price))
+        .map((price) => [normalizeSymbol(price.symbol), price.price]),
+    );
+    const candidatesBy = bestCandidateBySymbol(brief.top_candidates ?? []);
+    const matrixBy = bestMatrixBySymbol(decisionMatrix.data?.cells ?? []);
+    const map = new Map<string, Layer2AssetOption>();
+    const add = (symbolInput: string | undefined | null, source: string, order: number) => {
+      const symbol = normalizeSymbol(symbolInput);
+      if (!symbol) return;
+      const registryItem = registryBy.get(symbol);
+      const candidate = candidatesBy[symbol];
+      const matrix = matrixBy[symbol];
+      const current = map.get(symbol);
+      map.set(symbol, {
+        symbol,
+        label: registryItem?.label ?? symbol,
+        kind: registryItem?.kind ?? "asset",
+        roles: registryItem?.roles ?? [],
+        price: priceBy.get(symbol) ?? current?.price ?? null,
+        score: candidate?.score ?? matrix?.score ?? current?.score ?? null,
+        direction: candidate?.direction ?? matrix?.direction ?? current?.direction ?? null,
+        action:
+          candidate?.final_action ??
+          candidate?.candidate_action ??
+          matrix?.action ??
+          current?.action ??
+          null,
+        source: current?.source ?? source,
+        order: Math.min(current?.order ?? order, order),
+      });
+    };
+
+    (brief.top_candidates ?? []).forEach((candidate, index) => add(candidate.symbol, "layer1", index));
+    (decisionMatrix.data?.symbols ?? []).forEach((symbol, index) => add(symbol, "matrix", 50 + index));
+    (registry.data?.trade ?? []).forEach((symbol, index) => add(symbol, "registry", 100 + index));
+    (registry.data?.custom ?? []).forEach((symbol, index) => add(symbol, "custom", 130 + index));
+    (regime.data?.assets ?? []).forEach((asset, index) => add(asset.symbol, "liquidity", 180 + index));
+    DEFAULT_SYMBOLS.forEach((symbol, index) => add(symbol, "default", 220 + index));
+
+    return [...map.values()].sort((a, b) => {
+      const scoreDelta = (b.score ?? -1) - (a.score ?? -1);
+      if (Math.abs(scoreDelta) > 0.001) return scoreDelta;
+      return a.order - b.order;
+    });
+  }, [
+    brief.top_candidates,
+    decisionMatrix.data?.cells,
+    decisionMatrix.data?.symbols,
+    regime.data?.assets,
+    registry.data?.assets,
+    registry.data?.custom,
+    registry.data?.trade,
+    snapshot.data?.prices,
+  ]);
+  const activeSymbol = resolveActiveSymbol(selectedSymbol);
+  const active = options.find((option) => option.symbol === activeSymbol) ?? options[0];
+
+  useEffect(() => {
+    if (active && active.symbol !== activeSymbol) onSelectSymbol(active.symbol);
+  }, [active, activeSymbol, onSelectSymbol]);
+
+  return (
+    <section className="layer2-soul-asset-strip">
+      <div className="layer2-soul-asset-head">
+        <div>
+          <div className="layer2-soul-kicker">Soul asset scope</div>
+          <h3>{active?.symbol ?? activeSymbol}</h3>
+          <p>
+            Katman 1 asset kartlarindaki evren burada secilir. Alttaki tum Soul
+            panelleri sadece secili asseti okur.
+          </p>
+        </div>
+        <div className="layer2-soul-live">
+          <span>Fiyat</span>
+          <strong>{formatNumber(active?.price, active?.price && active.price >= 100 ? 2 : 4)}</strong>
+          <em>{active?.action ?? "watch"}</em>
+        </div>
+      </div>
+      <div className="layer2-soul-asset-grid">
+        {options.map((asset) => {
+          const activeCard = asset.symbol === activeSymbol;
+          return (
+            <button
+              key={asset.symbol}
+              type="button"
+              onClick={() => onSelectSymbol(asset.symbol)}
+              className={`layer2-soul-asset-card ${activeCard ? "is-active" : ""}`}
+            >
+              <span>{asset.kind}</span>
+              <strong>{asset.symbol}</strong>
+              <p>{asset.label}</p>
+              <div>
+                <b>{asset.score == null ? "--" : Math.round(asset.score)}</b>
+                <em>{asset.direction ?? asset.source}</em>
+              </div>
+            </button>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
+export function Layer2AssetDrilldownPanel({ selectedSymbol }: Layer2AssetPanelProps) {
+  const registry = useAssetRegistry();
+  const activeSymbol = resolveActiveSymbol(selectedSymbol);
+  const activeAsset = registry.data?.assets.find(
+    (asset) => normalizeSymbol(asset.symbol) === activeSymbol,
+  );
   const analysis = useAssetAnalysis(activeSymbol);
   const session = useMarketSessionAsset(activeSymbol);
   const timeframes = analysis.data?.timeframes ?? {};
@@ -288,8 +549,6 @@ export function Layer2AssetDrilldownPanel() {
 
   return (
     <div className="space-y-4">
-      <AssetSelector assets={tradeAssets} activeSymbol={activeSymbol} onSelect={setSelected} />
-
       <div className="grid gap-4 xl:grid-cols-[0.95fr_1.25fr_0.9fr]">
         <div className="relative overflow-hidden rounded-2xl border border-cyan-300/18 bg-cyan-300/[0.045] p-4">
           <div className="absolute inset-x-8 top-0 h-px bg-gradient-to-r from-transparent via-cyan-200/55 to-transparent" />
@@ -415,6 +674,377 @@ export function Layer2AssetDrilldownPanel() {
   );
 }
 
+function Layer2ExchangeChart({
+  bars,
+  symbol,
+  timeframe,
+  isLoading,
+  windowMode,
+}: {
+  bars: ChartBar[];
+  symbol: string;
+  timeframe: ChartTimeframe;
+  isLoading: boolean;
+  windowMode: ChartWindowMode;
+}) {
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const chartData = useMemo(() => toExchangeChartData(bars), [bars]);
+  const volumeData = useMemo<HistogramData<Time>[]>(
+    () =>
+      chartData.map((bar) => ({
+        time: bar.time,
+        value: bar.volume ?? 0,
+        color:
+          bar.close >= bar.open
+            ? "rgba(20, 184, 166, 0.34)"
+            : "rgba(244, 63, 94, 0.28)",
+      })),
+    [chartData],
+  );
+  const latest = chartData[chartData.length - 1];
+  const [hover, setHover] = useState<ExchangeHoverBar | null>(null);
+  const display = hover ?? latest ?? null;
+
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container || chartData.length === 0) return;
+
+    const compact = container.clientWidth < 460;
+    const precision = latest && Math.abs(latest.close) < 10 ? 4 : 2;
+    const chart = createChart(container, {
+      autoSize: true,
+      layout: {
+        background: { type: ColorType.Solid, color: "rgba(2, 8, 18, 0)" },
+        textColor: "rgba(203, 213, 225, 0.72)",
+        fontFamily:
+          "Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif",
+      },
+      grid: {
+        vertLines: { color: "rgba(45, 212, 191, 0.08)" },
+        horzLines: { color: "rgba(148, 163, 184, 0.1)" },
+      },
+      crosshair: {
+        mode: CrosshairMode.Normal,
+        vertLine: {
+          color: "rgba(125, 211, 252, 0.48)",
+          labelBackgroundColor: "rgba(8, 47, 73, 0.95)",
+        },
+        horzLine: {
+          color: "rgba(125, 211, 252, 0.35)",
+          labelBackgroundColor: "rgba(8, 47, 73, 0.95)",
+        },
+      },
+      rightPriceScale: {
+        borderColor: "rgba(148, 163, 184, 0.16)",
+        scaleMargins: { top: 0.08, bottom: 0.24 },
+      },
+      timeScale: {
+        borderColor: "rgba(148, 163, 184, 0.16)",
+        timeVisible: true,
+        secondsVisible: false,
+        rightOffset: compact ? 4 : 8,
+        barSpacing: compact ? 7 : 8,
+        fixLeftEdge: false,
+        fixRightEdge: false,
+      },
+      handleScroll: {
+        mouseWheel: true,
+        pressedMouseMove: true,
+        horzTouchDrag: true,
+        vertTouchDrag: true,
+      },
+      handleScale: {
+        axisPressedMouseMove: true,
+        mouseWheel: true,
+        pinch: true,
+      },
+    });
+
+    const candleSeries = chart.addSeries(CandlestickSeries, {
+      upColor: "#22c55e",
+      downColor: "#f43f5e",
+      borderUpColor: "#5eead4",
+      borderDownColor: "#fb7185",
+      wickUpColor: "#99f6e4",
+      wickDownColor: "#fecdd3",
+      priceLineColor: "rgba(250, 204, 21, 0.76)",
+      lastValueVisible: true,
+      priceLineVisible: true,
+      priceFormat: {
+        type: "price",
+        precision,
+        minMove: precision === 4 ? 0.0001 : 0.01,
+      },
+    });
+    candleSeries.setData(chartData);
+
+    const volumeSeries = chart.addSeries(HistogramSeries, {
+      priceFormat: { type: "volume" },
+      priceScaleId: "",
+      lastValueVisible: false,
+      priceLineVisible: false,
+    });
+    volumeSeries.priceScale().applyOptions({
+      scaleMargins: { top: 0.78, bottom: 0 },
+    });
+    volumeSeries.setData(volumeData);
+
+    const range = latestChartWindowRange(chartData.length, windowMode, compact);
+    if (range) chart.timeScale().setVisibleLogicalRange(range);
+    else chart.timeScale().fitContent();
+
+    const handleMove = (param: MouseEventParams<Time>) => {
+      const data = param.seriesData.get(candleSeries) as CandlestickData<Time> | undefined;
+      if (!data) {
+        setHover(null);
+        return;
+      }
+      const volume = (param.seriesData.get(volumeSeries) as HistogramData<Time> | undefined)
+        ?.value;
+      setHover({
+        time: data.time,
+        open: data.open,
+        high: data.high,
+        low: data.low,
+        close: data.close,
+        volume,
+      });
+    };
+
+    chart.subscribeCrosshairMove(handleMove);
+    return () => {
+      chart.unsubscribeCrosshairMove(handleMove);
+      chart.remove();
+    };
+  }, [chartData, latest, volumeData, windowMode]);
+
+  return (
+    <div className="layer2-exchange-chart">
+      <div ref={containerRef} className="layer2-exchange-chart__canvas" />
+      {chartData.length === 0 ? (
+        <div className="layer2-chart-empty">
+          {isLoading ? "Grafik verisi okunuyor..." : "Bu timeframe icin bar verisi yok."}
+        </div>
+      ) : null}
+      <div className="layer2-exchange-tooltip">
+        <div>
+          <span>{symbol}</span>
+          <strong>{timeframe}</strong>
+          <em>{formatChartTime(display?.time)}</em>
+        </div>
+        <dl>
+          <div>
+            <dt>O</dt>
+            <dd>{formatNumber(display?.open, display && Math.abs(display.open) < 10 ? 4 : 2)}</dd>
+          </div>
+          <div>
+            <dt>H</dt>
+            <dd>{formatNumber(display?.high, display && Math.abs(display.high) < 10 ? 4 : 2)}</dd>
+          </div>
+          <div>
+            <dt>L</dt>
+            <dd>{formatNumber(display?.low, display && Math.abs(display.low) < 10 ? 4 : 2)}</dd>
+          </div>
+          <div>
+            <dt>C</dt>
+            <dd>{formatNumber(display?.close, display && Math.abs(display.close) < 10 ? 4 : 2)}</dd>
+          </div>
+          <div>
+            <dt>V</dt>
+            <dd>{formatCompactNumber(display?.volume)}</dd>
+          </div>
+        </dl>
+      </div>
+    </div>
+  );
+}
+
+export function Layer2TechnicalChartPanel({ selectedSymbol }: Layer2AssetPanelProps) {
+  const [timeframe, setTimeframe] = useState<ChartTimeframe>("4h");
+  const [windowMode, setWindowMode] = useState<ChartWindowMode>("90");
+  const activeSymbol = resolveActiveSymbol(selectedSymbol);
+  const chartQuery = useTechnicalChart(activeSymbol, timeframe, 220);
+  const snapshot = useDataSnapshot();
+  const bars = chartQuery.data?.bars ?? [];
+  const visibleBars = bars.slice(-96);
+  const latest = bars.length > 0 ? bars[bars.length - 1] : null;
+  const previous = bars.length > 1 ? bars[bars.length - 2] : null;
+  const firstVisible = visibleBars.length > 0 ? visibleBars[0] : null;
+  const rangeHigh = visibleBars.length > 0 ? Math.max(...visibleBars.map((bar) => bar.high)) : null;
+  const rangeLow = visibleBars.length > 0 ? Math.min(...visibleBars.map((bar) => bar.low)) : null;
+  const changePct =
+    firstVisible && latest ? ((latest.close - firstVisible.open) / firstVisible.open) * 100 : null;
+  const lastCandlePct =
+    latest && previous ? ((latest.close - previous.close) / previous.close) * 100 : null;
+  const rangePct =
+    latest && rangeHigh != null && rangeLow != null
+      ? ((rangeHigh - rangeLow) / latest.close) * 100
+      : null;
+  const technical = snapshot.data?.technicals_by_tf?.[activeSymbol]?.[timeframe];
+  const tableBars = bars.slice(-10).reverse();
+  const chartStatus = chartQuery.isError ? "ERROR" : technical?.status ?? "OK";
+
+  return (
+    <section className="layer2-chart-panel">
+      <div className="layer2-chart-head">
+        <div>
+          <div className="layer2-soul-kicker">Selected asset chart feed</div>
+          <h4>
+            {activeSymbol} <span>{timeframe}</span>
+          </h4>
+          <p>
+            OHLCV mumlari, son bar tablosu ve ayni timeframe teknik snapshoti. Sembol
+            ustteki Soul asset seciminden gelir.
+          </p>
+        </div>
+        <div className="layer2-chart-tabs" aria-label="Chart timeframe">
+          {CHART_TIMEFRAMES.map((tf) => (
+            <button
+              key={tf}
+              type="button"
+              onClick={() => setTimeframe(tf)}
+              className={timeframe === tf ? "is-active" : ""}
+            >
+              {tf}
+            </button>
+          ))}
+        </div>
+        <div className="layer2-chart-window-tabs" aria-label="Chart window">
+          {[
+            ["90", "Son 90"],
+            ["180", "Son 180"],
+            ["fit", "Tum veri"],
+          ].map(([mode, label]) => (
+            <button
+              key={mode}
+              type="button"
+              onClick={() => setWindowMode(mode as ChartWindowMode)}
+              className={windowMode === mode ? "is-active" : ""}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="layer2-chart-layout">
+        <div className="layer2-chart-shell">
+          <Layer2ExchangeChart
+            bars={bars}
+            symbol={activeSymbol}
+            timeframe={timeframe}
+            isLoading={chartQuery.isLoading || chartQuery.isFetching}
+            windowMode={windowMode}
+          />
+        </div>
+
+        <aside className="layer2-chart-side">
+          <LabMetric
+            label="Last"
+            value={formatNumber(latest?.close, 2)}
+            detail={formatDateTime(latest?.ts)}
+            tone="text-cyan-100"
+          />
+          <LabMetric
+            label="Bars"
+            value={formatNumber(chartQuery.data?.bars_used ?? bars.length, 0)}
+            detail={chartQuery.data?.source ?? "source pending"}
+            tone="text-emerald-100"
+          />
+          <LabMetric
+            label="Visible change"
+            value={formatPct(changePct)}
+            detail="chart window"
+            tone={(changePct ?? 0) >= 0 ? "text-emerald-100" : "text-rose-100"}
+          />
+          <LabMetric
+            label="Last candle"
+            value={formatPct(lastCandlePct)}
+            detail={latest ? `${formatNumber(latest.open, 2)} -> ${formatNumber(latest.close, 2)}` : "--"}
+            tone={(lastCandlePct ?? 0) >= 0 ? "text-emerald-100" : "text-rose-100"}
+          />
+          <div className="layer2-chart-wide rounded-xl border border-white/10 bg-black/24 p-3">
+            <div className="flex items-center justify-between gap-3">
+              <div className="text-[10px] uppercase tracking-widest text-white/38">
+                Snapshot technicals
+              </div>
+              <StatusPill value={chartStatus} />
+            </div>
+            <div className="mt-3 grid grid-cols-3 gap-2 text-xs">
+              <div>
+                <div className="text-white/35">RSI</div>
+                <div className="mt-1 font-mono text-white/82">{formatNumber(technical?.rsi, 1)}</div>
+              </div>
+              <div>
+                <div className="text-white/35">MACD</div>
+                <div className="mt-1 font-mono text-white/82">{formatNumber(technical?.macd, 3)}</div>
+              </div>
+              <div>
+                <div className="text-white/35">ATR</div>
+                <div className="mt-1 font-mono text-white/82">{formatNumber(technical?.atr, 2)}</div>
+              </div>
+              <div>
+                <div className="text-white/35">EMA</div>
+                <div className="mt-1 font-mono text-white/82">{technical?.ema_stack ?? "--"}</div>
+              </div>
+              <div>
+                <div className="text-white/35">Score</div>
+                <div className="mt-1 font-mono text-amber-100">{formatNumber(technical?.score, 0)}</div>
+              </div>
+              <div>
+                <div className="text-white/35">Range</div>
+                <div className="mt-1 font-mono text-white/82">{formatPct(rangePct)}</div>
+              </div>
+            </div>
+            <div className="mt-3 text-[11px] leading-5 text-white/42">
+              Skor kaynagi: data/snapshot TechnicalTf. Mum verisi: technical/chart.
+            </div>
+          </div>
+        </aside>
+      </div>
+
+      <div className="layer2-chart-table-wrap">
+        <table className="layer2-chart-table">
+          <thead>
+            <tr>
+              <th>Time</th>
+              <th>Open</th>
+              <th>High</th>
+              <th>Low</th>
+              <th>Close</th>
+              <th>Volume</th>
+              <th>Bar</th>
+            </tr>
+          </thead>
+          <tbody>
+            {tableBars.length > 0 ? (
+              tableBars.map((bar) => (
+                <tr key={bar.ts}>
+                  <td>{formatDateTime(bar.ts)}</td>
+                  <td>{formatNumber(bar.open, 2)}</td>
+                  <td>{formatNumber(bar.high, 2)}</td>
+                  <td>{formatNumber(bar.low, 2)}</td>
+                  <td>{formatNumber(bar.close, 2)}</td>
+                  <td>{formatCompactNumber(bar.volume)}</td>
+                  <td className={bar.close >= bar.open ? "is-up" : "is-down"}>
+                    {bar.close >= bar.open ? "UP" : "DOWN"}
+                  </td>
+                </tr>
+              ))
+            ) : (
+              <tr>
+                <td colSpan={7}>
+                  {chartQuery.isFetching ? "Bar tablosu okunuyor..." : "Bar tablosu bos."}
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  );
+}
+
 function FibFramePanel({ frame }: { frame?: FibonacciFrame | null }) {
   const levels = frame?.levels ?? [];
   return (
@@ -485,20 +1115,13 @@ function FibLevelRow({ level }: { level: FibonacciLevel }) {
   );
 }
 
-export function Layer2FibonacciLabPanel() {
-  const registry = useAssetRegistry();
-  const [selected, setSelected] = useState("BTCUSD");
-  const tradeAssets = selectedAssetList(registry.data?.assets, registry.data?.trade);
-  const activeSymbol =
-    tradeAssets.some((asset) => asset.symbol === selected) || tradeAssets.length === 0
-      ? selected
-      : tradeAssets[0].symbol;
+export function Layer2FibonacciLabPanel({ selectedSymbol }: Layer2AssetPanelProps) {
+  const activeSymbol = resolveActiveSymbol(selectedSymbol);
   const insight = useTechnicalInsight(activeSymbol);
   const confluence = insight.data?.fib_confluence;
 
   return (
     <div className="space-y-4">
-      <AssetSelector assets={tradeAssets} activeSymbol={activeSymbol} onSelect={setSelected} />
       <div className="grid gap-4 xl:grid-cols-[1fr_1fr_0.82fr]">
         <FibFramePanel frame={insight.data?.fib_1d} />
         <FibFramePanel frame={insight.data?.fib_4h} />
@@ -744,23 +1367,18 @@ function ShadowEvidenceRow({
   );
 }
 
-export function Layer2ElliottZoneLabPanel() {
-  const registry = useAssetRegistry();
-  const [selected, setSelected] = useState("BTCUSD");
-  const tradeAssets = selectedAssetList(registry.data?.assets, registry.data?.trade);
-  const activeSymbol =
-    tradeAssets.some((asset) => asset.symbol === selected) || tradeAssets.length === 0
-      ? selected
-      : tradeAssets[0].symbol;
+export function Layer2ElliottZoneLabPanel({ selectedSymbol }: Layer2AssetPanelProps) {
+  const activeSymbol = resolveActiveSymbol(selectedSymbol);
   const elliott1d = useElliottScenario(activeSymbol, "1d");
   const elliott4h = useElliottScenario(activeSymbol, "4h");
   const zones = useZoneAnalysis(activeSymbol);
   const shadow = useShadowComparison();
-  const shadowRows = shadow.data?.rows ?? [];
+  const shadowRows = (shadow.data?.rows ?? []).filter((row) =>
+    rowMatchesSymbol(row as Record<string, unknown>, activeSymbol),
+  );
 
   return (
     <div className="space-y-4">
-      <AssetSelector assets={tradeAssets} activeSymbol={activeSymbol} onSelect={setSelected} />
       <div className="grid gap-4 xl:grid-cols-2">
         <ElliottScenarioPanel analysis={elliott1d.data} />
         <ElliottScenarioPanel analysis={elliott4h.data} />
@@ -972,14 +1590,8 @@ function PlainLanguageSummary({
   );
 }
 
-export function Layer2SetupConflictLabPanel() {
-  const registry = useAssetRegistry();
-  const [selected, setSelected] = useState("BTCUSD");
-  const tradeAssets = selectedAssetList(registry.data?.assets, registry.data?.trade);
-  const activeSymbol =
-    tradeAssets.some((asset) => asset.symbol === selected) || tradeAssets.length === 0
-      ? selected
-      : tradeAssets[0].symbol;
+export function Layer2SetupConflictLabPanel({ selectedSymbol }: Layer2AssetPanelProps) {
+  const activeSymbol = resolveActiveSymbol(selectedSymbol);
   const volume = useVolumeAnalysis(activeSymbol);
   const vwap = useVwapAnalysis(activeSymbol);
   const sweep = useLiquiditySweepAnalysis(activeSymbol);
@@ -989,7 +1601,6 @@ export function Layer2SetupConflictLabPanel() {
 
   return (
     <div className="space-y-4">
-      <AssetSelector assets={tradeAssets} activeSymbol={activeSymbol} onSelect={setSelected} />
       <PlainLanguageSummary
         symbol={activeSymbol}
         volume={volume.data}
@@ -1186,12 +1797,17 @@ function BacktestMetricGrid({
   );
 }
 
-export function Layer2BacktestOutcomePanel() {
+export function Layer2BacktestOutcomePanel({ selectedSymbol }: Layer2AssetPanelProps) {
+  const activeSymbol = resolveActiveSymbol(selectedSymbol);
   const replayStatus = useReplayStatus();
   const trace = useReplayDecisionTrace(replayStatus.data?.latest_snapshot_id);
   const backtest = useReplayBacktest();
-  const topCandidates = trace.data?.top_candidates ?? [];
-  const finalDecisions = trace.data?.final_decisions ?? [];
+  const topCandidates = (trace.data?.top_candidates ?? []).filter((row) =>
+    rowMatchesSymbol(row as Record<string, unknown>, activeSymbol),
+  );
+  const finalDecisions = (trace.data?.final_decisions ?? []).filter((row) =>
+    rowMatchesSymbol(row as Record<string, unknown>, activeSymbol),
+  );
   const errorText = backtest.error instanceof Error ? backtest.error.message : null;
 
   return (
@@ -1245,10 +1861,10 @@ export function Layer2BacktestOutcomePanel() {
         <div className="flex items-center justify-between gap-3">
           <div>
             <div className="text-[10px] uppercase tracking-[0.24em] text-cyan-100/55">
-              Outcome metrics
+              {activeSymbol} outcome metrics
             </div>
             <div className="mt-1 text-sm text-white/55">
-              Deterministic rolling backtest ve son karar izi
+              Secili asset icin deterministic rolling backtest ve son karar izi
             </div>
           </div>
           <StatusPill value={backtest.data?.status ?? trace.data?.note ?? "trace"} />
@@ -1262,7 +1878,7 @@ export function Layer2BacktestOutcomePanel() {
         <div className="grid gap-4 lg:grid-cols-2">
           <div>
             <div className="text-[10px] uppercase tracking-[0.24em] text-white/42">
-              Top candidates
+              {activeSymbol} top candidates
             </div>
             <div className="mt-3 space-y-2">
               {topCandidates.slice(0, 5).map((candidate, index) => (
@@ -1277,7 +1893,7 @@ export function Layer2BacktestOutcomePanel() {
           </div>
           <div>
             <div className="text-[10px] uppercase tracking-[0.24em] text-white/42">
-              Final decisions
+              {activeSymbol} final decisions
             </div>
             <div className="mt-3 space-y-2">
               {finalDecisions.slice(0, 5).map((decision, index) => (
@@ -1319,11 +1935,17 @@ function TraceRow({ row }: { row: Record<string, unknown> }) {
   );
 }
 
-export function Layer2SystemBriefArchivePanel() {
+export function Layer2SystemBriefArchivePanel({ selectedSymbol }: Layer2AssetPanelProps) {
+  const activeSymbol = resolveActiveSymbol(selectedSymbol);
   const briefing = useAgentBriefing();
   const notifications = useNotifications();
   const health = useSystemHealth();
-  const headlines = briefing.data?.headlines ?? [];
+  const headlines = (briefing.data?.headlines ?? []).filter((headline) =>
+    textMentionsSymbol(activeSymbol, headline.title, headline.detail, headline.category),
+  );
+  const assetNotifications = (notifications.data?.notifications ?? []).filter((notification) =>
+    textMentionsSymbol(activeSymbol, notification.title, notification.body_short, notification.body_long),
+  );
   const workers = Object.entries(health.data?.workers ?? {});
 
   return (
@@ -1332,13 +1954,14 @@ export function Layer2SystemBriefArchivePanel() {
         <div className="flex items-start justify-between gap-4">
           <div>
             <div className="text-[10px] uppercase tracking-[0.24em] text-cyan-100/55">
-              Executive archive
+              {activeSymbol} archive
             </div>
             <h4 className="mt-2 font-display text-2xl text-white">
-              {briefing.data?.executive?.headline ?? "Brief bekleniyor"}
+              {headlines[0]?.title ?? `${activeSymbol} icin ozel brief yok`}
             </h4>
             <p className="mt-2 max-w-3xl text-sm leading-6 text-white/54">
-              {briefing.data?.executive?.narrative ?? "Agent briefing endpoint'i okunuyor."}
+              {headlines[0]?.detail ??
+                "Genel agent brief okunuyor; bu panel sadece secili assete temas eden headline ve bildirimi gosterir."}
             </p>
           </div>
           <StatusPill value={briefing.data?.executive?.tone ?? briefing.data?.engine?.status} />
@@ -1381,6 +2004,11 @@ export function Layer2SystemBriefArchivePanel() {
               ) : null}
             </div>
           ))}
+          {headlines.length === 0 ? (
+            <div className="rounded-xl border border-white/10 bg-black/20 p-3 text-sm text-white/45">
+              {activeSymbol} icin asset-ozel headline yok.
+            </div>
+          ) : null}
         </div>
       </div>
 
@@ -1390,7 +2018,7 @@ export function Layer2SystemBriefArchivePanel() {
             Notification stream
           </div>
           <div className="mt-3 space-y-2">
-            {(notifications.data?.notifications ?? []).slice(0, 5).map((notification) => (
+            {assetNotifications.slice(0, 5).map((notification) => (
               <div key={notification.id} className="rounded-xl border border-white/10 bg-white/[0.035] p-3">
                 <div className="flex items-center justify-between gap-3">
                   <span className="font-semibold text-white/82">{notification.title}</span>
@@ -1401,9 +2029,9 @@ export function Layer2SystemBriefArchivePanel() {
                 </div>
               </div>
             ))}
-            {(notifications.data?.notifications ?? []).length === 0 ? (
+            {assetNotifications.length === 0 ? (
               <div className="rounded-xl border border-white/10 bg-white/[0.035] p-4 text-sm text-white/45">
-                Bildirim akisi bos.
+                {activeSymbol} icin bildirim yok.
               </div>
             ) : null}
           </div>
@@ -1431,34 +2059,34 @@ export function Layer2SystemBriefArchivePanel() {
   );
 }
 
-export function Layer2AssetUniversePanel() {
+export function Layer2AssetUniversePanel({ selectedSymbol }: Layer2AssetPanelProps) {
   const registry = useAssetRegistry();
   const snapshot = useDataSnapshot();
+  const activeSymbol = resolveActiveSymbol(selectedSymbol);
   const assets = registry.data?.assets ?? [];
-  const grouped = useMemo(() => {
-    return assets.reduce<Record<string, AssetRegistryItem[]>>((acc, asset) => {
-      acc[asset.kind] = acc[asset.kind] ?? [];
-      acc[asset.kind].push(asset);
-      return acc;
-    }, {});
-  }, [assets]);
+  const activeAsset = assets.find((asset) => normalizeSymbol(asset.symbol) === activeSymbol);
+  const livePrice = snapshot.data?.prices.find((price) => normalizeSymbol(price.symbol) === activeSymbol);
   const roleBuckets = [
     { label: "Trade", symbols: registry.data?.trade ?? [] },
     { label: "Snapshot", symbols: registry.data?.snapshot ?? [] },
     { label: "Liquidity", symbols: registry.data?.liquidity ?? [] },
+    { label: "Custom", symbols: registry.data?.custom ?? [] },
   ];
+  const activeBuckets = roleBuckets.filter((bucket) =>
+    bucket.symbols.some((symbol) => normalizeSymbol(symbol) === activeSymbol),
+  );
 
   return (
     <div className="grid gap-4 xl:grid-cols-[0.8fr_1.2fr]">
       <div className="rounded-2xl border border-cyan-300/14 bg-cyan-300/[0.035] p-4">
         <div className="text-[10px] uppercase tracking-[0.24em] text-cyan-100/55">
-          Universe map
+          {activeSymbol} universe record
         </div>
         <div className="mt-3 grid grid-cols-2 gap-3">
           <LabMetric
-            label="Assets"
-            value={formatNumber(assets.length, 0)}
-            detail="registry"
+            label="Price"
+            value={formatNumber(livePrice?.price, livePrice?.price && livePrice.price >= 100 ? 2 : 4)}
+            detail={livePrice?.status ?? "snapshot"}
             tone="text-cyan-100"
           />
           <LabMetric
@@ -1469,23 +2097,21 @@ export function Layer2AssetUniversePanel() {
           />
         </div>
         <div className="mt-4 space-y-3">
-          {roleBuckets.map((bucket) => (
+          {activeBuckets.map((bucket) => (
             <div key={bucket.label} className="rounded-xl border border-white/10 bg-black/20 p-3">
               <div className="flex items-center justify-between gap-3">
                 <span className="font-display text-sm uppercase tracking-widest text-white/75">
                   {bucket.label}
                 </span>
-                <span className="font-mono text-xs text-cyan-100">{bucket.symbols.length}</span>
-              </div>
-              <div className="mt-3 flex flex-wrap gap-2">
-                {bucket.symbols.map((symbol) => (
-                  <span key={`${bucket.label}-${symbol}`} className="rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1 text-[10px] font-semibold text-white/65">
-                    {symbol}
-                  </span>
-                ))}
+                <span className="font-mono text-xs text-cyan-100">{activeSymbol}</span>
               </div>
             </div>
           ))}
+          {activeBuckets.length === 0 ? (
+            <div className="rounded-xl border border-white/10 bg-black/20 p-3 text-sm text-white/45">
+              {activeSymbol} registry bucket'larinda bulunmuyor; yine de live/technical endpointleri okunur.
+            </div>
+          ) : null}
         </div>
       </div>
 
@@ -1493,47 +2119,39 @@ export function Layer2AssetUniversePanel() {
         <div className="flex items-center justify-between gap-3">
           <div>
             <div className="text-[10px] uppercase tracking-[0.24em] text-white/42">
-              Asset taxonomy
+              Selected asset taxonomy
             </div>
             <div className="mt-1 text-sm text-white/55">
-              Backend registry rollerine gore ayrilmis evren
+              Backend registry kaydindan secili assetin rolleri
             </div>
           </div>
           <StatusPill value={registry.isLoading ? "loading" : "ready"} />
         </div>
-        <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-          {Object.entries(grouped).map(([kind, kindAssets]) => (
-            <div key={kind} className="rounded-xl border border-white/10 bg-white/[0.035] p-3">
+        <div className="mt-4">
+          {activeAsset ? (
+            <div className="rounded-xl border border-white/10 bg-white/[0.035] p-4">
               <div className="flex items-center justify-between gap-3">
-                <span className="font-display text-sm uppercase tracking-widest text-white">
-                  {kind}
+                <span className="font-display text-xl uppercase tracking-widest text-white">
+                  {activeAsset.symbol}
                 </span>
-                <span className="font-mono text-xs text-white/42">{kindAssets.length}</span>
+                <span className="text-sm text-white/48">{activeAsset.label}</span>
               </div>
-              <div className="mt-3 space-y-2">
-                {kindAssets.map((asset) => (
-                  <div key={asset.symbol} className="rounded-lg border border-white/10 bg-black/20 p-2.5">
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="font-semibold text-white/82">{asset.symbol}</span>
-                      <span className="text-xs text-white/42">{asset.label}</span>
-                    </div>
-                    <div className="mt-2 flex flex-wrap gap-1.5">
-                      {asset.roles.map((role) => (
-                        <span key={`${asset.symbol}-${role}`} className={`rounded-full border px-2 py-0.5 text-[9px] font-semibold uppercase tracking-widest ${roleTone(role)}`}>
-                          {role}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
+              <div className="mt-3 flex flex-wrap gap-1.5">
+                <span className="rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1 text-[10px] font-semibold uppercase tracking-widest text-white/65">
+                  {activeAsset.kind}
+                </span>
+                {activeAsset.roles.map((role) => (
+                  <span key={`${activeAsset.symbol}-${role}`} className={`rounded-full border px-2 py-0.5 text-[9px] font-semibold uppercase tracking-widest ${roleTone(role)}`}>
+                    {role}
+                  </span>
                 ))}
               </div>
             </div>
-          ))}
-          {assets.length === 0 ? (
+          ) : (
             <div className="rounded-xl border border-white/10 bg-white/[0.035] p-4 text-sm text-white/45">
-              Asset registry okunuyor.
+              {activeSymbol} registry kaydi yok.
             </div>
-          ) : null}
+          )}
         </div>
       </div>
     </div>

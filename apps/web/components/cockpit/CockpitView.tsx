@@ -40,11 +40,12 @@ import {
   Layer2AssetDrilldownPanel,
   Layer2AssetUniversePanel,
   Layer2BacktestOutcomePanel,
-  Layer2ConflictGateLabPanel,
   Layer2ElliottZoneLabPanel,
   Layer2FibonacciLabPanel,
+  Layer2SoulAssetStrip,
   Layer2SetupConflictLabPanel,
   Layer2SystemBriefArchivePanel,
+  Layer2TechnicalChartPanel,
 } from "./Layer2Labs";
 import { QuantumBackplaneScene } from "./QuantumBackplaneScene";
 import { SpaceBrainScene } from "./SpaceBrainScene";
@@ -978,6 +979,7 @@ export function CockpitView() {
   const [activeLayer, setActiveLayer] = useState<LayerIndex>(0);
   const [direction, setDirection] = useState(1);
   const [hashSynced, setHashSynced] = useState(false);
+  const [selectedLayer2Symbol, setSelectedLayer2Symbol] = useState("BTCUSD");
 
   const activateLayer = (next: LayerIndex) => {
     setDirection(next >= activeLayer ? 1 : -1);
@@ -985,7 +987,18 @@ export function CockpitView() {
   };
 
   useEffect(() => {
+    let initialHashRead = true;
     const applyHash = () => {
+      const isInitialHashRead = initialHashRead;
+      initialHashRead = false;
+      const mobileStart =
+        window.matchMedia("(max-width: 768px)").matches && isInitialHashRead;
+      if (mobileStart && parseLayerHash(window.location.hash) !== 0) {
+        setActiveLayer(0);
+        setDirection(1);
+        window.history.replaceState(null, "", "#layer-0");
+        return;
+      }
       const fromHash = parseLayerHash(window.location.hash);
       if (fromHash != null) {
         setActiveLayer((current) => {
@@ -1194,13 +1207,19 @@ export function CockpitView() {
           <div className="space-y-6 pb-12">
             <LayerHeader
               meta={LAYERS[2]}
-              detail="Katman 1'in kopyasi degil: backend'in sagladigi derin kanit ekranlari burada lab mantigiyla okunur. Siralama: asset drilldown, fibonacci, backtest, brief archive, universe."
+              detail="Soul, secili assetin ruhunu okur: Katman 1 asset kartlarindan secilen varlik icin teknik, seviye, dalga, likidite ve trace kanitlari tek akista incelenir."
             >
               <DataQualityBadge dqs={dqs} generatedAt={data?.generated_at} />
             </LayerHeader>
 
+            <Layer2SoulAssetStrip
+              brief={brief}
+              selectedSymbol={selectedLayer2Symbol}
+              onSelectSymbol={setSelectedLayer2Symbol}
+            />
+
             <div className="layer2-command-strip grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-              <HudMetric label="Lab" value="5" tone="text-accent-cyan" />
+              <HudMetric label="Asset" value={selectedLayer2Symbol} tone="text-accent-cyan" />
               <HudMetric
                 label="Aday"
                 value={`${actionableCount}/${candidates.length}`}
@@ -1220,70 +1239,68 @@ export function CockpitView() {
 
             <Layer2DetailGroup
               index="01"
-              title="Asset Drilldown Terminal"
+              title={`${selectedLayer2Symbol} Core Terminal`}
               detail="Secilen varlik icin backend analysis/asset, timeframe teknikleri ve market-session karar kapisi tek terminalde okunur."
             >
-              <Layer2AssetDrilldownPanel />
+              <Layer2AssetDrilldownPanel selectedSymbol={selectedLayer2Symbol} />
             </Layer2DetailGroup>
 
             <Layer2DetailGroup
               index="02"
-              title="Fibonacci / Level Lab"
-              detail="Backend technical/insight ciktilariyla 1D ve 4H fib seviyeleri, yakin bolgeler ve confluence skoru okunur."
+              title={`${selectedLayer2Symbol} Multi-Timeframe Chart`}
+              detail="Secilen asset icin raw OHLCV mumlari, timeframe degistirme, son bar tablosu ve ayni TF teknik snapshoti birlikte okunur."
             >
-              <Layer2FibonacciLabPanel />
-              <div className="mt-4">
-                <PatternsAnchorPanel />
-              </div>
+              <Layer2TechnicalChartPanel selectedSymbol={selectedLayer2Symbol} />
             </Layer2DetailGroup>
 
             <Layer2DetailGroup
               index="03"
-              title="Elliott / Zone Lab"
-              detail="Backend Elliott Wave senaryosu (EVIDENCE only) ve support/resistance zone analizi; ayrica shadow gozlem kaydindan gelen Elliott + historical-edge ek kaniti. Hicbir karar zincirine bagli degildir."
+              title={`${selectedLayer2Symbol} Fibonacci / Level Lab`}
+              detail="Backend technical/insight ciktilariyla 1D ve 4H fib seviyeleri, yakin bolgeler ve confluence skoru okunur."
             >
-              <Layer2ElliottZoneLabPanel />
+              <Layer2FibonacciLabPanel selectedSymbol={selectedLayer2Symbol} />
             </Layer2DetailGroup>
 
             <Layer2DetailGroup
               index="04"
-              title="Volume / VWAP / Liquidity Lab"
-              detail="Volume Validation, VWAP/Anchored VWAP, Liquidity Sweep, Exhaustion, Location ve Trigger motorlarinin EVIDENCE only ciktilari — hicbir karar zincirine bagli degildir."
+              title={`${selectedLayer2Symbol} Elliott / Zone Lab`}
+              detail="Backend Elliott Wave senaryosu (EVIDENCE only) ve support/resistance zone analizi; ayrica shadow gozlem kaydindan gelen Elliott + historical-edge ek kaniti. Hicbir karar zincirine bagli degildir."
             >
-              <Layer2SetupConflictLabPanel />
+              <Layer2ElliottZoneLabPanel selectedSymbol={selectedLayer2Symbol} />
             </Layer2DetailGroup>
 
             <Layer2DetailGroup
               index="05"
-              title="Backtest / Outcome Lab"
-              detail="Replay store, son decision trace ve manuel tetiklenen deterministic backtest sonucunu ayni kanit ekraninda toplar."
+              title={`${selectedLayer2Symbol} Volume / VWAP / Liquidity Lab`}
+              detail="Volume Validation, VWAP/Anchored VWAP, Liquidity Sweep, Exhaustion, Location ve Trigger motorlarinin EVIDENCE only ciktilari — hicbir karar zincirine bagli degildir."
             >
-              <Layer2BacktestOutcomePanel />
+              <Layer2SetupConflictLabPanel selectedSymbol={selectedLayer2Symbol} />
             </Layer2DetailGroup>
 
             <Layer2DetailGroup
               index="06"
-              title="System Brief Archive"
-              detail="Agent briefing, bildirim akisi ve worker hafizasi tek arxiv gibi okunur; Katman 0 sohbetine kaynak olan ozet buradadir."
+              title={`${selectedLayer2Symbol} Trace / Outcome Lab`}
+              detail="Replay store ve son decision trace kayitlari sadece secili assete filtrelenir."
             >
-              <Layer2SystemBriefArchivePanel />
+              <Layer2BacktestOutcomePanel selectedSymbol={selectedLayer2Symbol} />
             </Layer2DetailGroup>
 
             <Layer2DetailGroup
               index="07"
-              title="Asset Universe Lab"
-              detail="Trade, snapshot, liquidity ve macro evreni backend asset registry uzerinden rol ve turlerine gore ayrilir."
+              title={`${selectedLayer2Symbol} Brief Archive`}
+              detail="Agent briefing ve bildirim akisi secili assete temas eden kayitlarla sinirlanir."
             >
-              <Layer2AssetUniversePanel />
+              <Layer2SystemBriefArchivePanel selectedSymbol={selectedLayer2Symbol} />
             </Layer2DetailGroup>
 
             <Layer2DetailGroup
               index="08"
-              title="Conflict Gate Lab"
-              detail="Faz 8 birlestirme katmaninin guncel config durumu (enabled + profil bazli mod) ve Faz 9A retrospektif dogrulama raporu."
+              title={`${selectedLayer2Symbol} Registry / Universe Record`}
+              detail="Tum evren listesi degil; secili assetin registry rolleri, snapshot fiyati ve bucket kaydi okunur."
             >
-              <Layer2ConflictGateLabPanel />
+              <Layer2AssetUniversePanel selectedSymbol={selectedLayer2Symbol} />
             </Layer2DetailGroup>
+
           </div>
         </div>
       );

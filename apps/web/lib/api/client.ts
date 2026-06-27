@@ -155,6 +155,30 @@ export type AssetAnalysis = {
   note?: string | null;
 };
 
+export type ChartTimeframe = "15m" | "1h" | "4h" | "1d" | "1w";
+
+export type ChartBar = {
+  ts: string;
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+  volume?: number | null;
+  source?: string | null;
+  verified?: boolean;
+};
+
+export type TechnicalChartResponse = {
+  symbol: string;
+  timeframe: ChartTimeframe;
+  limit?: number;
+  bars_used: number;
+  source?: string | null;
+  last_price?: number | null;
+  generated_at?: string | null;
+  bars: ChartBar[];
+};
+
 export type FibonacciLevel = {
   ratio?: number | null;
   label?: string | null;
@@ -418,6 +442,10 @@ export const api = {
   technicalInsight: (symbol: string) =>
     fetchJSON<TechnicalInsight>(
       `/api/v1/technical/insight/${encodeURIComponent(symbol)}`,
+    ),
+  technicalChart: (symbol: string, timeframe: ChartTimeframe = "1d", limit = 180) =>
+    fetchJSON<TechnicalChartResponse>(
+      `/api/v1/technical/chart/${encodeURIComponent(symbol)}?timeframe=${encodeURIComponent(timeframe)}&limit=${encodeURIComponent(String(limit))}`,
     ),
   elliottScenario: (symbol: string, timeframe = "1d") =>
     fetchJSON<ElliottAnalysis>(

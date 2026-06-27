@@ -12,6 +12,8 @@ export const qk = {
   assetAnalysis: (symbol: string) => ["analysis", "asset", symbol] as const,
   technicalInsight: (symbol: string) =>
     ["technical", "insight", symbol] as const,
+  technicalChart: (symbol: string, timeframe: string, limit: number) =>
+    ["technical", "chart", symbol, timeframe, limit] as const,
   elliottScenario: (symbol: string, timeframe: string) =>
     ["technical", "elliott", symbol, timeframe] as const,
   zoneAnalysis: (symbol: string, timeframe: string) =>

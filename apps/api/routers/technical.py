@@ -6,13 +6,16 @@ trade and never bypasses RiskGate.
 """
 from __future__ import annotations
 
-from fastapi import APIRouter
+from datetime import UTC, datetime
+
+from fastapi import APIRouter, Query
 
 from packages.data.ingestion.pipeline import get_cached_snapshot
 from packages.data.providers import ohlcv
 from packages.data.providers import technical as tech_provider
 from packages.data.providers.technical import fibonacci
 from packages.data.registry import assets as asset_registry
+from packages.data.types import TIMEFRAMES
 from packages.decision import agent_pipeline
 from packages.elliott import engine as elliott_engine
 from packages.learning import tf_weight_trainer
@@ -32,6 +35,44 @@ router = APIRouter(tags=["technical"])
 @router.get("/technical/insight/{asset_code}")
 def get_technical_insight(asset_code: str) -> dict:
     return tech_provider.get_technical_insight(asset_code).model_dump()
+
+
+@router.get("/technical/chart/{asset_code}")
+def get_technical_chart(
+    asset_code: str,
+    timeframe: str = "1d",
+    limit: int = Query(default=180, ge=20, le=500),
+) -> dict:
+    """Raw OHLCV chart feed for Layer 2 asset drilldown.
+
+    Read-only evidence surface: no decision mutation, no paper trading action.
+    """
+    tf = timeframe if timeframe in TIMEFRAMES else "1d"
+    bars = ohlcv.get_bars(asset_code, tf) or []
+    selected = bars[-limit:]
+    last = selected[-1] if selected else None
+    return {
+        "symbol": asset_code.upper(),
+        "timeframe": tf,
+        "limit": limit,
+        "bars_used": len(selected),
+        "source": getattr(last, "source", None) if last else None,
+        "last_price": getattr(last, "close", None) if last else None,
+        "generated_at": datetime.now(UTC).isoformat(),
+        "bars": [
+            {
+                "ts": bar.ts.isoformat(),
+                "open": bar.open,
+                "high": bar.high,
+                "low": bar.low,
+                "close": bar.close,
+                "volume": bar.volume,
+                "source": bar.source,
+                "verified": bar.verified,
+            }
+            for bar in selected
+        ],
+    }
 
 
 @router.get("/technical/elliott/{asset_code}")

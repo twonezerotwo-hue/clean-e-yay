@@ -14,26 +14,7 @@ html, body {
 
 @media (max-width: 768px) {
   .notification-toast-stack {
-    top: calc(3.9rem + env(safe-area-inset-top));
-    right: 0.75rem;
-    bottom: auto;
-    left: 0.75rem;
-    gap: 0.38rem;
-  }
-
-  .notification-toast-card {
-    width: auto;
-    border-radius: 0.85rem;
-    padding: 0.56rem 0.72rem;
-  }
-
-  .notification-toast-card:nth-child(n + 2) {
     display: none;
-  }
-
-  .notification-toast-card .text-sm {
-    font-size: 0.76rem;
-    line-height: 1.1;
   }
 }
 
@@ -564,6 +545,449 @@ html, body {
   padding: 1rem;
 }
 
+.layer2-soul-asset-strip {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  border: 1px solid rgba(45, 212, 191, 0.2);
+  border-radius: 18px;
+  background:
+    radial-gradient(circle at 12% 0%, rgba(45, 212, 191, 0.16), transparent 34%),
+    radial-gradient(circle at 88% 18%, rgba(34, 211, 238, 0.11), transparent 32%),
+    linear-gradient(145deg, rgba(3, 12, 24, 0.82), rgba(2, 6, 13, 0.66));
+  padding: 1rem;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.05),
+    0 22px 58px rgba(0, 0, 0, 0.22),
+    0 0 54px rgba(20, 184, 166, 0.08);
+}
+
+.layer2-soul-asset-strip::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background-image:
+    linear-gradient(rgba(34, 211, 238, 0.045) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(20, 184, 166, 0.038) 1px, transparent 1px);
+  background-size: 36px 36px;
+  mask-image: linear-gradient(90deg, transparent 0%, black 10%, black 90%, transparent 100%);
+}
+
+.layer2-soul-asset-head {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(92px, 0.22fr);
+  gap: 1rem;
+  align-items: stretch;
+}
+
+.layer2-soul-kicker,
+.layer2-soul-live span,
+.layer2-soul-asset-card span {
+  display: block;
+  color: rgba(125, 211, 252, 0.66);
+  font-size: 0.56rem;
+  font-weight: 900;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+.layer2-soul-asset-head h3 {
+  margin-top: 0.28rem;
+  color: rgba(248, 250, 252, 0.96);
+  font-family: var(--font-display, ui-sans-serif);
+  font-size: clamp(1.55rem, 3vw, 2.5rem);
+  font-weight: 950;
+  line-height: 0.95;
+  text-shadow: 0 0 24px rgba(34, 211, 238, 0.26);
+}
+
+.layer2-soul-asset-head p {
+  margin-top: 0.42rem;
+  max-width: 62rem;
+  color: rgba(203, 213, 225, 0.62);
+  font-size: 0.84rem;
+  line-height: 1.55;
+}
+
+.layer2-soul-live {
+  display: grid;
+  align-content: center;
+  min-width: 0;
+  border: 1px solid rgba(34, 211, 238, 0.18);
+  border-radius: 14px;
+  background: rgba(2, 8, 18, 0.52);
+  padding: 0.75rem;
+  text-align: right;
+}
+
+.layer2-soul-live strong {
+  display: block;
+  margin-top: 0.22rem;
+  overflow: hidden;
+  color: #a7f3d0;
+  font-family: var(--font-mono, monospace);
+  font-size: 1rem;
+  font-weight: 900;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.layer2-soul-live em {
+  margin-top: 0.22rem;
+  overflow: hidden;
+  color: rgba(148, 163, 184, 0.72);
+  font-size: 0.62rem;
+  font-style: normal;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.layer2-soul-asset-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(138px, 1fr));
+  gap: 0.55rem;
+  margin-top: 0.9rem;
+}
+
+.layer2-soul-asset-card {
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 14px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.045), rgba(255, 255, 255, 0.018)),
+    rgba(2, 8, 18, 0.5);
+  padding: 0.7rem;
+  text-align: left;
+  transition:
+    border-color 180ms ease,
+    background 180ms ease,
+    box-shadow 180ms ease,
+    transform 180ms ease;
+}
+
+.layer2-soul-asset-card:hover,
+.layer2-soul-asset-card.is-active {
+  border-color: rgba(45, 212, 191, 0.48);
+  background:
+    radial-gradient(circle at 84% 0%, rgba(45, 212, 191, 0.16), transparent 42%),
+    rgba(4, 21, 32, 0.78);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.06),
+    0 0 30px rgba(20, 184, 166, 0.13);
+  transform: translateY(-1px);
+}
+
+.layer2-soul-asset-card strong {
+  display: block;
+  margin-top: 0.2rem;
+  overflow: hidden;
+  color: rgba(248, 250, 252, 0.95);
+  font-family: var(--font-display, ui-sans-serif);
+  font-size: 1.05rem;
+  font-weight: 950;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.layer2-soul-asset-card p {
+  margin-top: 0.16rem;
+  overflow: hidden;
+  color: rgba(148, 163, 184, 0.64);
+  font-size: 0.68rem;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.layer2-soul-asset-card div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  padding-top: 0.45rem;
+}
+
+.layer2-soul-asset-card b {
+  color: #fde68a;
+  font-family: var(--font-mono, monospace);
+  font-size: 0.84rem;
+}
+
+.layer2-soul-asset-card em {
+  overflow: hidden;
+  color: rgba(204, 251, 241, 0.72);
+  font-size: 0.58rem;
+  font-style: normal;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.layer2-chart-panel {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid rgba(34, 211, 238, 0.15);
+  border-radius: 16px;
+  background:
+    radial-gradient(circle at 12% 8%, rgba(34, 211, 238, 0.11), transparent 32%),
+    radial-gradient(circle at 92% 4%, rgba(45, 212, 191, 0.08), transparent 28%),
+    rgba(2, 8, 18, 0.5);
+  padding: 0.9rem;
+}
+
+.layer2-chart-head {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: 1rem;
+  align-items: start;
+}
+
+.layer2-chart-head h4 {
+  margin-top: 0.25rem;
+  color: rgba(248, 250, 252, 0.95);
+  font-family: var(--font-display, ui-sans-serif);
+  font-size: clamp(1.3rem, 2.4vw, 2.05rem);
+  font-weight: 950;
+  line-height: 1;
+}
+
+.layer2-chart-head h4 span {
+  color: rgba(103, 232, 249, 0.78);
+  font-family: var(--font-mono, monospace);
+  font-size: 0.52em;
+}
+
+.layer2-chart-head p {
+  margin-top: 0.4rem;
+  max-width: 58rem;
+  color: rgba(203, 213, 225, 0.58);
+  font-size: 0.8rem;
+  line-height: 1.55;
+}
+
+.layer2-chart-tabs,
+.layer2-chart-window-tabs {
+  display: grid;
+  gap: 0.38rem;
+}
+
+.layer2-chart-tabs {
+  grid-template-columns: repeat(5, minmax(38px, 1fr));
+  min-width: 250px;
+}
+
+.layer2-chart-window-tabs {
+  grid-template-columns: repeat(3, minmax(58px, 1fr));
+  min-width: 220px;
+}
+
+.layer2-chart-tabs button,
+.layer2-chart-window-tabs button {
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+  background: rgba(15, 23, 42, 0.58);
+  padding: 0.5rem 0.55rem;
+  color: rgba(226, 232, 240, 0.72);
+  font-family: var(--font-mono, monospace);
+  font-size: 0.72rem;
+  font-weight: 900;
+  transition:
+    border-color 160ms ease,
+    background 160ms ease,
+    color 160ms ease;
+}
+
+.layer2-chart-tabs button:hover,
+.layer2-chart-tabs button.is-active,
+.layer2-chart-window-tabs button:hover,
+.layer2-chart-window-tabs button.is-active {
+  border-color: rgba(45, 212, 191, 0.5);
+  background: rgba(20, 184, 166, 0.18);
+  color: rgba(204, 251, 241, 0.96);
+}
+
+.layer2-chart-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.55fr) minmax(240px, 0.55fr);
+  gap: 0.85rem;
+  margin-top: 0.85rem;
+}
+
+.layer2-chart-shell {
+  min-width: 0;
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 14px;
+  background:
+    linear-gradient(rgba(34, 211, 238, 0.045) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(20, 184, 166, 0.035) 1px, transparent 1px),
+    rgba(2, 6, 13, 0.7);
+  background-size: 34px 34px;
+  padding: 0.55rem;
+}
+
+.layer2-exchange-chart {
+  position: relative;
+  min-height: 470px;
+  overflow: hidden;
+  border-radius: 12px;
+}
+
+.layer2-exchange-chart__canvas {
+  position: absolute;
+  inset: 0;
+}
+
+.layer2-exchange-tooltip {
+  position: absolute;
+  top: 0.65rem;
+  left: 0.65rem;
+  z-index: 2;
+  max-width: min(520px, calc(100% - 1.3rem));
+  border: 1px solid rgba(45, 212, 191, 0.18);
+  border-radius: 12px;
+  background: rgba(2, 8, 18, 0.72);
+  padding: 0.58rem 0.68rem;
+  box-shadow: 0 18px 44px rgba(0, 0, 0, 0.28);
+  backdrop-filter: blur(12px);
+}
+
+.layer2-exchange-tooltip > div {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.layer2-exchange-tooltip span {
+  color: rgba(248, 250, 252, 0.94);
+  font-family: var(--font-display, ui-sans-serif);
+  font-size: 0.9rem;
+  font-weight: 950;
+}
+
+.layer2-exchange-tooltip strong {
+  color: rgba(103, 232, 249, 0.92);
+  font-family: var(--font-mono, monospace);
+  font-size: 0.74rem;
+}
+
+.layer2-exchange-tooltip em {
+  color: rgba(148, 163, 184, 0.72);
+  font-size: 0.66rem;
+  font-style: normal;
+}
+
+.layer2-exchange-tooltip dl {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 0.75rem;
+  margin-top: 0.42rem;
+}
+
+.layer2-exchange-tooltip dl div {
+  display: flex;
+  align-items: baseline;
+  gap: 0.24rem;
+}
+
+.layer2-exchange-tooltip dt {
+  color: rgba(125, 211, 252, 0.58);
+  font-size: 0.58rem;
+  font-weight: 950;
+  letter-spacing: 0.1em;
+}
+
+.layer2-exchange-tooltip dd {
+  color: rgba(226, 232, 240, 0.9);
+  font-family: var(--font-mono, monospace);
+  font-size: 0.7rem;
+}
+
+.layer2-chart-svg {
+  display: block;
+  width: 100%;
+  min-height: 280px;
+}
+
+.layer2-chart-empty {
+  display: grid;
+  min-height: 280px;
+  place-items: center;
+  color: rgba(203, 213, 225, 0.52);
+  font-size: 0.82rem;
+}
+
+.layer2-chart-side {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.65rem;
+}
+
+.layer2-chart-wide {
+  grid-column: 1 / -1;
+}
+
+.layer2-chart-table-wrap {
+  margin-top: 0.85rem;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 14px;
+  background: rgba(2, 6, 13, 0.62);
+}
+
+.layer2-chart-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.72rem;
+}
+
+.layer2-chart-table th,
+.layer2-chart-table td {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.075);
+  padding: 0.55rem 0.65rem;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.layer2-chart-table th:first-child,
+.layer2-chart-table td:first-child {
+  text-align: left;
+}
+
+.layer2-chart-table th {
+  color: rgba(125, 211, 252, 0.64);
+  font-size: 0.56rem;
+  font-weight: 950;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.layer2-chart-table td {
+  color: rgba(226, 232, 240, 0.78);
+  font-family: var(--font-mono, monospace);
+}
+
+.layer2-chart-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.layer2-chart-table .is-up {
+  color: rgba(52, 211, 153, 0.95);
+}
+
+.layer2-chart-table .is-down {
+  color: rgba(251, 113, 133, 0.95);
+}
+
 .layer2-command-strip::before,
 .layer2-detail-group::before {
   content: "";
@@ -1087,6 +1511,206 @@ html, body {
 }
 
 @media (max-width: 760px) {
+  .layer2-soul-asset-strip {
+    padding: 0.72rem;
+  }
+
+  .layer2-soul-asset-head {
+    grid-template-columns: minmax(0, 1fr) minmax(86px, 0.34fr);
+    gap: 0.55rem;
+  }
+
+  .layer2-soul-live {
+    padding: 0.5rem;
+    text-align: right;
+  }
+
+  .layer2-soul-live strong {
+    font-size: 0.78rem;
+  }
+
+  .layer2-soul-live em {
+    font-size: 0.48rem;
+  }
+
+  .layer2-soul-asset-head h3 {
+    font-size: 1.52rem;
+  }
+
+  .layer2-soul-asset-head p {
+    margin-top: 0.26rem;
+    font-size: 0.66rem;
+    line-height: 1.28;
+  }
+
+  .layer2-soul-asset-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.38rem;
+    margin-top: 0.58rem;
+  }
+
+  .layer2-soul-asset-card {
+    border-radius: 10px;
+    padding: 0.42rem;
+  }
+
+  .layer2-soul-kicker,
+  .layer2-soul-live span,
+  .layer2-soul-asset-card span {
+    font-size: 0.44rem;
+    letter-spacing: 0.1em;
+  }
+
+  .layer2-soul-asset-card strong {
+    font-size: 0.72rem;
+  }
+
+  .layer2-soul-asset-card p {
+    font-size: 0.52rem;
+  }
+
+  .layer2-soul-asset-card div {
+    margin-top: 0.32rem;
+    padding-top: 0.28rem;
+  }
+
+  .layer2-soul-asset-card b {
+    font-size: 0.66rem;
+  }
+
+  .layer2-soul-asset-card em {
+    font-size: 0.46rem;
+  }
+
+  .layer2-chart-panel {
+    padding: 0.58rem;
+    border-radius: 13px;
+  }
+
+  .layer2-chart-head {
+    grid-template-columns: 1fr;
+    gap: 0.58rem;
+  }
+
+  .layer2-chart-head h4 {
+    font-size: 1.28rem;
+  }
+
+  .layer2-chart-head p {
+    font-size: 0.64rem;
+    line-height: 1.35;
+  }
+
+  .layer2-chart-tabs,
+  .layer2-chart-window-tabs {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    min-width: 0;
+    gap: 0.28rem;
+  }
+
+  .layer2-chart-window-tabs {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .layer2-chart-tabs button,
+  .layer2-chart-window-tabs button {
+    border-radius: 8px;
+    padding: 0.42rem 0.25rem;
+    font-size: 0.58rem;
+  }
+
+  .layer2-chart-layout {
+    grid-template-columns: 1fr;
+    gap: 0.55rem;
+    margin-top: 0.58rem;
+  }
+
+  .layer2-chart-shell {
+    padding: 0.32rem;
+    border-radius: 11px;
+  }
+
+  .layer2-exchange-chart {
+    min-height: 430px;
+  }
+
+  .layer2-exchange-tooltip {
+    top: 0.44rem;
+    left: 0.44rem;
+    right: 0.44rem;
+    max-width: calc(100% - 0.88rem);
+    border-radius: 10px;
+    padding: 0.38rem 0.46rem;
+  }
+
+  .layer2-exchange-tooltip span {
+    font-size: 0.74rem;
+  }
+
+  .layer2-exchange-tooltip strong,
+  .layer2-exchange-tooltip dd {
+    font-size: 0.58rem;
+  }
+
+  .layer2-exchange-tooltip em,
+  .layer2-exchange-tooltip dt {
+    font-size: 0.48rem;
+  }
+
+  .layer2-exchange-tooltip dl {
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 0.22rem 0.36rem;
+  }
+
+  .layer2-exchange-tooltip dl div {
+    min-width: 0;
+  }
+
+  .layer2-chart-svg,
+  .layer2-chart-empty {
+    min-height: 218px;
+  }
+
+  .layer2-chart-side {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.45rem;
+  }
+
+  .layer2-chart-side > div {
+    padding: 0.55rem;
+  }
+
+  .layer2-chart-table-wrap {
+    margin-top: 0.55rem;
+    border-radius: 11px;
+  }
+
+  .layer2-chart-table {
+    font-size: 0.54rem;
+  }
+
+  .layer2-chart-table th,
+  .layer2-chart-table td {
+    padding: 0.38rem 0.24rem;
+  }
+
+  .layer2-chart-table th {
+    font-size: 0.43rem;
+    letter-spacing: 0.08em;
+  }
+
+  .layer2-command-strip {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.45rem;
+    padding: 0.55rem;
+  }
+
+  .layer2-command-strip > div {
+    min-height: 54px;
+    padding: 0.55rem;
+  }
+
   .layer0-status-core__head,
   .layer0-decision-brief,
   .layer0-decision-focus {
