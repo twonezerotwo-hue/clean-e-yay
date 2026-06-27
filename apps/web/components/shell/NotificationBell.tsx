@@ -202,6 +202,15 @@ export function NotificationBell() {
   const [voiceError, setVoiceError] = useState<string | null>(null);
   const [listening, setListening] = useState(false);
   const [micReady, setMicReady] = useState(false);
+  const [hiddenIds, setHiddenIds] = useState<Set<string>>(() => {
+    if (typeof window === "undefined") return new Set();
+    try {
+      const raw = window.localStorage.getItem("eyay_hidden_notification_ids");
+      return raw ? new Set(JSON.parse(raw) as string[]) : new Set();
+    } catch {
+      return new Set();
+    }
+  });
   const dockRef = useRef<HTMLDivElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
   const chatLogRef = useRef<HTMLDivElement>(null);
@@ -216,6 +225,29 @@ export function NotificationBell() {
   const items: Notification[] = data?.notifications ?? [];
   const unread = data?.unread_count ?? 0;
   const assistantBrief = useMemo(() => latestNotificationBrief(items, unread), [items, unread]);
+  const visibleItems = useMemo(
+    () => items.filter((n) => !hiddenIds.has(n.id)),
+    [items, hiddenIds],
+  );
+  const hasHidableRead = visibleItems.some((n) => n.ack);
+
+  const clearReadNotifications = useCallback(() => {
+    setHiddenIds((prev) => {
+      const next = new Set(prev);
+      for (const n of items) {
+        if (n.ack) next.add(n.id);
+      }
+      try {
+        window.localStorage.setItem(
+          "eyay_hidden_notification_ids",
+          JSON.stringify(Array.from(next)),
+        );
+      } catch {
+        // localStorage yoksa sessizce devam — bu tur için ekran filtresi yine çalışır
+      }
+      return next;
+    });
+  }, [items]);
 
   const updatePanelPosition = useCallback(() => {
     if (typeof window === "undefined") return;
@@ -575,25 +607,30 @@ export function NotificationBell() {
                 yeni sohbet
               </button>
             ) : null}
-            {mode === "feed" && unread > 0 ? (
-              <button
-                type="button"
-                onClick={() => ackAllMutation.mutate()}
-                className="ml-auto"
-              >
-                hepsi okundu
-              </button>
+            {mode === "feed" ? (
+              <div className="ml-auto flex items-center gap-2">
+                {hasHidableRead ? (
+                  <button type="button" onClick={clearReadNotifications}>
+                    okunanları sil
+                  </button>
+                ) : null}
+                {unread > 0 ? (
+                  <button type="button" onClick={() => ackAllMutation.mutate()}>
+                    hepsi okundu
+                  </button>
+                ) : null}
+              </div>
             ) : null}
           </div>
 
           {mode === "feed" ? (
             <div className="floating-notification-feed">
-              {items.length === 0 ? (
+              {visibleItems.length === 0 ? (
                 <div className="px-4 py-6 text-center text-xs italic text-white/40">
                   Henüz bildirim yok.
                 </div>
               ) : (
-                items.map((n) => (
+                visibleItems.map((n) => (
                   <NotifRow
                     key={n.id}
                     n={n}
@@ -647,6 +684,11 @@ export function NotificationBell() {
                   onChange={(event) => setInput(event.target.value)}
                   placeholder="Soru yaz..."
                   maxLength={2000}
+                  autoComplete="off"
+                  autoCorrect="off"
+                  autoCapitalize="off"
+                  spellCheck={false}
+                  name="eyay-chat-input-no-autofill"
                 />
                 <button type="submit" disabled={chat.isPending || !input.trim()}>
                   Sor
