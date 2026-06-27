@@ -23,7 +23,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter, HTTPException
 
-from packages.data import backtest, snapshot_store
+from packages.data import backtest, snapshot_store, strategy_backtest
 
 router = APIRouter(tags=["replay"])
 
@@ -96,6 +96,27 @@ def get_replay_backtest_run(run_id: str) -> dict:
             },
         )
     return result
+
+
+@router.get("/replay/strategy-backtest")
+def get_strategy_backtest(symbol: str = "BTCUSD", timeframe: str = "1d") -> dict:
+    """Pilot — geçmiş OHLCV barları üzerinde canlı teknik bias motorunu yeniden
+    çalıştırıp gerçek SL/TP kuralıyla simüle edilmiş trade zinciri + win rate.
+
+    `packages.data.strategy_backtest.run_signal_backtest`: sadece teknik skor
+    (fundamental/news/sentinel için geçmiş veri saklanmıyor — dahil edilmez).
+    Look-ahead yok, live execution yok, paper state'e yazmaz.
+    """
+    return strategy_backtest.run_signal_backtest(symbol=symbol, timeframe=timeframe)
+
+
+@router.get("/replay/strategy-backtest/all")
+def get_strategy_backtest_all(timeframe: str = "1d") -> dict:
+    """İşlem evrenindeki HER asset için pilot backtest (per-symbol + toplam
+    win rate). `asset_registry.trade_symbols()` her çağrıda taze okunur —
+    sonradan role=trade ile eklenen custom asset otomatik dahil olur, kod
+    değişikliği gerekmez."""
+    return strategy_backtest.run_signal_backtest_all(timeframe=timeframe)
 
 
 @router.get("/replay/{snapshot_id}")
