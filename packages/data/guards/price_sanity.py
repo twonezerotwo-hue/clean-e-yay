@@ -34,6 +34,19 @@ def _max_jump_pct() -> float:
     return float(_cfg().get("max_jump_pct", 30.0))
 
 
+def _max_open_deviation_pct() -> float:
+    """OPEN-time OHLCV-reference tolerance — tighter than `max_jump_pct`.
+
+    `max_jump_pct` (30%) is sized to tolerate a genuinely stale reference and
+    real intraday volatility for *managing* an existing position. It is too
+    loose to catch a quote provider serving a noisy-but-plausible price (e.g.
+    a futures ticker briefly returning a price ~10-15% off the symbol's own
+    recent OHLCV close) — that price still passes the absolute bounds check
+    and isn't a >30% jump, so it silently became a ticket's entry price.
+    """
+    return float(_cfg().get("max_open_deviation_pct", 10.0))
+
+
 def _in_bounds(symbol: str, price: float) -> bool:
     """True if price is within the symbol's absolute bounds (or symbol is unbounded)."""
     bounds = (_cfg().get("bounds") or {}).get(symbol)
@@ -110,14 +123,27 @@ def price_sane_with_ohlcv_reason(
     timeframe: str = "15m",
     previous_price: float | None = None,
 ) -> str | None:
+    """OPEN-time sanity, cross-checked against a REAL OHLCV reference.
+
+    Bounds/jump check first (unchanged). Then a mandatory, tighter check
+    against the symbol's own latest cached OHLCV close
+    (`max_open_deviation_pct`, default 10%) — absolute bounds alone are too
+    wide to catch a noisy-but-plausible quote (real incident: BRENT quote
+    ~13% off its own recent close passed the 30% bounds/jump guard and
+    became a ticket's entry price). No cached OHLCV reference at all → reddet
+    (`no_ohlcv_reference`): a brand-new/just-promoted trade asset must not
+    open on an unverified quote before a real reference exists.
+    """
+    basic = price_sane_reason(symbol, price, previous_price=previous_price)
+    if basic is not None:
+        return basic
     reference, label = ohlcv_reference_price(symbol, timeframe)
-    return price_sane_reason(
-        symbol,
-        price,
-        previous_price=previous_price,
-        reference_price=reference,
-        reference_label=label or "ohlcv",
-    )
+    if reference is None:
+        return "no_ohlcv_reference"
+    pct = abs(price - reference) / reference * 100.0  # price > 0 guaranteed (basic check passed)
+    if pct > _max_open_deviation_pct():
+        return f"{label or 'ohlcv'}_jump_{pct:.0f}pct_gt_{_max_open_deviation_pct():g}pct"
+    return None
 
 
 def tick_price_usable(

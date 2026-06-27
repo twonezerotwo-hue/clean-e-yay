@@ -180,6 +180,7 @@ paper_trading:
 # Phase 2 port from e-yay-codex paper_trading_service._is_price_sane.
 price_sanity:
   max_jump_pct: 30.0          # reddet: |Δ| önceki sane fiyata göre > %30
+  max_open_deviation_pct: 10.0  # OPEN-time: |Δ| sembolün kendi son OHLCV close'una göre > %10 → reddet
   bounds:                     # mutlak [lo, hi]; listede olmayan sembol → yalnız pozitiflik
     BTCUSD: [20000, 500000]
     XAUUSD: [1500, 7000]
