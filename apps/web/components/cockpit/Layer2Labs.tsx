@@ -590,14 +590,33 @@ function ElliottScenarioPanel({ analysis }: { analysis?: ElliottAnalysis | null 
             key={`${wp.label}-${index}`}
             className="flex items-center justify-between rounded-lg border border-white/10 bg-white/[0.035] px-3 py-2 text-xs"
           >
-            <span className="font-semibold text-white/78">{wp.label}</span>
-            <span className="font-mono text-cyan-100">{formatNumber(wp.price, 2)}</span>
+            <span className="flex items-center gap-1.5 font-semibold text-white/78">
+              {wp.label}
+              {index === 0 ? (
+                <span className="rounded bg-cyan-300/15 px-1.5 py-0.5 text-[9px] font-normal uppercase tracking-wider text-cyan-200/70">
+                  başlangıç
+                </span>
+              ) : null}
+            </span>
+            <span className="font-mono text-cyan-100">
+              {formatNumber(wp.price, 2)}
+              {wp.bar_index != null ? (
+                <span className="ml-1.5 text-white/35">bar #{wp.bar_index}</span>
+              ) : null}
+            </span>
           </div>
         ))}
       </div>
       {(analysis?.diagnostics ?? []).length > 0 ? (
-        <div className="mt-3 text-xs leading-5 text-white/45">
-          {(analysis?.diagnostics ?? []).join(", ")}
+        <div className="mt-3 space-y-1.5">
+          {(analysis?.diagnostics ?? []).map((d, i) => (
+            <div
+              key={i}
+              className="rounded-lg border border-white/10 bg-white/[0.025] px-2.5 py-1.5 text-[11px] leading-snug text-white/55"
+            >
+              {d}
+            </div>
+          ))}
         </div>
       ) : null}
     </div>
