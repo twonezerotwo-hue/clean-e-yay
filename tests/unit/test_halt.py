@@ -48,13 +48,16 @@ def _risk_input(
     )
 
 
-def _position(ps, *, symbol: str = "BTCUSD", side: str = "long", size_usd: float = 10_000):
+def _position(
+    ps, *, symbol: str = "BTCUSD", side: str = "long", size_usd: float = 10_000,
+    price: float = 100.0,
+):
     return ps.Position(
         id=f"{symbol}-{side}",
         symbol=symbol,
         side=side,
-        entry_price=100.0,
-        current_price=100.0,
+        entry_price=price,
+        current_price=price,
         size_usd=size_usd,
         sl=None,
         tp=None,
@@ -161,7 +164,14 @@ def test_halt_active_no_new_positions_via_tick(fresh_env) -> None:
     state = ps.load()
     state.daily_pnl_usd = -5000.0  # %2 limitin çok üstünde
     state.daily_anchor_date = "2099-12-31"  # tick'te gün sıfırlamasın
-    state.open_positions.append(_position(ps, symbol="BTCUSD"))
+    # entry/current fiyat mock provider'ın BTCUSD taban fiyatıyla (68000,
+    # packages/data/providers/price/mock.py) UYUMLU olmalı — testler
+    # TEST_USE_MOCK=true ile çalışır (bkz. kök conftest.py) ve price_sanity
+    # guard'ı gerçek/mock fiyata göre >%30 "imkansız sıçrama" gördüğünde
+    # current_price'ı GÜNCELLEMEZ (DATA_POLICY) — pozisyon sonsuza dek
+    # EXIT_PENDING'de kalır, flatten_all hiç gerçekleşmez. 100.0 sentetik
+    # fiyatı bu yüzden testi kilitliyordu.
+    state.open_positions.append(_position(ps, symbol="BTCUSD", price=68_000.0))
     ps.save(state)
 
     from apps.api.main import app

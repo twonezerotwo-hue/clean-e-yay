@@ -20,6 +20,7 @@ PAPER_SAFE / NO_EXECUTION: only records a comparison; never opens/sizes/decides.
 from __future__ import annotations
 
 import json
+import logging
 import os
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
@@ -40,6 +41,8 @@ from packages.scoring import exhaustion as exhaustion_engine
 from packages.setup import classifier as setup_classifier
 from packages.volume import engine as volume_engine
 from packages.zones import engine as zone_engine
+
+_log = logging.getLogger(__name__)
 
 # ConsensusSnapshot/per_timeframe key naming (m15..w1) → entry timeframe label.
 _KEY_BY_TF = {"15m": "m15", "1h": "h1", "4h": "h4", "1d": "d1", "1w": "w1"}
@@ -154,6 +157,7 @@ def _evidence_for_symbol(symbol: str | None, *, fingerprint: str | None, timefra
             "bias": elliott.bias,
         }
     except Exception:
+        _log.warning("shadow evidence: elliott failed for %s/%s", symbol, tf, exc_info=True)
         out["elliott"] = {}
     try:
         if fingerprint:
@@ -166,6 +170,7 @@ def _evidence_for_symbol(symbol: str | None, *, fingerprint: str | None, timefra
         else:
             out["historical_edge"] = {}
     except Exception:
+        _log.warning("shadow evidence: historical_edge failed for %s", symbol, exc_info=True)
         out["historical_edge"] = {}
     return out
 
@@ -284,6 +289,12 @@ def _setup_and_conflict_for_symbol(
             "conflict_path": list(resolution.conflict_resolution_path),
         }
     except Exception:
+        _log.warning(
+            "shadow setup_conflict failed for %s — bu tick'in Faz 9A retrospektif "
+            "verisinde 'unmatched' olarak görünecek",
+            getattr(view, "symbol", "?"),
+            exc_info=True,
+        )
         return {}
 
 

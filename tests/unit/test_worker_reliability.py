@@ -152,7 +152,7 @@ def test_tick_worker_exception_writes_failed_heartbeat(ops_env, monkeypatch) -> 
     def boom():
         raise RuntimeError("snapshot blew up")
 
-    monkeypatch.setattr(tw, "get_cached_snapshot", boom)
+    monkeypatch.setattr(tw, "build_snapshot", boom)
     # run_once istisnayı yutar (loop ölmez) ve FAILED heartbeat yazar
     asyncio.run(tw.run_once())
     hb = heartbeat.load("tick_worker")
