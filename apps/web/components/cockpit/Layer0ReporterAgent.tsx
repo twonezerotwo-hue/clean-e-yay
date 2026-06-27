@@ -840,6 +840,47 @@ export function Layer0ReporterAgent({
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const audioUrlRef = useRef<string | null>(null);
   const speechRunRef = useRef(0);
+  const audioUnlockedRef = useRef(false);
+
+  // Tarayıcı autoplay politikası: sayfa hiç tıklanmadan (sadece "Hey E-yAy"
+  // söylenerek) tetiklenen ilk audio.play()/speechSynthesis.speak() çağrısı
+  // sessizce reddedilir — mikrofon/recognition bundan etkilenmez (input,
+  // gesture gerektirmez), ama SES ÇIKIŞI gerektirir. Sayfadaki İLK tıklama/
+  // tuşa basma/dokunuşta sessiz bir audio + boş bir utterance çalarak bu
+  // kilidi bir kerede açıyoruz; sonraki gesture'sız (wake-word tetikli)
+  // play()/speak() çağrıları artık bu "sound played after interaction"
+  // kaydı sayesinde sessizce engellenmiyor.
+  useEffect(() => {
+    const unlock = () => {
+      if (audioUnlockedRef.current) return;
+      audioUnlockedRef.current = true;
+      try {
+        const silent = new Audio(
+          "data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAA=",
+        );
+        void silent.play().catch(() => {});
+      } catch {
+        // yut — autoplay yine de engellenmişse sonraki adımlar normal akışa düşer
+      }
+      if (typeof window !== "undefined" && "speechSynthesis" in window) {
+        try {
+          const warm = new SpeechSynthesisUtterance(" ");
+          warm.volume = 0;
+          window.speechSynthesis.speak(warm);
+        } catch {
+          // yut
+        }
+      }
+    };
+    window.addEventListener("pointerdown", unlock, { passive: true });
+    window.addEventListener("keydown", unlock);
+    window.addEventListener("touchstart", unlock, { passive: true });
+    return () => {
+      window.removeEventListener("pointerdown", unlock);
+      window.removeEventListener("keydown", unlock);
+      window.removeEventListener("touchstart", unlock);
+    };
+  }, []);
 
   useEffect(() => {
     setMicReady(Boolean(getSpeechRecognition()));
