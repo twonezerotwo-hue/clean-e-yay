@@ -24,5 +24,5 @@ assets:
   CPI:    { label: "CPI",         kind: macro,     roles: [macro] }
   # Yalnızca likidite sepeti (snapshot evreninde değil; OHLCV'den on-demand).
   SP500:  { label: "Hisseler",    kind: risk,      roles: [liquidity] }
-  BRENT:  { label: "Brent",       kind: commodity, roles: [liquidity] }
+  BRENT:  { label: "Brent",       kind: commodity, roles: [liquidity, trade] }
   TLT:    { label: "Tahvil",      kind: safe,      roles: [liquidity] }

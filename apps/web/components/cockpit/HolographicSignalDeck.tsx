@@ -15,6 +15,7 @@ import {
 } from "@/lib/api/client";
 import { usePanelQueryPolicy } from "@/lib/panel-runtime";
 import {
+  useAssetRegistry,
   useDataSnapshot,
   useDecisionMatrix,
   useRegimeReport,
@@ -513,12 +514,16 @@ function DeckCard({
   offset,
   compact = false,
   onSelect,
+  removable = false,
+  onRemove,
 }: {
   row: DeckRow;
   active: boolean;
   offset: number;
   compact?: boolean;
   onSelect: () => void;
+  removable?: boolean;
+  onRemove?: () => void;
 }) {
   const value = round(row.best.score);
   const status = statusBadge(row.best);
@@ -554,6 +559,26 @@ function DeckCard({
       <div className="fut-card-depth" aria-hidden="true" />
       <div className="fut-card-shine" aria-hidden="true" />
       <div className="fut-card-grid" aria-hidden="true" />
+      {removable && onRemove && (
+        <span
+          role="button"
+          tabIndex={0}
+          aria-label={`${row.symbol} sil`}
+          onClick={(e) => {
+            e.stopPropagation();
+            onRemove();
+          }}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === " ") {
+              e.stopPropagation();
+              onRemove();
+            }
+          }}
+          className="absolute right-1.5 top-1.5 z-20 flex h-5 w-5 items-center justify-center rounded-full border border-rose-400/40 bg-rose-500/15 text-[10px] text-rose-200 hover:bg-rose-500/30"
+        >
+          ✕
+        </span>
+      )}
       <div className="relative z-10 p-3">
         <div className="flex items-start justify-between gap-3">
           <div>
@@ -982,10 +1007,33 @@ function AddAssetForm({ onClose }: { onClose: () => void }) {
 // ── Main ──────────────────────────────────────────────────────────────────────
 
 export function HolographicSignalDeck({ brief }: { brief: AgentBrief }) {
+  const queryClient = useQueryClient();
   const { data: snap } = useDataSnapshot();
   const { data: decisionMatrix } = useDecisionMatrix();
   const { data: regime } = useRegimeReport();
   const { data: ticketList } = useTradeTickets();
+  const { data: assetRegistry } = useAssetRegistry();
+  const customSymbols = useMemo(
+    () => new Set(assetRegistry?.custom ?? []),
+    [assetRegistry?.custom],
+  );
+
+  const handleRemoveCustom = async (symbol: string) => {
+    if (!window.confirm(`${symbol} silinsin mi? Bu asset için tüm karar/skor verisi kaybolur.`)) {
+      return;
+    }
+    try {
+      await api.removeCustomAsset(symbol);
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: qk.assetRegistry }),
+        queryClient.invalidateQueries({ queryKey: qk.dataSnapshot }),
+        queryClient.invalidateQueries({ queryKey: qk.decisionMatrix }),
+        queryClient.invalidateQueries({ queryKey: qk.cockpitBrief }),
+      ]);
+    } catch (err) {
+      window.alert(err instanceof Error ? err.message : "Silinemedi.");
+    }
+  };
 
   const rows = useMemo(
     () => pickDeckRows(brief.top_candidates ?? [], snap?.prices, decisionMatrix?.cells),
@@ -1247,6 +1295,8 @@ export function HolographicSignalDeck({ brief }: { brief: AgentBrief }) {
                     offset={offset}
                     compact={compactDeck}
                     onSelect={() => handleDeckSelect(i)}
+                    removable={customSymbols.has(r.symbol)}
+                    onRemove={() => handleRemoveCustom(r.symbol)}
                   />
                 );
               })
