@@ -9,6 +9,7 @@ from packages.agent.personas import build_votes
 from packages.consensus.engine import build as build_consensus
 from packages.data.ingestion.pipeline import DEFAULT_SYMBOLS, get_cached_snapshot
 from packages.data.provenance import data_provenance
+from packages.data.registry import assets as asset_registry
 from packages.paper import state as paper_state
 from packages.paper.lifecycle import max_drawdown_pct
 from packages.regime.classifier import classify
@@ -94,3 +95,42 @@ def get_dashboard_state() -> dict:
         },
         "warnings": snap.warnings,
     }
+
+
+@router.get("/dashboard/agent-quorum-matrix")
+def get_agent_quorum_matrix() -> dict:
+    """Agent persona quorum (analyst/risk-officer/macro-strategist) — `/dashboard/state`
+    gibi BTCUSD'ye sabit DEĞİL; işlem evrenindeki HER asset için ayrı ayrı hesaplanır.
+
+    `/dashboard/state.agent_votes` (`DEFAULT_SYMBOLS[0]` = BTCUSD sabit) bilinçli
+    olarak değiştirilmedi — AgentVotesPanel gibi mevcut tüketicileri bozmamak için
+    additive bir endpoint olarak eklendi (Çalışan sistemi bozma kuralı)."""
+    snap = get_cached_snapshot()
+    regime = classify(snap)
+    ps = paper_state.load()
+    risk = evaluate(
+        RiskInput(
+            dqs_score=snap.quality.score,
+            equity_usd=ps.equity_usd,
+            peak_equity_usd=ps.peak_equity_usd,
+            daily_pnl_usd=ps.daily_pnl_usd,
+            open_position_count=len(ps.open_positions),
+        )
+    )
+    rows = []
+    for symbol in asset_registry.trade_symbols():
+        cons = build_consensus(symbol, snap, regime)
+        votes, quorum = build_votes(cons, regime, risk)
+        tally: dict[str, int] = {}
+        for v in votes:
+            tally[v.direction] = tally.get(v.direction, 0) + 1
+        lead = max(tally.items(), key=lambda kv: kv[1])[0] if tally else None
+        rows.append(
+            {
+                "symbol": symbol,
+                "lead_direction": lead,
+                "quorum_reached": quorum,
+                "tally": tally,
+            }
+        )
+    return {"generated_at": datetime.now(UTC).isoformat(), "symbols": rows}

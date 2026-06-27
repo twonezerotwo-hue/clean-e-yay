@@ -99,6 +99,26 @@ export const useMarketSessions = () => {
   });
 };
 
+export const useMarketSessionsTradeUniverse = () => {
+  const policy = usePanelQueryPolicy(60_000);
+  return useQuery({
+    queryKey: qk.marketSessionsTradeUniverse,
+    queryFn: api.marketSessionsTradeUniverse,
+    staleTime: 60_000,
+    ...policy,
+  });
+};
+
+export const useAgentQuorumMatrix = () => {
+  const policy = usePanelQueryPolicy(30_000);
+  return useQuery({
+    queryKey: qk.agentQuorumMatrix,
+    queryFn: api.agentQuorumMatrix,
+    staleTime: 20_000,
+    ...policy,
+  });
+};
+
 export const useMarketSessionAsset = (symbol: string) => {
   const policy = usePanelQueryPolicy(60_000);
   return useQuery({

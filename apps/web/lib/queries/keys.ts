@@ -8,6 +8,8 @@ export const qk = {
   marketSessions: ["market-sessions", "current"] as const,
   marketSessionAsset: (symbol: string) =>
     ["market-sessions", "asset", symbol] as const,
+  marketSessionsTradeUniverse: ["market-sessions", "trade-universe"] as const,
+  agentQuorumMatrix: ["dashboard", "agent-quorum-matrix"] as const,
   assetRegistry: ["assets", "registry"] as const,
   assetAnalysis: (symbol: string) => ["analysis", "asset", symbol] as const,
   technicalInsight: (symbol: string) =>

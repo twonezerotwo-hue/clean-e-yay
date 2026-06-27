@@ -7,12 +7,15 @@ import { PanelFrame } from "@/components/shell/PanelFrame";
 import { HoloHeadScene } from "@/components/cockpit/HoloHeadScene";
 import {
   useAgentMatrix,
+  useAgentQuorumMatrix,
+  useAssetRegistry,
   useCockpitBrief,
   useConflictGateStatus,
   useConflictGateValidation,
   useDashboardState,
   useDataSnapshot,
   useDecisionMatrix,
+  useMarketSessionsTradeUniverse,
   usePaperTradingState,
   useRegimeReport,
   useRiskHalts,
@@ -21,7 +24,6 @@ import {
 } from "@/lib/queries/hooks";
 import { selectAgentBrief } from "@/lib/selectors/cockpit";
 import { selectHaltActive } from "@/lib/selectors/halts";
-import { selectAgentQuorum } from "@/lib/selectors/dashboard";
 import type { TradeTicket } from "@/types/generated/api";
 
 type CheckItem = {
@@ -37,19 +39,9 @@ const CYCLE_MS = 30_000;
 const CHECK_COUNT = 10;
 const STEP_MS = CYCLE_MS / CHECK_COUNT;
 
-function sideToDirection(side?: string | null) {
-  if (side === "long") return "bullish";
-  if (side === "short") return "bearish";
-  return null;
-}
-
 function formatTime(ms: number) {
   const seconds = Math.max(0, Math.ceil(ms / 1000));
   return `${seconds}s`;
-}
-
-function isHardRiskAction(action?: string | null) {
-  return action === "NO_POSITION_INCREASE" || action === "RISK_REDUCE" || action === "KILL_SWITCH";
 }
 
 
@@ -64,11 +56,13 @@ export function ExecutionReadinessPanel() {
   const halts = useRiskHalts();
   const tickets = useTradeTickets();
   const matrix = useDecisionMatrix();
-  const agentMatrix = useAgentMatrix();
   const regime = useRegimeReport();
   const paper = usePaperTradingState();
   const conflictGateStatus = useConflictGateStatus();
   const conflictGateValidation = useConflictGateValidation();
+  const assetRegistry = useAssetRegistry();
+  const sessionUniverse = useMarketSessionsTradeUniverse();
+  const agentQuorum = useAgentQuorumMatrix();
 
   useEffect(() => {
     const interval = window.setInterval(() => setNow(Date.now()), 1_000);
@@ -86,15 +80,16 @@ export function ExecutionReadinessPanel() {
       () => Promise.all([system.refetch(), halts.refetch()]),
       () => Promise.all([dashboard.refetch(), halts.refetch(), cockpit.refetch()]),
       () => Promise.all([conflictGateStatus.refetch(), conflictGateValidation.refetch()]),
-      () => cockpit.refetch(),
-      () => tickets.refetch(),
-      () => matrix.refetch(),
-      () => Promise.all([dashboard.refetch(), agentMatrix.refetch()]),
       () => Promise.all([regime.refetch(), matrix.refetch()]),
-      () => Promise.all([paper.refetch(), tickets.refetch()]),
+      () => Promise.all([matrix.refetch(), cockpit.refetch(), assetRegistry.refetch()]),
+      () => sessionUniverse.refetch(),
+      () => agentQuorum.refetch(),
+      () => paper.refetch(),
+      () => tickets.refetch(),
     ],
     [
-      agentMatrix,
+      agentQuorum,
+      assetRegistry,
       conflictGateStatus,
       conflictGateValidation,
       cockpit,
@@ -103,6 +98,7 @@ export function ExecutionReadinessPanel() {
       matrix,
       paper,
       regime,
+      sessionUniverse,
       snapshot,
       system,
       tickets,
@@ -115,9 +111,6 @@ export function ExecutionReadinessPanel() {
 
   const brief = selectAgentBrief(cockpit.data);
   const activeTicket = tickets.data?.tickets.find((ticket) => ticket.status === "active");
-  const ticketDirection = sideToDirection(activeTicket?.side);
-  const ticketSafetyErrors = activeTicket?.display?.safety_lines?.filter((line) => line.level === "error").length ?? 0;
-  const ticketExpired = activeTicket?.expires_at ? Date.parse(activeTicket.expires_at) <= Date.now() : true;
 
   const checks = useMemo<CheckItem[]>(() => {
     const dqs = snapshot.data?.dqs;
@@ -127,47 +120,12 @@ export function ExecutionReadinessPanel() {
     const staleWorkers = system.data?.stale_workers ?? [];
     const haltActive = selectHaltActive(halts.data) || Boolean(system.data?.risk_halt_status?.active);
     const riskGate = dashboard.data?.risk_gate;
-    const quorum = selectAgentQuorum(dashboard.data);
-    const actionableCandidates = brief?.top_candidates?.filter(
-      (candidate) =>
-        candidate.actionable &&
-        candidate.direction !== "neutral" &&
-        (candidate.score ?? 0) >= 55,
-    ) ?? [];
-    const matrixCells = matrix.data?.cells ?? [];
-    const actionableMatrixCells = matrixCells.filter(
-      (cell) =>
-        cell.actionable &&
-        (cell.action === "open_long" || cell.action === "open_short") &&
-        (!activeTicket || cell.symbol === activeTicket.symbol),
-    );
-    const matrixDirectionOk = !activeTicket
-      ? actionableMatrixCells.length > 0
-      : actionableMatrixCells.some((cell) =>
-          activeTicket.side === "long" ? cell.action === "open_long" : cell.action === "open_short",
-        );
     const eventRestrictive = Boolean(regime.data?.event_risk?.restrictive || matrix.data?.event_risk?.restrictive);
     const structureWarnings =
       (matrix.data?.derivatives?.length ?? 0) +
       (matrix.data?.volatility?.length ?? 0) +
       (matrix.data?.options?.length ?? 0) +
       (matrix.data?.catalysts?.length ?? 0);
-    const positionAlerts = paper.data?.position_rechecks?.filter(
-      (row) => row.verdict === "REDUCE" || row.verdict === "EXIT_RECOMMEND",
-    ).length ?? 0;
-    const duplicateWarnings = paper.data?.duplicate_warning?.length ?? 0;
-    const newEntriesDisabled = paper.data?.new_entries_disabled === true;
-    const paperBlocksTicket = newEntriesDisabled || duplicateWarnings > 0 || positionAlerts > 0;
-    const agentMatrixBlocks = isHardRiskAction(agentMatrix.data?.risk_action);
-    const ticketSummary = activeTicket?.summary;
-    const ticketPassed =
-      Boolean(activeTicket) &&
-      Boolean(paper.data) &&
-      !ticketExpired &&
-      ticketSafetyErrors === 0 &&
-      !paperBlocksTicket &&
-      (ticketSummary?.rr_ratio ?? 0) >= 1.5 &&
-      (ticketSummary?.confidence_calibrated ?? 0) >= 0.5;
     const gateModes = conflictGateStatus.data?.profile_modes ?? {};
     const restrictedGateProfiles = Object.entries(gateModes).filter(([, mode]) => mode !== "OFF");
     const validationReport = conflictGateValidation.data;
@@ -187,6 +145,55 @@ export function ExecutionReadinessPanel() {
     const conflictGatePassed =
       Boolean(conflictGateStatus.data) &&
       (!conflictGateEnabled || restrictedGateProfiles.length === 0 || validationProfiles.length > 0);
+
+    // #6 — tüm trade evreninde (statik + custom asset) actionable sinyal sayısı.
+    const tradeUniverse = assetRegistry.data?.trade ?? [];
+    const matrixCells = matrix.data?.cells ?? [];
+    const actionableSymbols = new Set(
+      matrixCells
+        .filter((cell) => cell.actionable && (cell.action === "open_long" || cell.action === "open_short"))
+        .map((cell) => cell.symbol),
+    );
+    const matrixUsable = Boolean(matrix.data) && matrix.data?.suspended !== true && matrix.data?.dqs_status !== "BLOCKED";
+    const universeCount = tradeUniverse.length || new Set(matrixCells.map((c) => c.symbol)).size;
+
+    // #7 — işlem evrenindeki her asset için piyasa/session durumu (tek çağrı).
+    const sessionAssets = sessionUniverse.data?.assets ?? [];
+    const sessionTradeable = sessionAssets.filter((a) => a.action !== "block");
+    const sessionTotal = sessionAssets.length;
+
+    // #8 — agent persona quorum'u, BTCUSD'ye sabit DEĞİL: her actionable sembol için.
+    const quorumRows = agentQuorum.data?.symbols ?? [];
+    const alignedQuorumRows = quorumRows.filter(
+      (row) => row.quorum_reached && row.lead_direction !== "neutral" && row.lead_direction !== null,
+    );
+
+    // #9 — portföy sağlığı: state anomaly + duplicate + toplam exposure (sistem-geneli, ticket-bağımsız).
+    const duplicateWarnings = paper.data?.duplicate_warning?.length ?? 0;
+    const positionAlerts = paper.data?.position_rechecks?.filter(
+      (row) => row.verdict === "REDUCE" || row.verdict === "EXIT_RECOMMEND",
+    ).length ?? 0;
+    const newEntriesDisabled = paper.data?.new_entries_disabled === true;
+    const anomalyDetected = paper.data?.state_anomaly?.detected === true;
+    const exposureUsd = paper.data?.total_exposure_usd ?? 0;
+    const equityUsd = paper.data?.equity_usd ?? 0;
+    const exposurePct = equityUsd > 0 ? (exposureUsd / equityUsd) * 100 : 0;
+    const portfolioPassed = Boolean(paper.data) && !anomalyDetected && duplicateWarnings === 0;
+
+    // #10 — aktif TÜM ticket'lar (tek ticket değil) broker-hazırlığı.
+    const activeTickets = tickets.data?.tickets.filter((t) => t.status === "active") ?? [];
+    const now = Date.now();
+    const readyTickets = activeTickets.filter((t) => {
+      const expired = t.expires_at ? Date.parse(t.expires_at) <= now : true;
+      const safetyErrors = t.display?.safety_lines?.filter((l) => l.level === "error").length ?? 0;
+      return (
+        !expired &&
+        safetyErrors === 0 &&
+        !newEntriesDisabled &&
+        (t.summary?.rr_ratio ?? 0) >= 1.5 &&
+        (t.summary?.confidence_calibrated ?? 0) >= 0.5
+      );
+    });
 
     return [
       {
@@ -259,67 +266,6 @@ export function ExecutionReadinessPanel() {
                 : `Gate aktif; ${validationProfiles.length} profil doğrulandı, eşleşmeyen shadow kaydı ${unmatchedShadowRows}.`,
       },
       {
-        id: "agent_permission",
-        title: "Agent işlem aç diyor mu?",
-        source: "AgentNarrator / AgentBrief / Decision",
-        passed:
-          Boolean(brief) &&
-          brief?.can_act === true &&
-          brief?.status === "ACTIONABLE" &&
-          brief?.data_mode !== "BLOCKED",
-        metric: brief ? `${brief.status} · ${brief.data_mode}` : "Agent yok",
-        detail:
-          brief?.can_act && brief.status === "ACTIONABLE"
-            ? brief.recommended_stance
-            : brief?.summary ?? "Agent henüz işlem aç sinyali vermiyor.",
-      },
-      {
-        id: "trade_signal",
-        title: "Net sinyal veya ticket var mı?",
-        source: "CommandSignals / TradeTicket",
-        passed: Boolean(activeTicket) && actionableCandidates.length > 0,
-        metric: activeTicket
-          ? `${activeTicket.symbol} ${activeTicket.side.toUpperCase()} · ${activeTicket.timeframe}`
-          : `${actionableCandidates.length} actionable aday`,
-        detail: activeTicket
-          ? `Broker ticket var; destekleyen aday sayısı ${actionableCandidates.length}.`
-          : "Açılacak net ticket yok; manuel giriş kontrolü geçmez.",
-      },
-      {
-        id: "timeframe_matrix",
-        title: "Timeframe'ler aynı yönü destekliyor mu?",
-        source: "TimeframeMatrix",
-        passed:
-          Boolean(matrix.data) &&
-          matrix.data?.suspended !== true &&
-          matrix.data?.dqs_status !== "BLOCKED" &&
-          matrixDirectionOk,
-        metric: `${actionableMatrixCells.length} actionable hücre`,
-        detail:
-          matrix.data?.suspended === true
-            ? "Matrix suspended; tüm TF'lerde yeni işlem yok."
-            : matrixDirectionOk
-              ? "Ticket yönü en az bir güçlü timeframe ile uyumlu."
-              : "Long/short yönünü destekleyen güçlü timeframe yok.",
-      },
-      {
-        id: "agent_consensus",
-        title: "Agentlar aynı yönde mi?",
-        source: "AgentVotes / AgentMatrix",
-        passed:
-          Boolean(dashboard.data) &&
-          quorum.quorumReached &&
-          quorum.leadCount >= 2 &&
-          !agentMatrixBlocks &&
-          (!ticketDirection || quorum.leadDirection === ticketDirection),
-        metric: `lead ${quorum.leadDirection ?? "-"} · ${quorum.leadCount}/${quorum.votes.length}`,
-        detail: agentMatrixBlocks
-          ? `Agent matrix risk nedeniyle blokluyor: ${agentMatrix.data?.risk_action}`
-          : quorum.quorumReached
-            ? "Agent çoğunluğu ticket yönüyle çelişmiyor."
-            : "Agent çoğunluğu oluşmadı veya yönler çelişiyor.",
-      },
-      {
         id: "market_structure",
         title: "Haber / volatilite engeli var mı?",
         source: "Derivatives / Volatility / Options / Catalyst",
@@ -332,35 +278,76 @@ export function ExecutionReadinessPanel() {
             : "Haber, volatilite ve piyasa yapısında sert engel görünmüyor.",
       },
       {
+        id: "actionable_signals",
+        title: "Kaç assette actionable sinyal var?",
+        source: "DecisionMatrix / AssetRegistry (tüm trade evreni)",
+        passed: matrixUsable && actionableSymbols.size > 0,
+        metric: `${actionableSymbols.size}/${universeCount} asset actionable`,
+        detail: !matrixUsable
+          ? "Decision matrix suspended veya DQS BLOCKED; hiçbir asset için yeni işlem yok."
+          : actionableSymbols.size > 0
+            ? `Actionable: ${Array.from(actionableSymbols).join(", ")}.`
+            : "İşlem evrenindeki hiçbir asset'te şu an actionable hücre yok.",
+      },
+      {
+        id: "session_status",
+        title: "Piyasa/session durumu nedir?",
+        source: "MarketSessions / trade-universe",
+        passed: Boolean(sessionUniverse.data) && sessionTradeable.length > 0,
+        metric: `${sessionTradeable.length}/${sessionTotal || "?"} piyasa işleme açık/izinli`,
+        detail: !sessionUniverse.data
+          ? "Session durumu okunamıyor."
+          : sessionTradeable.length === 0
+            ? "İşlem evrenindeki tüm asset'lerin session'ı kapalı (block)."
+            : `Kapalı: ${sessionAssets.filter((a) => a.action === "block").map((a) => a.asset_code).join(", ") || "yok"}.`,
+      },
+      {
+        id: "agent_consensus",
+        title: "Agentlar aynı yönde mi?",
+        source: "AgentVotes (her actionable asset için ayrı, BTCUSD'ye sabit değil)",
+        passed: Boolean(agentQuorum.data) && alignedQuorumRows.length > 0,
+        metric: `${alignedQuorumRows.length}/${quorumRows.length} assette agent quorum'u yönlü`,
+        detail: !agentQuorum.data
+          ? "Agent quorum matrisi okunamıyor."
+          : alignedQuorumRows.length > 0
+            ? `Yönlü quorum: ${alignedQuorumRows.map((r) => `${r.symbol}:${r.lead_direction}`).join(", ")}.`
+            : "Hiçbir assette agent çoğunluğu yönlü bir konsensüse ulaşmadı (hepsi neutral/çelişkili).",
+      },
+      {
+        id: "portfolio_health",
+        title: "Portföy/pozisyon sağlığı nedir?",
+        source: "PaperState / StateAnomaly (tüm açık pozisyonlar, tek ticket değil)",
+        passed: portfolioPassed,
+        metric: `exposure $${Math.round(exposureUsd).toLocaleString("en-US")} (%${exposurePct.toFixed(1)} equity)`,
+        detail: anomalyDetected
+          ? `State anomaly: ${paper.data?.state_anomaly?.reasons?.join(", ") || "tespit edildi"}.`
+          : duplicateWarnings > 0
+            ? "Aynı (symbol, timeframe) için duplicate açık pozisyon var."
+            : positionAlerts > 0
+              ? `${positionAlerts} açık pozisyon REDUCE/EXIT_RECOMMEND uyarısı veriyor (bilgi amaçlı, bloklamaz).`
+              : "Portföy muhasebesi tutarlı, duplicate yok.",
+      },
+      {
         id: "ticket_integrity",
-        title: "Broker'a girilecek ticket hazır mı?",
-        source: "TradeTicket",
-        passed: ticketPassed,
-        metric: activeTicket
-          ? `R:R 1:${(ticketSummary?.rr_ratio ?? 0).toFixed(2)} · conf ${Math.round((ticketSummary?.confidence_calibrated ?? 0) * 100)}%`
+        title: "Tüm aktif ticket'lar broker-hazır mı?",
+        source: "TradeTicket (tüm aktif ticket'lar, tek ticket değil)",
+        passed: activeTickets.length > 0 && readyTickets.length === activeTickets.length,
+        metric: activeTickets.length
+          ? `${readyTickets.length}/${activeTickets.length} ticket hazır`
           : "ticket yok",
-        detail: !activeTicket
-          ? "Entry, stop, hedef ve büyüklük içeren aktif ticket yok."
-          : !paper.data
-            ? "Paper state okunmuyor; ticket son kontrolü tamamlanmadı."
-          : ticketExpired
-            ? "Ticket süresi dolmuş."
-          : ticketSafetyErrors > 0
-              ? "Ticket güvenlik satırlarında hata var."
-              : newEntriesDisabled
-                ? "Paper state yeni girişleri kapatmış."
-                : duplicateWarnings > 0
-                  ? "Aynı yönde duplicate uyarısı var."
-                  : positionAlerts > 0
-                    ? "Açık pozisyon kontrolü REDUCE/EXIT uyarısı veriyor."
-                    : ticketPassed
-                      ? "Entry, stop, hedef, R:R ve güvenlik kontrolleri hazır."
-                      : "Ticket var ama R:R veya güven skoru yetersiz.",
+        detail:
+          activeTickets.length === 0
+            ? "Entry, stop, hedef ve büyüklük içeren aktif ticket yok."
+            : newEntriesDisabled
+              ? "Paper state yeni girişleri kapatmış; hiçbir ticket broker'a giremez."
+              : readyTickets.length === activeTickets.length
+                ? "Tüm aktif ticket'larda entry, stop, hedef, R:R ve güvenlik kontrolleri hazır."
+                : `${activeTickets.length - readyTickets.length} ticket süresi dolmuş, güvenlik hatası veya yetersiz R:R/güven nedeniyle hazır değil.`,
       },
     ];
   }, [
-    activeTicket,
-    agentMatrix.data,
+    agentQuorum.data,
+    assetRegistry.data,
     brief,
     conflictGateStatus.data,
     conflictGateValidation.data,
@@ -370,10 +357,10 @@ export function ExecutionReadinessPanel() {
     matrix.data,
     paper.data,
     regime.data,
+    sessionUniverse.data,
     snapshot.data,
     system.data,
-    ticketExpired,
-    ticketSafetyErrors,
+    tickets.data,
   ]);
 
   const passedCount = checks.filter((check) => check.passed).length;

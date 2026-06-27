@@ -32,6 +32,9 @@ export type AssetSignal = {
   confluence_aligned?: boolean;
   dominant_module?: string;
   win_rate_signal?: WinRateSignal;
+  // Senaryo paneli risk-on/risk-off kovası için asset sınıfı (risk/commodity/
+  // hedge/safe/cash/macro) — additive.
+  kind?: string | null;
 };
 
 export type NewsHeadline = {
@@ -109,6 +112,7 @@ export type LiquidityAssetFlow = {
   kind: string;
   return_pct: number | null;
   volume_change_pct: number | null;
+  tvl_change_pct?: number | null;
   flow_score: number;
   direction: FlowDirection;
 };
@@ -337,6 +341,9 @@ export type PaperTradingState = {
   // UX-A14 — açık pozisyonların fresh karara karşı verdict'i (read-only).
   position_rechecks?: PositionRecheck[];
   last_recheck_at?: string | null;
+  // Portföy sağlığı (ExecutionReadinessPanel) — additive.
+  total_exposure_usd?: number;
+  state_anomaly?: { detected: boolean; reasons: string[] };
 };
 
 // UX-A15 — Trade Ticket (broker handoff payload).

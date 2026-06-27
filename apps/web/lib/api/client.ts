@@ -354,6 +354,28 @@ export type MarketSessionAsset = {
   no_execution?: boolean;
 };
 
+export type MarketSessionsTradeUniverseResponse = {
+  generated_at: string;
+  assets: Array<{
+    asset_code: string;
+    primary_market_open: boolean | null;
+    action: string;
+    reason: string;
+  }>;
+  paper_safe: boolean;
+  no_execution: boolean;
+};
+
+export type AgentQuorumMatrixResponse = {
+  generated_at: string;
+  symbols: Array<{
+    symbol: string;
+    lead_direction: string | null;
+    quorum_reached: boolean;
+    tally: Record<string, number>;
+  }>;
+};
+
 async function fetchJSON<T>(path: string, init?: RequestInit): Promise<T> {
   const headers = new Headers(init?.headers);
   if (init?.body && !headers.has("content-type")) {
@@ -424,6 +446,12 @@ export const api = {
     fetchJSON<MarketSessionAsset>(
       `/api/v1/market-sessions/asset/${encodeURIComponent(symbol)}`,
     ),
+  marketSessionsTradeUniverse: () =>
+    fetchJSON<MarketSessionsTradeUniverseResponse>(
+      "/api/v1/market-sessions/trade-universe",
+    ),
+  agentQuorumMatrix: () =>
+    fetchJSON<AgentQuorumMatrixResponse>("/api/v1/dashboard/agent-quorum-matrix"),
   assetRegistry: () => fetchJSON<AssetRegistry>("/api/v1/assets"),
   addCustomAsset: (body: AddCustomAssetRequest) =>
     fetchJSON<AddCustomAssetResponse>("/api/v1/assets/custom", {

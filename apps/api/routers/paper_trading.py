@@ -15,7 +15,7 @@ from packages.decision.engine import decide_matrix
 from packages.paper import audit as paper_audit
 from packages.paper import maintenance, manual_queue, session_gate
 from packages.paper import state as paper_state
-from packages.paper.guards import price_sanity
+from packages.paper.guards import price_sanity, state_anomaly
 from packages.paper import manual_order, position_ops
 from packages.paper.lifecycle import (
     attempt_open,
@@ -87,12 +87,16 @@ def _serialize_state(ps: paper_state.PaperState) -> dict:
     # P1 — yeni girişler kapalı mı: aktif halt (KILL_SWITCH/RISK_REDUCE) varsa
     # yeni pozisyon açılmaz (read-only; risk hesaplamaz, persist halt'i okur).
     new_entries_disabled = bool(halt_store.active_halts())
+    anomaly = state_anomaly.detect_state(ps)
+    total_exposure_usd = round(sum(p.size_usd for p in ps.open_positions), 2)
     return {
         "equity_usd": round(ps.equity_usd, 2),
         "realized_pnl_usd": round(ps.realized_pnl_usd, 2),
         "unrealized_pnl_usd": round(unreal_total, 2),
         "max_drawdown_pct": max_drawdown_pct(ps),
         "sharpe_30d": 0.0,
+        "total_exposure_usd": total_exposure_usd,
+        "state_anomaly": {"detected": anomaly.detected, "reasons": anomaly.reasons},
         "open_positions": open_pos,
         "recent_trades": [asdict(t) for t in ps.recent_trades[-25:]],
         # P1 — additive lifecycle/audit yüzeyi (frontend hesap yapmaz).
