@@ -554,7 +554,7 @@ function ElliottScenarioPanel({ analysis }: { analysis?: ElliottAnalysis | null 
       <div className="flex items-start justify-between gap-3">
         <div>
           <div className="text-[10px] uppercase tracking-[0.24em] text-white/42">
-            Elliott senaryosu
+            {(analysis?.timeframe ?? "--").toUpperCase()} elliott senaryosu
           </div>
           <div className="mt-2 font-display text-xl text-white">
             {analysis?.primary_scenario ?? "NO_VALID_COUNT"}
@@ -752,7 +752,8 @@ export function Layer2ElliottZoneLabPanel() {
     tradeAssets.some((asset) => asset.symbol === selected) || tradeAssets.length === 0
       ? selected
       : tradeAssets[0].symbol;
-  const elliott = useElliottScenario(activeSymbol);
+  const elliott1d = useElliottScenario(activeSymbol, "1d");
+  const elliott4h = useElliottScenario(activeSymbol, "4h");
   const zones = useZoneAnalysis(activeSymbol);
   const shadow = useShadowComparison();
   const shadowRows = shadow.data?.rows ?? [];
@@ -761,7 +762,10 @@ export function Layer2ElliottZoneLabPanel() {
     <div className="space-y-4">
       <AssetSelector assets={tradeAssets} activeSymbol={activeSymbol} onSelect={setSelected} />
       <div className="grid gap-4 xl:grid-cols-2">
-        <ElliottScenarioPanel analysis={elliott.data} />
+        <ElliottScenarioPanel analysis={elliott1d.data} />
+        <ElliottScenarioPanel analysis={elliott4h.data} />
+      </div>
+      <div className="grid gap-4 xl:grid-cols-1">
         <ZoneAnalysisPanel analysis={zones.data} />
       </div>
       <div className="rounded-2xl border border-white/10 bg-black/22 p-4">
