@@ -72,6 +72,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/dashboard/agent-quorum-matrix": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Agent persona quorum per-symbol across the trade universe (not pinned to BTCUSD) */
+        get: operations["getAgentQuorumMatrix"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/liquidity/rotation": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Küresel Likidite Rotasyon — fixed basket flow score (1D/7D/30D), observation-only */
+        get: operations["getLiquidityRotation"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/ai-report/current": {
         parameters: {
             query?: never;
@@ -684,6 +718,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/replay/strategy-backtest": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Pilot — live technical-bias engine replayed over real historical OHLCV bars (single symbol) */
+        get: operations["getReplayStrategyBacktest"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/replay/strategy-backtest/all": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Pilot strategy backtest for every asset in the trade universe (incl. custom assets) */
+        get: operations["getReplayStrategyBacktestAll"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/replay/{snapshot_id}": {
         parameters: {
             query?: never;
@@ -744,6 +812,23 @@ export interface paths {
         };
         /** Per-asset session context + restrictive gate decision — read-only, paper-safe */
         get: operations["getMarketSessionAsset"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/market-sessions/trade-universe": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Per-asset session gate for the whole trade universe in one call (incl. custom assets) */
+        get: operations["getMarketSessionsTradeUniverse"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1048,6 +1133,8 @@ export interface components {
             dominant_module?: string;
             /** @enum {string} */
             win_rate_signal?: "AVOID" | "NORMAL" | "BOOST" | "INSUFFICIENT_DATA";
+            /** @description Asset class (risk/commodity/hedge/safe/cash/macro) for risk-on/off bucketing. */
+            kind?: string | null;
         };
         RegimeReport: {
             meta: components["schemas"]["SnapshotMeta"];
@@ -2354,6 +2441,115 @@ export interface components {
             paper_safe: boolean;
             no_execution: boolean;
         };
+        MarketSessionTradeUniverseAsset: {
+            asset_code: string;
+            primary_market_open: boolean | null;
+            /** @enum {string} */
+            action: "allow" | "caution" | "manual_ready" | "block";
+            reason: string;
+        };
+        /** @description Per-asset session gate for the whole trade universe (asset_registry. trade_symbols(), incl. custom assets) in one call. */
+        MarketSessionsTradeUniverseResponse: {
+            /** Format: date-time */
+            generated_at: string;
+            assets: components["schemas"]["MarketSessionTradeUniverseAsset"][];
+            paper_safe: boolean;
+            no_execution: boolean;
+        };
+        AgentQuorumRow: {
+            symbol: string;
+            lead_direction: string | null;
+            quorum_reached: boolean;
+            tally: {
+                [key: string]: number;
+            };
+        };
+        /** @description Agent persona quorum (analyst/risk-officer/macro-strategist) computed per-symbol across the trade universe — unlike /dashboard/state.agent_votes, not pinned to a single symbol. */
+        AgentQuorumMatrixResponse: {
+            /** Format: date-time */
+            generated_at: string;
+            symbols: components["schemas"]["AgentQuorumRow"][];
+        };
+        StrategyBacktestTrade: {
+            /** @enum {string} */
+            side: "long" | "short";
+            /** Format: date-time */
+            entry_ts: string;
+            entry_price: number;
+            /** Format: date-time */
+            exit_ts: string;
+            exit_price: number;
+            /** @enum {string} */
+            exit_reason: "SL_HIT" | "TP_HIT";
+            pnl_pct: number;
+            bars_held: number;
+        };
+        /** @description Pilot — live technical-bias engine replayed over real historical OHLCV bars (no look-ahead), trades simulated with the same SL/TP rules paper trading uses. scope=technical_only (fundamental/news/sentinel have no historical data to replay). status=insufficient_bars when warm-up isn't met. */
+        StrategyBacktestResult: {
+            /** @enum {string} */
+            status: "ok" | "insufficient_bars";
+            symbol: string;
+            timeframe: string;
+            /** @enum {string} */
+            scope?: "technical_only";
+            bars_used?: number;
+            bars_available?: number;
+            bars_required?: number;
+            window?: {
+                /** Format: date-time */
+                from?: string;
+                /** Format: date-time */
+                to?: string;
+            };
+            total_trades?: number;
+            wins?: number;
+            losses?: number;
+            win_rate?: number | null;
+            avg_return_pct?: number | null;
+            profit_factor?: number | null;
+            trades?: components["schemas"]["StrategyBacktestTrade"][];
+        };
+        /** @description StrategyBacktestResult for every asset in asset_registry.trade_symbols() (incl. custom assets) — symbol list re-read fresh on every call. */
+        StrategyBacktestAllResult: {
+            /** @enum {string} */
+            status: "ok" | "insufficient_bars";
+            timeframe: string;
+            /** @enum {string} */
+            scope?: "technical_only";
+            symbols_evaluated: number;
+            symbols_total: number;
+            total_trades: number;
+            overall_win_rate?: number | null;
+            per_symbol: {
+                [key: string]: components["schemas"]["StrategyBacktestResult"];
+            };
+        };
+        LiquidityAssetFlow: {
+            symbol: string;
+            label: string;
+            kind: string;
+            return_pct: number | null;
+            volume_change_pct: number | null;
+            /** @description Real on-chain TVL change (DefiLlama) — only available for BTCUSD/ETHUSD. */
+            tvl_change_pct?: number | null;
+            flow_score: number;
+            /** @enum {string} */
+            direction: "in" | "out" | "neutral";
+        };
+        LiquidityWindow: {
+            /** @enum {string} */
+            window: "1D" | "7D" | "30D";
+            assets: components["schemas"]["LiquidityAssetFlow"][];
+            /** @enum {string} */
+            regime: "RISK_ON" | "CONTROLLED_RISK_ON" | "NEUTRAL" | "RISK_OFF" | "CRISIS";
+            regime_reasons: string[];
+            contradictions: string[];
+        };
+        /** @description Küresel Likidite Rotasyon — fixed liquidity-role basket flow score (momentum + volume + macro + vol-penalty + TVL where available), observation-only (PAPER_SAFE/NO_EXECUTION). */
+        LiquidityRotation: {
+            windows: components["schemas"]["LiquidityWindow"][];
+            basket_size: number;
+        };
         FibonacciLevel: {
             ratio: number;
             label: string;
@@ -2827,6 +3023,46 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DashboardState"];
+                };
+            };
+        };
+    };
+    getAgentQuorumMatrix: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentQuorumMatrixResponse"];
+                };
+            };
+        };
+    };
+    getLiquidityRotation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LiquidityRotation"];
                 };
             };
         };
@@ -3652,6 +3888,51 @@ export interface operations {
             };
         };
     };
+    getReplayStrategyBacktest: {
+        parameters: {
+            query?: {
+                symbol?: string;
+                timeframe?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StrategyBacktestResult"];
+                };
+            };
+        };
+    };
+    getReplayStrategyBacktestAll: {
+        parameters: {
+            query?: {
+                timeframe?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StrategyBacktestAllResult"];
+                };
+            };
+        };
+    };
     getReplaySnapshot: {
         parameters: {
             query?: never;
@@ -3748,6 +4029,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["MarketSessionAssetResponse"];
+                };
+            };
+        };
+    };
+    getMarketSessionsTradeUniverse: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MarketSessionsTradeUniverseResponse"];
                 };
             };
         };

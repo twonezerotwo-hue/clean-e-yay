@@ -36,6 +36,8 @@ import type {
   TradeTicketList,
   AgentBriefing,
   VoiceSpeakRequest,
+  AgentQuorumMatrixResponse,
+  MarketSessionsTradeUniverseResponse,
 } from "@/types/generated/api";
 
 // NEXT_PUBLIC_API_BASE_URL tercih edilen; NEXT_PUBLIC_API_BASE geriye dönük
@@ -352,28 +354,6 @@ export type MarketSessionAsset = {
   diagnostics?: string[];
   paper_safe?: boolean;
   no_execution?: boolean;
-};
-
-export type MarketSessionsTradeUniverseResponse = {
-  generated_at: string;
-  assets: Array<{
-    asset_code: string;
-    primary_market_open: boolean | null;
-    action: string;
-    reason: string;
-  }>;
-  paper_safe: boolean;
-  no_execution: boolean;
-};
-
-export type AgentQuorumMatrixResponse = {
-  generated_at: string;
-  symbols: Array<{
-    symbol: string;
-    lead_direction: string | null;
-    quorum_reached: boolean;
-    tally: Record<string, number>;
-  }>;
 };
 
 async function fetchJSON<T>(path: string, init?: RequestInit): Promise<T> {

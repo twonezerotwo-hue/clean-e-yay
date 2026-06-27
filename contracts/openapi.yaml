@@ -57,6 +57,30 @@ paths:
               schema:
                 $ref: "#/components/schemas/DashboardState"
 
+  /api/v1/dashboard/agent-quorum-matrix:
+    get:
+      operationId: getAgentQuorumMatrix
+      summary: Agent persona quorum per-symbol across the trade universe (not pinned to BTCUSD)
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AgentQuorumMatrixResponse"
+
+  /api/v1/liquidity/rotation:
+    get:
+      operationId: getLiquidityRotation
+      summary: Küresel Likidite Rotasyon — fixed basket flow score (1D/7D/30D), observation-only
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LiquidityRotation"
+
   /api/v1/ai-report/current:
     get:
       operationId: getAIReportCurrent
@@ -596,6 +620,44 @@ paths:
         "404":
           description: run_id mevcut store ile eşleşmiyor (not_found)
 
+  /api/v1/replay/strategy-backtest:
+    get:
+      operationId: getReplayStrategyBacktest
+      summary: Pilot — live technical-bias engine replayed over real historical OHLCV bars (single symbol)
+      parameters:
+        - name: symbol
+          in: query
+          required: false
+          schema: { type: string, default: BTCUSD }
+        - name: timeframe
+          in: query
+          required: false
+          schema: { type: string, default: "1d" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StrategyBacktestResult"
+
+  /api/v1/replay/strategy-backtest/all:
+    get:
+      operationId: getReplayStrategyBacktestAll
+      summary: Pilot strategy backtest for every asset in the trade universe (incl. custom assets)
+      parameters:
+        - name: timeframe
+          in: query
+          required: false
+          schema: { type: string, default: "1d" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StrategyBacktestAllResult"
+
   /api/v1/replay/{snapshot_id}:
     get:
       operationId: getReplaySnapshot
@@ -662,6 +724,18 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/MarketSessionAssetResponse"
+
+  /api/v1/market-sessions/trade-universe:
+    get:
+      operationId: getMarketSessionsTradeUniverse
+      summary: Per-asset session gate for the whole trade universe in one call (incl. custom assets)
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MarketSessionsTradeUniverseResponse"
 
   /api/v1/technical/insight/{asset_code}:
     get:
@@ -999,6 +1073,10 @@ components:
         confluence_aligned: { type: boolean }
         dominant_module: { type: string }
         win_rate_signal: { type: string, enum: [AVOID, NORMAL, BOOST, INSUFFICIENT_DATA] }
+        kind:
+          type: string
+          nullable: true
+          description: Asset class (risk/commodity/hedge/safe/cash/macro) for risk-on/off bucketing.
 
     RegimeReport:
       type: object
@@ -2926,6 +3004,165 @@ components:
           items: { type: string }
         paper_safe: { type: boolean }
         no_execution: { type: boolean }
+
+    MarketSessionTradeUniverseAsset:
+      type: object
+      required: [asset_code, primary_market_open, action, reason]
+      properties:
+        asset_code: { type: string }
+        primary_market_open: { type: boolean, nullable: true }
+        action:
+          type: string
+          enum: [allow, caution, manual_ready, block]
+        reason: { type: string }
+
+    MarketSessionsTradeUniverseResponse:
+      type: object
+      description: >
+        Per-asset session gate for the whole trade universe (asset_registry.
+        trade_symbols(), incl. custom assets) in one call.
+      required: [generated_at, assets, paper_safe, no_execution]
+      properties:
+        generated_at: { type: string, format: date-time }
+        assets:
+          type: array
+          items: { $ref: "#/components/schemas/MarketSessionTradeUniverseAsset" }
+        paper_safe: { type: boolean }
+        no_execution: { type: boolean }
+
+    AgentQuorumRow:
+      type: object
+      required: [symbol, lead_direction, quorum_reached, tally]
+      properties:
+        symbol: { type: string }
+        lead_direction: { type: string, nullable: true }
+        quorum_reached: { type: boolean }
+        tally:
+          type: object
+          additionalProperties: { type: integer }
+
+    AgentQuorumMatrixResponse:
+      type: object
+      description: >
+        Agent persona quorum (analyst/risk-officer/macro-strategist) computed
+        per-symbol across the trade universe — unlike /dashboard/state.agent_votes,
+        not pinned to a single symbol.
+      required: [generated_at, symbols]
+      properties:
+        generated_at: { type: string, format: date-time }
+        symbols:
+          type: array
+          items: { $ref: "#/components/schemas/AgentQuorumRow" }
+
+    StrategyBacktestTrade:
+      type: object
+      required: [side, entry_ts, entry_price, exit_ts, exit_price, exit_reason, pnl_pct, bars_held]
+      properties:
+        side: { type: string, enum: [long, short] }
+        entry_ts: { type: string, format: date-time }
+        entry_price: { type: number }
+        exit_ts: { type: string, format: date-time }
+        exit_price: { type: number }
+        exit_reason: { type: string, enum: [SL_HIT, TP_HIT] }
+        pnl_pct: { type: number }
+        bars_held: { type: integer }
+
+    StrategyBacktestResult:
+      type: object
+      description: >
+        Pilot — live technical-bias engine replayed over real historical OHLCV
+        bars (no look-ahead), trades simulated with the same SL/TP rules paper
+        trading uses. scope=technical_only (fundamental/news/sentinel have no
+        historical data to replay). status=insufficient_bars when warm-up isn't met.
+      required: [status, symbol, timeframe]
+      properties:
+        status: { type: string, enum: [ok, insufficient_bars] }
+        symbol: { type: string }
+        timeframe: { type: string }
+        scope: { type: string, enum: [technical_only] }
+        bars_used: { type: integer }
+        bars_available: { type: integer }
+        bars_required: { type: integer }
+        window:
+          type: object
+          properties:
+            from: { type: string, format: date-time }
+            to: { type: string, format: date-time }
+        total_trades: { type: integer }
+        wins: { type: integer }
+        losses: { type: integer }
+        win_rate: { type: number, nullable: true }
+        avg_return_pct: { type: number, nullable: true }
+        profit_factor: { type: number, nullable: true }
+        trades:
+          type: array
+          items: { $ref: "#/components/schemas/StrategyBacktestTrade" }
+
+    StrategyBacktestAllResult:
+      type: object
+      description: >
+        StrategyBacktestResult for every asset in asset_registry.trade_symbols()
+        (incl. custom assets) — symbol list re-read fresh on every call.
+      required: [status, timeframe, symbols_evaluated, symbols_total, total_trades, per_symbol]
+      properties:
+        status: { type: string, enum: [ok, insufficient_bars] }
+        timeframe: { type: string }
+        scope: { type: string, enum: [technical_only] }
+        symbols_evaluated: { type: integer }
+        symbols_total: { type: integer }
+        total_trades: { type: integer }
+        overall_win_rate: { type: number, nullable: true }
+        per_symbol:
+          type: object
+          additionalProperties:
+            $ref: "#/components/schemas/StrategyBacktestResult"
+
+    LiquidityAssetFlow:
+      type: object
+      required: [symbol, label, kind, return_pct, volume_change_pct, flow_score, direction]
+      properties:
+        symbol: { type: string }
+        label: { type: string }
+        kind: { type: string }
+        return_pct: { type: number, nullable: true }
+        volume_change_pct: { type: number, nullable: true }
+        tvl_change_pct:
+          type: number
+          nullable: true
+          description: Real on-chain TVL change (DefiLlama) — only available for BTCUSD/ETHUSD.
+        flow_score: { type: number, minimum: 0, maximum: 100 }
+        direction: { type: string, enum: [in, out, neutral] }
+
+    LiquidityWindow:
+      type: object
+      required: [window, assets, regime, regime_reasons, contradictions]
+      properties:
+        window: { type: string, enum: ["1D", "7D", "30D"] }
+        assets:
+          type: array
+          items: { $ref: "#/components/schemas/LiquidityAssetFlow" }
+        regime:
+          type: string
+          enum: [RISK_ON, CONTROLLED_RISK_ON, NEUTRAL, RISK_OFF, CRISIS]
+        regime_reasons:
+          type: array
+          items: { type: string }
+        contradictions:
+          type: array
+          items: { type: string }
+
+    LiquidityRotation:
+      type: object
+      description: >
+        Küresel Likidite Rotasyon — fixed liquidity-role basket flow score
+        (momentum + volume + macro + vol-penalty + TVL where available),
+        observation-only (PAPER_SAFE/NO_EXECUTION).
+      required: [windows, basket_size]
+      properties:
+        windows:
+          type: array
+          items: { $ref: "#/components/schemas/LiquidityWindow" }
+        basket_size: { type: integer }
 
     # ── F1 — Multi-timeframe Fibonacci (technical evidence; backend-computed) ──
     FibonacciLevel:

@@ -117,7 +117,7 @@ export type LiquidityAssetFlow = {
   direction: FlowDirection;
 };
 export type LiquidityWindow = {
-  window: string;
+  window: "1D" | "7D" | "30D";
   assets: LiquidityAssetFlow[];
   regime: LiquidityRegime;
   regime_reasons: string[];
@@ -126,6 +126,72 @@ export type LiquidityWindow = {
 export type LiquidityRotation = {
   windows: LiquidityWindow[];
   basket_size: number;
+};
+
+// Agent persona quorum per-symbol across the trade universe (not pinned to
+// a single symbol, unlike DashboardState.agent_votes).
+export type AgentQuorumRow = {
+  symbol: string;
+  lead_direction: string | null;
+  quorum_reached: boolean;
+  tally: Record<string, number>;
+};
+export type AgentQuorumMatrixResponse = {
+  generated_at: string;
+  symbols: AgentQuorumRow[];
+};
+
+// Per-asset session gate for the whole trade universe in one call.
+export type MarketSessionTradeUniverseAsset = {
+  asset_code: string;
+  primary_market_open: boolean | null;
+  action: "allow" | "caution" | "manual_ready" | "block";
+  reason: string;
+};
+export type MarketSessionsTradeUniverseResponse = {
+  generated_at: string;
+  assets: MarketSessionTradeUniverseAsset[];
+  paper_safe: boolean;
+  no_execution: boolean;
+};
+
+// Pilot — live technical-bias engine replayed over historical OHLCV bars.
+export type StrategyBacktestTrade = {
+  side: "long" | "short";
+  entry_ts: string;
+  entry_price: number;
+  exit_ts: string;
+  exit_price: number;
+  exit_reason: "SL_HIT" | "TP_HIT";
+  pnl_pct: number;
+  bars_held: number;
+};
+export type StrategyBacktestResult = {
+  status: "ok" | "insufficient_bars";
+  symbol: string;
+  timeframe: string;
+  scope?: "technical_only";
+  bars_used?: number;
+  bars_available?: number;
+  bars_required?: number;
+  window?: { from: string; to: string };
+  total_trades?: number;
+  wins?: number;
+  losses?: number;
+  win_rate?: number | null;
+  avg_return_pct?: number | null;
+  profit_factor?: number | null;
+  trades?: StrategyBacktestTrade[];
+};
+export type StrategyBacktestAllResult = {
+  status: "ok" | "insufficient_bars";
+  timeframe: string;
+  scope?: "technical_only";
+  symbols_evaluated: number;
+  symbols_total: number;
+  total_trades: number;
+  overall_win_rate: number | null;
+  per_symbol: Record<string, StrategyBacktestResult>;
 };
 
 export type RiskAction =
