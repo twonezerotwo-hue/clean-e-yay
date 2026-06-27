@@ -2,6 +2,7 @@
 
 import { useQueries, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import { createPortal } from "react-dom";
 
 import { QuantumPanelField, getQuantumPanelStyle } from "@/components/shell/QuantumPanelField";
 import {
@@ -907,8 +908,17 @@ function AddAssetForm({ onClose }: { onClose: () => void }) {
     }
   };
 
-  return (
-    <div className="absolute right-2 top-[calc(100%+6px)] z-30 w-[min(320px,92vw)] rounded-lg border border-teal-300/30 bg-[#0a0f18]/97 p-3 shadow-[0_18px_44px_rgba(0,0,0,0.45)]">
+  if (typeof document === "undefined") return null;
+
+  return createPortal(
+    <div
+      className="fixed inset-0 z-[200] flex items-center justify-center bg-black/60 p-4"
+      onClick={onClose}
+    >
+    <div
+      className="w-[min(320px,92vw)] rounded-lg border border-teal-300/30 bg-[#0a0f18] p-3 shadow-[0_18px_44px_rgba(0,0,0,0.45)]"
+      onClick={(e) => e.stopPropagation()}
+    >
       <div className="mb-2 flex items-center justify-between">
         <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-teal-200/80">
           Asset Ekle
@@ -964,6 +974,8 @@ function AddAssetForm({ onClose }: { onClose: () => void }) {
         </p>
       </form>
     </div>
+    </div>,
+    document.body,
   );
 }
 
