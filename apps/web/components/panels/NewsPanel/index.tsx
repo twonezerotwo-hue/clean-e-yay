@@ -98,7 +98,7 @@ export function NewsPanel({ defaultView = "list" }: NewsPanelProps) {
   const eventRisk = data?.event_risk?.level ?? "clear";
   return (
     <>
-    <div className="hidden h-full min-[769px]:block">
+    <div className="h-full">
     <PanelFrame id="news" className="h-full">
       <PanelHeader
         title="Haberler"
@@ -162,7 +162,7 @@ export function NewsPanel({ defaultView = "list" }: NewsPanelProps) {
     </PanelFrame>
     </div>
     <MobileFlipCard
-      className="min-[769px]:hidden"
+      className="mobile-force-hidden"
       title="Haberler"
       front={
         <div className="mobile-news-front">

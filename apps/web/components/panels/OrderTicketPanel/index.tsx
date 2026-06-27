@@ -88,7 +88,7 @@ export function OrderTicketPanel() {
 
   return (
     <>
-    <div className="hidden h-full min-[769px]:block">
+    <div className="h-full">
     <PanelFrame id="order_ticket" className="h-full border-accent-cyan/25">
       <PanelHeader
         title="Order Ticket"
@@ -264,7 +264,7 @@ export function OrderTicketPanel() {
     </PanelFrame>
     </div>
     <MobileFlipCard
-      className="min-[769px]:hidden"
+      className="mobile-force-hidden"
       title="Order Ticket"
       front={
         <div className="mobile-order-front">

@@ -456,18 +456,29 @@ def _web_news_answer(message: str, ctx: dict) -> tuple[str, list[str]]:
         max_results=5,
     )
     fallback, fallback_ev = _news_answer(ctx)
+    has_fallback = "news:none" not in fallback_ev
     if result.error:
         if result.error == "missing_api_key":
-            prefix = "Canli web aramasi kapali: TAVILY_API_KEY backend env'de yok."
+            prefix = "Canli web aramasi su an aktif degil (yapilandirma eksik)."
         else:
             prefix = f"Canli web aramasi su an alinamadi ({result.error})."
+        if has_fallback:
+            return (
+                f"{prefix} Bunun yerine arka plandaki en guncel haber akisindan aktarabilirim: {fallback}",
+                [f"web:tavily:{result.error}", *fallback_ev],
+            )
         return (
-            f"{prefix} Mevcut backend haber akisi: {fallback}",
+            f"{prefix} Suanda elimde aktarabilecegim baska bir haber kaynagi da yok.",
             [f"web:tavily:{result.error}", *fallback_ev],
         )
     if not result.answer and not result.results:
+        if has_fallback:
+            return (
+                f"Canli web aramasi bu soru icin sonuc dondurmedi. Bunun yerine arka plandaki haber akisindan aktarabilirim: {fallback}",
+                ["web:tavily:no_results", *fallback_ev],
+            )
         return (
-            f"Canli web aramasi bu soru icin sonuc dondurmedi. Mevcut backend haber akisi: {fallback}",
+            "Canli web aramasi bu soru icin sonuc dondurmedi ve elimde baska bir haber kaynagi yok.",
             ["web:tavily:no_results", *fallback_ev],
         )
 
@@ -1004,7 +1015,9 @@ def answer(message: str) -> dict:
         "Deterministik motorun bu soru icin cikardigi kanit-temelli yanit:\n"
         f"{grounded}\n\n"
         f"KULLANICI SORUSU: {message}\n\n"
-        f"{scope_rule} Baglamda olmayan seyi 'state'te yok' diye belirt. "
+        f"{scope_rule} Deterministik motorun yanitinda somut bulgu (baslik, ozet, kaynak) "
+        "varsa bunu MUTLAKA aktar — 'veri yok' deme, var olan bulguyu ozetle. 'state'te yok' "
+        "ifadesini SADECE deterministik yanitta da gercekten hic bulgu olmayan konular icin kullan. "
         "Karar/islem onerme. Kisa Turkce yanit ver."
     )
     max_out = budget.max_tokens_per_request()

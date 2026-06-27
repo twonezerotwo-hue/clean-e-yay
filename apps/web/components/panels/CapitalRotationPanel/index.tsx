@@ -327,7 +327,7 @@ export function CapitalRotationPanel() {
 
   return (
     <>
-    <div className="hidden h-full min-[769px]:block">
+    <div className="h-full">
     <PanelFrame id="capital_rotation" className="h-full border-accent-cyan/20">
       <PanelHeader
         title="Kuresel Likidite Rotasyon Haritasi"
@@ -462,7 +462,7 @@ export function CapitalRotationPanel() {
     </PanelFrame>
     </div>
     <MobileFlipCard
-      className="min-[769px]:hidden"
+      className="mobile-force-hidden"
       title="Küresel Likidite Rotasyonu"
       front={
         <div className="mobile-capital-front">

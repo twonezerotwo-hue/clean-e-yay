@@ -136,8 +136,29 @@ function NotifRow({
   );
 }
 
+const EVIDENCE_LABELS: Record<string, string> = {
+  "web:tavily:missing_api_key": "canlı web araması yapılandırılmamış",
+  "web:tavily:no_results": "canlı web araması sonuç vermedi",
+  "web:tavily:live_search": "canlı web araması",
+  "news:none": "haber akışında öne çıkan başlık yok",
+};
+
+function humanizeEvidence(tag: string): string | null {
+  if (EVIDENCE_LABELS[tag]) return EVIDENCE_LABELS[tag];
+  if (tag.startsWith("web:tavily:http_")) return "canlı web araması başarısız";
+  if (tag.startsWith("web:tavily:search_failed")) return "canlı web araması başarısız";
+  if (tag.startsWith("web:")) return "kaynak: " + tag.slice(4);
+  if (tag.startsWith("news:")) return "haber: " + tag.slice(5).trim();
+  if (tag.startsWith("matrix:")) return tag.slice(7);
+  return tag;
+}
+
 function ChatBubble({ item }: { item: AssistantMessage }) {
   const isFallback = item.role === "agent" && item.meta?.llm?.source === "fallback";
+  const evidenceLabels = (item.meta?.evidence_used ?? [])
+    .map(humanizeEvidence)
+    .filter((label): label is string => Boolean(label))
+    .slice(0, 3);
   return (
     <div
       className={`floating-notification-chat-row ${
@@ -157,9 +178,9 @@ function ChatBubble({ item }: { item: AssistantMessage }) {
         ) : null}
       </div>
       <div>{item.text}</div>
-      {item.role === "agent" && item.meta?.evidence_used?.length ? (
+      {item.role === "agent" && evidenceLabels.length ? (
         <div className="mt-1 text-[10px] text-white/35">
-          kanıt: {item.meta.evidence_used.slice(0, 3).join(" · ")}
+          kanıt: {evidenceLabels.join(" · ")}
         </div>
       ) : null}
     </div>
@@ -307,11 +328,13 @@ export function NotificationBell() {
       setSpeaking(false);
       clearAudioPlayback();
       const fallbackSpoke = speakWithBrowserFallback(cleanText);
-      setVoiceError(
-        fallbackSpoke
-          ? "Kaliteli ses üretilemedi; tarayıcı sesi kullanılıyor."
-          : "Ses üretilemedi.",
-      );
+      if (fallbackSpoke) {
+        // Sessiz derecelendirme: kullanıcıya teknik detay gösterme, sadece logla.
+        console.debug("[voice] kaliteli ses kullanılamadı, tarayıcı sesine düşüldü");
+        setVoiceError(null);
+      } else {
+        setVoiceError("Ses üretilemedi.");
+      }
       return fallbackSpoke;
     }
   }, [clearAudioPlayback, speakWithBrowserFallback, voiceEnabled]);

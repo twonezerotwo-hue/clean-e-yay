@@ -1165,15 +1165,8 @@ export function CockpitView() {
       { key: "holographic_signals", node: <HolographicSignalDeck brief={brief} /> },
       { key: "capital_rotation", node: <CapitalRotationPanel /> },
       { key: "news", node: <NewsPanel defaultView="radar" /> },
-      {
-        key: "event_scenario",
-        node: (
-          <section className="quantum-panel-cluster grid grid-cols-1 gap-5 xl:grid-cols-2">
-            <EventCalendarPanel />
-            <ScenarioPanel />
-          </section>
-        ),
-      },
+      { key: "event_calendar", node: <EventCalendarPanel /> },
+      { key: "scenario", node: <ScenarioPanel /> },
       { key: "order_ticket", node: <OrderTicketPanel /> },
     ];
 
@@ -1284,7 +1277,7 @@ export function CockpitView() {
   }
 
   return (
-    <main className="relative grid h-dvh min-w-0 grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden bg-[#02030a] text-white">
+    <main className="cockpit-root relative grid min-w-0 grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden bg-[#02030a] text-white">
       <LayerDepthBackdrop activeLayer={activeLayer} brief={brief} />
 
       <header className="pointer-events-none relative z-30 min-w-0 overflow-hidden border-b border-white/[0.08] bg-black/24 backdrop-blur-md">

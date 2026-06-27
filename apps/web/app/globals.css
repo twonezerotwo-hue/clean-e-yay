@@ -1767,6 +1767,25 @@ html, body {
   transform-style: preserve-3d;
 }
 
+.cockpit-root {
+  height: 100vh;
+  min-height: 100vh;
+}
+
+@supports (height: 100svh) {
+  .cockpit-root {
+    height: 100svh;
+    min-height: 100svh;
+  }
+}
+
+@supports (height: 100dvh) {
+  .cockpit-root {
+    height: 100dvh;
+    min-height: 100dvh;
+  }
+}
+
 .layer1-stack-scroll {
   --layer1-stack-gap: clamp(72px, 11vh, 118px);
   --layer1-sticky-top: 1rem;
@@ -2034,7 +2053,9 @@ html, body {
   .layer1-stack-scroll {
     --layer1-stack-gap: 0px;
     --layer1-sticky-top: 0px;
-    --layer1-slide-height: calc(100dvh - 7.25rem);
+    --layer1-slide-height: clamp(480px, calc(100vh - 7.25rem), 780px);
+    --layer1-slide-height: clamp(480px, calc(100svh - 7.25rem), 780px);
+    --layer1-slide-height: clamp(480px, calc(100dvh - 7.25rem), 780px);
     width: 100%;
     max-width: 100%;
     overflow-x: hidden;
@@ -2075,8 +2096,7 @@ html, body {
     width: 100% !important;
     min-width: 0 !important;
     max-width: 100% !important;
-    overflow-y: auto;
-    overflow-x: hidden;
+    overflow: hidden !important;
     scrollbar-width: none;
   }
 
@@ -2095,7 +2115,9 @@ html, body {
   }
 
   .layer1-stack-scroll {
-    --layer1-slide-height: calc(100dvh - 6.85rem);
+    --layer1-slide-height: clamp(440px, calc(100vh - 6.85rem), 720px);
+    --layer1-slide-height: clamp(440px, calc(100svh - 6.85rem), 720px);
+    --layer1-slide-height: clamp(440px, calc(100dvh - 6.85rem), 720px);
   }
 }
 
@@ -2103,10 +2125,22 @@ html, body {
   display: none;
 }
 
+.mobile-force-hidden {
+  display: none !important;
+}
+
 @media (max-width: 768px) {
   .layer1-stack-scroll {
-    --layer1-slide-height: calc(100dvh - 7.85rem - env(safe-area-inset-bottom));
+    --layer1-slide-height: clamp(460px, calc(100vh - 7.85rem - env(safe-area-inset-bottom)), 760px);
+    --layer1-slide-height: clamp(460px, calc(100svh - 7.85rem - env(safe-area-inset-bottom)), 760px);
+    --layer1-slide-height: clamp(460px, calc(100dvh - 7.85rem - env(safe-area-inset-bottom)), 760px);
     padding-bottom: calc(96px + env(safe-area-inset-bottom));
+  }
+
+  .layer1-stack-item {
+    height: var(--layer1-slide-height);
+    min-height: var(--layer1-slide-height);
+    max-height: var(--layer1-slide-height);
   }
 
   .layer1-stack-item > .mobile-flip-card {
@@ -2197,6 +2231,233 @@ html, body {
     text-transform: uppercase;
     color: rgba(165, 243, 252, 0.9);
     box-shadow: 0 0 18px rgba(34, 211, 238, 0.14);
+  }
+
+  .mobile-check-direct {
+    height: 100%;
+    min-height: 100%;
+    overflow: hidden;
+    border: 1px solid rgba(34, 211, 238, 0.2);
+    border-radius: 0.95rem;
+    background:
+      radial-gradient(circle at 20% 10%, rgba(34, 211, 238, 0.12), transparent 32%),
+      linear-gradient(145deg, rgba(4, 12, 24, 0.95), rgba(2, 6, 14, 0.98));
+    padding: 0.56rem;
+    box-shadow:
+      0 18px 56px rgba(0, 0, 0, 0.34),
+      inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  }
+
+  .mobile-check-direct .mobile-check-head {
+    margin-bottom: 0.42rem;
+  }
+
+  .mobile-check-direct .mobile-check-list {
+    display: grid;
+    gap: 0.26rem;
+  }
+
+  .mobile-check-direct .mobile-check-row {
+    min-height: 0;
+    padding: 0.3rem 0.42rem;
+    gap: 0.36rem;
+  }
+
+  .mobile-check-direct .mobile-check-row strong {
+    font-size: 0.62rem;
+    line-height: 0.82rem;
+  }
+
+  .mobile-check-direct .mobile-check-row p {
+    margin-top: 0.08rem;
+    display: -webkit-box;
+    overflow: hidden;
+    font-size: 0.53rem;
+    line-height: 0.66rem;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 1;
+  }
+
+  .mobile-check-direct .mobile-check-row__num,
+  .mobile-check-direct .mobile-check-row__mark {
+    width: 1.14rem;
+    height: 1.14rem;
+    font-size: 0.52rem;
+  }
+
+  .mobile-check-direct .mobile-check-row em {
+    font-size: 0.48rem;
+  }
+
+  .quantum-holo-deck {
+    min-height: 100% !important;
+  }
+
+  .event-calendar-panel,
+  .scenario-panel {
+    height: 100%;
+    overflow: hidden;
+  }
+
+  .event-calendar-panel > .relative,
+  .scenario-panel > .relative {
+    height: 100%;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  .event-calendar-panel header,
+  .scenario-panel header {
+    margin-bottom: 0.42rem;
+  }
+
+  .event-calendar-shell,
+  .scenario-shell {
+    height: calc(100% - 2.75rem);
+    min-height: 0;
+  }
+
+  .event-calendar-main {
+    grid-template-columns: minmax(0, 0.88fr) minmax(0, 1.12fr);
+  }
+
+  .event-active-card {
+    padding: 0.52rem;
+  }
+
+  .event-date-card {
+    width: 3.25rem !important;
+    height: 3.45rem !important;
+  }
+
+  .event-date-card .font-display {
+    font-size: 1.42rem;
+  }
+
+  .event-active-card .font-display.text-base {
+    margin-top: 0.24rem;
+    font-size: 0.75rem;
+    line-height: 1rem;
+  }
+
+  .event-impact {
+    margin-top: 0.46rem;
+    padding-top: 0.46rem;
+  }
+
+  .event-impact ul {
+    margin-top: 0.34rem;
+  }
+
+  .event-impact li {
+    font-size: 0.64rem;
+    line-height: 0.95rem;
+  }
+
+  .event-calendar-grid-wrap {
+    padding: 0.5rem;
+  }
+
+  .event-calendar-grid {
+    gap: 0.2rem;
+  }
+
+  .event-holo-cell {
+    min-height: 0;
+    padding: 0.22rem;
+  }
+
+  .event-holo-cell .font-display {
+    margin-top: 0.12rem;
+    font-size: 0.92rem;
+  }
+
+  .event-calendar-upcoming {
+    padding: 0.42rem 0.5rem;
+  }
+
+  .event-calendar-upcoming-list {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    margin-top: 0.38rem;
+    gap: 0.24rem;
+  }
+
+  .event-calendar-upcoming-list button {
+    gap: 0.28rem;
+    padding: 0.3rem 0.4rem;
+    font-size: 0.56rem;
+    line-height: 0.76rem;
+  }
+
+  .scenario-shell {
+    display: grid;
+    grid-template-rows: auto minmax(0, 1fr) auto auto;
+  }
+
+  .scenario-head {
+    padding: 0.55rem 0.65rem 0;
+  }
+
+  .scenario-head .text-\[11px\] {
+    display: none;
+  }
+
+  .scenario-head .font-display.text-2xl {
+    font-size: 1.24rem;
+  }
+
+  .scenario-stage {
+    margin-top: 0.22rem;
+    min-height: 0 !important;
+    height: 10.4rem;
+  }
+
+  .scenario-clash {
+    width: 7.2rem;
+    height: 7.2rem;
+  }
+
+  .scenario-stage .font-display.text-4xl {
+    font-size: 1.55rem;
+  }
+
+  .scenario-cards {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.34rem;
+    padding: 0.52rem 0.58rem;
+  }
+
+  .scenario-card {
+    padding: 0.45rem;
+  }
+
+  .scenario-card .font-display.text-sm {
+    font-size: 0.68rem;
+  }
+
+  .scenario-card .font-display.text-xl {
+    font-size: 0.95rem;
+  }
+
+  .scenario-card .mt-2 {
+    margin-top: 0.34rem;
+  }
+
+  .scenario-card .min-h-\[32px\] {
+    min-height: 1.5rem;
+    overflow: hidden;
+    display: -webkit-box;
+    font-size: 0.56rem;
+    line-height: 0.76rem;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+  }
+
+  .scenario-foot {
+    padding: 0.38rem 0.5rem;
+    font-size: 0.5rem;
+    line-height: 0.7rem;
+    letter-spacing: 0.08em;
   }
 
   .mobile-kicker {
@@ -3943,6 +4204,216 @@ html, body {
   background: rgba(6, 9, 15, 0.44);
   padding: 6px;
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+.fut-signal-card-back {
+  min-height: 0;
+  max-height: min(100%, 362px);
+  --fut-accent: #2dd4bf;
+  --fut-accent-2: #fbbf24;
+  --fut-foil: rgba(45, 212, 191, 0.18);
+}
+
+@media (max-width: 768px) {
+  .fut-signal-card {
+    min-height: 272px;
+  }
+
+  .fut-signal-card-back {
+    max-height: min(100%, 348px);
+  }
+
+  .fut-signal-card-back .relative.z-10 {
+    padding: 0.55rem 0.85rem;
+  }
+
+  .fut-signal-card-back table {
+    font-size: 9px;
+  }
+
+  .fut-signal-card-back th,
+  .fut-signal-card-back td {
+    padding-block: 0.125rem;
+  }
+}
+
+@media (max-width: 380px) {
+  .event-calendar-shell,
+  .scenario-shell {
+    height: calc(100% - 2.45rem);
+  }
+
+  .event-calendar-main {
+    grid-template-columns: minmax(0, 0.86fr) minmax(0, 1.14fr);
+  }
+
+  .event-active-card {
+    padding: 0.42rem;
+  }
+
+  .event-date-card {
+    width: 2.8rem !important;
+    height: 3rem !important;
+  }
+
+  .event-date-card .font-display {
+    font-size: 1.12rem;
+  }
+
+  .event-active-card .font-display.text-base {
+    font-size: 0.66rem;
+    line-height: 0.84rem;
+  }
+
+  .event-active-card .text-\[10px\] {
+    font-size: 0.48rem;
+    letter-spacing: 0.08em;
+  }
+
+  .event-impact {
+    margin-top: 0.34rem;
+    padding-top: 0.34rem;
+  }
+
+  .event-impact li {
+    font-size: 0.54rem;
+    line-height: 0.74rem;
+  }
+
+  .event-calendar-grid-wrap {
+    padding: 0.36rem;
+  }
+
+  .event-calendar-grid {
+    gap: 0.16rem;
+  }
+
+  .event-holo-cell {
+    padding: 0.16rem;
+  }
+
+  .event-holo-cell .text-\[9px\] {
+    font-size: 0.44rem;
+    letter-spacing: 0.08em;
+  }
+
+  .event-holo-cell .font-display {
+    font-size: 0.76rem;
+  }
+
+  .event-calendar-upcoming {
+    padding: 0.34rem 0.4rem;
+  }
+
+  .event-calendar-upcoming-list button {
+    padding: 0.24rem 0.34rem;
+    font-size: 0.5rem;
+    line-height: 0.66rem;
+  }
+
+  .scenario-head {
+    padding: 0.44rem 0.54rem 0;
+  }
+
+  .scenario-stage {
+    height: 8.6rem;
+  }
+
+  .scenario-clash {
+    width: 6.1rem;
+    height: 6.1rem;
+  }
+
+  .scenario-stage .font-display.text-4xl {
+    font-size: 1.26rem;
+  }
+
+  .scenario-cards {
+    gap: 0.26rem;
+    padding: 0.42rem 0.46rem;
+  }
+
+  .scenario-card {
+    padding: 0.34rem;
+  }
+
+  .scenario-card .font-display.text-sm {
+    font-size: 0.58rem;
+  }
+
+  .scenario-card .font-display.text-xl {
+    font-size: 0.78rem;
+  }
+
+  .scenario-card .min-h-\[32px\] {
+    min-height: 1.18rem;
+    font-size: 0.48rem;
+    line-height: 0.62rem;
+  }
+
+  .scenario-foot {
+    padding: 0.3rem 0.4rem;
+    font-size: 0.44rem;
+  }
+
+  .mobile-check-direct {
+    padding: 0.46rem;
+  }
+
+  .mobile-check-direct .mobile-check-head {
+    margin-bottom: 0.34rem;
+  }
+
+  .mobile-check-direct .mobile-check-list {
+    gap: 0.2rem;
+  }
+
+  .mobile-check-direct .mobile-check-row {
+    padding: 0.24rem 0.34rem;
+    gap: 0.3rem;
+  }
+
+  .mobile-check-direct .mobile-check-row strong {
+    font-size: 0.58rem;
+    line-height: 0.74rem;
+  }
+
+  .mobile-check-direct .mobile-check-row p {
+    font-size: 0.5rem;
+    line-height: 0.62rem;
+  }
+
+  .mobile-check-direct .mobile-check-row__num,
+  .mobile-check-direct .mobile-check-row__mark {
+    width: 1rem;
+    height: 1rem;
+    font-size: 0.48rem;
+  }
+
+  .mobile-check-head strong {
+    font-size: 0.9rem;
+  }
+
+  .mobile-check-score {
+    padding: 0.38rem 0.48rem;
+  }
+
+  .mobile-check-score span {
+    font-size: 1.55rem;
+  }
+
+  .fut-signal-card {
+    min-height: 260px;
+  }
+
+  .fut-signal-card-back {
+    width: min(310px, 94vw) !important;
+    max-height: min(100%, 336px);
+  }
+
+  .fut-signal-card-back .relative.z-10 {
+    padding: 0.5rem 0.72rem;
+  }
 }
 
 .readiness-panel.panel {

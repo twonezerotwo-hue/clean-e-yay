@@ -82,7 +82,7 @@ export function ScenarioPanel() {
   const clash = Math.min(1, Math.abs(scenarios[0].value - scenarios[2].value) / 100);
 
   return (
-    <PanelFrame id="scenario" className="border-accent-cyan/20">
+    <PanelFrame id="scenario" className="scenario-panel border-accent-cyan/20">
       <PanelHeader
         title="Senaryo"
         subtitle="risk-on / base / risk-off visual battle"
@@ -92,10 +92,10 @@ export function ScenarioPanel() {
           </span>
         }
       />
-      <div className="relative overflow-hidden rounded-lg border border-white/10 bg-[radial-gradient(circle_at_50%_20%,rgba(34,211,238,0.18),transparent_42%),linear-gradient(180deg,rgba(3,13,28,0.98),rgba(1,5,13,0.98))]">
+      <div className="scenario-shell relative overflow-hidden rounded-lg border border-white/10 bg-[radial-gradient(circle_at_50%_20%,rgba(34,211,238,0.18),transparent_42%),linear-gradient(180deg,rgba(3,13,28,0.98),rgba(1,5,13,0.98))]">
         <div className="pointer-events-none absolute inset-0 opacity-[0.08] [background-image:linear-gradient(rgba(34,211,238,0.7)_1px,transparent_1px),linear-gradient(90deg,rgba(34,211,238,0.7)_1px,transparent_1px)] [background-size:44px_44px]" />
 
-        <div className="relative px-3 pt-3">
+        <div className="scenario-head relative px-3 pt-3">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
               <div className="text-[10px] uppercase tracking-[0.24em] text-accent-cyan/75">
@@ -109,7 +109,7 @@ export function ScenarioPanel() {
           </div>
         </div>
 
-        <div className="relative mt-2 min-h-[270px] overflow-hidden">
+        <div className="scenario-stage relative mt-2 min-h-[270px] overflow-hidden">
           <div className="absolute bottom-0 left-0 right-0 h-[34%] bg-[linear-gradient(180deg,transparent,rgba(0,0,0,0.75))]" />
           <div className="scenario-clash absolute left-1/2 top-1/2 h-40 w-40 -translate-x-1/2 -translate-y-1/2 rounded-full"
             style={{
@@ -131,9 +131,9 @@ export function ScenarioPanel() {
           </div>
         </div>
 
-        <div className="relative grid gap-2 p-3 sm:grid-cols-3">
+        <div className="scenario-cards relative grid gap-2 p-3 sm:grid-cols-3">
           {scenarios.map((scenario) => (
-            <div key={scenario.id} className="rounded-lg border border-white/10 bg-white/[0.035] p-3">
+            <div key={scenario.id} className="scenario-card rounded-lg border border-white/10 bg-white/[0.035] p-3">
               <div className="flex items-center justify-between gap-3">
                 <span className={`font-display text-sm ${scenario.tone}`}>{scenario.label}</span>
                 <span className={`font-display text-xl ${scenario.tone}`}>%{scenario.value}</span>
@@ -146,7 +146,7 @@ export function ScenarioPanel() {
           ))}
         </div>
 
-        <div className="relative border-t border-white/8 px-3 py-2 text-center text-[9px] uppercase tracking-widest text-white/32">
+        <div className="scenario-foot relative border-t border-white/8 px-3 py-2 text-center text-[9px] uppercase tracking-widest text-white/32">
           PAPER_SAFE / NO_EXECUTION / visual scenario weighting only
         </div>
       </div>

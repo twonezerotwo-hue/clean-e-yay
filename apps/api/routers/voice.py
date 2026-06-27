@@ -5,6 +5,7 @@ reads or mutates decision state; it only turns caller-provided text into audio.
 """
 from __future__ import annotations
 
+import asyncio
 import os
 from typing import Protocol
 
@@ -17,6 +18,7 @@ router = APIRouter(tags=["voice"])
 MAX_TTS_CHARS = 4000
 DEFAULT_ELEVENLABS_VOICE_ID = "21m00Tcm4TlvDq8ikWAM"
 DEFAULT_ELEVENLABS_MODEL_ID = "eleven_multilingual_v2"
+DEFAULT_EDGE_TTS_VOICE = "tr-TR-EmelNeural"
 
 
 class VoiceSpeakRequest(BaseModel):
@@ -92,10 +94,43 @@ class ElevenLabsTTSProvider:
         return response.content
 
 
+class EdgeTTSProvider:
+    """Microsoft Edge public TTS — free, no API key, no quota."""
+
+    def __init__(self) -> None:
+        self.default_voice = (
+            os.environ.get("EDGE_TTS_VOICE", "").strip() or DEFAULT_EDGE_TTS_VOICE
+        )
+
+    def speak(self, text: str, voice: str | None = None) -> bytes:
+        import edge_tts
+
+        async def _run() -> bytes:
+            chunks = bytearray()
+            communicate = edge_tts.Communicate(text, voice or self.default_voice)
+            async for chunk in communicate.stream():
+                if chunk["type"] == "audio":
+                    chunks.extend(chunk["data"])
+            return bytes(chunks)
+
+        try:
+            audio = asyncio.run(_run())
+        except Exception as exc:  # edge_tts raises its own error types over the network
+            raise HTTPException(
+                status_code=503,
+                detail=f"Edge TTS request failed: {exc.__class__.__name__}",
+            ) from exc
+        if not audio:
+            raise HTTPException(status_code=503, detail="Edge TTS returned no audio.")
+        return audio
+
+
 def get_tts_provider(name: str | None) -> TTSProvider:
     provider = (name or os.environ.get("TTS_PROVIDER") or "elevenlabs").strip().lower()
     if provider == "elevenlabs":
         return ElevenLabsTTSProvider()
+    if provider == "edge":
+        return EdgeTTSProvider()
     raise HTTPException(status_code=503, detail=f"Unsupported TTS provider: {provider}")
 
 
@@ -105,7 +140,15 @@ def speak(req: VoiceSpeakRequest) -> Response:
     if not text:
         raise HTTPException(status_code=400, detail="text is required.")
 
-    audio = get_tts_provider(req.provider).speak(text=text, voice=req.voice)
+    primary = req.provider or os.environ.get("TTS_PROVIDER") or "elevenlabs"
+    try:
+        audio = get_tts_provider(primary).speak(text=text, voice=req.voice)
+    except HTTPException:
+        # Ücretli sağlayıcı kota/hata verirse, ücretsiz Edge TTS'e otomatik düş —
+        # kullanıcı tarayıcı sesine düşmeden önce hâlâ kaliteli bir ses alır.
+        if primary.strip().lower() == "edge":
+            raise
+        audio = EdgeTTSProvider().speak(text=text, voice=None)
     return Response(
         content=audio,
         media_type="audio/mpeg",

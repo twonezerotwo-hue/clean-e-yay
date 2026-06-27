@@ -4,7 +4,6 @@ import { useQueries } from "@tanstack/react-query";
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 
 import { QuantumPanelField, getQuantumPanelStyle } from "@/components/shell/QuantumPanelField";
-import { MobileFlipCard } from "@/components/cockpit/MobileFlipCard";
 import {
   api,
   type ElliottAnalysis,
@@ -477,19 +476,19 @@ function deckTransform(offset: number, compact = false): CSSProperties {
         ? 368
         : 500;
   const tx = offset === 0 ? 0 : txStep * (offset > 0 ? 1 : -1);
-  const ty = abs === 0 ? -50 : abs === 1 ? -49 : -47;
+  const ty = compact ? (abs === 0 ? -39 : abs === 1 ? -42 : -44) : abs === 0 ? -50 : abs === 1 ? -49 : -47;
   const tz = offset === 0 ? (compact ? 44 : 64) : -abs * (compact ? 82 : 118);
   const ry = offset * (compact ? -14 : -22);
   const rz = offset * (compact ? 1.4 : 2.4);
   const rx = abs === 0 ? -5 : -2;
   const scale = compact
     ? abs === 0
-      ? 0.94
+      ? 0.84
       : abs === 1
-        ? 0.62
+        ? 0.56
         : abs === 2
-          ? 0.48
-          : 0.36
+          ? 0.42
+          : 0.32
     : abs === 0
       ? 1.06
       : abs === 1
@@ -534,7 +533,7 @@ function DeckCard({
     transitionTimingFunction: "cubic-bezier(0.22, 1, 0.36, 1)",
     transitionDuration: compact ? "900ms" : undefined,
     transformStyle: "preserve-3d",
-    width: compact ? 190 : undefined,
+    width: compact ? 210 : undefined,
     borderColor: active ? theme.accent : "rgba(71,85,105,0.38)",
     boxShadow: active
       ? `0 20px 58px -18px ${theme.shadow}, 0 0 0 1px ${theme.accent}45, inset 0 1px 0 rgba(255,255,255,0.10)`
@@ -617,6 +616,93 @@ function DeckCard({
   );
 }
 
+function MobileSignalCardBack({
+  row,
+  score,
+  tech,
+  evidence,
+  effectiveTf,
+  techForSymbol,
+  ticket,
+  onClose,
+  onSelectTf,
+}: {
+  row: DeckRow;
+  score: number;
+  tech: TechnicalTf | undefined;
+  evidence?: TfEvidence;
+  effectiveTf: Timeframe | null;
+  techForSymbol?: Partial<Record<Timeframe, TechnicalTf>>;
+  ticket?: TradeTicket;
+  onClose: () => void;
+  onSelectTf: (tf: Timeframe) => void;
+}) {
+  return (
+    <div
+      role="button"
+      tabIndex={0}
+      onClick={onClose}
+      onKeyDown={(event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          onClose();
+        }
+      }}
+      className="fut-signal-card fut-signal-card-active fut-signal-card-back absolute left-1/2 top-2 w-[min(322px,88vw)] transform-gpu overflow-hidden border border-teal-300/45 bg-[#06101b]/95 text-left shadow-[0_20px_58px_rgba(20,184,166,0.26),inset_0_1px_0_rgba(255,255,255,0.08)] [animation:hsd-card-back-in_520ms_cubic-bezier(0.22,1,0.36,1)]"
+      style={{
+        transform: "translate3d(-50%, 0, 84px) rotateX(-2deg) rotateY(360deg) scale(1)",
+        transformStyle: "preserve-3d",
+      }}
+    >
+      <div className="fut-card-shine" aria-hidden="true" />
+      <div className="relative z-10 space-y-2 p-2.5">
+        <div className="flex items-start justify-between gap-2">
+          <div className="min-w-0">
+            <p className="font-display text-sm font-black text-slate-50">
+              {row.icon} {row.symbol}
+            </p>
+            <p className="mt-0.5 text-[9px] uppercase tracking-[0.2em] text-slate-500">
+              Teknik arka yüz
+            </p>
+          </div>
+          <div className="rounded-full border border-amber-300/40 bg-amber-300/10 px-2 py-1 font-display text-lg text-amber-100">
+            {score}
+          </div>
+        </div>
+
+        <TfMatrix rows={row.perTf} />
+
+        <div
+          className="flex justify-end gap-1"
+          onClick={(event) => event.stopPropagation()}
+        >
+          {TF_ORDER.filter((tf) => techForSymbol?.[tf]).map((tf) => (
+            <button
+              key={tf}
+              type="button"
+              onClick={() => onSelectTf(tf)}
+              className={`rounded border px-1.5 py-0.5 text-[9px] font-mono uppercase ${
+                effectiveTf === tf
+                  ? "border-teal-300/50 bg-teal-300/12 text-teal-100"
+                  : "border-slate-600/40 bg-slate-900/70 text-slate-400"
+              }`}
+            >
+              {tf}
+            </button>
+          ))}
+        </div>
+
+        <TechnicalsBlock tech={tech} evidence={evidence} />
+        <TradePlanBlock ticket={ticket} symbol={row.symbol} />
+
+        <p className="text-center text-[9px] uppercase tracking-[0.2em] text-teal-100/52">
+          karta dokun: seçim ekranına dön
+        </p>
+      </div>
+    </div>
+  );
+}
+
 // ── Right detail panel ───────────────────────────────────────────────────────
 
 function TfMatrix({ rows }: { rows: AgentBriefCandidate[] }) {
@@ -626,13 +712,13 @@ function TfMatrix({ rows }: { rows: AgentBriefCandidate[] }) {
   const sorted = [...rows].sort((a, b) => tfIndex(a.timeframe) - tfIndex(b.timeframe));
   return (
     <div className="rounded-md border border-slate-700/40 bg-black/40 overflow-hidden">
-      <table className="w-full text-[11px]">
+      <table className="w-full text-[10px] sm:text-[11px]">
         <thead className="bg-white/[0.03] text-slate-500">
           <tr>
-            <th className="px-2 py-1 text-left font-medium uppercase tracking-widest">TF</th>
-            <th className="px-2 py-1 text-right font-medium uppercase tracking-widest">Skor</th>
-            <th className="px-2 py-1 text-right font-medium uppercase tracking-widest">Yön</th>
-            <th className="px-2 py-1 text-right font-medium uppercase tracking-widest">Aksiyon</th>
+            <th className="px-1.5 py-0.5 text-left font-medium uppercase tracking-widest sm:px-2 sm:py-1">TF</th>
+            <th className="px-1.5 py-0.5 text-right font-medium uppercase tracking-widest sm:px-2 sm:py-1">Skor</th>
+            <th className="px-1.5 py-0.5 text-right font-medium uppercase tracking-widest sm:px-2 sm:py-1">Yön</th>
+            <th className="px-1.5 py-0.5 text-right font-medium uppercase tracking-widest sm:px-2 sm:py-1">Aksiyon</th>
           </tr>
         </thead>
         <tbody>
@@ -641,16 +727,16 @@ function TfMatrix({ rows }: { rows: AgentBriefCandidate[] }) {
             const d = (r.direction ?? "neutral") as Direction;
             return (
               <tr key={`${r.timeframe ?? "?"}-${i}`} className="border-t border-white/5">
-                <td className="px-2 py-1 font-mono text-slate-300">{r.timeframe ?? "—"}</td>
-                <td className={`px-2 py-1 text-right font-mono font-semibold ${scoreTone(v)}`}>{v}</td>
+                <td className="px-1.5 py-0.5 font-mono text-slate-300 sm:px-2 sm:py-1">{r.timeframe ?? "—"}</td>
+                <td className={`px-1.5 py-0.5 text-right font-mono font-semibold sm:px-2 sm:py-1 ${scoreTone(v)}`}>{v}</td>
                 <td
-                  className={`px-2 py-1 text-right font-mono text-[10px] uppercase ${
+                  className={`px-1.5 py-0.5 text-right font-mono text-[9px] uppercase sm:px-2 sm:py-1 sm:text-[10px] ${
                     d === "bullish" ? "text-emerald-300" : d === "bearish" ? "text-rose-300" : "text-amber-200"
                   }`}
                 >
                   {d}
                 </td>
-                <td className="px-2 py-1 text-right text-slate-300/90">
+                <td className="px-1.5 py-0.5 text-right text-slate-300/90 sm:px-2 sm:py-1">
                   {r.candidate_action ?? "WATCH"}
                 </td>
               </tr>
@@ -672,9 +758,9 @@ function TechnicalMetric({
   tone?: string;
 }) {
   return (
-    <div className="min-w-0 rounded border border-white/[0.08] bg-slate-950/55 px-1.5 py-1">
-      <p className="truncate text-[7px] uppercase tracking-[0.1em] text-slate-500">{label}</p>
-      <p className={`mt-0.5 truncate font-mono text-[10px] font-semibold leading-[14px] ${tone}`} title={value}>
+    <div className="min-w-0 rounded border border-white/[0.08] bg-slate-950/55 px-1.5 py-1 sm:px-2 sm:py-1.5">
+      <p className="truncate text-[7px] uppercase tracking-[0.1em] text-slate-500 sm:text-[8px] sm:tracking-[0.13em]">{label}</p>
+      <p className={`mt-0.5 truncate font-mono text-[10px] font-semibold leading-[14px] sm:text-[11px] sm:leading-4 ${tone}`} title={value}>
         {value}
       </p>
     </div>
@@ -700,7 +786,7 @@ function TechnicalsBlock({ tech, evidence }: { tech: TechnicalTf | undefined; ev
         ? "text-rose-300"
         : "text-slate-300";
   return (
-    <div className="rounded-md border border-slate-700/45 bg-black/42 p-1.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]">
+    <div className="rounded-md border border-slate-700/45 bg-black/42 p-1.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)] sm:p-2">
       <div className="grid grid-cols-4 gap-1.5">
         <TechnicalMetric label="RSI 14" value={tech?.rsi != null ? String(Math.round(tech.rsi)) : "—"} tone={rsiTone} />
         <TechnicalMetric label="MACD" value={tech?.macd != null ? tech.macd.toFixed(2) : "—"} />
@@ -734,7 +820,7 @@ function TechnicalsBlock({ tech, evidence }: { tech: TechnicalTf | undefined; ev
 function TradePlanBlock({ ticket, symbol }: { ticket: TradeTicket | undefined; symbol: string }) {
   if (!ticket) {
     return (
-    <div className="rounded-md border border-slate-700/40 bg-black/30 p-2">
+      <div className="rounded-md border border-slate-700/40 bg-black/30 p-2">
         <p className="text-[10px] uppercase tracking-widest text-slate-500">Trade plan</p>
         <p className="mt-1 text-[11px] text-slate-500">
           {symbol} için aktif ticket yok — yeni giriş açılmıyor.
@@ -799,6 +885,7 @@ export function HolographicSignalDeck({ brief }: { brief: AgentBrief }) {
   const [activeIndex, setActiveIndex] = useState(0);
   const [paused, setPaused] = useState(false);
   const [selectedTf, setSelectedTf] = useState<Timeframe | null>(null);
+  const [mobileCardBackOpen, setMobileCardBackOpen] = useState(false);
   const [compactDeck, setCompactDeck] = useState(
     () => typeof window !== "undefined" && window.matchMedia("(max-width: 768px)").matches,
   );
@@ -837,13 +924,13 @@ export function HolographicSignalDeck({ brief }: { brief: AgentBrief }) {
   }, [activeIndex, rows.length]);
   useEffect(() => {
     setSelectedTf(null);
+    setMobileCardBackOpen(false);
   }, [activeIndex]);
 
   const activeRow = rows[activeIndex];
   const active = activeRow?.best;
   const activeSymbol = activeRow?.symbol ?? "—";
   const activeSymbolQuery = activeRow?.symbol ?? "";
-  const activeDirection = (active?.direction ?? "neutral") as Direction;
   const activeAction = active ? actionBadge(active) : { label: "—", cls: "" };
 
   const techForSymbol = snap?.technicals_by_tf?.[activeSymbol];
@@ -862,6 +949,18 @@ export function HolographicSignalDeck({ brief }: { brief: AgentBrief }) {
     () => ticketList?.tickets.find((t) => t.symbol === activeSymbol && t.status === "active"),
     [ticketList?.tickets, activeSymbol],
   );
+  const handleDeckSelect = (index: number) => {
+    if (!compactDeck) {
+      setActiveIndex(index);
+      return;
+    }
+    if (index === activeIndex) {
+      setMobileCardBackOpen((open) => !open);
+      return;
+    }
+    setActiveIndex(index);
+    setMobileCardBackOpen(false);
+  };
 
   const blocked = !brief.can_act;
 
@@ -877,114 +976,11 @@ export function HolographicSignalDeck({ brief }: { brief: AgentBrief }) {
     );
   }
 
-  if (compactDeck) {
-    const activeScore = round(active?.score);
-    return (
-      <MobileFlipCard
-        title="Asset Card"
-        front={
-          <div className="mobile-asset-front">
-            <div className="mobile-back-head">
-              <div>
-                <p className="mobile-kicker">ASSET CARD</p>
-                <strong>{activeSymbol}</strong>
-              </div>
-              <span className={blocked ? "text-amber-300" : "text-emerald-300"}>
-                {blocked ? "BLOCKED" : "GATE CLEAR"}
-              </span>
-            </div>
-
-            <div className="mobile-asset-hero">
-              <div>
-                <span className="mobile-asset-icon">{activeRow?.icon}</span>
-                <p>{activeRow?.name}</p>
-              </div>
-              <ScoreRing score={activeScore} size={96} active />
-            </div>
-
-            <div className="mobile-metric-grid">
-              <div>
-                <span>Fiyat</span>
-                <strong>{fmtPx(activeRow?.price)} {activeRow?.unit}</strong>
-              </div>
-              <div>
-                <span>Durum</span>
-                <strong>{activeAction.label}</strong>
-              </div>
-              <div>
-                <span>Yön</span>
-                <strong>{activeDirection}</strong>
-              </div>
-              <div>
-                <span>TF</span>
-                <strong>{active?.timeframe ?? "--"}</strong>
-              </div>
-            </div>
-
-            <p className="mobile-summary-line">{brief.recommended_stance}</p>
-            <p className="mobile-flip-hint">Detay için dokun</p>
-          </div>
-        }
-        back={
-          <div className="mobile-flip-card__scroll mobile-asset-back">
-            <div className="mobile-back-head">
-              <div>
-                <p className="mobile-kicker">Sinyal detayı</p>
-                <strong>{activeRow?.icon} {activeSymbol}</strong>
-              </div>
-              <span>{activeScore}</span>
-            </div>
-
-            <TfMatrix rows={activeRow?.perTf ?? []} />
-
-            <div className="mobile-tf-buttons" data-no-flip>
-              {TF_ORDER.filter((tf) => techForSymbol?.[tf]).map((tf) => (
-                <button
-                  key={tf}
-                  type="button"
-                  onClick={() => setSelectedTf(tf)}
-                  className={effectiveTf === tf ? "is-active" : ""}
-                >
-                  {tf}
-                </button>
-              ))}
-            </div>
-            <TechnicalsBlock tech={tech} evidence={effectiveEvidence} />
-            <TradePlanBlock ticket={activeTicket} symbol={activeSymbol} />
-
-            <div className="mobile-metric-grid">
-              <div>
-                <span>DQS</span>
-                <strong>{Math.round(brief.dqs?.score ?? 0)}</strong>
-              </div>
-              <div>
-                <span>Mode</span>
-                <strong>{brief.data_mode}</strong>
-              </div>
-            </div>
-
-            {supports.length > 0 ? (
-              <div className="mobile-support-list">
-                <p className="mobile-kicker">Piyasa göstergeleri</p>
-                {supports.slice(0, 5).map((support) => (
-                  <div key={support.symbol}>
-                    <span>{support.symbol}</span>
-                    <strong>{fmtPx(support.price)} {support.unit}</strong>
-                  </div>
-                ))}
-              </div>
-            ) : null}
-          </div>
-        }
-      />
-    );
-  }
-
   return (
     <section
       id="layer1_holographic_signals"
       data-panel="layer1_holographic_signals"
-      className="quantum-panel quantum-holo-deck relative flex h-full min-h-0 flex-col overflow-hidden rounded-lg border border-white/10 bg-[#090d14]/92 shadow-[0_18px_56px_rgba(0,0,0,0.30)] lg:min-h-[700px]"
+      className="quantum-panel quantum-holo-deck relative flex h-full min-h-full flex-col overflow-hidden rounded-lg border border-white/10 bg-[#090d14]/92 shadow-[0_18px_56px_rgba(0,0,0,0.30)] lg:min-h-[700px]"
       style={getQuantumPanelStyle("layer1_holographic_signals", "#14b8a6", "#fbbf24")}
       onMouseEnter={() => setPaused(true)}
       onMouseLeave={() => setPaused(false)}
@@ -999,11 +995,12 @@ export function HolographicSignalDeck({ brief }: { brief: AgentBrief }) {
         @keyframes hsd-ring-2 { 0%{transform:translate(-50%,-50%) scale(.85);opacity:.4} 100%{transform:translate(-50%,-50%) scale(1.6);opacity:0} }
         @keyframes hsd-ticker { from{transform:translateX(0)} to{transform:translateX(-50%)} }
         @keyframes hsd-corner-glow { 0%,100%{opacity:.6} 50%{opacity:1} }
+        @keyframes hsd-card-back-in { from{transform:translate3d(-50%,0,40px) rotateX(-2deg) rotateY(180deg) scale(.82);opacity:.35} to{transform:translate3d(-50%,0,84px) rotateX(-2deg) rotateY(360deg) scale(1);opacity:1} }
       `}</style>
       <QuantumPanelField id="layer1_holographic_signals" density="deck" />
 
       {/* Header */}
-      <div className="relative flex flex-wrap items-center justify-between gap-3 border-b border-white/10 bg-black/25 px-4 py-2.5">
+      <div className="relative flex flex-wrap items-center justify-between gap-2 border-b border-white/10 bg-black/25 px-3 py-2 sm:gap-3 sm:px-4 sm:py-2.5">
         <div className="flex items-center gap-2.5">
           <span className="w-1 h-3.5 rounded-full bg-teal-300/70" aria-hidden="true" />
           <div>
@@ -1025,10 +1022,10 @@ export function HolographicSignalDeck({ brief }: { brief: AgentBrief }) {
       </div>
 
       {/* Body grid */}
-      <div className="grid min-h-0 flex-1 gap-0 lg:grid-cols-[minmax(0,1fr)_360px]">
+      <div className="grid min-h-0 flex-1 grid-rows-[minmax(0,1fr)] gap-0 lg:grid-cols-[minmax(0,1fr)_360px] lg:grid-rows-none">
         {/* Left — 3D deck */}
         <div
-          className="relative min-h-[360px] overflow-hidden border-r border-white/10 sm:min-h-[420px] lg:min-h-0"
+          className="relative h-full min-h-0 overflow-hidden border-b border-white/10 lg:border-b-0 lg:border-r"
           style={{
             background:
               "radial-gradient(circle at 50% 72%, rgba(20,184,166,0.13), transparent 34%), radial-gradient(circle at 52% 6%, rgba(251,191,36,0.07), transparent 28%), linear-gradient(180deg, rgba(12,17,27,0.92), rgba(5,8,14,0.98))",
@@ -1096,25 +1093,39 @@ export function HolographicSignalDeck({ brief }: { brief: AgentBrief }) {
 
           {/* 3D deck stage */}
           <div
-            className="relative mx-auto mt-4 h-[280px] sm:h-[330px] lg:h-[360px]"
+            className="relative mx-auto mt-1.5 h-[calc(100%_-_84px)] min-h-[248px] max-h-[360px] sm:mt-3 sm:h-[calc(100%_-_102px)] sm:min-h-[292px] lg:mt-4 lg:h-[360px] lg:max-h-none"
             style={{ perspective: "2100px", perspectiveOrigin: "50% 40%" }}
           >
-            {rows.map((r, i) => {
-              const n = rows.length;
-              let offset = i - activeIndex;
-              if (offset > n / 2) offset -= n;
-              if (offset < -n / 2) offset += n;
-              return (
-                <DeckCard
-                  key={r.symbol}
-                  row={r}
-                  active={i === activeIndex}
-                  offset={offset}
-                  compact={compactDeck}
-                  onSelect={() => setActiveIndex(i)}
-                />
-              );
-            })}
+            {compactDeck && mobileCardBackOpen && activeRow ? (
+              <MobileSignalCardBack
+                row={activeRow}
+                score={round(active?.score)}
+                tech={tech}
+                evidence={effectiveEvidence}
+                effectiveTf={effectiveTf}
+                techForSymbol={techForSymbol}
+                ticket={activeTicket}
+                onClose={() => setMobileCardBackOpen(false)}
+                onSelectTf={setSelectedTf}
+              />
+            ) : (
+              rows.map((r, i) => {
+                const n = rows.length;
+                let offset = i - activeIndex;
+                if (offset > n / 2) offset -= n;
+                if (offset < -n / 2) offset += n;
+                return (
+                  <DeckCard
+                    key={r.symbol}
+                    row={r}
+                    active={i === activeIndex}
+                    offset={offset}
+                    compact={compactDeck}
+                    onSelect={() => handleDeckSelect(i)}
+                  />
+                );
+              })
+            )}
           </div>
 
           {/* Pagination dots */}
@@ -1133,7 +1144,7 @@ export function HolographicSignalDeck({ brief }: { brief: AgentBrief }) {
           </div>
 
           {/* AI Trading Operations podium */}
-          <div className="relative z-10 mx-auto mb-4 mt-1 h-[88px] w-[min(540px,84%)]">
+          <div className="relative z-10 mx-auto mb-2 mt-0 h-[58px] w-[min(540px,84%)] sm:mb-4 sm:mt-1 sm:h-[88px]">
             {/* expanding rings */}
             <div
               aria-hidden="true"
@@ -1159,14 +1170,14 @@ export function HolographicSignalDeck({ brief }: { brief: AgentBrief }) {
               }}
             />
             {/* label */}
-            <div className="absolute bottom-0 left-1/2 -translate-x-1/2 rounded border border-white/15 bg-slate-950/72 px-4 py-1 text-[10px] uppercase tracking-[0.32em] text-slate-200">
+            <div className="absolute bottom-0 left-1/2 -translate-x-1/2 whitespace-nowrap rounded border border-white/15 bg-slate-950/72 px-3 py-0.5 text-[8px] uppercase tracking-[0.24em] text-slate-200 sm:px-4 sm:py-1 sm:text-[10px] sm:tracking-[0.32em]">
               ◆ AI Trading Operations ◆
             </div>
           </div>
         </div>
 
         {/* Right — Sinyal Detayı */}
-        <aside className="relative min-h-0 overflow-hidden bg-black/20 p-2.5">
+        <aside className="relative hidden min-h-0 overflow-hidden bg-black/20 p-2.5 lg:block">
           <div className="space-y-1.5">
             <div className="flex items-center gap-2">
               <span className="h-1.5 w-1.5 rounded-full bg-teal-300 shadow-[0_0_8px_rgba(45,212,191,0.45)]" />
@@ -1243,8 +1254,8 @@ export function HolographicSignalDeck({ brief }: { brief: AgentBrief }) {
 
       {/* Bottom — Piyasa göstergeleri ticker */}
       {supports.length > 0 && (
-        <div className="border-t border-white/10 bg-black/25 px-4 py-2.5">
-          <p className="text-[9px] font-medium uppercase tracking-[0.22em] text-slate-500 mb-1.5">
+        <div className="border-t border-white/10 bg-black/25 px-3 py-1.5 sm:px-4 sm:py-2.5">
+          <p className="mb-1 text-[8px] font-medium uppercase tracking-[0.2em] text-slate-500 sm:mb-1.5 sm:text-[9px] sm:tracking-[0.22em]">
             Piyasa Göstergeleri
           </p>
           <div
@@ -1269,11 +1280,11 @@ export function HolographicSignalDeck({ brief }: { brief: AgentBrief }) {
                 return (
                   <div
                     key={`${s.symbol}-${i}`}
-                    className={`shrink-0 flex items-center gap-2 rounded border bg-slate-900/40 px-2 py-1 ${tone}`}
+                    className={`shrink-0 flex items-center gap-1.5 rounded border bg-slate-900/40 px-1.5 py-0.5 sm:gap-2 sm:px-2 sm:py-1 ${tone}`}
                   >
                     <span aria-hidden="true" className="h-1 w-1 rounded-full bg-current" />
-                    <span className="text-[10px] font-medium">{s.symbol}</span>
-                    <span className="text-[10px] font-mono text-slate-100">
+                    <span className="text-[9px] font-medium sm:text-[10px]">{s.symbol}</span>
+                    <span className="text-[9px] font-mono text-slate-100 sm:text-[10px]">
                       {fmtPx(s.price)} {s.unit}
                     </span>
                   </div>
@@ -1285,7 +1296,7 @@ export function HolographicSignalDeck({ brief }: { brief: AgentBrief }) {
       )}
 
       {/* Footer */}
-      <div className="border-t border-white/10 bg-black/25 px-4 py-1.5 text-center">
+      <div className="hidden border-t border-white/10 bg-black/25 px-4 py-1.5 text-center sm:block">
         <p className="text-[9px] text-slate-500">
           Yalnız görselleştirme · karar üretmez · final karar deterministik engine + RiskGate
         </p>

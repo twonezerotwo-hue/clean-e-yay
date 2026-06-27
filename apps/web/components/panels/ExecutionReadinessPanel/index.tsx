@@ -5,7 +5,6 @@ import type { CSSProperties } from "react";
 
 import { PanelFrame } from "@/components/shell/PanelFrame";
 import { HoloHeadScene } from "@/components/cockpit/HoloHeadScene";
-import { MobileFlipCard } from "@/components/cockpit/MobileFlipCard";
 import {
   useAgentMatrix,
   useCockpitBrief,
@@ -379,25 +378,7 @@ export function ExecutionReadinessPanel() {
 
   const passedCount = checks.filter((check) => check.passed).length;
   const allPassed = passedCount === checks.length;
-  const activeCheck = checks[activeIndex] ?? checks[0];
   const cycleRemaining = CYCLE_MS - cycleElapsed;
-  const visibleWindowSize = 4;
-  const visibleStart = Math.min(
-    Math.max(activeIndex - 1, 0),
-    Math.max(0, checks.length - visibleWindowSize),
-  );
-  const visibleChecks = checks
-    .slice(visibleStart, visibleStart + visibleWindowSize)
-    .map((check, offset) => ({ check, index: visibleStart + offset }));
-  const hiddenBefore = visibleStart;
-  const hiddenAfter = Math.max(0, checks.length - visibleStart - visibleChecks.length);
-  const mobileStart = Math.min(
-    Math.max(activeIndex - 1, 0),
-    Math.max(0, checks.length - 3),
-  );
-  const mobileChecks = checks
-    .slice(mobileStart, mobileStart + 3)
-    .map((check, offset) => ({ check, index: mobileStart + offset }));
 
   return (
     <>
@@ -480,71 +461,32 @@ export function ExecutionReadinessPanel() {
       <TradeTicketStrip ticket={activeTicket} />
     </PanelFrame>
     </div>
-    <MobileFlipCard
-      className="min-[769px]:hidden"
-      title="Check List"
-      front={
-        <div className="mobile-check-front">
-          <div className="mobile-check-head">
-            <div>
-              <p className="mobile-kicker">CHECK LIST</p>
-              <p className="mobile-subline">READ ONLY</p>
-              <strong className={allPassed ? "text-emerald-300" : "text-amber-300"}>
-                {allPassed ? "READY" : "CALIBRATING"}
-              </strong>
-            </div>
-            <div className="mobile-check-score">
-              <span>{passedCount}</span>
-              <em>/ {checks.length}</em>
-              <small>{formatTime(cycleRemaining)}</small>
-            </div>
-          </div>
-
-          <div className="mobile-check-active">
-            <span>{String(activeIndex + 1).padStart(2, "0")}</span>
-            <div>
-              <strong>{activeCheck.title}</strong>
-              <p>{activeCheck.detail}</p>
-            </div>
-          </div>
-
-          <div className="mobile-check-list">
-            {mobileChecks.map(({ check, index }) => (
-              <MobileCheckRow
-                key={check.id}
-                check={check}
-                index={index}
-                active={index === activeIndex}
-              />
-            ))}
-          </div>
-
-          <p className="mobile-flip-hint">Detay için dokun</p>
+    <section className="mobile-check-direct min-[769px]:hidden">
+      <div className="mobile-check-head">
+        <div>
+          <p className="mobile-kicker">CHECK LIST</p>
+          <p className="mobile-subline">READ ONLY</p>
+          <strong className={allPassed ? "text-emerald-300" : "text-amber-300"}>
+            {allPassed ? "READY" : "CALIBRATING"}
+          </strong>
         </div>
-      }
-      back={
-        <div className="mobile-flip-card__scroll mobile-check-back">
-          <div className="mobile-back-head">
-            <div>
-              <p className="mobile-kicker">10 kontrol</p>
-              <strong>{passedCount} onay</strong>
-            </div>
-            <span>{allPassed ? "READY" : "CALIBRATING"}</span>
-          </div>
-          <div className="mobile-check-list mobile-check-list--all">
-            {checks.map((check, index) => (
-              <MobileCheckRow
-                key={check.id}
-                check={check}
-                index={index}
-                active={index === activeIndex}
-              />
-            ))}
-          </div>
-          <TradeTicketStrip ticket={activeTicket} />
+        <div className="mobile-check-score">
+          <span>{passedCount}</span>
+          <em>/ {checks.length}</em>
+          <small>{formatTime(cycleRemaining)}</small>
         </div>
-      }
-    />
+      </div>
+      <div className="mobile-check-list mobile-check-list--all">
+        {checks.map((check, index) => (
+          <MobileCheckRow
+            key={check.id}
+            check={check}
+            index={index}
+            active={index === activeIndex}
+          />
+        ))}
+      </div>
+    </section>
     </>
   );
 }

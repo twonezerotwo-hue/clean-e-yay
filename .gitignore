@@ -19,6 +19,10 @@ node_modules/
 .turbo/
 *.tsbuildinfo
 out/
+.pnpm-store/
+
+# Scratch / debug artifacts (screenshots, browser profiles)
+tmp/
 
 # Env / secrets
 .env

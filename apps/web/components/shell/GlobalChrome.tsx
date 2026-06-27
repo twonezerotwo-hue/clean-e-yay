@@ -1,7 +1,9 @@
 "use client";
 
 import { useEventStream } from "@/hooks/useEventStream";
+import { telemetry } from "@/lib/telemetry";
 
+import { ErrorBoundary } from "./ErrorBoundary";
 import { NotificationBell } from "./NotificationBell";
 import { NotificationToast } from "./NotificationToast";
 
@@ -15,9 +17,12 @@ import { NotificationToast } from "./NotificationToast";
 export function GlobalChrome() {
   useEventStream();
   return (
-    <>
+    <ErrorBoundary
+      fallback={null}
+      onError={(error) => telemetry.panelCrashed("global_chrome", error)}
+    >
       <NotificationBell />
       <NotificationToast />
-    </>
+    </ErrorBoundary>
   );
 }

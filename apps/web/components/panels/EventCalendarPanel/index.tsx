@@ -117,7 +117,7 @@ export function EventCalendarPanel() {
   }, [sorted]);
 
   return (
-    <PanelFrame id="event_calendar" className="border-accent-cyan/20">
+    <PanelFrame id="event_calendar" className="event-calendar-panel border-accent-cyan/20">
       <PanelHeader
         title="Olay Takvimi"
         subtitle="holographic event calendar / paper safe"
@@ -135,15 +135,15 @@ export function EventCalendarPanel() {
         <EmptyState />
       ) : (
         <div
-          className="overflow-hidden rounded-lg border border-accent-cyan/16 bg-[#03101b]/92"
+          className="event-calendar-shell overflow-hidden rounded-lg border border-accent-cyan/16 bg-[#03101b]/92"
           onMouseEnter={() => setPaused(true)}
           onMouseLeave={() => setPaused(false)}
         >
-          <div className="grid gap-0 lg:grid-cols-[340px_minmax(0,1fr)]">
+          <div className="event-calendar-main grid gap-0 lg:grid-cols-[340px_minmax(0,1fr)]">
             <ActiveEvent event={active} />
-            <div className="relative border-t border-accent-cyan/14 p-3 lg:border-l lg:border-t-0">
+            <div className="event-calendar-grid-wrap relative border-t border-accent-cyan/14 p-3 lg:border-l lg:border-t-0">
               <div className="pointer-events-none absolute inset-0 opacity-[0.08] [background-image:linear-gradient(rgba(34,211,238,0.7)_1px,transparent_1px),linear-gradient(90deg,rgba(34,211,238,0.7)_1px,transparent_1px)] [background-size:42px_42px]" />
-              <div className="relative grid grid-cols-5 gap-1">
+              <div className="event-calendar-grid relative grid grid-cols-5 gap-1">
                 {grid.map((date, index) => {
                   const events = byDate.get(ymd(date)) ?? [];
                   const topEvent = events
@@ -192,7 +192,7 @@ export function EventCalendarPanel() {
             </div>
           </div>
 
-          <div className="border-t border-white/8 px-3 py-2">
+          <div className="event-calendar-upcoming border-t border-white/8 px-3 py-2">
             <div className="flex items-center justify-center gap-2">
               <span className="h-px flex-1 bg-accent-cyan/18" />
               <span className="text-[9px] uppercase tracking-[0.28em] text-accent-cyan/54">
@@ -200,7 +200,7 @@ export function EventCalendarPanel() {
               </span>
               <span className="h-px flex-1 bg-accent-cyan/18" />
             </div>
-            <div className="mt-2 grid gap-1 sm:grid-cols-2 xl:grid-cols-3">
+            <div className="event-calendar-upcoming-list mt-2 grid gap-1 sm:grid-cols-2 xl:grid-cols-3">
               {sorted.slice(0, 6).map((event, index) => {
                 const tone = toneOf(event.importance);
                 return (
@@ -231,7 +231,7 @@ function ActiveEvent({ event }: { event: Catalyst }) {
 
   return (
     <div
-      className="relative overflow-hidden p-3"
+      className="event-active-card relative overflow-hidden p-3"
       style={{
         background: `radial-gradient(circle at 0 0, ${tone.bg}, transparent 48%), linear-gradient(155deg, rgba(4,17,35,0.96), rgba(2,6,15,0.98))`,
       }}
@@ -239,7 +239,7 @@ function ActiveEvent({ event }: { event: Catalyst }) {
       <div className="pointer-events-none absolute inset-x-0 top-0 h-px" style={{ background: `linear-gradient(90deg, transparent, ${tone.color}, transparent)` }} />
       <div className="flex items-start gap-3">
         <div
-          className="grid h-[76px] w-[70px] shrink-0 place-items-center rounded-lg border"
+          className="event-date-card grid h-[76px] w-[70px] shrink-0 place-items-center rounded-lg border"
           style={{ borderColor: `${tone.color}77`, background: tone.bg, boxShadow: `0 0 24px ${tone.bg}` }}
         >
           <div className="text-center">
@@ -266,7 +266,7 @@ function ActiveEvent({ event }: { event: Catalyst }) {
         </div>
       </div>
 
-      <div className="mt-3 border-t border-white/10 pt-3">
+      <div className="event-impact mt-3 border-t border-white/10 pt-3">
         <div className="text-[10px] uppercase tracking-widest text-white/38">Potential impact</div>
         <ul className="mt-2 space-y-1">
           {notes.map((note, index) => (
