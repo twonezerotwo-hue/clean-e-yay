@@ -1131,9 +1131,14 @@ export function Layer0ReporterAgent({
     }
   };
 
+  // tr-TR tanima motoru "E-yAy"i fonetik olarak farkli yazabilir
+  // ("iyay", "ay ay", "\u0131yay" vb.) \u2014 gercekci varyantlarin hepsi burada.
   const WAKE_PHRASES = [
     "hey eyay", "hey e-yay", "hey ey ay", "hey eyai", "hey eyey",
     "hey ai", "hey a i", "hey yapay zeka", "hi eyay", "hey eai",
+    "hey iyay", "hey \u0131yay", "hey iay", "hey \u0131ay", "ey iyay", "ey \u0131yay",
+    "hey ay ay", "hey eyy", "hey yay", "hey ey yay", "hey i ay",
+    "he iyay", "he \u0131yay", "hey iyey", "hey iey",
   ];
 
   const matchesWakeWord = (raw: string): boolean => {
@@ -1143,7 +1148,10 @@ export function Layer0ReporterAgent({
       .replace(/[\u0300-\u036f]/g, "")
       .replace(/[^a-z0-9\s-]/g, "")
       .trim();
-    return WAKE_PHRASES.some((phrase) => normalized.includes(phrase));
+    if (WAKE_PHRASES.some((phrase) => normalized.includes(phrase))) return true;
+    // Esnek yedek: "hey/he/ey/hi" ile baslayip "eyay/iyay/ayay" benzeri bir
+    // hece iceren herhangi bir transkript de tetikler (ASR varyasyon payi).
+    return /\b(hey|he|ey|hi)\b.{0,6}\b(e?[i\u0131]?y?ay|ay ?ay|eyai|eyay)\b/.test(normalized);
   };
 
   const triggerWake = () => {
@@ -1151,6 +1159,18 @@ export function Layer0ReporterAgent({
     if (!speakWithBrowserFallback("Dinliyorum.")) {
       wakeWordPendingRef.current = false;
       startListening();
+    }
+  };
+
+  const scheduleWakeRestart = (delayMs: number) => {
+    wakeRecognitionRef.current = null;
+    if (
+      wakeWordEnabledRef.current &&
+      !listeningRef.current &&
+      !speakingRef.current &&
+      !chatPendingRef.current
+    ) {
+      window.setTimeout(() => startWakeListening(), delayMs);
     }
   };
 
@@ -1179,27 +1199,36 @@ export function Layer0ReporterAgent({
         }
       }
     };
-    recognition.onerror = () => {
-      wakeRecognitionRef.current = null;
-    };
-    recognition.onend = () => {
-      wakeRecognitionRef.current = null;
-      if (
-        wakeWordEnabledRef.current &&
-        !listeningRef.current &&
-        !speakingRef.current &&
-        !chatPendingRef.current
-      ) {
-        window.setTimeout(() => startWakeListening(), 600);
-      }
-    };
+    // Chrome "no-speech"/"audio-capture" gibi hatalarda onend her zaman
+    // guvenilir tetiklenmiyor — bu yuzden onerror'da da yeniden baslatiyoruz
+    // (cift baslatma startWakeListening icindeki guard'larla onleniyor).
+    recognition.onerror = () => scheduleWakeRestart(900);
+    recognition.onend = () => scheduleWakeRestart(600);
     wakeRecognitionRef.current = recognition;
     try {
       recognition.start();
     } catch {
-      wakeRecognitionRef.current = null;
+      scheduleWakeRestart(1500);
     }
   };
+
+  // Watchdog — event'ler hic tetiklenmeden sessizce olen recognition
+  // oturumlarini kurtarir (Chrome'da continuous mod bazen boyle takiliyor).
+  useEffect(() => {
+    const watchdog = window.setInterval(() => {
+      if (
+        wakeWordEnabledRef.current &&
+        !wakeRecognitionRef.current &&
+        !listeningRef.current &&
+        !speakingRef.current &&
+        !chatPendingRef.current
+      ) {
+        startWakeListening();
+      }
+    }, 5000);
+    return () => window.clearInterval(watchdog);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const stopSpeaking = () => {
     setDialogueMode(false);
