@@ -142,12 +142,11 @@ def _tvl_change_pct(symbol: str, n: int) -> float | None:
     return (tvls[-1] - base) / base * 100.0
 
 
-def _tvl_score(symbol: str, n: int) -> float | None:
+def _tvl_score(tvl_chg: float | None) -> float | None:
     """TVL değişimi → 0-100 (artış = zincire para giriyor, azalış = çıkıyor)."""
-    chg = _tvl_change_pct(symbol, n)
-    if chg is None:
+    if tvl_chg is None:
         return None
-    return _logistic(chg, k=0.8)
+    return _logistic(tvl_chg, k=0.8)
 
 
 @dataclass
@@ -237,7 +236,7 @@ def _asset_flow(
     macro_s = _macro_score(kind, macro)
     volpen = _realized_vol_pct(closes)
     tvl_chg = _tvl_change_pct(symbol, n)
-    tvl_s = _tvl_score(symbol, n)
+    tvl_s = _tvl_score(tvl_chg)
     # TVL yoksa (yalnız BTC/ETH'de var) W_TVL kalan bileşenlere orantılı
     # redistribute edilir — toplam ağırlık her durumda 1.0'a normalize olur.
     components: list[tuple[float, float]] = [

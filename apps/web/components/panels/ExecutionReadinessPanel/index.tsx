@@ -163,7 +163,11 @@ export function ExecutionReadinessPanel() {
     const sessionTotal = sessionAssets.length;
 
     // #8 — agent persona quorum'u, BTCUSD'ye sabit DEĞİL: her actionable sembol için.
-    const quorumRows = agentQuorum.data?.symbols ?? [];
+    // Backend tüm trade evreni için hesaplıyor; burada actionable olmayan
+    // semboller (henüz hiç sinyal yokken quorum gürültüsü) elenir.
+    const quorumRows = (agentQuorum.data?.symbols ?? []).filter((row) =>
+      actionableSymbols.has(row.symbol),
+    );
     const alignedQuorumRows = quorumRows.filter(
       (row) => row.quorum_reached && row.lead_direction !== "neutral" && row.lead_direction !== null,
     );

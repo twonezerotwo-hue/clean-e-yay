@@ -143,6 +143,8 @@ def run_signal_backtest(symbol: str = "BTCUSD", timeframe: str = "1d") -> dict:
             "to": bars[-1].ts.isoformat(),
         },
         "total_trades": n,
+        "wins": len(wins),
+        "losses": len(losses),
         "win_rate": round(len(wins) / n, 4) if n else None,
         "avg_return_pct": round(sum(t.pnl_pct for t in trades) / n, 5) if n else None,
         "profit_factor": round(gross_profit / gross_loss, 3) if gross_loss > 0 else None,
@@ -161,7 +163,7 @@ def run_signal_backtest_all(timeframe: str = "1d") -> dict:
 
     ok = [r for r in per_symbol.values() if r["status"] == STATUS_OK]
     total_trades = sum(r["total_trades"] for r in ok)
-    all_wins = sum(round(r["win_rate"] * r["total_trades"]) for r in ok if r["total_trades"])
+    all_wins = sum(r["wins"] for r in ok)
 
     return {
         "status": STATUS_OK if ok else STATUS_INSUFFICIENT_BARS,
