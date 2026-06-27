@@ -15,12 +15,15 @@ from dataclasses import dataclass
 
 API_CHAINS = "https://api.llama.fi/v2/chains"
 API_PROTOCOL = "https://api.llama.fi/protocol"
+API_HISTORICAL_CHAIN_TVL = "https://api.llama.fi/v2/historicalChainTvl"
 TIMEOUT_SEC = 6.0
 
 _DEFAULT_TTL_SEC = 1800  # TVL günlük değişir, sık çağrı gerekmez
+_HISTORY_TTL_SEC = 3600
 _LOCK = threading.Lock()
 _CHAIN_CACHE: tuple[float, dict[str, float]] | None = None
 _PROTOCOL_CACHE: dict[str, tuple[float, "ProtocolTvl"]] = {}
+_HISTORY_CACHE: dict[str, tuple[float, list[tuple[float, float]]]] = {}
 
 
 @dataclass(frozen=True)
@@ -57,6 +60,38 @@ def get_chain_tvl(chain: str) -> float | None:
     with _LOCK:
         _CHAIN_CACHE = (now, by_chain)
     return by_chain.get(chain.lower())
+
+
+def get_chain_tvl_history(chain: str) -> list[tuple[float, float]] | None:
+    """Zincir başına günlük TVL serisi [(epoch_saniye, tvl_usd), ...] — eskiden
+    yeniye sıralı. TVL DEĞİŞİMİ (akış yönü) hesaplamak için kullanılır; tek bir
+    anlık değer değişim yönünü göstermez. Hata/timeout → None (mock yok)."""
+    now = time.monotonic()
+    with _LOCK:
+        cached = _HISTORY_CACHE.get(chain)
+        if cached and (now - cached[0]) < _HISTORY_TTL_SEC:
+            return cached[1]
+    data = _get_json(f"{API_HISTORICAL_CHAIN_TVL}/{chain}")
+    if not isinstance(data, list):
+        return None
+    points: list[tuple[float, float]] = []
+    for row in data:
+        if not isinstance(row, dict):
+            continue
+        ts = row.get("date")
+        tvl = row.get("tvl")
+        if ts is None or tvl is None:
+            continue
+        try:
+            points.append((float(ts), float(tvl)))
+        except (TypeError, ValueError):
+            continue
+    if not points:
+        return None
+    points.sort()
+    with _LOCK:
+        _HISTORY_CACHE[chain] = (now, points)
+    return points
 
 
 def get_protocol_tvl(protocol: str) -> ProtocolTvl | None:

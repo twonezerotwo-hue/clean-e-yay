@@ -289,6 +289,11 @@ function FlowNode({
         </span>
         <span className="tabular-nums text-white/45">{fmtPct(asset.return_pct)}</span>
       </div>
+      {asset.tvl_change_pct != null ? (
+        <div className="mt-0.5 text-[9px] uppercase tracking-widest text-white/32">
+          TVL {fmtPct(asset.tvl_change_pct)}
+        </div>
+      ) : null}
     </div>
   );
 }

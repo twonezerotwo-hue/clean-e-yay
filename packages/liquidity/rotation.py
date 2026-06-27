@@ -1,11 +1,15 @@
 """Küresel Likidite Rotasyon — sabit sepet için flow skoru (1D / 7D / 30D).
 
-Veri kaynağı: YALNIZCA OHLCV cache (close + volume, verified). Karar VERMEZ;
-saf gözlemci. "Nakit nereye akıyor?" sorusunu fiyat momentumu + hacim teyidi +
-makro uyum (DXY/VIX) − volatilite cezasından dolaylı okur.
+Veri kaynağı: YALNIZCA OHLCV cache (close + volume, verified) + (BTC/ETH için)
+DefiLlama zincir TVL geçmişi. Karar VERMEZ; saf gözlemci. "Nakit nereye akıyor?"
+sorusunu fiyat momentumu + hacim teyidi + makro uyum (DXY/VIX) + TVL değişimi
+(gerçek para akışı, zincire kilitlenen/çekilen TVL) − volatilite cezasından
+dolaylı okur.
 
-ETF / fon-akışı (GLD/SPY/BTC-ETF inflow, stablecoin, repo) MVP'de YOK; eklenince
-flow skoruna ayrı bir bileşen olarak girer. Şimdilik ağırlık momentum+hacim+makro.
+ETF / fon-akışı (GLD/SPY/BTC-ETF inflow, stablecoin, repo) hâlâ YOK (ücretsiz/
+güvenilir kaynak bulunamadı — DATA_POLICY: tahmini/mock veri eklenmez). TVL,
+yalnızca kripto zinciri olan BTCUSD/ETHUSD için kullanılabilir; diğer asset'lerde
+o bileşenin ağırlığı kalan bileşenlere orantılı redistribute edilir.
 
 PAPER_SAFE / NO_EXECUTION.
 """
@@ -14,6 +18,7 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass, field
 
+from packages.data.providers.liquidity import defillama
 from packages.data.providers.ohlcv import cache
 from packages.data.registry import assets as _asset_registry
 
@@ -25,11 +30,17 @@ def _basket() -> list[tuple[str, str, str]]:
 
 WINDOWS: dict[str, int] = {"1D": 1, "7D": 7, "30D": 30}
 
-# Flow skoru ağırlıkları (toplam 1.0; pozitif bileşenler 0-100, ceza ters çevrilmiş).
-W_MOMENTUM = 0.45
-W_VOLUME = 0.25
-W_MACRO = 0.20
-W_VOLPEN = 0.10
+# Flow skoru ağırlıkları — TVL verisi olan asset'te (BTC/ETH) 5 bileşen, yoksa
+# W_TVL diğer 4'e orantılı redistribute edilir (toplam ağırlık her durumda 1.0'a
+# normalize edilir, bkz. _asset_flow).
+W_MOMENTUM = 0.40
+W_VOLUME = 0.22
+W_MACRO = 0.18
+W_VOLPEN = 0.08
+W_TVL = 0.12
+
+# Sembol → DefiLlama zincir adı (yalnızca gerçek on-chain TVL'si olan varlıklar).
+_TVL_CHAIN: dict[str, str] = {"BTCUSD": "bitcoin", "ETHUSD": "ethereum"}
 
 
 def _logistic(x: float, k: float = 1.0) -> float:
@@ -114,6 +125,31 @@ def _realized_vol_pct(closes: list[float], n: int = 20) -> float:
     return below / len(hist) * 100.0
 
 
+def _tvl_change_pct(symbol: str, n: int) -> float | None:
+    """Zincirin son n-gün TVL değişimi (%) — gerçek para akışı (fiyat değil).
+    Yalnızca BTCUSD/ETHUSD (gerçek on-chain zincir) için; veri yoksa None
+    (mock üretilmez, ağırlık diğer bileşenlere redistribute edilir)."""
+    chain = _TVL_CHAIN.get(symbol)
+    if chain is None:
+        return None
+    history = defillama.get_chain_tvl_history(chain)
+    if not history or len(history) <= n:
+        return None
+    tvls = [tvl for _ts, tvl in history]
+    base = tvls[-1 - n]
+    if not base:
+        return None
+    return (tvls[-1] - base) / base * 100.0
+
+
+def _tvl_score(symbol: str, n: int) -> float | None:
+    """TVL değişimi → 0-100 (artış = zincire para giriyor, azalış = çıkıyor)."""
+    chg = _tvl_change_pct(symbol, n)
+    if chg is None:
+        return None
+    return _logistic(chg, k=0.8)
+
+
 @dataclass
 class _Macro:
     dxy_ret: float
@@ -164,6 +200,7 @@ class AssetFlow:
     volume_change_pct: float | None
     flow_score: float
     direction: str  # "in" | "out" | "neutral"
+    tvl_change_pct: float | None = None
 
 
 @dataclass
@@ -199,12 +236,20 @@ def _asset_flow(
     volume = _volume_score(vols, n)
     macro_s = _macro_score(kind, macro)
     volpen = _realized_vol_pct(closes)
-    flow = (
-        W_MOMENTUM * momentum
-        + W_VOLUME * volume
-        + W_MACRO * macro_s
-        + W_VOLPEN * (100.0 - volpen)
-    )
+    tvl_chg = _tvl_change_pct(symbol, n)
+    tvl_s = _tvl_score(symbol, n)
+    # TVL yoksa (yalnız BTC/ETH'de var) W_TVL kalan bileşenlere orantılı
+    # redistribute edilir — toplam ağırlık her durumda 1.0'a normalize olur.
+    components: list[tuple[float, float]] = [
+        (W_MOMENTUM, momentum),
+        (W_VOLUME, volume),
+        (W_MACRO, macro_s),
+        (W_VOLPEN, 100.0 - volpen),
+    ]
+    if tvl_s is not None:
+        components.append((W_TVL, tvl_s))
+    total_w = sum(w for w, _ in components)
+    flow = sum(w * v for w, v in components) / total_w
     flow = max(0.0, min(100.0, flow))
     # hacim değişimi (son n-gün ort / 30g ort − 1) yüzde
     vol_change = None
@@ -223,6 +268,7 @@ def _asset_flow(
         volume_change_pct=round(vol_change, 1) if vol_change is not None else None,
         flow_score=round(flow, 1),
         direction=_direction(flow),
+        tvl_change_pct=round(tvl_chg, 2) if tvl_chg is not None else None,
     )
 
 
@@ -302,6 +348,7 @@ def compute() -> dict:
                         "kind": a.kind,
                         "return_pct": a.ret,
                         "volume_change_pct": a.volume_change_pct,
+                        "tvl_change_pct": a.tvl_change_pct,
                         "flow_score": a.flow_score,
                         "direction": a.direction,
                     }

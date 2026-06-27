@@ -19,12 +19,27 @@ function normalize(values: [number, number, number]) {
   return values.map((value) => Math.round((Math.max(0, value) / total) * 100)) as [number, number, number];
 }
 
+// Safe-haven/nakit sınıfı (DXY, tahvil) bullish olması RISK-OFF anlamına gelir
+// — dolar/tahvile kaçış. "Bullish direction = risk-on" şeklindeki naif eşleme
+// bunu tersten okurdu (gerçek bug: DXY bullish'i Risk-on'un tetikleyicisi
+// gösteriyordu). Hedge (altın/gümüş) talebi risk-on/off'a net bağlanamaz —
+// hem enflasyon-hedge (risk-on rejiminde) hem güvenli-liman (risk-off'ta)
+// olabilir; o yüzden yönden bağımsız Base'e eklenir.
+function assetBucket(kind: string | null | undefined, direction: string): "risk_on" | "risk_off" | "base" {
+  if (direction === "neutral") return "base";
+  const inverted = kind === "cash" || kind === "safe";
+  if (kind === "hedge") return "base";
+  if (inverted) return direction === "bullish" ? "risk_off" : "risk_on";
+  return direction === "bullish" ? "risk_on" : "risk_off";
+}
+
 function scenarioWeights(data: ReturnType<typeof useRegimeReport>["data"]): ScenarioWeight[] {
   const assets = data?.assets ?? [];
   const layers = data?.layers ?? [];
-  const bullishAssets = assets.filter((asset) => asset.direction === "bullish");
-  const bearishAssets = assets.filter((asset) => asset.direction === "bearish");
-  const neutralAssets = assets.filter((asset) => asset.direction === "neutral");
+  const bucketed = { risk_on: [] as typeof assets, base: [] as typeof assets, risk_off: [] as typeof assets };
+  for (const asset of assets) {
+    bucketed[assetBucket(asset.kind, asset.direction)].push(asset);
+  }
   const bullishLayerScore = layers
     .filter((layer) => layer.direction === "bullish")
     .reduce((sum, layer) => sum + layer.score, 0);
@@ -35,15 +50,14 @@ function scenarioWeights(data: ReturnType<typeof useRegimeReport>["data"]): Scen
     .filter((layer) => layer.direction === "neutral")
     .reduce((sum, layer) => sum + layer.score, 0);
 
-  // Ağırlıklar YALNIZCA backend skorlarından (yön bazında asset + layer skoru).
-  // Frontend sabit/bonus eklemez — regime_label zaten bu skorlardan türediği için
-  // ayrıca eklemek çift sayım olur (panel başlığındaki "derived from backend" iddiası).
+  // Ağırlıklar YALNIZCA backend skorlarından (asset-sınıfı-düzeltilmiş kova +
+  // layer skoru). Frontend sabit/bonus eklemez.
   const riskOnRaw =
-    bullishAssets.reduce((sum, asset) => sum + asset.score, 0) + bullishLayerScore;
+    bucketed.risk_on.reduce((sum, asset) => sum + asset.score, 0) + bullishLayerScore;
   const riskOffRaw =
-    bearishAssets.reduce((sum, asset) => sum + asset.score, 0) + bearishLayerScore;
+    bucketed.risk_off.reduce((sum, asset) => sum + asset.score, 0) + bearishLayerScore;
   const baseRaw =
-    neutralAssets.reduce((sum, asset) => sum + asset.score, 0) + neutralLayerScore;
+    bucketed.base.reduce((sum, asset) => sum + asset.score, 0) + neutralLayerScore;
   const [riskOn, base, riskOff] = normalize([riskOnRaw, baseRaw, riskOffRaw]);
 
   return [
@@ -53,7 +67,7 @@ function scenarioWeights(data: ReturnType<typeof useRegimeReport>["data"]): Scen
       value: riskOn,
       tone: "text-emerald-300",
       bar: "bg-emerald-300",
-      trigger: bullishAssets.length ? bullishAssets.slice(0, 3).map((asset) => asset.symbol).join(" / ") : "bullish layer confirmation",
+      trigger: bucketed.risk_on.length ? bucketed.risk_on.slice(0, 3).map((asset) => asset.symbol).join(" / ") : "bullish layer confirmation",
     },
     {
       id: "base",
@@ -69,7 +83,7 @@ function scenarioWeights(data: ReturnType<typeof useRegimeReport>["data"]): Scen
       value: riskOff,
       tone: "text-red-300",
       bar: "bg-red-300",
-      trigger: bearishAssets.length ? bearishAssets.slice(0, 3).map((asset) => asset.symbol).join(" / ") : "restrictive layer pressure",
+      trigger: bucketed.risk_off.length ? bucketed.risk_off.slice(0, 3).map((asset) => asset.symbol).join(" / ") : "restrictive layer pressure",
     },
   ];
 }
