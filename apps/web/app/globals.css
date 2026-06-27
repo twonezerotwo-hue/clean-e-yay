@@ -1788,6 +1788,16 @@ html, body {
   50% { opacity: 1; transform: scale(1); }
 }
 
+.reporter-wake-dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: #34d399;
+  box-shadow: 0 0 8px rgba(52, 211, 153, 0.75);
+  animation: reporter-voice-dot 1.6s ease-in-out infinite;
+}
+
 @keyframes reporter-voice-scan {
   0%, 28% { transform: translateX(-100%) skewX(-12deg); opacity: 0; }
   48% { opacity: 0.78; }

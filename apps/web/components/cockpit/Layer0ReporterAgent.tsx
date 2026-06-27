@@ -38,6 +38,7 @@ type SpeechRecognitionEventLike = {
 type SpeechRecognitionLike = {
   lang: string;
   interimResults: boolean;
+  continuous: boolean;
   maxAlternatives: number;
   onresult: ((event: SpeechRecognitionEventLike) => void) | null;
   onerror: (() => void) | null;
@@ -817,10 +818,13 @@ export function Layer0ReporterAgent({
   const paper = usePaperTradingState();
   const snapshot = useDataSnapshot();
   const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
+  const wakeRecognitionRef = useRef<SpeechRecognitionLike | null>(null);
+  const wakeWordPendingRef = useRef(false);
   const [messages, setMessages] = useState<ReporterMessage[]>([]);
   const [input, setInput] = useState("");
   const [voiceEnabled, setVoiceEnabled] = useState(true);
   const [dialogueMode, setDialogueMode] = useState(false);
+  const [wakeWordEnabled, setWakeWordEnabled] = useState(true);
   const [listening, setListening] = useState(false);
   const [speaking, setSpeaking] = useState(false);
   const [voiceLoading, setVoiceLoading] = useState(false);
@@ -829,7 +833,9 @@ export function Layer0ReporterAgent({
   const [lastUserText, setLastUserText] = useState("");
   const [streamedText, setStreamedText] = useState("");
   const dialogueModeRef = useRef(false);
+  const wakeWordEnabledRef = useRef(true);
   const listeningRef = useRef(false);
+  const speakingRef = useRef(false);
   const chatPendingRef = useRef(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const audioUrlRef = useRef<string | null>(null);
@@ -851,6 +857,8 @@ export function Layer0ReporterAgent({
       setSpeaking(false);
       setVoiceLoading(false);
       recognitionRef.current?.stop();
+      wakeRecognitionRef.current?.stop();
+      wakeRecognitionRef.current = null;
     };
   }, []);
 
@@ -859,8 +867,31 @@ export function Layer0ReporterAgent({
   }, [dialogueMode]);
 
   useEffect(() => {
+    wakeWordEnabledRef.current = wakeWordEnabled;
+    if (wakeWordEnabled) {
+      window.setTimeout(() => startWakeListening(), 300);
+    } else {
+      wakeRecognitionRef.current?.stop();
+      wakeRecognitionRef.current = null;
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [wakeWordEnabled]);
+
+  useEffect(() => {
     listeningRef.current = listening;
+    if (!listening) {
+      window.setTimeout(() => startWakeListening(), 600);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [listening]);
+
+  useEffect(() => {
+    speakingRef.current = speaking;
+    if (!speaking) {
+      window.setTimeout(() => startWakeListening(), 600);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [speaking]);
 
   useEffect(() => {
     chatPendingRef.current = chat.isPending;
@@ -970,11 +1001,15 @@ export function Layer0ReporterAgent({
     utterance.onstart = () => setSpeaking(true);
     utterance.onend = () => {
       setSpeaking(false);
-      if (dialogueModeRef.current) {
+      if (dialogueModeRef.current || wakeWordPendingRef.current) {
+        wakeWordPendingRef.current = false;
         window.setTimeout(() => startListening(), 520);
       }
     };
-    utterance.onerror = () => setSpeaking(false);
+    utterance.onerror = () => {
+      setSpeaking(false);
+      wakeWordPendingRef.current = false;
+    };
     window.speechSynthesis.speak(utterance);
     return true;
   };
@@ -1069,9 +1104,13 @@ export function Layer0ReporterAgent({
   };
 
   const startListening = () => {
-    if (listeningRef.current || chatPendingRef.current) return;
+    if (listeningRef.current || chatPendingRef.current || speakingRef.current) return;
     const Recognition = getSpeechRecognition();
     if (!Recognition) return;
+    // Ayni anda iki recognition oturumu calismaz — uyanma-sozu dinleyicisini
+    // durdurup soru yakalama oturumuna gecis yapariz (sonra otomatik doner).
+    wakeRecognitionRef.current?.stop();
+    wakeRecognitionRef.current = null;
     const recognition = new Recognition();
     recognition.lang = "tr-TR";
     recognition.interimResults = false;
@@ -1092,8 +1131,79 @@ export function Layer0ReporterAgent({
     }
   };
 
+  const WAKE_PHRASES = [
+    "hey eyay", "hey e-yay", "hey ey ay", "hey eyai", "hey eyey",
+    "hey ai", "hey a i", "hey yapay zeka", "hi eyay", "hey eai",
+  ];
+
+  const matchesWakeWord = (raw: string): boolean => {
+    const normalized = raw
+      .toLowerCase()
+      .normalize("NFKD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/[^a-z0-9\s-]/g, "")
+      .trim();
+    return WAKE_PHRASES.some((phrase) => normalized.includes(phrase));
+  };
+
+  const triggerWake = () => {
+    wakeWordPendingRef.current = true;
+    if (!speakWithBrowserFallback("Dinliyorum.")) {
+      wakeWordPendingRef.current = false;
+      startListening();
+    }
+  };
+
+  const startWakeListening = () => {
+    if (!wakeWordEnabledRef.current) return;
+    if (wakeRecognitionRef.current) return;
+    if (listeningRef.current || chatPendingRef.current || speakingRef.current) return;
+    const Recognition = getSpeechRecognition();
+    if (!Recognition) return;
+    const recognition = new Recognition();
+    recognition.lang = "tr-TR";
+    recognition.interimResults = true;
+    recognition.continuous = true;
+    recognition.maxAlternatives = 1;
+    recognition.onresult = (event) => {
+      for (let i = 0; i < event.results.length; i += 1) {
+        const transcript = event.results[i]?.[0]?.transcript ?? "";
+        if (matchesWakeWord(transcript)) {
+          try {
+            recognition.stop();
+          } catch {
+            // yut — zaten durduruluyor
+          }
+          triggerWake();
+          return;
+        }
+      }
+    };
+    recognition.onerror = () => {
+      wakeRecognitionRef.current = null;
+    };
+    recognition.onend = () => {
+      wakeRecognitionRef.current = null;
+      if (
+        wakeWordEnabledRef.current &&
+        !listeningRef.current &&
+        !speakingRef.current &&
+        !chatPendingRef.current
+      ) {
+        window.setTimeout(() => startWakeListening(), 600);
+      }
+    };
+    wakeRecognitionRef.current = recognition;
+    try {
+      recognition.start();
+    } catch {
+      wakeRecognitionRef.current = null;
+    }
+  };
+
   const stopSpeaking = () => {
     setDialogueMode(false);
+    wakeWordPendingRef.current = false;
     speechRunRef.current += 1;
     clearAudioPlayback();
     if (typeof window !== "undefined" && "speechSynthesis" in window) {
@@ -1137,6 +1247,8 @@ export function Layer0ReporterAgent({
           : dialogueMode
             ? "CANLI DIYALOG"
             : "E-yAy";
+  // NOT: streamedText asagida AYNI mesaji (latestAgentText) zaten yazdiriyor —
+  // burada onu TEKRAR etmiyoruz, sadece durum etiketi gosteriyoruz (yinelenme bug fix'i).
   const subtitleText =
     modelMode === "listening"
       ? "Dinliyorum. Sorunu bitirince otomatik olarak sisteme iletecegim."
@@ -1145,10 +1257,10 @@ export function Layer0ReporterAgent({
           ? `Sorun okunuyor: ${shortLine(lastUserText, 110)}`
           : "Sistem state, haber, risk ve sinyal katmanlarini tararken bekle."
         : modelMode === "speaking"
-          ? shortLine(latestAgentText, 132)
-        : dialogueMode
-          ? "Karsilikli mod acik. Konusma bitince tekrar dinlemeye donecegim."
-          : shortLine(latestAgentText, 132);
+          ? "E-yAy yaniti okunuyor."
+          : dialogueMode
+            ? "Karsilikli mod acik. Konusma bitince tekrar dinlemeye donecegim."
+            : "Son analiz.";
   const activeQuestionText = activeExchange.user?.text ?? lastUserText;
   const activeEvidence = activeExchange.agent?.meta?.evidence_used?.slice(0, 4) ?? [];
   const historyMessages = messages
@@ -1233,16 +1345,30 @@ export function Layer0ReporterAgent({
             <span className="grid h-6 w-6 place-items-center rounded-md border border-accent-cyan/30 bg-accent-cyan/10 text-accent-cyan">
               ▢
             </span>
-            <span className="min-w-0">
-              <span className="block text-[9px] font-medium tracking-[0.26em] text-accent-cyan/70">
-                CEVAP KANALI
-              </span>
-              <span className="block truncate text-base normal-case tracking-normal text-white/90">
-                KONUŞMA PANELİ
-              </span>
+            <span className="min-w-0 truncate text-base normal-case tracking-normal text-white/90">
+              E-yAy
             </span>
+            {wakeWordEnabled ? (
+              <span className="hidden items-center gap-1 truncate text-[9px] normal-case tracking-normal text-emerald-300/80 lg:flex">
+                <span className="reporter-wake-dot shrink-0" aria-hidden />
+                &quot;Hey E-yAy&quot; dinleniyor
+              </span>
+            ) : null}
           </div>
           <div className="flex items-center gap-1.5">
+            <button
+              type="button"
+              onClick={() => setWakeWordEnabled((value) => !value)}
+              disabled={!micReady}
+              title='"Hey E-yAy" / "Hey AI" ile uyandirma'
+              className={`grid h-7 w-7 place-items-center rounded-lg border text-[10px] uppercase tracking-widest transition-colors disabled:opacity-40 ${
+                wakeWordEnabled
+                  ? "border-emerald-400/40 bg-emerald-400/10 text-emerald-300"
+                  : "border-white/10 bg-white/[0.035] text-white/45"
+              }`}
+            >
+              HEY
+            </button>
             <button
               type="button"
               onClick={toggleDialogueMode}
