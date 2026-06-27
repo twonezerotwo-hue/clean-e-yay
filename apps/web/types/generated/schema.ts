@@ -1869,6 +1869,8 @@ export interface components {
             decision_usage: number;
             fallback_used: boolean;
             notes: string[];
+            /** @description Backend-derived presentation value (0-1) for Layer0HumanComputerModel's 3D pulse animation speed — not a decision/risk input. */
+            stress_score?: number;
         };
         /** @description Tek sembol fiyatı. Politika: runtime'da mock fallback yok — live başarısız → price=null, verified=false, status=DATA_UNAVAILABLE. (status=MOCK yalnızca test fixture modunda.) */
         LivePrice: {

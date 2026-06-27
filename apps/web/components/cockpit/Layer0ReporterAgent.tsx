@@ -1002,6 +1002,9 @@ export function Layer0ReporterAgent({
       drift: dqs.drift,
       reconciliation: dqs.reconciliation,
       decisionUsage: dqs.decision_usage,
+      // Backend-türetilmiş (DqsBreakdown.stress_score); eski/uyumsuz yanıt
+      // ihtimaline karşı sabit nötr varsayılan — burada YENİDEN hesaplanmaz.
+      stressScore: dqs.stress_score ?? 0.25,
       ageLabel: ageSeconds == null ? "snapshot bekleniyor" : `${fmtAge(ageSeconds)} önce`,
     };
   }, [snapshot.data]);

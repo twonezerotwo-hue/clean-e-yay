@@ -670,6 +670,9 @@ export type DqsBreakdown = {
   decision_usage: number;
   fallback_used: boolean;
   notes: string[];
+  // Layer0HumanComputerModel'in 3D nabız animasyon hızı için backend-türetilmiş
+  // sunum değeri (0-1) — karar/risk hesabına girmez.
+  stress_score?: number;
 };
 
 export type PriceStatus = "OK" | "DATA_UNAVAILABLE" | "MOCK";

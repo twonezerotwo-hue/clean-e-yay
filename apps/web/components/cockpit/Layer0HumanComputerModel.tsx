@@ -15,6 +15,9 @@ export type Layer0DataQualityPulse = {
   drift: number;
   reconciliation: number;
   decisionUsage: number;
+  // Backend-türetilmiş (DqsBreakdown.stress_score) — 3D nabız animasyon hızı
+  // için; burada YENİDEN hesaplanmaz (architecture guard: no frontend decision math).
+  stressScore: number;
   ageLabel: string;
 };
 
@@ -148,7 +151,7 @@ function DataQualityCore({
   const group = useRef<THREE.Group>(null);
   const score = dataQuality?.score ?? 0;
   const color = dataQuality ? DQS_COLOR[dataQuality.status] : "#67e8f9";
-  const stress = dataQuality ? Math.max(0, 70 - dataQuality.freshness) / 70 : 0.25;
+  const stress = dataQuality?.stressScore ?? 0.25;
   const bpm = dataQuality?.status === "BLOCKED" ? 2.55 : dataQuality?.status === "DEGRADED" ? 2.15 : 1.62 + stress * 0.8;
 
   useFrame(({ clock }) => {

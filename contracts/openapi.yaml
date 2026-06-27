@@ -2160,6 +2160,11 @@ components:
         notes:
           type: array
           items: { type: string }
+        stress_score:
+          type: number
+          description: >
+            Backend-derived presentation value (0-1) for Layer0HumanComputerModel's
+            3D pulse animation speed — not a decision/risk input.
 
     LivePrice:
       type: object

@@ -48,6 +48,10 @@ def get_snapshot() -> dict:
             "decision_usage": q.decision_usage,
             "fallback_used": q.fallback_used,
             "notes": list(q.notes),
+            # Layer0HumanComputerModel'in 3D nabız animasyon hızı (bpm) için —
+            # saf sunum türevi (karar/risk hesabına girmez), frontend artık
+            # freshness'tan bunu kendi hesaplamıyor (architecture guard).
+            "stress_score": round(max(0.0, 70.0 - q.freshness) / 70.0, 4),
         },
         "provider_status": snap.provider_status,
         "warnings": list(snap.warnings),
