@@ -32,6 +32,8 @@ import type {
   ShadowComparison,
   SystemHealth,
   TfWeightsReport,
+  TfTargetsView,
+  TfTargetsActionResult,
   TickResult,
   TradeTicketList,
   AgentBriefing,
@@ -528,6 +530,23 @@ export const api = {
     fetchJSON<CalibrationState>("/api/v1/learning/calibration"),
   tfWeights: () =>
     fetchJSON<TfWeightsReport>("/api/v1/learning/tf-weights"),
+  tfTargets: () =>
+    fetchJSON<TfTargetsView>("/api/v1/learning/tf-targets"),
+  tfTargetsApprove: () =>
+    fetchJSON<TfTargetsActionResult>(
+      "/api/v1/learning/tf-targets/approve",
+      { method: "POST" },
+    ),
+  tfTargetsReject: () =>
+    fetchJSON<TfTargetsActionResult>(
+      "/api/v1/learning/tf-targets/reject",
+      { method: "POST" },
+    ),
+  tfTargetsRetrain: () =>
+    fetchJSON<Record<string, unknown>>(
+      "/api/v1/learning/tf-targets/retrain",
+      { method: "POST" },
+    ),
   mistakes: () => fetchJSON<MistakesState>("/api/v1/learning/mistakes"),
   riskCorrelation: () =>
     fetchJSON<CorrelationState>("/api/v1/risk/correlation"),

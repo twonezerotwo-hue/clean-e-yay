@@ -582,6 +582,74 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/learning/tf-targets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Faz B — TF-bazlı SL/TP geometri öğrenmesinin durumu (read-only) */
+        get: operations["getLearningTfTargets"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/learning/tf-targets/approve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Bekleyen TF-target önerisini onayla (current'a yazılır) */
+        post: operations["postLearningTfTargetsApprove"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/learning/tf-targets/reject": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Bekleyen TF-target önerisini reddet (değişiklik uygulanmaz) */
+        post: operations["postLearningTfTargetsReject"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/learning/tf-targets/retrain": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** TF-target trainer'ı manuel tetikle (sample-gate bypass; gözlem için) */
+        post: operations["postLearningTfTargetsRetrain"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/learning/rebalance/proposal": {
         parameters: {
             query?: never;
@@ -2890,6 +2958,44 @@ export interface components {
                 [key: string]: "OFF" | "SOFT" | "SOFT_PLUS" | "HARD" | "HARD_MANUAL";
             };
         };
+        /** @description TF başına SL/TP geometri parametreleri (compute_tf_targets okur). */
+        TfTargetParams: {
+            sl_atr_mult: number;
+            rr: number;
+            sl_pct_floor: number;
+            sl_pct_cap: number;
+        };
+        TfTargetGuardrailBand: {
+            min: number;
+            max: number;
+        };
+        /** @description Faz B — TF-aware SL/TP öğrenmesinin durumu. `effective` o anki canlı değerleri (config → store override) gösterir; `pending` bekleyen owner-onayını taşır. */
+        TfTargetsView: {
+            enabled: boolean;
+            auto_apply_band_pct: number;
+            guardrail: {
+                [key: string]: components["schemas"]["TfTargetGuardrailBand"];
+            };
+            effective: {
+                [key: string]: components["schemas"]["TfTargetParams"];
+            };
+            store_current: {
+                [key: string]: components["schemas"]["TfTargetParams"];
+            };
+            pending?: {
+                [key: string]: unknown;
+            } | null;
+            history: {
+                [key: string]: unknown;
+            }[];
+        };
+        TfTargetsActionResult: {
+            approved?: boolean;
+            rejected?: boolean;
+            record?: {
+                [key: string]: unknown;
+            } | null;
+        };
         /** @description trade_profile (SCALP/INTRADAY/TACTICAL/SWING/POSITION) → route (open/open_reduced/manual_ready/block) → ConflictGateRouteStats. `_unmatched_no_shadow_data` ayrı bir tamsayı sayaçtır. */
         ConflictGateValidationReport: {
             _unmatched_no_shadow_data?: number;
@@ -3710,6 +3816,88 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ConflictGateStatus"];
+                };
+            };
+        };
+    };
+    getLearningTfTargets: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TfTargetsView"];
+                };
+            };
+        };
+    };
+    postLearningTfTargetsApprove: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TfTargetsActionResult"];
+                };
+            };
+        };
+    };
+    postLearningTfTargetsReject: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TfTargetsActionResult"];
+                };
+            };
+        };
+    };
+    postLearningTfTargetsRetrain: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
                 };
             };
         };

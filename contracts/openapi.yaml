@@ -494,6 +494,52 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/ConflictGateStatus" }
 
+  /api/v1/learning/tf-targets:
+    get:
+      operationId: getLearningTfTargets
+      summary: Faz B — TF-bazlı SL/TP geometri öğrenmesinin durumu (read-only)
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TfTargetsView" }
+
+  /api/v1/learning/tf-targets/approve:
+    post:
+      operationId: postLearningTfTargetsApprove
+      summary: Bekleyen TF-target önerisini onayla (current'a yazılır)
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TfTargetsActionResult" }
+
+  /api/v1/learning/tf-targets/reject:
+    post:
+      operationId: postLearningTfTargetsReject
+      summary: Bekleyen TF-target önerisini reddet (değişiklik uygulanmaz)
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TfTargetsActionResult" }
+
+  /api/v1/learning/tf-targets/retrain:
+    post:
+      operationId: postLearningTfTargetsRetrain
+      summary: TF-target trainer'ı manuel tetikle (sample-gate bypass; gözlem için)
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+
   /api/v1/learning/rebalance/proposal:
     get:
       operationId: getLearningRebalanceProposal
@@ -3706,6 +3752,62 @@ components:
         profile_modes:
           type: object
           additionalProperties: { type: string, enum: ["OFF", "SOFT", "SOFT_PLUS", "HARD", "HARD_MANUAL"] }
+
+    TfTargetParams:
+      type: object
+      description: TF başına SL/TP geometri parametreleri (compute_tf_targets okur).
+      required: [sl_atr_mult, rr, sl_pct_floor, sl_pct_cap]
+      properties:
+        sl_atr_mult:  { type: number }
+        rr:           { type: number }
+        sl_pct_floor: { type: number }
+        sl_pct_cap:   { type: number }
+
+    TfTargetGuardrailBand:
+      type: object
+      required: [min, max]
+      properties:
+        min: { type: number }
+        max: { type: number }
+
+    TfTargetsView:
+      type: object
+      description: >
+        Faz B — TF-aware SL/TP öğrenmesinin durumu. `effective` o anki canlı
+        değerleri (config → store override) gösterir; `pending` bekleyen
+        owner-onayını taşır.
+      required: [enabled, auto_apply_band_pct, guardrail, effective, store_current, history]
+      properties:
+        enabled: { type: boolean }
+        auto_apply_band_pct: { type: number }
+        guardrail:
+          type: object
+          additionalProperties: { $ref: "#/components/schemas/TfTargetGuardrailBand" }
+        effective:
+          type: object
+          additionalProperties: { $ref: "#/components/schemas/TfTargetParams" }
+        store_current:
+          type: object
+          additionalProperties: { $ref: "#/components/schemas/TfTargetParams" }
+        pending:
+          nullable: true
+          type: object
+          additionalProperties: true
+        history:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+
+    TfTargetsActionResult:
+      type: object
+      properties:
+        approved: { type: boolean }
+        rejected: { type: boolean }
+        record:
+          nullable: true
+          type: object
+          additionalProperties: true
 
     ConflictGateValidationReport:
       type: object

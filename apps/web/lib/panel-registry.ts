@@ -66,7 +66,8 @@ export type PanelKey =
   | "timeframe_matrix"
   | "agent_matrix"
   | "shadow"
-  | "tf_weights";
+  | "tf_weights"
+  | "tf_targets";
 
 export type PanelGroupId =
   // ana tier
@@ -149,6 +150,7 @@ export const PANEL_REGISTRY: PanelMeta[] = [
   { id: "calibration",      title: "Calibration",          defaultVisible: true,  span: "2",    group: "learning",        tier: "detay" },
   { id: "mistake_memory",   title: "Mistake Memory",       defaultVisible: true,  span: "1",    group: "learning",        tier: "detay" },
   { id: "tf_weights",       title: "tf_weights Kalibrasyon", defaultVisible: true, span: "2",   group: "learning",        tier: "detay" },
+  { id: "tf_targets",       title: "TF SL/TP Öğrenmesi",    defaultVisible: true, span: "2",   group: "learning",        tier: "detay" },
 
   // ── OPS — Sistem / Veri (default kapalı) ─────────────────────────────────
   { id: "data_quality",     title: "Veri Kalitesi",        defaultVisible: false, span: "2",    group: "ops",             tier: "ops" },

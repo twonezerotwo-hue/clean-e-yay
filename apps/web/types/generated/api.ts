@@ -1846,6 +1846,35 @@ export type ConflictGateValidationReport = {
   [profile: string]: Record<string, ConflictGateRouteStats> | number;
 };
 
+// Faz B — TF-aware SL/TP learning (packages/learning/tf_target_*.py)
+export type TfTargetParams = {
+  sl_atr_mult: number;
+  rr: number;
+  sl_pct_floor: number;
+  sl_pct_cap: number;
+};
+
+export type TfTargetGuardrailBand = {
+  min: number;
+  max: number;
+};
+
+export type TfTargetsView = {
+  enabled: boolean;
+  auto_apply_band_pct: number;
+  guardrail: Record<string, TfTargetGuardrailBand>;
+  effective: Record<string, TfTargetParams>;
+  store_current: Record<string, TfTargetParams>;
+  pending: Record<string, unknown> | null;
+  history: Array<Record<string, unknown>>;
+};
+
+export type TfTargetsActionResult = {
+  approved?: boolean;
+  rejected?: boolean;
+  record: Record<string, unknown> | null;
+};
+
 export type AgentBriefingTone = "ok" | "info" | "warn" | "alert";
 
 export type AgentBriefingHeadline = {

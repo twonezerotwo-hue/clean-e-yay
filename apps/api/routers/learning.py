@@ -13,8 +13,11 @@ from packages.learning import (
     calibration_trainer,
     historical_edge,
     mistake_memory,
+    tf_target_store,
+    tf_target_trainer,
     tf_weight_trainer,
 )
+from packages.risk import trade_economics as te
 from packages.learning.calibration import reliability_bins
 from packages.learning.summary import build_summary
 from packages.paper import state as paper_state
@@ -100,6 +103,58 @@ def get_historical_edge(fingerprint: str) -> dict:
         "similarity_weights": historical_edge.active_similarity_weights(),
         "result": historical_edge.edge_to_dict(result),
     }
+
+
+@router.get("/learning/tf-targets")
+def get_tf_targets() -> dict:
+    """Faz B — TF-bazlı SL/TP geometri öğrenmesinin durumu (read-only).
+
+    Aktif değerleri (config defaults + store override) TF başına gösterir;
+    bekleyen owner-onayını ve son trainer önerisinin özetini taşır. Live
+    geometri compute_tf_targets'tan üretilir — bu sadece görüntü."""
+    store_data = tf_target_store.load()
+    current = store_data.get("current") or {}
+    effective: dict[str, dict[str, float]] = {}
+    for tf in ("15m", "1h", "4h", "1d"):
+        effective[tf] = te._tf_params(tf)
+    return {
+        "enabled": te.tf_targets_enabled(),
+        "auto_apply_band_pct": tf_target_store.AUTO_APPLY_BAND_PCT,
+        "guardrail": {
+            k: {"min": v[0], "max": v[1]}
+            for k, v in tf_target_store.GUARDRAIL.items()
+        },
+        "effective": effective,
+        "store_current": dict(current),
+        "pending": store_data.get("pending"),
+        "history": list(store_data.get("history") or [])[:10],
+    }
+
+
+@router.post("/learning/tf-targets/approve")
+def post_tf_targets_approve() -> dict:
+    """Bekleyen TF-target önerisini onayla → store'a yazılır, compute_tf_targets
+    bir sonraki açılışta yeni değerleri kullanır."""
+    rec = tf_target_store.approve_pending()
+    return {"approved": rec is not None, "record": rec}
+
+
+@router.post("/learning/tf-targets/reject")
+def post_tf_targets_reject() -> dict:
+    """Bekleyen TF-target önerisini reddet → değişiklik uygulanmaz."""
+    rec = tf_target_store.reject_pending()
+    return {"rejected": rec is not None, "record": rec}
+
+
+@router.post("/learning/tf-targets/retrain")
+def post_tf_targets_retrain() -> dict:
+    """Trainer'ı manuel tetikle (örnek-kapısı bypass; gözlem için)."""
+    result = tf_target_trainer.train(
+        store_overrides=tf_target_store.active_overrides()
+    )
+    if isinstance(result, tf_target_trainer.TfTargetProposal):
+        return tf_target_trainer.proposal_to_dict(result)
+    return result
 
 
 @router.get("/learning/conflict-gate-validation")
