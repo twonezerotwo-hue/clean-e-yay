@@ -1893,6 +1893,29 @@ export type MissedOpportunityActive = {
   opened_at?: string | null;
 };
 
+export type AgentModeConfigValues = {
+  enabled_trade_profiles: string[];
+  disabled_trade_profiles: string[];
+  focus_mode?: string | null;
+  allow_counter_context_trades: boolean;
+  allow_reversal_trades: boolean;
+  allow_trend_follow_trades: boolean;
+  allow_range_trades: boolean;
+  allow_breakout_trades: boolean;
+  watch_disabled_profiles: boolean;
+  close_disabled_profile_positions: boolean;
+  close_requires_riskgate_pass: boolean;
+};
+
+export type AgentModeConfigView = {
+  trade_profiles: string[];
+  config: AgentModeConfigValues;
+  overrides: Record<string, unknown>;
+  applies_to: string;
+};
+
+export type AgentModeConfigUpdate = Partial<AgentModeConfigValues>;
+
 export type MissedOpportunitiesView = {
   available: boolean;
   enabled?: boolean;

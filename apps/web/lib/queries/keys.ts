@@ -39,6 +39,7 @@ export const qk = {
   tfWeights: ["learning", "tf-weights"] as const,
   tfTargets: ["learning", "tf-targets"] as const,
   missedOpportunities: ["learning", "missed-opportunities"] as const,
+  agentModeConfig: ["agent-mode", "config"] as const,
   mistakes: ["learning", "mistakes"] as const,
   riskCorrelation: ["risk", "correlation"] as const,
   riskHalts: ["risk", "halts"] as const,

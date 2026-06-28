@@ -494,6 +494,42 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/ConflictGateStatus" }
 
+  /api/v1/agent-mode/config:
+    get:
+      operationId: getAgentModeConfig
+      summary: Faz 3 — Agent Mode etkin config (thresholds defaults + owner override)
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AgentModeConfigView" }
+    post:
+      operationId: postAgentModeConfig
+      summary: Faz 3 — Agent Mode owner override'larını kaydet (ana config'e dokunmaz)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AgentModeConfigUpdate" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AgentModeConfigView" }
+
+  /api/v1/agent-mode/config/reset:
+    post:
+      operationId: postAgentModeConfigReset
+      summary: Faz 3 — Agent Mode override'larını sıfırla (saf config'e dön)
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AgentModeConfigView" }
+
   /api/v1/learning/missed-opportunities:
     get:
       operationId: getMissedOpportunities
@@ -3763,6 +3799,59 @@ components:
         profile_modes:
           type: object
           additionalProperties: { type: string, enum: ["OFF", "SOFT", "SOFT_PLUS", "HARD", "HARD_MANUAL"] }
+
+    AgentModeConfigValues:
+      type: object
+      description: Faz 3 — Agent Mode etkin değerleri (profil/strateji izinleri).
+      required:
+        - enabled_trade_profiles
+        - disabled_trade_profiles
+        - allow_counter_context_trades
+        - allow_reversal_trades
+        - allow_trend_follow_trades
+        - allow_range_trades
+        - allow_breakout_trades
+        - watch_disabled_profiles
+        - close_disabled_profile_positions
+        - close_requires_riskgate_pass
+      properties:
+        enabled_trade_profiles: { type: array, items: { type: string } }
+        disabled_trade_profiles: { type: array, items: { type: string } }
+        focus_mode: { type: string, nullable: true }
+        allow_counter_context_trades: { type: boolean }
+        allow_reversal_trades: { type: boolean }
+        allow_trend_follow_trades: { type: boolean }
+        allow_range_trades: { type: boolean }
+        allow_breakout_trades: { type: boolean }
+        watch_disabled_profiles: { type: boolean }
+        close_disabled_profile_positions: { type: boolean }
+        close_requires_riskgate_pass: { type: boolean }
+
+    AgentModeConfigUpdate:
+      type: object
+      description: Faz 3 — Owner override payload (tümü opsiyonel; bilinmeyen anahtar/profil sunucuda reddedilir).
+      properties:
+        enabled_trade_profiles: { type: array, items: { type: string } }
+        disabled_trade_profiles: { type: array, items: { type: string } }
+        focus_mode: { type: string, nullable: true }
+        allow_counter_context_trades: { type: boolean }
+        allow_reversal_trades: { type: boolean }
+        allow_trend_follow_trades: { type: boolean }
+        allow_range_trades: { type: boolean }
+        allow_breakout_trades: { type: boolean }
+        watch_disabled_profiles: { type: boolean }
+        close_disabled_profile_positions: { type: boolean }
+        close_requires_riskgate_pass: { type: boolean }
+
+    AgentModeConfigView:
+      type: object
+      description: Faz 3 — Agent Mode görüntüsü (etkin config + profil listesi + ham override + etki alanı).
+      required: [trade_profiles, config, overrides, applies_to]
+      properties:
+        trade_profiles: { type: array, items: { type: string } }
+        config: { $ref: "#/components/schemas/AgentModeConfigValues" }
+        overrides: { type: object, additionalProperties: true }
+        applies_to: { type: string }
 
     MissedOpportunityOutcomes:
       type: object

@@ -32,7 +32,12 @@ class AgentModeConfig:
 
 
 def load_config() -> AgentModeConfig:
-    c = load_thresholds().get("agent_mode_control") or {}
+    c = dict(load_thresholds().get("agent_mode_control") or {})
+    # Owner override'ları (file-backed) thresholds defaults'unun ÜSTÜNE uygulanır.
+    # Lazy import → modül-yükleme döngüsü yok (store, TRADE_PROFILES için bu modülü
+    # import eder). Store boşsa c değişmez → davranış birebir korunur.
+    from packages.mode import store
+    c.update(store.load_overrides())
     return AgentModeConfig(
         enabled_trade_profiles=tuple(c.get("enabled_trade_profiles") or ()),
         disabled_trade_profiles=tuple(c.get("disabled_trade_profiles") or ()),
@@ -48,4 +53,4 @@ def load_config() -> AgentModeConfig:
     )
 
 
-__all__ = ["AgentModeConfig", "TRADE_PROFILES", "load_config"]
+__all__ = ["TRADE_PROFILES", "AgentModeConfig", "load_config"]

@@ -345,6 +345,16 @@ export const useMissedOpportunities = () => {
   });
 };
 
+export const useAgentModeConfig = () => {
+  const policy = usePanelQueryPolicy(5 * 60_000);
+  return useQuery({
+    queryKey: qk.agentModeConfig,
+    queryFn: api.agentModeConfig,
+    staleTime: 60_000,
+    ...policy,
+  });
+};
+
 export const useMistakes = () => {
   const policy = usePanelQueryPolicy(2 * 60_000);
   return useQuery({

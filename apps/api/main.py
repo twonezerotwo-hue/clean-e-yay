@@ -52,6 +52,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from apps.api.routers import (
+    agent_mode,
     ai_report,
     analysis,
     assets,
@@ -122,6 +123,7 @@ def create_app() -> FastAPI:
     app.include_router(paper_trading.router, prefix=prefix)
     app.include_router(market_sessions.router, prefix=prefix)
     app.include_router(learning.router, prefix=prefix)
+    app.include_router(agent_mode.router, prefix=prefix)
     app.include_router(data.router, prefix=prefix)
     app.include_router(liquidity.router, prefix=prefix)
     app.include_router(analysis.router, prefix=prefix)

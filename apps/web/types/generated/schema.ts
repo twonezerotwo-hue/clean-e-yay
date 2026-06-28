@@ -582,6 +582,41 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/agent-mode/config": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Faz 3 — Agent Mode etkin config (thresholds defaults + owner override) */
+        get: operations["getAgentModeConfig"];
+        put?: never;
+        /** Faz 3 — Agent Mode owner override'larını kaydet (ana config'e dokunmaz) */
+        post: operations["postAgentModeConfig"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/agent-mode/config/reset": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Faz 3 — Agent Mode override'larını sıfırla (saf config'e dön) */
+        post: operations["postAgentModeConfigReset"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/learning/missed-opportunities": {
         parameters: {
             query?: never;
@@ -2975,6 +3010,43 @@ export interface components {
                 [key: string]: "OFF" | "SOFT" | "SOFT_PLUS" | "HARD" | "HARD_MANUAL";
             };
         };
+        /** @description Faz 3 — Agent Mode etkin değerleri (profil/strateji izinleri). */
+        AgentModeConfigValues: {
+            enabled_trade_profiles: string[];
+            disabled_trade_profiles: string[];
+            focus_mode?: string | null;
+            allow_counter_context_trades: boolean;
+            allow_reversal_trades: boolean;
+            allow_trend_follow_trades: boolean;
+            allow_range_trades: boolean;
+            allow_breakout_trades: boolean;
+            watch_disabled_profiles: boolean;
+            close_disabled_profile_positions: boolean;
+            close_requires_riskgate_pass: boolean;
+        };
+        /** @description Faz 3 — Owner override payload (tümü opsiyonel; bilinmeyen anahtar/profil sunucuda reddedilir). */
+        AgentModeConfigUpdate: {
+            enabled_trade_profiles?: string[];
+            disabled_trade_profiles?: string[];
+            focus_mode?: string | null;
+            allow_counter_context_trades?: boolean;
+            allow_reversal_trades?: boolean;
+            allow_trend_follow_trades?: boolean;
+            allow_range_trades?: boolean;
+            allow_breakout_trades?: boolean;
+            watch_disabled_profiles?: boolean;
+            close_disabled_profile_positions?: boolean;
+            close_requires_riskgate_pass?: boolean;
+        };
+        /** @description Faz 3 — Agent Mode görüntüsü (etkin config + profil listesi + ham override + etki alanı). */
+        AgentModeConfigView: {
+            trade_profiles: string[];
+            config: components["schemas"]["AgentModeConfigValues"];
+            overrides: {
+                [key: string]: unknown;
+            };
+            applies_to: string;
+        };
         /** @description Faz 2 — sonuç sayıları (TP önce=missed_win, SL önce=avoided_loss, TTL=expired). */
         MissedOpportunityOutcomes: {
             missed_win?: number;
@@ -3864,6 +3936,70 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ConflictGateStatus"];
+                };
+            };
+        };
+    };
+    getAgentModeConfig: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentModeConfigView"];
+                };
+            };
+        };
+    };
+    postAgentModeConfig: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AgentModeConfigUpdate"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentModeConfigView"];
+                };
+            };
+        };
+    };
+    postAgentModeConfigReset: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentModeConfigView"];
                 };
             };
         };

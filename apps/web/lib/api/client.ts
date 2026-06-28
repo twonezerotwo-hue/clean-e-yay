@@ -35,6 +35,8 @@ import type {
   TfTargetsView,
   TfTargetsActionResult,
   MissedOpportunitiesView,
+  AgentModeConfigView,
+  AgentModeConfigUpdate,
   TickResult,
   TradeTicketList,
   AgentBriefing,
@@ -552,6 +554,17 @@ export const api = {
     fetchJSON<MissedOpportunitiesView>(
       "/api/v1/learning/missed-opportunities",
     ),
+  agentModeConfig: () =>
+    fetchJSON<AgentModeConfigView>("/api/v1/agent-mode/config"),
+  agentModeConfigUpdate: (body: AgentModeConfigUpdate) =>
+    fetchJSON<AgentModeConfigView>("/api/v1/agent-mode/config", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+  agentModeConfigReset: () =>
+    fetchJSON<AgentModeConfigView>("/api/v1/agent-mode/config/reset", {
+      method: "POST",
+    }),
   mistakes: () => fetchJSON<MistakesState>("/api/v1/learning/mistakes"),
   riskCorrelation: () =>
     fetchJSON<CorrelationState>("/api/v1/risk/correlation"),
