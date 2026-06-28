@@ -533,3 +533,45 @@ def test_canonical_outcome_carries_excursions():
     o = build_outcome(t)
     assert o.mae_pct == 1.5
     assert o.mfe_pct == 2.0
+
+
+# ── TF-targets toggle (open_position SL/TP motoru seçimi) ────────────────────
+
+def test_open_position_uses_fixed_when_tf_targets_disabled(monkeypatch):
+    """timeframe_targets.enabled=false (default) → eski compute_fixed_targets davranışı."""
+    import packages.risk.trade_economics as te
+    from packages.paper.state import PaperState
+    from packages.paper.lifecycle import open_position
+    monkeypatch.setattr(te, "tf_targets_enabled", lambda: False)
+    state = PaperState(
+        equity_usd=100000.0, peak_equity_usd=100000.0,
+        open_positions=[], recent_trades=[],
+    )
+    pos = open_position(
+        state, symbol="BTCUSD", side="long", entry_price=100000.0,
+        size_multiplier=1.0, predicted_confidence=0.30,
+        timeframe="15m", atr=200.0,  # ATR verilse de fixed yolunda yok sayılır
+    )
+    # MODERATE tier: sl_pct = 0.04 × 0.7 = 0.028 → SL = 100000×(1-0.028) = 97200
+    assert abs(pos.sl - 97200.0) < 0.5
+
+
+def test_open_position_uses_tf_targets_when_enabled(monkeypatch):
+    """timeframe_targets.enabled=true + ATR → compute_tf_targets devreye girer."""
+    import packages.risk.trade_economics as te
+    import packages.paper.lifecycle as lc
+    from packages.paper.state import PaperState
+    monkeypatch.setattr(lc, "tf_targets_enabled", lambda: True)
+    state = PaperState(
+        equity_usd=100000.0, peak_equity_usd=100000.0,
+        open_positions=[], recent_trades=[],
+    )
+    pos = lc.open_position(
+        state, symbol="BTCUSD", side="long", entry_price=100000.0,
+        size_multiplier=1.0, predicted_confidence=0.45,  # STRONG
+        timeframe="1d", atr=2500.0,
+    )
+    # 1d STRONG: SL_mesafe = 2500×1.5×1.0 = 3750 (band içinde) → SL = 96250
+    # TP = entry + 3750×2.5 = 109375
+    assert abs(pos.sl - 96250.0) < 0.5
+    assert abs(pos.tp - 109375.0) < 0.5

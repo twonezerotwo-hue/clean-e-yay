@@ -275,6 +275,13 @@ async def run_once() -> None:
                 continue
             # P1 — açılış tek yoldan (attempt_open): duplicate/scale-in politikası +
             # fiyat denetimi + audit ortak. Seans çarpanı kısıtlayıcı + attribution.
+            # ATR'yi per-TF teknik snapshot'tan çek; lifecycle TF-targets enabled
+            # iken bunu compute_tf_targets'a aktarır, değilse görmezden gelir.
+            tf_atr: float | None = None
+            tech_by_tf = (snap.technicals_by_tf or {}).get(d.symbol) or {}
+            tech = tech_by_tf.get(d.timeframe)
+            if tech is not None and tech.atr is not None and tech.atr > 0:
+                tf_atr = float(tech.atr)
             pos, _decision = attempt_open(
                 ps,
                 symbol=d.symbol,
@@ -289,6 +296,7 @@ async def run_once() -> None:
                 predicted_confidence=d.confidence,
                 raw_confidence=d.raw_confidence,
                 confidence_source=d.confidence_source,
+                atr=tf_atr,
                 **routed.session_attribution,
             )
             if pos is not None:

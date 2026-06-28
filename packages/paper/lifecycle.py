@@ -18,7 +18,11 @@ from packages.learning import decision_log
 from packages.paper import audit, conviction, execution_sim, sizing
 from packages.paper.guards import price_sanity, state_anomaly
 from packages.paper.state import PaperState, Position, Trade, utc_iso
-from packages.risk.trade_economics import compute_fixed_targets
+from packages.risk.trade_economics import (
+    compute_fixed_targets,
+    compute_tf_targets,
+    tf_targets_enabled,
+)
 
 # Zorla kapanış nedenleri → terminal lifecycle_status=FORCE_CLOSED + ayrı audit
 # aksiyonu (KILL_SWITCH_EXIT / RISK_REDUCE_EXIT). Diğerleri normal CLOSED.
@@ -77,18 +81,27 @@ def open_position(
     open_session_evidence: str | None = None,
     manual: bool = False,
     size_usd_override: float | None = None,
+    atr: float | None = None,
 ) -> Position:
     # Konviksiyon kademesi (kalibre p(win) → risk çarpanları). Zayıf konviksiyon:
     # küçük boyut + YAKIN stop + KISA vade + sıkı trailing. Floor (min_open_confidence)
     # decide_for_symbol'da uygulanır; burası açılan pozisyonun risk profilini biçer.
     # MANUEL (owner) emir: kademe çarpanı uygulanmaz; boyutu owner belirler.
     tier = conviction.tier_for(None) if manual else conviction.tier_for(predicted_confidence)
-    # Canonical fixed-% targets — packages.risk.trade_economics.compute_fixed_targets
-    # is the single source of truth (shadow comparisons against the adaptive
-    # ATR/S-R engine call the exact same function, never a copy).
-    targets = compute_fixed_targets(
-        symbol, side, entry_price, predicted_confidence=predicted_confidence, manual=manual,
-    )
+    # SL/TP motoru seçimi: thresholds.timeframe_targets.enabled true ise TF-duyarlı
+    # compute_tf_targets (ATR-çapalı + floor/cap; ATR yoksa TF-ölçekli fallback);
+    # false ise mevcut compute_fixed_targets (sembol-bazlı sabit-% + tier). Geri
+    # dönüş tek flag ile — bozulma yok. shadow.evaluate_symbol her iki motoru
+    # her tick yan yana hesaplar, yani aktivasyon öncesi tam gözlem var.
+    if tf_targets_enabled():
+        targets = compute_tf_targets(
+            symbol, side, entry_price, timeframe=timeframe, atr=atr,
+            predicted_confidence=predicted_confidence, manual=manual,
+        )
+    else:
+        targets = compute_fixed_targets(
+            symbol, side, entry_price, predicted_confidence=predicted_confidence, manual=manual,
+        )
     sl, tp = targets.sl, targets.tp
     if size_usd_override is not None:
         # Owner manuel emir: tam dolar tutarı (kademe/sizing baypas).
@@ -222,6 +235,7 @@ def attempt_open(
     open_session_size_multiplier: float | None = None,
     open_session_primary_market_open: bool | None = None,
     open_session_evidence: str | None = None,
+    atr: float | None = None,
 ) -> tuple[Position | None, dict]:
     """P1 — tek açılış giriş noktası: denetim → blocked/opened + audit.
 
@@ -290,6 +304,7 @@ def attempt_open(
         open_session_size_multiplier=open_session_size_multiplier,
         open_session_primary_market_open=open_session_primary_market_open,
         open_session_evidence=open_session_evidence,
+        atr=atr,
     )
     return pos, decision
 
