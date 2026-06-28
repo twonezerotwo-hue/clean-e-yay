@@ -37,6 +37,7 @@ from packages.liquidity import sweep as liquidity_sweep_engine
 from packages.mode import config as mode_config
 from packages.mode import filter as mode_filter
 from packages.mode import profile_selector
+from packages.risk.trade_economics import compute_adaptive_targets, compute_fixed_targets
 from packages.scoring import exhaustion as exhaustion_engine
 from packages.setup import classifier as setup_classifier
 from packages.volume import engine as volume_engine
@@ -277,6 +278,43 @@ def _setup_and_conflict_for_symbol(
         )
         resolution = conflict_resolver.resolve(conflict_inputs)
 
+        # Additive — fixed-% (what lifecycle.open_position ACTUALLY uses) vs
+        # adaptive ATR/S-R targets (what the ticket card shows), side-by-side, for
+        # this would-be entry. Observation only; never affects setup/conflict/
+        # agreement. Needs a side + entry + ATR — skip (empty) if any are missing
+        # rather than fabricate.
+        target_comparison: dict = {}
+        try:
+            # setup_result.direction is "LONG"/"SHORT"/None (uppercase) —
+            # compute_fixed_targets/compute_adaptive_targets take lowercase.
+            side = (setup_result.direction or "").lower() or None
+            key_levels = getattr(entry_result, "key_levels", None)
+            atr = getattr(key_levels, "atr", None)
+            if side in ("long", "short") and current_price and atr:
+                fixed = compute_fixed_targets(
+                    symbol or "", side, current_price,
+                    predicted_confidence=getattr(decision, "confidence", None),
+                )
+                adaptive = compute_adaptive_targets(
+                    side, current_price, atr,
+                    support=getattr(key_levels, "support", None),
+                    resistance=getattr(key_levels, "resistance", None),
+                )
+                target_comparison = {
+                    "side": side,
+                    "entry": round(current_price, 4),
+                    "fixed": {"sl": fixed.sl, "tp": fixed.tp, "rr": fixed.rr, "sl_basis": fixed.sl_basis},
+                    "adaptive": {
+                        "sl": adaptive.sl, "tp": adaptive.tp, "rr": adaptive.rr,
+                        "tp_basis": adaptive.tp_basis, "rr_floor_met": adaptive.rr_floor_met,
+                    },
+                }
+        except Exception:
+            _log.warning(
+                "shadow target_comparison failed for %s", symbol, exc_info=True,
+            )
+            target_comparison = {}
+
         return {
             "setup_type": setup_result.setup_type,
             "setup_reason": setup_result.reason,
@@ -287,6 +325,7 @@ def _setup_and_conflict_for_symbol(
             "conflict_final_action": resolution.final_action,
             "conflict_blocked_by": list(resolution.blocked_by),
             "conflict_path": list(resolution.conflict_resolution_path),
+            "target_comparison": target_comparison,
         }
     except Exception:
         _log.warning(
@@ -558,6 +597,9 @@ def comparison_viewmodel(record: dict | None) -> dict:
                 "mode_filter_blocked_reason": setup_conflict.get("mode_filter_blocked_reason"),
                 "conflict_final_action": setup_conflict.get("conflict_final_action"),
                 "conflict_blocked_by": list(setup_conflict.get("conflict_blocked_by") or []),
+                # Additive — fixed-% (live execution) vs adaptive ATR/S-R targets,
+                # side-by-side; {} when unavailable (no side/ATR for this tick).
+                "target_comparison": setup_conflict.get("target_comparison") or {},
             }
         )
     return {

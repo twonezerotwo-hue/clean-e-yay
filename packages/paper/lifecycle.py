@@ -18,6 +18,7 @@ from packages.learning import decision_log
 from packages.paper import audit, conviction, execution_sim, sizing
 from packages.paper.guards import price_sanity, state_anomaly
 from packages.paper.state import PaperState, Position, Trade, utc_iso
+from packages.risk.trade_economics import compute_fixed_targets
 
 # Zorla kapanış nedenleri → terminal lifecycle_status=FORCE_CLOSED + ayrı audit
 # aksiyonu (KILL_SWITCH_EXIT / RISK_REDUCE_EXIT). Diğerleri normal CLOSED.
@@ -33,15 +34,6 @@ def _timeframe_time_stop_hours(timeframe: str) -> int:
     cfg = load_thresholds().get("timeframe_risk") or {}
     pol = cfg.get(timeframe) or {}
     return int(pol.get("time_stop_hours", 0))
-
-
-def _sl_pct_for(symbol: str) -> float:
-    th = load_thresholds()["paper_trading"]
-    return float(th["sl_pct"].get(symbol, 0.04))
-
-
-def _tp_rr() -> float:
-    return float(load_thresholds()["paper_trading"]["tp_rr_ratio"])
 
 
 def _max_pos_usd() -> float:
@@ -91,8 +83,13 @@ def open_position(
     # decide_for_symbol'da uygulanır; burası açılan pozisyonun risk profilini biçer.
     # MANUEL (owner) emir: kademe çarpanı uygulanmaz; boyutu owner belirler.
     tier = conviction.tier_for(None) if manual else conviction.tier_for(predicted_confidence)
-    sl_pct = _sl_pct_for(symbol) * tier.sl_mult
-    tp_pct = sl_pct * _tp_rr()
+    # Canonical fixed-% targets — packages.risk.trade_economics.compute_fixed_targets
+    # is the single source of truth (shadow comparisons against the adaptive
+    # ATR/S-R engine call the exact same function, never a copy).
+    targets = compute_fixed_targets(
+        symbol, side, entry_price, predicted_confidence=predicted_confidence, manual=manual,
+    )
+    sl, tp = targets.sl, targets.tp
     if size_usd_override is not None:
         # Owner manuel emir: tam dolar tutarı (kademe/sizing baypas).
         size = max(0.0, float(size_usd_override))
@@ -103,8 +100,6 @@ def open_position(
             size_multiplier * tier.size_mult, max_position_usd=_max_pos_usd()
         )
     opened_at = utc_iso()
-    sl = entry_price * (1 - sl_pct) if side == "long" else entry_price * (1 + sl_pct)
-    tp = entry_price * (1 + tp_pct) if side == "long" else entry_price * (1 - tp_pct)
     # T2 — TF time-stop: 15m kısa (6sa), 1d uzun (672sa); 0 → time-stop yok.
     # Kademe time_mult ile kısalır (zayıf konviksiyon = kısa vade).
     stop_hours = _timeframe_time_stop_hours(timeframe) * tier.time_mult

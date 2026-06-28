@@ -269,6 +269,50 @@ def compute_adaptive_targets(
     )
 
 
+# ── Fixed-% targets — what `packages.paper.lifecycle.open_position` ACTUALLY
+# uses for automatic execution (single source of truth; lifecycle.py calls this
+# instead of inlining the formula, so shadow comparisons below are guaranteed
+# faithful to live behaviour, not a copy that can drift).
+def compute_fixed_targets(
+    symbol: str,
+    side: str,
+    entry: float,
+    *,
+    predicted_confidence: float | None = None,
+    manual: bool = False,
+) -> AdaptiveTargets:
+    """`thresholds.paper_trading.sl_pct[symbol] × conviction tier` — the dumb,
+    timeframe-blind, structure-blind formula. Reuses `AdaptiveTargets` shape so
+    callers can diff it against `compute_adaptive_targets` directly."""
+    from packages.paper import conviction  # local import: paper← risk would cycle at module load
+
+    th = load_thresholds()["paper_trading"]
+    tier = conviction.tier_for(None) if manual else conviction.tier_for(predicted_confidence)
+    sl_pct = float(th["sl_pct"].get(symbol, 0.04)) * tier.sl_mult
+    tp_pct = sl_pct * float(th["tp_rr_ratio"])
+    if entry <= 0 or side not in {"long", "short"}:
+        return AdaptiveTargets(
+            sl=0.0, tp=0.0, rr=0.0,
+            sl_basis="invalid", tp_basis="invalid",
+            rr_floor_met=False, sl_distance=0.0,
+            notes=["entry veya side geçersiz"],
+        )
+    sl = entry * (1 - sl_pct) if side == "long" else entry * (1 + sl_pct)
+    tp = entry * (1 + tp_pct) if side == "long" else entry * (1 - tp_pct)
+    sl_distance = abs(entry - sl)
+    rr = abs(tp - entry) / sl_distance if sl_distance > 0 else 0.0
+    return AdaptiveTargets(
+        sl=round(sl, 4),
+        tp=round(tp, 4),
+        rr=round(rr, 4),
+        sl_basis="fixed_pct",
+        tp_basis="fixed_rr",
+        rr_floor_met=True,  # tasarımca sabit RR — floor kavramı yok
+        sl_distance=round(sl_distance, 4),
+        notes=[f"tier={tier.name} sl_pct={sl_pct:.4f} tp_rr={th['tp_rr_ratio']}"],
+    )
+
+
 def tf_size_cap(timeframe: str) -> float:
     """`timeframe_risk.risk_multiplier`'dan TF size tavanı (≤1.0; yalnız küçültür).
 
