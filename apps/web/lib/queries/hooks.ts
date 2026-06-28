@@ -335,6 +335,16 @@ export const useTfTargets = () => {
   });
 };
 
+export const useMissedOpportunities = () => {
+  const policy = usePanelQueryPolicy(5 * 60_000);
+  return useQuery({
+    queryKey: qk.missedOpportunities,
+    queryFn: api.missedOpportunities,
+    staleTime: 60_000,
+    ...policy,
+  });
+};
+
 export const useMistakes = () => {
   const policy = usePanelQueryPolicy(2 * 60_000);
   return useQuery({

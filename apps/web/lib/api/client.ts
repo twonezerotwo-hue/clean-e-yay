@@ -34,6 +34,7 @@ import type {
   TfWeightsReport,
   TfTargetsView,
   TfTargetsActionResult,
+  MissedOpportunitiesView,
   TickResult,
   TradeTicketList,
   AgentBriefing,
@@ -546,6 +547,10 @@ export const api = {
     fetchJSON<Record<string, unknown>>(
       "/api/v1/learning/tf-targets/retrain",
       { method: "POST" },
+    ),
+  missedOpportunities: () =>
+    fetchJSON<MissedOpportunitiesView>(
+      "/api/v1/learning/missed-opportunities",
     ),
   mistakes: () => fetchJSON<MistakesState>("/api/v1/learning/mistakes"),
   riskCorrelation: () =>

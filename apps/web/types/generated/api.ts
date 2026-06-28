@@ -1875,6 +1875,33 @@ export type TfTargetsActionResult = {
   record: Record<string, unknown> | null;
 };
 
+export type MissedOpportunityOutcomes = {
+  missed_win: number;
+  avoided_loss: number;
+  expired: number;
+};
+
+export type MissedOpportunityActive = {
+  symbol: string;
+  timeframe: string;
+  side: string;
+  trade_profile?: string | null;
+  setup_type?: string | null;
+  entry?: number | null;
+  sl?: number | null;
+  tp?: number | null;
+  opened_at?: string | null;
+};
+
+export type MissedOpportunitiesView = {
+  available: boolean;
+  enabled?: boolean;
+  outcomes: MissedOpportunityOutcomes;
+  by_profile: Record<string, MissedOpportunityOutcomes>;
+  active: MissedOpportunityActive[];
+  recent: Array<Record<string, unknown>>;
+};
+
 export type AgentBriefingTone = "ok" | "info" | "warn" | "alert";
 
 export type AgentBriefingHeadline = {

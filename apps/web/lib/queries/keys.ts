@@ -38,6 +38,7 @@ export const qk = {
   calibration: ["learning", "calibration"] as const,
   tfWeights: ["learning", "tf-weights"] as const,
   tfTargets: ["learning", "tf-targets"] as const,
+  missedOpportunities: ["learning", "missed-opportunities"] as const,
   mistakes: ["learning", "mistakes"] as const,
   riskCorrelation: ["risk", "correlation"] as const,
   riskHalts: ["risk", "halts"] as const,

@@ -40,6 +40,7 @@ import { CalibrationPanel } from "@/components/panels/CalibrationPanel";
 import { MistakeMemoryPanel } from "@/components/panels/MistakeMemoryPanel";
 import { TfWeightsPanel } from "@/components/panels/TfWeightsPanel";
 import { TfTargetsPanel } from "@/components/panels/TfTargetsPanel";
+import { MissedOpportunitiesPanel } from "@/components/panels/MissedOpportunitiesPanel";
 import { DataQualityPanel } from "@/components/panels/DataQualityPanel";
 import { ProviderStatusPanel } from "@/components/panels/ProviderStatusPanel";
 import { SnapshotPanel } from "@/components/panels/SnapshotPanel";
@@ -154,6 +155,7 @@ export default function HomePage() {
           <GridCell span="1"><MistakeMemoryPanel /></GridCell>
           <GridCell span="2"><TfWeightsPanel /></GridCell>
           <GridCell span="2"><TfTargetsPanel /></GridCell>
+          <GridCell span="2"><MissedOpportunitiesPanel /></GridCell>
         </PanelGroup>
       </section>
 

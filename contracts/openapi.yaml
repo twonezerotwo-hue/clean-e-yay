@@ -494,6 +494,17 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/ConflictGateStatus" }
 
+  /api/v1/learning/missed-opportunities:
+    get:
+      operationId: getMissedOpportunities
+      summary: Faz 2 — Missed Opportunity özeti (açılmayan valid setup'ların TTL sonucu, read-only)
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MissedOpportunitiesView" }
+
   /api/v1/learning/tf-targets:
     get:
       operationId: getLearningTfTargets
@@ -3752,6 +3763,47 @@ components:
         profile_modes:
           type: object
           additionalProperties: { type: string, enum: ["OFF", "SOFT", "SOFT_PLUS", "HARD", "HARD_MANUAL"] }
+
+    MissedOpportunityOutcomes:
+      type: object
+      description: Faz 2 — sonuç sayıları (TP önce=missed_win, SL önce=avoided_loss, TTL=expired).
+      properties:
+        missed_win: { type: integer }
+        avoided_loss: { type: integer }
+        expired: { type: integer }
+
+    MissedOpportunityActive:
+      type: object
+      description: Faz 2 — şu an izlenen (henüz çözülmemiş) açılmamış setup.
+      required: [symbol, timeframe, side]
+      properties:
+        symbol: { type: string }
+        timeframe: { type: string }
+        side: { type: string }
+        trade_profile: { type: string, nullable: true }
+        setup_type: { type: string, nullable: true }
+        entry: { type: number, nullable: true }
+        sl: { type: number, nullable: true }
+        tp: { type: number, nullable: true }
+        opened_at: { type: string, nullable: true }
+
+    MissedOpportunitiesView:
+      type: object
+      description: Faz 2 — Missed Opportunity özeti (read-only, paper-safe; açılmayan valid setup'ların TTL sonucu).
+      required: [available, outcomes, by_profile, active, recent]
+      properties:
+        available: { type: boolean }
+        enabled: { type: boolean }
+        outcomes: { $ref: "#/components/schemas/MissedOpportunityOutcomes" }
+        by_profile:
+          type: object
+          additionalProperties: { $ref: "#/components/schemas/MissedOpportunityOutcomes" }
+        active:
+          type: array
+          items: { $ref: "#/components/schemas/MissedOpportunityActive" }
+        recent:
+          type: array
+          items: { type: object, additionalProperties: true }
 
     TfTargetParams:
       type: object

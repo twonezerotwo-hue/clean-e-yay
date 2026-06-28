@@ -12,15 +12,16 @@ from packages.learning import (
     calibration_store,
     calibration_trainer,
     historical_edge,
+    missed_opportunity,
     mistake_memory,
     tf_target_store,
     tf_target_trainer,
     tf_weight_trainer,
 )
-from packages.risk import trade_economics as te
 from packages.learning.calibration import reliability_bins
 from packages.learning.summary import build_summary
 from packages.paper import state as paper_state
+from packages.risk import trade_economics as te
 
 router = APIRouter(tags=["learning"])
 
@@ -165,6 +166,15 @@ def get_conflict_gate_validation() -> dict:
     gerçek win-rate/avg_pnl gösterir. Read-only; karar zincirini etkilemez —
     profil aktivasyon kararına (conflict_gate.enabled) veri sağlar."""
     return conflict_gate_backtest.validation_report()
+
+
+@router.get("/learning/missed-opportunities")
+def get_missed_opportunities() -> dict:
+    """Faz 2 — Missed Opportunity özeti (read-only). Açılmayan valid setup'ların
+    (CANDIDATE_OPEN ama canlı açmadı) TTL sonucu: missed_win / avoided_loss /
+    expired, trade_profile bazında. PAPER_SAFE — paper'a dokunmaz, yalnızca
+    izleme logundan sayar. Faz 4 (conflict-gate genişletme) kararına veri."""
+    return missed_opportunity.summary_viewmodel()
 
 
 @router.get("/learning/conflict-gate-status")

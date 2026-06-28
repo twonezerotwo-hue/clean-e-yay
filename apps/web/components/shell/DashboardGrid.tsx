@@ -52,6 +52,7 @@ const PANEL_ID_BY_COMPONENT: Record<string, string> = {
   SystemHealthBar: "system_health",
   TfWeightsPanel: "tf_weights",
   TfTargetsPanel: "tf_targets",
+  MissedOpportunitiesPanel: "missed_opportunities",
   TimeframeMatrixPanel: "timeframe_matrix",
   TradeTicketPanel: "trade_ticket",
   TradingPanel: "trading",

@@ -411,6 +411,17 @@ shadow:
 conflict_resolver_activation:
   enabled: false
 
+# Missed Opportunity motoru (learning yakıtı; spec v2.3). Açılmayan valid
+# setup'ları (conflict_final_action=CANDIDATE_OPEN ama canlı açmadı) TTL boyunca
+# izler: fiyat önce TP'ye mi (missed_win) SL'e mi (avoided_loss) değdi?
+# PAPER_SAFE — paper'a ASLA dokunmaz, yalnızca shadow kaydı + cached barlardan
+# ölçer. enabled=false (varsayılan) → inert. Gözlem amaçlı; açmak risksiz, Faz 4
+# (conflict-gate genişletme) kararına veri toplar. Owner true yapınca toplanır.
+missed_opportunity:
+  enabled: false
+  min_rr: 1.0
+  ttl_hours: { "15m": 6, "1h": 24, "4h": 72, "1d": 240, "1w": 0 }
+
 # Faz 8 — Conflict Gate (spec v2.3 §28 devamı): eski decide_matrix önerisini
 # yeni Conflict Resolver'ın verdict'iyle, trade_profile bazlı KADEMELİ sıkılıkla
 # süzer (conflict_resolver_activation'dan FARKLI — bkz. packages/decision/conflict_gate.py
