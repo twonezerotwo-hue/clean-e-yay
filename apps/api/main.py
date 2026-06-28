@@ -62,6 +62,7 @@ from apps.api.routers import (
     dashboard_state,
     data,
     decision,
+    governor,
     health,
     learning,
     liquidity,
@@ -137,6 +138,7 @@ def create_app() -> FastAPI:
     app.include_router(system.router, prefix=prefix)
     app.include_router(stream.router, prefix=prefix)
     app.include_router(briefing.router, prefix=prefix)
+    app.include_router(governor.router, prefix=prefix)
     app.include_router(voice.router, prefix="/api")
     return app
 

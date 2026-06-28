@@ -6,7 +6,9 @@ Ortam değişkenleri:
     API_HOST              (default 0.0.0.0)
     API_PORT              (default 9000)
     LEARNING_INTERVAL_SEC (default 300)
+    GOVERNOR_INTERVAL_SEC (default 900)
     RUN_WORKERS           (default true) — false ise sadece API
+    RUN_GOVERNOR          (default true) — false ise governor döngüsü kapalı
 
 Mimari not: arka plan döngülerinin sahibi BURASIDIR, apps/api değil. Bu
 sayede apps/api ince HTTP katmanı olarak kalır (architecture guard geçer),
@@ -43,6 +45,26 @@ async def _learning_loop(stop: asyncio.Event, interval: int) -> None:
     _log.info("learning loop stopped")
 
 
+async def _governor_loop(stop: asyncio.Event, interval: int) -> None:
+    """governor_worker.run_once'ı periyodik döngüye sar (observe-only, read-only).
+
+    learning_loop ile aynı desen. governor trade açmaz / config değiştirmez —
+    yalnızca görev üretir + read-only rapor toplar. Hata izole (worker patlamaz)."""
+    from apps.governor_worker.main import run_once as governor_run_once
+
+    _log.info("governor loop started, interval=%ds", interval)
+    while not stop.is_set():
+        try:
+            await asyncio.to_thread(governor_run_once)
+        except Exception:
+            _log.exception("governor run_once failed")
+        try:
+            await asyncio.wait_for(stop.wait(), timeout=interval)
+        except TimeoutError:
+            pass
+    _log.info("governor loop stopped")
+
+
 async def _serve() -> None:
     import uvicorn
 
@@ -68,7 +90,16 @@ async def _serve() -> None:
             asyncio.create_task(tick_run(), name="tick_worker"),
             asyncio.create_task(_learning_loop(stop, interval), name="learning_loop"),
         ]
-        _log.info("agent ON — tick + learning workers running alongside API")
+        if _env_truthy("RUN_GOVERNOR", "true"):
+            gov_interval = int(os.environ.get("GOVERNOR_INTERVAL_SEC", "900"))
+            tasks.append(
+                asyncio.create_task(
+                    _governor_loop(stop, gov_interval), name="governor_loop"
+                )
+            )
+            _log.info("agent ON — tick + learning + governor workers running alongside API")
+        else:
+            _log.info("agent ON — tick + learning workers running alongside API")
     else:
         tick_stop = None
         _log.info("agent OFF (RUN_WORKERS=false) — API only")
