@@ -19,6 +19,16 @@ dqs:
   min_for_decision: 55
   limited_analysis_min: 40
 
+# DATA_POLICY sert uygulaması (owner kontrollü). Varsayılan: KAPALI →
+# mevcut davranış birebir korunur (stale TF consensus'ta ×0.70 nötre çekilir,
+# bkz. packages/consensus/engine.py _degraded_direction_score).
+# block_stale_ohlcv_for_trade=true olduğunda: karar timeframe'inin son barı TF
+# stale eşiğini aşmışsa (bkz. packages/data/providers/technical STALE_AFTER_SEC)
+# o (symbol, tf) için AÇILIŞ bloklanır — "eski veriyle trade açma" kuralı.
+# Yalnızca decide_for_symbol açılış yolunu etkiler; dampening/dashboard değişmez.
+data_policy:
+  block_stale_ohlcv_for_trade: false
+
 risk_gates:
   max_daily_loss_pct: 0.02      # equity'nin %2'si
   max_drawdown_pct: 0.08        # peak'ten %8

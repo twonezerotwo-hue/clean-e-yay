@@ -30,6 +30,7 @@ from typing import Literal
 from packages.consensus.engine import ConsensusResult
 from packages.consensus.engine import build as build_consensus
 from packages.data.ingestion.pipeline import MarketSnapshot
+from packages.data.providers import technical as tech_provider
 from packages.data.registry.loader import load_thresholds
 from packages.data.types import TIMEFRAMES
 from packages.learning import mistake_memory
@@ -200,6 +201,37 @@ def decide_for_symbol(
             candidate_action=candidate,
             blocked_by=[f"risk_gate:{risk.action}"],
         )
+
+    # ----- DATA_POLICY: stale OHLCV sert blok (owner-flag; varsayılan KAPALI) -----
+    # "Eski veriyle trade açma" kuralı. Flag kapalıyken bu blok HİÇ çalışmaz →
+    # mevcut davranış (consensus dampening, bkz. _degraded_direction_score) birebir
+    # korunur. Açıkken: karar timeframe'inin son barı TF stale eşiğini aşmışsa
+    # AÇILIŞ bloklanır. RiskGate'ten sonra, veri-geçerliliği önceliğiyle çalışır;
+    # asla RiskGate'i bypass etmez (bu noktaya yalnızca risk açıkken gelinir).
+    _dp = load_thresholds().get("data_policy") or {}
+    if _dp.get("block_stale_ohlcv_for_trade", False):
+        _t = (
+            snap.technicals_by_tf.get(symbol, {}).get(timeframe)
+            if snap.technicals_by_tf
+            else None
+        )
+        _age = tech_provider.staleness_age_sec(_t) if _t is not None else None
+        if _age is not None:
+            return TradeDecision(
+                symbol=symbol,
+                action="blocked",
+                confidence=0.0,
+                size_multiplier=0.0,
+                consensus=cons,
+                risk=risk,
+                reason=f"DATA_POLICY: stale OHLCV ({timeframe}, {int(_age)}s) — eski veriyle açılmaz",
+                raw_confidence=round(raw_conf, 4),
+                confidence_source=conf_source,
+                fingerprint=fp,
+                timeframe=timeframe,
+                candidate_action=candidate,
+                blocked_by=[f"stale_ohlcv:{timeframe}:{int(_age)}s"],
+            )
 
     # ----- Consensus eşikleri -----
     action: Action = candidate

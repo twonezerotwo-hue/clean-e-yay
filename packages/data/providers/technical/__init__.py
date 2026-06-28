@@ -38,6 +38,27 @@ def _clamp(v: float, lo: float, hi: float) -> float:
     return max(lo, min(hi, v))
 
 
+def staleness_age_sec(
+    snap: TechnicalSnapshot, *, now: datetime | None = None
+) -> float | None:
+    """Son bar TF stale eşiğini aştıysa yaşı (saniye) döner; taze ise None.
+
+    `compute_snapshot`'taki stale tespitiyle AYNI tanım (eşik tablosu
+    `STALE_AFTER_SEC` tek kaynak). Karar katmanı (DATA_POLICY sert blok) bunu
+    çağırarak "eski veriyle açma" kuralını uygular — `compute_snapshot`
+    davranışı değişmeden.
+    """
+    if not snap.bars_used:
+        return None
+    now = now or datetime.now(UTC)
+    ts = snap.ts if snap.ts.tzinfo is not None else snap.ts.replace(tzinfo=UTC)
+    age = (now - ts.astimezone(UTC)).total_seconds()
+    threshold = STALE_AFTER_SEC.get(snap.timeframe)
+    if threshold is None:
+        return None
+    return age if age > threshold else None
+
+
 def compute_snapshot(
     symbol: str,
     timeframe: Timeframe,
