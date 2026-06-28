@@ -4,6 +4,35 @@ _Bu dosya kısa ve güncel tutulur. Her görev sonunda güncellenir._
 
 ## Last known status
 
+- **GOVERNOR — Self-Managing (observe-only) katman tamamlandı** (2026-06-28):
+  raporda istenen 4 parça eklendi; var olan modüller (learning/shadow/mode) ÜSTÜNE
+  ince orkestrasyon — yeni karar/risk motoru DEĞİL. **Additive; mevcut hiçbir şey
+  bozulmadı.** PAPER_SAFE / NO_EXECUTION; RiskGate/DQS/KillSwitch/halt sıfır diff.
+  - **Part 1 — Öneri Defteri** (`packages/governor/proposals.py`): her tipte
+    owner-onaylı öneri + kanıt. **DEĞİŞMEZ:** approve YALNIZCA defter kaydını
+    günceller; canlı config (weights/thresholds/risk/mode) değişmez — uygulama
+    mevcut owner-gated yollardan (rebalance/mode store). Testle kilitli.
+  - **Part 2 — Görev Kuyruğu** (`packages/governor/tasks.py`): P0–P4 observe-only
+    görevler; **`can_change_policy` yapısal olarak hep False**, handler'lar yalnızca
+    read-only özet okur (config/paper/RiskGate'e yazamaz). `generate()` mevcut
+    store sinyallerinden görev üretir (dedup'lu, crash-safe).
+  - **Part 3 — Governor Worker** (`apps/governor_worker/` + `run_store.py`):
+    4. süreç, learning_worker deseni (run_once + zamanlayıcı, restart-always DEĞİL).
+    **`attempt_open` ASLA çağrılmaz** (import bile etmez — testli); açılış tek kapıda
+    (tick_worker) kalır. Supervisor'a bağlandı (`RUN_GOVERNOR`/`GOVERNOR_INTERVAL_SEC`,
+    default 900s; üç-süreç bağımsızlığı korunur, çökerse diğerlerini etkilemez).
+  - **Part 4 — Dashboard + sözleşme**: openapi.yaml governor path/şemaları +
+    `make codegen` (schema.ts) + api.ts friendly types (drift guard yeşil). Yeni
+    "Governor" paneli grubu: GovernorPanel (özet + görev üret) / ProposalPanel
+    (onayla/reddet) / TaskQueuePanel (koştur). page.tsx büyütülmedi (PanelGroup);
+    frontend hesap yapmaz.
+  - `packages/governor/report.py`: read-only aggregator (best-effort; bir kaynak
+    patlasa rapor düşmez) — "ne öğrendi / buldu / öneriyor / onay bekliyor / hangi
+    veriye güvenmiyor".
+  - **Validation**: pytest **1000 passed** (+28 governor, +3 sözleşme GET);
+    ruff yeni dosyalar temiz (baseline değişmedi); codegen-check OK; mimari guard'lar
+    yeşil; `tsc` temiz; `next build` ✓ (`/dashboard` 44.3 kB).
+
 - **SOAK1 + FULL SYSTEM AUDIT tamamlandı** (2026-06-14): production-like local
   dry-run + uçtan uca sistem denetimi. **Çalıştırma/gözlem/audit — KOD SIFIR DİFF**
   (docs hariç). Stack izole portlarda (`API 8060` / `Web 3060`); eski `E_YAY CODEX`

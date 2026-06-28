@@ -37,6 +37,9 @@ import type {
   MissedOpportunitiesView,
   AgentModeConfigView,
   AgentModeConfigUpdate,
+  GovernorReport,
+  GovernorProposalsView,
+  GovernorTasksView,
   TickResult,
   TradeTicketList,
   AgentBriefing,
@@ -565,6 +568,32 @@ export const api = {
     fetchJSON<AgentModeConfigView>("/api/v1/agent-mode/config/reset", {
       method: "POST",
     }),
+  // ── Governor (self-managing katman) ──────────────────────────────────────
+  governorReport: () =>
+    fetchJSON<GovernorReport>("/api/v1/governor/report"),
+  governorProposals: () =>
+    fetchJSON<GovernorProposalsView>("/api/v1/governor/proposals"),
+  governorProposalApprove: (proposalId: string) =>
+    fetchJSON<Record<string, unknown>>(
+      `/api/v1/governor/proposals/${encodeURIComponent(proposalId)}/approve`,
+      { method: "POST" },
+    ),
+  governorProposalReject: (proposalId: string, reason?: string) =>
+    fetchJSON<Record<string, unknown>>(
+      `/api/v1/governor/proposals/${encodeURIComponent(proposalId)}/reject`,
+      { method: "POST", body: JSON.stringify({ reason: reason ?? "owner_reject" }) },
+    ),
+  governorTasks: () =>
+    fetchJSON<GovernorTasksView>("/api/v1/governor/tasks"),
+  governorTasksGenerate: () =>
+    fetchJSON<Record<string, unknown>>("/api/v1/governor/tasks/generate", {
+      method: "POST",
+    }),
+  governorTaskRun: (taskId: string) =>
+    fetchJSON<Record<string, unknown>>(
+      `/api/v1/governor/tasks/${encodeURIComponent(taskId)}/run`,
+      { method: "POST" },
+    ),
   mistakes: () => fetchJSON<MistakesState>("/api/v1/learning/mistakes"),
   riskCorrelation: () =>
     fetchJSON<CorrelationState>("/api/v1/risk/correlation"),

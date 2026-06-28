@@ -1075,6 +1075,132 @@ paths:
               schema:
                 type: string
 
+  /api/v1/governor/report:
+    get:
+      operationId: getGovernorReport
+      summary: Governor read-only özet (ne öğrendi/buldu/öneriyor/onay bekliyor)
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/GovernorReport" }
+
+  /api/v1/governor/proposals:
+    get:
+      operationId: getGovernorProposals
+      summary: Öneri defteri (pending + history)
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/GovernorProposalsView" }
+    post:
+      operationId: postGovernorProposal
+      summary: Yeni öneri kaydet (PENDING) — canlı config'e dokunmaz
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object }
+
+  /api/v1/governor/proposals/{proposal_id}/approve:
+    post:
+      operationId: approveGovernorProposal
+      summary: Owner kararı APPROVED (yalnızca kayıt; canlı config değişmez)
+      parameters:
+        - in: path
+          name: proposal_id
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object }
+        "404":
+          description: not found
+
+  /api/v1/governor/proposals/{proposal_id}/reject:
+    post:
+      operationId: rejectGovernorProposal
+      summary: Owner kararı REJECTED
+      parameters:
+        - in: path
+          name: proposal_id
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object }
+        "404":
+          description: not found
+
+  /api/v1/governor/tasks:
+    get:
+      operationId: getGovernorTasks
+      summary: Görev kuyruğu (observe-only)
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/GovernorTasksView" }
+    post:
+      operationId: postGovernorTask
+      summary: Manuel görev ekle (can_change_policy daima false)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object }
+
+  /api/v1/governor/tasks/generate:
+    post:
+      operationId: generateGovernorTasks
+      summary: Observe-only görev üret (dedup'lu)
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object }
+
+  /api/v1/governor/tasks/{task_id}/run:
+    post:
+      operationId: runGovernorTask
+      summary: Görevi koş → read-only rapor üret
+      parameters:
+        - in: path
+          name: task_id
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object }
+        "404":
+          description: not found
+
 components:
   schemas:
     Health:
@@ -4025,3 +4151,121 @@ components:
         headlines:
           type: array
           items: { $ref: "#/components/schemas/AgentBriefingHeadline" }
+
+    GovernorProposalType:
+      type: string
+      enum: [WEIGHT_CHANGE, MODE_CHANGE, THRESHOLD_CHANGE, RISK_POLICY_CHANGE, DATA_PROVIDER_CHANGE, TF_TARGET_CHANGE, STRATEGY_ENABLE, STRATEGY_DISABLE, DASHBOARD_ALERT]
+
+    GovernorProposalStatus:
+      type: string
+      enum: [PENDING, APPROVED, REJECTED]
+
+    GovernorProposal:
+      type: object
+      required: [proposal_id, proposal_type, status, title]
+      properties:
+        proposal_id: { type: string }
+        proposal_type: { $ref: "#/components/schemas/GovernorProposalType" }
+        status: { $ref: "#/components/schemas/GovernorProposalStatus" }
+        title: { type: string }
+        summary: { type: string }
+        evidence: { type: object, additionalProperties: true }
+        requested_change: { type: object, additionalProperties: true }
+        rollback_plan: { type: string }
+        source: { type: string }
+        requires_owner_approval: { type: boolean }
+        created_at: { type: string }
+        decided_at: { type: string, nullable: true }
+        approved_by: { type: string, nullable: true }
+        reject_reason: { type: string, nullable: true }
+
+    GovernorProposalsView:
+      type: object
+      required: [pending, pending_count, history]
+      properties:
+        proposal_types:
+          type: array
+          items: { $ref: "#/components/schemas/GovernorProposalType" }
+        pending:
+          type: array
+          items: { $ref: "#/components/schemas/GovernorProposal" }
+        pending_count: { type: integer }
+        pending_by_type:
+          type: object
+          additionalProperties: { type: integer }
+        history:
+          type: array
+          items: { $ref: "#/components/schemas/GovernorProposal" }
+        note: { type: string }
+
+    GovernorTaskPriority:
+      type: string
+      enum: [P0, P1, P2, P3, P4]
+
+    GovernorTaskStatus:
+      type: string
+      enum: [PENDING, DONE, FAILED]
+
+    GovernorTaskType:
+      type: string
+      enum: [DATA_QUALITY_REVIEW, RISK_REVIEW, MISSED_OPPORTUNITY_REVIEW, TRADE_REVIEW, MODE_REVIEW, SYSTEM_HEALTH_REVIEW]
+
+    GovernorTask:
+      type: object
+      required: [task_id, task_type, priority, status, can_change_policy]
+      properties:
+        task_id: { type: string }
+        task_type: { $ref: "#/components/schemas/GovernorTaskType" }
+        priority: { $ref: "#/components/schemas/GovernorTaskPriority" }
+        subject: { type: string }
+        params: { type: object, additionalProperties: true }
+        status: { $ref: "#/components/schemas/GovernorTaskStatus" }
+        auto_execute: { type: boolean }
+        can_change_policy: { type: boolean }
+        source: { type: string }
+        created_at: { type: string }
+        executed_at: { type: string, nullable: true }
+        result: { type: object, additionalProperties: true, nullable: true }
+
+    GovernorTasksView:
+      type: object
+      required: [queue, queue_count, history]
+      properties:
+        task_types:
+          type: object
+          additionalProperties: { type: string }
+        queue:
+          type: array
+          items: { $ref: "#/components/schemas/GovernorTask" }
+        queue_count: { type: integer }
+        queue_by_priority:
+          type: object
+          additionalProperties: { type: integer }
+        history:
+          type: array
+          items: { $ref: "#/components/schemas/GovernorTask" }
+        note: { type: string }
+
+    GovernorReportSection:
+      type: object
+      required: [available]
+      properties:
+        available: { type: boolean }
+        data: {}
+        error: { type: string }
+
+    GovernorReport:
+      type: object
+      required: [generated_at, paper_safe, no_execution]
+      properties:
+        generated_at: { type: string }
+        paper_safe: { type: boolean }
+        no_execution: { type: boolean }
+        learned: { $ref: "#/components/schemas/GovernorReportSection" }
+        found_missed_opportunities: { $ref: "#/components/schemas/GovernorReportSection" }
+        tasks: { $ref: "#/components/schemas/GovernorReportSection" }
+        proposals: { $ref: "#/components/schemas/GovernorReportSection" }
+        other_pending_approvals: { $ref: "#/components/schemas/GovernorReportSection" }
+        data_trust: { $ref: "#/components/schemas/GovernorReportSection" }
+        worker_last_run: { $ref: "#/components/schemas/GovernorReportSection" }
+        note: { type: string }

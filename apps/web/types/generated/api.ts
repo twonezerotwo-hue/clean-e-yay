@@ -1975,3 +1975,100 @@ export type AgentBriefing = {
   dqs?: AgentBriefingDqs;
   headlines: AgentBriefingHeadline[];
 };
+
+// ── Governor (self-managing katman) ─────────────────────────────────────────
+
+export type GovernorProposalType =
+  | "WEIGHT_CHANGE"
+  | "MODE_CHANGE"
+  | "THRESHOLD_CHANGE"
+  | "RISK_POLICY_CHANGE"
+  | "DATA_PROVIDER_CHANGE"
+  | "TF_TARGET_CHANGE"
+  | "STRATEGY_ENABLE"
+  | "STRATEGY_DISABLE"
+  | "DASHBOARD_ALERT";
+
+export type GovernorProposalStatus = "PENDING" | "APPROVED" | "REJECTED";
+
+export type GovernorProposal = {
+  proposal_id: string;
+  proposal_type: GovernorProposalType;
+  status: GovernorProposalStatus;
+  title: string;
+  summary?: string;
+  evidence?: Record<string, unknown>;
+  requested_change?: Record<string, unknown>;
+  rollback_plan?: string;
+  source?: string;
+  requires_owner_approval?: boolean;
+  created_at?: string;
+  decided_at?: string | null;
+  approved_by?: string | null;
+  reject_reason?: string | null;
+};
+
+export type GovernorProposalsView = {
+  proposal_types?: GovernorProposalType[];
+  pending: GovernorProposal[];
+  pending_count: number;
+  pending_by_type?: Record<string, number>;
+  history: GovernorProposal[];
+  note?: string;
+};
+
+export type GovernorTaskPriority = "P0" | "P1" | "P2" | "P3" | "P4";
+
+export type GovernorTaskStatus = "PENDING" | "DONE" | "FAILED";
+
+export type GovernorTaskType =
+  | "DATA_QUALITY_REVIEW"
+  | "RISK_REVIEW"
+  | "MISSED_OPPORTUNITY_REVIEW"
+  | "TRADE_REVIEW"
+  | "MODE_REVIEW"
+  | "SYSTEM_HEALTH_REVIEW";
+
+export type GovernorTask = {
+  task_id: string;
+  task_type: GovernorTaskType;
+  priority: GovernorTaskPriority;
+  subject?: string;
+  params?: Record<string, unknown>;
+  status: GovernorTaskStatus;
+  auto_execute?: boolean;
+  can_change_policy: boolean;
+  source?: string;
+  created_at?: string;
+  executed_at?: string | null;
+  result?: Record<string, unknown> | null;
+};
+
+export type GovernorTasksView = {
+  task_types?: Record<string, string>;
+  queue: GovernorTask[];
+  queue_count: number;
+  queue_by_priority?: Record<string, number>;
+  history: GovernorTask[];
+  note?: string;
+};
+
+export type GovernorReportSection = {
+  available: boolean;
+  data?: unknown;
+  error?: string;
+};
+
+export type GovernorReport = {
+  generated_at: string;
+  paper_safe: boolean;
+  no_execution: boolean;
+  learned?: GovernorReportSection;
+  found_missed_opportunities?: GovernorReportSection;
+  tasks?: GovernorReportSection;
+  proposals?: GovernorReportSection;
+  other_pending_approvals?: GovernorReportSection;
+  data_trust?: GovernorReportSection;
+  worker_last_run?: GovernorReportSection;
+  note?: string;
+};
