@@ -13,10 +13,7 @@ import {
   useAgentMatrix,
   useCockpitBrief,
   useDashboardState,
-  useDataSnapshot,
   usePaperTradingState,
-  useReplayStatus,
-  useSystemHealth,
   useTradeTickets,
 } from "@/lib/queries/hooks";
 import {
@@ -35,6 +32,14 @@ import { ScenarioPanel } from "@/components/panels/ScenarioPanel";
 import { GovernorPanel } from "@/components/panels/GovernorPanel";
 import { ProposalPanel } from "@/components/panels/ProposalPanel";
 import { TaskQueuePanel } from "@/components/panels/TaskQueuePanel";
+import { LearningPanel } from "@/components/panels/LearningPanel";
+import { CalibrationPanel } from "@/components/panels/CalibrationPanel";
+import { MistakeMemoryPanel } from "@/components/panels/MistakeMemoryPanel";
+import { WeightProposalPanel } from "@/components/panels/WeightProposalPanel";
+import { WeightHistoryPanel } from "@/components/panels/WeightHistoryPanel";
+import { TfWeightsPanel } from "@/components/panels/TfWeightsPanel";
+import { TfTargetsPanel } from "@/components/panels/TfTargetsPanel";
+import { MissedOpportunitiesPanel } from "@/components/panels/MissedOpportunitiesPanel";
 import type { CockpitBrief } from "@/types/generated/api";
 
 import { HolographicSignalDeck } from "./HolographicSignalDeck";
@@ -103,10 +108,10 @@ const LAYERS: LayerMeta[] = [
   {
     index: 3,
     code: "03",
-    title: "Energy",
-    shortTitle: "Energy",
-    subtitle: "backend viewmodel / provider / snapshot / sistem sagligi",
-    depth: "makine odasi",
+    title: "Conscious",
+    shortTitle: "Conscious",
+    subtitle: "tum ogrenmeler: governor / kalibrasyon / hatalar / kacan firsat / agirlik",
+    depth: "ogrenme odasi",
   },
 ];
 
@@ -235,203 +240,6 @@ function Layer2DetailGroup({
       </header>
       <div className="relative z-10">{children}</div>
     </section>
-  );
-}
-
-function DataSpineCard({
-  label,
-  value,
-  detail,
-  tone = "text-white",
-}: {
-  label: string;
-  value: string;
-  detail: string;
-  tone?: string;
-}) {
-  return (
-    <div className="rounded-lg border border-white/10 bg-black/24 p-4">
-      <div className="text-[10px] uppercase tracking-widest text-white/38">{label}</div>
-      <div className={`mt-2 font-display text-2xl leading-none ${tone}`}>{value}</div>
-      <p className="mt-2 text-xs leading-5 text-white/50">{detail}</p>
-    </div>
-  );
-}
-
-function RawJsonPanel({
-  title,
-  detail,
-  data,
-}: {
-  title: string;
-  detail: string;
-  data: unknown;
-}) {
-  return (
-    <section className="rounded-xl border border-white/10 bg-black/24 p-4">
-      <div className="flex items-start justify-between gap-3 border-b border-white/[0.08] pb-3">
-        <div>
-          <div className="text-[10px] uppercase tracking-[0.22em] text-accent-cyan/70">
-            raw json
-          </div>
-          <h3 className="mt-1 font-display text-lg text-white/90">{title}</h3>
-          <p className="mt-1 text-xs leading-5 text-white/45">{detail}</p>
-        </div>
-        <span className="rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1 text-[10px] uppercase tracking-widest text-white/45">
-          read-only
-        </span>
-      </div>
-      <pre className="mt-3 max-h-[420px] overflow-auto rounded-lg border border-white/8 bg-[#02050a]/80 p-3 font-mono text-[11px] leading-5 text-cyan-50/68">
-        {JSON.stringify(data ?? { status: "loading" }, null, 2)}
-      </pre>
-    </section>
-  );
-}
-
-function RawDataRow({
-  label,
-  value,
-  detail,
-}: {
-  label: string;
-  value: string;
-  detail?: string;
-}) {
-  return (
-    <div className="rounded-lg border border-white/10 bg-white/[0.035] p-3">
-      <div className="text-[10px] uppercase tracking-widest text-white/36">{label}</div>
-      <div className="mt-1 break-words font-mono text-sm text-white/82">{value}</div>
-      {detail ? <div className="mt-1 text-xs leading-5 text-white/42">{detail}</div> : null}
-    </div>
-  );
-}
-
-function Layer3RawSpine({ cockpit }: { cockpit?: CockpitBrief }) {
-  const snapshot = useDataSnapshot();
-  const systemHealth = useSystemHealth();
-  const replayStatus = useReplayStatus();
-  const snapshotData = snapshot.data;
-  const dqs = snapshotData?.dqs;
-  const providerRows = Object.entries(snapshotData?.provider_status ?? {});
-  const priceRows = snapshotData?.prices ?? [];
-  const evidenceRefs = cockpit?.decision_trace?.evidence_refs ?? [];
-  const blockedBy = cockpit?.decision_trace?.blocked_by ?? [];
-
-  return (
-    <div className="h-full min-h-0 overflow-y-auto p-4 md:p-5">
-      <div className="space-y-5 pb-12">
-        <LayerHeader
-          meta={LAYERS[3]}
-          detail="Raw backend/provider/contract spine. Bu katmanda input, chat veya aksiyon yok; sadece gelen ViewModel ve veri omurgasi okunur."
-        >
-          <DataQualityBadge
-            dqs={dqs?.score ?? cockpit?.agent_brief?.dqs?.score ?? undefined}
-            generatedAt={snapshotData?.meta?.generated_at ?? cockpit?.generated_at}
-          />
-        </LayerHeader>
-
-        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-          <DataSpineCard
-            label="Endpoint status"
-            value={systemHealth.data?.api_status ?? "loading"}
-            detail={`paper_safe ${systemHealth.data?.paper_safe ? "true" : "false"} / no_execution ${systemHealth.data?.no_execution ? "true" : "false"}`}
-            tone="text-accent-cyan"
-          />
-          <DataSpineCard
-            label="Snapshot"
-            value={snapshotData?.meta?.snapshot_id ?? "loading"}
-            detail={`generated_at ${snapshotData?.meta?.generated_at ?? cockpit?.generated_at ?? "--"}`}
-            tone="text-white"
-          />
-          <DataSpineCard
-            label="Contract"
-            value={`schema ${formatScore(replayStatus.data?.schema_version)}`}
-            detail={`replay ${replayStatus.data?.status ?? "--"} / mode ${replayStatus.data?.mode ?? "--"}`}
-            tone="text-amber-200"
-          />
-          <DataSpineCard
-            label="Audit trace"
-            value={`${evidenceRefs.length} refs`}
-            detail={blockedBy.length ? `blocked_by ${blockedBy.join(", ")}` : "blocked_by none"}
-            tone="text-signal-up"
-          />
-        </div>
-
-        <Layer2DetailGroup
-          index="A"
-          title="Provider Health / Timestamp / Source"
-          detail="Saglayici durumlari, fiyat source alanlari ve available timestamp bilgileri ham snapshot uzerinden okunur."
-        >
-          <div className="grid gap-4 xl:grid-cols-[0.9fr_1.1fr]">
-            <div className="grid gap-2 sm:grid-cols-2">
-              {providerRows.map(([name, provider]) => (
-                <RawDataRow
-                  key={name}
-                  label={name}
-                  value={provider.status}
-                  detail={`last ${provider.last_success_at ?? "--"} / calls ${provider.calls} / fallbacks ${provider.fallbacks}${provider.last_error ? ` / error ${provider.last_error}` : ""}`}
-                />
-              ))}
-              {!providerRows.length ? (
-                <RawDataRow label="provider_status" value="loading" detail="Snapshot bekleniyor." />
-              ) : null}
-            </div>
-            <div className="grid gap-2 sm:grid-cols-2">
-              {priceRows.slice(0, 10).map((price) => (
-                <RawDataRow
-                  key={price.symbol}
-                  label={price.symbol}
-                  value={price.status}
-                  detail={`source ${price.source} / ts ${price.ts} / verified ${price.verified ? "true" : "false"}`}
-                />
-              ))}
-            </div>
-          </div>
-        </Layer2DetailGroup>
-
-        <Layer2DetailGroup
-          index="B"
-          title="DQS Breakdown"
-          detail="DQS alanlari frontendde yeniden hesaplanmaz; backend snapshot icindeki breakdown aynen gosterilir."
-        >
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
-            <RawDataRow label="Freshness" value={formatScore(dqs?.freshness)} />
-            <RawDataRow label="Completeness" value={formatScore(dqs?.completeness)} />
-            <RawDataRow label="Drift" value={formatScore(dqs?.drift)} />
-            <RawDataRow label="Reconciliation" value={formatScore(dqs?.reconciliation)} />
-            <RawDataRow label="Decision usage" value={formatScore(dqs?.decision_usage)} />
-          </div>
-          {dqs?.notes?.length ? (
-            <div className="mt-3 rounded-lg border border-amber-300/18 bg-amber-300/8 p-3 text-xs leading-5 text-amber-100/75">
-              {dqs.notes.join(" / ")}
-            </div>
-          ) : null}
-        </Layer2DetailGroup>
-
-        <div className="grid gap-5 xl:grid-cols-2">
-          <RawJsonPanel
-            title="Cockpit ViewModel"
-            detail="/api/v1/cockpit/brief response body"
-            data={cockpit}
-          />
-          <RawJsonPanel
-            title="Data Snapshot"
-            detail="/api/v1/data/snapshot response body"
-            data={snapshotData}
-          />
-          <RawJsonPanel
-            title="System Health"
-            detail="/api/v1/system/health response body"
-            data={systemHealth.data}
-          />
-          <RawJsonPanel
-            title="Replay / Contract Status"
-            detail="/api/v1/replay/status response body"
-            data={replayStatus.data}
-          />
-        </div>
-      </div>
-    </div>
   );
 }
 
@@ -1304,25 +1112,76 @@ export function CockpitView() {
               <Layer2AssetUniversePanel selectedSymbol={selectedLayer2Symbol} />
             </Layer2DetailGroup>
 
-            <Layer2DetailGroup
-              index="09"
-              title="Governor / Oz-Yonetim"
-              detail="Asset bagimsiz oz-yonetim katmani: agent gozlemler, ogrenir, oneri uretir ve owner onayi bekler. Islem acmaz, ayar degistirmez (observe-only)."
-            >
-              <div className="grid gap-3 lg:grid-cols-2">
-                <div className="lg:col-span-2">
-                  <GovernorPanel />
-                </div>
-                <ProposalPanel />
-                <TaskQueuePanel />
-              </div>
-            </Layer2DetailGroup>
-
           </div>
         </div>
       );
   } else {
-    layerContent = <Layer3RawSpine cockpit={data} />;
+    layerContent = (
+      <div className="h-full overflow-y-auto p-4 md:p-5">
+        <div className="space-y-6 pb-12">
+          <LayerHeader
+            meta={LAYERS[3]}
+            detail="Conscious: agent'in tum ogrenmeleri tek katmanda. Oz-yonetim (governor), kalibrasyon, hatalar, kacan firsatlar ve agirlik/TF ogrenmesi burada okunur. Hicbiri otomatik uygulanmaz — owner onayi gerekir."
+          >
+            <DataQualityBadge dqs={dqs} generatedAt={data?.generated_at} />
+          </LayerHeader>
+
+          <Layer2DetailGroup
+            index="01"
+            title="Governor / Oz-Yonetim"
+            detail="Agent gozlemler, ogrenir, oneri uretir ve owner onayi bekler. Islem acmaz, ayar degistirmez (observe-only)."
+          >
+            <div className="grid gap-3 lg:grid-cols-2">
+              <div className="lg:col-span-2"><GovernorPanel /></div>
+              <ProposalPanel />
+              <TaskQueuePanel />
+            </div>
+          </Layer2DetailGroup>
+
+          <Layer2DetailGroup
+            index="02"
+            title="Ogrenme Ozeti & Kalibrasyon"
+            detail="Kapali paper trade outcome'larindan ogrenme ozeti ve confidence kalibrasyonu (Platt)."
+          >
+            <div className="grid gap-3 lg:grid-cols-2">
+              <LearningPanel />
+              <CalibrationPanel />
+            </div>
+          </Layer2DetailGroup>
+
+          <Layer2DetailGroup
+            index="03"
+            title="Hatalar & Kacan Firsatlar"
+            detail="Tekrar eden hata parmak izleri (mistake memory) ve acilmayan valid setup'larin TTL sonucu (missed opportunity)."
+          >
+            <div className="grid gap-3 lg:grid-cols-2">
+              <MistakeMemoryPanel />
+              <MissedOpportunitiesPanel />
+            </div>
+          </Layer2DetailGroup>
+
+          <Layer2DetailGroup
+            index="04"
+            title="Agirlik Ogrenmesi"
+            detail="Auto-weight rebalance onerisi + gecmis + per-TF tf_weights kalibrasyonu. Aktif weights yalnizca owner onayiyla degisir."
+          >
+            <div className="grid gap-3 lg:grid-cols-2">
+              <WeightProposalPanel />
+              <WeightHistoryPanel />
+              <div className="lg:col-span-2"><TfWeightsPanel /></div>
+            </div>
+          </Layer2DetailGroup>
+
+          <Layer2DetailGroup
+            index="05"
+            title="TF SL/TP Ogrenmesi"
+            detail="Timeframe bazli SL/TP geometri ogrenmesi (hibrit auto / owner-onay)."
+          >
+            <TfTargetsPanel />
+          </Layer2DetailGroup>
+        </div>
+      </div>
+    );
   }
 
   return (
