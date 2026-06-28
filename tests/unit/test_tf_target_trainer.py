@@ -218,3 +218,22 @@ def test_effective_params_use_store_override(isolated_store):
     )
     after = _tf_params("15m")
     assert after["sl_atr_mult"] == 1.05  # store override etkili
+
+
+# ── Worker integration: trigger gate ─────────────────────────────────────────
+
+def test_worker_gate_pending_no_new_outcomes(tmp_path, monkeypatch):
+    """İkinci koşuda (outcome sayısı değişmediyse) GATE_PENDING dönmeli."""
+    monkeypatch.setenv("TF_TARGET_STORE_PATH", str(tmp_path / "tf_targets.json"))
+    monkeypatch.setenv("TF_TARGET_TRIGGER_PATH", str(tmp_path / "trigger.json"))
+    monkeypatch.setenv("TF_TARGET_PROPOSAL_OUT_PATH", str(tmp_path / "prop.json"))
+    # Re-import so module-level Path() pick up the env.
+    import importlib
+    import apps.learning_worker.main as lw
+    importlib.reload(lw)
+    # First run primes the trigger file.
+    r1 = lw.run_once()
+    assert r1.get("tf_target_status") in ("NO_NUDGE", "PROPOSED", "INSUFFICIENT")
+    # Second run — outcomes_seen aynıysa kapı kapalı.
+    r2 = lw.run_once()
+    assert r2.get("tf_target_status", "").startswith("GATE_PENDING")

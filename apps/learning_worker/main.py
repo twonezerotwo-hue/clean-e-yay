@@ -24,6 +24,8 @@ from packages.learning import (
     rebalance_store,
     run_store,
     tf_calibration,
+    tf_target_store,
+    tf_target_trainer,
     tf_weight_trainer,
 )
 from packages.learning import (
@@ -50,6 +52,42 @@ TF_CALIBRATION_OUT_PATH = Path(
 TF_WEIGHT_PROPOSAL_OUT_PATH = Path(
     os.environ.get("TF_WEIGHT_PROPOSAL_OUT_PATH", "data/runtime/tf_weight_proposal.json")
 )
+TF_TARGET_PROPOSAL_OUT_PATH = Path(
+    os.environ.get("TF_TARGET_PROPOSAL_OUT_PATH", "data/runtime/tf_target_proposal.json")
+)
+# Son tf_target çalışmasının dataset_size'ını burada tutuyoruz; bir sonraki
+# döngüde yalnızca outcomes_seen bundan ≥ TF_TARGET_MIN_NEW kadar arttıysa
+# trainer'ı tekrar çağırıyoruz (örnek-kapılı tetik). Periyodik kısım loop'un
+# kendisi (her gecelik koşu).
+TF_TARGET_TRIGGER_PATH = Path(
+    os.environ.get("TF_TARGET_TRIGGER_PATH", "data/runtime/tf_target_trigger.json")
+)
+TF_TARGET_MIN_NEW = int(os.environ.get("TF_TARGET_MIN_NEW", "20"))
+
+
+def _tf_target_should_run(outcomes_seen: int) -> tuple[bool, int]:
+    """Örnek-kapılı tetik: son çalıştırmadan beri ≥TF_TARGET_MIN_NEW yeni outcome
+    biriktiyse True. İlk çalıştırma (state yoksa) True. (gate, last_seen)."""
+    try:
+        if TF_TARGET_TRIGGER_PATH.exists():
+            data = json.loads(TF_TARGET_TRIGGER_PATH.read_text(encoding="utf-8"))
+            last = int(data.get("last_outcomes_seen", 0))
+            return (outcomes_seen - last >= TF_TARGET_MIN_NEW, last)
+    except (OSError, json.JSONDecodeError, ValueError):
+        pass
+    return True, 0
+
+
+def _tf_target_save_trigger(outcomes_seen: int) -> None:
+    try:
+        TF_TARGET_TRIGGER_PATH.parent.mkdir(parents=True, exist_ok=True)
+        TF_TARGET_TRIGGER_PATH.write_text(
+            json.dumps({"last_outcomes_seen": outcomes_seen,
+                        "updated_at": datetime.now(UTC).isoformat()}, indent=2),
+            encoding="utf-8",
+        )
+    except OSError:
+        pass
 
 
 def run_once() -> dict:
@@ -132,6 +170,50 @@ def run_once() -> dict:
     except Exception as exc:  # defensive — worker patlamamalı
         errors.append(f"tf_weight:{type(exc).__name__}")
 
+    # TF-target trainer (Faz B): TF başına SL/TP geometri nudge önerisi. Hibrit
+    # uygulama — tf_target_store dar bantta auto, dışında PENDING. Tetik örnek-
+    # kapılı: son koşudan beri ≥TF_TARGET_MIN_NEW yeni outcome biriktiyse çalışır.
+    tf_target_status = "SKIPPED"
+    tf_target_decisions: dict[str, str] = {}
+    try:
+        should_run, last_seen = _tf_target_should_run(outcomes_seen)
+        if not should_run:
+            tf_target_status = (
+                f"GATE_PENDING (have={outcomes_seen} last={last_seen} "
+                f"need_new>={TF_TARGET_MIN_NEW})"
+            )
+            log.info("tf_target_trainer: %s", tf_target_status)
+        else:
+            tt_result = tf_target_trainer.train(
+                store_overrides=tf_target_store.active_overrides()
+            )
+            if isinstance(tt_result, tf_target_trainer.TfTargetProposal):
+                payload = tf_target_trainer.proposal_to_dict(tt_result)
+                if tt_result.per_timeframe:
+                    # Trainer önerdiyse store hibrit kapısından geçir.
+                    baseline = {
+                        tf: tf_target_trainer._baseline_for_tf(
+                            tf, tf_target_store.active_overrides()
+                        )
+                        for tf in tt_result.per_timeframe
+                    }
+                    rec = tf_target_store.submit_proposal(payload, current_baseline=baseline)
+                    tf_target_decisions = dict(rec.get("decisions") or {})
+                    tf_target_status = "PROPOSED"
+                else:
+                    tf_target_status = "NO_NUDGE"
+                TF_TARGET_PROPOSAL_OUT_PATH.parent.mkdir(parents=True, exist_ok=True)
+                TF_TARGET_PROPOSAL_OUT_PATH.write_text(
+                    json.dumps(payload, indent=2, default=str), encoding="utf-8"
+                )
+            else:
+                tf_target_status = str(tt_result.get("status", "UNKNOWN"))
+            _tf_target_save_trigger(outcomes_seen)
+            log.info("tf_target_trainer: %s decisions=%s",
+                     tf_target_status, tf_target_decisions)
+    except Exception as exc:  # defensive — worker patlamamalı
+        errors.append(f"tf_target:{type(exc).__name__}")
+
     # G2: auto-weight trainer. Yeterli veri varsa pending proposal güncellenir;
     # active weights DEĞİŞMEZ — owner approval gerekir.
     try:
@@ -171,6 +253,8 @@ def run_once() -> dict:
         "tf_calibration_status": tf_calibration_status,
         "tf_weights_trusted": tf_weights_trusted,
         "tf_weight_proposal_status": tf_weight_proposal_status,
+        "tf_target_status": tf_target_status,
+        "tf_target_decisions": tf_target_decisions,
         "errors": errors,
     }
     run_store.save(run)
