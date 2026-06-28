@@ -313,6 +313,131 @@ def compute_fixed_targets(
     )
 
 
+# ── TF-duyarlı SL/TP — açılış-anı geometrisini timeframe'in gerçek
+# volatilitesine (ATR) çapalar. `thresholds.timeframe_targets.enabled:false`
+# iken kullanılmaz (lifecycle.open_position compute_fixed_targets'a düşer);
+# enabled iken canonical motor budur. Single source of truth — shadow ve canlı
+# açılış aynı fonksiyonu çağırır, kopya yok.
+#
+# ATR varsa (birincil): SL_mesafe = ATR × sl_atr_mult × tier.sl_mult, sonra
+#   [sl_pct_floor, sl_pct_cap] mutlak bandına kıstırılır (saçma ATR'den korur).
+# ATR yoksa (dürüst fallback): sl_pct[symbol] × (sl_atr_mult/1.5) × tier.sl_mult,
+#   yine aynı [floor, cap] bandında. Uydurma yok — sadece bilinen %-tabanı TF'ye
+#   göre ölçeklenir (sl_atr_mult 1.5'i baseline kabul eder).
+# TP_mesafe = SL_mesafe × rr (her iki durumda).
+_TF_TARGETS_DEFAULTS: dict[str, dict[str, float]] = {
+    "15m": {"sl_atr_mult": 1.0, "rr": 1.5, "sl_pct_floor": 0.005, "sl_pct_cap": 0.020},
+    "1h":  {"sl_atr_mult": 1.2, "rr": 1.8, "sl_pct_floor": 0.010, "sl_pct_cap": 0.035},
+    "4h":  {"sl_atr_mult": 1.5, "rr": 2.0, "sl_pct_floor": 0.015, "sl_pct_cap": 0.050},
+    "1d":  {"sl_atr_mult": 1.5, "rr": 2.5, "sl_pct_floor": 0.020, "sl_pct_cap": 0.080},
+}
+_TF_TARGETS_BASELINE_ATR_MULT = 1.5  # fallback ölçeklemesi için referans
+
+
+def _tf_targets_cfg() -> dict:
+    """`thresholds.timeframe_targets` bloğunu okur (yoksa defaults)."""
+    try:
+        return load_thresholds().get("timeframe_targets", {}) or {}
+    except (OSError, KeyError, ValueError):
+        return {}
+
+
+def tf_targets_enabled() -> bool:
+    return bool(_tf_targets_cfg().get("enabled", False))
+
+
+def _tf_params(timeframe: str) -> dict[str, float]:
+    cfg = _tf_targets_cfg()
+    tf_cfg = cfg.get(timeframe) or {}
+    base = _TF_TARGETS_DEFAULTS.get(timeframe, _TF_TARGETS_DEFAULTS["1d"])
+    return {
+        "sl_atr_mult": float(tf_cfg.get("sl_atr_mult", base["sl_atr_mult"])),
+        "rr": float(tf_cfg.get("rr", base["rr"])),
+        "sl_pct_floor": float(tf_cfg.get("sl_pct_floor", base["sl_pct_floor"])),
+        "sl_pct_cap": float(tf_cfg.get("sl_pct_cap", base["sl_pct_cap"])),
+    }
+
+
+def compute_tf_targets(
+    symbol: str,
+    side: str,
+    entry: float,
+    *,
+    timeframe: str,
+    atr: float | None,
+    predicted_confidence: float | None = None,
+    manual: bool = False,
+) -> AdaptiveTargets:
+    """TF-duyarlı SL/TP — ATR-çapalı + floor/cap, ATR yoksa TF-ölçekli fallback.
+
+    `AdaptiveTargets` şeklini döndürür → shadow karşılaştırması bedava.
+    `sl_basis` ∈ {"tf_atr", "tf_fixed_pct", "invalid"}; `tp_basis` = "tf_rr".
+    """
+    from packages.paper import conviction
+
+    if entry <= 0 or side not in {"long", "short"}:
+        return AdaptiveTargets(
+            sl=0.0, tp=0.0, rr=0.0,
+            sl_basis="invalid", tp_basis="invalid",
+            rr_floor_met=False, sl_distance=0.0,
+            notes=["entry veya side geçersiz"],
+        )
+
+    tier = conviction.tier_for(None) if manual else conviction.tier_for(predicted_confidence)
+    params = _tf_params(timeframe)
+    sl_atr_mult = params["sl_atr_mult"]
+    rr = params["rr"]
+    floor = params["sl_pct_floor"]
+    cap = params["sl_pct_cap"]
+
+    # SL mesafesini hesapla: ATR varsa ATR-çapalı, yoksa sembolün sabit-% tabanı.
+    if atr is not None and atr > 0:
+        sl_distance_raw = atr * sl_atr_mult * tier.sl_mult
+        basis = "tf_atr"
+        basis_note = f"atr={atr:.4f} × sl_atr_mult={sl_atr_mult} × tier.sl_mult={tier.sl_mult}"
+    else:
+        th = load_thresholds().get("paper_trading", {}) or {}
+        sl_pct_map = th.get("sl_pct", {}) or {}
+        base_pct = float(sl_pct_map.get(symbol, 0.04))
+        # TF ölçeği: sl_atr_mult / baseline (1.5). 15m → ×0.67, 1d → ×1.0.
+        tf_scale = sl_atr_mult / _TF_TARGETS_BASELINE_ATR_MULT
+        sl_distance_raw = entry * base_pct * tf_scale * tier.sl_mult
+        basis = "tf_fixed_pct"
+        basis_note = (
+            f"atr_unavailable; base_pct={base_pct} × tf_scale={tf_scale:.3f}"
+            f" × tier.sl_mult={tier.sl_mult}"
+        )
+
+    # %-floor/cap'e kıstır (mutlak güvenlik bandı — saçma ATR ya da küçük entry'den korur).
+    sl_pct_raw = sl_distance_raw / entry
+    sl_pct = max(floor, min(cap, sl_pct_raw))
+    sl_distance = entry * sl_pct
+    clamp_note = ""
+    if sl_pct_raw < floor:
+        clamp_note = f"clamped_to_floor({floor})"
+    elif sl_pct_raw > cap:
+        clamp_note = f"clamped_to_cap({cap})"
+
+    tp_distance = sl_distance * rr
+    sl = entry - sl_distance if side == "long" else entry + sl_distance
+    tp = entry + tp_distance if side == "long" else entry - tp_distance
+
+    notes = [f"tf={timeframe} tier={tier.name} rr={rr}", basis_note]
+    if clamp_note:
+        notes.append(clamp_note)
+
+    return AdaptiveTargets(
+        sl=round(sl, 4),
+        tp=round(tp, 4),
+        rr=round(rr, 4),
+        sl_basis=basis,
+        tp_basis="tf_rr",
+        rr_floor_met=True,  # tasarımca TF rr config'ten geliyor — floor kavramı yok
+        sl_distance=round(sl_distance, 4),
+        notes=notes,
+    )
+
+
 def tf_size_cap(timeframe: str) -> float:
     """`timeframe_risk.risk_multiplier`'dan TF size tavanı (≤1.0; yalnız küçültür).
 

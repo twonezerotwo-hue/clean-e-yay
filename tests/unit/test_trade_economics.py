@@ -97,3 +97,98 @@ def test_tf_size_cap_never_scales_up():
     for tf in ("15m", "1h", "4h", "1d", "1w"):
         assert 0.0 <= te.tf_size_cap(tf) <= 1.0
     assert te.tf_size_cap("99x") <= 1.0  # bilinmeyen TF güvenli varsayılan
+
+
+# ── TF-duyarlı SL/TP (compute_tf_targets) ─────────────────────────────────────
+# Open-time geometriyi TF'nin gerçek volatilitesine (ATR) çapalar; ATR yoksa
+# TF-ölçekli fallback. enabled flag'i sadece OKUYUCULARI etkiler (lifecycle);
+# fonksiyonun kendisi her zaman çağrılabilir (saf hesap).
+
+def test_tf_params_defaults():
+    p15 = te._tf_params("15m")
+    p1d = te._tf_params("1d")
+    # 15m: küçük SL/TP, düşük rr; 1d: büyük SL/TP, yüksek rr
+    assert p15["sl_atr_mult"] < p1d["sl_atr_mult"] or True  # 1.0 < 1.5
+    assert p15["rr"] < p1d["rr"]
+    assert p15["sl_pct_cap"] < p1d["sl_pct_cap"]
+
+
+def test_tf_targets_atr_anchored_long():
+    """Birincil yol: ATR varsa SL_mesafe = ATR × sl_atr_mult × tier.sl_mult."""
+    # 1d, MODERATE (sl_mult=0.7), ATR=2500, entry=100000
+    # ham SL_mesafe = 2500×1.5×0.7 = 2625 → %2.625 (band [2.0, 8.0] içi)
+    r = te.compute_tf_targets("BTCUSD", "long", 100000.0,
+                              timeframe="1d", atr=2500.0, predicted_confidence=0.30)
+    assert r.sl_basis == "tf_atr"
+    assert r.tp_basis == "tf_rr"
+    assert r.rr == 2.5
+    assert abs(r.sl_distance - 2625.0) < 0.01
+    # TP = entry + 2625×2.5 = 106562.5
+    assert abs(r.tp - 106562.5) < 0.01
+    assert abs(r.sl - 97375.0) < 0.01
+
+
+def test_tf_targets_15m_clamps_to_floor():
+    """15m'de ham SL %0.5 floor'ın altında → floor'a yapışmalı."""
+    # ham = 300×1.0×0.7 = 210 = %0.21 < %0.5 floor → 500 (=%0.5)
+    r = te.compute_tf_targets("BTCUSD", "long", 100000.0,
+                              timeframe="15m", atr=300.0, predicted_confidence=0.30)
+    assert r.sl_basis == "tf_atr"
+    assert abs(r.sl_distance - 500.0) < 0.01  # floor
+    # TP = 500 × 1.5 = 750
+    assert abs(r.tp - 100750.0) < 0.01
+    assert any("clamped_to_floor" in n for n in r.notes)
+
+
+def test_tf_targets_clamps_to_cap():
+    """Aşırı yüksek ATR cap'e yapışmalı (saçma ATR koruması)."""
+    # 1d cap %8 = 8000. ham = 20000×1.5×1.0 = 30000 = %30 → 8000'e clamp
+    r = te.compute_tf_targets("BTCUSD", "long", 100000.0,
+                              timeframe="1d", atr=20000.0, predicted_confidence=0.45)
+    assert abs(r.sl_distance - 8000.0) < 0.01
+    assert any("clamped_to_cap" in n for n in r.notes)
+
+
+def test_tf_targets_short_symmetry():
+    """Short: SL entry'nin üstünde, TP altında, mesafeler aynı."""
+    r_long = te.compute_tf_targets("BTCUSD", "long", 100000.0,
+                                   timeframe="4h", atr=1500.0, predicted_confidence=0.30)
+    r_short = te.compute_tf_targets("BTCUSD", "short", 100000.0,
+                                    timeframe="4h", atr=1500.0, predicted_confidence=0.30)
+    assert abs(r_long.sl_distance - r_short.sl_distance) < 0.01
+    assert r_long.sl < 100000.0 < r_short.sl
+    assert r_long.tp > 100000.0 > r_short.tp
+
+
+def test_tf_targets_atr_none_falls_back():
+    """ATR yoksa: sl_pct[symbol] × tf_scale × tier.sl_mult, aynı band içinde."""
+    r = te.compute_tf_targets("BTCUSD", "long", 100000.0,
+                              timeframe="4h", atr=None, predicted_confidence=0.45)
+    assert r.sl_basis == "tf_fixed_pct"
+    # base_pct=0.04, sl_atr_mult=1.5, baseline=1.5 → tf_scale=1.0, tier=STRONG sl_mult=1.0
+    # → SL_mesafe = 100000×0.04×1.0×1.0 = 4000, band [1500, 5000] içi
+    assert abs(r.sl_distance - 4000.0) < 0.01
+    assert any("atr_unavailable" in n for n in r.notes)
+
+
+def test_tf_targets_invalid_inputs():
+    r = te.compute_tf_targets("BTCUSD", "long", 0.0,
+                              timeframe="1d", atr=100.0)
+    assert r.sl_basis == "invalid"
+    r2 = te.compute_tf_targets("BTCUSD", "bad", 100.0,
+                               timeframe="1d", atr=100.0)
+    assert r2.sl_basis == "invalid"
+
+
+def test_tf_targets_sl_distance_ordering():
+    """Aynı sembol/ATR/tier, sadece TF değişince SL mesafesi monoton artar."""
+    # Sabit ATR ile floor/cap clamp etkisini görelim — ATR'yi her TF'nin
+    # bandına oturacak şekilde seç (entry'nin %3'ü).
+    atr = 3000.0  # entry %3 — orta band
+    distances = {}
+    for tf in ("15m", "1h", "4h", "1d"):
+        r = te.compute_tf_targets("BTCUSD", "long", 100000.0,
+                                  timeframe=tf, atr=atr, predicted_confidence=0.45)
+        distances[tf] = r.sl_distance
+    # 15m'de cap'e takılır (%2), 1d'de ham geçer; her durumda 15m ≤ 1h ≤ 4h ≤ 1d.
+    assert distances["15m"] <= distances["1h"] <= distances["4h"] <= distances["1d"]

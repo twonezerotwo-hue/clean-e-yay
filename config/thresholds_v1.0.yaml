@@ -44,6 +44,20 @@ timeframe_risk:
   # deliberate invariant — değiştirme (test_timeframe_* korur).
   "1w":  { role: strategic,    risk_multiplier: 0.00, paper_execution: false, time_stop_hours: 0 }
 
+# TF-duyarlı SL/TP geometrisi — açılış-anı stop/target mesafelerini timeframe'in
+# gerçek volatilitesine (ATR) çapalar. enabled:false → mevcut compute_fixed_targets
+# birebir korunur (geri dönüş anında, risksiz). Faz B'de ayrı onayla true'ya çekilir.
+# ATR varsa: SL_mesafe = ATR × sl_atr_mult × tier.sl_mult, [sl_pct_floor, sl_pct_cap] kıstır
+# ATR yoksa: paper_trading.sl_pct[symbol] × tf scale × tier.sl_mult (dürüst fallback)
+# TP_mesafe = SL_mesafe × rr (her iki durumda).
+# Not: 15m rr=1.5, trade_economics.min_rr (1.5) ile dahili tutarlı.
+timeframe_targets:
+  enabled: false
+  "15m": { sl_atr_mult: 1.0, rr: 1.5, sl_pct_floor: 0.005, sl_pct_cap: 0.020 }
+  "1h":  { sl_atr_mult: 1.2, rr: 1.8, sl_pct_floor: 0.010, sl_pct_cap: 0.035 }
+  "4h":  { sl_atr_mult: 1.5, rr: 2.0, sl_pct_floor: 0.015, sl_pct_cap: 0.050 }
+  "1d":  { sl_atr_mult: 1.5, rr: 2.5, sl_pct_floor: 0.020, sl_pct_cap: 0.080 }
+
 # P0 — Olay riski (event risk) yalnızca KISITLAYICIDIR. Yaklaşan, doğrulanmış
 # (verified) yüksek etkili takvim olayı varsa yeni pozisyon açılışını kısar;
 # ASLA size artırmaz, ASLA RiskGate/DQS/KillSwitch/halt gate'lerini gevşetmez.
