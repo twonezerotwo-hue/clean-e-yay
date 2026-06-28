@@ -37,7 +37,11 @@ from packages.liquidity import sweep as liquidity_sweep_engine
 from packages.mode import config as mode_config
 from packages.mode import filter as mode_filter
 from packages.mode import profile_selector
-from packages.risk.trade_economics import compute_adaptive_targets, compute_fixed_targets
+from packages.risk.trade_economics import (
+    compute_adaptive_targets,
+    compute_fixed_targets,
+    compute_tf_targets,
+)
 from packages.scoring import exhaustion as exhaustion_engine
 from packages.setup import classifier as setup_classifier
 from packages.volume import engine as volume_engine
@@ -300,6 +304,14 @@ def _setup_and_conflict_for_symbol(
                     support=getattr(key_levels, "support", None),
                     resistance=getattr(key_levels, "resistance", None),
                 )
+                # TF-aware (ATR × TF mult, [floor, cap] bandında, TF-bazlı rr).
+                # Faz A gözleminin merkez kolonu — fixed/adaptive ile yan yana
+                # her tick loglanır; Faz B aktivasyon kararının kanıtı bu üçlüden.
+                tf_aware = compute_tf_targets(
+                    symbol or "", side, current_price,
+                    timeframe=tf, atr=atr,
+                    predicted_confidence=getattr(decision, "confidence", None),
+                )
                 target_comparison = {
                     "side": side,
                     "entry": round(current_price, 4),
@@ -307,6 +319,12 @@ def _setup_and_conflict_for_symbol(
                     "adaptive": {
                         "sl": adaptive.sl, "tp": adaptive.tp, "rr": adaptive.rr,
                         "tp_basis": adaptive.tp_basis, "rr_floor_met": adaptive.rr_floor_met,
+                    },
+                    "tf_aware": {
+                        "sl": tf_aware.sl, "tp": tf_aware.tp, "rr": tf_aware.rr,
+                        "sl_basis": tf_aware.sl_basis, "tp_basis": tf_aware.tp_basis,
+                        "sl_distance": tf_aware.sl_distance,
+                        "timeframe": tf,
                     },
                 }
         except Exception:
