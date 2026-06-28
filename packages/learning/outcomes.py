@@ -44,6 +44,9 @@ class CanonicalOutcome:
     data_verified: bool = False
     source_quality: str = "unknown"
     paper_only: bool = True
+    # MAE/MFE (TF-target trainer girdisi). Legacy kayıtlar 0.0 default ile gelir.
+    mae_pct: float = 0.0
+    mfe_pct: float = 0.0
 
 
 def _duration_seconds(opened_at: str | None, closed_at: str | None) -> float | None:
@@ -113,6 +116,8 @@ def build_outcome(t: Trade) -> CanonicalOutcome:
         data_verified=verified,
         source_quality="verified" if verified else "unverified",
         paper_only=True,
+        mae_pct=float(getattr(t, "mae_pct", 0.0) or 0.0),
+        mfe_pct=float(getattr(t, "mfe_pct", 0.0) or 0.0),
     )
 
 
@@ -162,6 +167,8 @@ def build_outcome_from_log_entry(entry: dict) -> CanonicalOutcome:
         data_verified=verified,
         source_quality="verified" if verified else "unverified",
         paper_only=True,
+        mae_pct=float(outcome.get("mae_pct") or 0.0),
+        mfe_pct=float(outcome.get("mfe_pct") or 0.0),
     )
 
 

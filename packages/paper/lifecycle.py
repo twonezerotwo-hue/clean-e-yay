@@ -336,6 +336,8 @@ def close_position(
         open_session_size_multiplier=pos.open_session_size_multiplier,
         open_session_primary_market_open=pos.open_session_primary_market_open,
         open_session_evidence=pos.open_session_evidence,
+        mae_pct=pos.mae_pct,
+        mfe_pct=pos.mfe_pct,
     )
     state.recent_trades.append(trade)
     # Signal attribution: kapanan trade'in karar izini kalıcı decision_log'a yaz
@@ -393,6 +395,24 @@ def _time_stop_due(pos: Position, now: datetime) -> bool:
         return now >= datetime.fromisoformat(pos.valid_until)
     except ValueError:
         return False
+
+
+def _update_excursions(pos: Position, price: float) -> None:
+    """Pozisyon süresince MAE/MFE'yi monoton ilerlet (yakıt: tf_target_trainer).
+
+    MAE = entry'ye göre ters yönde gördüğü en uç hareket (%, pozitif sayı).
+    MFE = entry'ye göre lehte gördüğü en uç hareket (%, pozitif sayı).
+    Saf hesap; tick fiyatı güvenli (price_sanity'den geçmiş) varsayılır.
+    """
+    if pos.entry_price <= 0 or price <= 0:
+        return
+    diff = (price - pos.entry_price) / pos.entry_price * 100.0
+    favorable = diff if pos.side == "long" else -diff
+    adverse = -diff if pos.side == "long" else diff
+    if favorable > pos.mfe_pct:
+        pos.mfe_pct = round(favorable, 4)
+    if adverse > pos.mae_pct:
+        pos.mae_pct = round(adverse, 4)
 
 
 def _trailing_breached(pos: Position, price: float) -> bool:
@@ -516,6 +536,7 @@ def tick(
                 )
             continue
         pos.current_price = price
+        _update_excursions(pos, price)
         # SL/TP kontrol — formalized fill simulation (fill at observed tick price).
         fill = execution_sim.simulate_exit_fill(
             side=pos.side, entry_price=pos.entry_price, sl=pos.sl, tp=pos.tp,
@@ -569,6 +590,7 @@ def flatten_all(
                     timeframe=pos.timeframe, reason=reason,
                 )
             continue
+        _update_excursions(pos, price)
         closed.append(close_position(state, pos, exit_price=price, reason=reason))
     return closed
 

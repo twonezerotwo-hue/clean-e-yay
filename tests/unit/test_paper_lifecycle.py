@@ -432,3 +432,104 @@ def test_risk_plan_update_rejects_non_number_and_closed_position(paper_env) -> N
     )
     assert closed.status_code == 400
     assert closed.json()["reason"] == "Pozisyon kapalı olduğu için risk planı güncellenemez."
+
+
+# ── MAE/MFE excursion tracking (TF-target trainer'ın yakıtı) ──────────────────
+
+def test_update_excursions_long_monotonic():
+    """Long: lehte hareket mfe'yi artırır, ters hareket mae'yi artırır; geri
+    çekilince düşmez (monoton)."""
+    from packages.paper.state import Position
+    from packages.paper.lifecycle import _update_excursions
+    p = Position(
+        id="t", symbol="BTCUSD", side="long",
+        entry_price=100000.0, current_price=100000.0,
+        size_usd=1000, sl=95000, tp=110000,
+        opened_at="2026-06-28T10:00:00+00:00",
+    )
+    _update_excursions(p, 101000.0)  # +%1
+    assert p.mfe_pct == 1.0 and p.mae_pct == 0.0
+    _update_excursions(p, 99500.0)   # -%0.5
+    assert p.mfe_pct == 1.0 and p.mae_pct == 0.5
+    _update_excursions(p, 102000.0)  # +%2
+    assert p.mfe_pct == 2.0 and p.mae_pct == 0.5
+    _update_excursions(p, 100500.0)  # geri çekilir, monoton
+    assert p.mfe_pct == 2.0 and p.mae_pct == 0.5
+    _update_excursions(p, 98500.0)   # -%1.5
+    assert p.mfe_pct == 2.0 and p.mae_pct == 1.5
+
+
+def test_update_excursions_short_symmetric():
+    """Short: aşağı = lehte (mfe), yukarı = ters (mae)."""
+    from packages.paper.state import Position
+    from packages.paper.lifecycle import _update_excursions
+    p = Position(
+        id="t", symbol="ETHUSD", side="short",
+        entry_price=4000.0, current_price=4000.0,
+        size_usd=1000, sl=4200, tp=3600,
+        opened_at="2026-06-28T10:00:00+00:00",
+    )
+    _update_excursions(p, 3950.0)  # -%1.25 → lehte
+    assert p.mfe_pct == 1.25 and p.mae_pct == 0.0
+    _update_excursions(p, 4100.0)  # +%2.5 → ters
+    assert p.mae_pct == 2.5 and p.mfe_pct == 1.25
+
+
+def test_update_excursions_invalid_inputs_noop():
+    """Geçersiz fiyat/entry → no-op (KeyError/Div0 yok)."""
+    from packages.paper.state import Position
+    from packages.paper.lifecycle import _update_excursions
+    p = Position(
+        id="t", symbol="X", side="long",
+        entry_price=0.0, current_price=0.0,
+        size_usd=0, sl=None, tp=None,
+        opened_at="2026-06-28T10:00:00+00:00",
+    )
+    _update_excursions(p, 100.0)
+    assert p.mae_pct == 0.0 and p.mfe_pct == 0.0
+    p2 = Position(
+        id="t", symbol="X", side="long",
+        entry_price=100.0, current_price=100.0,
+        size_usd=0, sl=None, tp=None,
+        opened_at="2026-06-28T10:00:00+00:00",
+    )
+    _update_excursions(p2, 0.0)
+    assert p2.mae_pct == 0.0 and p2.mfe_pct == 0.0
+
+
+def test_close_position_carries_excursions_to_trade():
+    """Pozisyon kapanınca MAE/MFE Trade'e taşınır → outcomes/decision_log akar."""
+    from packages.paper.state import PaperState, Position
+    from packages.paper.lifecycle import close_position
+    pos = Position(
+        id="t1", symbol="BTCUSD", side="long",
+        entry_price=100000.0, current_price=102000.0,
+        size_usd=1000, sl=95000, tp=110000,
+        opened_at="2026-06-28T10:00:00+00:00",
+        data_verified=True,
+        mae_pct=1.5, mfe_pct=2.0,
+    )
+    state = PaperState(
+        equity_usd=100000.0, peak_equity_usd=100000.0,
+        open_positions=[pos], recent_trades=[],
+    )
+    trade = close_position(state, pos, exit_price=101500.0, reason="TP")
+    assert trade.mae_pct == 1.5
+    assert trade.mfe_pct == 2.0
+
+
+def test_canonical_outcome_carries_excursions():
+    """Trade → CanonicalOutcome: MAE/MFE alanları taşınır (trainer girdisi)."""
+    from packages.paper.state import Trade
+    from packages.learning.outcomes import build_outcome
+    t = Trade(
+        id="t1", symbol="BTCUSD", side="long",
+        entry_price=100000.0, exit_price=101500.0, pnl_usd=15.0,
+        opened_at="2026-06-28T10:00:00+00:00",
+        closed_at="2026-06-28T12:00:00+00:00",
+        close_reason="TP", data_verified=True,
+        mae_pct=1.5, mfe_pct=2.0,
+    )
+    o = build_outcome(t)
+    assert o.mae_pct == 1.5
+    assert o.mfe_pct == 2.0

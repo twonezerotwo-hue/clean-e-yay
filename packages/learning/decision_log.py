@@ -92,6 +92,9 @@ def entry_for(trade: Trade) -> dict:
             "exit_price": trade.exit_price,
             "pnl_usd": trade.pnl_usd,
             "won": won,
+            # MAE/MFE — TF-target trainer'ın yakıtı (legacy: 0.0).
+            "mae_pct": float(getattr(trade, "mae_pct", 0.0) or 0.0),
+            "mfe_pct": float(getattr(trade, "mfe_pct", 0.0) or 0.0),
         },
         "opened_at": trade.opened_at,
         "closed_at": trade.closed_at,

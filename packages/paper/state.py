@@ -78,6 +78,12 @@ class Position:
     trail_activate_pct: float | None = None  # trailing'in devreye girdiği lehte hareket
     trail_peak: float | None = None          # lehteki en uç fiyat (highwater)
     trail_active: bool = False               # trailing devreye girdi mi
+    # MAE/MFE (TF-target trainer'ın yakıtı). Her tick `current_price` güncellenirken
+    # _update_excursions tarafından monoton ilerletilir; kapanışta Trade'e taşınır.
+    # mae_pct: entry'ye göre ters yönde gördüğü en uç hareket (pozitif %).
+    # mfe_pct: entry'ye göre lehte gördüğü en uç hareket (pozitif %).
+    mae_pct: float = 0.0
+    mfe_pct: float = 0.0
 
     @property
     def unrealized_pnl_usd(self) -> float:
@@ -118,6 +124,9 @@ class Trade:
     open_session_size_multiplier: float | None = None
     open_session_primary_market_open: bool | None = None
     open_session_evidence: str | None = None
+    # MAE/MFE pozisyondan miras alınır (TF-target trainer girdisi).
+    mae_pct: float = 0.0
+    mfe_pct: float = 0.0
 
 
 @dataclass
