@@ -32,6 +32,7 @@ import { ScenarioPanel } from "@/components/panels/ScenarioPanel";
 import { GovernorPanel } from "@/components/panels/GovernorPanel";
 import { ProposalPanel } from "@/components/panels/ProposalPanel";
 import { TaskQueuePanel } from "@/components/panels/TaskQueuePanel";
+import { TradingPanel } from "@/components/panels/TradingPanel";
 import { LearningPanel } from "@/components/panels/LearningPanel";
 import { OutcomeLedgerPanel } from "@/components/panels/OutcomeLedgerPanel";
 import { LearningWorkerPanel } from "@/components/panels/LearningWorkerPanel";
@@ -1150,6 +1151,7 @@ export function CockpitView() {
             detail="Kapali paper trade outcome'larindan ogrenme ozeti ve confidence kalibrasyonu (Platt)."
           >
             <div className="grid gap-3 lg:grid-cols-2">
+              <div className="lg:col-span-2"><TradingPanel /></div>
               <LearningPanel />
               <CalibrationPanel />
               <div className="lg:col-span-2"><OutcomeLedgerPanel /></div>
