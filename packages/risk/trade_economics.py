@@ -347,15 +347,31 @@ def tf_targets_enabled() -> bool:
 
 
 def _tf_params(timeframe: str) -> dict[str, float]:
+    """Effective parametreler: config defaults → YAML override → öğrenilen store.
+
+    Trainer'ın `tf_target_store` üzerinden uyguladığı (AUTO_APPLIED veya owner-
+    approved) override'lar son sözü söyler — sistem zamanla kendi öğrendiği
+    SL/TP geometrisini kullanır. Store import'u local — paper → learning yönü
+    paper tarafı için temizdir (learning paper'ı import eder, tersi yok).
+    """
     cfg = _tf_targets_cfg()
     tf_cfg = cfg.get(timeframe) or {}
     base = _TF_TARGETS_DEFAULTS.get(timeframe, _TF_TARGETS_DEFAULTS["1d"])
-    return {
+    params = {
         "sl_atr_mult": float(tf_cfg.get("sl_atr_mult", base["sl_atr_mult"])),
         "rr": float(tf_cfg.get("rr", base["rr"])),
         "sl_pct_floor": float(tf_cfg.get("sl_pct_floor", base["sl_pct_floor"])),
         "sl_pct_cap": float(tf_cfg.get("sl_pct_cap", base["sl_pct_cap"])),
     }
+    try:
+        from packages.learning import tf_target_store
+        override = (tf_target_store.active_overrides() or {}).get(timeframe) or {}
+        for key, value in override.items():
+            if key in params:
+                params[key] = float(value)
+    except Exception:  # store bozuk/silinmiş → saf config (bozulma yok)
+        pass
+    return params
 
 
 def compute_tf_targets(
