@@ -32,6 +32,9 @@ import { ExecutionReadinessPanel } from "@/components/panels/ExecutionReadinessP
 import { OrderTicketPanel } from "@/components/panels/OrderTicketPanel";
 import { NewsPanel } from "@/components/panels/NewsPanel";
 import { ScenarioPanel } from "@/components/panels/ScenarioPanel";
+import { GovernorPanel } from "@/components/panels/GovernorPanel";
+import { ProposalPanel } from "@/components/panels/ProposalPanel";
+import { TaskQueuePanel } from "@/components/panels/TaskQueuePanel";
 import type { CockpitBrief } from "@/types/generated/api";
 
 import { HolographicSignalDeck } from "./HolographicSignalDeck";
@@ -1299,6 +1302,20 @@ export function CockpitView() {
               detail="Tum evren listesi degil; secili assetin registry rolleri, snapshot fiyati ve bucket kaydi okunur."
             >
               <Layer2AssetUniversePanel selectedSymbol={selectedLayer2Symbol} />
+            </Layer2DetailGroup>
+
+            <Layer2DetailGroup
+              index="09"
+              title="Governor / Oz-Yonetim"
+              detail="Asset bagimsiz oz-yonetim katmani: agent gozlemler, ogrenir, oneri uretir ve owner onayi bekler. Islem acmaz, ayar degistirmez (observe-only)."
+            >
+              <div className="grid gap-3 lg:grid-cols-2">
+                <div className="lg:col-span-2">
+                  <GovernorPanel />
+                </div>
+                <ProposalPanel />
+                <TaskQueuePanel />
+              </div>
             </Layer2DetailGroup>
 
           </div>

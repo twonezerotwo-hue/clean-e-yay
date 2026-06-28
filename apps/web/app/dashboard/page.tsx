@@ -42,9 +42,6 @@ import { TfWeightsPanel } from "@/components/panels/TfWeightsPanel";
 import { TfTargetsPanel } from "@/components/panels/TfTargetsPanel";
 import { MissedOpportunitiesPanel } from "@/components/panels/MissedOpportunitiesPanel";
 import { AgentModePanel } from "@/components/panels/AgentModePanel";
-import { GovernorPanel } from "@/components/panels/GovernorPanel";
-import { ProposalPanel } from "@/components/panels/ProposalPanel";
-import { TaskQueuePanel } from "@/components/panels/TaskQueuePanel";
 import { DataQualityPanel } from "@/components/panels/DataQualityPanel";
 import { ProviderStatusPanel } from "@/components/panels/ProviderStatusPanel";
 import { SnapshotPanel } from "@/components/panels/SnapshotPanel";
@@ -191,23 +188,6 @@ export default function HomePage() {
               uretilir (tek dogruluk kaynagi).
             </p>
           </GridCell>
-        </PanelGroup>
-      </section>
-
-      <section className="space-y-7 rounded-2xl border border-ink-700/60 bg-ink-800/40 px-5 py-5">
-        <div className="border-b border-ink-700/50 pb-2">
-          <h2 className="text-sm font-medium tracking-wide text-white/80">
-            GOVERNOR - Oz-Yonetim
-          </h2>
-          <p className="mt-1 text-xs text-white/40">
-            Gozlemler, ogrenir, oneri uretir; owner onayi bekler. Islem acmaz, ayar degistirmez.
-          </p>
-        </div>
-
-        <PanelGroup title="Governor (Oz-Yonetim)" hint="gozlemler / oneri defteri / gorev kuyrugu — observe-only">
-          <GridCell span="full"><GovernorPanel /></GridCell>
-          <GridCell span="2"><ProposalPanel /></GridCell>
-          <GridCell span="2"><TaskQueuePanel /></GridCell>
         </PanelGroup>
       </section>
 
