@@ -23,6 +23,7 @@ import type {
   MistakesState,
   NotificationList,
   PaperTradingState,
+  RebalanceProposalRecord,
   RebalanceState,
   ReplayBacktest,
   ReplayDecisionTrace,
@@ -128,6 +129,28 @@ export type AssetRegistry = {
   snapshot: string[];
   liquidity: string[];
   custom: string[];
+};
+
+export type HistoricalEdgeResult = {
+  candidate_fingerprint: string;
+  similarity_threshold: number;
+  sample_count: number;
+  strong_sample_count: number;
+  win_rate: number;
+  avg_pnl: number;
+  edge_confidence: string;
+  matched_trade_ids: string[];
+};
+
+export type HistoricalEdgeResponse = {
+  similarity_weights: Record<string, number>;
+  result: HistoricalEdgeResult;
+};
+
+export type RebalanceActionResult = {
+  status: string;
+  proposal?: RebalanceProposalRecord;
+  detail?: Record<string, unknown>;
 };
 
 export type AddCustomAssetRequest = {
@@ -532,8 +555,27 @@ export const api = {
     fetchJSON<LiquidityRotation>("/api/v1/liquidity/rotation"),
   rebalanceProposal: () =>
     fetchJSON<RebalanceState>("/api/v1/learning/rebalance/proposal"),
+  rebalancePropose: (regime = "NEUTRAL") =>
+    fetchJSON<RebalanceActionResult>("/api/v1/learning/rebalance/propose", {
+      method: "POST",
+      body: JSON.stringify({ regime }),
+    }),
+  rebalanceApprove: (approvedBy = "owner") =>
+    fetchJSON<RebalanceActionResult>("/api/v1/learning/rebalance/approve", {
+      method: "POST",
+      body: JSON.stringify({ approved_by: approvedBy }),
+    }),
+  rebalanceReject: (reason = "owner_reject") =>
+    fetchJSON<RebalanceActionResult>("/api/v1/learning/rebalance/reject", {
+      method: "POST",
+      body: JSON.stringify({ reason }),
+    }),
   calibration: () =>
     fetchJSON<CalibrationState>("/api/v1/learning/calibration"),
+  calibrationRetrain: () =>
+    fetchJSON<Record<string, unknown>>("/api/v1/learning/calibration/retrain", {
+      method: "POST",
+    }),
   tfWeights: () =>
     fetchJSON<TfWeightsReport>("/api/v1/learning/tf-weights"),
   tfTargets: () =>
@@ -556,6 +598,10 @@ export const api = {
   missedOpportunities: () =>
     fetchJSON<MissedOpportunitiesView>(
       "/api/v1/learning/missed-opportunities",
+    ),
+  historicalEdge: (fingerprint: string) =>
+    fetchJSON<HistoricalEdgeResponse>(
+      `/api/v1/learning/historical-edge?fingerprint=${encodeURIComponent(fingerprint)}`,
     ),
   agentModeConfig: () =>
     fetchJSON<AgentModeConfigView>("/api/v1/agent-mode/config"),

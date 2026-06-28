@@ -34,10 +34,14 @@ import { NewsPanel } from "@/components/panels/NewsPanel";
 import { ScenarioPanel } from "@/components/panels/ScenarioPanel";
 import { TradingPanel } from "@/components/panels/TradingPanel";
 import { LearningPanel } from "@/components/panels/LearningPanel";
+import { OutcomeLedgerPanel } from "@/components/panels/OutcomeLedgerPanel";
+import { LearningWorkerPanel } from "@/components/panels/LearningWorkerPanel";
 import { WeightProposalPanel } from "@/components/panels/WeightProposalPanel";
 import { WeightHistoryPanel } from "@/components/panels/WeightHistoryPanel";
 import { CalibrationPanel } from "@/components/panels/CalibrationPanel";
 import { MistakeMemoryPanel } from "@/components/panels/MistakeMemoryPanel";
+import { HistoricalEdgePanel } from "@/components/panels/HistoricalEdgePanel";
+import { ConflictGateLearningPanel } from "@/components/panels/ConflictGateLearningPanel";
 import { TfWeightsPanel } from "@/components/panels/TfWeightsPanel";
 import { TfTargetsPanel } from "@/components/panels/TfTargetsPanel";
 import { MissedOpportunitiesPanel } from "@/components/panels/MissedOpportunitiesPanel";
@@ -150,10 +154,14 @@ export default function HomePage() {
         <PanelGroup title="Ogrenme & Kalibrasyon" hint="paper / agirlik / platt / TF kalibrasyon">
           <GridCell span="2"><TradingPanel /></GridCell>
           <GridCell span="1"><LearningPanel /></GridCell>
+          <GridCell span="2"><OutcomeLedgerPanel /></GridCell>
+          <GridCell span="1"><LearningWorkerPanel /></GridCell>
           <GridCell span="2"><WeightProposalPanel /></GridCell>
           <GridCell span="1"><WeightHistoryPanel /></GridCell>
           <GridCell span="2"><CalibrationPanel /></GridCell>
           <GridCell span="1"><MistakeMemoryPanel /></GridCell>
+          <GridCell span="2"><HistoricalEdgePanel /></GridCell>
+          <GridCell span="2"><ConflictGateLearningPanel /></GridCell>
           <GridCell span="2"><TfWeightsPanel /></GridCell>
           <GridCell span="2"><TfTargetsPanel /></GridCell>
           <GridCell span="2"><MissedOpportunitiesPanel /></GridCell>

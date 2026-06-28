@@ -33,13 +33,18 @@ import { GovernorPanel } from "@/components/panels/GovernorPanel";
 import { ProposalPanel } from "@/components/panels/ProposalPanel";
 import { TaskQueuePanel } from "@/components/panels/TaskQueuePanel";
 import { LearningPanel } from "@/components/panels/LearningPanel";
+import { OutcomeLedgerPanel } from "@/components/panels/OutcomeLedgerPanel";
+import { LearningWorkerPanel } from "@/components/panels/LearningWorkerPanel";
 import { CalibrationPanel } from "@/components/panels/CalibrationPanel";
 import { MistakeMemoryPanel } from "@/components/panels/MistakeMemoryPanel";
+import { HistoricalEdgePanel } from "@/components/panels/HistoricalEdgePanel";
+import { ConflictGateLearningPanel } from "@/components/panels/ConflictGateLearningPanel";
 import { WeightProposalPanel } from "@/components/panels/WeightProposalPanel";
 import { WeightHistoryPanel } from "@/components/panels/WeightHistoryPanel";
 import { TfWeightsPanel } from "@/components/panels/TfWeightsPanel";
 import { TfTargetsPanel } from "@/components/panels/TfTargetsPanel";
 import { MissedOpportunitiesPanel } from "@/components/panels/MissedOpportunitiesPanel";
+import { AgentModePanel } from "@/components/panels/AgentModePanel";
 import type { CockpitBrief } from "@/types/generated/api";
 
 import { HolographicSignalDeck } from "./HolographicSignalDeck";
@@ -108,8 +113,8 @@ const LAYERS: LayerMeta[] = [
   {
     index: 3,
     code: "03",
-    title: "Conscious",
-    shortTitle: "Conscious",
+    title: "Energy",
+    shortTitle: "Energy",
     subtitle: "tum ogrenmeler: governor / kalibrasyon / hatalar / kacan firsat / agirlik",
     depth: "ogrenme odasi",
   },
@@ -1133,6 +1138,7 @@ export function CockpitView() {
           >
             <div className="grid gap-3 lg:grid-cols-2">
               <div className="lg:col-span-2"><GovernorPanel /></div>
+              <div className="lg:col-span-2"><AgentModePanel /></div>
               <ProposalPanel />
               <TaskQueuePanel />
             </div>
@@ -1146,6 +1152,8 @@ export function CockpitView() {
             <div className="grid gap-3 lg:grid-cols-2">
               <LearningPanel />
               <CalibrationPanel />
+              <div className="lg:col-span-2"><OutcomeLedgerPanel /></div>
+              <LearningWorkerPanel />
             </div>
           </Layer2DetailGroup>
 
@@ -1156,6 +1164,7 @@ export function CockpitView() {
           >
             <div className="grid gap-3 lg:grid-cols-2">
               <MistakeMemoryPanel />
+              <HistoricalEdgePanel />
               <MissedOpportunitiesPanel />
             </div>
           </Layer2DetailGroup>
@@ -1174,6 +1183,14 @@ export function CockpitView() {
 
           <Layer2DetailGroup
             index="05"
+            title="Conflict Gate Ogrenmesi"
+            detail="Conflict resolver profil modlari ve gecmis route validasyonu burada okunur."
+          >
+            <ConflictGateLearningPanel />
+          </Layer2DetailGroup>
+
+          <Layer2DetailGroup
+            index="06"
             title="TF SL/TP Ogrenmesi"
             detail="Timeframe bazli SL/TP geometri ogrenmesi (hibrit auto / owner-onay)."
           >

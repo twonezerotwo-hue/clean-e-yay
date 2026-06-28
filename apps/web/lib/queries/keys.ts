@@ -39,6 +39,8 @@ export const qk = {
   tfWeights: ["learning", "tf-weights"] as const,
   tfTargets: ["learning", "tf-targets"] as const,
   missedOpportunities: ["learning", "missed-opportunities"] as const,
+  historicalEdge: (fingerprint: string) =>
+    ["learning", "historical-edge", fingerprint] as const,
   agentModeConfig: ["agent-mode", "config"] as const,
   governorReport: ["governor", "report"] as const,
   governorProposals: ["governor", "proposals"] as const,

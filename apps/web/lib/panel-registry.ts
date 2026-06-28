@@ -45,6 +45,10 @@ export type PanelKey =
   | "news"
   | "patterns"
   | "learning"
+  | "outcome_ledger"
+  | "learning_worker"
+  | "historical_edge"
+  | "conflict_gate_learning"
   | "trading"
   | "replay_status"
   | "panel_audit"
@@ -150,11 +154,15 @@ export const PANEL_REGISTRY: PanelMeta[] = [
   { id: "scenario",         title: "Senaryo",              defaultVisible: true,  span: "1",    group: "macro",           tier: "detay" },
   // ── DETAY — Öğrenme & Kalibrasyon ────────────────────────────────────────
   { id: "trading",          title: "Paper Trading",        defaultVisible: true,  span: "2",    group: "learning",        tier: "detay" },
+  { id: "outcome_ledger",   title: "Outcome Ledger",       defaultVisible: true,  span: "2",    group: "learning",        tier: "detay" },
+  { id: "learning_worker",  title: "Learning Worker",      defaultVisible: true,  span: "1",    group: "learning",        tier: "detay" },
   { id: "learning",         title: "Öğrenme",              defaultVisible: true,  span: "1",    group: "learning",        tier: "detay" },
   { id: "weight_proposal",  title: "Ağırlık Önerisi",      defaultVisible: true,  span: "2",    group: "learning",        tier: "detay" },
   { id: "weight_history",   title: "Ağırlık Geçmişi",      defaultVisible: true,  span: "1",    group: "learning",        tier: "detay" },
   { id: "calibration",      title: "Calibration",          defaultVisible: true,  span: "2",    group: "learning",        tier: "detay" },
   { id: "mistake_memory",   title: "Mistake Memory",       defaultVisible: true,  span: "1",    group: "learning",        tier: "detay" },
+  { id: "historical_edge",  title: "Historical Edge",      defaultVisible: true,  span: "2",    group: "learning",        tier: "detay" },
+  { id: "conflict_gate_learning", title: "Conflict Gate Learning", defaultVisible: true, span: "2", group: "learning", tier: "detay" },
   { id: "tf_weights",       title: "tf_weights Kalibrasyon", defaultVisible: true, span: "2",   group: "learning",        tier: "detay" },
   { id: "tf_targets",       title: "TF SL/TP Öğrenmesi",    defaultVisible: true, span: "2",   group: "learning",        tier: "detay" },
   { id: "missed_opportunities", title: "Kaçan Fırsatlar",   defaultVisible: true, span: "2",   group: "learning",        tier: "detay" },
