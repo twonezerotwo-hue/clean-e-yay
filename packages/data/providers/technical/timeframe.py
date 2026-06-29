@@ -90,6 +90,12 @@ class TechnicalConfig:
     exh_high: float = 70.0            # ≥ bu = upside tükenmesi (long kovalama riski)
     exh_low: float = 30.0             # ≤ bu = downside tükenmesi (short kovalama riski)
     exh_min_mult: float = 0.5         # uçta (0/100) momentum mesafesi ×bu
+    # Faz 3b — reversion (mean-reversion): uç tükenme + reversal teyidi → yönü ÇEVİR.
+    # RİSK-YARATIR → default KAPALI. Yalnız reversal.bias teyit ederse tetiklenir.
+    reversion_enabled: bool = False
+    exh_rev_low: float = 20.0         # ≤ bu = güçlü downside tükenmesi (long reversal)
+    exh_rev_high: float = 80.0        # ≥ bu = güçlü upside tükenmesi (short reversal)
+    rev_magnitude: float = 25.0       # çevrilen skor 50±bu (consensus seyrelmesini aşmak için güçlü)
 
 
 def load_config() -> TechnicalConfig:
@@ -101,6 +107,7 @@ def load_config() -> TechnicalConfig:
     tlt = t.get("direction_tilt", {}) or {}
     tq = t.get("trend_quality", {}) or {}
     eg = t.get("exhaustion_guard", {}) or {}
+    rv = t.get("reversion", {}) or {}
     return TechnicalConfig(
         bull_cut=float(cuts.get("bull", 60)),
         bear_cut=float(cuts.get("bear", 40)),
@@ -132,6 +139,10 @@ def load_config() -> TechnicalConfig:
         exh_high=float(eg.get("exh_high", 70.0)),
         exh_low=float(eg.get("exh_low", 30.0)),
         exh_min_mult=float(eg.get("exh_min_mult", 0.5)),
+        reversion_enabled=bool(rv.get("enabled", False)),
+        exh_rev_low=float(rv.get("exh_rev_low", 20.0)),
+        exh_rev_high=float(rv.get("exh_rev_high", 80.0)),
+        rev_magnitude=float(rv.get("rev_magnitude", 25.0)),
     )
 
 
@@ -328,6 +339,26 @@ def _direction_score(
             if cfg.exhaustion_guard_enabled:
                 diag["exh_mult"] = round(exh_mult, 3)
                 final = 50.0 + (final - 50.0) * exh_mult
+
+    # Faz 3b — reversion (mean-reversion): momentum UÇTA tükenmiş + reversal teyidi
+    # TERS yönü işaret ediyorsa yönü ÇEVİR (oversold+bullish reversal → LONG;
+    # overbought+bearish reversal → SHORT). RİSK-YARATIR (counter-trend) → default
+    # KAPALI + shadow; yalnız enabled iken uygulanır. Touche modül skorudur, consensus
+    # ağırlığında seyrelir → magnitude güçlü tutulur (diğer modüller sert karşı çıkmadıkça
+    # geçer). Reversal teyidi ŞART (yalnız exhaustion yetmez).
+    rev_bias = reversal.bias if reversal is not None else "NEUTRAL"
+    if exhaustion_score is not None and rev_bias in ("BULLISH", "BEARISH"):
+        rev_dir = 0.0
+        if exhaustion_score <= cfg.exh_rev_low and rev_bias == "BULLISH" and final < 50.0:
+            rev_dir = 1.0     # downside tükenmesi + bullish reversal → LONG
+        elif exhaustion_score >= cfg.exh_rev_high and rev_bias == "BEARISH" and final > 50.0:
+            rev_dir = -1.0    # upside tükenmesi + bearish reversal → SHORT
+        if rev_dir != 0.0:
+            rev_score = _clamp(50.0 + rev_dir * cfg.rev_magnitude, 0.0, 100.0)
+            diag["reversion_shadow"] = round(rev_score, 2)
+            if cfg.reversion_enabled:
+                diag["reversion"] = round(rev_score, 2)
+                final = rev_score
 
     return _clamp(final, 0.0, 100.0), diag
 
@@ -605,6 +636,10 @@ def build_timeframe_result(
         if em is not None:
             applied = "exhaustion_guard" if cfg.exhaustion_guard_enabled else "exhaustion_guard_shadow"
             evidence.append(f"{applied}=×{em}")
+        rv = dir_diag.get("reversion_shadow")
+        if rv is not None:
+            applied = "reversion" if cfg.reversion_enabled else "reversion_shadow"
+            evidence.append(f"{applied}→{rv}")
     else:
         evidence.append("direction_unavailable_insufficient_data")
     if trend.label != "UNKNOWN":
@@ -635,6 +670,7 @@ def build_timeframe_result(
             location_gate_multiplier=dir_diag.get("gate_mult"),
             chop_guard_multiplier=dir_diag.get("chop_mult_shadow"),
             exhaustion_guard_multiplier=dir_diag.get("exh_mult_shadow"),
+            reversion_score=dir_diag.get("reversion_shadow"),
         ),
         key_levels=key_levels,
         confirmation_signals=_confirmations(rsi_v, macd_t, ema_stack, current, vwap_v),
