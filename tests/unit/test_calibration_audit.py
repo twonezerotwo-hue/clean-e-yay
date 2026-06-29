@@ -100,8 +100,10 @@ def test_record_open_appends_and_summarizes(tmp_path, monkeypatch):
     assert summ["by_dominant_module"].get("touche") == 1
 
 
-def test_record_open_best_effort_on_bad_path(monkeypatch):
+def test_record_open_best_effort_on_bad_path(tmp_path, monkeypatch):
     # Yazilamayan path -> None doner, exception sizdirmaz (tick dusmez).
-    monkeypatch.setenv("CALIBRATION_AUDIT_PATH", "Z:/nope/x.jsonl")
+    bad_parent = tmp_path / "not_a_directory"
+    bad_parent.write_text("x", encoding="utf-8")
+    monkeypatch.setenv("CALIBRATION_AUDIT_PATH", str(bad_parent / "x.jsonl"))
     decision, position = _fake_decision_position()
     assert calibration_audit.record_open(decision, position) is None
