@@ -441,7 +441,7 @@ technical:
   # çıkmadıkça geçer); canlıya almadan önce shadow'da reversion_score izlenmeli ve
   # ROADMAP'e göre ilk aşama manual_ready (oto-açma değil) düşünülmeli.
   reversion:
-    enabled: false
+    enabled: true
     exh_rev_low: 20.0
     exh_rev_high: 80.0
     rev_magnitude: 25.0
