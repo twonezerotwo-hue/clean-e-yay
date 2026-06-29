@@ -22,6 +22,18 @@ if str(ROOT) not in sys.path:
 os.environ.setdefault("TEST_USE_MOCK", "true")
 
 
+@pytest.fixture(autouse=True)
+def _f5_disabled_by_default(monkeypatch: pytest.MonkeyPatch) -> None:
+    """F5 (EV kapısı + Kelly sizing) canlı config'te AÇIK, ama çoğu unit test pre-F5
+    sizing/açılış davranışını varsayar (relatif size karşılaştırmaları, açık sayısı).
+    Testlerde default KAPAT — F5'i doğrulayan testler explicit monkeypatch ile açar.
+    Böylece F5 canlı enable'ı mevcut testleri bozmaz; F5 davranışı ayrı doğrulanır
+    (test_ev_kelly helper'ları + expected_value wiring + enabled-gate testi)."""
+    from packages.decision import engine
+    monkeypatch.setattr(engine, "_ev_gate_cfg", lambda: {"enabled": False})
+    monkeypatch.setattr(engine, "_kelly_cfg", lambda: {"enabled": False})
+
+
 @pytest.fixture(autouse=True, scope="session")
 def _isolate_runtime_stores(tmp_path_factory: pytest.TempPathFactory) -> None:
     """Redirect file-backed runtime stores under data/runtime/ to session tmp files so

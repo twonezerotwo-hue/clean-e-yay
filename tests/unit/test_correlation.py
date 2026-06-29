@@ -331,3 +331,28 @@ def test_correlation_endpoint(fresh_env) -> None:
     assert set(top["symbols"]) == {"BTCUSD", "ETHUSD"}
     assert top["cluster_pct"] == pytest.approx(0.35)
     assert top["status"] == "BREACH"
+
+
+def test_ev_gate_blocks_negative_ev(fresh_env, monkeypatch) -> None:
+    # F5: ev_gate AÇIK + skor açılır (62→cal_conf 0.24, floor'u geçer) ama EV negatif
+    # (0.24×2.5 − 0.76 − 0.1 = −0.26) → hold (blocked_by ev_gate).
+    from packages.consensus.engine import ConsensusResult, ModuleScore
+    from packages.decision import engine as dec
+    from packages.risk.engine import RiskDecision
+
+    snap, regime = _force_decision_pass(monkeypatch)
+    fake = ConsensusResult(
+        symbol="BTCUSD", score=62.0, direction="bullish", confluence_aligned=True,
+        dominant_module="touche",
+        modules=[ModuleScore(name="touche", score=62.0, weight=1.0, contribution=62.0)],
+    )
+    monkeypatch.setattr(dec, "build_consensus", lambda *a, **kw: fake)
+    # autouse fixture ev_gate'i kapatmıştı — bu testte AÇ (1d → RR 2.5).
+    monkeypatch.setattr(dec, "_ev_gate_cfg", lambda: {"enabled": True, "min_ev": 0.0, "cost_r": 0.1})
+    hold_risk = RiskDecision(action="HOLD", reason="ok", evidence=[])
+    d = dec.decide_for_symbol(
+        "BTCUSD", snap, regime, hold_risk, open_positions=[], equity_usd=100_000, timeframe="1d"
+    )
+    assert d.action == "hold"
+    assert "ev_gate" in d.blocked_by
+    assert d.expected_value is not None and d.expected_value < 0
