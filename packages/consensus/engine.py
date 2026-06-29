@@ -17,7 +17,7 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 
 from packages.data.ingestion.pipeline import MarketSnapshot
-from packages.data.registry.loader import load_active_weights
+from packages.data.registry.loader import load_active_weights, load_thresholds
 from packages.regime.classifier import RegimeOutput
 
 
@@ -41,10 +41,15 @@ class ConsensusResult:
     warnings: list[str] = field(default_factory=list)  # T2 additive
 
 
-def _direction(s: float) -> str:
-    if s >= 60:
+def _direction(s: float, bullish_min: float = 55.0, bearish_max: float = 45.0) -> str:
+    """Yön etiketi — trade aksiyon eşikleriyle (consensus.bullish_min/bearish_max)
+    AYNI banttan okunur. Eskiden 60/40 sabitti ama aksiyon eşiği 55/45'e
+    gevşetilmişti (2026-06-20); bu uyumsuzluk [40,45] ölü-bandında "neutral signal"
+    yazıp short açtırıyordu. Artık etiket ↔ aksiyon tek kaynak: short açılan her
+    skor (≤bearish_max) "bearish", long açılan her skor (≥bullish_min) "bullish"."""
+    if s >= bullish_min:
         return "bullish"
-    if s <= 40:
+    if s <= bearish_max:
         return "bearish"
     return "neutral"
 
@@ -225,10 +230,16 @@ def build(
     above = sum(1 for m in modules if m.score >= 55)
     below = sum(1 for m in modules if m.score <= 45)
     confluence = above >= 3 or below >= 3
+    # Yön etiketi trade aksiyon eşikleriyle aynı banttan (tek kaynak) okunur.
+    cons_th = load_thresholds().get("consensus", {})
     return ConsensusResult(
         symbol=symbol,
         score=round(final, 1),
-        direction=_direction(final),
+        direction=_direction(
+            final,
+            float(cons_th.get("bullish_min", 55.0)),
+            float(cons_th.get("bearish_max", 45.0)),
+        ),
         modules=modules,
         confluence_aligned=confluence,
         dominant_module=dominant,
