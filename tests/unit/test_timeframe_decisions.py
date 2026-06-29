@@ -464,3 +464,16 @@ def test_decide_matrix_guard_off_is_old_blind_behavior(monkeypatch) -> None:
     snap = build_snapshot(["BTCUSD"])
     engine.decide_matrix(["BTCUSD"], snap, _risk_in(), timeframes=["15m", "1h", "4h"])
     assert _fake_open.seen == [0, 0, 0]  # körlük: kimse kardeşini görmez
+
+
+def test_open_decisions_carry_expected_value(paper_env, monkeypatch) -> None:
+    # F5 — açık kararlar expected_value (gözlem) taşımalı (ev_gate KAPALI olsa da).
+    from packages.decision import engine as de
+    monkeypatch.setattr(de, "_intra_batch_guard_enabled", lambda: False)
+    snap = build_snapshot(["BTCUSD"])
+    _force_bullish(snap)
+    _regime, _risk, decisions = decide_matrix(["BTCUSD"], snap, _risk_in())
+    opens = [d for d in decisions if d.action in ("open_long", "open_short")]
+    assert opens, "force_bullish en az bir açık üretmeli"
+    for d in opens:
+        assert d.expected_value is not None  # F5 gözlem alanı dolu

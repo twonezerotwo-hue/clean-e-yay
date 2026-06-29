@@ -84,6 +84,9 @@ class TradeDecision:
     candidate_action: Action = "hold"
     blocked_by: list[str] = field(default_factory=list)
     actionable: bool = False
+    # F5 — beklenen değer (R-katı): p(win)×RR − (1−p)×1 − maliyet. Her zaman hesaplanır
+    # (gözlem); ev_gate.enabled iken < min_ev olan trade bloklanır. None = hesaplanmadı.
+    expected_value: float | None = None
 
 
 def _timeframe_policy(timeframe: str) -> dict:
@@ -133,6 +136,28 @@ def _verdict_to_dict(v: MistakeVerdict) -> dict:
         "fingerprint": v.fingerprint,
         "record": asdict(v.record) if v.record else None,
     }
+
+
+def _tf_rr(timeframe: str) -> float:
+    """timeframe_targets'tan o TF'in hedef ödül/risk (RR) oranı (yoksa 2.0)."""
+    cfg = load_thresholds().get("timeframe_targets") or {}
+    tf = cfg.get(timeframe) or {}
+    try:
+        return float(tf.get("rr", 2.0))
+    except (TypeError, ValueError):
+        return 2.0
+
+
+def _expected_value(p_win: float, rr: float, cost_r: float) -> float:
+    """Beklenen değer (R-katı): kazanırsan +RR, kaybedersen −1; maliyet düşülür."""
+    return p_win * rr - (1.0 - p_win) * 1.0 - cost_r
+
+
+def _kelly_fraction(p_win: float, rr: float) -> float:
+    """Tam Kelly oranı f* = (p×RR − (1−p)) / RR (edge/odds); negatif → 0."""
+    if rr <= 0:
+        return 0.0
+    return max(0.0, (p_win * rr - (1.0 - p_win)) / rr)
 
 
 def decide_for_symbol(
@@ -275,6 +300,30 @@ def decide_for_symbol(
             timeframe=timeframe,
             candidate_action=candidate,
             blocked_by=["confidence_floor"],
+        )
+
+    # ----- F5: EV (beklenen değer) kapısı — olasılık + ödül/risk BİRLİKTE pozitif
+    #  değilse açma. EV her zaman hesaplanır (gözlem); ev_gate.enabled iken kısıtlar.
+    #  RiskGate'i bypass etmez; yalnızca ek ekonomik filtre. (Owner config'ten.) -----
+    rr = _tf_rr(timeframe)
+    ev_cfg = load_thresholds().get("ev_gate") or {}
+    expected_value = _expected_value(cal_conf, rr, float(ev_cfg.get("cost_r", 0.1)))
+    if ev_cfg.get("enabled", False) and expected_value < float(ev_cfg.get("min_ev", 0.0)):
+        return TradeDecision(
+            symbol=symbol,
+            action="hold",
+            confidence=round(cal_conf, 3),
+            size_multiplier=0.0,
+            consensus=cons,
+            risk=risk,
+            reason=f"Negatif EV: {expected_value:.2f}R (p={cal_conf:.2f}, RR={rr})",
+            raw_confidence=round(raw_conf, 4),
+            confidence_source=conf_source,
+            fingerprint=fp,
+            timeframe=timeframe,
+            candidate_action=candidate,
+            blocked_by=["ev_gate"],
+            expected_value=round(expected_value, 4),
         )
 
     # Confluence yoksa boyut yarıya iner
@@ -552,6 +601,20 @@ def decide_for_symbol(
     # reason + size_multiplier üzerinden görünür.
     size *= pol["risk_multiplier"]
 
+    # ----- F5: Kelly sizing — boyutu ölçülen edge'e oransal CAP'le (yalnız küçültür).
+    #  fractional-Kelly $ = fraction × f* × equity; size_mult cap'i = bu / max_pos.
+    #  no-AI-boost: yalnız min() ile kısar, asla büyütmez. (Owner config; default KAPALI) -----
+    kelly_cfg = load_thresholds().get("kelly_sizing") or {}
+    if kelly_cfg.get("enabled", False) and equity_usd > 0:
+        max_pos = float((load_thresholds().get("paper_trading") or {}).get("max_position_usd", 0.0))
+        if max_pos > 0:
+            f_star = _kelly_fraction(cal_conf, rr)
+            fraction = float(kelly_cfg.get("fraction", 0.25))
+            kelly_mult_cap = fraction * f_star * equity_usd / max_pos
+            if kelly_mult_cap < size:
+                size = max(0.0, kelly_mult_cap)
+                blocked_by.append("kelly_cap")
+
     return TradeDecision(
         symbol=symbol,
         action=action,
@@ -598,6 +661,7 @@ def decide_for_symbol(
         candidate_action=candidate,
         blocked_by=blocked_by,
         actionable=size > 0.0,
+        expected_value=round(expected_value, 4),
     )
 
 
