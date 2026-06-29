@@ -43,6 +43,7 @@ import { WeightHistoryPanel } from "@/components/panels/WeightHistoryPanel";
 import { TfWeightsPanel } from "@/components/panels/TfWeightsPanel";
 import { TfTargetsPanel } from "@/components/panels/TfTargetsPanel";
 import { MissedOpportunitiesPanel } from "@/components/panels/MissedOpportunitiesPanel";
+import { BookAuditPanel } from "@/components/panels/BookAuditPanel";
 import { AgentModePanel } from "@/components/panels/AgentModePanel";
 import type { CockpitBrief } from "@/types/generated/api";
 
@@ -1202,8 +1203,18 @@ export function CockpitView() {
 
           <Layer2DetailGroup
             index="01"
+            title="Ne Ogrendim — Kitap Denetimi"
+            detail="Acik islemlerdeki mantik hatalarini kapanis beklemeden gosterir: ayni varlikta zit yon, tek varlikta asiri yogunlasma, ayni sinyalin TF'lere kopyalanmasi, tek-yon kitap."
+            badge="canli ogrenme"
+            badgeTone="border-accent-cyan/30 bg-accent-cyan/10 text-accent-cyan"
+          >
+            <BookAuditPanel />
+          </Layer2DetailGroup>
+
+          <Layer2DetailGroup
+            index="02"
             title="Sistem Yonetimi"
-            detail="Governor ozeti ve agent mode ayarlari. Sistem davranisini buradan gorur ve owner kontrollu modlari buradan yonetirsin."
+            detail="Owner kontrolu modlar: governor ozeti, agent modu ve gorev kuyrugu."
             badge="owner kontrolu"
             badgeTone="border-emerald-400/30 bg-emerald-400/10 text-emerald-200"
           >
@@ -1215,9 +1226,9 @@ export function CockpitView() {
           </Layer2DetailGroup>
 
           <Layer2DetailGroup
-            index="02"
+            index="03"
             title="Ogrenme Ozeti"
-            detail="Kapanan outcome'lardan uretilen genel ogrenme ozeti, sonuc defteri ve learning worker sagligi."
+            detail="Kapanan islemlerden cikan genel ogrenme, sonuc defteri ve ogrenme worker sagligi."
             badge="read-only"
           >
             <div className="grid gap-3 lg:grid-cols-2">
@@ -1228,9 +1239,9 @@ export function CockpitView() {
           </Layer2DetailGroup>
 
           <Layer2DetailGroup
-            index="03"
-            title="Kalibrasyon"
-            detail="Confidence kalibrasyonu, per-timeframe tf_weights kalibrasyonu ve timeframe bazli SL/TP hedef ogrenmesi."
+            index="04"
+            title="Kalibrasyon ve Agirliklar"
+            detail="Guven kalibrasyonu, TF agirliklari, SL/TP hedef ogrenmesi ve owner onayina sunulan agirlik degisimleri."
             badge="owner onayi"
             badgeTone="border-amber-400/30 bg-amber-400/10 text-amber-200"
           >
@@ -1238,17 +1249,6 @@ export function CockpitView() {
               <CalibrationPanel />
               <TfWeightsPanel />
               <div className="lg:col-span-2"><TfTargetsPanel /></div>
-            </div>
-          </Layer2DetailGroup>
-
-          <Layer2DetailGroup
-            index="04"
-            title="Agirlik Onerileri"
-            detail="Auto-weight trainer'in owner onayina sundugu agirlik degisimleri ve gecmis onay/red kayitlari."
-            badge="owner onayi"
-            badgeTone="border-amber-400/30 bg-amber-400/10 text-amber-200"
-          >
-            <div className="grid gap-3 lg:grid-cols-2">
               <WeightProposalPanel />
               <WeightHistoryPanel />
             </div>
@@ -1257,7 +1257,7 @@ export function CockpitView() {
           <Layer2DetailGroup
             index="05"
             title="Hata Hafizasi"
-            detail="Tekrar eden hata parmak izleri ve benzer gecmis setup performansi. Sistem hangi kosullarda zayif kalmis burada gorunur."
+            detail="Tekrar eden hata parmak izleri ve benzer gecmis setup performansi — sistem hangi kosullarda zayif kalmis."
             badge="read-only"
           >
             <div className="grid gap-3 lg:grid-cols-2">
@@ -1266,22 +1266,34 @@ export function CockpitView() {
             </div>
           </Layer2DetailGroup>
 
+          <div className="relative mt-2 flex items-center gap-3 pt-2">
+            <span className="h-px flex-1 bg-gradient-to-r from-transparent via-fuchsia-400/35 to-transparent" />
+            <span className="rounded-full border border-fuchsia-400/25 bg-fuchsia-400/8 px-3 py-1 text-[10px] uppercase tracking-[0.2em] text-fuchsia-200/80">
+              Shadow · Gozlem Seridi
+            </span>
+            <span className="h-px flex-1 bg-gradient-to-r from-transparent via-fuchsia-400/35 to-transparent" />
+          </div>
+          <p className="-mt-3 px-1 text-[11px] leading-5 text-white/45">
+            Bu bolumdeki katmanlar <strong className="text-white/65">karari henuz yonetmez</strong> — yalniz olculur
+            (shadow-first). Yeterince dogrulaninca owner kararyla canliya alinir.
+          </p>
+
           <Layer2DetailGroup
-            index="06"
+            index="S1"
             title="Kacan Firsatlar"
-            detail="Acilmayan valid setup'larin TTL sonucu: kacan kazanc, onlenen zarar ve sure dolan adaylar."
-            badge="read-only"
+            detail="Acilmayan valid setup'larin sonucu: kacan kazanc, onlenen zarar ve sure dolan adaylar (gozlem)."
+            badge="shadow"
+            badgeTone="border-fuchsia-400/30 bg-fuchsia-400/10 text-fuchsia-200"
           >
-            <div className="grid gap-3 lg:grid-cols-2">
-              <MissedOpportunitiesPanel />
-            </div>
+            <MissedOpportunitiesPanel />
           </Layer2DetailGroup>
 
           <Layer2DetailGroup
-            index="07"
+            index="S2"
             title="Conflict Gate Ogrenmesi"
-            detail="Conflict gate profil modlari ve gecmis route validation performansi. Gate kararlarini degerlendirmek icin kullanilir."
-            badge="read-only"
+            detail="Conflict gate profil modlari ve gecmis route dogrulama performansi — gate aktivasyon kararina veri (gozlem)."
+            badge="shadow"
+            badgeTone="border-fuchsia-400/30 bg-fuchsia-400/10 text-fuchsia-200"
           >
             <ConflictGateLearningPanel />
           </Layer2DetailGroup>

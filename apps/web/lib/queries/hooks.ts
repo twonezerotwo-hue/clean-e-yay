@@ -345,6 +345,16 @@ export const useMissedOpportunities = () => {
   });
 };
 
+export const useBookAudit = () => {
+  const policy = usePanelQueryPolicy(60_000);
+  return useQuery({
+    queryKey: qk.bookAudit,
+    queryFn: api.bookAudit,
+    staleTime: 30_000,
+    ...policy,
+  });
+};
+
 export const useCalibrationJumps = () => {
   const policy = usePanelQueryPolicy(5 * 60_000);
   return useQuery({

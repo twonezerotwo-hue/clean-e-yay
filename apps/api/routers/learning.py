@@ -10,6 +10,7 @@ from fastapi import APIRouter
 from packages.data.registry.loader import load_thresholds
 from packages.decision import conflict_gate, conflict_gate_backtest
 from packages.learning import (
+    book_audit,
     calibration_audit,
     calibration_store,
     calibration_trainer,
@@ -92,6 +93,18 @@ def get_mistakes() -> dict:
         "flagged_count": len(flagged),
         "total_fingerprints": len(items),
     }
+
+
+@router.get("/learning/book-audit")
+def get_book_audit() -> dict:
+    """Açık kitap yapısal denetimi (observe-only). Canlı açık pozisyonları tarar;
+    KAPANIŞ BEKLEMEDEN yapısal mantık hatalarını (aynı sembolde zıt yön, tek
+    varlıkta yoğunlaşma, aynı sinyalin TF'lere kopyalanması, korelasyon kümesi,
+    tek-yön kitap) kullanıcı-odaklı 'ders' olarak döndürür. mistake_memory yalnız
+    KAPALI trade'leri öğrendiği için bu canlı-kitap boşluğunu kapatır. Karar
+    zincirine etkisi yoktur — aktif self-conflict guard ayrı flag'le koşullu
+    (book_audit.self_conflict_guard.enabled, shadow-first)."""
+    return book_audit.summary_viewmodel()
 
 
 @router.get("/learning/historical-edge")
