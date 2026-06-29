@@ -138,6 +138,16 @@ def _verdict_to_dict(v: MistakeVerdict) -> dict:
     }
 
 
+def _ev_gate_cfg() -> dict:
+    """F5 EV kapısı config (monkeypatch-edilebilir seam — test izolasyonu)."""
+    return load_thresholds().get("ev_gate") or {}
+
+
+def _kelly_cfg() -> dict:
+    """F5 Kelly sizing config (monkeypatch-edilebilir seam — test izolasyonu)."""
+    return load_thresholds().get("kelly_sizing") or {}
+
+
 def _tf_rr(timeframe: str) -> float:
     """timeframe_targets'tan o TF'in hedef ödül/risk (RR) oranı (yoksa 2.0)."""
     cfg = load_thresholds().get("timeframe_targets") or {}
@@ -306,7 +316,7 @@ def decide_for_symbol(
     #  değilse açma. EV her zaman hesaplanır (gözlem); ev_gate.enabled iken kısıtlar.
     #  RiskGate'i bypass etmez; yalnızca ek ekonomik filtre. (Owner config'ten.) -----
     rr = _tf_rr(timeframe)
-    ev_cfg = load_thresholds().get("ev_gate") or {}
+    ev_cfg = _ev_gate_cfg()
     expected_value = _expected_value(cal_conf, rr, float(ev_cfg.get("cost_r", 0.1)))
     if ev_cfg.get("enabled", False) and expected_value < float(ev_cfg.get("min_ev", 0.0)):
         return TradeDecision(
@@ -604,7 +614,7 @@ def decide_for_symbol(
     # ----- F5: Kelly sizing — boyutu ölçülen edge'e oransal CAP'le (yalnız küçültür).
     #  fractional-Kelly $ = fraction × f* × equity; size_mult cap'i = bu / max_pos.
     #  no-AI-boost: yalnız min() ile kısar, asla büyütmez. (Owner config; default KAPALI) -----
-    kelly_cfg = load_thresholds().get("kelly_sizing") or {}
+    kelly_cfg = _kelly_cfg()
     if kelly_cfg.get("enabled", False) and equity_usd > 0:
         max_pos = float((load_thresholds().get("paper_trading") or {}).get("max_position_usd", 0.0))
         if max_pos > 0:

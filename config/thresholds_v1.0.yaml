@@ -20,14 +20,14 @@ consensus:
 # zaman hesaplanır (decision.expected_value gözlem); enabled iken EV<min_ev → hold.
 # Ayrı ekonomik filtre — RiskGate'i bypass etmez. DEFAULT KAPALI (önce shadow izle).
 ev_gate:
-  enabled: false
+  enabled: true
   min_ev: 0.0       # R-katı; <bu beklenen değerli trade açılmaz
   cost_r: 0.1       # round-trip maliyet (spread/fee) R cinsinden
 
 # F5 — Kelly sizing. Boyutu ölçülen edge'e oransal CAP'ler: $ = fraction × f* × equity
 # (f* = (p×RR−(1−p))/RR). Yalnız KÜÇÜLTÜR (no-AI-boost). DEFAULT KAPALI.
 kelly_sizing:
-  enabled: false
+  enabled: true
   fraction: 0.25    # fractional Kelly (¼) — tam Kelly çok agresif (varyans)
 
 dqs:
