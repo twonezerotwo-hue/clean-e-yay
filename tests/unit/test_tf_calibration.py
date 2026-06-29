@@ -95,3 +95,34 @@ def test_empty_is_safe():
     rep = tc.calibration_report([], min_trades=1)
     assert rep["per_timeframe"] == []
     assert rep["tf_weights_trusted"] is False
+
+
+# ── B5: trust gate POZİTİF beklenti de ister (yeterli örnek tek başına yetmez) ──
+
+def test_negative_expectancy_calibrated_but_not_trusted():
+    """Bol örnek + negatif expectancy → CALIBRATED (yeterli veri) ama canlı kapı
+    KAPALI (kanıtlı pozitif kenar yok). Eski bug: kaybeden TF güvenilir sayılıyordu."""
+    # 4 işlem, net negatif: (10 - 30 + 10 - 30)/4 = -10
+    outs = [_oc("1h", 10.0), _oc("1h", -30.0), _oc("1h", 10.0), _oc("1h", -30.0)]
+    rep = tc.calibration_report(outs, min_trades=3)
+    # per-TF damgası hâlâ CALIBRATED (trainer down-weight edebilsin diye)
+    assert rep["calibrated_timeframes"] == ["1h"]
+    # ama canlı tf_weights kapısı açılmaz:
+    assert rep["tf_weights_trusted"] is False
+    assert rep["edge_proven_timeframes"] == []
+
+
+def test_zero_expectancy_is_not_a_proven_edge():
+    """Tam başabaş (expectancy == 0) kanıtlı kenar SAYILMAZ → kapı kapalı."""
+    outs = [_oc("4h", 20.0), _oc("4h", -20.0), _oc("4h", 20.0), _oc("4h", -20.0)]
+    rep = tc.calibration_report(outs, min_trades=3)
+    assert rep["calibrated_timeframes"] == ["4h"]
+    assert rep["tf_weights_trusted"] is False
+
+
+def test_positive_expectancy_opens_gate():
+    """Yeterli örnek + pozitif expectancy → kapı açık (B5 regresyon karşıtı)."""
+    outs = [_oc("1d", 5.0) for _ in range(4)]
+    rep = tc.calibration_report(outs, min_trades=3)
+    assert rep["tf_weights_trusted"] is True
+    assert rep["edge_proven_timeframes"] == ["1d"]
