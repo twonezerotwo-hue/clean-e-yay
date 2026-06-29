@@ -20,9 +20,9 @@ from packages.learning import (
     tf_target_trainer,
     tf_weight_trainer,
 )
+from packages.learning import outcomes as outcomes_mod
 from packages.learning.calibration import reliability_bins
 from packages.learning.summary import build_summary
-from packages.paper import state as paper_state
 from packages.risk import trade_economics as te
 
 router = APIRouter(tags=["learning"])
@@ -36,14 +36,12 @@ def get_learning_summary() -> dict:
 @router.get("/learning/calibration")
 def get_calibration() -> dict:
     params = calibration_store.load()
-    # Mevcut state'ten reliability bins (uygulamak için fit'i tekrar koşmaya
-    # gerek yok — sadece son örnekleri göster).
-    s = paper_state.load()
+    # Reliability bins — fit'le AYNI durable kaynak (recent_trades + decision_log).
+    # Fit'i tekrar koşmaya gerek yok; sadece son örnekleri göster.
     samples = [
-        (float(t.predicted_confidence), bool(t.pnl_usd > 0))
-        for t in s.recent_trades
-        if getattr(t, "data_verified", False)
-        and getattr(t, "predicted_confidence", None) is not None
+        (float(o.predicted_confidence), bool(o.pnl > 0))
+        for o in outcomes_mod.outcomes_from_state()
+        if o.data_verified and o.predicted_confidence is not None
     ]
     bins = [asdict(b) for b in reliability_bins(samples, n_bins=5)]
     return {

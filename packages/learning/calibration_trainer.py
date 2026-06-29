@@ -14,20 +14,19 @@ from dataclasses import asdict
 from datetime import UTC, datetime
 
 from packages.learning import calibration_store
+from packages.learning import outcomes as outcomes_mod
 from packages.learning.calibration import fit_platt, reliability_bins
-from packages.paper import state as paper_state
 
 
 def _samples_from_state() -> list[tuple[float, bool]]:
-    s = paper_state.load()
+    """Canonical outcome'lardan (recent_trades + decision_log birleşimi) fit
+    örnekleri. Volatile recent_trades penceresi yerine kalıcı kaydı kullanır —
+    paper_state bozulması/200-pencere taşması veri kaybına yol açmaz."""
     out: list[tuple[float, bool]] = []
-    for t in s.recent_trades:
-        if not getattr(t, "data_verified", False):
+    for o in outcomes_mod.outcomes_from_state():
+        if not o.data_verified or o.predicted_confidence is None:
             continue
-        p = getattr(t, "predicted_confidence", None)
-        if p is None:
-            continue
-        out.append((float(p), bool(t.pnl_usd > 0)))
+        out.append((float(o.predicted_confidence), bool(o.pnl > 0)))
     return out
 
 

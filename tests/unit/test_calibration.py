@@ -18,6 +18,11 @@ from fastapi.testclient import TestClient
 @pytest.fixture
 def fresh_env(tmp_path, monkeypatch):
     monkeypatch.setenv("PAPER_STATE_PATH", str(tmp_path / "paper.json"))
+    # Trainer artık recent_trades + decision_log birleşiminden öğreniyor →
+    # decision_log'u test-bazında izole et. conftest session-scope'ta da izole
+    # eder ama o dosya session-paylaşımlı; per-test override başka testlerin
+    # yazdığı kayıtlardan da ayırır (örnek sayısı assertion'ları deterministik).
+    monkeypatch.setenv("DECISION_LOG_PATH", str(tmp_path / "decision_log.jsonl"))
     monkeypatch.setenv("CALIBRATION_STORE_PATH", str(tmp_path / "platt.json"))
     monkeypatch.setenv("REBALANCE_STORE_PATH", str(tmp_path / "rebalance.json"))
     monkeypatch.setenv("WEIGHTS_MANIFEST_PATH", str(tmp_path / "weights_active.json"))
