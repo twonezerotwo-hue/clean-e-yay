@@ -909,7 +909,8 @@ export type ModulePerf = {
 export type ProposalStatus =
   | "PENDING"
   | "APPROVED"
-  | "REJECTED";
+  | "REJECTED"
+  | "AUTO_APPLIED";
 
 export type RebalanceProposalRecord = {
   status: ProposalStatus;
@@ -929,10 +930,31 @@ export type RebalanceProposalRecord = {
   active_yaml?: string;
 };
 
+// G3 — otomatik-uygulanan ağırlık değişikliği kaydı (izleme + ledger).
+export type WeightAutoApplyEntry = {
+  event?: "AUTO_APPLIED" | "CONFIRMED" | "ROLLED_BACK";
+  status?: "MONITORING" | "CONFIRMED" | "ROLLED_BACK";
+  applied_version?: string;
+  prev_version?: string;
+  regime?: string | null;
+  baseline_expectancy?: number;
+  baseline_n?: number;
+  post_expectancy?: number;
+  post_n?: number;
+  applied_at?: string;
+  resolved_at?: string;
+};
+
+export type WeightAutoApplyState = {
+  active: WeightAutoApplyEntry | null;
+  ledger: WeightAutoApplyEntry[];
+};
+
 export type RebalanceState = {
   active_version: string;
   current: RebalanceProposalRecord | null;
   history: RebalanceProposalRecord[];
+  auto_apply?: WeightAutoApplyState;
 };
 
 export type CalibrationParams = {

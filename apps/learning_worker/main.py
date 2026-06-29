@@ -27,6 +27,7 @@ from packages.learning import (
     tf_target_store,
     tf_target_trainer,
     tf_weight_trainer,
+    weight_rollback,
 )
 from packages.learning import (
     outcomes as outcomes_mod,
@@ -102,6 +103,8 @@ def run_once() -> dict:
     tf_weights_trusted = False
     tf_weight_proposal_status = "UNKNOWN"
     skipped_reason: str | None = None
+    rebalance_decision: str | None = None  # G3: auto_applied | pending_* | no_change
+    rollback_status = "UNKNOWN"             # G3: no_active | monitoring | CONFIRMED | ROLLED_BACK
 
     try:
         outcomes_seen = len(outcomes_mod.outcomes_from_state())
@@ -214,15 +217,25 @@ def run_once() -> dict:
     except Exception as exc:  # defensive — worker patlamamalı
         errors.append(f"tf_target:{type(exc).__name__}")
 
-    # G2: auto-weight trainer. Yeterli veri varsa pending proposal güncellenir;
-    # active weights DEĞİŞMEZ — owner approval gerekir.
+    # G2/G3: auto-weight trainer. Yeterli veri varsa proposal üretilir. G3 hibrit:
+    # dar bant (|delta| ≤ REBALANCE_AUTO_APPLY_BAND) + auto-apply açık ise OTOMATİK
+    # uygulanır; aksi halde PENDING (owner). API propose/approve yolu ETKİLENMEZ.
     try:
         result = trainer.train(regime="NEUTRAL")
         if isinstance(result, trainer.RebalanceProposal):
-            rebalance_store.set_pending(trainer.proposal_to_dict(result))
+            base = [o for o in outcomes_mod.outcomes_from_state() if o.data_verified]
+            base_n = len(base)
+            base_exp = sum(o.pnl for o in base) / base_n if base_n else 0.0
+            decision = rebalance_store.maybe_auto_apply(
+                trainer.proposal_to_dict(result),
+                baseline_expectancy=base_exp,
+                baseline_n=base_n,
+            )
+            rebalance_decision = str(decision.get("decision"))
             proposals_generated = 1
             log.info(
-                "rebalance proposal pending: %s → %s (n=%s)",
+                "rebalance proposal %s: %s → %s (n=%s)",
+                rebalance_decision,
                 result.from_version,
                 result.to_version,
                 result.dataset_size,
@@ -232,6 +245,24 @@ def run_once() -> dict:
             log.info("rebalance trainer skipped: %s", result)
     except Exception as exc:  # defensive
         errors.append(f"trainer:{type(exc).__name__}")
+
+    # G3: otomatik-uygulanan ağırlık için outcome-bazlı rollback denetimi. İzlenen
+    # apply yoksa no_active; yeterli yeni outcome birikince CONFIRMED/ROLLED_BACK.
+    try:
+        rb = weight_rollback.check_rollback()
+        rollback_status = str(rb.get("status", "UNKNOWN"))
+        if rollback_status == "ROLLED_BACK":
+            log.info(
+                "weight ROLLBACK: %s → %s (post_exp=%s < baseline=%s)",
+                rb.get("reverted_from"),
+                rb.get("reverted_to"),
+                rb.get("post_expectancy"),
+                rb.get("baseline_expectancy"),
+            )
+        elif rollback_status == "CONFIRMED":
+            log.info("weight auto-apply CONFIRMED: %s", rb.get("confirmed_version"))
+    except Exception as exc:  # defensive — worker patlamamalı
+        errors.append(f"rollback:{type(exc).__name__}")
 
     if errors:
         status = "COMPLETED_WITH_ERRORS"
@@ -249,6 +280,9 @@ def run_once() -> dict:
         "skipped_reason": skipped_reason,
         "outcomes_seen": outcomes_seen,
         "proposals_generated": proposals_generated,
+        "rebalance_decision": rebalance_decision,  # G3
+        "rollback_status": rollback_status,          # G3
+
         "calibration_status": calibration_status,
         "tf_calibration_status": tf_calibration_status,
         "tf_weights_trusted": tf_weights_trusted,
