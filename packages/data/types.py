@@ -213,6 +213,10 @@ class TechnicalScoreOverview(BaseModel):
     # kadar söndü/sönerdi (gözlem; <1.0). enabled OFF iken de dolu (shadow); None =
     # kovalama yok / veri yok. Manuel tespit alanı (öğrenme katmanı izlemez).
     exhaustion_guard_multiplier: float | None = None
+    # Faz 3b reversion — uç tükenme + reversal teyidi varsa yönün ÇEVRİLECEĞİ skor
+    # (gözlem; >50 long-reversion, <50 short-reversion). enabled OFF iken de dolu
+    # (shadow); None = reversion setup'ı yok. Risk-yaratır → owner enable kararı.
+    reversion_score: float | None = None
 
 
 class TechnicalKeyLevels(BaseModel):

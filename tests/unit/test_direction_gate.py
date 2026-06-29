@@ -181,3 +181,56 @@ def test_exhaustion_never_flips_side():
     # Aşırı tükenme (exh 100) bile bullish'i bearish'e çevirmez.
     s, _ = tf._direction_score(_RSI, _MACD, _EMA, exhaustion_score=100.0, cfg=_EXH_ON)
     assert s > 50.0
+
+
+# ── Faz 3b: reversion (mean-reversion — uçta yönü ÇEVİR) ──────────────────────
+
+_REV_ON = tf.TechnicalConfig(reversion_enabled=True)   # rev_low 20, rev_high 80, mag 25
+
+
+def test_reversion_long_on_oversold_with_bullish_reversal():
+    # Bearish momentum + güçlü downside tükenmesi (exh 10) + BULLISH reversal teyidi
+    # → yön LONG'a çevrilir (mean-reversion).
+    s, diag = tf._direction_score(
+        30.0, 0.0, "bearish", exhaustion_score=10.0,
+        reversal=TechnicalReversalSignals(bias="BULLISH"), cfg=_REV_ON,
+    )
+    assert s > 50.0 and "reversion" in diag  # bearish iken long'a döndü
+
+
+def test_reversion_short_on_overbought_with_bearish_reversal():
+    # Bullish momentum + güçlü upside tükenmesi (exh 90) + BEARISH reversal → SHORT.
+    s, diag = tf._direction_score(
+        70.0, 0.0, "bullish", exhaustion_score=90.0,
+        reversal=TechnicalReversalSignals(bias="BEARISH"), cfg=_REV_ON,
+    )
+    assert s < 50.0 and "reversion" in diag
+
+
+def test_reversion_requires_reversal_confirmation():
+    # Uç tükenme TEK BAŞINA yetmez — reversal NEUTRAL ise çevirme yok.
+    s, diag = tf._direction_score(
+        30.0, 0.0, "bearish", exhaustion_score=10.0,
+        reversal=TechnicalReversalSignals(bias="NEUTRAL"), cfg=_REV_ON,
+    )
+    assert s < 50.0 and "reversion_shadow" not in diag  # bearish kaldı
+
+
+def test_reversion_shadow_when_off():
+    # OFF cfg: reversion_score gözlem yazılır ama final ÇEVRİLMEZ.
+    s, diag = tf._direction_score(
+        30.0, 0.0, "bearish", exhaustion_score=10.0,
+        reversal=TechnicalReversalSignals(bias="BULLISH"), cfg=_CHOP_OFF,
+    )
+    assert s < 50.0  # hâlâ bearish (çevrilmedi)
+    assert "reversion_shadow" in diag and "reversion" not in diag
+
+
+def test_reversion_skipped_when_momentum_already_aligned():
+    # Momentum zaten bullish + downside tükenmesi + bullish reversal → çevirecek bir
+    # şey yok (final<50 şartı sağlanmaz) → reversion tetiklenmez.
+    s, diag = tf._direction_score(
+        70.0, 0.0, "bullish", exhaustion_score=10.0,
+        reversal=TechnicalReversalSignals(bias="BULLISH"), cfg=_REV_ON,
+    )
+    assert s > 50.0 and "reversion_shadow" not in diag

@@ -414,6 +414,21 @@ technical:
     exh_low: 30.0
     exh_min_mult: 0.5
 
+  # Faz 3b — reversion (mean-reversion): momentum UÇTA tükenmiş + reversal teyidi
+  # TERS yönü işaret ediyorsa touche yönünü ÇEVİRİR (oversold+bullish reversal →
+  # LONG; overbought+bearish reversal → SHORT). Senin baştan beri aradığın "skor çok
+  # düşünce fiyat dönebilir → long" mantığı. Yalnız reversal.bias teyit ederse (uç
+  # exhaustion tek başına yetmez). RİSK-YARATIR (counter-trend) → DEFAULT KAPALI;
+  # enabled OFF iken reversion_score gözlem (shadow) loglanır. Not: touche bir modül,
+  # consensus ağırlığında seyrelir → magnitude güçlü (diğer modüller sert karşı
+  # çıkmadıkça geçer); canlıya almadan önce shadow'da reversion_score izlenmeli ve
+  # ROADMAP'e göre ilk aşama manual_ready (oto-açma değil) düşünülmeli.
+  reversion:
+    enabled: false
+    exh_rev_low: 20.0
+    exh_rev_high: 80.0
+    rev_magnitude: 25.0
+
 # T2 — AgentDecision (deterministic). ConsensusSnapshot + RiskGate aksiyonu →
 # tek yüksek-seviye aksiyon + entry_timeframe. EVIDENCE→aksiyon köprüsü; trade
 # AÇMAZ (paper open matrix/RiskGate işi). Kurallar: RiskGate her zaman final
