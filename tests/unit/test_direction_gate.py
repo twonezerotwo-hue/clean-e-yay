@@ -98,18 +98,20 @@ def test_short_side_symmetry():
 
 # ── Faz 2: chop guard (trend kalitesi) ────────────────────────────────────────
 
-_CHOP_ON = tf.TechnicalConfig(chop_guard_enabled=True)   # floor 20, min_mult 0.5
+_CHOP_ON = tf.TechnicalConfig(chop_guard_enabled=True)    # floor 20, min_mult 0.5
+_CHOP_OFF = tf.TechnicalConfig(chop_guard_enabled=False)  # explicit OFF (global config'ten bağımsız)
 
 
 def test_chop_guard_off_is_passthrough():
-    # Varsayılan config (kapalı): düşük ADX bile skoru DEĞİŞTİRMEZ.
-    assert _score(adx_v=5.0) == tf._momentum_score(_RSI, _MACD, _EMA)
+    # Explicit OFF cfg: düşük ADX bile final skoru DEĞİŞTİRMEZ (global flag ne olursa olsun).
+    s, _ = tf._direction_score(_RSI, _MACD, _EMA, adx_v=5.0, cfg=_CHOP_OFF)
+    assert s == tf._momentum_score(_RSI, _MACD, _EMA)
 
 
 def test_chop_guard_shadow_logged_even_when_off():
     # Flag KAPALI olsa da chop'ta "ne olurdu" gözlem değeri diag'a yazılır
     # (öğrenme katmanı yön-motorunu izlemez → manuel tespit sinyali).
-    s, diag = tf._direction_score(_RSI, _MACD, _EMA, adx_v=5.0)  # default cfg = OFF
+    s, diag = tf._direction_score(_RSI, _MACD, _EMA, adx_v=5.0, cfg=_CHOP_OFF)
     assert s == tf._momentum_score(_RSI, _MACD, _EMA)   # final DEĞİŞMEDİ
     assert "chop_mult_shadow" in diag                   # ama gözlem kaydedildi
     assert "chop_mult" not in diag                      # uygulanmadı

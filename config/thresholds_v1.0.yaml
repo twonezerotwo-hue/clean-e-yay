@@ -383,8 +383,11 @@ technical:
   # enabled=false (varsayılan) → HİÇ etki yok, mevcut skor birebir. Açıkken:
   # trendde (adx≥adx_chop_floor) çarpan 1.0 (dokunmaz); chop'ta skor mesafesi
   # 50'ye doğru ×[chop_min_mult..1.0] kısılır. Yön ASLA çevrilmez, yalnız sönümler.
+  # 2026-06-29: CANLIYA ALINDI (owner). Risk-azaltıcı (yalnız sönümler); fazla
+  # temkinli olursa chop_guard_multiplier loglarından görülür, enabled:false ile
+  # anında geri alınır. Öğrenme katmanı bunu OTOMATİK izlemez → manuel takip.
   trend_quality:
-    enabled: false
+    enabled: true
     adx_chop_floor: 20.0
     chop_min_mult: 0.5
 
