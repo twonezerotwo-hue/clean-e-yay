@@ -45,9 +45,11 @@ def post_propose(body: RegimeBody | None = None) -> dict:
     regime = (body.regime if body else "NEUTRAL").upper()
     result = trainer.train(regime=regime)
     if isinstance(result, dict):
-        return {"status": "INSUFFICIENT", "detail": result}
+        return {"status": result.get("status", "SKIPPED"), "detail": result}
     proposal = trainer.proposal_to_dict(result)
     saved = store.set_pending(proposal)
+    if saved.get("status") == "NO_CHANGE":
+        return {"status": "NO_CHANGE", "detail": saved}
     return {"status": "PENDING", "proposal": saved}
 
 

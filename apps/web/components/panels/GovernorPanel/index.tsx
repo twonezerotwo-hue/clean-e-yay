@@ -9,14 +9,19 @@ import {
 } from "@/lib/queries/hooks";
 import type { GovernorReport } from "@/types/generated/api";
 
-// Governor — self-managing katmanın özet panosu (packages/governor/report.py).
-// "Agent bugün ne öğrendi / ne buldu / ne öneriyor / ne onay bekliyor / hangi
-// veriye güvenmiyor" — hepsi read-only ViewModel'den. Frontend hesap YAPMAZ.
-// PAPER_SAFE / NO_EXECUTION: governor trade açmaz, ayar değiştirmez.
+const TASK_DETAIL: Record<string, string> = {
+  DATA_QUALITY_REVIEW: "Provider veya DQS tarafında güven düşüşü var; veri kaynağı raporu çalıştırılacak.",
+  RISK_REVIEW: "Risk halt veya risk kapısı davranışı read-only raporla incelenecek.",
+  MISSED_OPPORTUNITY_REVIEW: "Açılmayan valid setup sonuçları gözden geçirilecek.",
+  TRADE_REVIEW: "Kapanan trade outcome'ları ve öğrenme özeti incelenecek.",
+  MODE_REVIEW: "Aktif mod ve profil ayarları incelenecek.",
+  SYSTEM_HEALTH_REVIEW: "Worker ve sistem sağlığı raporu üretilecek.",
+};
 
 function rec(v: unknown): Record<string, unknown> {
   return v && typeof v === "object" ? (v as Record<string, unknown>) : {};
 }
+
 function num(v: unknown): number | null {
   return typeof v === "number" && Number.isFinite(v) ? v : null;
 }
@@ -41,6 +46,8 @@ export function GovernorPanel() {
   const trust = rec(d?.data_trust?.data);
   const providers = rec(trust.providers);
   const dqs = rec(trust.dqs);
+  const queue = Array.isArray(tasks.queue) ? tasks.queue : [];
+  const nextTask = rec(queue[0]);
 
   const runStatus = typeof run.status === "string" ? run.status : "—";
   const generatedAt = typeof run.completed_at === "string" ? run.completed_at : null;
@@ -48,12 +55,25 @@ export function GovernorPanel() {
   const pendingCount = num(proposals.pending_count) ?? 0;
   const degraded = num(providers.degraded_count);
   const dqsStatus = typeof dqs.status === "string" ? dqs.status : null;
+  const generatedResult = rec(generate.data);
+  const generatedCount = num(generatedResult.generated);
+  const generatedMessage =
+    generatedCount == null
+      ? null
+      : generatedCount > 0
+        ? `Görev taraması tamamlandı: ${generatedCount} yeni görev hazır.`
+        : queueCount > 0
+          ? "Görev taraması tamamlandı: yeni görev yok; mevcut bekleyen görev aşağıda."
+          : "Görev taraması tamamlandı: yeni görev yok.";
+  const nextPriority = typeof nextTask.priority === "string" ? nextTask.priority : null;
+  const nextType = typeof nextTask.task_type === "string" ? nextTask.task_type : null;
+  const nextSubject = nextType ? TASK_DETAIL[nextType] : null;
 
   return (
     <PanelFrame id="governor">
       <PanelHeader
         title="Governor"
-        subtitle="Öz-yönetim özeti — gözlemler, öğrenir, önerir (owner onayı bekler)"
+        subtitle="Öz-yönetim özeti — gözlemler, öğrenir, önerir"
         actions={
           <button
             type="button"
@@ -67,13 +87,25 @@ export function GovernorPanel() {
       />
 
       <p className="mb-2 rounded border border-white/10 bg-white/[0.02] px-2 py-1 text-[11px] text-white/55">
-        Governor işlem açmaz, ayar değiştirmez. Yalnızca görev üretir, read-only
-        rapor toplar ve owner onayına öneri sunar.
+        Governor işlem açmaz, ayar değiştirmez. Yalnızca read-only görev üretir ve
+        owner onayına veri hazırlar.
       </p>
+
+      {generatedMessage ? (
+        <p className="mb-2 rounded border border-emerald-400/25 bg-emerald-400/10 px-2 py-1 text-[11px] text-emerald-200/90">
+          {generatedMessage}
+        </p>
+      ) : null}
+
+      {generate.isError ? (
+        <p className="mb-2 rounded border border-signal-down/30 bg-signal-down/5 px-2 py-1 text-[11px] text-signal-down/90">
+          Görev üretimi tamamlanamadı.
+        </p>
+      ) : null}
 
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
         <Stat label="Son koşu" value={runStatus} />
-        <Stat label="Bekleyen görev" value={String(queueCount)} />
+        <Stat label="Bekleyen görev" value={String(queueCount)} tone={queueCount > 0 ? "warn" : undefined} />
         <Stat label="Bekleyen öneri" value={String(pendingCount)} tone={pendingCount > 0 ? "warn" : undefined} />
         <Stat
           label="Veri güveni"
@@ -81,6 +113,20 @@ export function GovernorPanel() {
           tone={degraded != null && degraded > 0 ? "warn" : undefined}
         />
       </div>
+
+      {nextType ? (
+        <div className="mt-2 rounded border border-amber-400/25 bg-amber-400/8 px-2 py-1.5 text-[11px] text-white/70">
+          <div className="mb-0.5 flex items-center justify-between gap-2">
+            <span className="uppercase tracking-widest text-white/40">Sıradaki görev</span>
+            <span className="font-mono text-amber-300">{nextPriority ?? "P?"}</span>
+          </div>
+          <div className="font-medium text-white/85">{nextType}</div>
+          {nextSubject ? <div className="mt-0.5 text-white/50">{nextSubject}</div> : null}
+          <div className="mt-1 text-[10px] uppercase tracking-widest text-white/35">
+            Detay ve çalıştırma: aşağıdaki Görev Kuyruğu paneli
+          </div>
+        </div>
+      ) : null}
 
       <div className="mt-2 grid grid-cols-2 gap-2 text-[11px] text-white/60">
         <div className="rounded border border-white/10 bg-white/[0.02] px-2 py-1">

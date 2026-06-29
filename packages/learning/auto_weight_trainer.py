@@ -32,11 +32,15 @@ from packages.paper import state as paper_state
 
 MIN_TRADES_PER_MODULE = 3
 MIN_TOTAL_TRADES = 10
+MIN_MODULES_FOR_REBALANCE = 2
+MIN_EFFECTIVE_DELTA = 0.0001
 
 NotEnoughDataReason = Literal[
     "no_verified_trades",
     "below_min_total",
     "no_module_meets_min",
+    "no_module_diversity",
+    "no_weight_delta",
 ]
 
 
@@ -220,11 +224,33 @@ def train(regime: str = "NEUTRAL") -> RebalanceProposal | dict:
             "rejected_records": rejected,
             "min_per_module": MIN_TRADES_PER_MODULE,
         }
+    if len(perfs) < MIN_MODULES_FOR_REBALANCE:
+        return {
+            "status": "INSUFFICIENT",
+            "reason": "no_module_diversity",
+            "dataset_size": eligible,
+            "rejected_records": rejected,
+            "min_modules": MIN_MODULES_FOR_REBALANCE,
+            "modules_ready": [asdict(p) for p in perfs],
+        }
 
     weights_cfg = load_active_weights()
     constraints = weights_cfg.get("constraints", {})
     base = dict(weights_cfg["regimes"].get(regime, weights_cfg["regimes"]["NEUTRAL"]))
     new_w, deltas = _propose_for_regime(perfs, regime, base, constraints)
+    if not any(abs(d.delta) >= MIN_EFFECTIVE_DELTA for d in deltas):
+        return {
+            "status": "NO_CHANGE",
+            "reason": "no_weight_delta",
+            "dataset_size": eligible,
+            "rejected_records": rejected,
+            "deltas": [asdict(d) for d in deltas],
+            "evidence": [asdict(p) for p in perfs],
+            "audit_note": (
+                f"{eligible} verified trade incelendi; mevcut agirliklardan "
+                "anlamli fark cikmadi."
+            ),
+        }
 
     from_version = active_weights_version()
     to_version = _bump_version(from_version)

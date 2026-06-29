@@ -26,6 +26,7 @@ from packages.data.registry.loader import (
 ProposalStatus = Literal["PENDING", "APPROVED", "REJECTED"]
 
 _LOCK = threading.Lock()
+_MIN_EFFECTIVE_DELTA = 0.0001
 
 
 def _store_path() -> Path:
@@ -51,6 +52,43 @@ def _empty() -> dict:
     return {"current": None, "history": []}
 
 
+def has_effective_delta(proposal: dict | None) -> bool:
+    if not isinstance(proposal, dict):
+        return False
+    deltas = proposal.get("deltas")
+    if not isinstance(deltas, list):
+        return False
+    for d in deltas:
+        if (
+            isinstance(d, dict)
+            and abs(float(d.get("delta") or 0.0)) >= _MIN_EFFECTIVE_DELTA
+        ):
+            return True
+    return False
+
+
+def _proposal_signature(proposal: dict) -> tuple:
+    deltas = proposal.get("deltas") if isinstance(proposal.get("deltas"), list) else []
+    compact_deltas = tuple(
+        sorted(
+            (
+                str(d.get("module")),
+                round(float(d.get("old") or 0.0), 6),
+                round(float(d.get("new") or 0.0), 6),
+                round(float(d.get("delta") or 0.0), 6),
+            )
+            for d in deltas
+            if isinstance(d, dict)
+        )
+    )
+    return (
+        str(proposal.get("from_version") or ""),
+        str(proposal.get("to_version") or ""),
+        str(proposal.get("regime") or ""),
+        compact_deltas,
+    )
+
+
 def load() -> dict:
     path = _store_path()
     with _LOCK:
@@ -71,19 +109,27 @@ def _save(data: dict) -> None:
 
 def get_pending() -> dict | None:
     cur = load().get("current")
-    if cur and cur.get("status") == "PENDING":
+    if cur and cur.get("status") == "PENDING" and has_effective_delta(cur):
         return cur
     return None
 
 
 def set_pending(proposal: dict) -> dict:
     """Yeni proposal yaz; eski PENDING varsa history'e taşı (SUPERSEDED)."""
+    proposal = dict(proposal, status="PENDING")
+    if not has_effective_delta(proposal):
+        return dict(proposal, status="NO_CHANGE")
     data = load()
     cur = data.get("current")
+    if (
+        cur
+        and cur.get("status") == "PENDING"
+        and _proposal_signature(cur) == _proposal_signature(proposal)
+    ):
+        return cur
     if cur and cur.get("status") == "PENDING":
         cur = dict(cur, status="REJECTED", reject_reason="superseded")
         data["history"] = [cur, *data.get("history", [])][:50]
-    proposal = dict(proposal, status="PENDING")
     data["current"] = proposal
     _save(data)
     return proposal

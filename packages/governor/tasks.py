@@ -252,8 +252,11 @@ def generate() -> list[dict]:
     created: list[dict] = []
 
     def _add(task_type: str, subject: str, params: dict | None = None) -> None:
-        t = enqueue(task_type, subject=subject, params=params or {})
-        if t and t.get("status") == "PENDING" and t not in created:
+        clean_params = _safe_dict(params)
+        key = _dedup_key({"task_type": task_type, "params": clean_params})
+        already_pending = any(_dedup_key(t) == key for t in load().get("queue", []))
+        t = enqueue(task_type, subject=subject, params=clean_params)
+        if not already_pending and t and t.get("status") == "PENDING" and t not in created:
             created.append(t)
 
     try:
@@ -261,14 +264,18 @@ def generate() -> list[dict]:
 
         h = build_system_health()
         prov = h.get("provider_summary") or {}
-        if prov.get("degraded") or prov.get("down"):
+        provider_counts = prov.get("providers") if isinstance(prov.get("providers"), dict) else {}
+        degraded_count = int(prov.get("degraded_count") or provider_counts.get("degraded") or 0)
+        down_count = int(provider_counts.get("down") or 0)
+        if degraded_count > 0 or down_count > 0:
             _add(
                 "DATA_QUALITY_REVIEW",
                 "Provider degraded/down — veri kalitesini incele",
                 {"provider_summary": prov},
             )
         dqs = h.get("dqs_status") or {}
-        if str(dqs.get("status") or "").upper() in {"BLOCKED", "DEGRADED"}:
+        dqs_status = dqs.get("status") if isinstance(dqs, dict) else dqs
+        if str(dqs_status or "").upper() in {"BLOCKED", "DEGRADED"}:
             _add("DATA_QUALITY_REVIEW", "DQS düşük — neden?", {"dqs": dqs})
         halt = h.get("risk_halt_status") or {}
         if halt.get("active") or halt.get("halts"):

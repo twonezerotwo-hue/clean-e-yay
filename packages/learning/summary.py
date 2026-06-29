@@ -17,7 +17,7 @@ MIN_RELIABLE_TRADES = 20
 
 def _proposal_status() -> str:
     """Rebalance proposal durumu (additive yüzey) — PENDING/APPROVED/REJECTED/NONE."""
-    cur = rebalance_store.load().get("current")
+    cur = rebalance_store.get_pending()
     return str(cur.get("status")) if cur else "NONE"
 
 

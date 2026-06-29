@@ -30,9 +30,7 @@ import { OrderTicketPanel } from "@/components/panels/OrderTicketPanel";
 import { NewsPanel } from "@/components/panels/NewsPanel";
 import { ScenarioPanel } from "@/components/panels/ScenarioPanel";
 import { GovernorPanel } from "@/components/panels/GovernorPanel";
-import { ProposalPanel } from "@/components/panels/ProposalPanel";
 import { TaskQueuePanel } from "@/components/panels/TaskQueuePanel";
-import { TradingPanel } from "@/components/panels/TradingPanel";
 import { LearningPanel } from "@/components/panels/LearningPanel";
 import { OutcomeLedgerPanel } from "@/components/panels/OutcomeLedgerPanel";
 import { LearningWorkerPanel } from "@/components/panels/LearningWorkerPanel";
@@ -45,7 +43,6 @@ import { WeightHistoryPanel } from "@/components/panels/WeightHistoryPanel";
 import { TfWeightsPanel } from "@/components/panels/TfWeightsPanel";
 import { TfTargetsPanel } from "@/components/panels/TfTargetsPanel";
 import { MissedOpportunitiesPanel } from "@/components/panels/MissedOpportunitiesPanel";
-import { CalibrationJumpsPanel } from "@/components/panels/CalibrationJumpsPanel";
 import { AgentModePanel } from "@/components/panels/AgentModePanel";
 import type { CockpitBrief } from "@/types/generated/api";
 
@@ -1134,78 +1131,95 @@ export function CockpitView() {
         <div className="space-y-6 pb-12">
           <LayerHeader
             meta={LAYERS[3]}
-            detail="Conscious — agent'in bilinci: kendini yonetir, ogrenir ve owner'a oneri sunar. Sirayla KONTROL ET (oz-yonetim), EGIT (agirlik / kalibrasyon / hedef) ve IZLE (sonuc defteri, hatalar). Hicbir degisiklik otomatik uygulanmaz — owner onayi sarttir."
+            detail="Katman 3, sistemin gecmisten ne ogrendigini, hangi ayarlari onerdigini ve hangi hatalari takip ettigini bolum bolum gosterir."
           >
             <DataQualityBadge dqs={dqs} generatedAt={data?.generated_at} />
           </LayerHeader>
 
           <Layer2DetailGroup
             index="01"
-            title="Oz-Yonetim & Kontrol"
-            detail="Komuta merkezi: agent'in kendi kendine ne yaptigini gor, ana profil/strateji anahtarlarini ac-kapa, bekleyen oneri ve gorevleri onayla/reddet. Agent islem acmaz."
+            title="Sistem Yonetimi"
+            detail="Governor ozeti ve agent mode ayarlari. Sistem davranisini buradan gorur ve owner kontrollu modlari buradan yonetirsin."
             badge="owner kontrolu"
             badgeTone="border-emerald-400/30 bg-emerald-400/10 text-emerald-200"
           >
             <div className="grid gap-3 lg:grid-cols-2">
               <div className="lg:col-span-2"><GovernorPanel /></div>
               <div className="lg:col-span-2"><AgentModePanel /></div>
-              <ProposalPanel />
-              <TaskQueuePanel />
+              <div className="lg:col-span-2"><TaskQueuePanel /></div>
             </div>
           </Layer2DetailGroup>
 
           <Layer2DetailGroup
             index="02"
-            title="Egitim · Agirlik Ogrenmesi"
-            detail="Agent agirlik dengelemesi onerir; gecmisi ve per-TF tf_weights kalibrasyonunu gosterir. Aktif agirliklar yalnizca owner onayiyla degisir."
+            title="Ogrenme Ozeti"
+            detail="Kapanan outcome'lardan uretilen genel ogrenme ozeti, sonuc defteri ve learning worker sagligi."
+            badge="read-only"
+          >
+            <div className="grid gap-3 lg:grid-cols-2">
+              <LearningPanel />
+              <LearningWorkerPanel />
+              <div className="lg:col-span-2"><OutcomeLedgerPanel /></div>
+            </div>
+          </Layer2DetailGroup>
+
+          <Layer2DetailGroup
+            index="03"
+            title="Kalibrasyon"
+            detail="Confidence kalibrasyonu, per-timeframe tf_weights kalibrasyonu ve timeframe bazli SL/TP hedef ogrenmesi."
+            badge="owner onayi"
+            badgeTone="border-amber-400/30 bg-amber-400/10 text-amber-200"
+          >
+            <div className="grid gap-3 lg:grid-cols-2">
+              <CalibrationPanel />
+              <TfWeightsPanel />
+              <div className="lg:col-span-2"><TfTargetsPanel /></div>
+            </div>
+          </Layer2DetailGroup>
+
+          <Layer2DetailGroup
+            index="04"
+            title="Agirlik Onerileri"
+            detail="Auto-weight trainer'in owner onayina sundugu agirlik degisimleri ve gecmis onay/red kayitlari."
             badge="owner onayi"
             badgeTone="border-amber-400/30 bg-amber-400/10 text-amber-200"
           >
             <div className="grid gap-3 lg:grid-cols-2">
               <WeightProposalPanel />
               <WeightHistoryPanel />
-              <div className="lg:col-span-2"><TfWeightsPanel /></div>
-            </div>
-          </Layer2DetailGroup>
-
-          <Layer2DetailGroup
-            index="03"
-            title="Egitim · Kalibrasyon & Hedef"
-            detail="Confidence kalibrasyonu (Platt, manuel retrain), timeframe bazli SL/TP geometri ogrenmesi ve conflict gate route ogrenmesi. Hibrit: bant ici auto, bant disi owner onayi."
-            badge="owner onayi"
-            badgeTone="border-amber-400/30 bg-amber-400/10 text-amber-200"
-          >
-            <div className="grid gap-3 lg:grid-cols-2">
-              <CalibrationPanel />
-              <CalibrationJumpsPanel />
-              <TfTargetsPanel />
-              <div className="lg:col-span-2"><ConflictGateLearningPanel /></div>
-            </div>
-          </Layer2DetailGroup>
-
-          <Layer2DetailGroup
-            index="04"
-            title="Izle · Performans & Sonuc Defteri"
-            detail="Paper hesap durumu, kapanan outcome defteri, ogrenme ozeti, learning worker durumu ve historical-edge sorgusu. Salt-okunur izleme yuzeyi."
-          >
-            <div className="grid gap-3 lg:grid-cols-2">
-              <div className="lg:col-span-2"><TradingPanel /></div>
-              <LearningPanel />
-              <LearningWorkerPanel />
-              <div className="lg:col-span-2"><OutcomeLedgerPanel /></div>
-              <div className="lg:col-span-2"><HistoricalEdgePanel /></div>
             </div>
           </Layer2DetailGroup>
 
           <Layer2DetailGroup
             index="05"
-            title="Ogren · Hatalar & Kacan Firsatlar"
-            detail="Tekrar eden hata parmak izleri (mistake memory) ve acilmayan valid setup'larin TTL sonucu (kacan firsat). Agent'in nereden ders cikardigi."
+            title="Hata Hafizasi"
+            detail="Tekrar eden hata parmak izleri ve benzer gecmis setup performansi. Sistem hangi kosullarda zayif kalmis burada gorunur."
+            badge="read-only"
           >
             <div className="grid gap-3 lg:grid-cols-2">
               <MistakeMemoryPanel />
+              <HistoricalEdgePanel />
+            </div>
+          </Layer2DetailGroup>
+
+          <Layer2DetailGroup
+            index="06"
+            title="Kacan Firsatlar"
+            detail="Acilmayan valid setup'larin TTL sonucu: kacan kazanc, onlenen zarar ve sure dolan adaylar."
+            badge="read-only"
+          >
+            <div className="grid gap-3 lg:grid-cols-2">
               <MissedOpportunitiesPanel />
             </div>
+          </Layer2DetailGroup>
+
+          <Layer2DetailGroup
+            index="07"
+            title="Conflict Gate Ogrenmesi"
+            detail="Conflict gate profil modlari ve gecmis route validation performansi. Gate kararlarini degerlendirmek icin kullanilir."
+            badge="read-only"
+          >
+            <ConflictGateLearningPanel />
           </Layer2DetailGroup>
         </div>
       </div>

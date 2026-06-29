@@ -19,19 +19,49 @@ import { fmtNum, fmtRelative } from "@/lib/format";
 
 type ActionKind = "propose" | "approve" | "reject";
 
+function describeResult(
+  res: Awaited<ReturnType<typeof api.rebalancePropose>>,
+): string | null {
+  const detail = res.detail ?? {};
+  const reason = typeof detail.reason === "string" ? detail.reason : "";
+  if (res.status === "NO_CHANGE" || reason === "no_weight_delta") {
+    return "Yeni öneri yok: mevcut ağırlıklardan anlamlı fark çıkmadı.";
+  }
+  if (reason === "no_module_diversity") {
+    return "Yeni öneri yok: öğrenme verisi tek modülde yoğunlaşıyor; ağırlık değiştirmek için en az 2 modül karşılaştırılmalı.";
+  }
+  if (reason === "below_min_total") {
+    const min = typeof detail.min_required === "number" ? detail.min_required : 10;
+    return `Yeni öneri yok: en az ${min} verified trade gerekiyor.`;
+  }
+  if (reason === "no_module_meets_min") {
+    return "Yeni öneri yok: modül başına yeterli verified trade yok.";
+  }
+  if (res.status === "PENDING") return null;
+  return res.status ? `Öneri üretilmedi: ${res.status}.` : null;
+}
+
 export function WeightProposalPanel() {
   const { data, isLoading } = useRebalanceProposal();
   const qc = useQueryClient();
   const [busy, setBusy] = useState<ActionKind | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [info, setInfo] = useState<string | null>(null);
 
   const runAction = async (kind: ActionKind) => {
     setBusy(kind);
     setError(null);
     try {
-      if (kind === "propose") await api.rebalancePropose("NEUTRAL");
-      else if (kind === "approve") await api.rebalanceApprove("owner");
-      else await api.rebalanceReject("owner_reject");
+      if (kind === "propose") {
+        const res = await api.rebalancePropose("NEUTRAL");
+        setInfo(describeResult(res));
+      } else if (kind === "approve") {
+        await api.rebalanceApprove("owner");
+        setInfo(null);
+      } else {
+        await api.rebalanceReject("owner_reject");
+        setInfo(null);
+      }
       await qc.invalidateQueries({ queryKey: qk.rebalanceProposal });
       await qc.invalidateQueries({ queryKey: qk.learningSummary });
       await qc.invalidateQueries({ queryKey: qk.tfWeights });
@@ -45,7 +75,7 @@ export function WeightProposalPanel() {
   if (isLoading) {
     return (
       <PanelFrame id="weight_proposal">
-        <PanelHeader title="Agirlik Onerisi" />
+        <PanelHeader title="Ağırlık Önerisi" />
         <LoadingState />
       </PanelFrame>
     );
@@ -58,7 +88,7 @@ export function WeightProposalPanel() {
     return (
       <PanelFrame id="weight_proposal">
         <PanelHeader
-          title="Agirlik Onerisi"
+          title="Ağırlık Önerisi"
           subtitle={`aktif v${active}`}
           actions={
             <button
@@ -67,14 +97,19 @@ export function WeightProposalPanel() {
               onClick={() => runAction("propose")}
               className="rounded border border-accent-cyan/35 bg-accent-cyan/8 px-2 py-0.5 text-[10px] uppercase tracking-wide text-accent-cyan hover:bg-accent-cyan/14 disabled:opacity-40"
             >
-              {busy === "propose" ? "Uretiyor..." : "Oneri uret"}
+              {busy === "propose" ? "Üretiliyor..." : "Öneri üret"}
             </button>
           }
         />
         <EmptyState />
         <p className="mt-2 text-[11px] text-white/40">
-          Bekleyen owner-onayli agirlik onerisi yok.
+          Bekleyen owner-onaylı ağırlık önerisi yok.
         </p>
+        {info ? (
+          <p className="mt-2 rounded border border-amber-400/25 bg-amber-400/8 px-2 py-1 text-[11px] text-amber-100/80">
+            {info}
+          </p>
+        ) : null}
         {error ? (
           <p className="mt-2 rounded border border-signal-down/30 bg-signal-down/5 px-2 py-1 text-[11px] text-signal-down/90">
             {error}
@@ -89,8 +124,8 @@ export function WeightProposalPanel() {
   return (
     <PanelFrame id="weight_proposal">
       <PanelHeader
-        title="Agirlik Onerisi"
-        subtitle={`aktif v${active} -> oneri v${p.to_version} - ${p.regime}`}
+        title="Ağırlık Önerisi"
+        subtitle={`aktif v${active} -> öneri v${p.to_version} - ${p.regime}`}
         actions={
           <>
             <span className="rounded px-1.5 py-0.5 bg-amber-400/20 text-amber-400 text-[10px] uppercase tracking-widest">
@@ -117,7 +152,7 @@ export function WeightProposalPanel() {
       />
 
       <div className="text-[11px] text-white/50 mb-2">
-        {p.dataset_size} verified trade - {p.rejected_records} kayit atlandi -{" "}
+        {p.dataset_size} verified trade - {p.rejected_records} kayıt atlandı -{" "}
         {fmtRelative(p.generated_at)}
       </div>
 

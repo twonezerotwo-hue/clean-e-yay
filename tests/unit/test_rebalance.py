@@ -36,17 +36,21 @@ def _fresh_env(tmp_path, monkeypatch):
 
 def _seed_trades(ps, *, n_verified: int, n_unverified: int = 0,
                  fingerprint: str = "BTCUSD|NEUTRAL|bullish|S65|C|touche",
-                 win_pnl: float = 120.0) -> None:
+                 win_pnl: float = 120.0,
+                 loss_pnl: float = -50.0,
+                 wins: int | None = None,
+                 id_prefix: str = "v") -> None:
     state = ps.load()
     for i in range(n_verified):
+        is_win = i < wins if wins is not None else i % 2 == 0
         state.recent_trades.append(
             ps.Trade(
-                id=f"v{i}",
+                id=f"{id_prefix}{i}",
                 symbol="BTCUSD",
                 side="long",
                 entry_price=100.0,
                 exit_price=101.0,
-                pnl_usd=win_pnl if i % 2 == 0 else -50.0,
+                pnl_usd=win_pnl if is_win else loss_pnl,
                 opened_at="2026-06-11T00:00:00+00:00",
                 closed_at="2026-06-11T01:00:00+00:00",
                 close_reason="TP_HIT",
@@ -73,6 +77,23 @@ def _seed_trades(ps, *, n_verified: int, n_unverified: int = 0,
     ps.save(state)
 
 
+def _seed_diverse_trades(ps) -> None:
+    _seed_trades(
+        ps,
+        n_verified=6,
+        fingerprint="BTCUSD|NEUTRAL|bullish|S65|C|touche",
+        wins=6,
+        id_prefix="t",
+    )
+    _seed_trades(
+        ps,
+        n_verified=6,
+        fingerprint="BTCUSD|NEUTRAL|bearish|S35|C|fundamental",
+        wins=0,
+        id_prefix="f",
+    )
+
+
 def test_trainer_insufficient_when_no_verified_trades(tmp_path, monkeypatch) -> None:
     ps, _, _ = _fresh_env(tmp_path, monkeypatch)
     _seed_trades(ps, n_verified=0, n_unverified=5)
@@ -94,15 +115,15 @@ def test_trainer_below_min_total(tmp_path, monkeypatch) -> None:
 
 def test_trainer_emits_proposal(tmp_path, monkeypatch) -> None:
     ps, _, _ = _fresh_env(tmp_path, monkeypatch)
-    # 10 verified trade — eşik üstü; tek modül 'touche'
-    _seed_trades(ps, n_verified=10)
+    # Proposal icin en az iki karsilastirilabilir modul gerekir.
+    _seed_diverse_trades(ps)
     from packages.learning import auto_weight_trainer as t
     res = t.train(regime="NEUTRAL")
     assert hasattr(res, "deltas")
     assert res.from_version == "1.0.0"
     assert res.to_version == "1.1.0"
     # Sadece verified hesaba katıldı:
-    assert res.dataset_size == 10
+    assert res.dataset_size == 12
     # YAML proposal bir 'regimes.NEUTRAL' tablosu içermeli + normalize ≈1
     weights = res.proposed_yaml["regimes"]["NEUTRAL"]
     assert abs(sum(weights.values()) - 1.0) < 1e-3
@@ -110,16 +131,27 @@ def test_trainer_emits_proposal(tmp_path, monkeypatch) -> None:
 
 def test_unverified_records_are_excluded(tmp_path, monkeypatch) -> None:
     ps, _, _ = _fresh_env(tmp_path, monkeypatch)
-    _seed_trades(ps, n_verified=10, n_unverified=5)
+    _seed_diverse_trades(ps)
+    _seed_trades(ps, n_verified=0, n_unverified=5, id_prefix="u")
     from packages.learning import auto_weight_trainer as t
     res = t.train(regime="NEUTRAL")
-    assert res.dataset_size == 10
+    assert res.dataset_size == 12
     assert res.rejected_records == 5
+
+
+def test_trainer_skips_single_module_no_diversity(tmp_path, monkeypatch) -> None:
+    ps, _, _ = _fresh_env(tmp_path, monkeypatch)
+    _seed_trades(ps, n_verified=10)
+    from packages.learning import auto_weight_trainer as t
+    res = t.train(regime="NEUTRAL")
+    assert isinstance(res, dict)
+    assert res["status"] == "INSUFFICIENT"
+    assert res["reason"] == "no_module_diversity"
 
 
 def test_endpoints_propose_approve_flow(tmp_path, monkeypatch) -> None:
     ps, rs, ld = _fresh_env(tmp_path, monkeypatch)
-    _seed_trades(ps, n_verified=10)
+    _seed_diverse_trades(ps)
 
     # Yeni modül + manifest path environment kullandığımız için apps.api
     # modüllerini de yeniden yükle ki taze loader / store cache'i kullansın.
@@ -157,7 +189,7 @@ def test_endpoints_propose_approve_flow(tmp_path, monkeypatch) -> None:
 
 def test_endpoints_reject_clears_pending(tmp_path, monkeypatch) -> None:
     ps, rs, ld = _fresh_env(tmp_path, monkeypatch)
-    _seed_trades(ps, n_verified=10)
+    _seed_diverse_trades(ps)
 
     from apps.api import main as api_main
     importlib.reload(api_main)
@@ -193,7 +225,7 @@ def test_active_weights_falls_back_to_baseline_without_manifest(
 
 def test_consensus_uses_active_weights(tmp_path, monkeypatch) -> None:
     ps, rs, ld = _fresh_env(tmp_path, monkeypatch)
-    _seed_trades(ps, n_verified=10)
+    _seed_diverse_trades(ps)
 
     from apps.api import main as api_main
     importlib.reload(api_main)
