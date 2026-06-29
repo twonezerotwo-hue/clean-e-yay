@@ -210,10 +210,12 @@ paper_trading:
   # kardeşler birbirini görmez → correlation cluster cap ateşlenemiyor. true iken
   # pass içinde açılan kardeşler sentetik pozisyon olarak sonraki hücrelere beslenir
   # → cap (aynı sembol rho=1.0) onları görür.
-  # DEFAULT KAPALI: açmak çok-TF aynı-sembol matris davranışını %30 cluster cap'e
-  # tabi kılar (multi-TF'i belirgin sıkar) — bu bir POLİTİKA kararı (ne kadar aynı-
-  # sembol konsantrasyon kabul). Owner eşiğe karar verince true yapar. false = eski.
-  intra_batch_cluster_guard: false
+  # 2026-06-29: AÇILDI (owner politika kararı). Eşik = mevcut max_cluster_pct (%30):
+  # aynı sembolün tüm TF'lerinin tek-pass toplam exposure'ı, diğer korelasyonlu
+  # pozisyonlarla birlikte equity'nin %30'unu aşamaz (XAGUSD-tarzı 15m/1h/4h yığını
+  # artık cap'lenir). Risk-azaltıcı (yalnız küçültür/bloklar); fazla sıkarsa false ile
+  # geri alınır. NOT: position_cap_per_asset_pct (%25) hâlâ enforce edilmiyor (ölü config).
+  intra_batch_cluster_guard: true
   sl_pct:
     BTCUSD: 0.04
     ETHUSD: 0.05
