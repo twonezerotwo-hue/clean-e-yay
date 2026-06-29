@@ -2819,7 +2819,7 @@ components:
       description: G2 — owner onayı bekleyen / geçmiş ağırlık önerisi (additive alanlı).
       required: [status]
       properties:
-        status: { type: string, enum: [PENDING, APPROVED, REJECTED] }
+        status: { type: string, enum: [PENDING, APPROVED, REJECTED, AUTO_APPLIED] }
         from_version: { type: string }
         to_version: { type: string }
         generated_at: { type: string, format: date-time }
@@ -2830,6 +2830,38 @@ components:
         evidence:
           type: array
           items: { $ref: "#/components/schemas/ModulePerf" }
+
+    WeightAutoApplyEntry:
+      type: object
+      description: >
+        G3 — otomatik-uygulanan ağırlık değişikliği kaydı (izleme + ledger). Alanlar
+        olaya göre değişir (AUTO_APPLIED/CONFIRMED/ROLLED_BACK); presentation-only.
+      additionalProperties: true
+      properties:
+        event: { type: string, enum: [AUTO_APPLIED, CONFIRMED, ROLLED_BACK] }
+        status: { type: string, enum: [MONITORING, CONFIRMED, ROLLED_BACK] }
+        applied_version: { type: string }
+        prev_version: { type: string }
+        regime: { type: string, nullable: true }
+        baseline_expectancy: { type: number }
+        baseline_n: { type: integer }
+        post_expectancy: { type: number }
+        post_n: { type: integer }
+        applied_at: { type: string }
+        resolved_at: { type: string }
+
+    WeightAutoApplyState:
+      type: object
+      description: G3 — izlenen aktif otomatik-uygulama + son ledger olayları.
+      required: [active, ledger]
+      properties:
+        active:
+          oneOf:
+            - { $ref: "#/components/schemas/WeightAutoApplyEntry" }
+            - { type: "null" }
+        ledger:
+          type: array
+          items: { $ref: "#/components/schemas/WeightAutoApplyEntry" }
 
     RebalanceState:
       type: object
@@ -2843,6 +2875,8 @@ components:
         history:
           type: array
           items: { $ref: "#/components/schemas/RebalanceProposalRecord" }
+        auto_apply:
+          $ref: "#/components/schemas/WeightAutoApplyState"
 
     # ---------------- R1 — gerçek snapshot replay foundation ----------------
     # Replay = kaydedilmiş gerçek state'in incelenmesi. Sahte backtest / uydurma

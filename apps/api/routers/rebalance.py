@@ -15,6 +15,7 @@ from pydantic import BaseModel
 from packages.data.registry.loader import active_weights_version
 from packages.learning import auto_weight_trainer as trainer
 from packages.learning import rebalance_store as store
+from packages.learning import weight_autoapply_store
 
 router = APIRouter(tags=["learning"])
 
@@ -33,10 +34,17 @@ class RejectBody(BaseModel):
 
 @router.get("/learning/rebalance/proposal")
 def get_proposal() -> dict:
+    # G3 — otomatik-uygulama görünürlüğü (conscious layer): izlenen aktif apply +
+    # ledger (AUTO_APPLIED/CONFIRMED/ROLLED_BACK). Owner, ağırlıkların ne zaman
+    # kendi başına değişip geri alındığını cockpit'te görür.
     return {
         "active_version": active_weights_version(),
         "current": store.get_pending(),
         "history": store.history(20),
+        "auto_apply": {
+            "active": weight_autoapply_store.get_active(),
+            "ledger": weight_autoapply_store.history(20),
+        },
     }
 
 
