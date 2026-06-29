@@ -48,10 +48,10 @@ _load_dotenv()
 if sys.platform == "win32":
     asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 
-from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
+from fastapi import FastAPI  # noqa: E402
+from fastapi.middleware.cors import CORSMiddleware  # noqa: E402
 
-from apps.api.routers import (
+from apps.api.routers import (  # noqa: E402
     agent_mode,
     ai_report,
     analysis,

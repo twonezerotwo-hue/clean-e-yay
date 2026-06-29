@@ -209,7 +209,7 @@ def compute_adaptive_targets(
         natural = resistance if (resistance is not None and resistance > entry) else None
         if natural is None:
             tp, tp_basis = tp_min, "atr_floor"
-            notes.append("doğal direnç yok; ATR tabanı kullanıldı (1:%.1f)" % min_rr)
+            notes.append(f"doğal direnç yok; ATR tabanı kullanıldı (1:{min_rr:.1f})")
         elif natural < tp_min:
             # Yetersiz fırsat — sinyal atlanmalı
             rr = (natural - entry) / sl_distance
@@ -218,14 +218,13 @@ def compute_adaptive_targets(
                 sl_basis="atr", tp_basis="below_floor",
                 rr_floor_met=False, sl_distance=sl_distance,
                 notes=[
-                    "direnç %.2f, minimum 1:%.1f için %.2f gerekirdi"
-                    % (natural, min_rr, tp_min),
+                    f"direnç {natural:.2f}, minimum 1:{min_rr:.1f} için {tp_min:.2f} gerekirdi",
                     "R/R yetersiz — sinyal atlanmalı",
                 ],
             )
         elif natural > tp_max:
             tp, tp_basis = tp_max, "atr_max"
-            notes.append("doğal direnç çok uzakta; ATR tavanı kullanıldı (1:%.1f)" % max_rr)
+            notes.append(f"doğal direnç çok uzakta; ATR tavanı kullanıldı (1:{max_rr:.1f})")
         else:
             tp, tp_basis = natural, "resistance"
             notes.append("doğal direnç hedef olarak kullanıldı")
@@ -236,7 +235,7 @@ def compute_adaptive_targets(
         natural = support if (support is not None and support < entry) else None
         if natural is None:
             tp, tp_basis = tp_min, "atr_floor"
-            notes.append("doğal destek yok; ATR tabanı kullanıldı (1:%.1f)" % min_rr)
+            notes.append(f"doğal destek yok; ATR tabanı kullanıldı (1:{min_rr:.1f})")
         elif natural > tp_min:
             rr = (entry - natural) / sl_distance
             return AdaptiveTargets(
@@ -244,14 +243,13 @@ def compute_adaptive_targets(
                 sl_basis="atr", tp_basis="below_floor",
                 rr_floor_met=False, sl_distance=sl_distance,
                 notes=[
-                    "destek %.2f, minimum 1:%.1f için %.2f gerekirdi"
-                    % (natural, min_rr, tp_min),
+                    f"destek {natural:.2f}, minimum 1:{min_rr:.1f} için {tp_min:.2f} gerekirdi",
                     "R/R yetersiz — sinyal atlanmalı",
                 ],
             )
         elif natural < tp_max:
             tp, tp_basis = tp_max, "atr_max"
-            notes.append("doğal destek çok uzakta; ATR tavanı kullanıldı (1:%.1f)" % max_rr)
+            notes.append(f"doğal destek çok uzakta; ATR tavanı kullanıldı (1:{max_rr:.1f})")
         else:
             tp, tp_basis = natural, "support"
             notes.append("doğal destek hedef olarak kullanıldı")

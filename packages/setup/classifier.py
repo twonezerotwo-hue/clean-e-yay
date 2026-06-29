@@ -168,4 +168,4 @@ def classify(inputs: SetupInputs) -> SetupResult:
     return SetupResult(NO_TRADE, direction, "no_setup_evidence_matched")
 
 
-__all__ = ["SetupInputs", "SetupResult", "classify", "NO_TRADE"]
+__all__ = ["NO_TRADE", "SetupInputs", "SetupResult", "classify"]

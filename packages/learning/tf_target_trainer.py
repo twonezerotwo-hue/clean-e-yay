@@ -86,7 +86,7 @@ class TfTargetProposal:
 #   "TIME_STOP_EXIT", "TRAILING_STOP_EXIT", "KILL_SWITCH_EXIT", "MANUAL_CLOSE"
 def _classify_close(reason: str | None) -> str:
     r = (reason or "").upper()
-    if r == "SL" or "STOP" in r and "TIME" not in r and "TRAIL" not in r:
+    if r == "SL" or ("STOP" in r and "TIME" not in r and "TRAIL" not in r):
         return "sl"
     if r == "TP" or r.endswith("_TP"):
         return "tp"
@@ -147,7 +147,6 @@ def _nudge_tf(stats: TfStats, baseline: dict[str, float]) -> tuple[dict[str, flo
     """TF stats + mevcut baseline → yeni parametreler + nudge gerekçeleri."""
     new = dict(baseline)
     nudges: list[TfNudge] = []
-    sl_distance_avg_pct = baseline["sl_atr_mult"]  # proxy; gerçek SL mesafesi tier+ATR ile
     # MAE oranı sl_distance ile değil, sl_pct_floor/baseline ile karşılaştır:
     # baseline sl_atr_mult'un yansıması ortalama SL %. Gerçek mesafe ATR'ye bağlı,
     # bu trainer TF düzeyinde nudge yapar; tam mesafe için Faz B2 tetik döngüsünde

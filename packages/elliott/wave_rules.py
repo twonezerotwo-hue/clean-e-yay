@@ -87,4 +87,4 @@ def confidence_from_rules(results: list[ImpulseRuleResult]) -> float:
     return round(passed / len(results) * 100.0, 1)
 
 
-__all__ = ["check_impulse_rules", "check_abc_rules", "confidence_from_rules"]
+__all__ = ["check_abc_rules", "check_impulse_rules", "confidence_from_rules"]

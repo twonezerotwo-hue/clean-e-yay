@@ -186,8 +186,8 @@ __all__ = [
     "append",
     "append_many",
     "list_recent",
-    "unread_count",
+    "make_id",
     "mark_ack",
     "mark_all_ack",
-    "make_id",
+    "unread_count",
 ]

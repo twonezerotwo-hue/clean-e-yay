@@ -30,7 +30,7 @@ class Event:
 
 
 class _Sub:
-    __slots__ = ("queue", "loop")
+    __slots__ = ("loop", "queue")
 
     def __init__(self, queue: asyncio.Queue[Event], loop: asyncio.AbstractEventLoop):
         self.queue = queue

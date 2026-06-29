@@ -28,6 +28,7 @@ from packages.data.providers.price import (
 )
 from packages.data.types import PriceQuote
 
+
 # Sembol → birincil sağlayıcı modülü. Fonksiyon (sabit dict DEĞİL) — kullanıcı
 # runtime'da yeni bir custom asset eklediğinde (custom_assets.add) SUPPORTED
 # kümeleri anında genişler; statik dict olsaydı yeniden import gerekirdi.

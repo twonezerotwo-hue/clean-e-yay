@@ -180,8 +180,8 @@ def is_strong_negative(result: HistoricalEdgeResult) -> bool:
 
 
 __all__ = [
-    "HistoricalEdgeResult",
     "SIMILARITY_WEIGHTS",
+    "HistoricalEdgeResult",
     "active_similarity_weights",
     "compute_edge",
     "edge_to_dict",

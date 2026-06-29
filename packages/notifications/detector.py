@@ -16,8 +16,8 @@ from packages.notifications import Notification, make_id
 
 def _format_pct(x: float) -> str:
     if x >= 1:
-        return f"%{int(round(x))}"
-    return f"%{int(round(x * 100))}"
+        return f"%{round(x)}"
+    return f"%{round(x * 100)}"
 
 
 def _ticket_short(t: dict[str, Any]) -> str:
@@ -280,10 +280,10 @@ def detect_dqs_drop(
 
 
 __all__ = [
-    "detect_new_tickets",
-    "detect_expiring_tickets",
-    "detect_recheck_changes",
-    "detect_risk_gate_change",
     "detect_catalyst_imminent",
     "detect_dqs_drop",
+    "detect_expiring_tickets",
+    "detect_new_tickets",
+    "detect_recheck_changes",
+    "detect_risk_gate_change",
 ]
