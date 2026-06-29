@@ -636,6 +636,32 @@ def decide_all(
     return regime, risk, decisions
 
 
+def _intra_batch_guard_enabled() -> bool:
+    """Intra-batch same-symbol cluster guard açık mı (default KAPALI). Açıkken
+    decide_matrix pass içinde açılan kardeş pozisyonları sonraki hücrelere besler →
+    aynı-sembol çok-TF yığını correlation cap'e tabi olur. Politika kararı (owner)."""
+    try:
+        return bool(
+            (load_thresholds().get("paper_trading") or {}).get("intra_batch_cluster_guard", False)
+        )
+    except (OSError, KeyError, ValueError, TypeError):
+        return False
+
+
+@dataclass(frozen=True)
+class _PendingPosition:
+    """decide_matrix pass'i İÇİNDE açılması önerilen (henüz gerçek olmayan) pozisyon.
+
+    Kardeş (symbol, tf) hücrelerinin correlation cluster cap'ine girsin diye üretilir
+    — intra-batch aynı-sembol yığılmasını (örn. XAGUSD 15m/1h/4h short) cap görebilsin.
+    cluster_exposure yalnız .symbol/.side/.size_usd/.id okur."""
+
+    id: str
+    symbol: str
+    side: str
+    size_usd: float
+
+
 def decide_matrix(
     symbols: list[str],
     snap: MarketSnapshot,
@@ -661,22 +687,42 @@ def decide_matrix(
         sorted({*symbols, *(p.symbol for p in positions)})
     )
     tfs = [tf for tf in (timeframes or list(TIMEFRAMES)) if tf in TIMEFRAMES]
+    # Intra-batch yığılma koruması: pass içinde açılması önerilen kardeş hücreleri
+    # büyüyen listeye ekle → sonraki hücreler onları open_positions'ta görüp aynı
+    # correlation cap'e tabi olur. Flag kapalıyken eski (pass-başı-snapshot) davranış.
+    guard_on = _intra_batch_guard_enabled()
+    max_pos = float((load_thresholds().get("paper_trading") or {}).get("max_position_usd", 0.0))
+    pass_positions = list(positions)
     decisions: list[TradeDecision] = []
     for s in symbols:
-        per_tf = {
-            tf: decide_for_symbol(
+        per_tf: dict[str, TradeDecision] = {}
+        for tf in tfs:
+            d = decide_for_symbol(
                 s,
                 snap,
                 regime,
                 risk,
                 mistakes=mems,
-                open_positions=positions,
+                open_positions=pass_positions,
                 equity_usd=paper_state_input.equity_usd,
                 corr_entries=corr_entries,
                 timeframe=tf,
             )
-            for tf in tfs
-        }
+            per_tf[tf] = d
+            if (
+                guard_on
+                and max_pos > 0
+                and d.action in ("open_long", "open_short")
+                and d.size_multiplier > 0
+            ):
+                pass_positions.append(
+                    _PendingPosition(
+                        id=f"pending:{s}:{tf}",
+                        symbol=s,
+                        side="long" if d.action == "open_long" else "short",
+                        size_usd=round(d.size_multiplier * max_pos, 2),
+                    )
+                )
         weekly = per_tf.get("1w")
         if weekly is not None:
             bias = weekly.consensus.direction
