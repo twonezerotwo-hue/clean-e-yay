@@ -105,15 +105,17 @@ def test_default_profile_modes_constant_is_the_full_graduated_ladder():
 
 
 def test_load_config_reflects_shipped_position_pilot():
-    # 2026-06-26: POSITION pilotu aktif (owner onayı, ARCHITECTURE.md §7.5) —
-    # diğer profiller veri birikene kadar kasıtlı OFF. Bu test config/thresholds
-    # değiştiğinde bilinçli güncellenmeli; sürpriz drift'i yakalar.
+    # 2026-06-26: POSITION pilotu aktif (owner onayı, ARCHITECTURE.md §7.5).
+    # 2026-06-29: INTRADAY+TACTICAL HARD'a alındı (owner onayı) — eski engine'in
+    # zayıf-skor short'larını resolver NO_TRADE/WATCH/BLOCKED'da bloklamak için;
+    # SCALP/SWING hâlâ OFF. Bu test config/thresholds değiştiğinde bilinçli
+    # güncellenmeli; sürpriz drift'i yakalar.
     cfg = conflict_gate.load_config()
     assert cfg.enabled is True
     assert cfg.profile_modes == {
         "SCALP": "OFF",
-        "INTRADAY": "OFF",
-        "TACTICAL": "OFF",
+        "INTRADAY": "HARD",
+        "TACTICAL": "HARD",
         "SWING": "OFF",
         "POSITION": "HARD_MANUAL",
     }
