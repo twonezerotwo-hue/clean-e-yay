@@ -106,6 +106,15 @@ def test_chop_guard_off_is_passthrough():
     assert _score(adx_v=5.0) == tf._momentum_score(_RSI, _MACD, _EMA)
 
 
+def test_chop_guard_shadow_logged_even_when_off():
+    # Flag KAPALI olsa da chop'ta "ne olurdu" gözlem değeri diag'a yazılır
+    # (öğrenme katmanı yön-motorunu izlemez → manuel tespit sinyali).
+    s, diag = tf._direction_score(_RSI, _MACD, _EMA, adx_v=5.0)  # default cfg = OFF
+    assert s == tf._momentum_score(_RSI, _MACD, _EMA)   # final DEĞİŞMEDİ
+    assert "chop_mult_shadow" in diag                   # ama gözlem kaydedildi
+    assert "chop_mult" not in diag                      # uygulanmadı
+
+
 def test_chop_guard_dampens_in_chop():
     # Açık + ADX floor altı → skor 50'ye doğru kısılır (ama aynı tarafta kalır).
     pure = tf._momentum_score(_RSI, _MACD, _EMA)        # ≈65 (bullish)

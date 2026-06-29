@@ -284,15 +284,19 @@ def _direction_score(
 
     final = 50.0 + (core - 50.0) * mult
 
-    # Faz 2 — chop guard (flag-gated; default kapalı = etki yok). Gerçek trend
-    # yoksa (ADX floor altı) momentum mesafesini 50'ye doğru kıs — trendde (adx≥
-    # floor) çarpan 1.0 (dokunmaz), yön ASLA çevrilmez (yalnız sönümler).
-    if cfg.chop_guard_enabled and adx_v is not None and cfg.chop_adx_floor > 0:
+    # Faz 2 — chop guard. Çarpan HER ZAMAN hesaplanır (shadow gözlem) ama yalnız
+    # enabled iken final'a uygulanır. Böylece flag KAPALIYKEN bile "chop'ta skor ne
+    # kadar sönerdi" diag'a yazılır → öğrenme katmanı yön-motorunu İZLEMEDİĞİ için
+    # tek manuel tespit sinyali budur. Trendde (adx≥floor) çarpan 1.0 (dokunmaz);
+    # yön ASLA çevrilmez (yalnız sönümler).
+    if adx_v is not None and cfg.chop_adx_floor > 0:
         ratio = _clamp(adx_v / cfg.chop_adx_floor, 0.0, 1.0)
         chop_mult = cfg.chop_min_mult + (1.0 - cfg.chop_min_mult) * ratio
         if chop_mult < 1.0:
-            diag["chop_mult"] = round(chop_mult, 3)
-            final = 50.0 + (final - 50.0) * chop_mult
+            diag["chop_mult_shadow"] = round(chop_mult, 3)  # her zaman (gözlem)
+            if cfg.chop_guard_enabled:
+                diag["chop_mult"] = round(chop_mult, 3)      # uygulandı
+                final = 50.0 + (final - 50.0) * chop_mult
 
     return _clamp(final, 0.0, 100.0), diag
 
@@ -550,6 +554,10 @@ def build_timeframe_result(
         gm = dir_diag.get("gate_mult")
         if gm is not None and abs(gm - 1.0) >= 0.01:
             evidence.append(f"location_gate=×{gm}")
+        cm = dir_diag.get("chop_mult_shadow")
+        if cm is not None:
+            applied = "chop_guard" if cfg.chop_guard_enabled else "chop_guard_shadow"
+            evidence.append(f"{applied}=×{cm}")
     else:
         evidence.append("direction_unavailable_insufficient_data")
     if trend.label != "UNKNOWN":
@@ -578,6 +586,7 @@ def build_timeframe_result(
             direction_score=round(direction, 2) if direction is not None else None,
             strength_score=round(strength, 2) if strength is not None else None,
             location_gate_multiplier=dir_diag.get("gate_mult"),
+            chop_guard_multiplier=dir_diag.get("chop_mult_shadow"),
         ),
         key_levels=key_levels,
         confirmation_signals=_confirmations(rsi_v, macd_t, ema_stack, current, vwap_v),
