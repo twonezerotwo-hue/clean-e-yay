@@ -22,6 +22,8 @@ from datetime import UTC, datetime
 from typing import Literal
 
 from packages.data.registry.loader import (
+    CONFIG_DIR,
+    DEFAULT_WEIGHTS_FILE,
     active_weights_version,
     load_active_weights,
     load_thresholds,
@@ -77,6 +79,18 @@ class RebalanceProposal:
     rejected_records: int = 0
     status: str = "PENDING"
     notes: list[str] = field(default_factory=list)
+
+
+def _baseline_tf_weights() -> dict:
+    """Baseline (weights_v1.0) step-8 tf_weights prior'ı — self-healing fallback.
+    Aktif weights zincirinde tf_weights düşürülmüşse buradan geri-doldurulur."""
+    import yaml
+    try:
+        path = CONFIG_DIR / DEFAULT_WEIGHTS_FILE
+        data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+        return dict(data.get("tf_weights") or {})
+    except (OSError, ValueError, yaml.YAMLError):
+        return {}
 
 
 def _parse_dominant_module(fingerprint: str | None) -> str | None:
@@ -278,10 +292,10 @@ def train(regime: str = "NEUTRAL") -> RebalanceProposal | dict:
         ),
         "regimes": new_regimes,
         "constraints": dict(constraints),
-        # Rejim-dışı PRIOR blokları (step-8 tf_weights vb.) korunur — eskiden
-        # proposed_yaml bunları taşımıyordu, her rebalance per-strateji TF ağırlık
-        # prior'ını sessizce siliyordu (load_tf_weight_prior → {} → trust gate kör).
-        **({"tf_weights": weights_cfg["tf_weights"]} if "tf_weights" in weights_cfg else {}),
+        # Step-8 tf_weights PRIOR: carry-forward + SELF-HEALING. Aktif weights'te
+        # varsa taşı; YOKSA (zincirde bir kez düşmüş — örn. v1.2.0) baseline'dan
+        # geri-doldur → prior asla kalıcı kaybolmaz (load_tf_weight_prior {} olmaz).
+        **({"tf_weights": weights_cfg.get("tf_weights") or _baseline_tf_weights()}),
         "audit": {
             "based_on_trades": eligible,
             "rejected_records": rejected,
