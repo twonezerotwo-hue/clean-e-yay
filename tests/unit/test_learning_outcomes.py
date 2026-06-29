@@ -253,6 +253,21 @@ def test_trainer_attributes_v2_module_not_score_bucket(learn_env) -> None:
     assert "tf_weights" in res.proposed_yaml
 
 
+def test_trainer_self_heals_tf_weights_from_baseline(learn_env, monkeypatch) -> None:
+    # BUG (v1.4.0'da bulundu): zincirde tf_weights bir kez düşünce carry-forward
+    # taşıyacak bir şey bulamıyordu. Self-healing: aktif weights tf_weights'i
+    # KAYBETMİŞSE proposal baseline'dan (v1.0) geri-doldurur.
+    ps, _ = learn_env
+    _seed_v2(ps, n=7, module="touche", tf="1d")
+    _seed_v2(ps, n=3, module="sentinel", tf="1d")
+    from packages.learning import auto_weight_trainer as t
+    stripped = {k: v for k, v in t.load_active_weights().items() if k != "tf_weights"}
+    monkeypatch.setattr(t, "load_active_weights", lambda: stripped)
+    res = t.train(regime="NEUTRAL")
+    assert "tf_weights" in res.proposed_yaml
+    assert "intraday" in res.proposed_yaml["tf_weights"]  # baseline'dan geri geldi
+
+
 def test_trainer_insufficient_no_proposal(learn_env) -> None:
     ps, _ = learn_env
     _seed_v2(ps, n=4, module="touche")  # < MIN_TOTAL_TRADES
