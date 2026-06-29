@@ -97,10 +97,21 @@ def calibration_report(
     outs = outcomes if outcomes is not None else outcomes_mod.outcomes_from_state(state)
     cals = per_timeframe_calibration(outs, min_trades=min_trades)
     calibrated = [c.timeframe for c in cals if c.trust == "CALIBRATED"]
+    # B5 — canlı tf_weights kapısı (resolve_live_tf_weights → consensus) yalnız
+    # KANITLI POZİTİF kenar varsa açılır. Eskiden "yeterli örnek" (CALIBRATED)
+    # tek başına yeterliydi; bu, para KAYBEDEN ama örneği bol bir TF'i "güvenilir"
+    # sayıp canlı ağırlığı açıyordu. Artık en az bir CALIBRATED TF'in expectancy'si
+    # > 0 olmalı. Not: per-TF CALIBRATED damgası DEĞİŞMEZ — trainer kaybeden bir
+    # TF'i hâlâ aşağı çekebilsin diye (down-weight). Sadece canlı kapı sıkılaşır.
+    edge_proven = [
+        c.timeframe for c in cals if c.trust == "CALIBRATED" and c.expectancy > 0.0
+    ]
     return {
         "min_trades_per_tf": min_trades,
         "tf_weights_prior": load_tf_weight_prior(),
         "per_timeframe": [asdict(c) for c in cals],
-        "tf_weights_trusted": bool(calibrated),
+        "tf_weights_trusted": bool(edge_proven),
         "calibrated_timeframes": calibrated,
+        # B5 additive — hangi TF'ler kanıtlı pozitif kenara sahip (şeffaflık).
+        "edge_proven_timeframes": edge_proven,
     }
