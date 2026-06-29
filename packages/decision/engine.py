@@ -933,6 +933,9 @@ def matrix_view(
                 "actionable": actionable,
                 "status": status,
                 "paper_action": d.action if actionable else "none",
+                # F5 gözlem — beklenen değer (R-katı); ev_gate KAPALI olsa da dolu.
+                # Dashboard/owner pozitif-EV dağılımını görüp ev_gate enable kararını verir.
+                "expected_value": d.expected_value,
             }
         )
     return {

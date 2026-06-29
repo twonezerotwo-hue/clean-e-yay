@@ -477,3 +477,13 @@ def test_open_decisions_carry_expected_value(paper_env, monkeypatch) -> None:
     assert opens, "force_bullish en az bir açık üretmeli"
     for d in opens:
         assert d.expected_value is not None  # F5 gözlem alanı dolu
+
+
+def test_matrix_view_cells_expose_expected_value(paper_env) -> None:
+    # F5 gözlem: matrix_view hücreleri expected_value taşımalı (dashboard için).
+    snap = build_snapshot(["BTCUSD"])
+    _regime, _risk, decisions = decide_matrix(["BTCUSD"], snap, _risk_in())
+    vm = matrix_view(_regime, _risk, decisions, snap, ["BTCUSD"])
+    assert vm["cells"], "hücre üretilmeli"
+    for c in vm["cells"]:
+        assert "expected_value" in c  # alan her hücrede var (None olabilir)
