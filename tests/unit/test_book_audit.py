@@ -184,6 +184,29 @@ def test_self_conflict_guard_same_side_no_block(fresh_env, monkeypatch) -> None:
 
 # ---------------- endpoint ----------------
 
+def test_chat_book_audit_answer_surfaces_lessons(fresh_env) -> None:
+    from packages.agent.llm import chat
+    ps = fresh_env
+    state = ps.load()
+    state.open_positions.append(
+        _pos(ps, symbol="BRENT", side="short", size_usd=5_000, timeframe="4h", pid="a")
+    )
+    state.open_positions.append(
+        _pos(ps, symbol="BRENT", side="long", size_usd=1_250, timeframe="15m", pid="b")
+    )
+    ps.save(state)
+    ans, ev = chat._book_audit_answer()
+    assert "BRENT" in ans
+    assert any("SELF_CONFLICT" in e for e in ev)
+
+
+def test_chat_book_audit_answer_clean(fresh_env) -> None:
+    from packages.agent.llm import chat
+    ans, ev = chat._book_audit_answer()
+    assert "temiz" in ans.lower()
+    assert ev == ["book_audit:clean"]
+
+
 def test_book_audit_endpoint(fresh_env) -> None:
     ps = fresh_env
     state = ps.load()

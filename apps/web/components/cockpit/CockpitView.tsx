@@ -872,6 +872,47 @@ export function CockpitView() {
     setActiveLayer(next);
   };
 
+  // Katmanlar arası yatay kaydırma geçişi (dokunmatik). Sağdan-sola → bir sonraki
+  // (derinleş), soldan-sağa → bir önceki katman. Yalnız BASKIN yatay hareket sayılır
+  // (dikey kaydırma/scroll'u bozmaz); input, sohbet kutusu ve yatay-kaydırmalı panel
+  // sekmeleri muaf (data-no-swipe / closest guard).
+  const swipeRef = useRef<{ x: number; y: number; t: number } | null>(null);
+  const onTouchStart = (event: React.TouchEvent) => {
+    if (event.touches.length !== 1) {
+      swipeRef.current = null;
+      return;
+    }
+    const t = event.touches[0];
+    swipeRef.current = { x: t.clientX, y: t.clientY, t: Date.now() };
+  };
+  const onTouchEnd = (event: React.TouchEvent) => {
+    const start = swipeRef.current;
+    swipeRef.current = null;
+    if (!start) return;
+    const target = event.target as HTMLElement | null;
+    if (
+      target?.closest(
+        'input, textarea, [contenteditable="true"], .layer1-mobile-panel-tabs, .layer0-voice-input, [data-no-swipe]',
+      )
+    ) {
+      return;
+    }
+    const t = event.changedTouches[0];
+    if (!t) return;
+    const dx = t.clientX - start.x;
+    const dy = t.clientY - start.y;
+    const dt = Date.now() - start.t;
+    // Baskın yatay + yeterli mesafe + hızlı jest değilse yok say.
+    if (dt > 700 || Math.abs(dx) < 64 || Math.abs(dx) < Math.abs(dy) * 1.6) return;
+    if (dx < 0) {
+      const next = Math.min(3, activeLayer + 1) as LayerIndex;
+      if (next !== activeLayer) activateLayer(next);
+    } else {
+      const prev = Math.max(0, activeLayer - 1) as LayerIndex;
+      if (prev !== activeLayer) activateLayer(prev);
+    }
+  };
+
   useEffect(() => {
     let initialHashRead = true;
     const applyHash = () => {
@@ -1303,7 +1344,11 @@ export function CockpitView() {
   }
 
   return (
-    <main className="cockpit-root relative grid min-w-0 grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden bg-[#02030a] text-white">
+    <main
+      className="cockpit-root relative grid min-w-0 grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden bg-[#02030a] text-white"
+      onTouchStart={onTouchStart}
+      onTouchEnd={onTouchEnd}
+    >
       <LayerDepthBackdrop activeLayer={activeLayer} brief={brief} />
 
       <header className="pointer-events-none relative z-30 min-w-0 overflow-hidden border-b border-white/[0.08] bg-black/24 backdrop-blur-md">
