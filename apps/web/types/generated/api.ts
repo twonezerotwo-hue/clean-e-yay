@@ -364,6 +364,7 @@ export type Trade = {
     | "RISK_REDUCE"
     | "MANUAL"
     | "TIME_STOP_EXIT"
+    | "TRAILING_STOP_EXIT"
     | "KILL_SWITCH_EXIT";
   fingerprint?: string;
   timeframe?: Timeframe;
@@ -1923,6 +1924,48 @@ export type MissedOpportunitiesView = {
   by_profile: Record<string, MissedOpportunityOutcomes>;
   active: MissedOpportunityActive[];
   recent: Array<Record<string, unknown>>;
+};
+
+export type CalibrationGuardrailStatus = {
+  enabled: boolean;
+  max_inflation_delta: number;
+};
+
+export type CalibrationJumpRow = {
+  ts?: string | null;
+  position_id?: string | null;
+  symbol?: string | null;
+  timeframe?: string | null;
+  side?: string | null;
+  raw_confidence?: number | null;
+  fitted_confidence?: number | null;
+  inflation_delta?: number | null;
+  confidence_source?: string | null;
+  platt_a?: number | null;
+  platt_b?: number | null;
+  platt_status?: string | null;
+  platt_samples?: number | null;
+  score?: number | null;
+  dominant_module?: string | null;
+  direction?: string | null;
+  confluence_aligned?: boolean | null;
+  regime?: string | null;
+  tier?: string | null;
+  size_usd?: number | null;
+  fingerprint?: string | null;
+};
+
+export type CalibrationJumpsView = {
+  guardrail: CalibrationGuardrailStatus;
+  count: number;
+  fitted_count: number;
+  capped_count: number;
+  avg_inflation_delta?: number | null;
+  max_inflation_delta?: number | null;
+  by_tier: Record<string, number>;
+  by_dominant_module: Record<string, number>;
+  top_jumps: CalibrationJumpRow[];
+  recent: CalibrationJumpRow[];
 };
 
 export type AgentBriefingTone = "ok" | "info" | "warn" | "alert";

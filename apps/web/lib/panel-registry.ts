@@ -73,6 +73,7 @@ export type PanelKey =
   | "tf_weights"
   | "tf_targets"
   | "missed_opportunities"
+  | "calibration_jumps"
   | "agent_mode"
   | "governor"
   | "governor_proposals"
@@ -166,6 +167,7 @@ export const PANEL_REGISTRY: PanelMeta[] = [
   { id: "tf_weights",       title: "tf_weights Kalibrasyon", defaultVisible: true, span: "2",   group: "learning",        tier: "detay" },
   { id: "tf_targets",       title: "TF SL/TP Öğrenmesi",    defaultVisible: true, span: "2",   group: "learning",        tier: "detay" },
   { id: "missed_opportunities", title: "Kaçan Fırsatlar",   defaultVisible: true, span: "2",   group: "learning",        tier: "detay" },
+  { id: "calibration_jumps", title: "Kalibrasyon Sıçraması", defaultVisible: true, span: "2",  group: "learning",        tier: "detay" },
   { id: "agent_mode",       title: "Agent Mode",           defaultVisible: true, span: "2",   group: "learning",        tier: "detay" },
 
   // ── DETAY — Governor (öz-yönetim) ────────────────────────────────────────

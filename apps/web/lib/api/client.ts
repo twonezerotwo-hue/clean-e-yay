@@ -36,6 +36,7 @@ import type {
   TfTargetsView,
   TfTargetsActionResult,
   MissedOpportunitiesView,
+  CalibrationJumpsView,
   AgentModeConfigView,
   AgentModeConfigUpdate,
   GovernorReport,
@@ -599,6 +600,8 @@ export const api = {
     fetchJSON<MissedOpportunitiesView>(
       "/api/v1/learning/missed-opportunities",
     ),
+  calibrationJumps: () =>
+    fetchJSON<CalibrationJumpsView>("/api/v1/learning/calibration-jumps"),
   historicalEdge: (fingerprint: string) =>
     fetchJSON<HistoricalEdgeResponse>(
       `/api/v1/learning/historical-edge?fingerprint=${encodeURIComponent(fingerprint)}`,

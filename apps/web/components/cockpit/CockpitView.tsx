@@ -45,6 +45,7 @@ import { WeightHistoryPanel } from "@/components/panels/WeightHistoryPanel";
 import { TfWeightsPanel } from "@/components/panels/TfWeightsPanel";
 import { TfTargetsPanel } from "@/components/panels/TfTargetsPanel";
 import { MissedOpportunitiesPanel } from "@/components/panels/MissedOpportunitiesPanel";
+import { CalibrationJumpsPanel } from "@/components/panels/CalibrationJumpsPanel";
 import { AgentModePanel } from "@/components/panels/AgentModePanel";
 import type { CockpitBrief } from "@/types/generated/api";
 
@@ -1176,6 +1177,7 @@ export function CockpitView() {
           >
             <div className="grid gap-3 lg:grid-cols-2">
               <CalibrationPanel />
+              <CalibrationJumpsPanel />
               <TfTargetsPanel />
               <div className="lg:col-span-2"><ConflictGateLearningPanel /></div>
             </div>

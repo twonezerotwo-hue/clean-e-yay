@@ -541,6 +541,17 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/MissedOpportunitiesView" }
 
+  /api/v1/learning/calibration-jumps:
+    get:
+      operationId: getCalibrationJumps
+      summary: Calibration jump ledger — Platt şişmesi (raw→fitted) + faktörler + guardrail durumu (read-only)
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CalibrationJumpsView" }
+
   /api/v1/learning/tf-targets:
     get:
       operationId: getLearningTfTargets
@@ -1643,7 +1654,7 @@ components:
         closed_at: { type: string, format: date-time }
         close_reason:
           type: string
-          enum: [SL_HIT, TP_HIT, SIGNAL_REVERSAL, RISK_REDUCE, MANUAL, TIME_STOP_EXIT, KILL_SWITCH_EXIT]
+          enum: [SL_HIT, TP_HIT, SIGNAL_REVERSAL, RISK_REDUCE, MANUAL, TIME_STOP_EXIT, TRAILING_STOP_EXIT, KILL_SWITCH_EXIT]
         fingerprint: { type: string }
         timeframe: { $ref: "#/components/schemas/Timeframe" }
         lifecycle_status:
@@ -4019,6 +4030,64 @@ components:
         recent:
           type: array
           items: { type: object, additionalProperties: true }
+
+    CalibrationGuardrailStatus:
+      type: object
+      description: Calibration inflation guardrail (otomatik kısma) flag durumu.
+      required: [enabled, max_inflation_delta]
+      properties:
+        enabled: { type: boolean }
+        max_inflation_delta: { type: number }
+
+    CalibrationJumpRow:
+      type: object
+      description: Tek açılışın kalibrasyon sıçraması kaydı (raw→fitted + faktörler).
+      properties:
+        ts: { type: string, nullable: true }
+        position_id: { type: string, nullable: true }
+        symbol: { type: string, nullable: true }
+        timeframe: { type: string, nullable: true }
+        side: { type: string, nullable: true }
+        raw_confidence: { type: number, nullable: true }
+        fitted_confidence: { type: number, nullable: true }
+        inflation_delta: { type: number, nullable: true }
+        confidence_source: { type: string, nullable: true }
+        platt_a: { type: number, nullable: true }
+        platt_b: { type: number, nullable: true }
+        platt_status: { type: string, nullable: true }
+        platt_samples: { type: integer, nullable: true }
+        score: { type: number, nullable: true }
+        dominant_module: { type: string, nullable: true }
+        direction: { type: string, nullable: true }
+        confluence_aligned: { type: boolean, nullable: true }
+        regime: { type: string, nullable: true }
+        tier: { type: string, nullable: true }
+        size_usd: { type: number, nullable: true }
+        fingerprint: { type: string, nullable: true }
+
+    CalibrationJumpsView:
+      type: object
+      description: Calibration jump ledger özeti (read-only/observe) + guardrail durumu.
+      required: [guardrail, count, fitted_count, capped_count, by_tier, by_dominant_module, top_jumps, recent]
+      properties:
+        guardrail: { $ref: "#/components/schemas/CalibrationGuardrailStatus" }
+        count: { type: integer }
+        fitted_count: { type: integer }
+        capped_count: { type: integer }
+        avg_inflation_delta: { type: number, nullable: true }
+        max_inflation_delta: { type: number, nullable: true }
+        by_tier:
+          type: object
+          additionalProperties: { type: integer }
+        by_dominant_module:
+          type: object
+          additionalProperties: { type: integer }
+        top_jumps:
+          type: array
+          items: { $ref: "#/components/schemas/CalibrationJumpRow" }
+        recent:
+          type: array
+          items: { $ref: "#/components/schemas/CalibrationJumpRow" }
 
     TfTargetParams:
       type: object

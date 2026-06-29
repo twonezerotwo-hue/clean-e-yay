@@ -7,8 +7,10 @@ from dataclasses import asdict
 
 from fastapi import APIRouter
 
+from packages.data.registry.loader import load_thresholds
 from packages.decision import conflict_gate, conflict_gate_backtest
 from packages.learning import (
+    calibration_audit,
     calibration_store,
     calibration_trainer,
     historical_edge,
@@ -175,6 +177,22 @@ def get_missed_opportunities() -> dict:
     expired, trade_profile bazında. PAPER_SAFE — paper'a dokunmaz, yalnızca
     izleme logundan sayar. Faz 4 (conflict-gate genişletme) kararına veri."""
     return missed_opportunity.summary_viewmodel()
+
+
+@router.get("/learning/calibration-jumps")
+def get_calibration_jumps() -> dict:
+    """Calibration jump ledger özeti (read-only/observe). Platt kalibrasyonunun
+    ham consensus güvenini ne kadar şişirdiğini (raw → fitted) ve sürükleyen
+    faktörleri (score/dominant/regime/tier/size) gösterir. `guardrail` bloğu
+    otomatik kısma flag'inin durumudur — açıkken zayıf sinyal aşırı şişemez."""
+    cfg = load_thresholds().get("calibration_guardrail") or {}
+    return {
+        "guardrail": {
+            "enabled": bool(cfg.get("enabled", False)),
+            "max_inflation_delta": float(cfg.get("max_inflation_delta", 0.25)),
+        },
+        **calibration_audit.summary_viewmodel(),
+    }
 
 
 @router.get("/learning/conflict-gate-status")

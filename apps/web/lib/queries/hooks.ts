@@ -345,6 +345,16 @@ export const useMissedOpportunities = () => {
   });
 };
 
+export const useCalibrationJumps = () => {
+  const policy = usePanelQueryPolicy(5 * 60_000);
+  return useQuery({
+    queryKey: qk.calibrationJumps,
+    queryFn: api.calibrationJumps,
+    staleTime: 60_000,
+    ...policy,
+  });
+};
+
 export const useHistoricalEdge = (fingerprint: string) => {
   const trimmed = fingerprint.trim();
   const policy = usePanelQueryPolicy(2 * 60_000);

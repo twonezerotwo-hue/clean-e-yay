@@ -57,6 +57,7 @@ const PANEL_ID_BY_COMPONENT: Record<string, string> = {
   TfWeightsPanel: "tf_weights",
   TfTargetsPanel: "tf_targets",
   MissedOpportunitiesPanel: "missed_opportunities",
+  CalibrationJumpsPanel: "calibration_jumps",
   AgentModePanel: "agent_mode",
   GovernorPanel: "governor",
   ProposalPanel: "governor_proposals",

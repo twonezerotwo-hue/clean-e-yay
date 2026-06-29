@@ -634,6 +634,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/learning/calibration-jumps": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Calibration jump ledger — Platt şişmesi (raw→fitted) + faktörler + guardrail durumu (read-only) */
+        get: operations["getCalibrationJumps"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/learning/tf-targets": {
         parameters: {
             query?: never;
@@ -1622,7 +1639,7 @@ export interface components {
             /** Format: date-time */
             closed_at: string;
             /** @enum {string} */
-            close_reason: "SL_HIT" | "TP_HIT" | "SIGNAL_REVERSAL" | "RISK_REDUCE" | "MANUAL" | "TIME_STOP_EXIT" | "KILL_SWITCH_EXIT";
+            close_reason: "SL_HIT" | "TP_HIT" | "SIGNAL_REVERSAL" | "RISK_REDUCE" | "MANUAL" | "TIME_STOP_EXIT" | "TRAILING_STOP_EXIT" | "KILL_SWITCH_EXIT";
             fingerprint?: string;
             timeframe?: components["schemas"]["Timeframe"];
             lifecycle_status?: components["schemas"]["PaperLifecycleStatus"];
@@ -3199,6 +3216,52 @@ export interface components {
                 [key: string]: unknown;
             }[];
         };
+        /** @description Calibration inflation guardrail (otomatik kısma) flag durumu. */
+        CalibrationGuardrailStatus: {
+            enabled: boolean;
+            max_inflation_delta: number;
+        };
+        /** @description Tek açılışın kalibrasyon sıçraması kaydı (raw→fitted + faktörler). */
+        CalibrationJumpRow: {
+            ts?: string | null;
+            position_id?: string | null;
+            symbol?: string | null;
+            timeframe?: string | null;
+            side?: string | null;
+            raw_confidence?: number | null;
+            fitted_confidence?: number | null;
+            inflation_delta?: number | null;
+            confidence_source?: string | null;
+            platt_a?: number | null;
+            platt_b?: number | null;
+            platt_status?: string | null;
+            platt_samples?: number | null;
+            score?: number | null;
+            dominant_module?: string | null;
+            direction?: string | null;
+            confluence_aligned?: boolean | null;
+            regime?: string | null;
+            tier?: string | null;
+            size_usd?: number | null;
+            fingerprint?: string | null;
+        };
+        /** @description Calibration jump ledger özeti (read-only/observe) + guardrail durumu. */
+        CalibrationJumpsView: {
+            guardrail: components["schemas"]["CalibrationGuardrailStatus"];
+            count: number;
+            fitted_count: number;
+            capped_count: number;
+            avg_inflation_delta?: number | null;
+            max_inflation_delta?: number | null;
+            by_tier: {
+                [key: string]: number;
+            };
+            by_dominant_module: {
+                [key: string]: number;
+            };
+            top_jumps: components["schemas"]["CalibrationJumpRow"][];
+            recent: components["schemas"]["CalibrationJumpRow"][];
+        };
         /** @description TF başına SL/TP geometri parametreleri (compute_tf_targets okur). */
         TfTargetParams: {
             sl_atr_mult: number;
@@ -4229,6 +4292,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["MissedOpportunitiesView"];
+                };
+            };
+        };
+    };
+    getCalibrationJumps: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CalibrationJumpsView"];
                 };
             };
         };
