@@ -264,6 +264,80 @@ def test_corrupt_state_backup_and_default(paper_env) -> None:
     assert any(e["action"] == "STATE_REPAIRED" for e in paper_env["audit"].read_recent())
 
 
+def _seed_one_trade(paper_state, trade_id: str = "t1"):
+    st = paper_state._initial_state()
+    st.recent_trades.append(paper_state.Trade(
+        id=trade_id, symbol="BTCUSD", side="long", entry_price=100.0,
+        exit_price=101.0, pnl_usd=50.0, opened_at="2026-06-11T00:00:00+00:00",
+        closed_at="2026-06-11T01:00:00+00:00", close_reason="TP_HIT",
+    ))
+    paper_state.save(st)
+    return st
+
+
+def test_transient_read_lock_retries_then_succeeds(paper_env, monkeypatch) -> None:
+    """B2 — geçici PermissionError (Windows dosya kilidi) BOZULMA SANILMAZ:
+    retry edilir, veri korunur, onarım/yedek TETİKLENMEZ."""
+    import pathlib
+    paper_state = paper_env["state"]
+    _seed_one_trade(paper_state, "t1")
+
+    real_read = pathlib.Path.read_text
+    state_path = paper_state.STATE_PATH
+    calls = {"n": 0}
+
+    def flaky(self, *a, **k):
+        if self == state_path and calls["n"] < 2:
+            calls["n"] += 1
+            raise PermissionError(13, "locked")
+        return real_read(self, *a, **k)
+
+    monkeypatch.setattr(pathlib.Path, "read_text", flaky)
+    monkeypatch.setattr(paper_state.time, "sleep", lambda *_: None)  # testi hızlandır
+
+    loaded = paper_state.load()
+    assert calls["n"] == 2  # iki kez kilide takıldı, sonra başardı
+    assert len(loaded.recent_trades) == 1  # VERİ KORUNDU
+    assert loaded.recent_trades[0].id == "t1"
+    # onarım/yedek YOK (eski bug: geçici kilit → wipe + corrupt yedek)
+    assert list(paper_env["tmp"].glob("paper_state.corrupt-*.json")) == []
+    assert not any(
+        e["action"] == "STATE_REPAIRED" for e in paper_env["audit"].read_recent()
+    )
+
+
+def test_persistent_read_lock_does_not_wipe_data(paper_env, monkeypatch) -> None:
+    """B2 — kalıcı kilitte bile disk dosyasına DOKUNULMAZ (veri-kaybı yok);
+    süreç-içi son-iyi state döner. Eski bug: boş default'la ezip yedekliyordu."""
+    import pathlib
+    paper_state = paper_env["state"]
+    _seed_one_trade(paper_state, "keep")
+    assert len(paper_state.load().recent_trades) == 1  # son-iyi cache'i doldur
+    disk_before = paper_state.STATE_PATH.read_text(encoding="utf-8")
+
+    real_read = pathlib.Path.read_text
+    state_path = paper_state.STATE_PATH
+
+    def always_locked(self, *a, **k):
+        if self == state_path:
+            raise PermissionError(13, "locked")
+        return real_read(self, *a, **k)
+
+    monkeypatch.setattr(pathlib.Path, "read_text", always_locked)
+    monkeypatch.setattr(paper_state.time, "sleep", lambda *_: None)
+
+    loaded = paper_state.load()
+    assert len(loaded.recent_trades) == 1  # son-iyi (gerçek) veri, boş DEĞİL
+    assert loaded.recent_trades[0].id == "keep"
+    # disk dokunulmadı: yedek yok + içerik aynı
+    assert list(paper_env["tmp"].glob("paper_state.corrupt-*.json")) == []
+    monkeypatch.setattr(pathlib.Path, "read_text", real_read)  # diski raw oku
+    assert paper_state.STATE_PATH.read_text(encoding="utf-8") == disk_before
+    audits = paper_env["audit"].read_recent()
+    assert not any(e["action"] == "STATE_REPAIRED" for e in audits)
+    assert any(e["action"] == "STATE_READ_LOCKED" for e in audits)
+
+
 def test_legacy_position_without_lifecycle_fields_loads(paper_env) -> None:
     paper_state = paper_env["state"]
     legacy = {

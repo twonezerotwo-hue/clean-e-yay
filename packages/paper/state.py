@@ -9,6 +9,7 @@ from __future__ import annotations
 import json
 import os
 import threading
+import time
 from dataclasses import asdict, dataclass, field, fields
 from datetime import UTC, datetime
 from pathlib import Path
@@ -22,6 +23,20 @@ STATE_PATH = Path(
     os.environ.get("PAPER_STATE_PATH", "data/runtime/paper_state.json")
 )
 _LOCK = threading.Lock()
+
+# B2 — geçici dosya-kilidi (Windows) dayanıklılığı. Birden fazla süreç (supervisor
+# + keep-alive watchdog'ın spawn'ı) state'i eşzamanlı yazınca, bir sürecin
+# `read_text`/`os.replace`'i ötekinin `os.replace`'i sırasında kısa süre kilide
+# takılıp PermissionError (WinError 5/32) alabilir. Bu GEÇİCİDİR — bozulma değil.
+# Eskiden load() bunu "corrupt" sanıp state'i boş default'la EZİYORDU (gerçek
+# veri-kaybı). Artık retry ediyoruz; yalnız gerçek parse hatası onarımı tetikler.
+_READ_RETRIES = 5
+_RETRY_BASE_SLEEP_S = 0.05
+
+# Süreç-içi son başarıyla okunan ham state. Kalıcı kilitte (retry'lar tükenirse)
+# gerçek veriyi koruyabilmek için tutulur — boş default'la read-modify-write
+# ezmesini önler.
+_LAST_GOOD_RAW: dict | None = None
 
 
 def _only_known(cls, d: dict) -> dict:
@@ -254,12 +269,45 @@ def _initial_state() -> PaperState:
     return PaperState(equity_usd=equity, peak_equity_usd=equity)
 
 
+def _read_text_with_retry(path: Path) -> str:
+    """state dosyasını oku; Windows'ta eşzamanlı `os.replace` dosyayı kısa süre
+    kilitleyip PermissionError/OSError verebilir. Bu GEÇİCİDİR (bozulma değil),
+    bu yüzden artan beklemeyle birkaç kez yeniden dener. Kalıcı kilitte son
+    hatayı yükseltir — burada ASLA veri silinmez/sıfırlanmaz."""
+    last: OSError | None = None
+    for attempt in range(_READ_RETRIES):
+        try:
+            return path.read_text(encoding="utf-8")
+        except OSError as exc:  # PermissionError dahil (WinError 5/32)
+            last = exc
+            time.sleep(_RETRY_BASE_SLEEP_S * (attempt + 1))
+    assert last is not None  # döngü en az bir kez hata yakaladı
+    raise last
+
+
+def _replace_with_retry(tmp: Path, path: Path) -> None:
+    """`os.replace` de aynı geçici kilide takılabilir (okuyucu dosyayı tutarken).
+    Yeniden dener ki yazım sessizce düşmesin ve tmp dosyası ortada kalmasın."""
+    last: OSError | None = None
+    for attempt in range(_READ_RETRIES):
+        try:
+            os.replace(tmp, path)
+            return
+        except OSError as exc:
+            last = exc
+            time.sleep(_RETRY_BASE_SLEEP_S * (attempt + 1))
+    assert last is not None
+    raise last
+
+
 def _write_atomic(path: Path, payload: dict) -> None:
-    """Atomik yazım: temp dosya + os.replace (yarım dosya asla görünmez)."""
+    """Atomik yazım: temp dosya + os.replace (yarım dosya asla görünmez).
+
+    os.replace geçici kilide takılırsa retry'lı (bkz. _replace_with_retry)."""
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_name(f"{path.name}.tmp-{os.getpid()}")
     tmp.write_text(json.dumps(payload, indent=2, default=str), encoding="utf-8")
-    os.replace(tmp, path)
+    _replace_with_retry(tmp, path)
 
 
 def _backup_corrupt(path: Path) -> str | None:
@@ -274,15 +322,39 @@ def _backup_corrupt(path: Path) -> str | None:
 
 
 def load() -> PaperState:
+    global _LAST_GOOD_RAW
     with _LOCK:
         if not STATE_PATH.exists():
             state = _initial_state()
             _write_atomic(STATE_PATH, state.to_dict())
+            _LAST_GOOD_RAW = state.to_dict()
             return state
+
+        # 1) Okuma I/O'su ayrı tutulur: geçici dosya kilidi (PermissionError)
+        #    BOZULMA DEĞİLDİR — retry et, asla onarım/sıfırlama tetikleme.
         try:
-            raw = json.loads(STATE_PATH.read_text(encoding="utf-8"))
-            return PaperState.from_dict(raw)
-        except (OSError, json.JSONDecodeError, ValueError, TypeError) as exc:
+            raw_text = _read_text_with_retry(STATE_PATH)
+        except OSError as exc:
+            # B2 — kalıcı kilit (retry'lar tükendi; pratikte ~hiç olmaz). Disk
+            # dosyasına DOKUNMA: yedekleme/sıfırlama YOK → gerçek veri yerinde
+            # kalır, sıradaki başarılı load onu okur. Süreç-içi son-iyi varsa onu
+            # döndür (read-modify-write'ın boş default'la ezmesini önler).
+            audit.record(
+                "STATE_READ_LOCKED",
+                reason=f"transient_lock:{type(exc).__name__}",
+            )
+            if _LAST_GOOD_RAW is not None:
+                return PaperState.from_dict(_LAST_GOOD_RAW)
+            return _initial_state()
+
+        # 2) Parse: yalnız GERÇEK bozulma (JSON parse edilemiyor / şema bozuk)
+        #    onarımı tetikler. PermissionError artık buraya DÜŞMEZ.
+        try:
+            raw = json.loads(raw_text)
+            state = PaperState.from_dict(raw)
+            _LAST_GOOD_RAW = raw
+            return state
+        except (json.JSONDecodeError, ValueError, TypeError) as exc:
             # P1 — corrupt state: yedekle + temiz default yaz (crash YOK).
             bak = _backup_corrupt(STATE_PATH)
             state = _initial_state()
@@ -295,6 +367,7 @@ def load() -> PaperState:
                 reason=f"corrupt_paper_state:{type(exc).__name__}",
                 backup=bak,
             )
+            _LAST_GOOD_RAW = state.to_dict()
             return state
 
 
