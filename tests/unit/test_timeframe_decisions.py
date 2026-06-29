@@ -414,3 +414,45 @@ def test_paper_tick_endpoint_timeframe_actions(paper_env) -> None:
     for p in state["open_positions"]:
         assert p["timeframe"] in {"15m", "1h", "4h", "1d"}
         assert p["valid_until"] is not None
+
+
+# ---------------- intra-batch yığılma koruması ----------------
+
+def _fake_open(symbol, snap, regime, risk, *, mistakes=None, open_positions=None,
+               equity_usd=0.0, corr_entries=None, timeframe="1d"):
+    """Her hücreyi open_short olarak döndürür; gördüğü open_positions uzunluğunu
+    çağıran teste kaydetmek için _fake_open.seen listesine ekler."""
+    from packages.consensus.engine import ConsensusResult
+    from packages.decision.engine import TradeDecision
+    _fake_open.seen.append(len(open_positions or []))
+    cons = ConsensusResult(
+        symbol=symbol, score=42.0, direction="bearish", modules=[],
+        confluence_aligned=False, dominant_module="touche", timeframe=timeframe,
+    )
+    return TradeDecision(
+        symbol=symbol, action="open_short", confidence=0.5, size_multiplier=0.5,
+        consensus=cons, risk=risk, reason="t", timeframe=timeframe,
+    )
+
+
+def test_decide_matrix_feeds_pass_siblings_when_guard_on(monkeypatch) -> None:
+    # guard AÇIK: pass içinde açılan kardeşler büyüyen open_positions'a eklenir →
+    # sonraki hücre daha uzun liste görür (correlation cap onları görebilir).
+    from packages.decision import engine
+    monkeypatch.setattr(engine, "_intra_batch_guard_enabled", lambda: True)
+    _fake_open.seen = []
+    monkeypatch.setattr(engine, "decide_for_symbol", _fake_open)
+    snap = build_snapshot(["BTCUSD"])
+    engine.decide_matrix(["BTCUSD"], snap, _risk_in(), timeframes=["15m", "1h", "4h"])
+    assert _fake_open.seen == [0, 1, 2]  # her açılış sonrakine birikiyor
+
+
+def test_decide_matrix_guard_off_is_old_blind_behavior(monkeypatch) -> None:
+    # guard KAPALI (default): kardeşler beslenmez → her hücre pass-başı snapshot'ı görür.
+    from packages.decision import engine
+    monkeypatch.setattr(engine, "_intra_batch_guard_enabled", lambda: False)
+    _fake_open.seen = []
+    monkeypatch.setattr(engine, "decide_for_symbol", _fake_open)
+    snap = build_snapshot(["BTCUSD"])
+    engine.decide_matrix(["BTCUSD"], snap, _risk_in(), timeframes=["15m", "1h", "4h"])
+    assert _fake_open.seen == [0, 0, 0]  # körlük: kimse kardeşini görmez
