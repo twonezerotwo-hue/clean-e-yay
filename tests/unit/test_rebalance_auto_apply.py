@@ -199,3 +199,21 @@ def test_rollback_restores_previous_manifest(g3_env):
 def test_no_active_is_safe(g3_env):
     from packages.learning import weight_rollback as wr
     assert wr.check_rollback() == {"status": "no_active"}
+
+
+def test_proposal_endpoint_surfaces_auto_apply(g3_env):
+    """G3 cockpit yüzeyi: GET .../rebalance/proposal auto_apply bloğunu döndürür."""
+    from fastapi.testclient import TestClient
+
+    from packages.learning import rebalance_store as rs
+    _apply_one(rs, baseline=0.0)
+
+    from apps.api import main as api_main
+    importlib.reload(api_main)
+    client = TestClient(api_main.app)
+    r = client.get("/api/v1/learning/rebalance/proposal")
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert "auto_apply" in body
+    assert body["auto_apply"]["active"]["applied_version"] == "1.1.0"
+    assert any(e.get("event") == "AUTO_APPLIED" for e in body["auto_apply"]["ledger"])
