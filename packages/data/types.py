@@ -217,6 +217,10 @@ class TechnicalScoreOverview(BaseModel):
     # (gözlem; >50 long-reversion, <50 short-reversion). enabled OFF iken de dolu
     # (shadow); None = reversion setup'ı yok. Risk-yaratır → owner enable kararı.
     reversion_score: float | None = None
+    # Faz 4 — continuation/reversion model anahtarı: TREND | RANGE | TRANSITION |
+    # UNKNOWN (adx + volatility_regime'den). TREND = momentum modeli; RANGE = mean-
+    # reversion modeli. Reversion yalnız TREND DIŞINDA tetiklenir.
+    market_regime: str | None = None
 
 
 class TechnicalKeyLevels(BaseModel):
