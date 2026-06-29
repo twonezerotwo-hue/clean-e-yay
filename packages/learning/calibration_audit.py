@@ -85,7 +85,7 @@ def record_open(decision: object, position: object, *, regime: str | None = None
         row = build_row(decision, position, regime=regime)
         _append(row)
         return row
-    except Exception:  # noqa: BLE001 — gözlem katmanı asla tick'i düşürmez
+    except Exception:
         return None
 
 

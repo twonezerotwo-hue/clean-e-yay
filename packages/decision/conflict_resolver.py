@@ -159,4 +159,4 @@ def resolve(inputs: ConflictInputs) -> ConflictResolution:
     return ConflictResolution(CANDIDATE_OPEN, [], path, [])
 
 
-__all__ = ["ConflictInputs", "ConflictResolution", "resolve", "BLOCKED", "NO_TRADE", "WATCH", "CANDIDATE_OPEN"]
+__all__ = ["BLOCKED", "CANDIDATE_OPEN", "NO_TRADE", "WATCH", "ConflictInputs", "ConflictResolution", "resolve"]

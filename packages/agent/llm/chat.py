@@ -657,7 +657,7 @@ def _catalyst_answer(ctx: dict) -> tuple[str, list[str]]:
 def _tickets_answer(ctx: dict | None = None) -> tuple[str, list[str]]:
     # Lazy import — router-level cache; chat'i sıkı bağımlı yapmaz.
     try:
-        from apps.api.routers.paper_trading import _LAST_TICKETS as tickets  # noqa
+        from apps.api.routers.paper_trading import _LAST_TICKETS as tickets
     except Exception:
         tickets = []
     active = [t for t in (tickets or []) if t.get("status") == "active"]

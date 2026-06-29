@@ -107,17 +107,17 @@ def _acquire_single_instance() -> None:
     while True:
         try:
             _LOCK_FD = os.open(str(LOCK_PATH), os.O_CREAT | os.O_EXCL | os.O_RDWR)
-            os.write(_LOCK_FD, f"{os.getpid()}|{_utc_iso()}".encode("utf-8"))
+            os.write(_LOCK_FD, f"{os.getpid()}|{_utc_iso()}".encode())
             atexit.register(_release_single_instance)
             return
         except FileExistsError:
             try:
                 raw = LOCK_PATH.read_text(encoding="utf-8").strip()
-                pid = int((raw.split("|", 1)[0] or "0"))
+                pid = int(raw.split("|", 1)[0] or "0")
             except (OSError, ValueError):
                 pid = 0
             if _pid_alive(pid):
-                raise RuntimeError(f"tick_worker already running pid={pid}")
+                raise RuntimeError(f"tick_worker already running pid={pid}") from None
             try:
                 LOCK_PATH.unlink(missing_ok=True)
             except OSError as exc:

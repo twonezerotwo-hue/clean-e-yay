@@ -395,10 +395,8 @@ def _executive(snap, regime, cells, engine) -> dict[str, Any]:
     try:
         ps = paper_state.load()
         positions = list(ps.open_positions or [])
-        equity = ps.equity_usd
-        daily = ps.daily_pnl_usd
     except Exception:
-        positions, equity, daily = [], None, None
+        positions = []
     if positions:
         total = sum(p.size_usd for p in positions)
         pos_clause = f"{len(positions)} açık pozisyon (${total:,.0f})"

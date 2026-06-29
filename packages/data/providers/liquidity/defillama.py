@@ -22,7 +22,7 @@ _DEFAULT_TTL_SEC = 1800  # TVL günlük değişir, sık çağrı gerekmez
 _HISTORY_TTL_SEC = 3600
 _LOCK = threading.Lock()
 _CHAIN_CACHE: tuple[float, dict[str, float]] | None = None
-_PROTOCOL_CACHE: dict[str, tuple[float, "ProtocolTvl"]] = {}
+_PROTOCOL_CACHE: dict[str, tuple[float, ProtocolTvl]] = {}
 _HISTORY_CACHE: dict[str, tuple[float, list[tuple[float, float]]]] = {}
 
 

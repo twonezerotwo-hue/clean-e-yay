@@ -27,7 +27,6 @@ from packages.paper.guards import price_sanity
 from packages.paper.state import PaperState
 from packages.risk.trade_economics import compute_adaptive_targets
 
-
 # TF süresi (saat) — ticket expires_at için
 _TF_HOURS = {"15m": 0.25, "1h": 1, "4h": 4, "1d": 24, "1w": 168}
 

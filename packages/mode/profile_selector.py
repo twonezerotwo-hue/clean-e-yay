@@ -28,4 +28,4 @@ def select_profile(setup_type: str, entry_timeframe: str | None) -> str | None:
     return _TF_PROFILE.get(entry_timeframe or "", None)
 
 
-__all__ = ["select_profile", "TRADE_PROFILES"]
+__all__ = ["TRADE_PROFILES", "select_profile"]

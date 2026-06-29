@@ -1,22 +1,23 @@
 """GET /api/v1/paper-trading/state, POST /api/v1/paper-trading/tick"""
 from __future__ import annotations
 
+import math
 from dataclasses import asdict
 from datetime import UTC, datetime
-import math
 
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
-from packages.data.ingestion.pipeline import build_snapshot, get_cached_snapshot
+from packages.data.ingestion.pipeline import build_snapshot, get_cached_snapshot  # noqa: F401
 from packages.data.registry import assets as asset_registry
 from packages.decision.engine import decide_matrix
+from packages.notifications import append_many, list_recent, mark_ack, mark_all_ack, unread_count
+from packages.notifications import detector as notif_detector
 from packages.paper import audit as paper_audit
-from packages.paper import maintenance, manual_queue, session_gate
+from packages.paper import maintenance, manual_order, manual_queue, position_ops, session_gate
 from packages.paper import state as paper_state
 from packages.paper.guards import price_sanity, state_anomaly
-from packages.paper import manual_order, position_ops
 from packages.paper.lifecycle import (
     attempt_open,
     close_position,
@@ -28,14 +29,12 @@ from packages.paper.lifecycle import (
 )
 from packages.paper.recheck import compute_rechecks
 from packages.paper.ticket import build_tickets_from_decisions
-from packages.notifications import append_many, list_recent, mark_ack, mark_all_ack, unread_count
-from packages.notifications import detector as notif_detector
+from packages.risk import halt as halt_store
+from packages.risk.engine import RiskInput
 
 # Tick-içi geçici state (proses ömrü) — diff detector için
 _PREV_STATE: dict = {"ticket_ids": set(), "verdicts": {}, "risk_action": None, "dqs": None}
 _LAST_TICKETS: list[dict] = []
-from packages.risk import halt as halt_store
-from packages.risk.engine import RiskInput
 
 router = APIRouter(tags=["paper-trading"])
 

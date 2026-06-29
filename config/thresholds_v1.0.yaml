@@ -206,6 +206,15 @@ correlation_baseline:
 paper_trading:
   initial_equity_usd: 100000
   max_position_usd: 25000
+  # Intra-batch yığılma koruması: decide_matrix tek pass'te aynı sembolün birden
+  # çok TF'sini açabilir (XAGUSD 15m/1h/4h short); pass-başı snapshot'ı donduğu için
+  # kardeşler birbirini görmez → correlation cluster cap ateşlenemiyor. true iken
+  # pass içinde açılan kardeşler sentetik pozisyon olarak sonraki hücrelere beslenir
+  # → cap (aynı sembol rho=1.0) onları görür.
+  # DEFAULT KAPALI: açmak çok-TF aynı-sembol matris davranışını %30 cluster cap'e
+  # tabi kılar (multi-TF'i belirgin sıkar) — bu bir POLİTİKA kararı (ne kadar aynı-
+  # sembol konsantrasyon kabul). Owner eşiğe karar verince true yapar. false = eski.
+  intra_batch_cluster_guard: false
   sl_pct:
     BTCUSD: 0.04
     ETHUSD: 0.05

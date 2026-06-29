@@ -20,11 +20,11 @@ from packages.data.providers import options as options_provider
 from packages.data.providers import price as price_provider
 from packages.data.providers import rotation as rot_provider
 from packages.data.providers import technical as tech_provider
-from packages.data.registry import assets as _asset_registry
 from packages.data.providers import volatility as vol_provider
 from packages.data.providers.news import catalyst as catalyst_engine
 from packages.data.quality.dqs import QualityReport
 from packages.data.quality.dqs import compute as compute_dqs
+from packages.data.registry import assets as _asset_registry
 from packages.data.types import (
     TIMEFRAMES,
     Catalyst,

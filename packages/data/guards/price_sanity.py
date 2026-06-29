@@ -22,7 +22,6 @@ from __future__ import annotations
 from packages.data.providers.ohlcv import cache as ohlcv_cache
 from packages.data.registry.loader import load_thresholds
 
-
 _REFERENCE_TFS = ("15m", "1h", "1d")
 
 
