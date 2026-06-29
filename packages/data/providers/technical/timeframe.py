@@ -572,9 +572,14 @@ def build_timeframe_result(
     # ── scoring (SEPARATE axes) — top-down: momentum trigger gated by location/
     #    pattern/volume evidence (§4.5 now feeds direction, no longer evidence-only).
     # Faz 3a — exhaustion (climax kovalama riski). Lokal import: paket-init cycle'ı
-    # (timeframe ↔ scoring) önler. Volume/sweep build'de yok → RSI+getiri tabanlı.
+    # (timeframe ↔ scoring) önler. Volume climax + liquidity sweep beslenir →
+    # RSI+getiri'ye ek climax kanıtı (shadow'daki agent_pipeline ile aynı girdiler).
+    from packages.liquidity import sweep as _sweep_engine
     from packages.scoring import exhaustion as _exhaustion_engine
-    _exh = _exhaustion_engine.analyze(bars, timeframe=timeframe)
+    from packages.volume import engine as _volume_engine
+    _vol = _volume_engine.analyze(bars, timeframe=timeframe)
+    _swp = _sweep_engine.analyze(bars, timeframe=timeframe)
+    _exh = _exhaustion_engine.analyze(bars, timeframe=timeframe, volume=_vol, sweep=_swp)
     exhaustion_score = _exh.score if _exh.validity != "unavailable" else None
 
     direction, dir_diag = _direction_score(
