@@ -70,6 +70,10 @@ class TradeDecision:
     fingerprint: str | None = None
     mistake_verdict: dict = field(default_factory=dict)
     cluster_report: dict = field(default_factory=dict)
+    # Açık-kitap self-conflict guard (shadow-first). Aday aynı sembolde zaten açık
+    # ZIT yöne giriyorsa burada işaretlenir; book_audit.self_conflict_guard.enabled
+    # iken bloklanır, kapalıyken yalnız gözlem (active=False). Boş = çakışma yok.
+    self_conflict_report: dict = field(default_factory=dict)
     # v2.7 D2 — kripto türev riski (yalnızca kısıtlayıcı; crypto sembolleri).
     derivatives_report: dict = field(default_factory=dict)
     # v2.7 D4 — realized volatility riski (yalnızca kısıtlayıcı; per (symbol, tf)).
@@ -146,6 +150,13 @@ def _ev_gate_cfg() -> dict:
 def _kelly_cfg() -> dict:
     """F5 Kelly sizing config (monkeypatch-edilebilir seam — test izolasyonu)."""
     return load_thresholds().get("kelly_sizing") or {}
+
+
+def _self_conflict_cfg() -> dict:
+    """Açık-kitap self-conflict guard config (monkeypatch-seam). Aynı sembolde
+    zaten açık ZIT yöne yeni aday girişini engeller. enabled default False
+    (shadow-first); kapalıyken yalnız gözlem işaretlenir, davranış değişmez."""
+    return (load_thresholds().get("book_audit") or {}).get("self_conflict_guard") or {}
 
 
 def _tf_rr(timeframe: str) -> float:
@@ -365,6 +376,52 @@ def decide_for_symbol(
     # factor to ≤ 1.0 so a BOOST verdict can never increase the deterministic base.
     size *= min(1.0, verdict.size_factor)
     size = max(0.0, min(1.5, size))
+
+    # ----- Açık-kitap self-conflict guard (shadow-first) -----
+    # Aday aynı sembolde zaten açık ZIT yöne giriyorsa (BRENT short varken long)
+    # bu kendine-karşı pozisyondur — biri kesin yanlış, ikisi birbirini hedge eder.
+    # correlation.cluster_exposure bunu "hedge" sayıp İZİN VERİYOR; bu guard kapatır.
+    # Shadow-her-zaman-hesaplanır; yalnız enabled iken bloklar (mimari kural: yön/
+    # yapı katmanı öğrenme otomasyonunca izlenmediği için flag-default-OFF + ölç).
+    cand_side = "long" if action == "open_long" else "short"
+    opposite_side = "short" if cand_side == "long" else "long"
+    conflict_legs = [
+        p for p in (open_positions or [])
+        if p.symbol == symbol and p.side == opposite_side
+    ]
+    if conflict_legs:
+        sc_enabled = bool(_self_conflict_cfg().get("enabled", False))
+        self_conflict_report = {
+            "active": sc_enabled,
+            "symbol": symbol,
+            "candidate_side": cand_side,
+            "open_opposite_side": opposite_side,
+            "open_opposite_count": len(conflict_legs),
+            "open_opposite_usd": round(sum(float(p.size_usd) for p in conflict_legs), 2),
+        }
+        if sc_enabled:
+            return TradeDecision(
+                symbol=symbol,
+                action="hold",
+                confidence=round(cal_conf, 3),
+                size_multiplier=0.0,
+                consensus=cons,
+                risk=risk,
+                reason=(
+                    f"self_conflict: {symbol} üzerinde zaten {len(conflict_legs)} "
+                    f"{opposite_side.upper()} açık — zıt yön ({cand_side.upper()}) engellendi"
+                ),
+                raw_confidence=round(raw_conf, 4),
+                confidence_source=conf_source,
+                fingerprint=fp,
+                mistake_verdict=_verdict_to_dict(verdict),
+                self_conflict_report=self_conflict_report,
+                timeframe=timeframe,
+                candidate_action=candidate,
+                blocked_by=["self_conflict_guard"],
+            )
+    else:
+        self_conflict_report = {}
 
     # ----- G4: Correlation cluster cap (sadece küçültür, RiskGate'i bypass etmez) -----
     cluster = correlation.cluster_exposure(
@@ -663,6 +720,7 @@ def decide_for_symbol(
         fingerprint=fp,
         mistake_verdict=_verdict_to_dict(verdict),
         cluster_report=cluster_dict,
+        self_conflict_report=self_conflict_report,
         derivatives_report=derivatives_dict,
         volatility_report=volatility_dict,
         catalyst_report=catalyst_dict,

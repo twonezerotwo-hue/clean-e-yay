@@ -39,6 +39,7 @@ export const qk = {
   tfWeights: ["learning", "tf-weights"] as const,
   tfTargets: ["learning", "tf-targets"] as const,
   missedOpportunities: ["learning", "missed-opportunities"] as const,
+  bookAudit: ["learning", "book-audit"] as const,
   calibrationJumps: ["learning", "calibration-jumps"] as const,
   historicalEdge: (fingerprint: string) =>
     ["learning", "historical-edge", fingerprint] as const,

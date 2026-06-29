@@ -240,6 +240,26 @@ paper_trading:
   trailing_stop_enabled: true
   partial_tp1_pct: 0.5
 
+# Açık kitap yapısal denetimi (packages/learning/book_audit.py). Canlı açık
+# pozisyon kitabını tarar; KAPANIŞ BEKLEMEDEN yapısal mantık hatalarını (aynı
+# sembolde zıt yön, tek varlıkta yoğunlaşma, aynı sinyalin TF'lere kopyalanması,
+# tek-yön kitap) kullanıcı-odaklı "ders" olarak Conscious paneline yüzeyler.
+# mistake_memory yalnız KAPALI trade fingerprint'lerini öğrendiği için bu boşluğu
+# kapatır. Observe-only — eşikler yalnız ders üretimini ayarlar.
+book_audit:
+  concentration_pct_of_book: 0.30   # tek sembol kitabın %30'unu aşarsa yoğunlaşma dersi
+  one_way_pct: 0.80                 # tek yön kitabın %80'ini aşarsa tek-yön dersi
+  stack_min_timeframes: 2           # aynı sembol+yön ≥2 TF → kopya yığını dersi
+  # Aktif self-conflict guard: aynı sembolde zaten açık ZIT yöne yeni aday
+  # açılışını engeller (BRENT short+long tarzı kendine-karşı pozisyonu önler).
+  # 2026-06-30: AÇILDI (owner kararı). Yalnız KISITLAYICI — bu sistemde kasıtlı
+  # aynı-sembol hedge yok, dolayısıyla meşru karşı-örneği yoktur; en güvenli
+  # guard. Her kararda self_conflict_report gözlemlenir; yanlışsa false ile
+  # anında geri alınır (flag-rollback). NOT: canlı tick_worker'a yansıması için
+  # yeniden başlatma gerekir (AWS deploy worker'ları zaten restart eder).
+  self_conflict_guard:
+    enabled: true
+
 # Price sanity guard — cross-pair contamination + absurd-price protection.
 # Phase 2 port from e-yay-codex paper_trading_service._is_price_sane.
 price_sanity:

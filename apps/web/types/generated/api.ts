@@ -1948,6 +1948,27 @@ export type MissedOpportunitiesView = {
   recent: Array<Record<string, unknown>>;
 };
 
+export type BookAuditSeverity = "CRITICAL" | "WARNING" | "INFO";
+
+export type BookAuditLesson = {
+  code: string;
+  severity: BookAuditSeverity;
+  title: string;
+  detail: string;
+  symbols: string[];
+  evidence: string[];
+  suggested_action: string;
+};
+
+export type BookAuditView = {
+  open_positions: number;
+  book_total_usd: number;
+  counts: Record<string, number>;
+  clean: boolean;
+  lessons: BookAuditLesson[];
+  thresholds: Record<string, number>;
+};
+
 export type CalibrationGuardrailStatus = {
   enabled: boolean;
   max_inflation_delta: number;
