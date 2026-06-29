@@ -81,6 +81,7 @@ type LayerMeta = {
 
 type Layer1StackItem = {
   key: string;
+  label: string;
   node: ReactNode;
 };
 
@@ -460,7 +461,7 @@ function LayerControls({
       >
         Geri
       </button>
-      <div className="hidden items-center gap-1 sm:flex">
+      <div className="flex items-center gap-1">
         {LAYERS.map((layer) => (
           <button
             key={layer.code}
@@ -471,7 +472,7 @@ function LayerControls({
                 ? "w-8 bg-accent-cyan"
                 : "w-2.5 bg-white/24 hover:bg-white/45"
             }`}
-            aria-label={`Katman ${layer.index}`}
+            aria-label={`Katman ${layer.index} ${layer.title}`}
           />
         ))}
       </div>
@@ -586,6 +587,17 @@ function Layer1Stack({ items }: { items: Layer1StackItem[] }) {
   const scrollerRef = useRef<HTMLDivElement | null>(null);
   const [activeIndex, setActiveIndex] = useState(0);
 
+  const scrollToItem = (key: string) => {
+    const scroller = scrollerRef.current;
+    const panel = scroller?.querySelector<HTMLElement>(`[data-layer1-key="${key}"]`);
+    if (!scroller || !panel) return;
+    const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    scroller.scrollTo({
+      top: panel.offsetTop,
+      behavior: reducedMotion ? "auto" : "smooth",
+    });
+  };
+
   useEffect(() => {
     const scroller = scrollerRef.current;
     const stack = scroller?.querySelector<HTMLElement>(".layer1-stack");
@@ -614,6 +626,44 @@ function Layer1Stack({ items }: { items: Layer1StackItem[] }) {
         return target;
       });
     };
+
+    const isMobileStack = window.matchMedia("(max-width: 768px)").matches;
+    if (isMobileStack) {
+      let ticking = false;
+
+      const syncMobileState = () => {
+        const panels = readItems();
+        if (!panels.length) return;
+
+        const current = scroller.scrollTop;
+        let nearest = 0;
+        panels.forEach((panel, index) => {
+          panel.dataset.layer1State = "active";
+          if (Math.abs(current - panel.offsetTop) < Math.abs(current - panels[nearest].offsetTop)) {
+            nearest = index;
+          }
+        });
+        scroller.dataset.layer1Active = String(nearest + 1);
+        setActiveIndex(nearest);
+      };
+
+      const onMobileScroll = () => {
+        if (ticking) return;
+        ticking = true;
+        window.requestAnimationFrame(() => {
+          ticking = false;
+          syncMobileState();
+        });
+      };
+
+      syncMobileState();
+      scroller.addEventListener("scroll", onMobileScroll, { passive: true });
+      window.addEventListener("resize", syncMobileState);
+      return () => {
+        scroller.removeEventListener("scroll", onMobileScroll);
+        window.removeEventListener("resize", syncMobileState);
+      };
+    }
 
     const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     let active = 0;
@@ -777,6 +827,20 @@ function Layer1Stack({ items }: { items: Layer1StackItem[] }) {
       aria-live="polite"
       aria-label={`Katman 1 panel ${activeIndex + 1} / ${items.length}`}
     >
+      <div className="layer1-mobile-panel-tabs md:hidden" aria-label="Heart panelleri">
+        {items.map((item, index) => (
+          <button
+            key={item.key}
+            type="button"
+            onClick={() => scrollToItem(item.key)}
+            className={index === activeIndex ? "is-active" : ""}
+            aria-current={index === activeIndex ? "true" : undefined}
+          >
+            <span>{String(index + 1).padStart(2, "0")}</span>
+            {item.label}
+          </button>
+        ))}
+      </div>
       <div className="layer1-stack">
         {items.map((item) => (
           <div
@@ -1010,13 +1074,13 @@ export function CockpitView() {
       );
   } else if (activeLayer === 1) {
     const layer1Items: Layer1StackItem[] = [
-      { key: "holographic_signals", node: <HolographicSignalDeck brief={brief} /> },
-      { key: "news", node: <NewsPanel defaultView="radar" /> },
-      { key: "execution_readiness", node: <ExecutionReadinessPanel /> },
-      { key: "event_calendar", node: <EventCalendarPanel /> },
-      { key: "scenario", node: <ScenarioPanel /> },
-      { key: "capital_rotation", node: <CapitalRotationPanel /> },
-      { key: "order_ticket", node: <OrderTicketPanel /> },
+      { key: "holographic_signals", label: "Sinyal Kartlari", node: <HolographicSignalDeck brief={brief} /> },
+      { key: "news", label: "Haberler", node: <NewsPanel defaultView="radar" /> },
+      { key: "execution_readiness", label: "Checklist", node: <ExecutionReadinessPanel /> },
+      { key: "event_calendar", label: "Olay Takvimi", node: <EventCalendarPanel /> },
+      { key: "scenario", label: "Senaryo", node: <ScenarioPanel /> },
+      { key: "capital_rotation", label: "Likidite", node: <CapitalRotationPanel /> },
+      { key: "order_ticket", label: "Order Ticket", node: <OrderTicketPanel /> },
     ];
 
     layerContent = (

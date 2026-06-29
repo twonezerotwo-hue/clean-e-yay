@@ -3790,6 +3790,112 @@ html, body {
   .mobile-order-back button {
     min-height: 2.35rem;
   }
+
+  .layer1-mobile-panel-tabs {
+    position: sticky;
+    top: 0;
+    z-index: 140;
+    display: flex;
+    gap: 0.35rem;
+    margin: 0 0 0.55rem;
+    padding: 0.42rem 0.1rem 0.5rem;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    background: linear-gradient(180deg, rgba(2, 3, 10, 0.96), rgba(2, 3, 10, 0.72));
+    scrollbar-width: none;
+    -webkit-backdrop-filter: blur(18px);
+    backdrop-filter: blur(18px);
+  }
+
+  .layer1-mobile-panel-tabs::-webkit-scrollbar {
+    display: none;
+  }
+
+  .layer1-mobile-panel-tabs button {
+    display: inline-flex;
+    flex: 0 0 auto;
+    align-items: center;
+    gap: 0.35rem;
+    min-height: 2rem;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.035);
+    padding: 0.42rem 0.62rem;
+    font-family: var(--font-mono, monospace);
+    font-size: 0.62rem;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: rgba(255, 255, 255, 0.54);
+    white-space: nowrap;
+  }
+
+  .layer1-mobile-panel-tabs button span {
+    color: rgba(103, 232, 249, 0.72);
+  }
+
+  .layer1-mobile-panel-tabs button.is-active {
+    border-color: rgba(34, 211, 238, 0.56);
+    background: rgba(34, 211, 238, 0.13);
+    color: rgba(236, 254, 255, 0.94);
+    box-shadow: 0 0 18px rgba(34, 211, 238, 0.12);
+  }
+
+  .layer1-stack-scroll {
+    --layer1-stack-gap: 0.75rem;
+    --layer1-sticky-top: 0px;
+    --layer1-slide-height: calc(100vh - 8.35rem - env(safe-area-inset-bottom));
+    --layer1-slide-height: calc(100svh - 8.35rem - env(safe-area-inset-bottom));
+    --layer1-slide-height: calc(100dvh - 8.35rem - env(safe-area-inset-bottom));
+    padding: 0.45rem 0.55rem calc(5.75rem + env(safe-area-inset-bottom));
+    scroll-padding-block: 0.45rem;
+    scroll-snap-type: y proximity;
+  }
+
+  .layer1-stack {
+    gap: var(--layer1-stack-gap);
+    padding-bottom: 0;
+  }
+
+  .layer1-stack-item {
+    height: auto;
+    min-height: max(28rem, var(--layer1-slide-height));
+    max-height: none;
+    overflow: visible;
+    contain: layout style;
+    scroll-snap-align: start;
+    scroll-snap-stop: normal;
+  }
+
+  .layer1-stack-item > * {
+    height: auto !important;
+    min-height: max(28rem, var(--layer1-slide-height)) !important;
+    max-height: none !important;
+    overflow: visible !important;
+  }
+
+  .layer1-stack-item .panel.quantum-panel,
+  .layer1-stack-item > div > .panel.quantum-panel {
+    height: auto !important;
+    min-height: max(28rem, var(--layer1-slide-height)) !important;
+    max-height: none !important;
+  }
+
+  .layer1-stack-item .panel.quantum-panel > .relative.z-10 {
+    min-height: 0;
+  }
+
+  .layer1-stack-item[data-layer1-key="event_calendar"],
+  .layer1-stack-item[data-layer1-key="scenario"] {
+    min-height: var(--layer1-slide-height);
+  }
+
+  .layer1-stack-item[data-layer1-key="event_calendar"] > *,
+  .layer1-stack-item[data-layer1-key="scenario"] > *,
+  .layer1-stack-item[data-layer1-key="event_calendar"] .panel.quantum-panel,
+  .layer1-stack-item[data-layer1-key="scenario"] .panel.quantum-panel {
+    min-height: var(--layer1-slide-height) !important;
+  }
 }
 
 @media (max-width: 768px) and (prefers-reduced-motion: reduce) {
