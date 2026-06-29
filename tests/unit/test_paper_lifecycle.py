@@ -538,16 +538,20 @@ def test_canonical_outcome_carries_excursions():
 # ── TF-targets toggle (open_position SL/TP motoru seçimi) ────────────────────
 
 def test_open_position_uses_fixed_when_tf_targets_disabled(monkeypatch):
-    """timeframe_targets.enabled=false (default) → eski compute_fixed_targets davranışı."""
-    import packages.risk.trade_economics as te
+    """timeframe_targets.enabled=false → eski compute_fixed_targets davranışı.
+
+    NOT: lifecycle.open_position `tf_targets_enabled`'ı KENDİ namespace'inden
+    çağırır; bu yüzden patch lifecycle modülüne yapılmalı (te'ye değil). Aksi
+    halde global default'a bağımlı kalır — testi hermetik tutar.
+    """
+    import packages.paper.lifecycle as lc
     from packages.paper.state import PaperState
-    from packages.paper.lifecycle import open_position
-    monkeypatch.setattr(te, "tf_targets_enabled", lambda: False)
+    monkeypatch.setattr(lc, "tf_targets_enabled", lambda: False)
     state = PaperState(
         equity_usd=100000.0, peak_equity_usd=100000.0,
         open_positions=[], recent_trades=[],
     )
-    pos = open_position(
+    pos = lc.open_position(
         state, symbol="BTCUSD", side="long", entry_price=100000.0,
         size_multiplier=1.0, predicted_confidence=0.30,
         timeframe="15m", atr=200.0,  # ATR verilse de fixed yolunda yok sayılır

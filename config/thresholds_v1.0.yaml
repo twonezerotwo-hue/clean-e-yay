@@ -62,7 +62,7 @@ timeframe_risk:
 # TP_mesafe = SL_mesafe × rr (her iki durumda).
 # Not: 15m rr=1.5, trade_economics.min_rr (1.5) ile dahili tutarlı.
 timeframe_targets:
-  enabled: false
+  enabled: true
   "15m": { sl_atr_mult: 1.0, rr: 1.5, sl_pct_floor: 0.005, sl_pct_cap: 0.020 }
   "1h":  { sl_atr_mult: 1.2, rr: 1.8, sl_pct_floor: 0.010, sl_pct_cap: 0.035 }
   "4h":  { sl_atr_mult: 1.5, rr: 2.0, sl_pct_floor: 0.015, sl_pct_cap: 0.050 }
