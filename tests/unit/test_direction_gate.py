@@ -94,3 +94,37 @@ def test_short_side_symmetry():
     )
     # Shorting into support against a bullish reversal → conviction pulled toward 50.
     assert conflicted > pure  # bearish score rises toward neutral (less conviction)
+
+
+# ── Faz 2: chop guard (trend kalitesi) ────────────────────────────────────────
+
+_CHOP_ON = tf.TechnicalConfig(chop_guard_enabled=True)   # floor 20, min_mult 0.5
+
+
+def test_chop_guard_off_is_passthrough():
+    # Varsayılan config (kapalı): düşük ADX bile skoru DEĞİŞTİRMEZ.
+    assert _score(adx_v=5.0) == tf._momentum_score(_RSI, _MACD, _EMA)
+
+
+def test_chop_guard_dampens_in_chop():
+    # Açık + ADX floor altı → skor 50'ye doğru kısılır (ama aynı tarafta kalır).
+    pure = tf._momentum_score(_RSI, _MACD, _EMA)        # ≈65 (bullish)
+    s, diag = tf._direction_score(_RSI, _MACD, _EMA, adx_v=5.0, cfg=_CHOP_ON)
+    assert 50.0 < s < pure          # sönümlendi ama bullish kaldı (yön çevrilmedi)
+    assert "chop_mult" in diag
+
+
+def test_chop_guard_inert_in_trend():
+    # Açık ama ADX floor üstü (gerçek trend) → dokunmaz.
+    pure = tf._momentum_score(_RSI, _MACD, _EMA)
+    s, diag = tf._direction_score(_RSI, _MACD, _EMA, adx_v=30.0, cfg=_CHOP_ON)
+    assert s == pure and "chop_mult" not in diag
+
+
+def test_chop_guard_never_flips_side():
+    # Aşırı chop (adx≈0) bile bullish'i bearish yapmaz (yalnız sönümler).
+    s, _ = tf._direction_score(_RSI, _MACD, _EMA, adx_v=0.0, cfg=_CHOP_ON)
+    assert s > 50.0
+    # Bearish çekirdek de aynı: aşağıda kalır, yukarı çevrilmez.
+    sb, _ = tf._direction_score(30.0, 0.0, "bearish", adx_v=0.0, cfg=_CHOP_ON)
+    assert sb < 50.0

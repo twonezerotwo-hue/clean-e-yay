@@ -236,7 +236,9 @@ def _seed_v2(ps, *, n: int, module: str = "touche", tf: str = "1d") -> None:
 
 def test_trainer_attributes_v2_module_not_score_bucket(learn_env) -> None:
     ps, _ = learn_env
-    _seed_v2(ps, n=10, module="touche", tf="1d")
+    # Rebalance ≥2 modül çeşitliliği ister (MIN_MODULES_FOR_REBALANCE): touche + sentinel.
+    _seed_v2(ps, n=7, module="touche", tf="1d")
+    _seed_v2(ps, n=3, module="sentinel", tf="1d")
     from packages.learning import auto_weight_trainer as t
     res = t.train(regime="NEUTRAL")
     assert hasattr(res, "evidence")
@@ -246,7 +248,9 @@ def test_trainer_attributes_v2_module_not_score_bucket(learn_env) -> None:
     # timeframe/regime evidence proposal'da görünür
     audit = res.proposed_yaml["audit"]
     assert audit["timeframe_distribution"] == {"1d": 10}
-    assert audit["module_distribution"] == {"touche": 10}
+    assert audit["module_distribution"] == {"touche": 7, "sentinel": 3}
+    # step-8 tf_weights PRIOR bloğu proposal'da KORUNUR (eskiden düşüyordu).
+    assert "tf_weights" in res.proposed_yaml
 
 
 def test_trainer_insufficient_no_proposal(learn_env) -> None:
@@ -276,7 +280,7 @@ def test_mistake_memory_separates_by_timeframe(learn_env) -> None:
 # ------------------------------ learning worker ------------------------------
 
 def test_learning_worker_empty_data_no_crash(learn_env) -> None:
-    ps, _ = learn_env  # boş state
+    _ps, _ = learn_env  # boş state
     from apps.learning_worker import main as lw
     importlib.reload(lw)
     run = lw.run_once()
@@ -292,9 +296,14 @@ def test_learning_worker_empty_data_no_crash(learn_env) -> None:
     assert saved["run_id"] == run["run_id"]
 
 
-def test_learning_worker_metadata_with_data(learn_env) -> None:
+def test_learning_worker_metadata_with_data(learn_env, monkeypatch) -> None:
     ps, ld = learn_env
-    _seed_v2(ps, n=10, module="touche", tf="1d")
+    # Bu test "owner onayı olmadan PENDING kalır" davranışını doğrular → G3 dar-bant
+    # otomatik-uygulamayı KAPAT (aksi halde narrow-band proposal auto-apply olur).
+    monkeypatch.setenv("REBALANCE_AUTO_APPLY", "0")
+    # Rebalance ≥2 modül çeşitliliği ister: touche + sentinel (toplam 10).
+    _seed_v2(ps, n=7, module="touche", tf="1d")
+    _seed_v2(ps, n=3, module="sentinel", tf="1d")
     from apps.learning_worker import main as lw
     importlib.reload(lw)
     run = lw.run_once()

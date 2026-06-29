@@ -378,6 +378,16 @@ technical:
     confirm_gain: 0.15  # kanıt momentumla uyumluysa max +%15 güven
     penalty_gain: 0.40  # kanıt çelişiyorsa max −%40 güven
 
+  # Faz 2 — chop guard (yön kalitesi). ADX düşükse (gerçek trend yok) momentum
+  # yönünü nötre çeker → chop'ta üretilen zayıf/sahte yön sinyalleri sönümlenir.
+  # enabled=false (varsayılan) → HİÇ etki yok, mevcut skor birebir. Açıkken:
+  # trendde (adx≥adx_chop_floor) çarpan 1.0 (dokunmaz); chop'ta skor mesafesi
+  # 50'ye doğru ×[chop_min_mult..1.0] kısılır. Yön ASLA çevrilmez, yalnız sönümler.
+  trend_quality:
+    enabled: false
+    adx_chop_floor: 20.0
+    chop_min_mult: 0.5
+
 # T2 — AgentDecision (deterministic). ConsensusSnapshot + RiskGate aksiyonu →
 # tek yüksek-seviye aksiyon + entry_timeframe. EVIDENCE→aksiyon köprüsü; trade
 # AÇMAZ (paper open matrix/RiskGate işi). Kurallar: RiskGate her zaman final
