@@ -201,6 +201,78 @@ def test_no_active_is_safe(g3_env):
     assert wr.check_rollback() == {"status": "no_active"}
 
 
+# ── G3 fix: atfedilebilirlik + sonsuz-bekleme koruması + eşleştirilmiş baseline ──
+
+def _seed_opened(ps, n, pnl, *, opened_at, closed_at):
+    st = ps.load()
+    for i in range(n):
+        st.recent_trades.append(ps.Trade(
+            id=f"x{opened_at}{closed_at}{i}", symbol="BTCUSD", side="long",
+            entry_price=100.0, exit_price=101.0, pnl_usd=pnl, opened_at=opened_at,
+            closed_at=closed_at, close_reason="TP_HIT", data_verified=True, timeframe="1d",
+        ))
+    ps.save(st)
+
+
+def test_post_window_uses_opened_at_not_closed(g3_env):
+    """Eski ağırlıkla AÇILMIŞ (opened_at < apply) ama uygulamadan SONRA kapanan
+    uzun-vade trade'ler post-apply penceresine GİRMEZ — atıf opened_at'e göre."""
+    from packages.learning import rebalance_store as rs
+    from packages.learning import weight_rollback as wr
+    _apply_one(rs, baseline=100.0)
+    # 15 trade: apply ÖNCESİ açılmış, apply SONRASI kapanmış → atfedilemez.
+    _seed_opened(g3_env["ps"], 15, -50.0,
+                 opened_at="2020-01-01T00:00:00+00:00",
+                 closed_at="2027-01-01T00:00:00+00:00")
+    res = wr.check_rollback()
+    assert res["status"] == "monitoring" and res["post_n"] == 0  # closed_at olsaydı 15 sayardı
+
+
+def test_monitor_expiry_no_evidence_rolls_back(g3_env):
+    """İzleme çok eskiyse ve hiç yeni outcome yoksa → güvenli geri alış (kilit açılır)."""
+    from packages.learning import rebalance_store as rs
+    from packages.learning import weight_autoapply_store as aas
+    from packages.learning import weight_rollback as wr
+    _apply_one(rs, baseline=0.0)
+    # applied_at'i geçmişe çek (14 günden eski) — hiç outcome seed etme.
+    store = g3_env["tmp"] / "weight_autoapply.json"
+    data = json.loads(store.read_text(encoding="utf-8"))
+    data["active"]["applied_at"] = "2020-01-01T00:00:00+00:00"
+    store.write_text(json.dumps(data), encoding="utf-8")
+    res = wr.check_rollback()
+    assert res["status"] == "ROLLED_BACK"
+    assert res["reason"] == "monitor_expired_no_evidence"
+    assert aas.get_active() is None  # kilit açıldı → sonraki proposal uygulanabilir
+
+
+def test_monitor_expiry_disabled_keeps_monitoring(g3_env, monkeypatch):
+    """REBALANCE_MONITOR_MAX_AGE_HOURS=0 → süre koruması kapalı, MONITORING sürer."""
+    monkeypatch.setenv("REBALANCE_MONITOR_MAX_AGE_HOURS", "0")
+    from packages.learning import rebalance_store as rs
+    from packages.learning import weight_rollback as wr
+    _apply_one(rs, baseline=0.0)
+    store = g3_env["tmp"] / "weight_autoapply.json"
+    data = json.loads(store.read_text(encoding="utf-8"))
+    data["active"]["applied_at"] = "2020-01-01T00:00:00+00:00"
+    store.write_text(json.dumps(data), encoding="utf-8")
+    assert wr.check_rollback()["status"] == "monitoring"
+
+
+def test_pre_apply_expectancy_matched_window(g3_env, monkeypatch):
+    """Baseline = ömür-boyu değil, opened_at'e göre en son N verified outcome."""
+    monkeypatch.setenv("REBALANCE_ROLLBACK_MIN_OUTCOMES", "5")
+    from packages.learning import weight_rollback as wr
+    # Eski 10 trade: pnl 0 (eski, düşük opened_at). Yeni 5 trade: pnl 100.
+    _seed_opened(g3_env["ps"], 10, 0.0,
+                 opened_at="2026-01-01T00:00:00+00:00",
+                 closed_at="2026-01-02T00:00:00+00:00")
+    _seed_opened(g3_env["ps"], 5, 100.0,
+                 opened_at="2026-05-01T00:00:00+00:00",
+                 closed_at="2026-05-02T00:00:00+00:00")
+    n, exp = wr.pre_apply_expectancy()
+    assert n == 5 and exp == 100.0  # ömür-boyu olsaydı (10*0+5*100)/15 ≈ 33.3
+
+
 def test_proposal_endpoint_surfaces_auto_apply(g3_env):
     """G3 cockpit yüzeyi: GET .../rebalance/proposal auto_apply bloğunu döndürür."""
     from fastapi.testclient import TestClient
