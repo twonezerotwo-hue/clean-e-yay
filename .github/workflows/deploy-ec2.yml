@@ -1,0 +1,53 @@
+name: Deploy EC2
+
+on:
+  workflow_dispatch:
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
+
+concurrency:
+  group: deploy-ec2-main
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Deploy to AWS EC2
+    runs-on: ubuntu-latest
+    if: >
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.head_branch == 'main')
+    steps:
+      - name: Prepare SSH
+        env:
+          EC2_HOST: ${{ secrets.EC2_HOST }}
+          EC2_DEPLOY_KEY: ${{ secrets.EC2_DEPLOY_KEY }}
+        run: |
+          set -euo pipefail
+          if [ -z "${EC2_HOST}" ]; then
+            echo "EC2_HOST secret is missing" >&2
+            exit 1
+          fi
+          if [ -z "${EC2_DEPLOY_KEY}" ]; then
+            echo "EC2_DEPLOY_KEY secret is missing" >&2
+            exit 1
+          fi
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          printf '%s\n' "${EC2_DEPLOY_KEY}" > ~/.ssh/ec2_deploy_key
+          chmod 600 ~/.ssh/ec2_deploy_key
+          ssh-keyscan -H "${EC2_HOST}" >> ~/.ssh/known_hosts
+
+      - name: Run Remote Deploy
+        env:
+          EC2_HOST: ${{ secrets.EC2_HOST }}
+          EC2_USER: ${{ secrets.EC2_USER }}
+        run: |
+          set -euo pipefail
+          user="${EC2_USER:-ubuntu}"
+          ssh -i ~/.ssh/ec2_deploy_key \
+            -o IdentitiesOnly=yes \
+            -o StrictHostKeyChecking=yes \
+            "${user}@${EC2_HOST}" \
+            "/opt/clean-e-yay/scripts/deploy-from-github.sh"
