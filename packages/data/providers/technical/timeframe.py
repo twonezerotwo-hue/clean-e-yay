@@ -266,6 +266,7 @@ def _direction_score(
     current: float | None = None,
     adx_v: float | None = None,
     exhaustion_score: float | None = None,
+    market_regime: str | None = None,
     cfg: TechnicalConfig | None = None,
 ) -> tuple[float | None, dict[str, float]]:
     """Top-down directional read (0–100, 50 = neutral). None = insufficient momentum.
@@ -347,7 +348,11 @@ def _direction_score(
     # ağırlığında seyrelir → magnitude güçlü tutulur (diğer modüller sert karşı çıkmadıkça
     # geçer). Reversal teyidi ŞART (yalnız exhaustion yetmez).
     rev_bias = reversal.bias if reversal is not None else "NEUTRAL"
-    if exhaustion_score is not None and rev_bias in ("BULLISH", "BEARISH"):
+    # Faz 4 model anahtarı: reversion yalnız TREND DIŞINDA (RANGE/TRANSITION/UNKNOWN)
+    # tetiklenir — trende karşı dönüş açma. market_regime None ise (eski çağrı/unit
+    # test) kapı uygulanmaz (geri uyumlu).
+    regime_allows_reversion = market_regime != "TREND"
+    if exhaustion_score is not None and rev_bias in ("BULLISH", "BEARISH") and regime_allows_reversion:
         rev_dir = 0.0
         if exhaustion_score <= cfg.exh_rev_low and rev_bias == "BULLISH" and final < 50.0:
             rev_dir = 1.0     # downside tükenmesi + bullish reversal → LONG
@@ -398,6 +403,21 @@ def _volatility_regime(
         if bb_w >= cfg.bb_expansion_pct:
             return "EXPANSION"
     return "RANGING"
+
+
+def _market_regime(adx_v: float | None, vol_regime: str, cfg: TechnicalConfig) -> str:
+    """Faz 4 — continuation/reversion MODEL ANAHTARI: TREND | RANGE | TRANSITION |
+    UNKNOWN. Yeni hesap değil — adx + volatility_regime'den temiz 3'lü etiket türetir.
+    TREND = momentum/continuation modeli geçerli; RANGE = mean-reversion modeli
+    geçerli; TRANSITION (expansion) = belirsiz. Reversion (F3b) yalnız TREND DIŞINDA
+    tetiklenir (trende karşı dönüş açma)."""
+    if vol_regime == "TRENDING" or (adx_v is not None and adx_v >= cfg.adx_trend_min):
+        return "TREND"
+    if vol_regime in ("RANGING", "SQUEEZE"):
+        return "RANGE"
+    if vol_regime == "EXPANSION":
+        return "TRANSITION"
+    return "UNKNOWN"
 
 
 def _key_levels(
@@ -596,6 +616,7 @@ def build_timeframe_result(
     key_levels = _key_levels(current, pivots, atr_v, atr_pct, cfg)
     trend = _trend_strength(adx_t, cfg)
     vol_regime = _volatility_regime(adx_v, bb_w, cfg)
+    market_regime = _market_regime(adx_v, vol_regime, cfg)  # Faz 4 — model anahtarı
     zones = _confluence_zones(
         current, atr_pct, key_levels.support, key_levels.resistance, vwap_v, fib
     )
@@ -617,7 +638,7 @@ def build_timeframe_result(
         rsi_v, macd_atr, ema_stack,
         fib=fib, zones=zones, reversal=reversal_signals, chart=chart_patterns,
         vwap_v=vwap_v, current=current, adx_v=adx_v,
-        exhaustion_score=exhaustion_score, cfg=cfg,
+        exhaustion_score=exhaustion_score, market_regime=market_regime, cfg=cfg,
     )
     strength = _strength_score(adx_v, direction)
     bias = _bias(direction, cfg)
@@ -645,6 +666,7 @@ def build_timeframe_result(
     if trend.label != "UNKNOWN":
         evidence.append(f"adx={trend.adx} ({trend.label})")
     evidence.append(f"volatility_regime={vol_regime}")
+    evidence.append(f"market_regime={market_regime}")  # Faz 4 — model anahtarı
     if fib is not None and fib.validity != "unavailable":
         evidence.append(f"fib_zone={fib.zone}")
     if reversal_signals is not None and reversal_signals.bias != "NEUTRAL":
@@ -671,6 +693,7 @@ def build_timeframe_result(
             chop_guard_multiplier=dir_diag.get("chop_mult_shadow"),
             exhaustion_guard_multiplier=dir_diag.get("exh_mult_shadow"),
             reversion_score=dir_diag.get("reversion_shadow"),
+            market_regime=market_regime,
         ),
         key_levels=key_levels,
         confirmation_signals=_confirmations(rsi_v, macd_t, ema_stack, current, vwap_v),

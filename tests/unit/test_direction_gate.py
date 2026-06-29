@@ -234,3 +234,38 @@ def test_reversion_skipped_when_momentum_already_aligned():
         reversal=TechnicalReversalSignals(bias="BULLISH"), cfg=_REV_ON,
     )
     assert s > 50.0 and "reversion_shadow" not in diag
+
+
+# ── Faz 4: trend/range market_regime (model anahtarı) ─────────────────────────
+
+_CFG = tf.TechnicalConfig()  # adx_trend_min=20
+
+
+def test_market_regime_classifier():
+    assert tf._market_regime(30.0, "TRENDING", _CFG) == "TREND"
+    assert tf._market_regime(10.0, "RANGING", _CFG) == "RANGE"
+    assert tf._market_regime(10.0, "SQUEEZE", _CFG) == "RANGE"
+    assert tf._market_regime(None, "EXPANSION", _CFG) == "TRANSITION"
+    assert tf._market_regime(None, "UNKNOWN", _CFG) == "UNKNOWN"
+    assert tf._market_regime(25.0, "RANGING", _CFG) == "TREND"  # adx≥20 → trend baskın
+
+
+def test_reversion_suppressed_in_trend_regime():
+    # Reversion setup'ı tam (bearish + exh 10 + bullish reversal) AMA rejim TREND →
+    # trende karşı dönüş AÇMA: reversion tetiklenmez.
+    s, diag = tf._direction_score(
+        30.0, 0.0, "bearish", exhaustion_score=10.0,
+        reversal=TechnicalReversalSignals(bias="BULLISH"),
+        market_regime="TREND", cfg=_REV_ON,
+    )
+    assert s < 50.0 and "reversion_shadow" not in diag  # bastırıldı
+
+
+def test_reversion_allowed_in_range_regime():
+    # Aynı setup + rejim RANGE → mean-reversion modeli geçerli → çevirir.
+    s, diag = tf._direction_score(
+        30.0, 0.0, "bearish", exhaustion_score=10.0,
+        reversal=TechnicalReversalSignals(bias="BULLISH"),
+        market_regime="RANGE", cfg=_REV_ON,
+    )
+    assert s > 50.0 and "reversion" in diag
