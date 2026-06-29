@@ -223,9 +223,10 @@ def run_once() -> dict:
     try:
         result = trainer.train(regime="NEUTRAL")
         if isinstance(result, trainer.RebalanceProposal):
-            base = [o for o in outcomes_mod.outcomes_from_state() if o.data_verified]
-            base_n = len(base)
-            base_exp = sum(o.pnl for o in base) / base_n if base_n else 0.0
+            # Baseline = apply öncesi EŞLEŞTİRİLMİŞ pencere (opened_at'e göre en son
+            # N verified outcome) — post-apply penceresiyle aynı boyut/recency.
+            # Ömür-boyu ortalama DEĞİL: rollback like-for-like kıyas yapabilsin.
+            base_n, base_exp = weight_rollback.pre_apply_expectancy()
             decision = rebalance_store.maybe_auto_apply(
                 trainer.proposal_to_dict(result),
                 baseline_expectancy=base_exp,

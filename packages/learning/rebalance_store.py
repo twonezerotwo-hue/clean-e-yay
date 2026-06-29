@@ -116,16 +116,26 @@ def load() -> dict:
         if not path.exists():
             return _empty()
         try:
-            return json.loads(path.read_text(encoding="utf-8"))
+            data = json.loads(path.read_text(encoding="utf-8"))
         except (OSError, json.JSONDecodeError):
             return _empty()
+    # Bozuk/şekilsiz içerik (örn. dosya bir liste) → boş şema; `.get` patlamasın.
+    if not isinstance(data, dict):
+        return _empty()
+    data.setdefault("current", None)
+    if not isinstance(data.get("history"), list):
+        data["history"] = []
+    return data
 
 
 def _save(data: dict) -> None:
     path = _store_path()
     with _LOCK:
         path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(json.dumps(data, indent=2), encoding="utf-8")
+        # Atomik yazım: tmp'e yaz + replace — yarım/bozuk JSON bırakmaz.
+        tmp = path.with_suffix(".tmp")
+        tmp.write_text(json.dumps(data, indent=2), encoding="utf-8")
+        tmp.replace(path)
 
 
 def get_pending() -> dict | None:
