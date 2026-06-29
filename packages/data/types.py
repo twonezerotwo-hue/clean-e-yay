@@ -205,6 +205,10 @@ class TechnicalScoreOverview(BaseModel):
     # volume gate scaled momentum conviction. 1.0 = neutral, <1 penalty (e.g. longing
     # into resistance), >1 mild confirm. None when momentum/evidence insufficient.
     location_gate_multiplier: float | None = None
+    # Faz 2 chop guard — momentum yönü gerçek trend yokken (ADX düşük) ne kadar
+    # söndü/sönerdi (gözlem; <1.0 = chop sönümü). enabled OFF iken de dolu (shadow);
+    # None = chop değil / adx yok. Öğrenme katmanı bunu İZLEMEZ — manuel tespit alanı.
+    chop_guard_multiplier: float | None = None
 
 
 class TechnicalKeyLevels(BaseModel):

@@ -278,6 +278,10 @@ def train(regime: str = "NEUTRAL") -> RebalanceProposal | dict:
         ),
         "regimes": new_regimes,
         "constraints": dict(constraints),
+        # Rejim-dışı PRIOR blokları (step-8 tf_weights vb.) korunur — eskiden
+        # proposed_yaml bunları taşımıyordu, her rebalance per-strateji TF ağırlık
+        # prior'ını sessizce siliyordu (load_tf_weight_prior → {} → trust gate kör).
+        **({"tf_weights": weights_cfg["tf_weights"]} if "tf_weights" in weights_cfg else {}),
         "audit": {
             "based_on_trades": eligible,
             "rejected_records": rejected,

@@ -94,3 +94,48 @@ def test_short_side_symmetry():
     )
     # Shorting into support against a bullish reversal → conviction pulled toward 50.
     assert conflicted > pure  # bearish score rises toward neutral (less conviction)
+
+
+# ── Faz 2: chop guard (trend kalitesi) ────────────────────────────────────────
+
+_CHOP_ON = tf.TechnicalConfig(chop_guard_enabled=True)    # floor 20, min_mult 0.5
+_CHOP_OFF = tf.TechnicalConfig(chop_guard_enabled=False)  # explicit OFF (global config'ten bağımsız)
+
+
+def test_chop_guard_off_is_passthrough():
+    # Explicit OFF cfg: düşük ADX bile final skoru DEĞİŞTİRMEZ (global flag ne olursa olsun).
+    s, _ = tf._direction_score(_RSI, _MACD, _EMA, adx_v=5.0, cfg=_CHOP_OFF)
+    assert s == tf._momentum_score(_RSI, _MACD, _EMA)
+
+
+def test_chop_guard_shadow_logged_even_when_off():
+    # Flag KAPALI olsa da chop'ta "ne olurdu" gözlem değeri diag'a yazılır
+    # (öğrenme katmanı yön-motorunu izlemez → manuel tespit sinyali).
+    s, diag = tf._direction_score(_RSI, _MACD, _EMA, adx_v=5.0, cfg=_CHOP_OFF)
+    assert s == tf._momentum_score(_RSI, _MACD, _EMA)   # final DEĞİŞMEDİ
+    assert "chop_mult_shadow" in diag                   # ama gözlem kaydedildi
+    assert "chop_mult" not in diag                      # uygulanmadı
+
+
+def test_chop_guard_dampens_in_chop():
+    # Açık + ADX floor altı → skor 50'ye doğru kısılır (ama aynı tarafta kalır).
+    pure = tf._momentum_score(_RSI, _MACD, _EMA)        # ≈65 (bullish)
+    s, diag = tf._direction_score(_RSI, _MACD, _EMA, adx_v=5.0, cfg=_CHOP_ON)
+    assert 50.0 < s < pure          # sönümlendi ama bullish kaldı (yön çevrilmedi)
+    assert "chop_mult" in diag
+
+
+def test_chop_guard_inert_in_trend():
+    # Açık ama ADX floor üstü (gerçek trend) → dokunmaz.
+    pure = tf._momentum_score(_RSI, _MACD, _EMA)
+    s, diag = tf._direction_score(_RSI, _MACD, _EMA, adx_v=30.0, cfg=_CHOP_ON)
+    assert s == pure and "chop_mult" not in diag
+
+
+def test_chop_guard_never_flips_side():
+    # Aşırı chop (adx≈0) bile bullish'i bearish yapmaz (yalnız sönümler).
+    s, _ = tf._direction_score(_RSI, _MACD, _EMA, adx_v=0.0, cfg=_CHOP_ON)
+    assert s > 50.0
+    # Bearish çekirdek de aynı: aşağıda kalır, yukarı çevrilmez.
+    sb, _ = tf._direction_score(30.0, 0.0, "bearish", adx_v=0.0, cfg=_CHOP_ON)
+    assert sb < 50.0

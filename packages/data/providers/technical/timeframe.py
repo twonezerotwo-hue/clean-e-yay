@@ -26,9 +26,9 @@ from packages.data.types import (
     IndicatorQualityReport,
     OHLCVBar,
     TechnicalBias,
+    TechnicalChartPatterns,
     TechnicalConfluenceZone,
     TechnicalDataQuality,
-    TechnicalChartPatterns,
     TechnicalKeyLevels,
     TechnicalReversalSignals,
     TechnicalScoreOverview,
@@ -78,6 +78,12 @@ class TechnicalConfig:
     )
     tilt_confirm_gain: float = 0.15   # max conviction *1.15 when evidence agrees
     tilt_penalty_gain: float = 0.40   # max conviction *0.60 when evidence conflicts
+    # Faz 2 — chop guard: ADX düşükse (gerçek trend yok) momentum YÖNÜNÜ nötre çek.
+    # enabled=False → HİÇ etki yok (mevcut skor birebir). Trendde (adx≥floor) etkisiz;
+    # yalnız chop'ta (adx<floor) skor mesafesini 50'ye doğru kısar — asla yön çevirmez.
+    chop_guard_enabled: bool = False
+    chop_adx_floor: float = 20.0      # adx bunun altı = chop sayılır
+    chop_min_mult: float = 0.5        # tam chop'ta (adx→0) momentum mesafesi ×bu
 
 
 def load_config() -> TechnicalConfig:
@@ -87,6 +93,7 @@ def load_config() -> TechnicalConfig:
     piv = t.get("swing_pivot", {}) or {}
     warm = t.get("warmup_min_bars", {}) or {}
     tlt = t.get("direction_tilt", {}) or {}
+    tq = t.get("trend_quality", {}) or {}
     return TechnicalConfig(
         bull_cut=float(cuts.get("bull", 60)),
         bear_cut=float(cuts.get("bear", 40)),
@@ -111,6 +118,9 @@ def load_config() -> TechnicalConfig:
         },
         tilt_confirm_gain=float(tlt.get("confirm_gain", 0.15)),
         tilt_penalty_gain=float(tlt.get("penalty_gain", 0.40)),
+        chop_guard_enabled=bool(tq.get("enabled", False)),
+        chop_adx_floor=float(tq.get("adx_chop_floor", 20.0)),
+        chop_min_mult=float(tq.get("chop_min_mult", 0.5)),
     )
 
 
@@ -232,6 +242,7 @@ def _direction_score(
     chart: TechnicalChartPatterns | None = None,
     vwap_v: float | None = None,
     current: float | None = None,
+    adx_v: float | None = None,
     cfg: TechnicalConfig | None = None,
 ) -> tuple[float | None, dict[str, float]]:
     """Top-down directional read (0–100, 50 = neutral). None = insufficient momentum.
@@ -272,6 +283,21 @@ def _direction_score(
     diag["gate_mult"] = round(mult, 3)
 
     final = 50.0 + (core - 50.0) * mult
+
+    # Faz 2 — chop guard. Çarpan HER ZAMAN hesaplanır (shadow gözlem) ama yalnız
+    # enabled iken final'a uygulanır. Böylece flag KAPALIYKEN bile "chop'ta skor ne
+    # kadar sönerdi" diag'a yazılır → öğrenme katmanı yön-motorunu İZLEMEDİĞİ için
+    # tek manuel tespit sinyali budur. Trendde (adx≥floor) çarpan 1.0 (dokunmaz);
+    # yön ASLA çevrilmez (yalnız sönümler).
+    if adx_v is not None and cfg.chop_adx_floor > 0:
+        ratio = _clamp(adx_v / cfg.chop_adx_floor, 0.0, 1.0)
+        chop_mult = cfg.chop_min_mult + (1.0 - cfg.chop_min_mult) * ratio
+        if chop_mult < 1.0:
+            diag["chop_mult_shadow"] = round(chop_mult, 3)  # her zaman (gözlem)
+            if cfg.chop_guard_enabled:
+                diag["chop_mult"] = round(chop_mult, 3)      # uygulandı
+                final = 50.0 + (final - 50.0) * chop_mult
+
     return _clamp(final, 0.0, 100.0), diag
 
 
@@ -517,7 +543,7 @@ def build_timeframe_result(
     direction, dir_diag = _direction_score(
         rsi_v, macd_atr, ema_stack,
         fib=fib, zones=zones, reversal=reversal_signals, chart=chart_patterns,
-        vwap_v=vwap_v, current=current, cfg=cfg,
+        vwap_v=vwap_v, current=current, adx_v=adx_v, cfg=cfg,
     )
     strength = _strength_score(adx_v, direction)
     bias = _bias(direction, cfg)
@@ -528,6 +554,10 @@ def build_timeframe_result(
         gm = dir_diag.get("gate_mult")
         if gm is not None and abs(gm - 1.0) >= 0.01:
             evidence.append(f"location_gate=×{gm}")
+        cm = dir_diag.get("chop_mult_shadow")
+        if cm is not None:
+            applied = "chop_guard" if cfg.chop_guard_enabled else "chop_guard_shadow"
+            evidence.append(f"{applied}=×{cm}")
     else:
         evidence.append("direction_unavailable_insufficient_data")
     if trend.label != "UNKNOWN":
@@ -556,6 +586,7 @@ def build_timeframe_result(
             direction_score=round(direction, 2) if direction is not None else None,
             strength_score=round(strength, 2) if strength is not None else None,
             location_gate_multiplier=dir_diag.get("gate_mult"),
+            chop_guard_multiplier=dir_diag.get("chop_mult_shadow"),
         ),
         key_levels=key_levels,
         confirmation_signals=_confirmations(rsi_v, macd_t, ema_stack, current, vwap_v),
