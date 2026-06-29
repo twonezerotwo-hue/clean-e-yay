@@ -139,3 +139,45 @@ def test_chop_guard_never_flips_side():
     # Bearish çekirdek de aynı: aşağıda kalır, yukarı çevrilmez.
     sb, _ = tf._direction_score(30.0, 0.0, "bearish", adx_v=0.0, cfg=_CHOP_ON)
     assert sb < 50.0
+
+
+# ── Faz 3a: exhaustion guard (climax kovalama) ────────────────────────────────
+
+_EXH_ON = tf.TechnicalConfig(exhaustion_guard_enabled=True)   # high 70, low 30, min_mult 0.5
+
+
+def test_exhaustion_dampens_chasing_top():
+    # Bullish momentum + upside tükenmesi (exh 90) → tepeyi kovalıyor → sönümle.
+    pure = tf._momentum_score(_RSI, _MACD, _EMA)              # ≈76 (bullish)
+    s, diag = tf._direction_score(_RSI, _MACD, _EMA, exhaustion_score=90.0, cfg=_EXH_ON)
+    assert 50.0 < s < pure
+    assert "exh_mult" in diag
+
+
+def test_exhaustion_dampens_chasing_bottom():
+    # Bearish momentum + downside tükenmesi (exh 10) → dibi kovalıyor → sönümle.
+    pure, _ = tf._direction_score(30.0, 0.0, "bearish")       # <50
+    s, diag = tf._direction_score(30.0, 0.0, "bearish", exhaustion_score=10.0, cfg=_EXH_ON)
+    assert pure < s < 50.0
+    assert "exh_mult" in diag
+
+
+def test_exhaustion_no_dampen_when_riding_reversal():
+    # Bullish momentum + DOWNSIDE tükenmesi (exh 10, yukarı reversal) → momentum
+    # reversal'ı sürüyor, kovalamıyor → DOKUNMAZ.
+    pure = tf._momentum_score(_RSI, _MACD, _EMA)
+    s, diag = tf._direction_score(_RSI, _MACD, _EMA, exhaustion_score=10.0, cfg=_EXH_ON)
+    assert s == pure and "exh_mult_shadow" not in diag
+
+
+def test_exhaustion_shadow_when_off():
+    # OFF cfg + tepeyi kovalama → gözlem yazılır ama final DEĞİŞMEZ.
+    s, diag = tf._direction_score(_RSI, _MACD, _EMA, exhaustion_score=90.0, cfg=_CHOP_OFF)
+    assert s == tf._momentum_score(_RSI, _MACD, _EMA)
+    assert "exh_mult_shadow" in diag and "exh_mult" not in diag
+
+
+def test_exhaustion_never_flips_side():
+    # Aşırı tükenme (exh 100) bile bullish'i bearish'e çevirmez.
+    s, _ = tf._direction_score(_RSI, _MACD, _EMA, exhaustion_score=100.0, cfg=_EXH_ON)
+    assert s > 50.0
