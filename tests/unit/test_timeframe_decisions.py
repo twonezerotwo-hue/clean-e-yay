@@ -123,7 +123,10 @@ def _force_bullish(snap, symbol: str = "BTCUSD") -> None:
     snap.technicals[symbol] = snap.technicals_by_tf[symbol]["1d"]
 
 
-def test_matrix_produces_all_timeframes_and_1w_never_opens(paper_env) -> None:
+def test_matrix_produces_all_timeframes_and_1w_never_opens(paper_env, monkeypatch) -> None:
+    # Konsantrasyon-dışı (1w/TF enum) test → intra_batch guard'ı kapat (ayrı testlerde).
+    from packages.decision import engine as de
+    monkeypatch.setattr(de, "_intra_batch_guard_enabled", lambda: False)
     snap = build_snapshot(["BTCUSD"])
     _force_bullish(snap)
     _regime, _risk, decisions = decide_matrix(["BTCUSD"], snap, _risk_in())
@@ -136,7 +139,10 @@ def test_matrix_produces_all_timeframes_and_1w_never_opens(paper_env) -> None:
     assert w.actionable is False
 
 
-def test_matrix_timeframe_risk_multiplier_only_reduces(paper_env) -> None:
+def test_matrix_timeframe_risk_multiplier_only_reduces(paper_env, monkeypatch) -> None:
+    # TF risk çarpanı testi → intra_batch guard kapalı (konsantrasyon ayrı testlerde).
+    from packages.decision import engine as de
+    monkeypatch.setattr(de, "_intra_batch_guard_enabled", lambda: False)
     snap = build_snapshot(["BTCUSD"])
     _force_bullish(snap)
     _regime, _risk, decisions = decide_matrix(["BTCUSD"], snap, _risk_in())
@@ -157,6 +163,8 @@ def test_matrix_1w_bearish_bias_scales_down_lower_tf_long(
     # diğer TF'ler güçlü bullish.
     from packages.consensus.engine import ConsensusResult
     from packages.decision import engine as de
+    # 1w-bias testi → intra_batch guard kapalı (konsantrasyon ayrı testlerde).
+    monkeypatch.setattr(de, "_intra_batch_guard_enabled", lambda: False)
 
     def fake_build(symbol, snap, regime, timeframe="1d"):
         bearish = timeframe == "1w"
