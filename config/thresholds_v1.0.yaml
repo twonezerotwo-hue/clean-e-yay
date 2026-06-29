@@ -37,7 +37,11 @@ data_policy:
 # Yalnızca KISITLAR — fitted'i asla artırmaz. Her açılışta calibration_audit
 # ledger'ı sıçramayı + faktörleri (score/dominant/regime/tier/size) kaydeder.
 calibration_guardrail:
-  enabled: false
+  # 2026-06-29: AÇILDI. Zayıf ham sinyalin (örn. raw 0.13) Platt ile STRONG
+  # kademe eşiğine (0.45) şişip büyük pozisyon açmasını engeller; fitted - raw
+  # bu deltayı aşarsa fitted = raw + max_inflation_delta'ya kıstırılır.
+  enabled: true
+  max_inflation_delta: 0.25
   max_inflation_delta: 0.25
 
 risk_gates:
