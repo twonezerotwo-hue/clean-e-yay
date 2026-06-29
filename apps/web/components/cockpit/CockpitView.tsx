@@ -114,10 +114,10 @@ const LAYERS: LayerMeta[] = [
   {
     index: 3,
     code: "03",
-    title: "Energy",
-    shortTitle: "Energy",
-    subtitle: "tum ogrenmeler: governor / kalibrasyon / hatalar / kacan firsat / agirlik",
-    depth: "ogrenme odasi",
+    title: "Conscious",
+    shortTitle: "Conscious",
+    subtitle: "oz-yonetim · onay · egitim · sonuc defteri",
+    depth: "bilinc / ogrenme odasi",
   },
 ];
 
@@ -218,12 +218,18 @@ function Layer2DetailGroup({
   title,
   detail,
   id,
+  badge = "read-only",
+  badgeTone = "border-accent-cyan/20 bg-accent-cyan/8 text-accent-cyan/72",
   children,
 }: {
   index: string;
   title: string;
   detail: string;
   id?: string;
+  /** Sağ üst rozet metni. Varsayılan "read-only"; owner kontrolü olan
+   *  gruplarda "owner kontrolü" / "owner onayı" gibi etiketle override edilir. */
+  badge?: string;
+  badgeTone?: string;
   children: ReactNode;
 }) {
   return (
@@ -240,8 +246,8 @@ function Layer2DetailGroup({
           </h3>
           <p className="mt-2 max-w-4xl text-sm leading-6 text-white/52">{detail}</p>
         </div>
-        <span className="shrink-0 rounded-full border border-accent-cyan/20 bg-accent-cyan/8 px-3 py-1 text-[10px] uppercase tracking-widest text-accent-cyan/72">
-          read-only
+        <span className={`shrink-0 rounded-full border px-3 py-1 text-[10px] uppercase tracking-widest ${badgeTone}`}>
+          {badge}
         </span>
       </header>
       <div className="relative z-10">{children}</div>
@@ -1006,12 +1012,12 @@ export function CockpitView() {
       );
   } else if (activeLayer === 1) {
     const layer1Items: Layer1StackItem[] = [
-      { key: "execution_readiness", node: <ExecutionReadinessPanel /> },
       { key: "holographic_signals", node: <HolographicSignalDeck brief={brief} /> },
-      { key: "capital_rotation", node: <CapitalRotationPanel /> },
       { key: "news", node: <NewsPanel defaultView="radar" /> },
+      { key: "execution_readiness", node: <ExecutionReadinessPanel /> },
       { key: "event_calendar", node: <EventCalendarPanel /> },
       { key: "scenario", node: <ScenarioPanel /> },
+      { key: "capital_rotation", node: <CapitalRotationPanel /> },
       { key: "order_ticket", node: <OrderTicketPanel /> },
     ];
 
@@ -1127,15 +1133,17 @@ export function CockpitView() {
         <div className="space-y-6 pb-12">
           <LayerHeader
             meta={LAYERS[3]}
-            detail="Conscious: agent'in tum ogrenmeleri tek katmanda. Oz-yonetim (governor), kalibrasyon, hatalar, kacan firsatlar ve agirlik/TF ogrenmesi burada okunur. Hicbiri otomatik uygulanmaz — owner onayi gerekir."
+            detail="Conscious — agent'in bilinci: kendini yonetir, ogrenir ve owner'a oneri sunar. Sirayla KONTROL ET (oz-yonetim), EGIT (agirlik / kalibrasyon / hedef) ve IZLE (sonuc defteri, hatalar). Hicbir degisiklik otomatik uygulanmaz — owner onayi sarttir."
           >
             <DataQualityBadge dqs={dqs} generatedAt={data?.generated_at} />
           </LayerHeader>
 
           <Layer2DetailGroup
             index="01"
-            title="Governor / Oz-Yonetim"
-            detail="Agent gozlemler, ogrenir, oneri uretir ve owner onayi bekler. Islem acmaz, ayar degistirmez (observe-only)."
+            title="Oz-Yonetim & Kontrol"
+            detail="Komuta merkezi: agent'in kendi kendine ne yaptigini gor, ana profil/strateji anahtarlarini ac-kapa, bekleyen oneri ve gorevleri onayla/reddet. Agent islem acmaz."
+            badge="owner kontrolu"
+            badgeTone="border-emerald-400/30 bg-emerald-400/10 text-emerald-200"
           >
             <div className="grid gap-3 lg:grid-cols-2">
               <div className="lg:col-span-2"><GovernorPanel /></div>
@@ -1147,34 +1155,10 @@ export function CockpitView() {
 
           <Layer2DetailGroup
             index="02"
-            title="Ogrenme Ozeti & Kalibrasyon"
-            detail="Kapali paper trade outcome'larindan ogrenme ozeti ve confidence kalibrasyonu (Platt)."
-          >
-            <div className="grid gap-3 lg:grid-cols-2">
-              <div className="lg:col-span-2"><TradingPanel /></div>
-              <LearningPanel />
-              <CalibrationPanel />
-              <div className="lg:col-span-2"><OutcomeLedgerPanel /></div>
-              <LearningWorkerPanel />
-            </div>
-          </Layer2DetailGroup>
-
-          <Layer2DetailGroup
-            index="03"
-            title="Hatalar & Kacan Firsatlar"
-            detail="Tekrar eden hata parmak izleri (mistake memory) ve acilmayan valid setup'larin TTL sonucu (missed opportunity)."
-          >
-            <div className="grid gap-3 lg:grid-cols-2">
-              <MistakeMemoryPanel />
-              <HistoricalEdgePanel />
-              <MissedOpportunitiesPanel />
-            </div>
-          </Layer2DetailGroup>
-
-          <Layer2DetailGroup
-            index="04"
-            title="Agirlik Ogrenmesi"
-            detail="Auto-weight rebalance onerisi + gecmis + per-TF tf_weights kalibrasyonu. Aktif weights yalnizca owner onayiyla degisir."
+            title="Egitim · Agirlik Ogrenmesi"
+            detail="Agent agirlik dengelemesi onerir; gecmisi ve per-TF tf_weights kalibrasyonunu gosterir. Aktif agirliklar yalnizca owner onayiyla degisir."
+            badge="owner onayi"
+            badgeTone="border-amber-400/30 bg-amber-400/10 text-amber-200"
           >
             <div className="grid gap-3 lg:grid-cols-2">
               <WeightProposalPanel />
@@ -1184,19 +1168,42 @@ export function CockpitView() {
           </Layer2DetailGroup>
 
           <Layer2DetailGroup
-            index="05"
-            title="Conflict Gate Ogrenmesi"
-            detail="Conflict resolver profil modlari ve gecmis route validasyonu burada okunur."
+            index="03"
+            title="Egitim · Kalibrasyon & Hedef"
+            detail="Confidence kalibrasyonu (Platt, manuel retrain), timeframe bazli SL/TP geometri ogrenmesi ve conflict gate route ogrenmesi. Hibrit: bant ici auto, bant disi owner onayi."
+            badge="owner onayi"
+            badgeTone="border-amber-400/30 bg-amber-400/10 text-amber-200"
           >
-            <ConflictGateLearningPanel />
+            <div className="grid gap-3 lg:grid-cols-2">
+              <CalibrationPanel />
+              <TfTargetsPanel />
+              <div className="lg:col-span-2"><ConflictGateLearningPanel /></div>
+            </div>
           </Layer2DetailGroup>
 
           <Layer2DetailGroup
-            index="06"
-            title="TF SL/TP Ogrenmesi"
-            detail="Timeframe bazli SL/TP geometri ogrenmesi (hibrit auto / owner-onay)."
+            index="04"
+            title="Izle · Performans & Sonuc Defteri"
+            detail="Paper hesap durumu, kapanan outcome defteri, ogrenme ozeti, learning worker durumu ve historical-edge sorgusu. Salt-okunur izleme yuzeyi."
           >
-            <TfTargetsPanel />
+            <div className="grid gap-3 lg:grid-cols-2">
+              <div className="lg:col-span-2"><TradingPanel /></div>
+              <LearningPanel />
+              <LearningWorkerPanel />
+              <div className="lg:col-span-2"><OutcomeLedgerPanel /></div>
+              <div className="lg:col-span-2"><HistoricalEdgePanel /></div>
+            </div>
+          </Layer2DetailGroup>
+
+          <Layer2DetailGroup
+            index="05"
+            title="Ogren · Hatalar & Kacan Firsatlar"
+            detail="Tekrar eden hata parmak izleri (mistake memory) ve acilmayan valid setup'larin TTL sonucu (kacan firsat). Agent'in nereden ders cikardigi."
+          >
+            <div className="grid gap-3 lg:grid-cols-2">
+              <MistakeMemoryPanel />
+              <MissedOpportunitiesPanel />
+            </div>
           </Layer2DetailGroup>
         </div>
       </div>

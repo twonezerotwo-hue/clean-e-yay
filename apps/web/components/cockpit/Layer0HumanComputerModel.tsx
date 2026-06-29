@@ -466,18 +466,49 @@ export function Layer0HumanComputerModel({
   mode,
   dataQuality,
   onOpenLayer1,
+  pttEnabled = false,
+  pttActive = false,
+  onPressStart,
+  onPressEnd,
 }: {
   mode: ModelMode;
   dataQuality?: Layer0DataQualityPulse | null;
   onOpenLayer1?: () => void;
+  // Bas-konus: holograma basili tutuldukca dinle, birakinca gonder.
+  pttEnabled?: boolean;
+  pttActive?: boolean;
+  onPressStart?: () => void;
+  onPressEnd?: () => void;
 }) {
   const status = dataQuality?.status ?? "DEGRADED";
+  const handlePressStart = () => {
+    if (pttEnabled) onPressStart?.();
+  };
+  const handlePressEnd = () => {
+    if (pttEnabled) onPressEnd?.();
+  };
   return (
     <div
-      className="layer0-human-model"
+      className={`layer0-human-model${pttEnabled ? " layer0-human-model--ptt" : ""}${
+        pttActive ? " layer0-human-model--listening" : ""
+      }`}
       onDoubleClick={onOpenLayer1}
-      title="Katman 1'e geç"
+      onPointerDown={handlePressStart}
+      onPointerUp={handlePressEnd}
+      onPointerLeave={handlePressEnd}
+      onPointerCancel={handlePressEnd}
+      onContextMenu={(event) => {
+        if (pttEnabled) event.preventDefault();
+      }}
+      title={pttEnabled ? "Bas-konus: basili tut konus, birak; cift tikla Katman 1" : "Katman 1'e geç"}
+      style={pttEnabled ? { touchAction: "none", cursor: "pointer", userSelect: "none" } : undefined}
     >
+      {pttEnabled ? (
+        <div className={`layer0-ptt-hint${pttActive ? " layer0-ptt-hint--on" : ""}`} aria-hidden>
+          <span className="layer0-ptt-dot" />
+          {pttActive ? "Dinliyorum… birak" : "Bas-konus: basili tut"}
+        </div>
+      ) : null}
       <Canvas
         camera={{ position: [0, 0.32, 5.15], fov: 40 }}
         dpr={[1, 1.75]}

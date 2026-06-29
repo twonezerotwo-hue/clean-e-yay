@@ -113,6 +113,7 @@ function pickDeckRows(
   candidates: AgentBriefCandidate[],
   prices: LivePrice[] | undefined,
   matrixCells: TimeframeDecision[] | undefined,
+  customSymbols?: Set<string>,
 ): DeckRow[] {
   const priceBy = new Map<string, number>();
   for (const p of prices ?? []) {
@@ -176,24 +177,30 @@ function pickDeckRows(
     ...groups.keys(),
     ...matrixGroups.keys(),
   ]);
-  const remaining = [...remainingSymbols].flatMap((symbol) => {
+  const remaining: DeckRow[] = [...remainingSymbols].flatMap((symbol) => {
     const candidateRows = groups.get(symbol) ?? [];
     const matrixRows = matrixGroups.get(symbol) ?? [];
     const all = matrixRows.length ? sortByTf(matrixRows) : sortByTf(candidateRows);
     if (!all.length && !candidateRows.length) return [];
-    const best = candidateRows.length ? bestByScore(candidateRows) : bestByScore(all);
     return {
       symbol,
       icon: "◇",
       name: symbol,
       unit: "usd",
-      best,
+      best: candidateRows.length ? bestByScore(candidateRows) : bestByScore(all),
       perTf: all,
       price: priceBy.get(symbol) ?? null,
     };
   });
-  remaining.sort((a, b) => (b.best.score ?? 0) - (a.best.score ?? 0));
-  return [...rows, ...remaining].slice(0, 6);
+  // Custom (kullanıcı-eklenen) assetler skoru düşük olsa da HER ZAMAN gösterilir;
+  // geri kalan keşfedilen semboller skor sırasıyla kalan kapasiteyi doldurur.
+  const byScoreDesc = (a: DeckRow, b: DeckRow) => (b.best.score ?? 0) - (a.best.score ?? 0);
+  const customRows = remaining.filter((r) => customSymbols?.has(r.symbol)).sort(byScoreDesc);
+  const otherRows = remaining.filter((r) => !customSymbols?.has(r.symbol)).sort(byScoreDesc);
+  // Taban kapasite 6; PRIMARY + custom toplamı daha büyükse hepsini kapsar —
+  // böylece kullanıcının eklediği hiçbir asset kart destesinden kırpılmaz.
+  const cap = Math.max(6, rows.length + customRows.length);
+  return [...rows, ...customRows, ...otherRows].slice(0, cap);
 }
 
 function pickSupports(assets: AssetSignal[] | undefined, prices: LivePrice[] | undefined): {
@@ -1036,8 +1043,8 @@ export function HolographicSignalDeck({ brief }: { brief: AgentBrief }) {
   };
 
   const rows = useMemo(
-    () => pickDeckRows(brief.top_candidates ?? [], snap?.prices, decisionMatrix?.cells),
-    [brief.top_candidates, decisionMatrix?.cells, snap?.prices],
+    () => pickDeckRows(brief.top_candidates ?? [], snap?.prices, decisionMatrix?.cells, customSymbols),
+    [brief.top_candidates, decisionMatrix?.cells, snap?.prices, customSymbols],
   );
   const supports = useMemo(
     () => pickSupports(regime?.assets, snap?.prices),
