@@ -14,7 +14,7 @@ import threading
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
-from packages.data.registry.loader import REPO_ROOT
+from packages.data.registry.loader import REPO_ROOT, load_thresholds
 from packages.learning.calibration import apply_platt
 
 MIN_SAMPLES = 10
@@ -86,3 +86,41 @@ def predict_calibrated(
     if math.isnan(val) or math.isinf(val):
         return round(raw, 4), "insufficient"
     return round(min(max(val, 0.0), 1.0), 4), "fitted"
+
+
+def _guardrail_cfg() -> dict:
+    try:
+        return load_thresholds().get("calibration_guardrail", {}) or {}
+    except (OSError, KeyError, ValueError, TypeError):
+        return {}
+
+
+def inflation_delta(raw_p: float, fitted_p: float) -> float:
+    """Kalibrasyonun ham olasılığı ne kadar şişirdiği (negatifse: kıstı)."""
+    return round(float(fitted_p) - float(raw_p), 4)
+
+
+def apply_inflation_guardrail(raw_p: float, fitted_p: float, source: str) -> tuple[float, str]:
+    """Kalibrasyonun ZAYIF ham sinyali aşırı şişirmesini sınırlar.
+
+    OWNER-FLAG, varsayılan KAPALI. `calibration_guardrail.enabled=false` iken
+    PASSTHROUGH — mevcut karar/sizing davranışı birebir korunur (bozulma yok).
+    Açıkken: `fitted - raw > max_inflation_delta` ise fitted = raw + max_delta'ya
+    kıstırılır ve kaynak "fitted_capped" olarak damgalanır (ledger'da görünür).
+    Yalnızca KISITLAR — fitted'i asla artırmaz, RiskGate/DQS'i bypass etmez.
+    """
+    if source != "fitted":
+        return fitted_p, source
+    cfg = _guardrail_cfg()
+    if not cfg.get("enabled", False):
+        return fitted_p, source
+    try:
+        max_delta = float(cfg.get("max_inflation_delta", 0.25))
+    except (TypeError, ValueError):
+        max_delta = 0.25
+    if max_delta < 0:
+        return fitted_p, source
+    if float(fitted_p) - float(raw_p) > max_delta:
+        capped = round(min(1.0, max(0.0, float(raw_p) + max_delta)), 4)
+        return capped, "fitted_capped"
+    return fitted_p, source

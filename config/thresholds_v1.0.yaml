@@ -29,6 +29,17 @@ dqs:
 data_policy:
   block_stale_ohlcv_for_trade: false
 
+# Calibration inflation guardrail — Platt kalibrasyonunun ZAYIF ham sinyali
+# aşırı güvene şişirmesini sınırlar (örn. raw 0.11 → fitted 0.55 → STRONG kademe →
+# büyük pozisyon). enabled=false iken HİÇ çalışmaz (passthrough; mevcut davranış
+# birebir). enabled=true iken: fitted - raw > max_inflation_delta ise fitted =
+# raw + max_inflation_delta'ya kıstırılır, kaynak "fitted_capped" damgalanır.
+# Yalnızca KISITLAR — fitted'i asla artırmaz. Her açılışta calibration_audit
+# ledger'ı sıçramayı + faktörleri (score/dominant/regime/tier/size) kaydeder.
+calibration_guardrail:
+  enabled: false
+  max_inflation_delta: 0.25
+
 risk_gates:
   max_daily_loss_pct: 0.02      # equity'nin %2'si
   max_drawdown_pct: 0.08        # peak'ten %8

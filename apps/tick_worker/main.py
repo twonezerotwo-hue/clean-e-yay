@@ -35,7 +35,12 @@ from packages.decision import (
     shadow_activation,
 )
 from packages.decision.engine import decide_matrix, matrix_view
-from packages.learning import missed_opportunity, tf_calibration, tf_weight_trainer
+from packages.learning import (
+    calibration_audit,
+    missed_opportunity,
+    tf_calibration,
+    tf_weight_trainer,
+)
 from packages.ops import heartbeat
 from packages.paper import manual_queue
 from packages.paper import state as paper_state
@@ -312,6 +317,11 @@ async def run_once() -> None:
                     "open: %s %s %s @ %.4f size=%.0f valid_until=%s",
                     pos.symbol, pos.timeframe, pos.side, pos.entry_price, pos.size_usd,
                     pos.valid_until,
+                )
+                # Observe-only: kalibrasyon sıçramasını + faktörleri ledger'a yaz
+                # (karar/sizing değişmez; best-effort, tick'i düşürmez).
+                calibration_audit.record_open(
+                    d, pos, regime=getattr(_regime, "label", None)
                 )
 
         paper_state.save(ps)

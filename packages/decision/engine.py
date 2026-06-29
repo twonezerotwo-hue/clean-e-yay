@@ -35,6 +35,7 @@ from packages.data.registry.loader import load_thresholds
 from packages.data.types import TIMEFRAMES
 from packages.learning import mistake_memory
 from packages.learning.calibration_store import (
+    apply_inflation_guardrail,
     predict_calibrated,
     raw_confidence_from_score,
 )
@@ -151,6 +152,9 @@ def decide_for_symbol(
 
     raw_conf = raw_confidence_from_score(cons.score)
     cal_conf, conf_source = predict_calibrated(raw_conf)
+    # Owner-flag (default KAPALI): zayıf ham sinyalin aşırı kalibrasyon şişmesini
+    # kıs. Kapalıyken passthrough — mevcut davranış birebir korunur.
+    cal_conf, conf_source = apply_inflation_guardrail(raw_conf, cal_conf, conf_source)
 
     # Candidate = consensus'un ham niyeti (gate'lerden önce) — dashboard
     # candidate vs final ayrımını bununla gösterir.
