@@ -1185,6 +1185,16 @@ export function Layer0ReporterAgent({
     }
   };
 
+  // Çift dokunma ile aç/kapa: dinliyorsa durdur (toplanan metni gönderir),
+  // değilse başlat. Holograma basili-tut KALDIRILDI (mobilde bağlam menüsü).
+  const toggleListen = () => {
+    if (listeningRef.current) {
+      stopPushToTalk();
+    } else {
+      startPushToTalk();
+    }
+  };
+
 
   // Sessiz'e gecince: suren TTS'i ve aktif dinlemeyi durdur (yazi-only mod).
   const enterSilent = () => {
@@ -1287,11 +1297,9 @@ export function Layer0ReporterAgent({
           <Layer0HumanComputerModel
             mode={modelMode}
             dataQuality={dataQualityPulse}
-            onOpenLayer1={() => onNavigate(1)}
             pttEnabled={!silent && micReady}
             pttActive={listening}
-            onPressStart={startPushToTalk}
-            onPressEnd={stopPushToTalk}
+            onToggleListen={toggleListen}
           />
           <div className="reporter-model-hud">
             <div className="reporter-model-spectrum" aria-hidden>

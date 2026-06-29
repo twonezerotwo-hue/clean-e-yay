@@ -688,6 +688,78 @@ def _tickets_answer(ctx: dict | None = None) -> tuple[str, list[str]]:
     return "Aktif Trade Ticket'lar: " + " | ".join(parts) + ".", ev
 
 
+def _book_audit_answer() -> tuple[str, list[str]]:
+    """Açık kitap yapısal denetimi (book_audit) — canlı kitaptaki mantık hatalarını
+    (zıt yön, aşırı yoğunlaşma, çok-TF kopya, korelasyon kümesi, tek-yön) patron
+    diline çevirir. mistake_memory yalnız kapalı işlemleri öğrenir; bu canlı kitabı
+    okur."""
+    from packages.learning import book_audit
+
+    vm = book_audit.summary_viewmodel()
+    lessons = vm.get("lessons") or []
+    if vm.get("clean") or not lessons:
+        return (
+            f"Açık kitabın yapısal olarak temiz — {vm.get('open_positions', 0)} pozisyonda "
+            "belirgin mantık hatası (zıt yön, aşırı yoğunlaşma, çok-TF kopya, tek-yön) yok.",
+            ["book_audit:clean"],
+        )
+    counts = vm.get("counts") or {}
+    parts = [
+        f"Açık kitap denetimi: {counts.get('CRITICAL', 0)} kritik, {counts.get('WARNING', 0)} uyarı "
+        f"({vm.get('open_positions', 0)} pozisyon, kitap {_money(vm.get('book_total_usd'))})."
+    ]
+    ev = ["book_audit:flagged"]
+    for lesson in lessons[:5]:
+        parts.append(f"• {lesson['title']}: {lesson['detail']} → {lesson['suggested_action']}")
+        ev.append(f"book_audit:{lesson['code']}")
+    parts.append(
+        "Not: bu gözlem + aktif self-conflict guard; zıt-yön açılışı engellenir, "
+        "diğer bulgular uyarıdır — karar zincirine ek otomatik işlem üretmez."
+    )
+    return " ".join(parts), ev
+
+
+def _learning_answer() -> tuple[str, list[str]]:
+    """Öğrenme özeti — tekrar eden zayıf kalıplar (mistake_memory) + açık kitap
+    denetimi başlığı. 'ne öğrendin / kalibrasyon / tekrar eden hatam var mı' gibi."""
+    from packages.learning import book_audit, mistake_memory
+
+    mems = mistake_memory.summary()
+    flagged = []
+    for m in mems:
+        verdict = mistake_memory._verdict_for(m, m.fingerprint)
+        if verdict.action in ("AVOID", "WARNING"):
+            flagged.append((m, verdict))
+    parts: list[str] = []
+    ev = ["learning:summary"]
+    if flagged:
+        top = flagged[:3]
+        parts.append(
+            "Tekrar eden zayıf kalıplar (kapanan işlemlerden): "
+            + "; ".join(
+                f"{m.fingerprint} (win %{m.win_rate * 100:.0f}, {v.action.lower()})" for m, v in top
+            )
+            + "."
+        )
+        ev += [f"mistake:{m.fingerprint}" for m, _ in top]
+    else:
+        parts.append(
+            "Kapanan işlemlerde tekrar eden belirgin hata kalıbı yok "
+            "(yeterli veri yok ya da win-rate kabul edilebilir)."
+        )
+    vm = book_audit.summary_viewmodel()
+    counts = vm.get("counts") or {}
+    if not vm.get("clean"):
+        parts.append(
+            f"Açık kitapta {counts.get('CRITICAL', 0)} kritik / {counts.get('WARNING', 0)} uyarı "
+            "yapısal bulgu var — ayrıntı için 'kitap denetimi' diyebilirsin."
+        )
+        ev.append("book_audit:has_findings")
+    else:
+        parts.append("Açık kitap yapısal olarak temiz.")
+    return " ".join(parts), ev
+
+
 def _notifications_answer() -> tuple[str, list[str]]:
     items = list_notifications(limit=8, unread_only=False)
     if not items:
@@ -965,6 +1037,23 @@ def _grounded_answer(message: str, ctx: dict) -> tuple[str, list[str]]:
     memory = system_memory.answer(message)
     if memory is not None:
         return memory
+    # Açık kitap yapısal denetimi (book_audit) — canlı kitaptaki mantık hataları.
+    if any(
+        k in folded
+        for k in ("kitap denet", "yapısal", "yapisal", "kendine karşı", "kendine karsi",
+                  "self-conflict", "self conflict", "zıt yön", "zit yon", "yoğunlaş",
+                  "yogunlas", "kitabımda", "kitabimda", "mantık hata", "mantik hata",
+                  "aşırı pozisyon", "asiri pozisyon", "çok tf", "cok tf", "tek yön", "tek yon")
+    ):
+        return _book_audit_answer()
+    # Öğrenme / kalibrasyon / tekrar eden hata özeti.
+    if any(
+        k in folded
+        for k in ("ne öğrendin", "ne ogrendin", "öğrenme", "ogrenme", "tekrar eden hata",
+                  "mistake", "hata hafıza", "hata hafiza", "kalibrasyon", "calibration",
+                  "neyi öğrendin", "neyi ogrendin")
+    ):
+        return _learning_answer()
     # Fırsat / en yakın aday — sembolden bağımsız "işleme yakın olan ne?" sorusu.
     if any(
         k in folded

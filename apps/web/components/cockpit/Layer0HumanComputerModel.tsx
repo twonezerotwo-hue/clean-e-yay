@@ -465,48 +465,54 @@ function clampMetric(value: number) {
 export function Layer0HumanComputerModel({
   mode,
   dataQuality,
-  onOpenLayer1,
   pttEnabled = false,
   pttActive = false,
-  onPressStart,
-  onPressEnd,
+  onToggleListen,
 }: {
   mode: ModelMode;
   dataQuality?: Layer0DataQualityPulse | null;
-  onOpenLayer1?: () => void;
-  // Bas-konus: holograma basili tutuldukca dinle, birakinca gonder.
+  // Bas-konus artık ÇİFT TIKLAMA/dokunma ile aç-kapa (basili-tut KALDIRILDI;
+  // mobilde basili-tut "kopyala/yapıştır" bağlam menüsü açıyordu). Çift dokun
+  // başlat, tekrar çift dokun durdur. Çift-tıkla-Katman-1 davranışı da KALDIRILDI
+  // (katmanlar arası geçiş kaydırma + alt kontrollerle yapılır).
   pttEnabled?: boolean;
   pttActive?: boolean;
-  onPressStart?: () => void;
-  onPressEnd?: () => void;
+  onToggleListen?: () => void;
 }) {
   const status = dataQuality?.status ?? "DEGRADED";
-  const handlePressStart = () => {
-    if (pttEnabled) onPressStart?.();
-  };
-  const handlePressEnd = () => {
-    if (pttEnabled) onPressEnd?.();
+  const lastTapRef = useRef(0);
+  // Çift dokunma tespiti (350ms): tek dokunma hiçbir şey yapmaz; çift dokunma
+  // bas-konuş'u aç/kapatır. Long-press olmadığı için mobil bağlam menüsü çıkmaz.
+  const handleTap = () => {
+    if (!pttEnabled) return;
+    const now = Date.now();
+    if (now - lastTapRef.current < 350) {
+      lastTapRef.current = 0;
+      onToggleListen?.();
+    } else {
+      lastTapRef.current = now;
+    }
   };
   return (
     <div
       className={`layer0-human-model${pttEnabled ? " layer0-human-model--ptt" : ""}${
         pttActive ? " layer0-human-model--listening" : ""
       }`}
-      onDoubleClick={onOpenLayer1}
-      onPointerDown={handlePressStart}
-      onPointerUp={handlePressEnd}
-      onPointerLeave={handlePressEnd}
-      onPointerCancel={handlePressEnd}
+      onClick={handleTap}
       onContextMenu={(event) => {
         if (pttEnabled) event.preventDefault();
       }}
-      title={pttEnabled ? "Bas-konus: basili tut konus, birak; cift tikla Katman 1" : "Katman 1'e geç"}
-      style={pttEnabled ? { touchAction: "none", cursor: "pointer", userSelect: "none" } : undefined}
+      title={pttEnabled ? "Çift tıkla konuş (aç/kapa)" : undefined}
+      style={
+        pttEnabled
+          ? { touchAction: "manipulation", cursor: "pointer", userSelect: "none", WebkitUserSelect: "none" }
+          : undefined
+      }
     >
       {pttEnabled ? (
         <div className={`layer0-ptt-hint${pttActive ? " layer0-ptt-hint--on" : ""}`} aria-hidden>
           <span className="layer0-ptt-dot" />
-          {pttActive ? "Dinliyorum… birak" : "Bas-konus: basili tut"}
+          {pttActive ? "Dinliyorum… çift tıkla durdur" : "Çift tıkla konuş"}
         </div>
       ) : null}
       <Canvas
