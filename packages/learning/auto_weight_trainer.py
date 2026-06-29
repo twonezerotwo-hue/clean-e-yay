@@ -103,26 +103,28 @@ def _module_score(win_rate: float, avg_pnl: float) -> float:
     return round(win_rate * 100.0 + pnl_term, 3)
 
 
-def _aggregate(trades) -> tuple[list[ModulePerf], int]:
+def _aggregate(outcomes) -> tuple[list[ModulePerf], int]:
+    """Canonical outcome listesinden modül-bazlı performans. `pnl` canonical
+    alandır (`pnl_usd` Trade'e özgüydü); fingerprint/data_verified aynı kalır."""
     by_module: dict[str, list] = {}
     rejected = 0
-    for t in trades:
-        if not getattr(t, "data_verified", False):
+    for o in outcomes:
+        if not getattr(o, "data_verified", False):
             rejected += 1
             continue
-        mod = _parse_dominant_module(t.fingerprint)
+        mod = _parse_dominant_module(o.fingerprint)
         if not mod:
             rejected += 1
             continue
-        by_module.setdefault(mod, []).append(t)
+        by_module.setdefault(mod, []).append(o)
 
     perfs: list[ModulePerf] = []
     for mod, items in by_module.items():
         n = len(items)
         if n < MIN_TRADES_PER_MODULE:
             continue
-        wins = sum(1 for t in items if t.pnl_usd > 0)
-        total_pnl = sum(t.pnl_usd for t in items)
+        wins = sum(1 for o in items if o.pnl > 0)
+        total_pnl = sum(o.pnl for o in items)
         win_rate = wins / n
         avg_pnl = total_pnl / n
         perfs.append(
@@ -195,11 +197,14 @@ def _propose_for_regime(
 def train(regime: str = "NEUTRAL") -> RebalanceProposal | dict:
     """Trainer ana giriş. Yeterli veri yoksa açıklayıcı dict döner."""
     s = paper_state.load()
-    trades = list(s.recent_trades)
+    # Durable kaynak: recent_trades (volatile pencere) + decision_log (kalıcı).
+    # Eskiden yalnızca recent_trades okunuyordu → paper_state bozulması/200-
+    # pencere taşması öğrenme veri setini kısıtlıyordu.
+    outcomes = outcomes_mod.outcomes_from_state(s)
 
-    perfs, rejected = _aggregate(trades)
-    eligible = sum(1 for t in trades if getattr(t, "data_verified", False))
-    total = len(trades)
+    perfs, rejected = _aggregate(outcomes)
+    eligible = sum(1 for o in outcomes if o.data_verified)
+    total = len(outcomes)
 
     if eligible == 0:
         return {
@@ -257,9 +262,7 @@ def train(regime: str = "NEUTRAL") -> RebalanceProposal | dict:
 
     # L1 — timeframe/regime/module attribution kaybolmasın: verified canonical
     # outcome'lardan kompakt dağılımları proposal evidence'ına ekle.
-    verified_outcomes = [
-        o for o in outcomes_mod.outcomes_from_state(s) if o.data_verified
-    ]
+    verified_outcomes = [o for o in outcomes if o.data_verified]
     tf_dist = outcomes_mod.distribution(verified_outcomes, lambda o: o.timeframe)
     regime_dist = outcomes_mod.distribution(verified_outcomes, lambda o: o.regime)
     module_dist = outcomes_mod.distribution(verified_outcomes, lambda o: o.dominant_module)

@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from dataclasses import asdict
 
+from packages.data.registry.loader import active_weights_version
 from packages.learning import outcomes as outcomes_mod
 from packages.learning import rebalance_store, run_store
 from packages.learning.calibration import reliability_bins
@@ -23,12 +24,16 @@ def _proposal_status() -> str:
 
 def build_summary() -> dict:
     s = paper_state.load()
-    trades = s.recent_trades
-    total = len(trades)
-    wins = sum(1 for t in trades if t.pnl_usd > 0)
+    # B4 — başlık metrikleri de canonical outcome birleşiminden (recent_trades +
+    # decision_log) türetilir. Eskiden yalnız `recent_trades` (volatile ~200
+    # pencere) okunuyordu; bu yüzden başlık 12 trade gösterirken alt kırılımlar
+    # 55 gösterip ÇELİŞİYORDU. Artık tek kaynak: outcomes_from_state.
+    outcomes = outcomes_mod.outcomes_from_state(s)
+    total = len(outcomes)
+    wins = sum(1 for o in outcomes if o.pnl > 0)
     win_rate = round(wins / total, 3) if total else 0.0
 
-    pnls = [t.pnl_usd for t in trades]
+    pnls = [o.pnl for o in outcomes]
     sharpe = None
     if len(pnls) >= 2:
         mean = sum(pnls) / len(pnls)
@@ -36,24 +41,22 @@ def build_summary() -> dict:
         sd = var**0.5 if var > 0 else 0.0
         sharpe = round((mean / sd) * (252**0.5), 3) if sd > 0 else 0.0
 
-    # G6: gerçek predicted_confidence (verified trade'lerden). Placeholder
+    # G6: gerçek predicted_confidence (verified outcome'lardan). Placeholder
     # 0.5 baseline'ı kaldırıldı — DATA_POLICY: verified+predicted'a sahip
-    # trade'ler örneklere alınır.
+    # outcome'lar örneklere alınır. /learning/calibration endpoint'i ile aynı
+    # kaynak → panel ile başlık tutarlı.
     samples = [
-        (float(t.predicted_confidence), t.pnl_usd > 0)
-        for t in trades
-        if getattr(t, "data_verified", False)
-        and getattr(t, "predicted_confidence", None) is not None
+        (float(o.predicted_confidence), o.pnl > 0)
+        for o in outcomes
+        if o.data_verified and o.predicted_confidence is not None
     ]
     bins = [asdict(b) for b in reliability_bins(samples, n_bins=5)]
 
     wf = wf_summarize(pnls)
     walk = asdict(wf) if wf else None
 
-    # L1 — timeframe-aware breakdown'lar (canonical outcome'lardan).
-    # 15m outcome 1d bucket'ını ETKİLEMEZ (her bucket ayrı). Global metrikler
-    # (win_rate/sharpe) korunur; bunlar additive.
-    outcomes = outcomes_mod.outcomes_from_state(s)
+    # L1 — timeframe-aware breakdown'lar (aynı canonical outcome listesinden).
+    # 15m outcome 1d bucket'ını ETKİLEMEZ (her bucket ayrı).
     bd = outcomes_mod.breakdowns(outcomes)
     verified_outcomes = sum(1 for o in outcomes if o.data_verified)
 
@@ -73,7 +76,9 @@ def build_summary() -> dict:
         "walk_forward": walk,
         "calibration": bins,
         "module_skew": {},
-        "weights_version": "1.0.0",
+        # Aktif manifest'ten (approve sonrası güncellenir) — eskiden "1.0.0"
+        # sabit kodluydu ve owner'a yanlış aktif versiyon gösteriyordu.
+        "weights_version": active_weights_version(),
         # --- L1 additive (frontend hesap yapmaz; backend türetir) ---
         "outcomes_total": len(outcomes),
         "verified_outcomes": verified_outcomes,

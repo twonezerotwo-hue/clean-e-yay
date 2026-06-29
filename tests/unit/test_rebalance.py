@@ -21,6 +21,11 @@ def _fresh_env(tmp_path, monkeypatch):
     manifest = tmp_path / "weights_active.json"
     out_dir = tmp_path / "weights_out"
     monkeypatch.setenv("PAPER_STATE_PATH", str(state))
+    # Trainer artık recent_trades + decision_log birleşiminden öğreniyor →
+    # decision_log'u test-bazında izole et. conftest session-scope'ta da izole
+    # eder ama o dosya session-paylaşımlı; per-test override başka testlerin
+    # yazdığı kayıtlardan da ayırır (dataset_size assertion'ları deterministik).
+    monkeypatch.setenv("DECISION_LOG_PATH", str(tmp_path / "decision_log.jsonl"))
     monkeypatch.setenv("REBALANCE_STORE_PATH", str(store))
     monkeypatch.setenv("WEIGHTS_MANIFEST_PATH", str(manifest))
     monkeypatch.setenv("WEIGHTS_OUTPUT_DIR", str(out_dir))

@@ -47,6 +47,9 @@ class CanonicalOutcome:
     # MAE/MFE (TF-target trainer girdisi). Legacy kayıtlar 0.0 default ile gelir.
     mae_pct: float = 0.0
     mfe_pct: float = 0.0
+    # Calibration trainer girdisi — açılış anında damgalanmış güven (Trade +
+    # decision_log taşır). Legacy/eksik kayıtlar None ile gelir (fit'e girmez).
+    predicted_confidence: float | None = None
 
 
 def _duration_seconds(opened_at: str | None, closed_at: str | None) -> float | None:
@@ -118,7 +121,18 @@ def build_outcome(t: Trade) -> CanonicalOutcome:
         paper_only=True,
         mae_pct=float(getattr(t, "mae_pct", 0.0) or 0.0),
         mfe_pct=float(getattr(t, "mfe_pct", 0.0) or 0.0),
+        predicted_confidence=_opt_float(getattr(t, "predicted_confidence", None)),
     )
+
+
+def _opt_float(value) -> float | None:
+    """None-güvenli float dönüşümü (bozuk değer → None, asla patlamaz)."""
+    if value is None:
+        return None
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
 
 
 def build_outcome_from_log_entry(entry: dict) -> CanonicalOutcome:
@@ -169,6 +183,7 @@ def build_outcome_from_log_entry(entry: dict) -> CanonicalOutcome:
         paper_only=True,
         mae_pct=float(outcome.get("mae_pct") or 0.0),
         mfe_pct=float(outcome.get("mfe_pct") or 0.0),
+        predicted_confidence=_opt_float(opening.get("predicted_confidence")),
     )
 
 
