@@ -391,6 +391,18 @@ technical:
     adx_chop_floor: 20.0
     chop_min_mult: 0.5
 
+  # Faz 3a — exhaustion guard. Momentum, tükenmenin AYNI yönüne (climax) kovalıyorsa
+  # sönümler: exh_score≥exh_high (upside tükenmesi) iken long, ≤exh_low (downside
+  # tükenmesi) iken short kovalaması 50'ye doğru kısılır. Momentum ters yöndeyse
+  # (reversal'ı sürüyorsa) DOKUNMAZ; yön ASLA çevrilmez, size ASLA artmaz.
+  # enabled=false (varsayılan) → etki yok; çarpan yine de gözlem (shadow) loglanır.
+  # Faz 2 deseni: önce shadow ölç, sonra enabled:true. exhaustion_guard_multiplier izle.
+  exhaustion_guard:
+    enabled: false
+    exh_high: 70.0
+    exh_low: 30.0
+    exh_min_mult: 0.5
+
 # T2 — AgentDecision (deterministic). ConsensusSnapshot + RiskGate aksiyonu →
 # tek yüksek-seviye aksiyon + entry_timeframe. EVIDENCE→aksiyon köprüsü; trade
 # AÇMAZ (paper open matrix/RiskGate işi). Kurallar: RiskGate her zaman final

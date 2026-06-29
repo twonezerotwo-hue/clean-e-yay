@@ -84,6 +84,12 @@ class TechnicalConfig:
     chop_guard_enabled: bool = False
     chop_adx_floor: float = 20.0      # adx bunun altı = chop sayılır
     chop_min_mult: float = 0.5        # tam chop'ta (adx→0) momentum mesafesi ×bu
+    # Faz 3a — exhaustion guard: momentum tükenmenin AYNI yönüne (climax) kovalıyorsa
+    # sönümle. enabled=False → etki yok. Yön ASLA çevrilmez, size ASLA artmaz.
+    exhaustion_guard_enabled: bool = False
+    exh_high: float = 70.0            # ≥ bu = upside tükenmesi (long kovalama riski)
+    exh_low: float = 30.0             # ≤ bu = downside tükenmesi (short kovalama riski)
+    exh_min_mult: float = 0.5         # uçta (0/100) momentum mesafesi ×bu
 
 
 def load_config() -> TechnicalConfig:
@@ -94,6 +100,7 @@ def load_config() -> TechnicalConfig:
     warm = t.get("warmup_min_bars", {}) or {}
     tlt = t.get("direction_tilt", {}) or {}
     tq = t.get("trend_quality", {}) or {}
+    eg = t.get("exhaustion_guard", {}) or {}
     return TechnicalConfig(
         bull_cut=float(cuts.get("bull", 60)),
         bear_cut=float(cuts.get("bear", 40)),
@@ -121,6 +128,10 @@ def load_config() -> TechnicalConfig:
         chop_guard_enabled=bool(tq.get("enabled", False)),
         chop_adx_floor=float(tq.get("adx_chop_floor", 20.0)),
         chop_min_mult=float(tq.get("chop_min_mult", 0.5)),
+        exhaustion_guard_enabled=bool(eg.get("enabled", False)),
+        exh_high=float(eg.get("exh_high", 70.0)),
+        exh_low=float(eg.get("exh_low", 30.0)),
+        exh_min_mult=float(eg.get("exh_min_mult", 0.5)),
     )
 
 
@@ -243,6 +254,7 @@ def _direction_score(
     vwap_v: float | None = None,
     current: float | None = None,
     adx_v: float | None = None,
+    exhaustion_score: float | None = None,
     cfg: TechnicalConfig | None = None,
 ) -> tuple[float | None, dict[str, float]]:
     """Top-down directional read (0–100, 50 = neutral). None = insufficient momentum.
@@ -297,6 +309,25 @@ def _direction_score(
             if cfg.chop_guard_enabled:
                 diag["chop_mult"] = round(chop_mult, 3)      # uygulandı
                 final = 50.0 + (final - 50.0) * chop_mult
+
+    # Faz 3a — exhaustion guard: momentum tükenmenin AYNI yönüne (climax'ı) kovalıyorsa
+    # sönümle. exhaustion>50 = upside tükenmesi (yukarı kovalama riski), <50 = downside
+    # tükenmesi (aşağı kovalama riski). Momentum ters yöndeyse (reversal'ı sürüyorsa)
+    # DOKUNMAZ. Çarpan her zaman hesaplanır (shadow); yalnız enabled iken uygulanır.
+    if exhaustion_score is not None:
+        dir_lean = final - 50.0
+        exh_mult = 1.0
+        if dir_lean > 0 and exhaustion_score >= cfg.exh_high:        # bullish → tepeyi kovalıyor
+            t = _clamp((exhaustion_score - cfg.exh_high) / (100.0 - cfg.exh_high), 0.0, 1.0)
+            exh_mult = 1.0 - (1.0 - cfg.exh_min_mult) * t
+        elif dir_lean < 0 and exhaustion_score <= cfg.exh_low:       # bearish → dibi kovalıyor
+            t = _clamp((cfg.exh_low - exhaustion_score) / cfg.exh_low, 0.0, 1.0)
+            exh_mult = 1.0 - (1.0 - cfg.exh_min_mult) * t
+        if exh_mult < 1.0:
+            diag["exh_mult_shadow"] = round(exh_mult, 3)
+            if cfg.exhaustion_guard_enabled:
+                diag["exh_mult"] = round(exh_mult, 3)
+                final = 50.0 + (final - 50.0) * exh_mult
 
     return _clamp(final, 0.0, 100.0), diag
 
@@ -540,10 +571,17 @@ def build_timeframe_result(
 
     # ── scoring (SEPARATE axes) — top-down: momentum trigger gated by location/
     #    pattern/volume evidence (§4.5 now feeds direction, no longer evidence-only).
+    # Faz 3a — exhaustion (climax kovalama riski). Lokal import: paket-init cycle'ı
+    # (timeframe ↔ scoring) önler. Volume/sweep build'de yok → RSI+getiri tabanlı.
+    from packages.scoring import exhaustion as _exhaustion_engine
+    _exh = _exhaustion_engine.analyze(bars, timeframe=timeframe)
+    exhaustion_score = _exh.score if _exh.validity != "unavailable" else None
+
     direction, dir_diag = _direction_score(
         rsi_v, macd_atr, ema_stack,
         fib=fib, zones=zones, reversal=reversal_signals, chart=chart_patterns,
-        vwap_v=vwap_v, current=current, adx_v=adx_v, cfg=cfg,
+        vwap_v=vwap_v, current=current, adx_v=adx_v,
+        exhaustion_score=exhaustion_score, cfg=cfg,
     )
     strength = _strength_score(adx_v, direction)
     bias = _bias(direction, cfg)
@@ -558,6 +596,10 @@ def build_timeframe_result(
         if cm is not None:
             applied = "chop_guard" if cfg.chop_guard_enabled else "chop_guard_shadow"
             evidence.append(f"{applied}=×{cm}")
+        em = dir_diag.get("exh_mult_shadow")
+        if em is not None:
+            applied = "exhaustion_guard" if cfg.exhaustion_guard_enabled else "exhaustion_guard_shadow"
+            evidence.append(f"{applied}=×{em}")
     else:
         evidence.append("direction_unavailable_insufficient_data")
     if trend.label != "UNKNOWN":
@@ -587,6 +629,7 @@ def build_timeframe_result(
             strength_score=round(strength, 2) if strength is not None else None,
             location_gate_multiplier=dir_diag.get("gate_mult"),
             chop_guard_multiplier=dir_diag.get("chop_mult_shadow"),
+            exhaustion_guard_multiplier=dir_diag.get("exh_mult_shadow"),
         ),
         key_levels=key_levels,
         confirmation_signals=_confirmations(rsi_v, macd_t, ema_stack, current, vwap_v),

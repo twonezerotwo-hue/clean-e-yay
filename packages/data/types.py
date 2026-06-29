@@ -209,6 +209,10 @@ class TechnicalScoreOverview(BaseModel):
     # söndü/sönerdi (gözlem; <1.0 = chop sönümü). enabled OFF iken de dolu (shadow);
     # None = chop değil / adx yok. Öğrenme katmanı bunu İZLEMEZ — manuel tespit alanı.
     chop_guard_multiplier: float | None = None
+    # Faz 3a exhaustion guard — momentum climax'ı (aynı yönde tükenme) kovalarken ne
+    # kadar söndü/sönerdi (gözlem; <1.0). enabled OFF iken de dolu (shadow); None =
+    # kovalama yok / veri yok. Manuel tespit alanı (öğrenme katmanı izlemez).
+    exhaustion_guard_multiplier: float | None = None
 
 
 class TechnicalKeyLevels(BaseModel):
