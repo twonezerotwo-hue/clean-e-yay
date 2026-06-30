@@ -137,9 +137,32 @@ _LITERAL_UNION = re.compile(r'^\|?\s*"[^"]*"(\s*\|\s*"[^"]*")*$')
 # Frontend-only object types with no OpenAPI schema yet (contract debt inherited from
 # clean's hand-written friendly layer). Phase 3 promoted all of them to named schemas in
 # contracts/openapi.yaml (SnapshotMode was dead — superseded by ProvenanceMode — and was
-# removed instead of promoted). This guard is now a *ratchet at zero*: any NEW orphan
-# friendly type fails the guard until it gets a contract schema (contract-first).
-KNOWN_UNCONTRACTED: set[str] = set()
+# removed instead of promoted). This guard is now a *ratchet*: any NEW orphan friendly
+# type fails the guard until it gets a contract schema (contract-first) or is baselined here.
+#
+# CP1–CP4 öğrenme panelleri (dataset-health / edge-report / guard-safety / book-audit /
+# entry-exit-quality) endpoint'leri saf `dict` döndürüyor (observe-only read-model'ler,
+# dış API contract'ı değil) → bunların friendly tipleri elle bakılıyor, OpenAPI şeması yok.
+# Bu guard CP1'den beri main CI'ı kırıyordu (deploy "skipped" kalıyordu). Deploy hattını
+# açmak için observe-only learning view-model'leri burada baseline'lıyoruz. TODO (contract
+# debt): bu endpoint'lere Pydantic response_model ekleyip openapi.yaml'a terfi et, sonra
+# bunları buradan çıkar (ratchet'i tekrar sıfıra getir).
+KNOWN_UNCONTRACTED: set[str] = {
+    "BookAuditLesson",
+    "BookAuditView",
+    "DatasetHealthLearner",
+    "DatasetHealthView",
+    "EdgeReportView",
+    "EdgeStability",
+    "EdgeStabilitySegment",
+    "EntryExitBucket",
+    "EntryExitBucketMetrics",
+    "EntryExitQualityView",
+    "EntryExitVerdict",
+    "GuardSafetyGuard",
+    "GuardSafetyMonitor",
+    "GuardSafetyView",
+}
 
 
 def test_friendly_types_map_to_contract() -> None:

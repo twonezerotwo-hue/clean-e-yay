@@ -16,6 +16,7 @@ from packages.learning import (
     calibration_trainer,
     dataset_health,
     edge_report,
+    entry_exit_quality,
     guard_safety,
     historical_edge,
     missed_opportunity,
@@ -115,6 +116,17 @@ def get_edge_report() -> dict:
     INSUFFICIENT). Mevcut backtest motorunu (replay/strategy-backtest) tekrar
     etmez; CP4 öz-ayar bir öneriyi uygulamadan önce güven tartmak için okur."""
     return edge_report.report()
+
+
+@router.get("/learning/entry-exit-quality")
+def get_entry_exit_quality() -> dict:
+    """CP4 (slice 1) — giriş/çıkış kalitesi öğrenicisi (observe-only). Biriken
+    verified outcome'ların MAE/MFE excursion'ından, dominant_module × timeframe
+    kovaları bazında üç dersi çıkarır: erken çıkış (kâr masada), dar stop (gürültüde
+    tetikleniyor), erken giriş (önce eziliyor). TF-target trainer'ın yalnız-TF
+    granülerliğindeki boşluğu kapatır; karar zincirine etkisi yoktur (önerileri
+    otonom uygulama ayrı bir slice — rollback net'iyle, edge STABLE kapısından)."""
+    return entry_exit_quality.report()
 
 
 @router.get("/learning/guard-safety")
