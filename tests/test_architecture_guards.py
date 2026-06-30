@@ -162,6 +162,7 @@ KNOWN_UNCONTRACTED: set[str] = {
     "GuardSafetyGuard",
     "GuardSafetyMonitor",
     "GuardSafetyView",
+    "TfTargetEdgeGate",
 }
 
 

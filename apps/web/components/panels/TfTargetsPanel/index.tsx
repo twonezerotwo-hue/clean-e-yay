@@ -162,6 +162,42 @@ export function TfTargetsPanel() {
         </div>
       )}
 
+      {d?.edge_gate ? (
+        <div className="mt-3 rounded border border-white/10 bg-white/[0.02] px-2 py-1.5 text-[11px]">
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] uppercase tracking-widest text-white/40">
+              Edge-gate (otonom güvenlik)
+            </span>
+            <span
+              className={`rounded px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide ${
+                d.edge_gate.enabled
+                  ? "bg-signal-up/20 text-signal-up"
+                  : "bg-white/10 text-white/55"
+              }`}
+            >
+              {d.edge_gate.enabled ? "AÇIK" : "KAPALI"}
+            </span>
+          </div>
+          <p className="mt-1 leading-4 text-white/55">
+            {d.edge_gate.enabled
+              ? d.edge_gate.safe_to_autotune
+                ? "Edge STABİL → geometri nudge'ları otomatik uygulanıyor + rollback izleniyor."
+                : "Edge TUTARSIZ → otomatik uygulama duraklatıldı (gated_pending, owner onayına düşer)."
+              : "Kapalı: nudge'lar edge'den bağımsız uygulanıyor (rollback izleme yok). TF_TARGET_EDGE_GATE=1 ile aç."}
+          </p>
+          {d.edge_gate.active_monitor ? (
+            <p className="mt-1 text-[10px] text-amber-300/80">
+              İzlemede: bir geometri değişimi outcome-rollback bekliyor.
+            </p>
+          ) : null}
+          {d.edge_gate.rollback_history.length ? (
+            <p className="mt-1 text-[10px] text-white/40">
+              Son: {(d.edge_gate.rollback_history[0] as { event?: string })?.event ?? "—"}
+            </p>
+          ) : null}
+        </div>
+      ) : null}
+
       <div className="mt-3 flex items-center justify-between text-[10px] text-white/35">
         <span>
           Mutlak güvenlik: SL × ATR ∈ [{d?.guardrail.sl_atr_mult?.min}, {d?.guardrail.sl_atr_mult?.max}], R:R ∈ [
