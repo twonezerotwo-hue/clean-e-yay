@@ -40,10 +40,27 @@ echo "deploy: restart services"
 sudo systemctl restart eyay-supervisor.service
 sudo systemctl restart eyay-web.service
 
-sleep 6
+# Health-check retry: t3.small'da API/web port'a bind olması 6sn'den uzun
+# sürebiliyor (ağır import + state yükleme). Tek-seferlik curl yanlış-negatif
+# veriyordu (kod aslında canlıya çıkmış olsa bile deploy "failed" görünüyordu).
+# Başarı için ~60sn grace; gerçek crash'te (servis active değil / port hiç
+# açılmıyor) yine non-zero exit ile patlar.
+wait_for() {
+  local what="$1" tries="${3:-30}" i
+  for ((i = 1; i <= tries; i++)); do
+    if eval "$2" >/dev/null 2>&1; then
+      echo "deploy: $what ok (${i}. denemede)"
+      return 0
+    fi
+    sleep 2
+  done
+  echo "deploy: $what FAILED ($((tries * 2))sn sonra hâlâ cevap yok)" >&2
+  return 1
+}
+
 systemctl is-active --quiet eyay-supervisor.service
 systemctl is-active --quiet eyay-web.service
-curl -fsS http://127.0.0.1:9000/api/v1/health >/dev/null
-curl -fsSI http://127.0.0.1:3000/ >/dev/null
+wait_for "api"  "curl -fsS http://127.0.0.1:9000/api/v1/health" 30
+wait_for "web"  "curl -fsSI http://127.0.0.1:3000/" 30
 
 echo "deploy: ok $(git rev-parse --short HEAD)"
