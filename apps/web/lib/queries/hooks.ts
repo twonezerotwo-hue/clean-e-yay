@@ -355,6 +355,16 @@ export const useBookAudit = () => {
   });
 };
 
+export const useDatasetHealth = () => {
+  const policy = usePanelQueryPolicy(5 * 60_000);
+  return useQuery({
+    queryKey: qk.datasetHealth,
+    queryFn: api.datasetHealth,
+    staleTime: 60_000,
+    ...policy,
+  });
+};
+
 export const useCalibrationJumps = () => {
   const policy = usePanelQueryPolicy(5 * 60_000);
   return useQuery({

@@ -1969,6 +1969,26 @@ export type BookAuditView = {
   thresholds: Record<string, number>;
 };
 
+export type DatasetHealthLearner = {
+  name: string;
+  have: number;
+  need: number;
+  ready: boolean;
+};
+
+export type DatasetHealthView = {
+  total: number;
+  verified: number;
+  trainable: number;
+  coverage: {
+    verified_pct: number;
+    confidence_pct: number;
+    excursion_pct: number;
+  };
+  learners: DatasetHealthLearner[];
+  all_ready: boolean;
+};
+
 export type CalibrationGuardrailStatus = {
   enabled: boolean;
   max_inflation_delta: number;

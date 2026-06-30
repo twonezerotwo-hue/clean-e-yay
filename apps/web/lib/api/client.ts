@@ -37,6 +37,7 @@ import type {
   TfTargetsActionResult,
   MissedOpportunitiesView,
   BookAuditView,
+  DatasetHealthView,
   CalibrationJumpsView,
   AgentModeConfigView,
   AgentModeConfigUpdate,
@@ -603,6 +604,8 @@ export const api = {
     ),
   bookAudit: () =>
     fetchJSON<BookAuditView>("/api/v1/learning/book-audit"),
+  datasetHealth: () =>
+    fetchJSON<DatasetHealthView>("/api/v1/learning/dataset-health"),
   calibrationJumps: () =>
     fetchJSON<CalibrationJumpsView>("/api/v1/learning/calibration-jumps"),
   historicalEdge: (fingerprint: string) =>
