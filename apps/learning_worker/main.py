@@ -21,10 +21,12 @@ from pathlib import Path
 from packages.learning import auto_weight_trainer as trainer
 from packages.learning import (
     calibration_trainer,
+    edge_report,
     guard_safety,
     rebalance_store,
     run_store,
     tf_calibration,
+    tf_target_rollback,
     tf_target_store,
     tf_target_trainer,
     tf_weight_trainer,
@@ -65,6 +67,16 @@ TF_TARGET_TRIGGER_PATH = Path(
     os.environ.get("TF_TARGET_TRIGGER_PATH", "data/runtime/tf_target_trigger.json")
 )
 TF_TARGET_MIN_NEW = int(os.environ.get("TF_TARGET_MIN_NEW", "20"))
+
+
+def _tf_target_edge_gate_on() -> bool:
+    """CP4 slice 2 — edge-gate + rollback flag'i. Default OFF → geometri auto-apply
+    eski davranışla (gate'siz) çalışır, bayt-aynı. AÇIK iken: band-içi nudge'lar yalnız
+    `edge_report.safe_to_autotune` STABLE iken otomatik uygulanır + her auto-apply
+    outcome-rollback ile izlenir (kötüleşirse geri alınır)."""
+    return os.environ.get("TF_TARGET_EDGE_GATE", "0").strip().lower() not in {
+        "0", "false", "no", "off", ""
+    }
 # CP1 — performans bütçesi: learning koşusu bu süreyi aşarsa WARN + run meta'da
 # over_budget=True. Tick'e dokunmaz; yalnız off-tick learning loop'unu izler ki
 # yeni öğrenici eklendikçe sistem sessizce AĞIRLAŞMASIN (ana kural).
@@ -206,9 +218,30 @@ def run_once() -> dict:
                         )
                         for tf in tt_result.per_timeframe
                     }
-                    rec = tf_target_store.submit_proposal(payload, current_baseline=baseline)
+                    # CP4 slice 2 edge-gate: flag açıksa band-içi nudge'lar yalnız
+                    # edge STABLE iken auto-apply edilir (UNSTABLE → gated_pending).
+                    # Flag OFF (default) → allowed=True, eski davranış birebir.
+                    gate_on = _tf_target_edge_gate_on()
+                    auto_allowed = True
+                    if gate_on:
+                        auto_allowed = bool(edge_report.report().get("safe_to_autotune"))
+                    rec = tf_target_store.submit_proposal(
+                        payload, current_baseline=baseline,
+                        auto_apply_allowed=auto_allowed,
+                    )
                     tf_target_decisions = dict(rec.get("decisions") or {})
                     tf_target_status = "PROPOSED"
+                    # Gate açık + gerçekten auto-apply olduysa rollback'e al (tek aktif
+                    # izleme; mevcut izleme bitmeden yenisini başlatma).
+                    applied = rec.get("applied_changes") or {}
+                    if gate_on and applied and tf_target_rollback.get_active() is None:
+                        base_n, base_exp = weight_rollback.pre_apply_expectancy()
+                        tf_target_rollback.record_apply(
+                            prev_overrides=applied,
+                            applied_tfs=list(applied.keys()),
+                            baseline_expectancy=base_exp,
+                            baseline_n=base_n,
+                        )
                 else:
                     tf_target_status = "NO_NUDGE"
                 TF_TARGET_PROPOSAL_OUT_PATH.parent.mkdir(parents=True, exist_ok=True)
@@ -270,6 +303,23 @@ def run_once() -> dict:
             log.info("weight auto-apply CONFIRMED: %s", rb.get("confirmed_version"))
     except Exception as exc:  # defensive — worker patlamamalı
         errors.append(f"rollback:{type(exc).__name__}")
+
+    # CP4 slice 2: otomatik-uygulanan TF-target (SL/TP geometri) için outcome-bazlı
+    # rollback. İzlenen apply yoksa no_active; yeterli yeni outcome birikince
+    # geometri CONFIRMED ya da önceki değerine ROLLED_BACK olur.
+    try:
+        gb = tf_target_rollback.check_rollback()
+        gb_status = str(gb.get("status", "UNKNOWN"))
+        if gb_status == "ROLLED_BACK":
+            log.info(
+                "tf_target ROLLBACK: %s (post_exp=%s < baseline=%s)",
+                gb.get("reverted_tfs"), gb.get("post_expectancy"),
+                gb.get("baseline_expectancy"),
+            )
+        elif gb_status == "CONFIRMED":
+            log.info("tf_target auto-apply CONFIRMED: %s", gb.get("confirmed_tfs"))
+    except Exception as exc:  # defensive — worker patlamamalı
+        errors.append(f"tf_target_rollback:{type(exc).__name__}")
 
     # CP3: yön güvenlik kasası. Owner bir guard'ı canlıya aldıysa izlemeye alır;
     # yeterli yeni outcome birikince post-enable expectancy baseline'ın altına

@@ -3,6 +3,7 @@ POST /api/v1/learning/calibration/retrain
 """
 from __future__ import annotations
 
+import os
 from dataclasses import asdict
 
 from fastapi import APIRouter
@@ -21,6 +22,7 @@ from packages.learning import (
     historical_edge,
     missed_opportunity,
     mistake_memory,
+    tf_target_rollback,
     tf_target_store,
     tf_target_trainer,
     tf_weight_trainer,
@@ -184,6 +186,12 @@ def get_tf_targets() -> dict:
     effective: dict[str, dict[str, float]] = {}
     for tf in ("15m", "1h", "4h", "1d"):
         effective[tf] = te._tf_params(tf)
+    # CP4 slice 2 — edge-gate + outcome-rollback durumu (observe). Gate flag açıksa
+    # geometri auto-apply yalnız edge STABLE iken olur ve her apply izlenir.
+    gate_on = os.environ.get("TF_TARGET_EDGE_GATE", "0").strip().lower() not in {
+        "0", "false", "no", "off", ""
+    }
+    rb = tf_target_rollback.load()
     return {
         "enabled": te.tf_targets_enabled(),
         "auto_apply_band_pct": tf_target_store.AUTO_APPLY_BAND_PCT,
@@ -195,6 +203,12 @@ def get_tf_targets() -> dict:
         "store_current": dict(current),
         "pending": store_data.get("pending"),
         "history": list(store_data.get("history") or [])[:10],
+        "edge_gate": {
+            "enabled": gate_on,
+            "safe_to_autotune": bool(edge_report.report().get("safe_to_autotune")),
+            "active_monitor": rb.get("active"),
+            "rollback_history": list(rb.get("history") or [])[:5],
+        },
     }
 
 

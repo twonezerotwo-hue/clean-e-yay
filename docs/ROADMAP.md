@@ -97,10 +97,23 @@ mistake'i ayarlar — yön mantığını DEĞİL (bkz. ARCHITECTURE.md güvenlik
     `tf_target_trainer` SL/TP'yi yalnız **TF** bazında öğrenir; "hangi MODÜLÜN çıkışı/girişi/
     stop'u bozuk" granülerliği yoktu. İlk canlı bulgu: **touche × 4h/1h asıl sorun dar stop
     DEĞİL, EXIT_EARLY** (hareketin ~%28'i yakalanıyor, işlem başı ~%2.5 kâr masada).
-  - **Slice 2 (SIRADA) — otonom uygula.** entry_exit_quality önerilerini modül-bazlı
-    SL×ATR / trailing nudge'ına bağla; **G3 rollback net'iyle** (`weight_autoapply_store`/
-    `weight_rollback` deseni reuse — expectancy düşerse oto-geri-al) ve `edge_report.
-    safe_to_autotune` STABLE kapısından geçince. Bugün edge UNSTABLE → uygulama YOK.
+  - **Slice 2 ✅ DONE — otonom geometri uygulama: edge-gate + rollback net.**
+    Mevcut `tf_target_trainer`/`tf_target_store` geometriyi (SL×ATR, rr) ±%15 bantta zaten
+    otonom uyguluyordu AMA **gate'siz + rollback'siz** (kırmızı çizgi ihlali). Slice 2 bunu
+    güvenli-otonom yaptı: (1) **edge-gate** — `tf_target_store.submit_proposal(auto_apply_
+    allowed=)`; worker `TF_TARGET_EDGE_GATE` flag açıkken `edge_report.safe_to_autotune`
+    STABLE değilse band-içi nudge bile `gated_pending` olur (auto-apply YOK). (2) **outcome-
+    rollback** — `tf_target_rollback.py` (ağırlık G3 ikizi; `weight_rollback.{pre_apply,
+    post_open}_expectancy` REUSE): auto-apply izlenir, post-apply expectancy baseline'ın
+    altına düşerse `tf_target_store.revert_overrides()` ile geometri önceki değerine döner.
+    `submit_proposal` artık `applied_changes` (prev snapshot) taşır. `/learning/tf-targets`
+    endpoint'i + `TfTargetsPanel`'de `edge_gate` bloğu (durum + izleme + son rollback).
+    **Flag default OFF = bayt-aynı** (gate'siz eski davranış). Owner `TF_TARGET_EDGE_GATE=1`
+    ile güvenli-otonom modu açar. Tek-değişiklik-tek-doğrulama (aynı anda 1 aktif izleme).
+  - **Slice 3 (SIRADA) — touche erken-çıkış (trailing) düzeltmesi.** entry_exit_quality'nin
+    asıl bulgusu EXIT_EARLY/trailing; ama trailing tf_targets yüzeyinde DEĞİL (sl_atr/rr/
+    sl_pct). Trailing autotuner ayrı yüzey (trail_distance_pct, açılış yolu) gerektirir —
+    modül-aware. **Owner notu: CP7'den önce touche erken-çıkışı bu slice'ta düzelt.**
   - **Kalan CP4 kapsamı.** Kural-sabit eşikleri (rejim ADX/vol, consensus eşiği, guard
     eşikleri, tf_weights) trainer öner → CP2/backtest doğrula → CP3 harness'la **dar-bant oto**
     (G3 deseni). **NOT:** A/B parametre-backtest için `load_thresholds` (`@lru_cache`) üstüne

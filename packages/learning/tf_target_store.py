@@ -111,6 +111,7 @@ def submit_proposal(
     proposal: dict,
     *,
     current_baseline: dict[str, dict[str, float]],
+    auto_apply_allowed: bool = True,
 ) -> dict:
     """Trainer'dan gelen proposal'ı işle: TF başına AUTO_APPLY veya PENDING.
 
@@ -124,12 +125,21 @@ def submit_proposal(
         }
 
     `current_baseline`: o anki aktif değerler (config + mevcut store override).
-    Dönüş: aynı proposal + her TF için "decision" ("auto_applied" | "pending").
+
+    `auto_apply_allowed` (CP4 slice 2 — edge-gate): False ise band-içi nudge'lar bile
+    AUTO_APPLIED edilmez, PENDING'e yönlendirilir (owner yine onaylayabilir). Worker
+    bunu `edge_report.safe_to_autotune` + `TF_TARGET_EDGE_GATE` flag'inden hesaplar.
+    Default True → eski davranış birebir (bayt-aynı; flag OFF iken gate yok).
+
+    Dönüş: aynı proposal + her TF için "decision" ("auto_applied" | "pending" |
+    "gated_pending") + `applied_changes` (auto uygulanan TF'lerin önceki→yeni değeri,
+    rollback baseline'ı için).
     """
     data = load()
     current = dict(data.get("current") or {})
     decisions: dict[str, str] = {}
     pending_changes: dict[str, dict[str, float]] = {}
+    applied_changes: dict[str, dict[str, float]] = {}  # rollback için prev snapshot
 
     for tf, new_params in (proposal.get("per_timeframe") or {}).items():
         baseline = current_baseline.get(tf) or {}
@@ -142,19 +152,20 @@ def submit_proposal(
                 break
 
         clamped, clamp_notes = _clamp_guardrails(new_params)
-        if all_within:
+        if all_within and auto_apply_allowed:
+            applied_changes[tf] = dict(current.get(tf) or baseline)  # önceki değer
             current[tf] = clamped
             decisions[tf] = "auto_applied"
             if clamp_notes:
                 decisions[tf] += f" ({'; '.join(clamp_notes)})"
         else:
             pending_changes[tf] = clamped
-            decisions[tf] = "pending"
+            decisions[tf] = "gated_pending" if (all_within and not auto_apply_allowed) else "pending"
             if clamp_notes:
                 decisions[tf] += f" ({'; '.join(clamp_notes)})"
 
     record = dict(proposal, status="MIXED", decisions=decisions,
-                  pending_changes=pending_changes)
+                  pending_changes=pending_changes, applied_changes=applied_changes)
     # Önceki PENDING varsa SUPERSEDED olarak history'e taşı.
     history = list(data.get("history") or [])
     cur_pending = data.get("pending")
@@ -200,6 +211,23 @@ def reject_pending(reason: str = "owner_reject") -> dict | None:
     return rejected
 
 
+def revert_overrides(prev: dict[str, dict[str, float]]) -> dict[str, dict[str, float]]:
+    """CP4 slice 2 rollback — auto-apply edilmiş TF override'larını önceki değerine
+    döndür. `prev` = {tf: {param: eski_değer}} (submit_proposal'ın `applied_changes`'i).
+    Boş prev dict olan TF → override'ı tamamen kaldır (config default'a düş).
+    Sadece manifest-pointer değil, gerçek değer geri yazılır. Dönüş = yeni current."""
+    data = load()
+    current = dict(data.get("current") or {})
+    for tf, params in (prev or {}).items():
+        if params:
+            current[tf] = dict(params)
+        else:
+            current.pop(tf, None)
+    _save({"current": current, "pending": data.get("pending"),
+           "history": list(data.get("history") or [])})
+    return current
+
+
 def reset() -> None:
     """Tüm override'ları sil (saf config'e dönüş)."""
     _save(_empty())
@@ -214,5 +242,6 @@ __all__ = [
     "load",
     "reject_pending",
     "reset",
+    "revert_overrides",
     "submit_proposal",
 ]
