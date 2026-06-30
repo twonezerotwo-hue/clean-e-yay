@@ -2015,6 +2015,48 @@ export type EdgeReportView = {
   safe_to_autotune: boolean;
 };
 
+// CP4 (slice 1) — giriş/çıkış kalitesi öğrenicisi (entry_exit_quality.report).
+export type EntryExitVerdict = {
+  code: "EXIT_EARLY" | "STOP_TOO_TIGHT" | "ENTER_EARLY";
+  detail: string;
+  nudge: { dimension: string; direction: string };
+};
+
+export type EntryExitBucketMetrics = {
+  n: number;
+  n_usable: number;
+  n_winners: number;
+  n_sl_hit: number;
+  sl_hit_rate: number;
+  avg_capture_ratio: number | null;
+  avg_give_back_pct: number | null;
+  avg_winner_mfe_pct: number | null;
+  avg_sl_adverse_pct: number | null;
+  avg_winner_adverse_ratio: number | null;
+};
+
+export type EntryExitBucket = {
+  module: string;
+  timeframe: string;
+  metrics: EntryExitBucketMetrics;
+  verdicts: EntryExitVerdict[];
+};
+
+export type EntryExitQualityView = {
+  total: number;
+  usable: number;
+  min_bucket: number;
+  verdict_counts: Record<string, number>;
+  flagged_count: number;
+  buckets: EntryExitBucket[];
+  thresholds: {
+    capture_low: number;
+    give_back_high_pct: number;
+    sl_rate_high: number;
+    adverse_ratio_high: number;
+  };
+};
+
 // CP3 — yön güvenlik kasası (guard_safety.report).
 export type GuardSafetyMonitor = {
   enabled_at?: string | null;

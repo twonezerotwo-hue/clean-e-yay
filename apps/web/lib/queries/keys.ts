@@ -42,6 +42,7 @@ export const qk = {
   bookAudit: ["learning", "book-audit"] as const,
   datasetHealth: ["learning", "dataset-health"] as const,
   edgeReport: ["learning", "edge-report"] as const,
+  entryExitQuality: ["learning", "entry-exit-quality"] as const,
   guardSafety: ["learning", "guard-safety"] as const,
   calibrationJumps: ["learning", "calibration-jumps"] as const,
   historicalEdge: (fingerprint: string) =>

@@ -84,11 +84,33 @@ mistake'i ayarlar — yön mantığını DEĞİL (bkz. ARCHITECTURE.md güvenlik
   dolunca INCONCLUSIVE kapanır, guard CANLI kalır (guard enable = owner kararı). **CP4/CP5'in
   ön-koşulu artık hazır.** Not: önceden-canlı guard'lar geriye dönük izlenmez (yalnız gelecek
   geçişler); mevcut canlı `self_conflict`'i kasaya almak için owner OFF→ON toggle eder.
-- **CP4 — Adaptif öz-ayar.** Kural-sabit eşikleri (rejim ADX/vol, consensus eşiği, guard
-  eşikleri, tf_weights) trainer öner → CP2/backtest doğrula → CP3 harness'la **dar-bant oto**
-  (G3 deseni; `rebalance_store`/`tf_target_store` reuse). **NOT:** A/B parametre-backtest için
-  `load_thresholds` (`@lru_cache`) üstüne **temiz config-injection seam** gerekir (CP2'de
-  bilinçli ertelendi — invazif olmasın diye). `edge_report.safe_to_autotune` False iken oto-uygulama YOK.
+- **CP4 — Adaptif öz-ayar.**
+  - **Slice 1 ✅ DONE — giriş/çıkış kalitesi öğrenicisi (observe-only).**
+    `packages/learning/entry_exit_quality.py`: biriken verified outcome'ların MAE/MFE
+    excursion'ından, **dominant_module × timeframe** kovaları bazında üç ders çıkarır:
+    EXIT_EARLY (yakalama=pnl_pct/mfe_pct düşük + bırakılan kâr yüksek → trailing sıkı),
+    STOP_TOO_TIGHT (SL_HIT oranı yüksek + stop adverse < kazanan MFE → gürültü stop'u),
+    ENTER_EARLY (kazananlar lehe dönmeden önce MFE'lerinin büyük kısmı kadar aleyhte
+    dalıyor). Her ders bir `nudge` ipucu taşır (slice 2 için: trailing/sl_atr/entry_timing).
+    `GET /api/v1/learning/entry-exit-quality` + `EntryExitQualityPanel` (Conscious grup 03).
+    On-demand (worker'a yük yok), karar zincirine SIFIR dokunuş. **Neden gerekliydi:**
+    `tf_target_trainer` SL/TP'yi yalnız **TF** bazında öğrenir; "hangi MODÜLÜN çıkışı/girişi/
+    stop'u bozuk" granülerliği yoktu. İlk canlı bulgu: **touche × 4h/1h asıl sorun dar stop
+    DEĞİL, EXIT_EARLY** (hareketin ~%28'i yakalanıyor, işlem başı ~%2.5 kâr masada).
+  - **Slice 2 (SIRADA) — otonom uygula.** entry_exit_quality önerilerini modül-bazlı
+    SL×ATR / trailing nudge'ına bağla; **G3 rollback net'iyle** (`weight_autoapply_store`/
+    `weight_rollback` deseni reuse — expectancy düşerse oto-geri-al) ve `edge_report.
+    safe_to_autotune` STABLE kapısından geçince. Bugün edge UNSTABLE → uygulama YOK.
+  - **Kalan CP4 kapsamı.** Kural-sabit eşikleri (rejim ADX/vol, consensus eşiği, guard
+    eşikleri, tf_weights) trainer öner → CP2/backtest doğrula → CP3 harness'la **dar-bant oto**
+    (G3 deseni). **NOT:** A/B parametre-backtest için `load_thresholds` (`@lru_cache`) üstüne
+    **temiz config-injection seam** gerekir (CP2'de bilinçli ertelendi). `safe_to_autotune`
+    False iken oto-uygulama YOK.
+  - **Deadlock bilgisi (devam eden AI bilsin):** otonom ağırlık akışı "tek-değişiklik-tek-
+    doğrulama" diskiplininde; bir auto-apply, `REBALANCE_ROLLBACK_MIN_OUTCOMES` (default 15)
+    yeni post-apply outcome birikene kadar MONITORING'de kalır ve TÜM yeni önerileri PENDING→
+    `REJECTED(superseded)`'e iter. Düşük işlem hacminde bu "15 red" görüntüsü **owner veto'su
+    DEĞİL**, sadece kuyruk churn'ü. Akışı hızlandırmak için eşiği düşür (env: 15→8) — kod değil.
 - **CP5 — Keşif + motor birleşmesi.** `discovery.py` (sınırlı hipotez üret→backtest→CP4 terfi);
   shadow zekâyı (market_regime/trend_strength/setup_classifier/conflict_resolver/agent_pipeline)
   **tek tek** flag'li yön otoritesine terfi (= eski F6, güvenle).
