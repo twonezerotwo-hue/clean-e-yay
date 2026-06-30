@@ -36,6 +36,10 @@ GUARDRAIL: dict[str, tuple[float, float]] = {
     "rr":           (1.5, 5.0),   # 15m için trade_economics.min_rr (1.5) zemin
     "sl_pct_floor": (0.002, 0.030),
     "sl_pct_cap":   (0.010, 0.150),
+    # CP4 slice 3 — trailing mesafesi çarpanı (tier.trail_distance × trail_mult).
+    # 1.0 = nötr (bayt-aynı). EXIT_EARLY bulgusunda trainer ↑ önerir (trail gevşer,
+    # kâr daha çok koşar). Mutlak band: yarısı–iki katı arası, gürültüye karşı.
+    "trail_mult":   (0.5, 2.0),
 }
 
 ProposalStatus = Literal["PENDING", "APPROVED", "REJECTED", "AUTO_APPLIED", "SUPERSEDED"]

@@ -1890,6 +1890,13 @@ export type TfTargetEdgeGate = {
   rollback_history: Array<Record<string, unknown>>;
 };
 
+// CP4 slice 3 — öğrenilen per-TF trailing çarpanı.
+export type TfTargetTrailAutotune = {
+  enabled: boolean;
+  guardrail: { min: number; max: number };
+  per_timeframe: Record<string, number>;
+};
+
 export type TfTargetsView = {
   enabled: boolean;
   auto_apply_band_pct: number;
@@ -1899,6 +1906,7 @@ export type TfTargetsView = {
   pending: Record<string, unknown> | null;
   history: Array<Record<string, unknown>>;
   edge_gate: TfTargetEdgeGate;
+  trail_autotune: TfTargetTrailAutotune;
 };
 
 export type TfTargetsActionResult = {
