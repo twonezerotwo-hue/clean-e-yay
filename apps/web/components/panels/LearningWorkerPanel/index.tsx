@@ -88,7 +88,7 @@ export function LearningWorkerPanel() {
   if (health.isLoading || summary.isLoading) {
     return (
       <PanelFrame id="learning_worker">
-        <PanelHeader title="Learning Worker" />
+        <PanelHeader title="Öğrenme Motoru Durumu" />
         <LoadingState />
       </PanelFrame>
     );
@@ -97,7 +97,7 @@ export function LearningWorkerPanel() {
   if (!worker && !run) {
     return (
       <PanelFrame id="learning_worker">
-        <PanelHeader title="Learning Worker" />
+        <PanelHeader title="Öğrenme Motoru Durumu" />
         <EmptyState message="Worker saglik verisi yok." />
       </PanelFrame>
     );
@@ -106,8 +106,8 @@ export function LearningWorkerPanel() {
   return (
     <PanelFrame id="learning_worker">
       <PanelHeader
-        title="Learning Worker"
-        subtitle={`son basari ${fmtRelative(worker?.last_success_at ?? health.data?.last_learning_run)}`}
+        title="Öğrenme Motoru Durumu"
+        subtitle={`son başarılı çalışma ${fmtRelative(worker?.last_success_at ?? health.data?.last_learning_run)}`}
         actions={
           <span
             className={`rounded px-1.5 py-0.5 text-[10px] uppercase tracking-widest ${statusTone(

@@ -46,7 +46,7 @@ export function TfWeightsPanel() {
   if (isLoading) {
     return (
       <PanelFrame id="tf_weights">
-        <PanelHeader title="tf_weights Kalibrasyon" />
+        <PanelHeader title="Zaman Dilimi Ağırlıkları" />
         <LoadingState />
       </PanelFrame>
     );
@@ -58,8 +58,8 @@ export function TfWeightsPanel() {
   return (
     <PanelFrame id="tf_weights">
       <PanelHeader
-        title="tf_weights Kalibrasyon"
-        subtitle="per-TF doğrulama → öneri (owner onaylı)"
+        title="Zaman Dilimi Ağırlıkları"
+        subtitle="Hangi zaman dilimine ne kadar güveniliyor (önerir, sen onaylarsın)"
         actions={
           <span
             className={`rounded px-1.5 py-0.5 uppercase tracking-wide text-[10px] ${
@@ -72,10 +72,10 @@ export function TfWeightsPanel() {
       />
       <p className="mb-2 rounded border border-white/10 bg-white/[0.02] px-2 py-1 text-[11px] text-white/55">
         {trusted
-          ? "tf_weights doğrulandı — öneri verilebilir."
-          : "tf_weights PRIOR · kalibrasyon doğrulayana kadar güvenilmiyor."}{" "}
-        Durum: <b>{STATUS_LABEL[status] ?? status}</b>. Owner onaylar; canlı ağırlık asla
-        otomatik taşınmaz.
+          ? "Zaman dilimi güvenleri doğrulandı — öneri verilebilir."
+          : "Zaman dilimi güvenleri henüz doğrulanmadı · yeterli kanıt birikene kadar güvenilmiyor."}{" "}
+        Durum: <b>{STATUS_LABEL[status] ?? status}</b>. Değişikliği sen onaylarsın; canlı
+        ağırlık asla otomatik taşınmaz.
       </p>
       {!rows.length ? (
         <EmptyState message="Henüz verified outcome yok — kalibrasyon birikiyor." />

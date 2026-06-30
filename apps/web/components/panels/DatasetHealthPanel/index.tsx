@@ -53,7 +53,7 @@ export function DatasetHealthPanel() {
     <PanelFrame id="dataset_health">
       <PanelHeader
         title="Veri Sağlığı"
-        subtitle="Öğrenme yakıtı hazır mı"
+        subtitle="Öğrenmek için yeterli ve temiz veri var mı"
         actions={
           <span
             className={`rounded px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide ${

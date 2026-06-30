@@ -75,7 +75,7 @@ export function WeightProposalPanel() {
   if (isLoading) {
     return (
       <PanelFrame id="weight_proposal">
-        <PanelHeader title="Ağırlık Önerisi" />
+        <PanelHeader title="Ağırlık Ayarı Önerisi" />
         <LoadingState />
       </PanelFrame>
     );
@@ -88,7 +88,7 @@ export function WeightProposalPanel() {
     return (
       <PanelFrame id="weight_proposal">
         <PanelHeader
-          title="Ağırlık Önerisi"
+          title="Ağırlık Ayarı Önerisi"
           subtitle={`aktif v${active}`}
           actions={
             <button
@@ -124,7 +124,7 @@ export function WeightProposalPanel() {
   return (
     <PanelFrame id="weight_proposal">
       <PanelHeader
-        title="Ağırlık Önerisi"
+        title="Ağırlık Ayarı Önerisi"
         subtitle={`aktif v${active} -> öneri v${p.to_version} - ${p.regime}`}
         actions={
           <>

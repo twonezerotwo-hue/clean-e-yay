@@ -44,7 +44,7 @@ export function TaskQueuePanel() {
   if (isLoading) {
     return (
       <PanelFrame id="governor_tasks">
-        <PanelHeader title="Görev Kuyruğu" />
+        <PanelHeader title="Bekleyen İncelemeler" />
         <LoadingState />
       </PanelFrame>
     );
@@ -58,8 +58,8 @@ export function TaskQueuePanel() {
   return (
     <PanelFrame id="governor_tasks">
       <PanelHeader
-        title="Görev Kuyruğu"
-        subtitle={`${queue.length} bekleyen read-only inceleme`}
+        title="Bekleyen İncelemeler"
+        subtitle={`${queue.length} bekleyen inceleme`}
         actions={
           <button
             type="button"

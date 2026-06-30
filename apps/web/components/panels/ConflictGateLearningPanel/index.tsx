@@ -63,7 +63,7 @@ export function ConflictGateLearningPanel() {
   if (status.isLoading || validation.isLoading) {
     return (
       <PanelFrame id="conflict_gate_learning">
-        <PanelHeader title="Conflict Gate Learning" />
+        <PanelHeader title="Çelişki Filtresi Öğrenmesi" />
         <LoadingState />
       </PanelFrame>
     );
@@ -72,7 +72,7 @@ export function ConflictGateLearningPanel() {
   if (!status.data && !rows.length) {
     return (
       <PanelFrame id="conflict_gate_learning">
-        <PanelHeader title="Conflict Gate Learning" />
+        <PanelHeader title="Çelişki Filtresi Öğrenmesi" />
         <EmptyState />
       </PanelFrame>
     );
@@ -81,8 +81,8 @@ export function ConflictGateLearningPanel() {
   return (
     <PanelFrame id="conflict_gate_learning">
       <PanelHeader
-        title="Conflict Gate Learning"
-        subtitle={`${modes.length} profil modu / ${rows.length} validation route`}
+        title="Çelişki Filtresi Öğrenmesi"
+        subtitle={`${modes.length} mod · ${rows.length} doğrulama kaydı`}
         actions={
           <span
             className={`rounded px-1.5 py-0.5 text-[10px] uppercase tracking-widest ${

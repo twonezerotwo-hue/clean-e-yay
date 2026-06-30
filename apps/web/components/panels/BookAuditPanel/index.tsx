@@ -69,7 +69,7 @@ export function BookAuditPanel() {
   if (isLoading) {
     return (
       <PanelFrame id="book_audit">
-        <PanelHeader title="Kitap Denetimi" />
+        <PanelHeader title="Açık İşlem Tutarlılığı" />
         <LoadingState />
       </PanelFrame>
     );
@@ -84,8 +84,8 @@ export function BookAuditPanel() {
   return (
     <PanelFrame id="book_audit">
       <PanelHeader
-        title="Kitap Denetimi"
-        subtitle="Açık kitabın yapısal mantık kontrolü"
+        title="Açık İşlem Tutarlılığı"
+        subtitle="Açık pozisyonlarda mantık hatası var mı"
         actions={
           <span
             className={`rounded px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide ${
