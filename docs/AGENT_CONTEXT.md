@@ -28,6 +28,14 @@ Goal → Plan → Fetch → Validate → Analyze → Decide → RiskGate → Pap
 Kendi verisini bulan, doğrulayan, agent'lara dağıtan, karar üreten,
 riskten geçiren, paper trade deneyen ve sonuçtan öğrenen sistem.
 
+## Aktif yol haritası (devam eden iş)
+
+**Adaptif kendini-eğitme (CP1–CP7)** → [ROADMAP.md](ROADMAP.md#adaptif-kendini-eğitme-yol-haritası-cp1cp7).
+Atıl öğrenme/shadow verisini güvenle döngüye sokma planı + **değişmez yasalar**
+(additive · flag-OFF=aynı · shadow-önce · rollback · off-tick · ölü-kod-yok).
+Durum: CP1✅ CP2✅, **sırada CP3 (yön güvenlik kasası)**. Başka oturum/AI buradan
+devam edebilir — fazlar, kırıdığı çizgiler ve geliştirme deseni orada yazılı.
+
 ## Detay
 
 Tam mimari için → [ARCHITECTURE.md](../ARCHITECTURE.md) (sadece derin
