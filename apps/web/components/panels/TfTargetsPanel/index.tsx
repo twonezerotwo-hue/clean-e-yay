@@ -198,6 +198,43 @@ export function TfTargetsPanel() {
         </div>
       ) : null}
 
+      {d?.trail_autotune ? (
+        <div className="mt-2 rounded border border-white/10 bg-white/[0.02] px-2 py-1.5 text-[11px]">
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] uppercase tracking-widest text-white/40">
+              Trailing öğrenmesi (kâr koşsun)
+            </span>
+            <span
+              className={`rounded px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide ${
+                d.trail_autotune.enabled
+                  ? "bg-signal-up/20 text-signal-up"
+                  : "bg-white/10 text-white/55"
+              }`}
+            >
+              {d.trail_autotune.enabled ? "AÇIK" : "KAPALI"}
+            </span>
+          </div>
+          <p className="mt-1 leading-4 text-white/55">
+            EXIT_EARLY (trailing erken kesiyor) bulgusunda trainer per-TF trail çarpanını
+            yükseltir → kâr daha çok koşar. 1.0 = nötr.
+            {d.trail_autotune.enabled
+              ? ""
+              : " Kapalı: trailing birebir tier varsayılanı. TF_TARGET_TRAIL_AUTOTUNE=1 ile aç."}
+          </p>
+          <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-[10px] tabular-nums text-white/55">
+            {TFS.map((tf) => {
+              const m = d.trail_autotune.per_timeframe[tf] ?? 1;
+              return (
+                <span key={tf}>
+                  <span className="uppercase text-white/40">{tf}</span>{" "}
+                  <span className={m > 1 ? "text-signal-up" : "text-white/70"}>×{m.toFixed(2)}</span>
+                </span>
+              );
+            })}
+          </div>
+        </div>
+      ) : null}
+
       <div className="mt-3 flex items-center justify-between text-[10px] text-white/35">
         <span>
           Mutlak güvenlik: SL × ATR ∈ [{d?.guardrail.sl_atr_mult?.min}, {d?.guardrail.sl_atr_mult?.max}], R:R ∈ [

@@ -110,10 +110,18 @@ mistake'i ayarlar — yön mantığını DEĞİL (bkz. ARCHITECTURE.md güvenlik
     endpoint'i + `TfTargetsPanel`'de `edge_gate` bloğu (durum + izleme + son rollback).
     **Flag default OFF = bayt-aynı** (gate'siz eski davranış). Owner `TF_TARGET_EDGE_GATE=1`
     ile güvenli-otonom modu açar. Tek-değişiklik-tek-doğrulama (aynı anda 1 aktif izleme).
-  - **Slice 3 (SIRADA) — touche erken-çıkış (trailing) düzeltmesi.** entry_exit_quality'nin
-    asıl bulgusu EXIT_EARLY/trailing; ama trailing tf_targets yüzeyinde DEĞİL (sl_atr/rr/
-    sl_pct). Trailing autotuner ayrı yüzey (trail_distance_pct, açılış yolu) gerektirir —
-    modül-aware. **Owner notu: CP7'den önce touche erken-çıkışı bu slice'ta düzelt.**
+  - **Slice 3 ✅ DONE — touche erken-çıkış (trailing) düzeltmesi.** Bulgu: trailing açılışta
+    konviksiyon **tier**'ından geliyordu (`tier.trail_distance`, global; per-TF/modül değil).
+    Global gevşetmek yanlış olurdu (touche 15m %100 yakalıyor). Çözüm: trailing'i **TF-aware**
+    yaptık — tf_targets yüzeyine yeni param **`trail_mult`** eklendi (GUARDRAIL [0.5,2.0]).
+    Açılış (`lifecycle._open`): `trail_distance = tier.trail_distance × te.tf_trail_mult(tf)`.
+    `tf_trail_mult` flag `TF_TARGET_TRAIL_AUTOTUNE` OFF iken **1.0 → bayt-aynı**. Trainer
+    Rule 4: bir TF'de trailing-çıkış oranı yüksek + yakalama (realize/MFE) düşükse
+    `trail_mult ↑` önerir (TfStats'a `trailing_rate`/`avg_capture` eklendi). trail_mult,
+    slice 2'nin store+edge-gate+rollback'inden GEÇER (otomatik güvenli). `/learning/tf-targets`
+    `trail_autotune` bloğu + `TfTargetsPanel`. **NOT:** uygulama TF-aware (modül değil); touche
+    4h/1h'i hedefler çünkü touche o TF'lerde baskın. Owner `TF_TARGET_TRAIL_AUTOTUNE=1` +
+    `TF_TARGET_EDGE_GATE=1` ile güvenli-otonom trailing'i açar.
   - **Kalan CP4 kapsamı.** Kural-sabit eşikleri (rejim ADX/vol, consensus eşiği, guard
     eşikleri, tf_weights) trainer öner → CP2/backtest doğrula → CP3 harness'la **dar-bant oto**
     (G3 deseni). **NOT:** A/B parametre-backtest için `load_thresholds` (`@lru_cache`) üstüne

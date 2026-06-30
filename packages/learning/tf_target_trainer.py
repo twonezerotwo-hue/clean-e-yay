@@ -37,6 +37,11 @@ TIGHT_MAE_RATIO   = 0.50    # MAE / SL_mesafe < bu → SL kullanılmadan vurdu (
 DISTANT_TP_RATIO  = 0.50    # MFE / TP_mesafe < bu → TP'ye yaklaşmadı (uzak)
 RICH_MFE_RATIO    = 0.90    # MFE / TP_mesafe > bu → TP'ye sık değdi, daha uzak çekilebilir
 
+# CP4 slice 3 — trailing gevşetme (EXIT_EARLY). Trailing çıkış oranı yüksek VE
+# yakalama (realize/MFE) düşükse trail çok sıkı kesiyor → trail_mult ↑.
+HIGH_TRAILING_RATE = 0.30   # trailing-stop çıkış oranı bu eşiğin üstünde
+LOW_CAPTURE        = 0.50   # ort. yakalama bu eşiğin altında → kâr masada kalıyor
+
 # Tek seferde her parametreye uygulanan maksimum nudge oranı (%). Store ayrıca
 # AUTO_APPLY_BAND_PCT ile sınırlar — bu trainer-içi ikinci güvenlik kemeri.
 NUDGE_STEP = 0.10  # %10
@@ -58,6 +63,10 @@ class TfStats:
     avg_mae_pct: float
     avg_mfe_pct: float
     avg_pnl: float
+    # CP4 slice 3 — trailing/capture (default'lu → additive; eski testler kırılmaz).
+    trailing_exit: int = 0
+    trailing_rate: float = 0.0
+    avg_capture: float = 1.0  # kazanan trade'lerde realize/MFE; 1.0 = tam yakalama
 
 
 @dataclass
@@ -103,7 +112,8 @@ def _stats_for_tf(rows, timeframe: str) -> TfStats | None:
     if n < MIN_TRADES_PER_TF:
         return None
     wins = sum(1 for o in items if o.pnl > 0)
-    sl_hit = tp_hit = time_stop = other = 0
+    sl_hit = tp_hit = time_stop = trailing = other = 0
+    captures: list[float] = []
     for o in items:
         cat = _classify_close(o.close_reason)
         if cat == "sl":
@@ -112,11 +122,18 @@ def _stats_for_tf(rows, timeframe: str) -> TfStats | None:
             tp_hit += 1
         elif cat == "time_stop":
             time_stop += 1
+        elif cat == "trailing":
+            trailing += 1
         else:
             other += 1
+        # Yakalama oranı: kazanan + lehe gitmiş trade'de realize/MFE (≤1).
+        pnl_pct = getattr(o, "pnl_pct", None)
+        if o.pnl > 0 and o.mfe_pct > 0.05 and pnl_pct is not None:
+            captures.append(min(1.0, pnl_pct / o.mfe_pct))
     avg_mae = sum(o.mae_pct for o in items) / n
     avg_mfe = sum(o.mfe_pct for o in items) / n
     avg_pnl = sum(o.pnl for o in items) / n
+    avg_capture = round(sum(captures) / len(captures), 4) if captures else 1.0
     return TfStats(
         timeframe=timeframe,
         trades=n, wins=wins, win_rate=round(wins / n, 3),
@@ -127,6 +144,9 @@ def _stats_for_tf(rows, timeframe: str) -> TfStats | None:
         avg_mae_pct=round(avg_mae, 4),
         avg_mfe_pct=round(avg_mfe, 4),
         avg_pnl=round(avg_pnl, 2),
+        trailing_exit=trailing,
+        trailing_rate=round(trailing / n, 3),
+        avg_capture=avg_capture,
     )
 
 
@@ -138,6 +158,7 @@ def _baseline_for_tf(tf: str, store_current: dict[str, dict[str, float]]) -> dic
         "rr": float(cfg.get("rr", 2.0)),
         "sl_pct_floor": float(cfg.get("sl_pct_floor", 0.015)),
         "sl_pct_cap": float(cfg.get("sl_pct_cap", 0.050)),
+        "trail_mult": 1.0,  # CP4 slice 3 — nötr taban; store override son sözü söyler
     }
     base.update({k: float(v) for k, v in (store_current.get(tf) or {}).items()})
     return base
@@ -193,6 +214,20 @@ def _nudge_tf(stats: TfStats, baseline: dict[str, float]) -> tuple[dict[str, flo
             old=old, new=new["rr"], delta_pct=NUDGE_STEP,
             reason=f"avg_mfe/typical_tp={mfe_ratio:.2f} > {RICH_MFE_RATIO}; "
                    f"tp_hit={stats.tp_hit_rate} > 0.5 → kâr genişletilebilir",
+        ))
+
+    # Kural 4 (CP4 slice 3): trailing erken kesiyor (yüksek trailing oranı + düşük
+    # yakalama) → trail_mult ↑ (trail gevşer, kâr daha çok koşar). entry_exit_quality
+    # EXIT_EARLY bulgusunun geometriye uygulanan karşılığı.
+    if stats.trailing_rate > HIGH_TRAILING_RATE and stats.avg_capture < LOW_CAPTURE:
+        old = new.get("trail_mult", 1.0)
+        proposed = old * (1.0 + NUDGE_STEP)
+        new["trail_mult"] = round(proposed, 4)
+        nudges.append(TfNudge(
+            timeframe=stats.timeframe, param="trail_mult",
+            old=old, new=new["trail_mult"], delta_pct=NUDGE_STEP,
+            reason=f"trailing_rate={stats.trailing_rate} > {HIGH_TRAILING_RATE}; "
+                   f"avg_capture={stats.avg_capture} < {LOW_CAPTURE} → trail çok sıkı",
         ))
 
     return new, nudges

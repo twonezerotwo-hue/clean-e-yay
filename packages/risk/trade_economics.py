@@ -11,6 +11,7 @@ tetiklenmez). Eksik/geçersiz seviye = diagnostic BLOCK, asla uydurma `allow`.
 """
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass, field
 
 from packages.data.registry.loader import load_thresholds
@@ -370,6 +371,31 @@ def _tf_params(timeframe: str) -> dict[str, float]:
     except Exception:  # store bozuk/silinmiş → saf config (bozulma yok)
         pass
     return params
+
+
+def trail_autotune_enabled() -> bool:
+    """CP4 slice 3 — öğrenilen per-TF trailing çarpanı flag'i. Default OFF → açılış
+    trailing'i birebir tier.trail_distance (bayt-aynı). AÇIK iken `tf_trail_mult`
+    store override'ı uygulanır (EXIT_EARLY öğrenmesi → trailing gevşer)."""
+    return os.environ.get("TF_TARGET_TRAIL_AUTOTUNE", "0").strip().lower() not in {
+        "0", "false", "no", "off", ""
+    }
+
+
+def tf_trail_mult(timeframe: str) -> float:
+    """Per-TF trailing-mesafesi çarpanı (öğrenilen). Flag OFF veya override yok →
+    1.0 (nötr; tier.trail_distance değişmez). Açılış yolu: trail_distance =
+    tier.trail_distance * tf_trail_mult(tf). Store bozuk → 1.0 (bozulma yok)."""
+    if not trail_autotune_enabled():
+        return 1.0
+    try:
+        from packages.learning import tf_target_store
+        override = (tf_target_store.active_overrides() or {}).get(timeframe) or {}
+        mult = float(override.get("trail_mult", 1.0))
+        lo, hi = tf_target_store.GUARDRAIL.get("trail_mult", (0.5, 2.0))
+        return max(lo, min(hi, mult))
+    except Exception:  # store yok/bozuk → nötr
+        return 1.0
 
 
 def compute_tf_targets(

@@ -22,6 +22,7 @@ from packages.risk.trade_economics import (
     compute_fixed_targets,
     compute_tf_targets,
     tf_targets_enabled,
+    tf_trail_mult,
 )
 
 # Zorla kapanış nedenleri → terminal lifecycle_status=FORCE_CLOSED + ayrı audit
@@ -153,7 +154,10 @@ def open_position(
         open_session_primary_market_open=open_session_primary_market_open,
         open_session_evidence=open_session_evidence,
         tier="MANUAL" if manual else tier.name,
-        trail_distance_pct=tier.trail_distance,
+        # CP4 slice 3 — öğrenilen per-TF trailing gevşemesi. Flag OFF → tf_trail_mult
+        # 1.0 döner, trail_distance birebir tier.trail_distance (bayt-aynı). MANUEL
+        # emirde de uygulanır (timeframe'e bağlı, tier'dan bağımsız çarpan).
+        trail_distance_pct=tier.trail_distance * tf_trail_mult(timeframe),
         trail_activate_pct=conviction.trail_activate(),
         trail_peak=entry_price,
         trail_active=False,

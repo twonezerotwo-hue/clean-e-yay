@@ -192,6 +192,17 @@ def get_tf_targets() -> dict:
         "0", "false", "no", "off", ""
     }
     rb = tf_target_rollback.load()
+    # CP4 slice 3 — öğrenilen per-TF trailing çarpanı (açılışta tier.trail_distance ×).
+    trail = {
+        "enabled": te.trail_autotune_enabled(),
+        "guardrail": {
+            "min": tf_target_store.GUARDRAIL["trail_mult"][0],
+            "max": tf_target_store.GUARDRAIL["trail_mult"][1],
+        },
+        "per_timeframe": {
+            tf: te.tf_trail_mult(tf) for tf in ("15m", "1h", "4h", "1d")
+        },
+    }
     return {
         "enabled": te.tf_targets_enabled(),
         "auto_apply_band_pct": tf_target_store.AUTO_APPLY_BAND_PCT,
@@ -209,6 +220,7 @@ def get_tf_targets() -> dict:
             "active_monitor": rb.get("active"),
             "rollback_history": list(rb.get("history") or [])[:5],
         },
+        "trail_autotune": trail,
     }
 
 
