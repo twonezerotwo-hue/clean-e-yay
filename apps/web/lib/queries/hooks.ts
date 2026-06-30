@@ -365,6 +365,16 @@ export const useDatasetHealth = () => {
   });
 };
 
+export const useEdgeReport = () => {
+  const policy = usePanelQueryPolicy(5 * 60_000);
+  return useQuery({
+    queryKey: qk.edgeReport,
+    queryFn: api.edgeReport,
+    staleTime: 60_000,
+    ...policy,
+  });
+};
+
 export const useCalibrationJumps = () => {
   const policy = usePanelQueryPolicy(5 * 60_000);
   return useQuery({
