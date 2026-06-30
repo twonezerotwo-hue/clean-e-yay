@@ -40,7 +40,7 @@ export function MissedOpportunitiesPanel() {
     <PanelFrame id="missed_opportunities">
       <PanelHeader
         title="Kaçan Fırsatlar"
-        subtitle="Açılmayan valid setup'ların TTL sonucu"
+        subtitle="Açılmayan geçerli fırsatların sonradan ne olduğu"
         actions={
           <span
             className={`rounded px-1.5 py-0.5 uppercase tracking-wide text-[10px] ${

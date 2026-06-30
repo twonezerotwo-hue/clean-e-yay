@@ -33,7 +33,7 @@ export function GovernorPanel() {
   if (isLoading) {
     return (
       <PanelFrame id="governor">
-        <PanelHeader title="Governor" />
+        <PanelHeader title="Sistem Yöneticisi" />
         <LoadingState />
       </PanelFrame>
     );
@@ -72,8 +72,8 @@ export function GovernorPanel() {
   return (
     <PanelFrame id="governor">
       <PanelHeader
-        title="Governor"
-        subtitle="Öz-yönetim özeti — gözlemler, öğrenir, önerir"
+        title="Sistem Yöneticisi"
+        subtitle="Sistemi izler, öğrenir, iyileştirme önerir"
         actions={
           <button
             type="button"

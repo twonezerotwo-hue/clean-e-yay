@@ -14,7 +14,7 @@ export function LearningPanel() {
   if (isLoading) {
     return (
       <PanelFrame id="learning">
-        <PanelHeader title="Ogrenme" />
+        <PanelHeader title="Öğrenme Özeti" />
         <LoadingState />
       </PanelFrame>
     );
@@ -23,7 +23,7 @@ export function LearningPanel() {
   if (!data) {
     return (
       <PanelFrame id="learning">
-        <PanelHeader title="Ogrenme" />
+        <PanelHeader title="Öğrenme Özeti" />
         <EmptyState />
       </PanelFrame>
     );
@@ -36,8 +36,8 @@ export function LearningPanel() {
   return (
     <PanelFrame id="learning">
       <PanelHeader
-        title="Ogrenme"
-        subtitle={`${sampleCount}/${outcomeCount} verified outcome - weights ${data.weights_version ?? "---"}`}
+        title="Öğrenme Özeti"
+        subtitle={`${sampleCount}/${outcomeCount} doğrulanmış işlem · ağırlık sürümü ${data.weights_version ?? "---"}`}
         actions={
           insufficient ? (
             <span className="rounded px-1.5 py-0.5 bg-amber-400/20 text-amber-300 uppercase tracking-wide text-[10px]">

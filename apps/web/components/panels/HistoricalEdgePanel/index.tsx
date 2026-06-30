@@ -49,8 +49,8 @@ export function HistoricalEdgePanel() {
   return (
     <PanelFrame id="historical_edge">
       <PanelHeader
-        title="Historical Edge"
-        subtitle="fuzzy setup benzerligi"
+        title="Geçmiş Benzer İşlemler"
+        subtitle="Benzer kurulumlar geçmişte nasıl sonuçlandı"
         actions={
           result ? (
             <span

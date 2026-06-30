@@ -30,7 +30,7 @@ export function MistakeMemoryPanel() {
   if (isLoading) {
     return (
       <PanelFrame id="mistake_memory">
-        <PanelHeader title="Mistake Memory" />
+        <PanelHeader title="Hata Hafızası" />
         <LoadingState />
       </PanelFrame>
     );
@@ -42,7 +42,7 @@ export function MistakeMemoryPanel() {
   if (!total) {
     return (
       <PanelFrame id="mistake_memory">
-        <PanelHeader title="Mistake Memory" subtitle="benzer geçmiş hata yok" />
+        <PanelHeader title="Hata Hafızası" subtitle="benzer geçmiş hata yok" />
         <EmptyState />
         <p className="mt-2 text-[11px] text-white/40">
           Yeterli doğrulanmış trade yok — neutral fallback (no_adjustment).
@@ -53,8 +53,8 @@ export function MistakeMemoryPanel() {
   return (
     <PanelFrame id="mistake_memory">
       <PanelHeader
-        title="Mistake Memory"
-        subtitle={`${total} fingerprint · ${flagged} flagged`}
+        title="Hata Hafızası"
+        subtitle={`${total} durum · ${flagged} riskli işaretli`}
         actions={
           <span className="text-[10px] uppercase tracking-widest text-white/40">
             RiskGate / DQS ile birlikte çalışır

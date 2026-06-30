@@ -35,6 +35,7 @@ import { LearningPanel } from "@/components/panels/LearningPanel";
 import { OutcomeLedgerPanel } from "@/components/panels/OutcomeLedgerPanel";
 import { LearningWorkerPanel } from "@/components/panels/LearningWorkerPanel";
 import { CalibrationPanel } from "@/components/panels/CalibrationPanel";
+import { CalibrationJumpsPanel } from "@/components/panels/CalibrationJumpsPanel";
 import { MistakeMemoryPanel } from "@/components/panels/MistakeMemoryPanel";
 import { HistoricalEdgePanel } from "@/components/panels/HistoricalEdgePanel";
 import { ConflictGateLearningPanel } from "@/components/panels/ConflictGateLearningPanel";
@@ -1294,6 +1295,7 @@ export function CockpitView() {
           >
             <div className="grid gap-3 lg:grid-cols-2">
               <CalibrationPanel />
+              <CalibrationJumpsPanel />
               <TfWeightsPanel />
               <div className="lg:col-span-2"><TfTargetsPanel /></div>
               <WeightProposalPanel />

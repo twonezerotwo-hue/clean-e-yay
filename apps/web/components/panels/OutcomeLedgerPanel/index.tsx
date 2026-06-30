@@ -77,7 +77,7 @@ export function OutcomeLedgerPanel() {
   if (isLoading) {
     return (
       <PanelFrame id="outcome_ledger">
-        <PanelHeader title="Outcome Ledger" />
+        <PanelHeader title="İşlem Sonuç Defteri" />
         <LoadingState />
       </PanelFrame>
     );
@@ -86,7 +86,7 @@ export function OutcomeLedgerPanel() {
   if (!data) {
     return (
       <PanelFrame id="outcome_ledger">
-        <PanelHeader title="Outcome Ledger" />
+        <PanelHeader title="İşlem Sonuç Defteri" />
         <EmptyState />
       </PanelFrame>
     );
@@ -98,8 +98,8 @@ export function OutcomeLedgerPanel() {
   return (
     <PanelFrame id="outcome_ledger">
       <PanelHeader
-        title="Outcome Ledger"
-        subtitle={`${verified}/${outcomes} verified outcome`}
+        title="İşlem Sonuç Defteri"
+        subtitle={`${verified}/${outcomes} doğrulanmış işlem`}
         actions={
           <span className="rounded px-1.5 py-0.5 bg-white/10 text-[10px] uppercase tracking-widest text-white/55">
             {data.sample_sufficient === false ? "LOW SAMPLE" : "READY"}

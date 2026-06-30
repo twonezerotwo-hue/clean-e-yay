@@ -30,7 +30,7 @@ export function CalibrationJumpsPanel() {
   if (isLoading) {
     return (
       <PanelFrame id="calibration_jumps">
-        <PanelHeader title="Kalibrasyon Sıçraması" />
+        <PanelHeader title="Güven Şişme Denetimi" />
         <LoadingState />
       </PanelFrame>
     );
@@ -45,8 +45,8 @@ export function CalibrationJumpsPanel() {
   return (
     <PanelFrame id="calibration_jumps">
       <PanelHeader
-        title="Kalibrasyon Sıçraması"
-        subtitle="Ham → fitted güven şişmesi + faktörler"
+        title="Güven Şişme Denetimi"
+        subtitle="Güven ayarı tahmini ne kadar şişiriyor"
         actions={
           <span
             className={`rounded px-1.5 py-0.5 uppercase tracking-wide text-[10px] ${

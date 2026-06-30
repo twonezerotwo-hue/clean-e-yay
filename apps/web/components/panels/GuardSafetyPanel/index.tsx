@@ -95,7 +95,7 @@ export function GuardSafetyPanel() {
   if (isLoading) {
     return (
       <PanelFrame id="guard_safety">
-        <PanelHeader title="Yön Güvenlik Kasası" />
+        <PanelHeader title="Koruma Filtresi Güvenliği" />
         <LoadingState />
       </PanelFrame>
     );
@@ -112,8 +112,8 @@ export function GuardSafetyPanel() {
   return (
     <PanelFrame id="guard_safety">
       <PanelHeader
-        title="Yön Güvenlik Kasası"
-        subtitle="Canlı guard'ları izle, kötüyse oto-kapat"
+        title="Koruma Filtresi Güvenliği"
+        subtitle="Açık koruma filtreleri işe yarıyor mu; zarar verirse kapatır"
         actions={
           <span
             className={`rounded px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide ${

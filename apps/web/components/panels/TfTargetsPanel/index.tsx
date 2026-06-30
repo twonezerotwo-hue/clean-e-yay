@@ -52,7 +52,7 @@ export function TfTargetsPanel() {
   if (isLoading) {
     return (
       <PanelFrame id="tf_targets">
-        <PanelHeader title="TF SL/TP Öğrenmesi" />
+        <PanelHeader title="Kâr/Zarar Hedefi Öğrenmesi" />
         <LoadingState />
       </PanelFrame>
     );
@@ -81,8 +81,8 @@ export function TfTargetsPanel() {
   return (
     <PanelFrame id="tf_targets">
       <PanelHeader
-        title="TF SL/TP Öğrenmesi"
-        subtitle="ATR-çapalı SL/TP, kapanan trade'lerden öğrenir"
+        title="Kâr/Zarar Hedefi Öğrenmesi"
+        subtitle="Stop ve hedef seviyelerini geçmiş işlemlerden öğrenir"
         actions={
           <span
             className={`rounded px-1.5 py-0.5 uppercase tracking-wide text-[10px] ${

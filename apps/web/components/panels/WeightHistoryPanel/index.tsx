@@ -31,7 +31,7 @@ export function WeightHistoryPanel() {
   if (isLoading) {
     return (
       <PanelFrame id="weight_history">
-        <PanelHeader title="Ağırlık Geçmişi" />
+        <PanelHeader title="Ağırlık Değişiklik Geçmişi" />
         <LoadingState />
       </PanelFrame>
     );
@@ -49,7 +49,7 @@ export function WeightHistoryPanel() {
   if (!items.length && !autoActive && !autoLedger.length) {
     return (
       <PanelFrame id="weight_history">
-        <PanelHeader title="Ağırlık Geçmişi" subtitle={`aktif v${active}`} />
+        <PanelHeader title="Ağırlık Değişiklik Geçmişi" subtitle={`aktif v${active}`} />
         <EmptyState />
       </PanelFrame>
     );
@@ -58,7 +58,7 @@ export function WeightHistoryPanel() {
   return (
     <PanelFrame id="weight_history">
       <PanelHeader
-        title="Ağırlık Geçmişi"
+        title="Ağırlık Değişiklik Geçmişi"
         subtitle={`aktif v${active} · ${items.length} kayıt · ${approved} onay / ${rejected} red`}
       />
       <AutoApplyBlock active={autoActive} ledger={autoLedger} />

@@ -42,7 +42,7 @@ export function CalibrationPanel() {
   if (isLoading) {
     return (
       <PanelFrame id="calibration">
-        <PanelHeader title="Calibration" />
+        <PanelHeader title="Güven Ayarı" />
         <LoadingState />
       </PanelFrame>
     );
@@ -50,7 +50,7 @@ export function CalibrationPanel() {
   if (!data) {
     return (
       <PanelFrame id="calibration">
-        <PanelHeader title="Calibration" />
+        <PanelHeader title="Güven Ayarı" />
         <EmptyState />
       </PanelFrame>
     );
@@ -60,8 +60,8 @@ export function CalibrationPanel() {
   return (
     <PanelFrame id="calibration">
       <PanelHeader
-        title="Calibration"
-        subtitle={`Platt scaling · ${samples_in_state}/${min_required} örnek`}
+        title="Güven Ayarı"
+        subtitle={`Tahmin güveni gerçeğe uyuyor mu · ${samples_in_state}/${min_required} örnek`}
         actions={
           <>
             <span

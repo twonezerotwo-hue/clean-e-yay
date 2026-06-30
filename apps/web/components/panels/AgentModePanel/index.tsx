@@ -50,7 +50,7 @@ export function AgentModePanel() {
   if (isLoading) {
     return (
       <PanelFrame id="agent_mode">
-        <PanelHeader title="Agent Mode" />
+        <PanelHeader title="İşlem Modu İzinleri" />
         <LoadingState />
       </PanelFrame>
     );
@@ -108,8 +108,8 @@ export function AgentModePanel() {
   return (
     <PanelFrame id="agent_mode">
       <PanelHeader
-        title="Agent Mode"
-        subtitle="Profil / strateji izinleri (owner kontrolü)"
+        title="İşlem Modu İzinleri"
+        subtitle="Hangi işlem türlerine izin var (sen belirlersin)"
         actions={
           <span
             className={`rounded px-1.5 py-0.5 uppercase tracking-wide text-[10px] ${

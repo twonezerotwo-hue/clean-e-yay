@@ -23,7 +23,7 @@ export function EdgeReportPanel() {
   if (isLoading) {
     return (
       <PanelFrame id="edge_report">
-        <PanelHeader title="Edge Kanıtı" />
+        <PanelHeader title="Kazanç Tutarlılığı" />
         <LoadingState />
       </PanelFrame>
     );
@@ -37,8 +37,8 @@ export function EdgeReportPanel() {
   return (
     <PanelFrame id="edge_report">
       <PanelHeader
-        title="Edge Kanıtı"
-        subtitle="Edge tutarlı mı, fluke mı"
+        title="Kazanç Tutarlılığı"
+        subtitle="Sistemin avantajı kalıcı mı, şans mı"
         actions={
           <span className={`rounded px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide ${v.chip}`}>
             {v.label}
