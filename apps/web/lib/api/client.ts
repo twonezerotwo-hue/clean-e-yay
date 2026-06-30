@@ -38,6 +38,7 @@ import type {
   MissedOpportunitiesView,
   BookAuditView,
   DatasetHealthView,
+  EdgeReportView,
   CalibrationJumpsView,
   AgentModeConfigView,
   AgentModeConfigUpdate,
@@ -606,6 +607,8 @@ export const api = {
     fetchJSON<BookAuditView>("/api/v1/learning/book-audit"),
   datasetHealth: () =>
     fetchJSON<DatasetHealthView>("/api/v1/learning/dataset-health"),
+  edgeReport: () =>
+    fetchJSON<EdgeReportView>("/api/v1/learning/edge-report"),
   calibrationJumps: () =>
     fetchJSON<CalibrationJumpsView>("/api/v1/learning/calibration-jumps"),
   historicalEdge: (fingerprint: string) =>

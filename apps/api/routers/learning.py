@@ -15,6 +15,7 @@ from packages.learning import (
     calibration_store,
     calibration_trainer,
     dataset_health,
+    edge_report,
     historical_edge,
     missed_opportunity,
     mistake_memory,
@@ -103,6 +104,16 @@ def get_dataset_health() -> dict:
     (yeterli örnek var mı). 'Biriktirdiğimiz veri kullanılabilir mi' sorusunu
     yanıtlar; yeni veri toplamaz, karar zincirine etkisi yoktur."""
     return dataset_health.report()
+
+
+@router.get("/learning/edge-report")
+def get_edge_report() -> dict:
+    """CP2 — edge kanıt/stabilite özeti (observe-only). Biriken outcome'lar
+    üstünde çok-katlı walk-forward stabilite (edge tutarlı mı) + missed
+    opportunity counterfactual + tek-kelime verdict (STABLE/UNSTABLE/
+    INSUFFICIENT). Mevcut backtest motorunu (replay/strategy-backtest) tekrar
+    etmez; CP4 öz-ayar bir öneriyi uygulamadan önce güven tartmak için okur."""
+    return edge_report.report()
 
 
 @router.get("/learning/book-audit")

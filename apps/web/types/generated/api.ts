@@ -1989,6 +1989,32 @@ export type DatasetHealthView = {
   all_ready: boolean;
 };
 
+export type EdgeStabilitySegment = {
+  n: number;
+  win_rate: number;
+  expectancy: number;
+};
+
+export type EdgeStability = {
+  ready: boolean;
+  reason?: string;
+  have?: number;
+  need?: number;
+  folds?: number;
+  segments: EdgeStabilitySegment[];
+  win_rate_std?: number;
+  positive_folds?: number;
+  stable?: boolean;
+};
+
+export type EdgeReportView = {
+  total: number;
+  verdict: "STABLE" | "UNSTABLE" | "INSUFFICIENT";
+  stability: EdgeStability;
+  counterfactual: { missed_win: number; avoided_loss: number; expired: number };
+  safe_to_autotune: boolean;
+};
+
 export type CalibrationGuardrailStatus = {
   enabled: boolean;
   max_inflation_delta: number;
