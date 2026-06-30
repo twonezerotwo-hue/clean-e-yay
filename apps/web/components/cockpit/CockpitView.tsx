@@ -44,6 +44,7 @@ import { TfWeightsPanel } from "@/components/panels/TfWeightsPanel";
 import { TfTargetsPanel } from "@/components/panels/TfTargetsPanel";
 import { MissedOpportunitiesPanel } from "@/components/panels/MissedOpportunitiesPanel";
 import { BookAuditPanel } from "@/components/panels/BookAuditPanel";
+import { DatasetHealthPanel } from "@/components/panels/DatasetHealthPanel";
 import { AgentModePanel } from "@/components/panels/AgentModePanel";
 import type { CockpitBrief } from "@/types/generated/api";
 
@@ -1273,6 +1274,7 @@ export function CockpitView() {
             badge="read-only"
           >
             <div className="grid gap-3 lg:grid-cols-2">
+              <DatasetHealthPanel />
               <LearningPanel />
               <LearningWorkerPanel />
               <div className="lg:col-span-2"><OutcomeLedgerPanel /></div>

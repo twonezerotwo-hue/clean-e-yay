@@ -14,6 +14,7 @@ from packages.learning import (
     calibration_audit,
     calibration_store,
     calibration_trainer,
+    dataset_health,
     historical_edge,
     missed_opportunity,
     mistake_memory,
@@ -93,6 +94,15 @@ def get_mistakes() -> dict:
         "flagged_count": len(flagged),
         "total_fingerprints": len(items),
     }
+
+
+@router.get("/learning/dataset-health")
+def get_dataset_health() -> dict:
+    """CP1 — öğrenme veri-hazırlık özeti (observe-only). Biriken outcome'ların
+    kapsama yüzdeleri (verified/confidence/excursion) + öğrenici-başı hazırlık
+    (yeterli örnek var mı). 'Biriktirdiğimiz veri kullanılabilir mi' sorusunu
+    yanıtlar; yeni veri toplamaz, karar zincirine etkisi yoktur."""
+    return dataset_health.report()
 
 
 @router.get("/learning/book-audit")

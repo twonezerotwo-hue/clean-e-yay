@@ -64,6 +64,10 @@ TF_TARGET_TRIGGER_PATH = Path(
     os.environ.get("TF_TARGET_TRIGGER_PATH", "data/runtime/tf_target_trigger.json")
 )
 TF_TARGET_MIN_NEW = int(os.environ.get("TF_TARGET_MIN_NEW", "20"))
+# CP1 — performans bütçesi: learning koşusu bu süreyi aşarsa WARN + run meta'da
+# over_budget=True. Tick'e dokunmaz; yalnız off-tick learning loop'unu izler ki
+# yeni öğrenici eklendikçe sistem sessizce AĞIRLAŞMASIN (ana kural).
+LEARNING_BUDGET_MS = int(os.environ.get("LEARNING_BUDGET_MS", "60000"))
 
 
 def _tf_target_should_run(outcomes_seen: int) -> tuple[bool, int]:
@@ -273,6 +277,14 @@ def run_once() -> dict:
     else:
         status = "COMPLETED"  # skipped_reason trainer'dan (örn. below_min_total)
 
+    # CP1 — perf bütçesi denetimi (off-tick; sistem ağırlaşmasın diye erken uyarı).
+    duration_ms = int((time.monotonic() - t0) * 1000)
+    over_budget = duration_ms > LEARNING_BUDGET_MS
+    if over_budget:
+        log.warning(
+            "learning run over budget: %dms > %dms (bütçe)", duration_ms, LEARNING_BUDGET_MS
+        )
+
     run = {
         "run_id": run_id,
         "started_at": started_at,
@@ -290,6 +302,8 @@ def run_once() -> dict:
         "tf_weight_proposal_status": tf_weight_proposal_status,
         "tf_target_status": tf_target_status,
         "tf_target_decisions": tf_target_decisions,
+        "duration_ms": duration_ms,        # CP1 — perf görünürlüğü
+        "over_budget": over_budget,        # CP1 — bütçe aşımı bayrağı
         "errors": errors,
     }
     run_store.save(run)
@@ -303,7 +317,7 @@ def run_once() -> dict:
         last_error="; ".join(errors) if errors else None,
         learning_outcomes_seen=outcomes_seen,
         proposals_generated=proposals_generated,
-        duration_ms=int((time.monotonic() - t0) * 1000),
+        duration_ms=duration_ms,
     )
     return run
 
