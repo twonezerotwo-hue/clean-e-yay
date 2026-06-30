@@ -16,6 +16,7 @@ from packages.learning import (
     calibration_trainer,
     dataset_health,
     edge_report,
+    guard_safety,
     historical_edge,
     missed_opportunity,
     mistake_memory,
@@ -114,6 +115,25 @@ def get_edge_report() -> dict:
     INSUFFICIENT). Mevcut backtest motorunu (replay/strategy-backtest) tekrar
     etmez; CP4 öz-ayar bir öneriyi uygulamadan önce güven tartmak için okur."""
     return edge_report.report()
+
+
+@router.get("/learning/guard-safety")
+def get_guard_safety() -> dict:
+    """CP3 — yön güvenlik kasası (observe view). Bağlı yön guard'ları (chop /
+    exhaustion / reversion / self_conflict) için: ham config-enabled vs engine'in
+    gördüğü efektif durum, aktif izleme ilerlemesi (baseline vs post-enable
+    expectancy), kasa kill-override'ları ve son geçmiş. Kasa bir guard'ı canlıda
+    izlerken expectancy baseline'ın altına düşerse oto-kapatır (CP4/CP5 ön-koşulu);
+    bu endpoint yalnız o durumu raporlar, karar zincirine etkisi yoktur."""
+    return guard_safety.report()
+
+
+@router.post("/learning/guard-safety/adopt")
+def post_guard_safety_adopt() -> dict:
+    """CP3 — owner aksiyonu: zaten AÇIK ama izlenmeyen yön guard'larını "şu andan
+    itibaren" izlemeye al (adopted/sürüklenme modu, yalnız-öneri — sessizce kapatmaz).
+    Kanıtlı oto-kapat için guard'ı OFF→ON toggle etmek gerekir (transition modu)."""
+    return guard_safety.adopt()
 
 
 @router.get("/learning/book-audit")

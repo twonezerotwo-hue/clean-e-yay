@@ -375,6 +375,26 @@ export const useEdgeReport = () => {
   });
 };
 
+export const useGuardSafety = () => {
+  const policy = usePanelQueryPolicy(5 * 60_000);
+  return useQuery({
+    queryKey: qk.guardSafety,
+    queryFn: api.guardSafety,
+    staleTime: 60_000,
+    ...policy,
+  });
+};
+
+export const useGuardSafetyAdopt = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: api.guardSafetyAdopt,
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: qk.guardSafety });
+    },
+  });
+};
+
 export const useCalibrationJumps = () => {
   const policy = usePanelQueryPolicy(5 * 60_000);
   return useQuery({

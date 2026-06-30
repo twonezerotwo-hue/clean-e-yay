@@ -104,18 +104,27 @@ def pre_apply_expectancy(window: int | None = None) -> tuple[int, float]:
     return n, exp
 
 
-def _post_apply_metrics(applied_at: str) -> tuple[int, float]:
-    """applied_at SONRASI AÇILAN (opened_at) verified outcome'ların (sayı, ort PnL).
-    Outcome'lar yalnız kapalı trade'lerden türer; opened_at>applied_at filtresi →
-    yeni ağırlıkla açılmış + kapanmış (değişikliğe atfedilebilir) trade'ler."""
+def post_open_expectancy(since: str) -> tuple[int, float]:
+    """`since` (ISO) SONRASI AÇILAN (opened_at) verified outcome'ların (sayı, ort PnL).
+    Outcome'lar yalnız kapalı trade'lerden türer; opened_at>since filtresi →
+    değişiklikten sonra açılmış + kapanmış (değişikliğe atfedilebilir) trade'ler.
+
+    CP3 guard_safety kasası bunu yeniden kullanır (guard enable anından sonraki
+    canlı expectancy); böylece eşleştirilmiş-pencere mantığı tek yerde kalır."""
     outs = [
         o
         for o in outcomes_mod.outcomes_from_state()
-        if o.data_verified and _after(o.opened_at, applied_at)
+        if o.data_verified and _after(o.opened_at, since)
     ]
     n = len(outs)
     exp = round(sum(o.pnl for o in outs) / n, 4) if n else 0.0
     return n, exp
+
+
+def _post_apply_metrics(applied_at: str) -> tuple[int, float]:
+    """applied_at SONRASI AÇILAN verified outcome'ların (sayı, ort PnL) — G3 ağırlık
+    rollback'i için `post_open_expectancy`'nin niyet-açık (intent-revealing) sarmalı."""
+    return post_open_expectancy(applied_at)
 
 
 def _decide(active: dict, *, post_exp: float, post_n: int, baseline: float,
@@ -193,4 +202,4 @@ def check_rollback() -> dict:
     return _decide(active, post_exp=post_exp, post_n=post_n, baseline=baseline)
 
 
-__all__ = ["check_rollback", "pre_apply_expectancy"]
+__all__ = ["check_rollback", "post_open_expectancy", "pre_apply_expectancy"]

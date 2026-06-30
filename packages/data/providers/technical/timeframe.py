@@ -18,6 +18,7 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 
 from packages.data.providers.technical import fibonacci, indicators, patterns, reversal
+from packages.data.registry import guard_overrides
 from packages.data.registry.loader import load_thresholds
 from packages.data.types import (
     ConfirmationSignal,
@@ -132,14 +133,20 @@ def load_config() -> TechnicalConfig:
         },
         tilt_confirm_gain=float(tlt.get("confirm_gain", 0.15)),
         tilt_penalty_gain=float(tlt.get("penalty_gain", 0.40)),
-        chop_guard_enabled=bool(tq.get("enabled", False)),
+        # CP3 — yön güvenlik kasası: guard_safety bir guard'ı canlıda kötü bulup
+        # kill-override yazdıysa enabled zorla False'a çekilir (config'e dokunmadan).
+        # Override yokken `and not False` → birebir bugünkü davranış (law 2).
+        chop_guard_enabled=bool(tq.get("enabled", False))
+        and not guard_overrides.is_disabled("chop"),
         chop_adx_floor=float(tq.get("adx_chop_floor", 20.0)),
         chop_min_mult=float(tq.get("chop_min_mult", 0.5)),
-        exhaustion_guard_enabled=bool(eg.get("enabled", False)),
+        exhaustion_guard_enabled=bool(eg.get("enabled", False))
+        and not guard_overrides.is_disabled("exhaustion"),
         exh_high=float(eg.get("exh_high", 70.0)),
         exh_low=float(eg.get("exh_low", 30.0)),
         exh_min_mult=float(eg.get("exh_min_mult", 0.5)),
-        reversion_enabled=bool(rv.get("enabled", False)),
+        reversion_enabled=bool(rv.get("enabled", False))
+        and not guard_overrides.is_disabled("reversion"),
         exh_rev_low=float(rv.get("exh_rev_low", 20.0)),
         exh_rev_high=float(rv.get("exh_rev_high", 80.0)),
         rev_magnitude=float(rv.get("rev_magnitude", 25.0)),
