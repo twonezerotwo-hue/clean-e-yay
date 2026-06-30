@@ -46,6 +46,7 @@ import { MissedOpportunitiesPanel } from "@/components/panels/MissedOpportunitie
 import { BookAuditPanel } from "@/components/panels/BookAuditPanel";
 import { DatasetHealthPanel } from "@/components/panels/DatasetHealthPanel";
 import { EdgeReportPanel } from "@/components/panels/EdgeReportPanel";
+import { GuardSafetyPanel } from "@/components/panels/GuardSafetyPanel";
 import { AgentModePanel } from "@/components/panels/AgentModePanel";
 import type { CockpitBrief } from "@/types/generated/api";
 
@@ -1277,6 +1278,7 @@ export function CockpitView() {
             <div className="grid gap-3 lg:grid-cols-2">
               <DatasetHealthPanel />
               <EdgeReportPanel />
+              <GuardSafetyPanel />
               <LearningPanel />
               <LearningWorkerPanel />
               <div className="lg:col-span-2"><OutcomeLedgerPanel /></div>

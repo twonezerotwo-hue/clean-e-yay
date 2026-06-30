@@ -31,6 +31,7 @@ from packages.consensus.engine import ConsensusResult
 from packages.consensus.engine import build as build_consensus
 from packages.data.ingestion.pipeline import MarketSnapshot
 from packages.data.providers import technical as tech_provider
+from packages.data.registry import guard_overrides
 from packages.data.registry.loader import load_thresholds
 from packages.data.types import TIMEFRAMES
 from packages.learning import mistake_memory
@@ -155,8 +156,15 @@ def _kelly_cfg() -> dict:
 def _self_conflict_cfg() -> dict:
     """Açık-kitap self-conflict guard config (monkeypatch-seam). Aynı sembolde
     zaten açık ZIT yöne yeni aday girişini engeller. enabled default False
-    (shadow-first); kapalıyken yalnız gözlem işaretlenir, davranış değişmez."""
-    return (load_thresholds().get("book_audit") or {}).get("self_conflict_guard") or {}
+    (shadow-first); kapalıyken yalnız gözlem işaretlenir, davranış değişmez.
+
+    CP3 — yön güvenlik kasası: guard_safety bu guard'ı canlıda kötü bulup
+    kill-override yazdıysa enabled zorla False'a çekilir (config'e dokunmadan).
+    Override yokken çıktı birebir bugünkü (bkz. guard_overrides)."""
+    cfg = (load_thresholds().get("book_audit") or {}).get("self_conflict_guard") or {}
+    if cfg.get("enabled") and guard_overrides.is_disabled("self_conflict"):
+        return {**cfg, "enabled": False}
+    return cfg
 
 
 def _tf_rr(timeframe: str) -> float:

@@ -2015,6 +2015,37 @@ export type EdgeReportView = {
   safe_to_autotune: boolean;
 };
 
+// CP3 — yön güvenlik kasası (guard_safety.report).
+export type GuardSafetyMonitor = {
+  enabled_at?: string | null;
+  mode: "transition" | "adopted";
+  baseline_expectancy: number;
+  baseline_n: number;
+  post_expectancy: number;
+  post_n: number;
+  need: number;
+};
+
+export type GuardSafetyGuard = {
+  guard_key: string;
+  label: string;
+  config_enabled: boolean;
+  vault_disabled: boolean;
+  effective_enabled: boolean;
+  monitoring: boolean;
+  monitor?: GuardSafetyMonitor | null;
+  override?: { reason?: string; by?: string; at?: string } | null;
+};
+
+export type GuardSafetyView = {
+  available: boolean;
+  auto_disable_enabled: boolean;
+  min_outcomes: number;
+  monitor_max_age_hours: number;
+  guards: GuardSafetyGuard[];
+  history: Array<Record<string, unknown>>;
+};
+
 export type CalibrationGuardrailStatus = {
   enabled: boolean;
   max_inflation_delta: number;

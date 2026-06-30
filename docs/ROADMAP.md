@@ -69,10 +69,21 @@ mistake'i ayarlar — yön mantığını DEĞİL (bkz. ARCHITECTURE.md güvenlik
   `packages/learning/edge_report.py` (çok-katlı walk-forward stabilite + missed_opp
   counterfactual + verdict STABLE/UNSTABLE/INSUFFICIENT + `safe_to_autotune`)
   + `GET /api/v1/learning/edge-report` + `EdgeReportPanel`. Observe-only.
-- **CP3 — Yön güvenlik kasası ⏭️ SIRADA.**
-  `weight_rollback` desenini herhangi bir flag'li yön katmanına genelle (shadow→canlı
-  expectancy izle, düşerse oto-kapat). Mevcut `chop`/`exhaustion`/`reversion`/`self_conflict`
-  guard'larını bağla. **CP4/CP5'in ön-koşulu.**
+- **CP3 — Yön güvenlik kasası ✅ DONE (slice 1).**
+  `weight_rollback` deseni guard-agnostik kasaya genellendi: `packages/learning/guard_safety.py`
+  (owner bir guard'ı OFF→ON aldığında izlemeye alır → eşleştirilmiş baseline; yeterli yeni
+  outcome'da post-enable expectancy < baseline ise **oto-kapat**) + `guard_monitor_store.py`
+  (guard başına izleme/geçmiş ledger'i) + `packages/data/registry/guard_overrides.py`
+  (runtime kill-switch; engine seam'leri `_self_conflict_cfg`/`timeframe.load_config` OFF'a
+  zorlar, override yokken bayt-aynı, mtime-cache'li → sıcak yol sıfır yük). Bağlı guard'lar:
+  `chop`/`exhaustion`/`reversion`/`self_conflict`. `weight_rollback.post_open_expectancy`
+  public yapıldı (eşleştirilmiş-pencere mantığı tek yerde). Worker `run()` çağırır
+  (off-tick) + `GET /api/v1/learning/guard-safety` + `GuardSafetyPanel` (Conscious).
+  Oto-kapat default AÇIK; `GUARD_AUTO_DISABLE=0` → yalnız öneri (ROLLBACK_RECOMMENDED).
+  **Owner-niyeti farkı:** ağırlık rollback'i no-evidence'ta geri alırdı; kasa kanıtsız süre
+  dolunca INCONCLUSIVE kapanır, guard CANLI kalır (guard enable = owner kararı). **CP4/CP5'in
+  ön-koşulu artık hazır.** Not: önceden-canlı guard'lar geriye dönük izlenmez (yalnız gelecek
+  geçişler); mevcut canlı `self_conflict`'i kasaya almak için owner OFF→ON toggle eder.
 - **CP4 — Adaptif öz-ayar.** Kural-sabit eşikleri (rejim ADX/vol, consensus eşiği, guard
   eşikleri, tf_weights) trainer öner → CP2/backtest doğrula → CP3 harness'la **dar-bant oto**
   (G3 deseni; `rebalance_store`/`tf_target_store` reuse). **NOT:** A/B parametre-backtest için

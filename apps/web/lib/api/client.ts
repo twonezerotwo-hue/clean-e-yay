@@ -39,6 +39,7 @@ import type {
   BookAuditView,
   DatasetHealthView,
   EdgeReportView,
+  GuardSafetyView,
   CalibrationJumpsView,
   AgentModeConfigView,
   AgentModeConfigUpdate,
@@ -609,6 +610,12 @@ export const api = {
     fetchJSON<DatasetHealthView>("/api/v1/learning/dataset-health"),
   edgeReport: () =>
     fetchJSON<EdgeReportView>("/api/v1/learning/edge-report"),
+  guardSafety: () =>
+    fetchJSON<GuardSafetyView>("/api/v1/learning/guard-safety"),
+  guardSafetyAdopt: () =>
+    fetchJSON<{ adopted: string[] }>("/api/v1/learning/guard-safety/adopt", {
+      method: "POST",
+    }),
   calibrationJumps: () =>
     fetchJSON<CalibrationJumpsView>("/api/v1/learning/calibration-jumps"),
   historicalEdge: (fingerprint: string) =>

@@ -21,6 +21,7 @@ from pathlib import Path
 from packages.learning import auto_weight_trainer as trainer
 from packages.learning import (
     calibration_trainer,
+    guard_safety,
     rebalance_store,
     run_store,
     tf_calibration,
@@ -109,6 +110,7 @@ def run_once() -> dict:
     skipped_reason: str | None = None
     rebalance_decision: str | None = None  # G3: auto_applied | pending_* | no_change
     rollback_status = "UNKNOWN"             # G3: no_active | monitoring | CONFIRMED | ROLLED_BACK
+    guard_safety_status: dict = {}          # CP3: yön guard kasası (armed/rolled_back/...)
 
     try:
         outcomes_seen = len(outcomes_mod.outcomes_from_state())
@@ -269,6 +271,18 @@ def run_once() -> dict:
     except Exception as exc:  # defensive — worker patlamamalı
         errors.append(f"rollback:{type(exc).__name__}")
 
+    # CP3: yön güvenlik kasası. Owner bir guard'ı canlıya aldıysa izlemeye alır;
+    # yeterli yeni outcome birikince post-enable expectancy baseline'ın altına
+    # düşerse guard'ı oto-kapatır (kill-override). Geçiş yoksa sessiz (no-op).
+    try:
+        guard_safety_status = guard_safety.run()
+        if guard_safety_status.get("armed"):
+            log.info("guard_safety ARMED: %s", guard_safety_status["armed"])
+        if guard_safety_status.get("rolled_back"):
+            log.info("guard_safety ROLLBACK: %s", guard_safety_status["rolled_back"])
+    except Exception as exc:  # defensive — worker patlamamalı
+        errors.append(f"guard_safety:{type(exc).__name__}")
+
     if errors:
         status = "COMPLETED_WITH_ERRORS"
     elif outcomes_seen == 0:
@@ -295,6 +309,7 @@ def run_once() -> dict:
         "proposals_generated": proposals_generated,
         "rebalance_decision": rebalance_decision,  # G3
         "rollback_status": rollback_status,          # G3
+        "guard_safety_status": guard_safety_status,  # CP3
 
         "calibration_status": calibration_status,
         "tf_calibration_status": tf_calibration_status,
