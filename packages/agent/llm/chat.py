@@ -1110,6 +1110,27 @@ def _grounded_answer(message: str, ctx: dict) -> tuple[str, list[str]]:
     return _overview_answer(ctx)
 
 
+# LLM'in "veri yok" tarzı reddi — canlı web bulgusu varken bu PROVABLY yanlış.
+_DENIAL_MARKERS = (
+    "veri yok", "bilgi yok", "haber yok", "veri bulunam", "bilgi bulunam",
+    "no data", "no information", "elimde", "bulunmuyor",
+)
+
+
+def _llm_dropped_findings(llm_text: str, grounded: str, live_evidence: bool) -> bool:
+    """Zayıf/itaatsiz LLM, deterministik yanıttaki GERÇEK bulguları çöpe atıp
+    'veri yok' dediyse True. Yalnız canlı web bulgusu VARKEN (live_evidence) ve
+    deterministik yanıt kendisi 'yok' demiyorken tetiklenir — yüksek isabet, düşük
+    yanlış-pozitif (örn. 'açık pozisyonun yok' gibi meşru cevapları vurmaz)."""
+    if not live_evidence:
+        return False
+    low = llm_text.casefold()
+    grounded_low = grounded.casefold()
+    said_denial = any(m in low for m in _DENIAL_MARKERS)
+    grounded_has_findings = not any(m in grounded_low for m in _DENIAL_MARKERS)
+    return said_denial and grounded_has_findings
+
+
 def answer(message: str) -> dict:
     """Chat yanıtı — her zaman state-grounded; LLM sadece anlatımı akıcılaştırır."""
     refusal = guard.screen(message)
@@ -1181,6 +1202,16 @@ def answer(message: str) -> dict:
                     "fallback_reason": reason},
         }
     budget.record(comp.input_tokens + comp.output_tokens)
+    # Güvenlik ağı: LLM (özellikle zayıf yerel model) canlı web bulgularını çöpe atıp
+    # "veri yok" derse, deterministik özeti (gerçek bulguları taşır) kullan. Modelden
+    # bağımsız — Ollama/remote fark etmez; gerçek veri asla kaybolmaz.
+    if _llm_dropped_findings(comp.text, grounded, live_evidence):
+        return {
+            **base,
+            "answer": grounded,
+            "llm": {"mode": mode, "model": comp.model, "source": "fallback",
+                    "cached": False, "fallback_reason": "llm_dropped_findings"},
+        }
     result = {
         "answer": comp.text,
         "llm": {"mode": mode, "model": comp.model, "source": "llm", "cached": False,
