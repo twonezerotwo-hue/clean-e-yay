@@ -267,8 +267,13 @@ book_audit:
   # %9'u, G4 hiç görmedi); bu guard tek-sembol yığınına sıkı sınır koyar. enabled default
   # FALSE (shadow-first; her kararda concentration_report gözlemlenir, davranış değişmez).
   # CP3 kasası (guard_safety) canlıda kötü bulup kill-override yazarsa enabled zorla False.
+  # 2026-07-01: AÇILDI (owner kararı, Grup B). Yalnız KISITLAYICI — aynı-sinyalin
+  # TF'lere kopyalanıp riski 2x'lemesini (DODO 1h+4h −692) engeller; meşru karşı-örneği
+  # yok. CP3 kasası (guard_safety) izliyor; expectancy düşerse oto-kapatır. Yanlışsa
+  # false ile anında geri alınır (flag-rollback). Canlı tick_worker restart gerekir
+  # (AWS deploy zaten restart eder).
   concentration_guard:
-    enabled: false
+    enabled: true
     max_same_dir_legs: 1    # aynı sembol+yönde zaten ≥ bu kadar açık leg varsa yeni aday bloklanır (yığın 2'de başlar; stack_min_timeframes ile hizalı)
     max_symbol_pct: 0.05    # aynı sembol+yön açık exposure equity'nin bu oranını aşarsa blokla (G4 %30 cluster'ından çok daha sıkı)
 
