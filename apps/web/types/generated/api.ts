@@ -259,7 +259,7 @@ export type TimeframeSummary = {
 };
 
 export type LLMMeta = {
-  mode?: "off" | "mock" | "groq" | "openrouter";
+  mode?: "off" | "mock" | "groq" | "openrouter" | "ollama";
   model?: string | null;
   source?: "llm" | "fallback" | "guard";
   fallback_reason?: string | null;
