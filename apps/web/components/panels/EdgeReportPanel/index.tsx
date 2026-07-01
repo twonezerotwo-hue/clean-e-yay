@@ -95,6 +95,21 @@ export function EdgeReportPanel() {
           <span>Süre: <span className="text-white/60">{cf.expired}</span></span>
         </div>
       ) : null}
+
+      {d?.outlier_concentration != null ? (
+        <div
+          className={`mt-2 rounded border px-2 py-1 text-[10px] ${
+            d.outlier_dependent
+              ? "border-amber-400/30 bg-amber-400/5 text-amber-300/90"
+              : "border-white/10 bg-white/[0.02] text-white/45"
+          }`}
+        >
+          Tek-işlem yoğunlaşması: <span className="tabular-nums">%{Math.round((d.outlier_concentration ?? 0) * 100)}</span>
+          {" "}(eşik %{Math.round((d.max_outlier_concentration ?? 0.35) * 100)})
+          {d.outlier_dependent ? " — edge tek işleme bağımlı, autotune kilitli" : ""}
+          {" · "}rejim etiketi %{Math.round((d.regime_coverage ?? 0) * 100)}
+        </div>
+      ) : null}
     </PanelFrame>
   );
 }

@@ -19,6 +19,34 @@ from __future__ import annotations
 _MAX_WIN_RATE_STD = 0.15
 _MIN_FOLDS = 4
 _MIN_PER_FOLD = 3
+# CP4-fix #2: outlier-yoğunlaşma kapısı. Tek bir işlem toplam |pnl|'in bu oranından
+# fazlasını oluşturuyorsa edge o işleme BAĞIMLI → "STABLE" olsa bile autotune güvenli
+# değil (kâr tek talihli işlemden geliyorsa öğrenme yanlış gradyanı kovalar).
+_MAX_OUTLIER_CONCENTRATION = 0.35
+# Winsorize kuyruk oranı: expectancy-işaret kontrolü tek aykırı değere sallanmasın.
+_WINSOR_PCT = 0.05
+
+
+def _winsorize(pnls: list[float], pct: float = _WINSOR_PCT) -> list[float]:
+    """Uç değerleri p·%–(1-p)·% bandına kıstır (winsorize). Sıralamayı KORUR (fold
+    yapısı bozulmaz), sadece uç büyüklükleri sınırlar → per-fold expectancy işareti
+    tek dev işlemle spurious pozitif/negatif olmaz."""
+    n = len(pnls)
+    if n < 5:
+        return list(pnls)
+    ordered = sorted(pnls)
+    k = int(n * pct)  # simetrik kuyruk uzunluğu (alt k, üst k eleman kıstırılır)
+    lo = ordered[k]
+    hi = ordered[n - 1 - k]
+    return [max(lo, min(hi, p)) for p in pnls]
+
+
+def _outlier_concentration(pnls: list[float]) -> float:
+    """En büyük tek |pnl| / toplam |pnl|. 1.0 = tüm sinyal tek işlemde; 0'a yakın =
+    dağılmış. Edge'in tek talihli işleme ne kadar bağımlı olduğunu ölçer."""
+    absvals = [abs(p) for p in pnls]
+    total = sum(absvals)
+    return round(max(absvals) / total, 3) if total > 0 else 0.0
 
 
 def walk_forward_stability(pnls: list[float], folds: int = _MIN_FOLDS) -> dict:
@@ -60,8 +88,13 @@ def report() -> dict:
     from packages.learning import outcomes as outcomes_mod
 
     outs = outcomes_mod.outcomes_from_state()
-    pnls = [o.pnl for o in outs]
-    stab = walk_forward_stability(pnls)
+    pnls_raw = [o.pnl for o in outs]
+    # CP4-fix #2: stabilite verdict'i WINSORIZE edilmiş seride ölçülür → tek dev işlem
+    # fold expectancy işaretini çevirip sahte STABLE üretemez.
+    stab = walk_forward_stability(_winsorize(pnls_raw))
+    concentration = _outlier_concentration(pnls_raw)
+    labeled = sum(1 for o in outs if (o.regime or "UNKNOWN") != "UNKNOWN")
+    regime_coverage = round(labeled / len(outs), 3) if outs else 0.0
 
     mo = missed_opportunity.summary_viewmodel()
     moc = mo.get("outcomes") or {}
@@ -78,12 +111,18 @@ def report() -> dict:
     else:
         verdict = "UNSTABLE"
 
+    outlier_dependent = concentration > _MAX_OUTLIER_CONCENTRATION
     return {
         "total": len(outs),
         "verdict": verdict,
         "stability": stab,
         "counterfactual": counterfactual,
-        # CP4 bu raporu öneri-doğrulamada okuyacak; UNSTABLE iken oto-uygulama
-        # yapılmamalı (güven yok) — politika CP4'te bağlanır.
-        "safe_to_autotune": verdict == "STABLE",
+        # CP4-fix #2: outlier-yoğunlaşma + rejim kapsaması teşhisi.
+        "outlier_concentration": concentration,
+        "outlier_dependent": outlier_dependent,
+        "max_outlier_concentration": _MAX_OUTLIER_CONCENTRATION,
+        "regime_coverage": regime_coverage,
+        # Autotune YALNIZ stabil VE tek-işleme-bağımlı-değil ise güvenli. Tek talihli
+        # işlem edge'i STABLE gösterse bile öğrenmeye açma (dürüst gate).
+        "safe_to_autotune": verdict == "STABLE" and not outlier_dependent,
     }

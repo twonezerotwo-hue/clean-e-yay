@@ -1538,7 +1538,7 @@ export interface components {
         /** @description v2.6 — LLM çağrı meta'sı; source=fallback → deterministik narrative. */
         LLMMeta: {
             /** @enum {string} */
-            mode?: "off" | "mock" | "groq" | "openrouter";
+            mode?: "off" | "mock" | "groq" | "openrouter" | "ollama";
             model?: string | null;
             /** @enum {string} */
             source?: "llm" | "fallback" | "guard";
