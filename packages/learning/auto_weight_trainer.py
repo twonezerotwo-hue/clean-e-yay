@@ -17,6 +17,7 @@ Algoritma:
 """
 from __future__ import annotations
 
+import os
 from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime
 from typing import Literal
@@ -117,6 +118,45 @@ def _module_score(win_rate: float, avg_pnl: float) -> float:
     return round(win_rate * 100.0 + pnl_term, 3)
 
 
+# CP4-fix #3 — kayıp-farkında skor. Eski `_module_score`'da avg_pnl terimi
+# clamp(±10) yüzünden ihmal edilir → "iyi yön, felaket stop" modülü (touche:
+# çok küçük kazanç + birkaç dev SL_HIT) yüksek win-rate'le yüksek skor alıp
+# cezalandırılmıyordu. Flag `WEIGHT_LOSS_AWARE` (default OFF = bayt-aynı) açıkken
+# skora WINSORIZE'lı profit-factor eklenir → kayıp-büyüklüğü gerçekten yansır,
+# tek dev kazanç (outlier) skoru şişiremez.
+_LOSS_AWARE_OFF = {"0", "false", "no", "off", ""}
+
+
+def _loss_aware_enabled() -> bool:
+    return os.environ.get("WEIGHT_LOSS_AWARE", "0").strip().lower() not in _LOSS_AWARE_OFF
+
+
+def _winsorize(pnls: list[float], pct: float = 0.05) -> list[float]:
+    """Uç değerleri kıstır (outlier-direnç). edge_report ile aynı desen."""
+    n = len(pnls)
+    if n < 5:
+        return list(pnls)
+    ordered = sorted(pnls)
+    k = int(n * pct)
+    lo, hi = ordered[k], ordered[n - 1 - k]
+    return [max(lo, min(hi, p)) for p in pnls]
+
+
+def _loss_aware_score(win_rate: float, pnls: list[float]) -> float:
+    """win_rate*100 + WINSORIZE'lı profit-factor terimi. PF = kazanç/kayıp; net-
+    kaybeden modül (PF<1) skoruna kayıp büyüklüğüyle orantılı ceza alır. Term ±30
+    bandında (win_rate'e karşı anlamlı ağırlık); PF winsorize'lı → outlier şişirmez."""
+    w = _winsorize(pnls)
+    gross_profit = sum(p for p in w if p > 0)
+    gross_loss = abs(sum(p for p in w if p < 0))
+    if gross_loss <= 0:
+        pnl_term = 15.0 if gross_profit > 0 else 0.0
+    else:
+        pf = gross_profit / gross_loss
+        pnl_term = max(-30.0, min(30.0, (pf - 1.0) * 30.0))
+    return round(win_rate * 100.0 + pnl_term, 3)
+
+
 def _aggregate(outcomes) -> tuple[list[ModulePerf], int]:
     """Canonical outcome listesinden modül-bazlı performans. `pnl` canonical
     alandır (`pnl_usd` Trade'e özgüydü); fingerprint/data_verified aynı kalır."""
@@ -132,15 +172,23 @@ def _aggregate(outcomes) -> tuple[list[ModulePerf], int]:
             continue
         by_module.setdefault(mod, []).append(o)
 
+    loss_aware = _loss_aware_enabled()
     perfs: list[ModulePerf] = []
     for mod, items in by_module.items():
         n = len(items)
         if n < MIN_TRADES_PER_MODULE:
             continue
         wins = sum(1 for o in items if o.pnl > 0)
-        total_pnl = sum(o.pnl for o in items)
+        pnls = [o.pnl for o in items]
+        total_pnl = sum(pnls)
         win_rate = wins / n
         avg_pnl = total_pnl / n
+        # Flag OFF → eski skor (bayt-aynı); ON → kayıp-farkında (profit-factor).
+        score = (
+            _loss_aware_score(win_rate, pnls)
+            if loss_aware
+            else _module_score(win_rate, avg_pnl)
+        )
         perfs.append(
             ModulePerf(
                 module=mod,
@@ -149,7 +197,7 @@ def _aggregate(outcomes) -> tuple[list[ModulePerf], int]:
                 win_rate=round(win_rate, 3),
                 avg_pnl=round(avg_pnl, 2),
                 total_pnl=round(total_pnl, 2),
-                score=_module_score(win_rate, avg_pnl),
+                score=score,
             )
         )
     perfs.sort(key=lambda p: -p.score)
