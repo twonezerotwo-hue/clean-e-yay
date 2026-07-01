@@ -2030,6 +2030,11 @@ export type EdgeReportView = {
   stability: EdgeStability;
   counterfactual: { missed_win: number; avoided_loss: number; expired: number };
   safe_to_autotune: boolean;
+  // CP4-fix #2 — outlier-direnç teşhisi.
+  outlier_concentration?: number;
+  outlier_dependent?: boolean;
+  max_outlier_concentration?: number;
+  regime_coverage?: number;
 };
 
 // CP4 (slice 1) — giriş/çıkış kalitesi öğrenicisi (entry_exit_quality.report).

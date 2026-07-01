@@ -58,3 +58,41 @@ def test_edge_report_endpoint(fresh_env) -> None:
     assert resp.status_code == 200
     body = resp.json()
     assert "verdict" in body and "stability" in body
+
+
+# ── CP4-fix #2: outlier-direnç ─────────────────────────────────────────────────
+
+def test_winsorize_clamps_extremes_keeps_order() -> None:
+    pnls = [1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 1000.0]
+    w = edge_report._winsorize(pnls, pct=0.1)
+    assert len(w) == len(pnls)
+    assert max(w) < 1000.0  # dev değer kıstırıldı (üst kuyruk)
+    assert w[-1] == w[8]  # 1000 → üst sınıra (9.0) çekildi; konum korunur
+
+
+def test_outlier_concentration() -> None:
+    # Tek dev işlem → yüksek yoğunlaşma
+    assert edge_report._outlier_concentration([1.0, 1.0, 1.0, 100.0]) > 0.9
+    # Dağılmış → düşük
+    assert edge_report._outlier_concentration([5.0, 5.0, 5.0, 5.0]) == 0.25
+
+
+def test_safe_to_autotune_false_when_outlier_dependent(monkeypatch) -> None:
+    from packages.learning import outcomes as om
+
+    def _o(pnl, regime="NEUTRAL"):
+        return om.CanonicalOutcome(
+            trade_id="t", symbol="X", timeframe="1d", opened_at=None, closed_at=None,
+            duration_seconds=None, direction="long", open_price=1.0, close_price=1.0,
+            pnl=pnl, pnl_pct=None, open_reason=None, close_reason=None, fingerprint=None,
+            regime=regime, dominant_module="touche", candidate_action=None,
+            final_action=None, data_verified=True,
+        )
+
+    # Tutarlı win-rate + çoğu pozitif ama tek dev outlier → STABLE olsa bile gate kapalı.
+    outs = [_o(1.0), _o(-0.5)] * 8 + [_o(500.0)]  # 500 tek başına baskın
+    monkeypatch.setattr(om, "outcomes_from_state", lambda *a, **k: outs)
+    r = edge_report.report()
+    assert r["outlier_dependent"] is True
+    assert r["safe_to_autotune"] is False
+    assert "regime_coverage" in r

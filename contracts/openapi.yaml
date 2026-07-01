@@ -1519,7 +1519,7 @@ components:
       type: object
       description: v2.6 — LLM çağrı meta'sı; source=fallback → deterministik narrative.
       properties:
-        mode: { type: string, enum: ["off", mock, groq, openrouter] }
+        mode: { type: string, enum: ["off", mock, groq, openrouter, ollama] }
         model: { type: string, nullable: true }
         source: { type: string, enum: [llm, fallback, guard] }
         fallback_reason: { type: string, nullable: true }
