@@ -173,6 +173,9 @@ def test_self_conflict_guard_same_side_no_block(fresh_env, monkeypatch) -> None:
     dec, snap, regime = _force_pass(monkeypatch)
     from packages.risk.engine import RiskDecision
     monkeypatch.setattr(dec, "_self_conflict_cfg", lambda: {"enabled": True})
+    # Concentration guard'ı izole et: aynı-yön yığınını O bloklar (kendi testinde);
+    # burada YALNIZ self_conflict'in aynı-yönde tetiklenmediğini doğruluyoruz.
+    monkeypatch.setattr(dec, "_concentration_cfg", lambda: {"enabled": False})
     hold_risk = RiskDecision(action="HOLD", reason="ok", evidence=[])
     long_pos = _pos(fresh_env, symbol="BTCUSD", side="long", size_usd=5_000, timeframe="4h")
     d = dec.decide_for_symbol(
