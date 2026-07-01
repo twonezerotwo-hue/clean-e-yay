@@ -47,6 +47,11 @@ ensure_env() {  # ensure_env KEY VALUE
 }
 ensure_env WEIGHT_LOSS_AWARE 1
 ensure_env REBALANCE_ROLLBACK_MIN_OUTCOMES 8
+# Grup C — tam otonom öz-ayar (CP5'e kadar). Hepsi edge-gated + rollback'li:
+# edge STABLE olana kadar ARMED-ama-PAUSED (güvenlik ağı). Owner onayı gerektirmez.
+ensure_env TF_TARGET_EDGE_GATE 1
+ensure_env TF_TARGET_TRAIL_AUTOTUNE 1
+ensure_env THRESHOLD_AUTOTUNE 1
 
 echo "deploy: restart services"
 sudo systemctl restart eyay-supervisor.service
