@@ -1,8 +1,10 @@
 """Source ve feature registry yükleyicisi."""
 from __future__ import annotations
 
+import contextvars
 import json
 import os
+from contextlib import contextmanager
 from functools import lru_cache
 from pathlib import Path
 
@@ -41,9 +43,54 @@ def load_weights() -> dict:
 
 
 @lru_cache(maxsize=1)
-def load_thresholds() -> dict:
+def _load_thresholds_base() -> dict:
+    """Disk'ten okunan ham thresholds config (cache'li, tek kaynak)."""
     path = CONFIG_DIR / "thresholds_v1.0.yaml"
     return yaml.safe_load(path.read_text(encoding="utf-8"))
+
+
+# CP4 — config-injection seam. lru_cache'li base'in ÜSTÜNE in-process override
+# enjekte eder (deep-merge). Backtest A/B parametre-taraması + (ileride) otonom
+# eşik-ayarı bunu kullanır; @lru_cache artık A/B'yi engellemiyor. contextvar →
+# thread/async-güvenli, scope dışında otomatik temizlenir. Override yokken
+# load_thresholds base'i BİREBİR (zero-copy) döner → sıcak yol bayt-aynı.
+_thresholds_override: contextvars.ContextVar[dict | None] = contextvars.ContextVar(
+    "thresholds_override", default=None
+)
+
+
+def _deep_merge(base: dict, override: dict) -> dict:
+    out = dict(base)
+    for key, value in override.items():
+        if isinstance(value, dict) and isinstance(out.get(key), dict):
+            out[key] = _deep_merge(out[key], value)
+        else:
+            out[key] = value
+    return out
+
+
+def load_thresholds() -> dict:
+    """Etkin thresholds config = cache'li base + (varsa) aktif override (deep-merge).
+
+    Override yoksa base BİREBİR döner (zero-copy, bayt-aynı) — sıcak yol (decision
+    engine ~11 çağrı) ek yük almaz."""
+    base = _load_thresholds_base()
+    override = _thresholds_override.get()
+    if not override:
+        return base
+    return _deep_merge(base, override)
+
+
+@contextmanager
+def threshold_override(overrides: dict | None):
+    """CP4 seam — `overrides`'i load_thresholds'a enjekte et (deep-merge), scope
+    bitince temizle. Boş/None → no-op (base). A/B backtest: `with threshold_override(
+    {"consensus": {"min_confidence": 0.6}}): run_signal_backtest(...)`."""
+    token = _thresholds_override.set(overrides or None)
+    try:
+        yield
+    finally:
+        _thresholds_override.reset(token)
 
 
 def _resolve_path(p: str) -> Path:
