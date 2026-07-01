@@ -64,6 +64,23 @@ def test_sweep_applies_override_during_backtest(monkeypatch):
     assert out["recommendation"]["value"] == 0.03
 
 
+def test_multi_symbol_sweep_aggregates_trade_weighted(monkeypatch):
+    # Her sembol farklı trade sayısı/return → sepet trade-ağırlıklı ortalanmalı.
+    per_sym = {
+        "BTCUSD": {"status": "ok", "total_trades": 10, "win_rate": 0.5, "avg_return_pct": 0.02, "profit_factor": 2.0},
+        "ETHUSD": {"status": "ok", "total_trades": 30, "win_rate": 0.6, "avg_return_pct": 0.04, "profit_factor": 2.0},
+    }
+    monkeypatch.setattr(strategy_backtest, "run_signal_backtest",
+                        lambda s, t: dict(per_sym[s]))
+    out = threshold_ab.sweep("paper_trading.tp_rr_ratio", [2.0],
+                             symbols=["BTCUSD", "ETHUSD"])
+    b = out["baseline"]
+    assert b["total_trades"] == 40  # 10 + 30
+    # trade-ağırlıklı: (0.02*10 + 0.04*30) / 40 = 0.035
+    assert b["avg_return_pct"] == 0.035
+    assert out["symbols"] == ["BTCUSD", "ETHUSD"]
+
+
 def test_sweep_no_recommendation_when_not_better(monkeypatch):
     # Tüm değerler baseline ile aynı → öneri YOK (sadece açıkça iyiyse önerir).
     monkeypatch.setattr(

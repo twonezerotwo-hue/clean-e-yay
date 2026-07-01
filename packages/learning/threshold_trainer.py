@@ -33,8 +33,10 @@ MIN_IMPROVEMENT = 0.0005    # avg_return_pct bu kadar iyileşmeli (gürültü de
 _MIN_OUTCOMES_DEFAULT = 15
 _MONITOR_MAX_AGE_HOURS = 336.0
 
-# Backtest-doğrulama sembol/TF'i (harness; genişletmeye açık).
-VALIDATION_SYMBOL = "BTCUSD"
+# Backtest-doğrulama: global eşikler tek sembolde değil, işlem evreni SEPETİNDE
+# doğrulanır (CP4-fix #5) — trade-ağırlıklı ortalama. tp_rr_ratio gibi geometri de
+# sepet üstünde daha sağlam.
+VALIDATION_SYMBOLS = ["BTCUSD", "ETHUSD", "XAUUSD", "XAGUSD"]
 VALIDATION_TF = "1d"
 
 
@@ -45,12 +47,19 @@ class ThresholdParam:
     hi: float
 
 
-# Allowlist — YALNIZ run_signal_backtest'in gerçekten ölçtüğü skaler eşikler.
-# tp_rr_ratio: _sl_tp_pct'te tp_pct = sl_pct × tp_rr_ratio (backtest bunu kullanır).
-# (consensus/regime eşikleri run_signal_backtest'i etkilemediğinden ŞİMDİLİK dışarıda
-#  — onlar için o eşikleri exercise eden bir backtest gerekir; sonraki iş.)
+# Allowlist — run_signal_backtest'in gerçekten ÖLÇTÜĞÜ skaler eşikler (sepet üstünde
+# doğrulanır). tp_rr_ratio: tp_pct = sl_pct × tp_rr_ratio. CP4-fix #5: sinyal/rejim
+# eşikleri eklendi — bunlar build_timeframe_result'ın bias/rejimini (giriş tetiği)
+# doğrudan etkiler, sweep ile ölçülebilir:
+#   * technical.bias_cuts.bull / .bear — TF'in BULLISH/BEARISH eşiği (giriş yönü)
+#   * technical.adx_trend_min — TREND vs RANGE rejim ayrımı
+# (consensus.* eşikleri run_signal_backtest'i ETKİLEMEZ — o karar-katmanı gate'i;
+#  onun için tam decision-pipeline backtest'i gerekir, ayrı iş.)
 TUNABLE: list[ThresholdParam] = [
     ThresholdParam("paper_trading.tp_rr_ratio", lo=1.5, hi=4.0),
+    ThresholdParam("technical.bias_cuts.bull", lo=52.0, hi=70.0),
+    ThresholdParam("technical.bias_cuts.bear", lo=30.0, hi=48.0),
+    ThresholdParam("technical.adx_trend_min", lo=12.0, hi=30.0),
 ]
 
 
@@ -128,7 +137,7 @@ def train() -> dict:
             evaluated.append({"path": p.path, "decision": "no_candidates"})
             continue
         ab = threshold_ab.sweep(
-            p.path, cands, symbol=VALIDATION_SYMBOL, timeframe=VALIDATION_TF
+            p.path, cands, symbols=VALIDATION_SYMBOLS, timeframe=VALIDATION_TF
         )
         base_ret = (ab.get("baseline") or {}).get("avg_return_pct")
         rec = ab.get("recommendation")

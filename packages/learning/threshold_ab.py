@@ -48,27 +48,64 @@ def _metrics(result: dict) -> dict:
     }
 
 
+def _agg_metrics(symbols: list[str], timeframe: str) -> dict:
+    """Aktif override altında sembol-seti üstünde backtest'i TRADE-AĞIRLIKLI birleştir.
+    Global eşikler (bias_cuts/adx) tek sembolde değil, sepet üstünde doğrulanmalı."""
+    total_trades = 0
+    total_wins = 0.0
+    weighted_ret = 0.0
+    per_symbol: dict[str, dict] = {}
+    for sym in symbols:
+        r = strategy_backtest.run_signal_backtest(sym, timeframe)
+        per_symbol[sym] = _metrics(r)
+        n = int(r.get("total_trades") or 0)
+        if n <= 0:
+            continue
+        total_trades += n
+        total_wins += float(r.get("win_rate") or 0.0) * n
+        weighted_ret += float(r.get("avg_return_pct") or 0.0) * n
+    if total_trades <= 0:
+        return {"status": "ok", "total_trades": 0, "win_rate": None,
+                "avg_return_pct": None, "profit_factor": None, "per_symbol": per_symbol}
+    return {
+        "status": "ok",
+        "total_trades": total_trades,
+        "win_rate": round(total_wins / total_trades, 4),
+        "avg_return_pct": round(weighted_ret / total_trades, 5),
+        "profit_factor": None,
+        "per_symbol": per_symbol,
+    }
+
+
 def sweep(
     param_path: str,
     values: list[float],
     *,
     symbol: str = "BTCUSD",
     timeframe: str = "1d",
+    symbols: list[str] | None = None,
 ) -> dict:
     """`param_path` eşiğini `values` üzerinde tara; her değer için backtest metriği.
 
     En iyi = en yüksek avg_return_pct (yeterli trade'i olan; trade yoksa elenir).
     Baseline = aktif config değeri (override'sız koşu)."""
     baseline_value = _current_value(param_path)
+    syms = symbols or [symbol]
+    multi = len(syms) > 1
+
+    def _measure() -> dict:
+        if multi:
+            return _agg_metrics(syms, timeframe)
+        return _metrics(strategy_backtest.run_signal_backtest(syms[0], timeframe))
 
     runs: list[dict] = []
     for v in values:
         with threshold_override(_nested(param_path, v)):
-            result = strategy_backtest.run_signal_backtest(symbol, timeframe)
-        runs.append({"value": v, **_metrics(result)})
+            result = _measure()
+        runs.append({"value": v, **result})
 
     # Baseline (override yok) — referans.
-    base_result = strategy_backtest.run_signal_backtest(symbol, timeframe)
+    base_result = _measure()
 
     ranked = [
         r for r in runs
@@ -78,7 +115,8 @@ def sweep(
 
     return {
         "param_path": param_path,
-        "symbol": symbol,
+        "symbol": symbol if not multi else None,
+        "symbols": syms,
         "timeframe": timeframe,
         "baseline_value": baseline_value,
         "baseline": _metrics(base_result),

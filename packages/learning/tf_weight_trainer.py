@@ -1,10 +1,12 @@
 """Step 8 — tf_weights auto-tune (trust-gated proposal; owner-gated, never applied).
 
-Honest scope (no faking): full per-TF signal-CONTRIBUTION attribution (how much each
-timeframe's signal pushed each decision) needs richer per-TF decision logging and stays
-deferred. What is honestly derivable today is the per-TF entry OUTCOME — hit-rate and
-expectancy of trades entered on each timeframe — which `tf_calibration` already computes
-from VERIFIED outcomes.
+Scope: full per-TF signal-CONTRIBUTION attribution IS NOW LIVE (CP4-fix #7). `shadow`
+records per-TF contribution shares at decision time (see `tf_contribution.compute_
+snapshot`); `_gather_attributed_pnl` reads recent shadow snapshots + verified closed
+outcomes and credits each closed trade's PnL to the timeframes that DROVE the entry
+(not just the entry TF). When those snapshots exist for closed trades the proposal
+switches to attributed-PnL nudging automatically; otherwise it falls back to the
+per-TF entry OUTCOME (hit-rate/expectancy from `tf_calibration`).
 
 This trainer turns that into a conservative per-strategy `tf_weights` PROPOSAL:
 
@@ -17,9 +19,10 @@ This trainer turns that into a conservative per-strategy `tf_weights` PROPOSAL:
   * It is NEVER auto-applied. Owner approval moves live weights (mirrors
     `auto_weight_trainer`); this only proposes.
 
-Only the entry-TF's own weight in its strategy bucket is tuned (1d→swing, 1h/4h→
-intraday, 15m→scalp); 1w yields bias only and is never an entry. Cross-TF weights stay
-at PRIOR until contribution attribution lands.
+Entry-TF weights are tuned within their strategy bucket (1d→swing, 1h/4h→intraday,
+15m→scalp); 1w yields bias only and is never an entry. Cross-TF weights follow the
+attributed-PnL share when contribution snapshots are available (attribution LIVE),
+falling back to PRIOR only when no contribution data matches the closed trades.
 """
 from __future__ import annotations
 
@@ -57,7 +60,7 @@ class TfWeightProposal:
     deltas: list[TfWeightDelta]
     calibrated_timeframes: list[str] = field(default_factory=list)
     note: str = (
-        "entry-outcome based, trust-gated; full per-TF contribution attribution deferred"
+        "entry-outcome based, trust-gated; contribution attribution active when data matches"
     )
 
 
