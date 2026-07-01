@@ -240,6 +240,24 @@ paper_trading:
   trailing_stop_enabled: true
   partial_tp1_pct: 0.5
 
+# Strateji-farkında işlem şekillendirme (Faz 4) — her setup tipi (TREND/REVERSAL/
+# RANGE/BREAKOUT/PULLBACK/SCALP) kendi risk profiliyle açılsın: TREND geniş trailing'le
+# kazananı sürsün, REVERSAL yakın stopla (S/R belli), RANGE dar hedefle, SCALP hızlı
+# gir-çık. Çarpanlar TABAN geometriye (TF-bazlı) uygulanır → birleşir. size_mult ≤ 1.0
+# (no-boost invariant: yalnız küçültür). enabled:false → şekillendirme YOK (bayt-aynı);
+# setup_type bilinmiyorsa da nötr (hepsi 1.0). Guardrail: tüm çarpanlar [0.5, 1.5].
+strategy_shaping:
+  enabled: false
+  profiles:
+    #                    stop_mult  tp_rr_mult  trail_mult  size_mult
+    TREND:              { stop: 1.0,  tp_rr: 1.15, trail: 1.25, size: 1.0 }   # trendi sür: geniş trailing + yüksek TP
+    BREAKOUT:           { stop: 1.0,  tp_rr: 1.15, trail: 1.10, size: 1.0 }   # teyitli hareket, koş
+    REVERSAL_CONFIRMED: { stop: 0.85, tp_rr: 1.0,  trail: 1.0,  size: 1.0 }   # dönüş noktası belli → yakın stop
+    REVERSAL_WATCH:     { stop: 0.85, tp_rr: 0.9,  trail: 0.85, size: 0.7 }   # onaysız → temkinli, küçük
+    RANGE:              { stop: 0.85, tp_rr: 0.8,  trail: 0.8,  size: 0.7 }   # yatay → dar hedef, küçük
+    PULLBACK:           { stop: 0.9,  tp_rr: 1.0,  trail: 1.0,  size: 1.0 }   # trende dönüş, kontrollü
+    SCALP:              { stop: 0.75, tp_rr: 0.8,  trail: 0.75, size: 0.7 }   # hızlı gir-çık, çok sıkı
+
 # Açık kitap yapısal denetimi (packages/learning/book_audit.py). Canlı açık
 # pozisyon kitabını tarar; KAPANIŞ BEKLEMEDEN yapısal mantık hatalarını (aynı
 # sembolde zıt yön, tek varlıkta yoğunlaşma, aynı sinyalin TF'lere kopyalanması,
