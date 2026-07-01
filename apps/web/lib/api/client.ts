@@ -39,6 +39,8 @@ import type {
   BookAuditView,
   DatasetHealthView,
   EdgeReportView,
+  ThresholdAutotuneView,
+  ThresholdAbView,
   EntryExitQualityView,
   GuardSafetyView,
   CalibrationJumpsView,
@@ -611,6 +613,19 @@ export const api = {
     fetchJSON<DatasetHealthView>("/api/v1/learning/dataset-health"),
   edgeReport: () =>
     fetchJSON<EdgeReportView>("/api/v1/learning/edge-report"),
+  thresholdAutotune: () =>
+    fetchJSON<ThresholdAutotuneView>("/api/v1/learning/threshold-autotune"),
+  thresholdAb: (
+    paramPath: string,
+    values: string,
+    symbol = "BTCUSD",
+    timeframe = "1d",
+  ) =>
+    fetchJSON<ThresholdAbView>(
+      `/api/v1/learning/threshold-ab?param_path=${encodeURIComponent(paramPath)}` +
+        `&values=${encodeURIComponent(values)}` +
+        `&symbol=${encodeURIComponent(symbol)}&timeframe=${encodeURIComponent(timeframe)}`,
+    ),
   entryExitQuality: () =>
     fetchJSON<EntryExitQualityView>("/api/v1/learning/entry-exit-quality"),
   guardSafety: () =>

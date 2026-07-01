@@ -2037,6 +2037,63 @@ export type EdgeReportView = {
   regime_coverage?: number;
 };
 
+// CP4 (final) — otonom eşik trainer durumu (threshold_trainer.status_viewmodel).
+export type ThresholdOverrideEntry = {
+  value: number;
+  prev?: number | null;
+  at?: string | null;
+};
+
+export type ThresholdMonitorEntry = {
+  path: string;
+  from?: number;
+  to?: number;
+  backtest_gain?: number;
+  baseline_expectancy?: number;
+  baseline_n?: number;
+  applied_at?: string;
+  status?: string;
+  // resolved/history alanları (event, post_expectancy, post_n, resolved_at, reason)
+  event?: string;
+  post_expectancy?: number;
+  post_n?: number;
+  resolved_at?: string;
+  reason?: string;
+};
+
+export type ThresholdAutotuneView = {
+  enabled: boolean;
+  safe_to_autotune: boolean;
+  tunable: string[];
+  active_overrides: Record<string, ThresholdOverrideEntry>;
+  monitor?: ThresholdMonitorEntry | null;
+  history: ThresholdMonitorEntry[];
+};
+
+// CP4 — eşik A/B parametre-taraması (threshold_ab.sweep, on-demand backtest).
+export type ThresholdAbMetrics = {
+  status?: string;
+  total_trades?: number | null;
+  win_rate?: number | null;
+  avg_return_pct?: number | null;
+  profit_factor?: number | null;
+};
+
+export type ThresholdAbRun = ThresholdAbMetrics & { value: number };
+
+export type ThresholdAbView = {
+  param_path: string;
+  symbol?: string | null;
+  symbols: string[];
+  timeframe: string;
+  baseline_value?: number | null;
+  baseline: ThresholdAbMetrics;
+  runs: ThresholdAbRun[];
+  best?: ThresholdAbRun | null;
+  recommendation?: ThresholdAbRun | null;
+  error?: string;
+};
+
 // CP4 (slice 1) — giriş/çıkış kalitesi öğrenicisi (entry_exit_quality.report).
 export type EntryExitVerdict = {
   code: "EXIT_EARLY" | "STOP_TOO_TIGHT" | "ENTER_EARLY";
