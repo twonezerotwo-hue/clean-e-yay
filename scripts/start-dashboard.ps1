@@ -13,6 +13,22 @@ $ngrok = Join-Path $root "tools\ngrok.exe"
 $logs = Join-Path $root "logs"
 New-Item -ItemType Directory -Force -Path $logs | Out-Null
 
+# .env yükle → Start-Process ile başlatılan TÜM alt süreçler (API/tick/learning)
+# miras alsın. AWS supervisor .env'i in-process yükler (apps.api.main import),
+# ama LOCAL'de learning_worker/tick_worker AYRI süreç ve kendileri .env yüklemez;
+# WEIGHT_LOSS_AWARE / REBALANCE_ROLLBACK_MIN_OUTCOMES gibi flag'leri buradan görür.
+$envFile = Join-Path $root ".env"
+if (Test-Path $envFile) {
+    Get-Content $envFile | ForEach-Object {
+        $line = $_.Trim()
+        if ($line -and -not $line.StartsWith("#") -and $line.Contains("=")) {
+            $k, $v = ($line -split "=", 2)
+            $k = $k.Trim(); $v = $v.Trim()
+            if ($k) { Set-Item -Path "env:$k" -Value $v }
+        }
+    }
+}
+
 # Gerçek sağlık = HTTP 200 (sadece port açık olması yetmez; zombi süreç de port tutar).
 function Test-Http([string]$url, [int]$timeoutSec = 5) {
     try { return ((Invoke-WebRequest $url -TimeoutSec $timeoutSec -UseBasicParsing).StatusCode -eq 200) }
