@@ -11,6 +11,7 @@ Bağlı guard'lar (hepsi shadow-first; gözlem değeri zaten direction_score'da 
   * exhaustion    — technical.exhaustion_guard.enabled
   * reversion     — technical.reversion.enabled
   * self_conflict — book_audit.self_conflict_guard.enabled
+  * concentration — book_audit.concentration_guard.enabled
 
 KASA İLE AĞIRLIK ROLLBACK'İNİN İKİ FARKI (bilinçli):
   1. Birden çok guard bağımsız izlenir (her guard_key kendi slot'unda).
@@ -43,6 +44,7 @@ _GUARDS: dict[str, dict] = {
     "exhaustion": {"label": "Exhaustion (climax kovalama)", "path": ("technical", "exhaustion_guard")},
     "reversion": {"label": "Reversion (mean-reversion)", "path": ("technical", "reversion")},
     "self_conflict": {"label": "Self-conflict (zıt yön)", "path": ("book_audit", "self_conflict_guard")},
+    "concentration": {"label": "Concentration (aynı-yön yığını)", "path": ("book_audit", "concentration_guard")},
 }
 
 _MIN_OUTCOMES_DEFAULT = 15
