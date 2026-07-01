@@ -164,6 +164,15 @@ KNOWN_UNCONTRACTED: set[str] = {
     "GuardSafetyView",
     "TfTargetEdgeGate",
     "TfTargetTrailAutotune",
+    # CP4 eşik öğrenme panelleri (observe-only; /learning/threshold-autotune + -ab).
+    # Diğer learning view-type'larıyla aynı kategori — çekirdek trading API contract'ı
+    # değil, panel görünüm modelleri.
+    "ThresholdAbMetrics",
+    "ThresholdAbRun",
+    "ThresholdAbView",
+    "ThresholdAutotuneView",
+    "ThresholdMonitorEntry",
+    "ThresholdOverrideEntry",
 }
 
 
