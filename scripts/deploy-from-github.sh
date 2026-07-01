@@ -36,6 +36,18 @@ echo "deploy: web build"
   NEXT_DIST_DIR=.next-prod pnpm build
 )
 
+# Öğrenme otonomi flag'leri (Grup B, owner kararı) — PROD .env'de yoksa ekle.
+# Bunlar SIR DEĞİL, davranış toggle'ı: apps.api.main._load_dotenv APP_DIR/.env'i
+# supervisor import'unda yükler. Idempotent (grep -q guard) → deploy'da çoğalmaz;
+# owner .env'de değeri elle değiştirirse (örn. =0) korunur (yalnız YOK ise eklenir).
+# Instance rebuild'de de kalıcı (SSH gerektirmez).
+ensure_env() {  # ensure_env KEY VALUE
+  touch "$APP_DIR/.env"
+  grep -q "^$1=" "$APP_DIR/.env" 2>/dev/null || echo "$1=$2" >> "$APP_DIR/.env"
+}
+ensure_env WEIGHT_LOSS_AWARE 1
+ensure_env REBALANCE_ROLLBACK_MIN_OUTCOMES 8
+
 echo "deploy: restart services"
 sudo systemctl restart eyay-supervisor.service
 sudo systemctl restart eyay-web.service
