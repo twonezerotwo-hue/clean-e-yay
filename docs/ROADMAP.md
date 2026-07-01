@@ -131,11 +131,18 @@ mistake'i ayarlar — yön mantığını DEĞİL (bkz. ARCHITECTURE.md güvenlik
     win_rate/avg_return/PF karşılaştırır + baseline'dan iyiyse öneri. `GET /learning/threshold-ab`.
     Observe-only (override yalnız backtest scope'unda; canlı config değişmez). Bu = CP4'ün
     "trainer öner → **backtest doğrula**" adımının altyapısı.
-  - **Kalan CP4 kapsamı.** Kural-sabit eşikleri (rejim ADX/vol, consensus eşiği, guard
-    eşikleri, tf_weights) için OTONOM trainer: eşik nudge öner → `threshold_ab` ile backtest
-    doğrula → slice-2 edge-gate + rollback harness'ıyla dar-bant oto uygula (file-backed
-    override). `conviction._config` `@lru_cache`'i de aynı seam desenini isteyebilir.
-    `safe_to_autotune` False iken oto-uygulama YOK.
+  - **Slice 5 ✅ DONE — otonom eşik trainer (CP4 KAPANDI).** Tüm CP4 parçalarını birleştirir:
+    `threshold_trainer.train()` (off-tick) → allowlist eşiği (ilk: `paper_trading.tp_rr_ratio`,
+    skaler + backtest-ölçülebilir) için ±%10 aday üret → `threshold_ab.sweep` ile backtest-
+    doğrula → baseline'ı MIN_IMPROVEMENT geçerse VE `edge_report.safe_to_autotune` STABLE ise
+    → `threshold_overrides` (file-backed, mtime-cache) ile CANLIYA uygula → `check_rollback()`
+    outcome-rollback (post-apply expectancy düşerse `threshold_overrides.revert`). `load_thresholds`
+    runtime override'ı **yalnız `THRESHOLD_AUTOTUNE` açıkken** merge eder → flag OFF = bayt-aynı
+    (dosya bile okunmaz). `GET /learning/threshold-autotune`. weight_rollback expectancy REUSE;
+    tek-değişiklik-tek-doğrulama. **NOT:** allowlist şimdilik yalnız run_signal_backtest'in
+    ÖLÇTÜĞÜ skaler eşik(ler); consensus/regime eşikleri için o eşikleri exercise eden bir
+    backtest gerekir (sonraki iş — CP4 harness'ı hazır, genişletme allowlist + backtest meselesi).
+    Owner `THRESHOLD_AUTOTUNE=1` ile açar.
   - **Deadlock bilgisi (devam eden AI bilsin):** otonom ağırlık akışı "tek-değişiklik-tek-
     doğrulama" diskiplininde; bir auto-apply, `REBALANCE_ROLLBACK_MIN_OUTCOMES` (default 15)
     yeni post-apply outcome birikene kadar MONITORING'de kalır ve TÜM yeni önerileri PENDING→

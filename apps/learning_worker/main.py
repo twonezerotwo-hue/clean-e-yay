@@ -30,6 +30,7 @@ from packages.learning import (
     tf_target_store,
     tf_target_trainer,
     tf_weight_trainer,
+    threshold_trainer,
     weight_rollback,
 )
 from packages.learning import (
@@ -320,6 +321,22 @@ def run_once() -> dict:
             log.info("tf_target auto-apply CONFIRMED: %s", gb.get("confirmed_tfs"))
     except Exception as exc:  # defensive — worker patlamamalı
         errors.append(f"tf_target_rollback:{type(exc).__name__}")
+
+    # CP4 (final): otonom eşik trainer. THRESHOLD_AUTOTUNE açıkken allowlist eşikleri
+    # backtest-doğrulamayla dar-bant oto-uygular (edge STABLE + iyileşme şartı);
+    # rollback ayrı denetlenir. Flag OFF → DISABLED (no-op). Rollback her koşuda.
+    try:
+        tt = threshold_trainer.train()
+        if tt.get("status") == "APPLIED":
+            log.info("threshold AUTO-APPLIED: %s", tt.get("evaluated"))
+        tr = threshold_trainer.check_rollback()
+        if tr.get("status") == "ROLLED_BACK":
+            log.info("threshold ROLLBACK: %s (post_exp=%s < baseline=%s)",
+                     tr.get("path"), tr.get("post_expectancy"), tr.get("baseline_expectancy"))
+        elif tr.get("status") == "CONFIRMED":
+            log.info("threshold auto-apply CONFIRMED: %s", tr.get("path"))
+    except Exception as exc:  # defensive — worker patlamamalı
+        errors.append(f"threshold_trainer:{type(exc).__name__}")
 
     # CP3: yön güvenlik kasası. Owner bir guard'ı canlıya aldıysa izlemeye alır;
     # yeterli yeni outcome birikince post-enable expectancy baseline'ın altına

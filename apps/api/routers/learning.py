@@ -27,6 +27,7 @@ from packages.learning import (
     tf_target_trainer,
     tf_weight_trainer,
     threshold_ab,
+    threshold_trainer,
 )
 from packages.learning import outcomes as outcomes_mod
 from packages.learning.calibration import reliability_bins
@@ -139,6 +140,15 @@ def get_threshold_ab(
     except ValueError:
         return {"error": "values virgülle ayrılmış sayılar olmalı", "values": values}
     return threshold_ab.sweep(param_path, parsed, symbol=symbol, timeframe=timeframe)
+
+
+@router.get("/learning/threshold-autotune")
+def get_threshold_autotune() -> dict:
+    """CP4 (final) — otonom eşik trainer durumu (observe). Allowlist eşikleri,
+    aktif runtime override'lar, izlenen apply (rollback), geçmiş + edge/flag durumu.
+    Flag `THRESHOLD_AUTOTUNE` OFF iken hiçbir eşik oto-uygulanmaz (bayt-aynı); AÇIK
+    iken trainer backtest-doğrulamalı + edge STABLE + rollback'li dar-bant oto uygular."""
+    return threshold_trainer.status_viewmodel()
 
 
 @router.get("/learning/entry-exit-quality")

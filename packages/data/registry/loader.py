@@ -69,16 +69,33 @@ def _deep_merge(base: dict, override: dict) -> dict:
     return out
 
 
-def load_thresholds() -> dict:
-    """Etkin thresholds config = cache'li base + (varsa) aktif override (deep-merge).
+def _runtime_threshold_override() -> dict:
+    """CP4 otonom eşik-ayarı — file-backed runtime override (yalnız `THRESHOLD_AUTOTUNE`
+    açıkken). Kapalıyken `{}` (dosya bile okunmaz → bayt-aynı). Local import: loader
+    düşük seviyeli, threshold_overrides ondan REPO_ROOT alır (döngü önlenir)."""
+    try:
+        from packages.data.registry import threshold_overrides
+        return threshold_overrides.active_tree()
+    except Exception:  # store yok/bozuk → base (bozulma yok)
+        return {}
 
-    Override yoksa base BİREBİR döner (zero-copy, bayt-aynı) — sıcak yol (decision
-    engine ~11 çağrı) ek yük almaz."""
+
+def load_thresholds() -> dict:
+    """Etkin thresholds config = cache'li base + (varsa) override'lar (deep-merge).
+
+    İki override kaynağı: (1) file-backed runtime override (CP4 otonom eşik-ayarı,
+    yalnız flag açıkken), (2) contextvar (backtest A/B, threshold_override). Hiçbiri
+    yoksa base BİREBİR döner (zero-copy, bayt-aynı) — sıcak yol (decision engine ~11
+    çağrı) ek yük almaz."""
     base = _load_thresholds_base()
-    override = _thresholds_override.get()
-    if not override:
-        return base
-    return _deep_merge(base, override)
+    merged = base
+    runtime_ov = _runtime_threshold_override()
+    if runtime_ov:
+        merged = _deep_merge(merged, runtime_ov)
+    ctx_ov = _thresholds_override.get()
+    if ctx_ov:
+        merged = _deep_merge(merged, ctx_ov)
+    return base if merged is base else merged
 
 
 @contextmanager
