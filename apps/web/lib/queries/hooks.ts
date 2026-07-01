@@ -375,6 +375,33 @@ export const useEdgeReport = () => {
   });
 };
 
+export const useThresholdAutotune = () => {
+  const policy = usePanelQueryPolicy(5 * 60_000);
+  return useQuery({
+    queryKey: qk.thresholdAutotune,
+    queryFn: api.thresholdAutotune,
+    staleTime: 60_000,
+    ...policy,
+  });
+};
+
+export const useThresholdAb = (
+  paramPath: string,
+  values: string,
+  symbol: string,
+  timeframe: string,
+  enabled: boolean,
+) => {
+  const policy = usePanelQueryPolicy(5 * 60_000);
+  return useQuery({
+    queryKey: qk.thresholdAb(paramPath, values, symbol, timeframe),
+    queryFn: () => api.thresholdAb(paramPath, values, symbol, timeframe),
+    enabled: enabled && Boolean(paramPath) && Boolean(values.trim()),
+    staleTime: 60_000,
+    ...policy,
+  });
+};
+
 export const useEntryExitQuality = () => {
   const policy = usePanelQueryPolicy(5 * 60_000);
   return useQuery({

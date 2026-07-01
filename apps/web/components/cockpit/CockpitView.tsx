@@ -48,6 +48,8 @@ import { BookAuditPanel } from "@/components/panels/BookAuditPanel";
 import { DatasetHealthPanel } from "@/components/panels/DatasetHealthPanel";
 import { EdgeReportPanel } from "@/components/panels/EdgeReportPanel";
 import { EntryExitQualityPanel } from "@/components/panels/EntryExitQualityPanel";
+import { ThresholdAutotunePanel } from "@/components/panels/ThresholdAutotunePanel";
+import { ThresholdAbPanel } from "@/components/panels/ThresholdAbPanel";
 import { GuardSafetyPanel } from "@/components/panels/GuardSafetyPanel";
 import { AgentModePanel } from "@/components/panels/AgentModePanel";
 import type { CockpitBrief } from "@/types/generated/api";
@@ -1280,6 +1282,8 @@ export function CockpitView() {
             <div className="grid gap-3 lg:grid-cols-2">
               <DatasetHealthPanel />
               <EdgeReportPanel />
+              <ThresholdAutotunePanel />
+              <ThresholdAbPanel />
               <EntryExitQualityPanel />
               <GuardSafetyPanel />
               <LearningPanel />
