@@ -26,6 +26,7 @@ from packages.learning import (
     tf_target_store,
     tf_target_trainer,
     tf_weight_trainer,
+    threshold_ab,
 )
 from packages.learning import outcomes as outcomes_mod
 from packages.learning.calibration import reliability_bins
@@ -118,6 +119,26 @@ def get_edge_report() -> dict:
     INSUFFICIENT). Mevcut backtest motorunu (replay/strategy-backtest) tekrar
     etmez; CP4 öz-ayar bir öneriyi uygulamadan önce güven tartmak için okur."""
     return edge_report.report()
+
+
+@router.get("/learning/threshold-ab")
+def get_threshold_ab(
+    param_path: str,
+    values: str,
+    symbol: str = "BTCUSD",
+    timeframe: str = "1d",
+) -> dict:
+    """CP4 — eşik A/B parametre-taraması (config-injection seam tüketicisi, on-demand).
+    Bir eşik parametresinin (`param_path`, ör. `paper_trading.sl_pct`) virgülle
+    ayrılmış `values` değerlerini MEVCUT backtest motoruyla geçmiş barlarda dener,
+    win_rate/avg_return/profit_factor karşılaştırır + baseline'dan iyiyse öneri verir.
+    Override yalnız backtest scope'unda enjekte edilir (threshold_override seam);
+    canlı config + karar zinciri DEĞİŞMEZ. 'trainer öner → backtest doğrula' adımı."""
+    try:
+        parsed = [float(v) for v in values.split(",") if v.strip()]
+    except ValueError:
+        return {"error": "values virgülle ayrılmış sayılar olmalı", "values": values}
+    return threshold_ab.sweep(param_path, parsed, symbol=symbol, timeframe=timeframe)
 
 
 @router.get("/learning/entry-exit-quality")

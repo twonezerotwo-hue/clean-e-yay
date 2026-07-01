@@ -122,11 +122,20 @@ mistake'i ayarlar — yön mantığını DEĞİL (bkz. ARCHITECTURE.md güvenlik
     `trail_autotune` bloğu + `TfTargetsPanel`. **NOT:** uygulama TF-aware (modül değil); touche
     4h/1h'i hedefler çünkü touche o TF'lerde baskın. Owner `TF_TARGET_TRAIL_AUTOTUNE=1` +
     `TF_TARGET_EDGE_GATE=1` ile güvenli-otonom trailing'i açar.
+  - **Slice 4 ✅ DONE — config-injection seam + A/B backtest (deferred prereq).**
+    `load_thresholds` `@lru_cache`'i A/B'yi engelliyordu (CP2'de ertelenmişti). Çözüm:
+    `loader.py` cache'li `_load_thresholds_base()` + `threshold_override()` contextmanager
+    (contextvar, deep-merge). `load_thresholds` override yokken base'i **BİREBİR (zero-copy)**
+    döner → sıcak yol (decision engine ~11 çağrı) bayt-aynı. Tüketici: `threshold_ab.sweep()`
+    — bir eşiğin farklı değerlerini MEVCUT `run_signal_backtest` ile geçmiş barlarda dener,
+    win_rate/avg_return/PF karşılaştırır + baseline'dan iyiyse öneri. `GET /learning/threshold-ab`.
+    Observe-only (override yalnız backtest scope'unda; canlı config değişmez). Bu = CP4'ün
+    "trainer öner → **backtest doğrula**" adımının altyapısı.
   - **Kalan CP4 kapsamı.** Kural-sabit eşikleri (rejim ADX/vol, consensus eşiği, guard
-    eşikleri, tf_weights) trainer öner → CP2/backtest doğrula → CP3 harness'la **dar-bant oto**
-    (G3 deseni). **NOT:** A/B parametre-backtest için `load_thresholds` (`@lru_cache`) üstüne
-    **temiz config-injection seam** gerekir (CP2'de bilinçli ertelendi). `safe_to_autotune`
-    False iken oto-uygulama YOK.
+    eşikleri, tf_weights) için OTONOM trainer: eşik nudge öner → `threshold_ab` ile backtest
+    doğrula → slice-2 edge-gate + rollback harness'ıyla dar-bant oto uygula (file-backed
+    override). `conviction._config` `@lru_cache`'i de aynı seam desenini isteyebilir.
+    `safe_to_autotune` False iken oto-uygulama YOK.
   - **Deadlock bilgisi (devam eden AI bilsin):** otonom ağırlık akışı "tek-değişiklik-tek-
     doğrulama" diskiplininde; bir auto-apply, `REBALANCE_ROLLBACK_MIN_OUTCOMES` (default 15)
     yeni post-apply outcome birikene kadar MONITORING'de kalır ve TÜM yeni önerileri PENDING→
