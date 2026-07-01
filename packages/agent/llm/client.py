@@ -223,7 +223,12 @@ class OpenRouterClient:
 
 
 class OllamaClient:
-    """Local Ollama chat adapter; no API key required."""
+    """Local Ollama chat adapter; no API key required.
+
+    Remote API'lerden farklı: local CPU inference YAVAŞ (7B soğuk yükleme ~15s +
+    üretim). Bu yüzden ayrı, uzun timeout (OLLAMA_TIMEOUT_SEC, default 120s) ve
+    keep_alive (modeli RAM'de tutar → sonraki isteklerde soğuk yükleme yok). Genel
+    12s TIMEOUT_SEC burada kullanılsa her istek timeout olurdu."""
 
     name = "ollama"
 
@@ -231,12 +236,19 @@ class OllamaClient:
         _load_repo_dotenv_once()
         self.model = os.environ.get("OLLAMA_MODEL", DEFAULT_OLLAMA_MODEL).strip()
         self.api_url = os.environ.get("OLLAMA_API_URL", OLLAMA_API_URL).strip()
+        try:
+            self.timeout = float(os.environ.get("OLLAMA_TIMEOUT_SEC", "120"))
+        except (TypeError, ValueError):
+            self.timeout = 120.0
+        # Modeli RAM'de tut → soğuk yükleme (ilk istekteki ~15s) tekrar etmesin.
+        self.keep_alive = os.environ.get("OLLAMA_KEEP_ALIVE", "30m").strip()
 
     def complete(self, system: str, user: str, max_tokens: int) -> LLMCompletion | None:
         body = json.dumps(
             {
                 "model": self.model,
                 "stream": False,
+                "keep_alive": self.keep_alive,
                 "messages": [
                     {"role": "system", "content": system},
                     {"role": "user", "content": user},
@@ -257,7 +269,7 @@ class OllamaClient:
             method="POST",
         )
         try:
-            with urllib.request.urlopen(req, timeout=TIMEOUT_SEC) as resp:
+            with urllib.request.urlopen(req, timeout=self.timeout) as resp:
                 data = json.loads(resp.read().decode("utf-8"))
             msg = data.get("message") or {}
             text = msg.get("content") if isinstance(msg, dict) else None
