@@ -41,17 +41,25 @@ echo "deploy: web build"
 # supervisor import'unda yükler. Idempotent (grep -q guard) → deploy'da çoğalmaz;
 # owner .env'de değeri elle değiştirirse (örn. =0) korunur (yalnız YOK ise eklenir).
 # Instance rebuild'de de kalıcı (SSH gerektirmez).
-ensure_env() {  # ensure_env KEY VALUE
+ensure_env() {  # ensure_env KEY VALUE — yalnız YOK ise ekle (owner elle ezerse korunur)
   touch "$APP_DIR/.env"
   grep -q "^$1=" "$APP_DIR/.env" 2>/dev/null || echo "$1=$2" >> "$APP_DIR/.env"
 }
+set_env() {  # set_env KEY VALUE — replace-or-add (değeri ZORLA ayarla; diğer satırlar korunur)
+  touch "$APP_DIR/.env"
+  grep -v "^$1=" "$APP_DIR/.env" > "$APP_DIR/.env.tmp" 2>/dev/null || true
+  echo "$1=$2" >> "$APP_DIR/.env.tmp"
+  mv "$APP_DIR/.env.tmp" "$APP_DIR/.env"
+}
 ensure_env WEIGHT_LOSS_AWARE 1
 ensure_env REBALANCE_ROLLBACK_MIN_OUTCOMES 8
-# Grup C — tam otonom öz-ayar (CP5'e kadar). Hepsi edge-gated + rollback'li:
-# edge STABLE olana kadar ARMED-ama-PAUSED (güvenlik ağı). Owner onayı gerektirmez.
-ensure_env TF_TARGET_EDGE_GATE 1
+# Grup C — tam otonom öz-ayar (CP5'e kadar). Trailing/threshold autotune AÇIK.
 ensure_env TF_TARGET_TRAIL_AUTOTUNE 1
 ensure_env THRESHOLD_AUTOTUNE 1
+# Kalite tuning'i AKTİF: edge-gate KAPALI (0) → geometri/trailing stop/exit'i ŞİMDİ
+# düzeltsin (±%15 bant + outcome-rollback net). Owner kararı — bekletme, aktif çalışsın.
+# set_env: AWS .env'de =1 kalmışsa ZORLA 0'a çevirir (ensure_env yetmez).
+set_env TF_TARGET_EDGE_GATE 0
 
 echo "deploy: restart services"
 sudo systemctl restart eyay-supervisor.service
