@@ -163,6 +163,21 @@ mistake'i ayarlar — yön mantığını DEĞİL (bkz. ARCHITECTURE.md güvenlik
 - **Veri yeterli** (CP1 canlı): ~81 eğitilebilir outcome, öğreniciler HAZIR → darboğaz toplama değil **tüketim**.
 - **Edge UNSTABLE** (CP2 canlı): 2/4 dilim pozitif → `safe_to_autotune=False`. Oto-ayar (CP4) bu
   kapıdan geçmeli; bugün açmak yanlış olurdu.
+- **EDGE KÖK-NEDEN (2026-07-01, 114 outcome işlem-seviye):** Kayıp YÖN değil, mekanik risk.
+  SL_HIT −1676 (SL-dışı sistem +3766); kâr tamamen tek gümüş +2456 outlier'dan (o çıkınca net −366).
+  4 kök neden: (1) risk stop-mesafesine normalize DEĞİL (DODO %8 stop × tam boyut → −376); (2) çok-TF
+  DUPLİKE sinyal → konsantrasyon (DODO 1h+4h aynı mae=8.43 → −692; ETH 4h+1d → −272); (3) SL bimodal
+  bozuk (15m dar, 4h-alt geniş); (4) asimetrik kazanç (EXIT_EARLY %2.6 masada) + veri boşluğu (mae/mfe=0).
+  Yön kalitesi İYİ (touche TP'ye giden 9/9 kazanç).
+- **CP4 KONSANTRASYON GUARD ✅ (branch `feat/cp4-concentration-guard`):** kök-neden #2. book_audit'in
+  observe-only "kopya yığını dersi"ni (stack_min_timeframes) CANLI giriş kapısına terfi eder.
+  `engine._concentration_guard` (self_conflict ikizi): aynı-sembol AYNI-yön açık leg ≥ max_same_dir_legs
+  VEYA exposure/equity ≥ max_symbol_pct → blok. G4 correlation'dan FARKLI (G4 equity %30'unda; DODO 2
+  leg=%9 → G4 hiç görmedi). `book_audit.concentration_guard.enabled` default FALSE=bayt-aynı (shadow:
+  concentration_report her kararda hesaplanır); `guard_safety._GUARDS`'a eklendi → CP3 kasası izler+
+  oto-kapatır, GuardSafetyPanel oto-listeler. Canlı doğrulama: guard ON olsaydı 2. DODO leg (−376)
+  açılmazdı. 8 test + regresyon geçer. KALAN kök-nedenler: #1 risk-normalize boyutlama (en yüksek
+  getiri, ayrı slice), #3 varlık-farkında stop, #4 EXIT_EARLY (CP4 trailing autotune kısmen).
 
 ### Yeni öğrenme paneli/endpoint eklerken izlenecek desen (bakım kolaylığı)
 1. `packages/learning/<modül>.py` (saf fonksiyon, mevcut `outcomes`/`missed_opportunity`/store reuse).

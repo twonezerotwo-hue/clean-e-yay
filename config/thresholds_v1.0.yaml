@@ -259,6 +259,18 @@ book_audit:
   # yeniden başlatma gerekir (AWS deploy worker'ları zaten restart eder).
   self_conflict_guard:
     enabled: true
+  # Aktif concentration guard: aynı sembolde zaten açık AYNI yöne yeni leg eklenmesini
+  # sınırlar (DODO 1h+4h gibi TEK sinyalin TF'lere kopyalanıp riski 2x'lemesi). book_
+  # audit yalnız "kopya yığını dersi" üretiyordu (observe-only, stack_min_timeframes);
+  # bu onu CANLI giriş kapısına terfi eder. G4 correlation cluster'ından FARKLI: G4
+  # equity'nin %30'unda tetikler (tek sembol için çok gevşek — DODO 2 leg = equity'nin
+  # %9'u, G4 hiç görmedi); bu guard tek-sembol yığınına sıkı sınır koyar. enabled default
+  # FALSE (shadow-first; her kararda concentration_report gözlemlenir, davranış değişmez).
+  # CP3 kasası (guard_safety) canlıda kötü bulup kill-override yazarsa enabled zorla False.
+  concentration_guard:
+    enabled: false
+    max_same_dir_legs: 1    # aynı sembol+yönde zaten ≥ bu kadar açık leg varsa yeni aday bloklanır (yığın 2'de başlar; stack_min_timeframes ile hizalı)
+    max_symbol_pct: 0.05    # aynı sembol+yön açık exposure equity'nin bu oranını aşarsa blokla (G4 %30 cluster'ından çok daha sıkı)
 
 # Price sanity guard — cross-pair contamination + absurd-price protection.
 # Phase 2 port from e-yay-codex paper_trading_service._is_price_sane.

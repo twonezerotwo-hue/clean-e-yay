@@ -75,6 +75,11 @@ class TradeDecision:
     # ZIT yöne giriyorsa burada işaretlenir; book_audit.self_conflict_guard.enabled
     # iken bloklanır, kapalıyken yalnız gözlem (active=False). Boş = çakışma yok.
     self_conflict_report: dict = field(default_factory=dict)
+    # Concentration guard (shadow-first). Aday aynı sembolde zaten açık AYNI yöne yeni
+    # leg ekliyorsa (tek sinyalin TF'lere kopyası) burada işaretlenir; book_audit.
+    # concentration_guard.enabled iken yığın sınırı aşılırsa bloklanır, kapalıyken
+    # yalnız gözlem (active=False). Boş = aynı-yön açık leg yok.
+    concentration_report: dict = field(default_factory=dict)
     # v2.7 D2 — kripto türev riski (yalnızca kısıtlayıcı; crypto sembolleri).
     derivatives_report: dict = field(default_factory=dict)
     # v2.7 D4 — realized volatility riski (yalnızca kısıtlayıcı; per (symbol, tf)).
@@ -165,6 +170,56 @@ def _self_conflict_cfg() -> dict:
     if cfg.get("enabled") and guard_overrides.is_disabled("self_conflict"):
         return {**cfg, "enabled": False}
     return cfg
+
+
+def _concentration_cfg() -> dict:
+    """Aynı-sembol aynı-yön yığın (concentration) guard config (monkeypatch-seam).
+    Aday aynı sembolde zaten açık AYNI yöne yeni leg ekliyorsa (DODO 1h+4h gibi tek
+    sinyalin TF'lere kopyalanması → riski 2x) yığını sınırlar. enabled default False
+    (shadow-first); kapalıyken yalnız gözlem işaretlenir, davranış değişmez.
+
+    CP3 — yön güvenlik kasası: guard_safety bu guard'ı canlıda kötü bulup kill-override
+    yazdıysa enabled zorla False'a çekilir (config'e dokunmadan). Override yokken çıktı
+    birebir bugünkü (bkz. guard_overrides)."""
+    cfg = (load_thresholds().get("book_audit") or {}).get("concentration_guard") or {}
+    if cfg.get("enabled") and guard_overrides.is_disabled("concentration"):
+        return {**cfg, "enabled": False}
+    return cfg
+
+
+def _concentration_report(
+    symbol: str, cand_side: str, open_positions, equity_usd: float, cfg: dict
+) -> dict:
+    """Aday aynı-sembol aynı-yön açık leg'leri değerlendir (shadow — her zaman hesaplanır).
+
+    Boş dict = aynı-yön açık leg yok (yığın riski yok). Aksi halde yığın raporu:
+    leg sayısı ≥ max_same_dir_legs VEYA exposure/equity ≥ max_symbol_pct → breach.
+    `active` yalnız enabled iken True; blok kararı çağırana bırakılır."""
+    legs = [
+        p for p in (open_positions or [])
+        if p.symbol == symbol and p.side == cand_side
+    ]
+    if not legs:
+        return {}
+    max_legs = int(cfg.get("max_same_dir_legs", 1))
+    max_pct = float(cfg.get("max_symbol_pct", 0.05))
+    exposure_usd = sum(float(p.size_usd) for p in legs)
+    exposure_pct = round(exposure_usd / equity_usd, 4) if equity_usd > 0 else 0.0
+    breach_count = len(legs) >= max_legs
+    breach_pct = max_pct > 0 and exposure_pct >= max_pct
+    return {
+        "active": bool(cfg.get("enabled", False)),
+        "symbol": symbol,
+        "candidate_side": cand_side,
+        "open_same_dir_count": len(legs),
+        "open_same_dir_usd": round(exposure_usd, 2),
+        "exposure_pct": exposure_pct,
+        "max_same_dir_legs": max_legs,
+        "max_symbol_pct": max_pct,
+        "breach": bool(breach_count or breach_pct),
+        "breach_reason": "leg_count" if breach_count else ("exposure_pct" if breach_pct else None),
+        "timeframes": sorted({p.timeframe for p in legs if getattr(p, "timeframe", None)}),
+    }
 
 
 def _tf_rr(timeframe: str) -> float:
@@ -430,6 +485,39 @@ def decide_for_symbol(
             )
     else:
         self_conflict_report = {}
+
+    # ----- Concentration guard (shadow-first) — aynı-sembol aynı-yön yığını -----
+    # Aday aynı sembolde zaten açık AYNI yöne yeni leg ekliyorsa (DODO 1h+4h gibi tek
+    # sinyalin TF'lere kopyalanması) bu tek market olayına 2x maruz kalmaktır. G4
+    # correlation cluster equity'nin %30'unda tetikler (tek sembol için çok gevşek —
+    # DODO 2 leg = equity'nin %9'u, G4 hiç görmedi); bu guard tek-sembol yığınına sıkı
+    # sınır koyar. Shadow-her-zaman-hesaplanır; yalnız enabled + breach iken bloklar.
+    concentration_report = _concentration_report(
+        symbol, cand_side, open_positions, equity_usd, _concentration_cfg()
+    )
+    if concentration_report.get("active") and concentration_report.get("breach"):
+        return TradeDecision(
+            symbol=symbol,
+            action="hold",
+            confidence=round(cal_conf, 3),
+            size_multiplier=0.0,
+            consensus=cons,
+            risk=risk,
+            reason=(
+                f"concentration: {symbol} üzerinde zaten "
+                f"{concentration_report['open_same_dir_count']} {cand_side.upper()} açık "
+                f"({concentration_report['exposure_pct']:.0%} equity) — aynı-yön yığını engellendi"
+            ),
+            raw_confidence=round(raw_conf, 4),
+            confidence_source=conf_source,
+            fingerprint=fp,
+            mistake_verdict=_verdict_to_dict(verdict),
+            self_conflict_report=self_conflict_report,
+            concentration_report=concentration_report,
+            timeframe=timeframe,
+            candidate_action=candidate,
+            blocked_by=["concentration_guard"],
+        )
 
     # ----- G4: Correlation cluster cap (sadece küçültür, RiskGate'i bypass etmez) -----
     cluster = correlation.cluster_exposure(
@@ -729,6 +817,7 @@ def decide_for_symbol(
         mistake_verdict=_verdict_to_dict(verdict),
         cluster_report=cluster_dict,
         self_conflict_report=self_conflict_report,
+        concentration_report=concentration_report,
         derivatives_report=derivatives_dict,
         volatility_report=volatility_dict,
         catalyst_report=catalyst_dict,
