@@ -131,6 +131,35 @@ def _loss_aware_enabled() -> bool:
     return os.environ.get("WEIGHT_LOSS_AWARE", "0").strip().lower() not in _LOSS_AWARE_OFF
 
 
+# F3-2 (2026-07-02) — rejim-filtreli eğitim. Flag KAPALI (default) → bayt-aynı:
+# tüm outcome'lar tek torbada, yalnız hedef rejimin ağırlık satırı güncellenir
+# (sakin piyasadan öğrenilen, fırtına satırına da yazılır — denetim bulgusu 1.2).
+# AÇIK → dataset hedef rejimin KENDİ outcome'larına daralır; MIN_TOTAL_TRADES/
+# MIN_TRADES_PER_MODULE eşikleri rejim başına doğal fren olur (az veri → eğitim
+# yok). Owner kararı 2026-07-02: F3-1 (CI'lı üç-durumlu karar) atlandı; güvenlik
+# ağı = bu minimum-örnek eşikleri + G3 outcome-rollback.
+def regime_filter_enabled() -> bool:
+    return (
+        os.environ.get("WEIGHT_REGIME_FILTER", "0").strip().lower()
+        not in _LOSS_AWARE_OFF
+    )
+
+
+def latest_outcome_regime(outcomes=None) -> str | None:
+    """En son kapanan verified outcome'un rejimi (flag açıkken worker'ın
+    eğiteceği rejim — verisi en son değişen rejim budur; saat değil veri
+    sürüyor: deterministik/replay-güvenli)."""
+    if outcomes is None:
+        outcomes = outcomes_mod.outcomes_from_state(paper_state.load())
+    latest = None
+    for o in outcomes:
+        if not getattr(o, "data_verified", False) or not o.closed_at:
+            continue
+        if latest is None or o.closed_at > latest.closed_at:
+            latest = o
+    return latest.regime if latest is not None and latest.regime else None
+
+
 def _winsorize(pnls: list[float], pct: float = 0.05) -> list[float]:
     """Uç değerleri kıstır (outlier-direnç). edge_report ile aynı desen."""
     n = len(pnls)
@@ -264,16 +293,28 @@ def train(regime: str = "NEUTRAL") -> RebalanceProposal | dict:
     # pencere taşması öğrenme veri setini kısıtlıyordu.
     outcomes = outcomes_mod.outcomes_from_state(s)
 
+    # F3-2 — rejim filtresi: flag açıkken yalnız hedef rejimin outcome'ları.
+    # Bilinmeyen rejim etiketi weights'e sahte satır açmasın → NEUTRAL'a düş.
+    regime_filtered = regime_filter_enabled()
+    if regime_filtered:
+        known = set((load_active_weights().get("regimes") or {}).keys())
+        if regime not in known:
+            regime = "NEUTRAL"
+        outcomes = [o for o in outcomes if (o.regime or "NEUTRAL") == regime]
+
     perfs, rejected = _aggregate(outcomes)
     eligible = sum(1 for o in outcomes if o.data_verified)
     total = len(outcomes)
 
+    # F3-2 — rejim başına yetersiz veri görünürlüğü (flag kapalıyken de zararsız).
+    insufficient_base = {"regime": regime, "regime_filtered": regime_filtered}
     if eligible == 0:
         return {
             "status": "INSUFFICIENT",
             "reason": "no_verified_trades",
             "dataset_size": 0,
             "rejected_records": total,
+            **insufficient_base,
         }
     if eligible < MIN_TOTAL_TRADES:
         return {
@@ -282,6 +323,7 @@ def train(regime: str = "NEUTRAL") -> RebalanceProposal | dict:
             "dataset_size": eligible,
             "rejected_records": rejected,
             "min_required": MIN_TOTAL_TRADES,
+            **insufficient_base,
         }
     if not perfs:
         return {
@@ -290,6 +332,7 @@ def train(regime: str = "NEUTRAL") -> RebalanceProposal | dict:
             "dataset_size": eligible,
             "rejected_records": rejected,
             "min_per_module": MIN_TRADES_PER_MODULE,
+            **insufficient_base,
         }
     if len(perfs) < MIN_MODULES_FOR_REBALANCE:
         return {
@@ -299,6 +342,7 @@ def train(regime: str = "NEUTRAL") -> RebalanceProposal | dict:
             "rejected_records": rejected,
             "min_modules": MIN_MODULES_FOR_REBALANCE,
             "modules_ready": [asdict(p) for p in perfs],
+            **insufficient_base,
         }
 
     weights_cfg = load_active_weights()
@@ -354,6 +398,7 @@ def train(regime: str = "NEUTRAL") -> RebalanceProposal | dict:
         "audit": {
             "based_on_trades": eligible,
             "rejected_records": rejected,
+            "regime_filtered": regime_filtered,  # F3-2 — dataset rejime mi daraldı
             "module_performance": [asdict(p) for p in perfs],
             "timeframe_distribution": tf_dist,
             "regime_distribution": regime_dist,

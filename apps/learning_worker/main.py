@@ -260,8 +260,14 @@ def run_once() -> dict:
     # G2/G3: auto-weight trainer. Yeterli veri varsa proposal üretilir. G3 hibrit:
     # dar bant (|delta| ≤ REBALANCE_AUTO_APPLY_BAND) + auto-apply açık ise OTOMATİK
     # uygulanır; aksi halde PENDING (owner). API propose/approve yolu ETKİLENMEZ.
+    # F3-2: WEIGHT_REGIME_FILTER açıkken hedef = en son kapanan verified
+    # outcome'un rejimi (verisi en son değişen rejim); kapalıyken NEUTRAL (eski).
     try:
-        result = trainer.train(regime="NEUTRAL")
+        train_regime = "NEUTRAL"
+        if trainer.regime_filter_enabled():
+            train_regime = trainer.latest_outcome_regime() or "NEUTRAL"
+            log.info("regime-filtered training target: %s", train_regime)
+        result = trainer.train(regime=train_regime)
         if isinstance(result, trainer.RebalanceProposal):
             # Baseline = apply öncesi EŞLEŞTİRİLMİŞ pencere (opened_at'e göre en son
             # N verified outcome) — post-apply penceresiyle aynı boyut/recency.
