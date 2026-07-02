@@ -80,6 +80,8 @@ def record(
     learning_outcomes_seen: int = 0,
     proposals_generated: int = 0,
     duration_ms: int | None = None,
+    unrealized_pnl_usd: float | None = None,
+    mtm_equity_usd: float | None = None,
 ) -> dict:
     """Heartbeat yaz (atomik); yazılan dict'i döner (best-effort).
 
@@ -111,6 +113,14 @@ def record(
             "learning_outcomes_seen": int(learning_outcomes_seen),
             "proposals_generated": int(proposals_generated),
             "duration_ms": duration_ms,
+            # F2-1 — MTM salt-gözlem: tick_worker cycle sonunda yazar; RiskGate
+            # girdisi DEĞİL. None = bu cycle'da ölçüm yok (ör. FAILED).
+            "unrealized_pnl_usd": (
+                None if unrealized_pnl_usd is None else float(unrealized_pnl_usd)
+            ),
+            "mtm_equity_usd": (
+                None if mtm_equity_usd is None else float(mtm_equity_usd)
+            ),
         }
         all_hb[worker_name] = hb
         _save(all_hb)

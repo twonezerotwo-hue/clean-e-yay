@@ -1347,6 +1347,8 @@ export interface components {
             learning_outcomes_seen?: number;
             proposals_generated?: number;
             duration_ms?: number | null;
+            unrealized_pnl_usd?: number | null;
+            mtm_equity_usd?: number | null;
         };
         /** @description O1 — 7/24 sistem sağlığı özeti (network-free; owner warning'leri). */
         SystemHealth: {

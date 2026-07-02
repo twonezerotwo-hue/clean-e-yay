@@ -214,6 +214,17 @@ class PaperState:
     last_rechecks: list[dict] = field(default_factory=list)
     last_recheck_at: str | None = None
 
+    # F2-1 — mark-to-market SALT-GÖZLEM alanları. Persist edilmez (türetilir),
+    # RiskGate girdisine BAĞLI DEĞİL: gate hâlâ realized `equity_usd` görür.
+    # Gate'e bağlama, gözlem penceresi sonrası ayrı tarihli owner kararıdır.
+    @property
+    def unrealized_pnl_usd(self) -> float:
+        return sum(p.unrealized_pnl_usd for p in self.open_positions)
+
+    @property
+    def mtm_equity_usd(self) -> float:
+        return self.equity_usd + self.unrealized_pnl_usd
+
     def to_dict(self) -> dict:
         return {
             "schema_version": SCHEMA_VERSION,

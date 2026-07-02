@@ -61,6 +61,9 @@ def _unknown_worker(name: str) -> dict:
         "last_error": None,
         "age_seconds": None,
         "duration_ms": None,
+        # F2-1 — MTM salt-gözlem alanları (tick_worker yazar; gate girdisi değil).
+        "unrealized_pnl_usd": None,
+        "mtm_equity_usd": None,
     }
     for k, dv in _METRIC_DEFAULTS:
         view[k] = dv
@@ -91,6 +94,9 @@ def _worker_view(name: str, threshold_sec: int, now: datetime) -> dict:
     view.setdefault("duration_ms", None)
     view.setdefault("last_error", None)
     view.setdefault("last_success_at", None)
+    # F2-1 — legacy heartbeat dosyaları MTM alanlarını taşımaz → None'a düşer.
+    view.setdefault("unrealized_pnl_usd", None)
+    view.setdefault("mtm_equity_usd", None)
     return view
 
 

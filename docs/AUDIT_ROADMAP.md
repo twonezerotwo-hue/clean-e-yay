@@ -9,17 +9,17 @@
 Bu belge farklı bir asistan/oturum tarafından SIFIR bağlamla devralınabilir
 şekilde yazılmıştır. Mevcut durum:
 
-- **Branch:** `fix/learning-calibration-news-filter` (PR #48, AÇIK — henüz
-  merge edilmedi). Main'e merge = AWS'e otomatik deploy (systemd worker
-  restart dahil). Lokalde de bu branch checkout'lu olabilir — merge sonrası
-  `main`'e dönülmeli (lokal keep-alive watchdog worker'ları lokal koddan
-  çalıştırır).
-- **Tamamlanan:** F0-1, F0-2, F1-1…F1-5, R2-3 (aşağıdaki tabloda ✅ ve
-  ayrıntılar). Suite 1181/1181 yeşil, ruff temiz.
-- **Sıradaki iş:** F2-1 (mark-to-market equity → RiskInput). 🔴 sınıfı:
-  önce MTM equity/unrealized toplamı snapshot+heartbeat'e SALT-GÖZLEM olarak
-  yazılır, bant görüldükten sonra ayrı owner kararıyla flag'le RiskGate
-  girdisine bağlanır.
+- **Branch:** `main` (PR #48 merge edildi). Main'e merge = AWS'e otomatik
+  deploy (systemd worker restart dahil). Lokal keep-alive watchdog
+  worker'ları lokal koddan çalıştırır.
+- **Tamamlanan:** F0-1, F0-2, F1-1…F1-5, R2-3 + F2-1 gözlem fazı
+  (aşağıdaki tabloda ✅/🔶 ve ayrıntılar). Suite 1189/1189 yeşil, ruff'ta
+  yeni hata yok (tests/ altında ~45 eski baseline bulgusu var, dokunulmadı).
+- **Sıradaki iş:** F2-2 (korelasyonu fiyat getirisinden hesapla — OHLCV
+  cache; kaynak önceliği computed_price > baseline > neutral). F2-1'in
+  gate-bağlama yarısı bant gözlemi bekliyor: snapshot store'daki
+  `paper_state_summary.mtm_equity_usd` serisi birkaç gün izlendikten sonra
+  ayrı owner kararıyla flag'le RiskInput'a bağlanacak.
 - **Bekleyen owner kararları:** `EXPECTANCY_R_MODE` (R-bazlı expectancy)
   default KAPALI — R-damgalı outcome birikince açılacak (open_risk_pct
   yalnız YENİ kapanışlarda damgalanıyor; eski kayıtlarda yok).
@@ -56,7 +56,7 @@ Risk: 🟢 davranış değiştirmez (ölçüm/altyapı) · 🟡 flag'li davranı
 | F1-3 | decision_log'a modül katkı vektörü (score×weight) yaz + edge/attribution raporunda oku | 4.2 | ✅ (learning summary `module_attribution`) | 🟢 | F1 |
 | F1-4 | Gün çapası UTC fix (`date.today()` → UTC) | 1.6a | ✅ | 🟢 | F1 |
 | F1-5 | Kısmi kapanışta trade id benzersizliği (leg suffix) + dedupe düzeltmesi | 1.6b | ✅ | 🟢 | F1 |
-| F2-1 | Mark-to-market equity → RiskInput (önce gözlem alanı, sonra flag'li gate girdisi) | 1.3, 3.5 | ⬜ | 🔴 | F2 |
+| F2-1 | Mark-to-market equity → RiskInput (önce gözlem alanı, sonra flag'li gate girdisi) | 1.3, 3.5 | 🔶 gözlem fazı tamam (2026-07-02): `PaperState.unrealized_pnl_usd`/`mtm_equity_usd` türetilmiş; snapshot `paper_state_summary` + tick heartbeat + system/health taşır. Gate girdisine bağlama = bant gözlemi sonrası ayrı owner kararı (flag ile) | 🔴 | F2 |
 | F2-2 | Korelasyonu fiyat getirisinden hesapla (OHLCV cache; kaynak önceliği computed_price > baseline > neutral) | 1.5, 3.7 | ⬜ | 🟡 | F2 |
 | F2-3 | Regime layer'ları veri yokken düşür+redistribute (quantum deseni; default-sabit sahte skor yok) | 2 (classifier) | ⬜ | 🟡 | F2 |
 | F3-1 | Wilson/bootstrap CI + üç-durumlu rollback kararı (geri al / onayla / izlemeye devam) | 1.6d, 4.1 | ⬜ | 🟡 | F3 |

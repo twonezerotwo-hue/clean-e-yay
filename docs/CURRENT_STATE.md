@@ -4,6 +4,22 @@ _Bu dosya kısa ve güncel tutulur. Her görev sonunda güncellenir._
 
 ## Last known status
 
+- **F2-1 (gözlem fazı) — Mark-to-market SALT-GÖZLEM alanları** (2026-07-02):
+  denetim yol haritasının (docs/AUDIT_ROADMAP.md) F2-1 ilk yarısı. RiskGate
+  bugüne dek yalnız realized `equity_usd` görüyordu; açık pozisyonların MTM'i
+  hiçbir yerde toplu raporlanmıyordu. **Davranış sıfır diff — gate'e bağlama
+  YOK**, yalnız gözlem:
+  - `PaperState.unrealized_pnl_usd` / `mtm_equity_usd` türetilmiş property
+    (persist edilmez; değerleme tek kaynak `execution_sim.unrealized_pnl`).
+  - tick_worker: snapshot `paper_state_summary`'ye + cycle-sonu heartbeat'e
+    `unrealized_pnl_usd`/`mtm_equity_usd` yazar (FAILED/learning → None).
+  - `system/health` worker view alanları geçirir (legacy heartbeat → None);
+    `WorkerHealth` sözleşmesine additive nullable alanlar + codegen.
+  - Bant gözlemi: snapshot store'daki `mtm_equity_usd` serisi izlenecek;
+    RiskInput'a bağlama ayrı tarihli owner kararı (flag'li) — F2-1 ikinci yarı.
+  - **Validation**: pytest **1189 passed** (+7 yeni: `test_mtm_observation.py`
+    + tick entegrasyonu); ruff değişen dosyalarda temiz; codegen çalıştı.
+
 - **GOVERNOR — Self-Managing (observe-only) katman tamamlandı** (2026-06-28):
   raporda istenen 4 parça eklendi; var olan modüller (learning/shadow/mode) ÜSTÜNE
   ince orkestrasyon — yeni karar/risk motoru DEĞİL. **Additive; mevcut hiçbir şey

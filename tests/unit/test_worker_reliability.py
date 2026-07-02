@@ -145,6 +145,28 @@ def test_tick_worker_success_writes_ok_heartbeat(ops_env) -> None:
     assert hb["last_success_at"] is not None
 
 
+def test_tick_worker_writes_mtm_observation(ops_env) -> None:
+    """F2-1 — MTM salt-gözlem: cycle sonunda heartbeat + snapshot
+    paper_state_summary MTM alanlarını taşır. RiskGate girdisi değişmez."""
+    from apps.tick_worker import main as tw
+    from packages.data import snapshot_store
+    from packages.ops import heartbeat
+    asyncio.run(tw.run_once())
+    hb = heartbeat.load("tick_worker")
+    assert hb["status"] in {"OK", "DEGRADED"}
+    # Pozisyon yokken de ölçüm yazılır (0.0 / realized equity) — None değil.
+    assert isinstance(hb["unrealized_pnl_usd"], (int, float))
+    assert isinstance(hb["mtm_equity_usd"], (int, float))
+    latest = snapshot_store.latest()
+    assert latest is not None
+    summary = latest["paper_state_summary"]
+    assert "unrealized_pnl_usd" in summary and "mtm_equity_usd" in summary
+    # Tutarlılık: mtm = realized equity + unrealized (yuvarlama payı).
+    assert summary["mtm_equity_usd"] == pytest.approx(
+        summary["equity_usd"] + summary["unrealized_pnl_usd"], abs=0.02
+    )
+
+
 def test_tick_worker_exception_writes_failed_heartbeat(ops_env, monkeypatch) -> None:
     from apps.tick_worker import main as tw
     from packages.ops import heartbeat

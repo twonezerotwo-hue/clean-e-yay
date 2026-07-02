@@ -1245,6 +1245,10 @@ components:
         learning_outcomes_seen: { type: integer }
         proposals_generated: { type: integer }
         duration_ms: { type: integer, nullable: true }
+        # F2-1 — MTM salt-gözlem (tick_worker yazar; RiskGate girdisi DEĞİL).
+        # null = ölçüm yok (FAILED cycle / legacy heartbeat / learning_worker).
+        unrealized_pnl_usd: { type: number, nullable: true }
+        mtm_equity_usd: { type: number, nullable: true }
 
     SystemHealth:
       type: object

@@ -156,6 +156,10 @@ def _snapshot_record(snap, view: dict, risk, ps) -> dict:
             "peak_equity_usd": round(ps.peak_equity_usd, 2),
             "daily_pnl_usd": round(ps.daily_pnl_usd, 2),
             "realized_pnl_usd": round(ps.realized_pnl_usd, 2),
+            # F2-1 — MTM salt-gözlem: açık pozisyonların mark-to-market toplamı.
+            # RiskGate hâlâ realized equity görür; bu alanlar bant gözlemi içindir.
+            "unrealized_pnl_usd": round(ps.unrealized_pnl_usd, 2),
+            "mtm_equity_usd": round(ps.mtm_equity_usd, 2),
             "open_position_count": len(ps.open_positions),
             "open_positions": [
                 {
@@ -448,6 +452,9 @@ async def run_once() -> None:
             decisions_generated=decisions_generated,
             paper_actions=paper_actions,
             duration_ms=int((time.monotonic() - t0) * 1000),
+            # F2-1 — MTM salt-gözlem (RiskGate girdisi değil; bkz. _snapshot_record).
+            unrealized_pnl_usd=round(ps.unrealized_pnl_usd, 2),
+            mtm_equity_usd=round(ps.mtm_equity_usd, 2),
         )
         # SSE: cockpit'in canlı nabzı — UI bu event'i alınca brief/decision/
         # paper cache'lerini invalidate eder.
