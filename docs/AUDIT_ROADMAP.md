@@ -15,10 +15,20 @@ Bu belge farklı bir asistan/oturum tarafından SIFIR bağlamla devralınabilir
 - **Tamamlanan:** F0-1, F0-2, F1-1…F1-5, R2-3 + F2-1 gözlem fazı
   (aşağıdaki tabloda ✅/🔶 ve ayrıntılar). Suite 1189/1189 yeşil, ruff'ta
   yeni hata yok (tests/ altında ~45 eski baseline bulgusu var, dokunulmadı).
-- **Sıradaki iş:** F4-3 (partial-TP + breakeven stop — 🔴 sınıfı: önce
-  shadow yan-yana ölçüm zorunlu). F3 serisi kapandı: F3-1 owner kararıyla
-  YAPILMAYACAK, F3-2+F3-3 kodlandı (flag OFF). F2-1 gate-bağlama owner
-  kararı bekliyor.
+- **Sıradaki iş — PR KUYRUĞU (owner talimatı 2026-07-02):** Kalan tüm
+  dilimler AYRI BRANCH + AYRI PR olarak yazılır ve MERGE EDİLMEZ — owner
+  dönünce tek tek inceleyip merge/iptal eder (merge edilmeyen hiçbir şey
+  canlıya dokunmaz; deploy yalnız main'den tetiklenir). Sıra:
+  1. `slice/f4-3` — partial-TP + breakeven stop (🔴, shadow-first)
+  2. `slice/f5-3` — outcome-watchdog standart sarmalayıcı (🟢)
+  3. `slice/f5-1` — counterfactual → kalibrasyon/eşik kanıtı (🟡)
+  4. `slice/f5-2` — champion/challenger terfi paketi (🟡)
+  5. `slice/f5-4` — weights YAML'ları data/runtime'a (🟡)
+  Not: PR'lar main'in aynı noktasından dallanır (bağımsız inceleme);
+  tablo satırları bitişik olduğundan ardışık merge'lerde roadmap
+  tablosunda küçük çakışma çıkabilir — GitHub editöründe önemsiz.
+  F3 serisi kapandı: F3-1 owner kararıyla YAPILMAYACAK, F3-2+F3-3
+  kodlandı (flag OFF). F2-1 gate-bağlama owner kararı bekliyor.
 - **Bekleyen owner aktivasyonları:** (1) `news.sentiment_v2` (M1 kodu
   canlıda, flag OFF — regime-report'taki v1/v2 ayrışması izlenip açılır);
   (2) `regime.drop_unavailable_layers` (F2-3 kodu canlıda, flag OFF —
