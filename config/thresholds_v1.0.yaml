@@ -110,7 +110,18 @@ risk_gates:
   max_drawdown_pct: 0.08        # peak'ten %8
   correlation_threshold: 0.7
   correlation_window_days: 30
-  correlation_min_overlap_days: 5    # bunun altında computed rho kullanılmaz
+  correlation_min_overlap_days: 5    # bunun altında computed (PnL) rho kullanılmaz
+  # F2-2 (2026-07-02) — fiyat-getirisi korelasyonu. false (DEFAULT) → aktif rho
+  # zinciri eski davranışla birebir (trade-PnL computed → baseline → neutral);
+  # fiyat-rho her girdide `rho_price`/`price_samples` SALT-GÖZLEM alanı olarak
+  # yine hesaplanır (/risk/correlation matrisinde). true → gerçek 1d fiyat
+  # getirisinden hesaplanan rho zincirin BAŞINA geçer (computed_price). Kaynak:
+  # OHLCV disk cache (ağ çağrısı yok, yalnız verified barlar — DATA_POLICY).
+  # Gerekçe: trade-PnL rho'su seyrek/gürültülü (iki sembolde aynı gün kapanmış
+  # trade ister), baseline elle yazılmış sabit — fiyat serisi tek dürüst kaynak.
+  # Owner gözlem sonrası tarihli kararla açar.
+  correlation_price_returns: false
+  correlation_price_min_overlap_days: 20   # bunun altında ortak günle fiyat-rho AKTİF olamaz (gözlemde görünür)
   max_cluster_pct: 0.30              # aynı risk cluster'ın toplam %equity tavanı
   vol_regime_zscore: 2.0
   # M6 (2026-07-02): ölü `position_cap_per_asset_pct` (%25) KALDIRILDI — hiçbir

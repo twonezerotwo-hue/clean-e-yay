@@ -15,8 +15,9 @@ Bu belge farklı bir asistan/oturum tarafından SIFIR bağlamla devralınabilir
 - **Tamamlanan:** F0-1, F0-2, F1-1…F1-5, R2-3 + F2-1 gözlem fazı
   (aşağıdaki tabloda ✅/🔶 ve ayrıntılar). Suite 1189/1189 yeşil, ruff'ta
   yeni hata yok (tests/ altında ~45 eski baseline bulgusu var, dokunulmadı).
-- **Sıradaki iş:** M serisi TAMAMLANDI (M1–M6). Sırada F2-2 (korelasyonu
-  fiyat getirisinden hesapla) — F serisinin kalan en öncelikli dilimi.
+- **Sıradaki iş:** F3-1 (Wilson/bootstrap CI + üç-durumlu rollback) —
+  F3-2'nin ön koşulu. M serisi + F2-2 tamamlandı; F2-1 gate-bağlama owner
+  kararı bekliyor.
 - **Bekleyen owner aktivasyonları:** (1) `news.sentiment_v2` (M1 kodu
   canlıda, flag OFF — regime-report'taki v1/v2 ayrışması izlenip açılır);
   (2) `regime.drop_unavailable_layers` (F2-3 kodu canlıda, flag OFF —
@@ -25,9 +26,11 @@ Bu belge farklı bir asistan/oturum tarafından SIFIR bağlamla devralınabilir
   warning'lerindeki `fundamental_v2_observe` ayrışması izlenip açılır);
   (4) `sentinel_v2.enabled` (M4 kodu canlıda, flag OFF — hücre
   warning'lerindeki `sentinel_v2_observe` ayrışması izlenip açılır);
-  (5) F2-1 gate-bağlama (snapshot store'daki
+  (5) `risk_gates.correlation_price_returns` (F2-2 kodu canlıda, flag OFF —
+  /risk/correlation matrisindeki `rho_price` gözlemi izlenip açılır);
+  (6) F2-1 gate-bağlama (snapshot store'daki
   `paper_state_summary.mtm_equity_usd` bandı izlenip RiskInput'a flag'le
-  bağlanır); (6) `EXPECTANCY_R_MODE` (R-damgalı outcome birikince).
+  bağlanır); (7) `EXPECTANCY_R_MODE` (R-damgalı outcome birikince).
 - **Bekleyen owner kararları:** `EXPECTANCY_R_MODE` (R-bazlı expectancy)
   default KAPALI — R-damgalı outcome birikince açılacak (open_risk_pct
   yalnız YENİ kapanışlarda damgalanıyor; eski kayıtlarda yok).
@@ -65,7 +68,7 @@ Risk: 🟢 davranış değiştirmez (ölçüm/altyapı) · 🟡 flag'li davranı
 | F1-4 | Gün çapası UTC fix (`date.today()` → UTC) | 1.6a | ✅ | 🟢 | F1 |
 | F1-5 | Kısmi kapanışta trade id benzersizliği (leg suffix) + dedupe düzeltmesi | 1.6b | ✅ | 🟢 | F1 |
 | F2-1 | Mark-to-market equity → RiskInput (önce gözlem alanı, sonra flag'li gate girdisi) | 1.3, 3.5 | 🔶 gözlem fazı tamam (2026-07-02): `PaperState.unrealized_pnl_usd`/`mtm_equity_usd` türetilmiş; snapshot `paper_state_summary` + tick heartbeat + system/health taşır. Gate girdisine bağlama = bant gözlemi sonrası ayrı owner kararı (flag ile) | 🔴 | F2 |
-| F2-2 | Korelasyonu fiyat getirisinden hesapla (OHLCV cache; kaynak önceliği computed_price > baseline > neutral) | 1.5, 3.7 | ⬜ | 🟡 | F2 |
+| F2-2 | Korelasyonu fiyat getirisinden hesapla (OHLCV cache; kaynak önceliği computed_price > baseline > neutral) | 1.5, 3.7 | ✅ (2026-07-02) `price_return_series` + `computed_price` kaynağı: 1d OHLCV disk cache'inden günlük getiri Pearson'ı (ağ çağrısı YOK, yalnız verified barlar). Flag `risk_gates.correlation_price_returns` DEFAULT OFF (aktif zincir bayt-aynı); fiyat-rho her girdide `rho_price`/`price_samples` SALT-GÖZLEM (API /risk/correlation matrisi + `price_returns_enabled`). Aktiflik eşiği `correlation_price_min_overlap_days` (20). Canlı kanıt: aktif zincirde 45 çiftin 43'ü neutral (risk motoru kör) iken fiyat-rho 38 çifti dolduruyor; iki baseline da gerçeği KÜÇÜMSÜYOR (BTC\|ETH 0.75→0.882, XAG\|XAU 0.80→0.868 — cluster riski olduğundan az görünüyor). AKTİVASYON BEKLİYOR | 🟡 | F2 |
 | F2-3 | Regime layer'ları veri yokken düşür+redistribute (quantum deseni; default-sabit sahte skor yok) | 2 (classifier) | ✅ (2026-07-02) flag `regime.drop_unavailable_layers` DEFAULT OFF (eski davranış bayt-aynı). Açıkken: veri olmayan katman düşer (`RegimeOutput.dropped` → regime-report `dropped_layers`), fundamental/sentinel katmansız kalırsa consensus modülü de düşer+redistribute. Canlı kanıt (FRED'siz ortam): OFF Likidite=96.6 sahte → ON katman düştü, konsensüs 51.2→47.0 (~4.2p sahte şişme). AKTİVASYON BEKLİYOR (owner: `true` + tarihli yorum) | 🟡 | F2 |
 | F3-1 | Wilson/bootstrap CI + üç-durumlu rollback kararı (geri al / onayla / izlemeye devam) | 1.6d, 4.1 | ⬜ | 🟡 | F3 |
 | F3-2 | Ağırlık trainer'ına rejim filtresi + 4 rejimin ayrı eğitimi | 1.2 | ⬜ | 🟡 | F3 |

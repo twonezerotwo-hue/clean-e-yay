@@ -13,17 +13,25 @@ Politika:
   hizalama ≤ -threshold → hedge (ayrı raporlanır, cap'e girmez).
 - Cluster toplamı ≥ `max_cluster_pct` (0.30 equity) → size_factor 0.0;
   yarısını aştıysa → 0.5.
-- rho kaynağı: yeterli veri varsa kapalı trade PnL serisinden hesaplanır
-  (computed); yetersizse config `correlation_baseline` (baseline); o da
-  yoksa neutral (rho=0, `insufficient_correlation_data` uyarısı, adjustment
-  yok). DATA_POLICY: yalnızca `data_verified=True` trade'ler kullanılır.
+- rho kaynağı (F2-2, 2026-07-02): flag `risk_gates.correlation_price_returns`
+  AÇIKKEN önce gerçek fiyat getirisinden hesaplanır (computed_price — 1d OHLCV
+  disk cache'i, ağ çağrısı YOK, yalnız verified barlar); yoksa/yetersizse
+  kapalı trade PnL serisi (computed); yetersizse config `correlation_baseline`
+  (baseline); o da yoksa neutral (rho=0, `insufficient_correlation_data`
+  uyarısı, adjustment yok). Flag KAPALIYKEN (default) aktif zincir eski
+  davranışla birebir; fiyat-rho her girdide `rho_price`/`price_samples`
+  SALT-GÖZLEM alanı olarak yine hesaplanır (owner aktivasyon kanıtını
+  /risk/correlation matrisinden izler). DATA_POLICY: yalnızca
+  `data_verified=True` trade'ler ve `verified=True` barlar kullanılır.
 """
 from __future__ import annotations
 
 import math
 from dataclasses import dataclass, field
 from datetime import date, timedelta
+from itertools import pairwise
 
+from packages.data.providers.ohlcv import cache as ohlcv_cache
 from packages.data.registry.loader import load_thresholds
 
 SIDE_SIGN = {"long": 1.0, "short": -1.0}
@@ -35,8 +43,12 @@ class CorrelationEntry:
     symbol_a: str
     symbol_b: str
     rho: float
-    source: str          # computed | baseline | neutral
-    samples: int         # computed için ortak gün sayısı, diğerlerinde 0
+    source: str          # computed_price | computed | baseline | neutral
+    samples: int         # computed* için ortak gün sayısı, diğerlerinde 0
+    # F2-2 — fiyat-getirisi rho'su HER ZAMAN gözlem olarak taşınır (flag
+    # kapalıyken aktif zincire girmez; owner ayrışmayı buradan izler).
+    rho_price: float | None = None
+    price_samples: int = 0
 
 
 @dataclass
@@ -65,6 +77,58 @@ class ClusterReport:
 
 def _gates() -> dict:
     return load_thresholds()["risk_gates"]
+
+
+def _price_returns_enabled() -> bool:
+    """`risk_gates.correlation_price_returns` owner-flag'i (default KAPALI).
+
+    KAPALI → aktif rho zinciri eski davranışla birebir (computed → baseline →
+    neutral); fiyat-rho yalnız gözlem alanlarında. AÇIK → computed_price
+    zincirin başına geçer. Aktivasyon ayrı tarihli owner kararı."""
+    return bool(_gates().get("correlation_price_returns", False))
+
+
+def _price_min_overlap() -> int:
+    return int(_gates().get("correlation_price_min_overlap_days", 20))
+
+
+def price_return_series(
+    symbols, window_days: int | None = None
+) -> dict[str, dict[date, float]]:
+    """Sembol → gün → günlük fiyat getirisi (1d OHLCV disk cache'inden).
+
+    Ağ çağrısı YAPMAZ — tick_worker'ın sürekli tazelediği cache'i okur; cache
+    yoksa sembol atlanır (fallback zinciri devralır). DATA_POLICY: yalnız
+    `verified=True` barlar (fixture/mock bar girmez). Getiri ardışık barlar
+    arasıdır (hafta sonu boşluğu sorun değil — Pearson ortak günlerle çalışır).
+    Pencere, veri setindeki en son bar gününe göre alınır (deterministik)."""
+    if window_days is None:
+        window_days = int(_gates().get("correlation_window_days", 30))
+    closes_by_sym: dict[str, list[tuple[date, float]]] = {}
+    for sym in sorted(set(symbols)):
+        cached = ohlcv_cache.load(sym, "1d")
+        if cached is None:
+            continue
+        by_day: dict[date, float] = {}
+        for b in sorted(cached.bars, key=lambda b: b.ts):
+            if b.verified and b.close and b.close > 0:
+                by_day[b.ts.date()] = float(b.close)  # aynı güne son bar yazar
+        if len(by_day) >= 2:
+            closes_by_sym[sym] = sorted(by_day.items())
+    if not closes_by_sym:
+        return {}
+    anchor = max(days[-1][0] for days in closes_by_sym.values())
+    cutoff = anchor - timedelta(days=window_days)
+    out: dict[str, dict[date, float]] = {}
+    for sym, days in closes_by_sym.items():
+        rets = {
+            d2: c2 / c1 - 1.0
+            for (_, c1), (d2, c2) in pairwise(days)
+            if d2 >= cutoff
+        }
+        if rets:
+            out[sym] = rets
+    return out
 
 
 def _baseline_rho(a: str, b: str) -> float | None:
@@ -127,14 +191,41 @@ def _pearson(xs: list[float], ys: list[float]) -> float | None:
     return cov / math.sqrt(vx * vy)
 
 
+def _pair_price_rho(
+    a: str, b: str, price_series: dict[str, dict[date, float]]
+) -> tuple[float | None, int]:
+    """Çiftin fiyat-getirisi rho'su + ortak gün sayısı (yetersizse (None, n))."""
+    pa, pb = price_series.get(a, {}), price_series.get(b, {})
+    common = sorted(set(pa) & set(pb))
+    if len(common) < _price_min_overlap():
+        return None, len(common)
+    rho = _pearson([pa[d] for d in common], [pb[d] for d in common])
+    if rho is None:
+        return None, len(common)
+    return round(rho, 3), len(common)
+
+
 def pair_correlation(
     a: str,
     b: str,
     series: dict[str, dict[date, float]],
+    price_series: dict[str, dict[date, float]] | None = None,
 ) -> CorrelationEntry:
-    """Tek çift için rho: computed → baseline → neutral fallback sırası."""
+    """Tek çift için rho: [computed_price →] computed → baseline → neutral.
+
+    computed_price yalnız flag açıkken AKTİF zincire girer; flag kapalıyken
+    de gözlem alanlarına (`rho_price`/`price_samples`) her zaman yazılır."""
     if a == b:
         return CorrelationEntry(symbol_a=a, symbol_b=b, rho=1.0, source="computed", samples=0)
+    rho_price, price_samples = (
+        _pair_price_rho(a, b, price_series) if price_series is not None else (None, 0)
+    )
+    if _price_returns_enabled() and rho_price is not None:
+        return CorrelationEntry(
+            symbol_a=a, symbol_b=b, rho=rho_price,
+            source="computed_price", samples=price_samples,
+            rho_price=rho_price, price_samples=price_samples,
+        )
     min_overlap = int(_gates().get("correlation_min_overlap_days", 5))
     sa, sb = series.get(a, {}), series.get(b, {})
     common = sorted(set(sa) & set(sb))
@@ -144,11 +235,18 @@ def pair_correlation(
             return CorrelationEntry(
                 symbol_a=a, symbol_b=b, rho=round(rho, 3),
                 source="computed", samples=len(common),
+                rho_price=rho_price, price_samples=price_samples,
             )
     base = _baseline_rho(a, b)
     if base is not None:
-        return CorrelationEntry(symbol_a=a, symbol_b=b, rho=base, source="baseline", samples=0)
-    return CorrelationEntry(symbol_a=a, symbol_b=b, rho=0.0, source="neutral", samples=0)
+        return CorrelationEntry(
+            symbol_a=a, symbol_b=b, rho=base, source="baseline", samples=0,
+            rho_price=rho_price, price_samples=price_samples,
+        )
+    return CorrelationEntry(
+        symbol_a=a, symbol_b=b, rho=0.0, source="neutral", samples=0,
+        rho_price=rho_price, price_samples=price_samples,
+    )
 
 
 def matrix(symbols: list[str], trades=None) -> list[CorrelationEntry]:
@@ -157,11 +255,12 @@ def matrix(symbols: list[str], trades=None) -> list[CorrelationEntry]:
         from packages.paper import state as paper_state
         trades = paper_state.load().recent_trades
     series = daily_pnl_series(trades)
+    price_series = price_return_series(symbols)
     syms = sorted(set(symbols))
     out: list[CorrelationEntry] = []
     for i, a in enumerate(syms):
         for b in syms[i + 1:]:
-            out.append(pair_correlation(a, b, series))
+            out.append(pair_correlation(a, b, series, price_series))
     return out
 
 

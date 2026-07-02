@@ -1899,8 +1899,10 @@ export interface components {
             symbol_b: string;
             rho: number;
             /** @enum {string} */
-            source: "computed" | "baseline" | "neutral";
+            source: "computed_price" | "computed" | "baseline" | "neutral";
             samples: number;
+            rho_price?: number | null;
+            price_samples?: number;
         };
         /** @description Risk — bir exposure cluster'ındaki tek açık paper pozisyon (packages/risk/correlation.py serileştirir; presentation-only). */
         ClusterPosition: {
@@ -1923,6 +1925,8 @@ export interface components {
             max_cluster_pct: number;
             window_days?: number;
             min_overlap_days?: number;
+            price_returns_enabled?: boolean;
+            price_min_overlap_days?: number;
             symbols: string[];
             matrix: components["schemas"]["CorrelationEntry"][];
             clusters: components["schemas"]["ExposureCluster"][];

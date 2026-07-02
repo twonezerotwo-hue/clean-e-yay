@@ -69,6 +69,9 @@ def get_correlation() -> dict:
         "max_cluster_pct": float(gates.get("max_cluster_pct", 0.30)),
         "window_days": int(gates.get("correlation_window_days", 30)),
         "min_overlap_days": int(gates.get("correlation_min_overlap_days", 5)),
+        # F2-2 — owner gözlem kanıtı: matristeki rho_price/price_samples ile birlikte okunur
+        "price_returns_enabled": bool(gates.get("correlation_price_returns", False)),
+        "price_min_overlap_days": int(gates.get("correlation_price_min_overlap_days", 20)),
         "symbols": symbols,
         "matrix": [asdict(e) for e in entries],
         "clusters": clusters,

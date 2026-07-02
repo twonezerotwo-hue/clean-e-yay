@@ -2032,8 +2032,13 @@ components:
         symbol_a: { type: string }
         symbol_b: { type: string }
         rho: { type: number }
-        source: { type: string, enum: [computed, baseline, neutral] }
+        # F2-2: computed_price = gerçek 1d fiyat getirisinden (flag açıkken aktif)
+        source: { type: string, enum: [computed_price, computed, baseline, neutral] }
         samples: { type: integer }
+        # F2-2 salt-gözlem alanları — fiyat-rho flag kapalıyken de hesaplanır;
+        # owner aktivasyon kanıtını (baseline/computed vs fiyat ayrışması) izler.
+        rho_price: { type: number, nullable: true }
+        price_samples: { type: integer }
 
     ClusterPosition:
       type: object
@@ -2069,6 +2074,9 @@ components:
         max_cluster_pct: { type: number }
         window_days: { type: integer }
         min_overlap_days: { type: integer }
+        # F2-2 — fiyat-getirisi korelasyon flag durumu + aktiflik eşiği
+        price_returns_enabled: { type: boolean }
+        price_min_overlap_days: { type: integer }
         symbols:
           type: array
           items: { type: string }

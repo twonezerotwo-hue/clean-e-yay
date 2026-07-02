@@ -1029,7 +1029,8 @@ export type MistakesState = {
   total_fingerprints: number;
 };
 
-export type CorrelationSource = "computed" | "baseline" | "neutral";
+// F2-2: computed_price = gerçek 1d fiyat getirisinden (flag açıkken aktif)
+export type CorrelationSource = "computed_price" | "computed" | "baseline" | "neutral";
 
 export type CorrelationEntry = {
   symbol_a: string;
@@ -1037,6 +1038,9 @@ export type CorrelationEntry = {
   rho: number;
   source: CorrelationSource;
   samples: number;
+  // F2-2 salt-gözlem alanları — fiyat-rho flag kapalıyken de hesaplanır
+  rho_price?: number | null;
+  price_samples?: number;
 };
 
 export type ClusterPosition = {
@@ -1059,6 +1063,9 @@ export type CorrelationState = {
   max_cluster_pct: number;
   window_days: number;
   min_overlap_days: number;
+  // F2-2 — fiyat-getirisi korelasyon flag durumu + aktiflik eşiği
+  price_returns_enabled?: boolean;
+  price_min_overlap_days?: number;
   symbols: string[];
   matrix: CorrelationEntry[];
   clusters: ExposureCluster[];
