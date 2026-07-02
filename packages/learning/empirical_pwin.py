@@ -42,15 +42,24 @@ def _path() -> Path:
 
 
 def cfg() -> dict:
-    """`empirical_pwin` config'i (enabled default False, min_samples default 20)."""
+    """`empirical_pwin` config'i (enabled default False, min_samples default 20).
+
+    F5-1 — blend_counterfactual (default False): AÇIKKEN gerçek outcome'u
+    yetersiz TF'lerde missed-opportunity counterfactual sayımları SON ÇARE
+    fallback olarak harmanlanır (gerçek kanıt her zaman önceliklidir)."""
     try:
         raw = load_thresholds().get("empirical_pwin") or {}
         return {
             "enabled": bool(raw.get("enabled", False)),
             "min_samples": max(1, int(raw.get("min_samples", DEFAULT_MIN_SAMPLES))),
+            "blend_counterfactual": bool(raw.get("blend_counterfactual", False)),
         }
     except (OSError, KeyError, ValueError, TypeError):
-        return {"enabled": False, "min_samples": DEFAULT_MIN_SAMPLES}
+        return {
+            "enabled": False,
+            "min_samples": DEFAULT_MIN_SAMPLES,
+            "blend_counterfactual": False,
+        }
 
 
 def enabled() -> bool:
@@ -70,10 +79,16 @@ def _cell_key(timeframe: str, regime: str) -> str:
     return f"{timeframe}|{regime}"
 
 
-def build_table(outcomes) -> dict:
-    """Verified outcome'lardan (tf|rejim) + tf hücre tablosu (pure)."""
+def build_table(outcomes, counterfactuals: list[dict] | None = None) -> dict:
+    """Verified outcome'lardan (tf|rejim) + tf hücre tablosu (pure).
+
+    F5-1 — `counterfactuals` (missed_opportunity çözümleri) AYRI kanala
+    yazılır (`cf_by_tf`): win=missed_win, loss=avoided_loss, expired paydaya
+    girmez. Gerçek ölçüm hücreleri counterfactual ile KİRLETİLMEZ — harman
+    yalnız lookup'ta, flag'le ve son-çare fallback olarak yapılır."""
     cells: dict[str, dict] = {}
     by_tf: dict[str, dict] = {}
+    cf_by_tf: dict[str, dict] = {}
 
     def _bump(bucket: dict, key: str, won: bool) -> None:
         c = bucket.setdefault(key, {"wins": 0, "losses": 0})
@@ -89,6 +104,12 @@ def build_table(outcomes) -> dict:
         regime = str(o.regime or "UNKNOWN")
         _bump(cells, _cell_key(tf, regime), won)
         _bump(by_tf, tf, won)
+
+    for r in counterfactuals or []:
+        oc = r.get("outcome")
+        if oc not in ("missed_win", "avoided_loss"):
+            continue  # expired: net sonuç yok
+        _bump(cf_by_tf, str(r.get("timeframe") or "1d"), oc == "missed_win")
 
     def _finalize(bucket: dict) -> dict:
         out = {}
@@ -110,6 +131,8 @@ def build_table(outcomes) -> dict:
         "min_samples": min_samples,
         "cells": fin_cells,
         "by_tf": fin_tf,
+        # F5-1 — counterfactual kanalı (ayrı; gerçek hücreleri kirletmez)
+        "cf_by_tf": _finalize(cf_by_tf),
         "cell_count": len(fin_cells),
         "sufficient_count": sum(
             1 for c in fin_cells.values() if c["n"] >= min_samples
@@ -119,9 +142,14 @@ def build_table(outcomes) -> dict:
 
 def write_table(state=None) -> dict:
     """Tabloyu üret + atomik yaz (learning worker her cycle çağırır)."""
+    from packages.learning import missed_opportunity
     from packages.learning import outcomes as outcomes_mod
 
-    payload = build_table(outcomes_mod.outcomes_from_state(state))
+    try:
+        cf = missed_opportunity.resolutions()
+    except Exception:
+        cf = []  # counterfactual kanalı best-effort — tabloyu düşürmez
+    payload = build_table(outcomes_mod.outcomes_from_state(state), counterfactuals=cf)
     p = _path()
     with _LOCK:
         p.parent.mkdir(parents=True, exist_ok=True)
@@ -158,32 +186,54 @@ def _load_cached() -> dict:
 def lookup(timeframe: str, regime: str) -> EmpiricalPwin | None:
     """(tf|rejim) hücresi; yetersizse tf geneli; o da yetersizse None.
 
-    None = "ampirik kanıt yok" — çağıran kalibre güvene düşer (sahte p yok)."""
+    F5-1 — `blend_counterfactual` AÇIKSA son çare: gerçek tf sayımları +
+    counterfactual tf sayımları HARMANLANIR (kaynak "tf_blend_cf"). Gerekçe:
+    bir TF bloklanınca gerçek outcome ÜRETMEZ (geri-besleme kör noktası);
+    counterfactual'lar o TF'i ölçmeye devam eder. Gerçek kanıt yeterliyse
+    harman HİÇ devreye girmez. None = kanıt yok — çağıran kalibre güvene
+    düşer (sahte p yok)."""
     data = _load_cached()
     if not data:
         return None
-    min_samples = cfg()["min_samples"]
+    c = cfg()
+    min_samples = c["min_samples"]
     for source, bucket, key in (
         ("tf_regime", data.get("cells") or {}, _cell_key(timeframe, regime)),
         ("tf", data.get("by_tf") or {}, timeframe),
     ):
-        c = bucket.get(key)
-        if not isinstance(c, dict):
+        cell = bucket.get(key)
+        if not isinstance(cell, dict):
             continue
         try:
-            n = int(c.get("n", 0))
+            n = int(cell.get("n", 0))
             if n < min_samples:
                 continue
             return EmpiricalPwin(
-                p_win=float(c["p_win"]),
-                wins=int(c.get("wins", 0)),
-                losses=int(c.get("losses", 0)),
+                p_win=float(cell["p_win"]),
+                wins=int(cell.get("wins", 0)),
+                losses=int(cell.get("losses", 0)),
                 n=n,
                 source=source,
             )
         except (TypeError, ValueError, KeyError):
             continue
-    return None
+    if not c["blend_counterfactual"]:
+        return None
+    # Son çare harman: gerçek(tf) + counterfactual(tf) sayımları.
+    try:
+        actual = (data.get("by_tf") or {}).get(timeframe) or {}
+        cf = (data.get("cf_by_tf") or {}).get(timeframe) or {}
+        wins = int(actual.get("wins", 0)) + int(cf.get("wins", 0))
+        losses = int(actual.get("losses", 0)) + int(cf.get("losses", 0))
+        n = wins + losses
+        if n < min_samples:
+            return None
+        return EmpiricalPwin(
+            p_win=round(wins / n, 4), wins=wins, losses=losses, n=n,
+            source="tf_blend_cf",
+        )
+    except (TypeError, ValueError):
+        return None
 
 
 __all__ = ["EmpiricalPwin", "build_table", "cfg", "enabled", "lookup", "write_table"]

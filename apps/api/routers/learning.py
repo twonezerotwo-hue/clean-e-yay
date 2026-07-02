@@ -11,6 +11,7 @@ from fastapi import APIRouter
 from packages.data.registry.loader import load_thresholds
 from packages.decision import conflict_gate, conflict_gate_backtest
 from packages.learning import (
+    activation_watchdog,
     book_audit,
     calibration_audit,
     calibration_store,
@@ -22,6 +23,8 @@ from packages.learning import (
     historical_edge,
     missed_opportunity,
     mistake_memory,
+    partial_tp_shadow,
+    promotion_criteria,
     tf_target_rollback,
     tf_target_store,
     tf_target_trainer,
@@ -72,6 +75,20 @@ def get_calibration() -> dict:
 @router.post("/learning/calibration/retrain")
 def post_retrain_calibration() -> dict:
     return calibration_trainer.train()
+
+
+@router.get("/learning/activation-watchdog")
+def get_activation_watchdog() -> dict:
+    """F5-3 — owner-flag aktivasyon izleyicisi (read-only, yalnız-öneri).
+    Hangi flag açık, izleme ilerlemesi, CONFIRMED/DEGRADED geçmişi."""
+    return activation_watchdog.report()
+
+
+@router.get("/learning/partial-tp-shadow")
+def get_partial_tp_shadow() -> dict:
+    """F4-3 — partial-TP shadow-vs-actual özeti (read-only). Owner
+    `partial_tp.enabled` aktivasyon kararını bu kanıtla verir."""
+    return partial_tp_shadow.summary()
 
 
 @router.get("/learning/tf-weights")
@@ -306,6 +323,14 @@ def get_missed_opportunities() -> dict:
     expired, trade_profile bazında. PAPER_SAFE — paper'a dokunmaz, yalnızca
     izleme logundan sayar. Faz 4 (conflict-gate genişletme) kararına veri."""
     return missed_opportunity.summary_viewmodel()
+
+
+@router.get("/learning/promotion-criteria")
+def get_promotion_criteria() -> dict:
+    """F5-2 — champion/challenger terfi kriteri (read-only). Eşleşmiş karar
+    hacmi + ayrışma kanıtı + Wilson CI ayrıklığı; READY olsa bile terfi
+    otomatik DEĞİL — governor'daki owner onay paketi üzerinden yürür."""
+    return promotion_criteria.evaluate()
 
 
 @router.get("/learning/calibration-jumps")

@@ -53,3 +53,6 @@ def _isolate_runtime_stores(tmp_path_factory: pytest.TempPathFactory) -> None:
     # motorunun predict_calibrated'ına sızıyordu (testte identity bekleyen assertion
     # makinede fit varken şaşar). Per-test fixture'lar yine override edebilir.
     os.environ["CALIBRATION_STORE_PATH"] = str(runtime / "platt.json")
+    # F5-3 — learning worker testleri activation watchdog store'unu gerçek
+    # data/runtime'a yazmasın.
+    os.environ["ACTIVATION_WATCHDOG_PATH"] = str(runtime / "activation_watchdog.json")
