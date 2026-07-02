@@ -4,6 +4,30 @@
 > sürecine çevirir. **Yaşayan belge** — her slice tamamlanınca durum sütunu
 > güncellenir. Kaynak denetim raporu: PR #48 açıklaması + oturum kaydı.
 
+## Devir notu (son güncelleme: 2026-07-02)
+
+Bu belge farklı bir asistan/oturum tarafından SIFIR bağlamla devralınabilir
+şekilde yazılmıştır. Mevcut durum:
+
+- **Branch:** `fix/learning-calibration-news-filter` (PR #48, AÇIK — henüz
+  merge edilmedi). Main'e merge = AWS'e otomatik deploy (systemd worker
+  restart dahil). Lokalde de bu branch checkout'lu olabilir — merge sonrası
+  `main`'e dönülmeli (lokal keep-alive watchdog worker'ları lokal koddan
+  çalıştırır).
+- **Tamamlanan:** F0-1, F0-2, F1-1…F1-5, R2-3 (aşağıdaki tabloda ✅ ve
+  ayrıntılar). Suite 1181/1181 yeşil, ruff temiz.
+- **Sıradaki iş:** F2-1 (mark-to-market equity → RiskInput). 🔴 sınıfı:
+  önce MTM equity/unrealized toplamı snapshot+heartbeat'e SALT-GÖZLEM olarak
+  yazılır, bant görüldükten sonra ayrı owner kararıyla flag'le RiskGate
+  girdisine bağlanır.
+- **Bekleyen owner kararları:** `EXPECTANCY_R_MODE` (R-bazlı expectancy)
+  default KAPALI — R-damgalı outcome birikince açılacak (open_risk_pct
+  yalnız YENİ kapanışlarda damgalanıyor; eski kayıtlarda yok).
+- **Test komutu:** `.venv/Scripts/python -m pytest --basetemp=.pytest_tmp/run_X -q`
+  (basetemp şart — Windows Temp kilit sorunu). Ruff: `.venv/Scripts/python -m ruff check packages apps tests`.
+- **Kurallar:** commit/push'tan önce owner'a sor; işler ayrı commit'lerle
+  gider; aşağıdaki Anayasa her slice için bağlayıcıdır.
+
 ## Anayasa (her slice için geçerli — pazarlıksız)
 
 1. **Çalışan sistem ASLA bozulmaz** — davranış değiştiren her şey ya
