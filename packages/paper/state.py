@@ -104,6 +104,14 @@ class Position:
     # Trade'e, oradan decision_log'a taşınır; learning summary attribution okur.
     # Manuel/legacy açılışlar None (consensus vektörü yok — uydurma yok).
     open_module_contributions: dict[str, float] | None = None
+    # F4-3 — partial-TP shadow gözlemi (flag'ten BAĞIMSIZ her tick ilerletilir).
+    # r_hit: kâr ilk kez trigger_r×|entry−SL| mesafesine değdiği an + o anki fiyat.
+    # be_touched: r-hit SONRASI fiyat girişe geri döndü mü (breakeven senaryosu).
+    # done: partial_tp.enabled AÇIKKEN kısmi kapatma gerçekleşti (bir kez).
+    ptp_r_hit_at: str | None = None
+    ptp_price_at_r: float | None = None
+    ptp_be_touched: bool = False
+    ptp_done: bool = False
 
     @property
     def unrealized_pnl_usd(self) -> float:
@@ -152,6 +160,12 @@ class Trade:
     open_risk_pct: float | None = None
     # F1-3 — açılış anındaki consensus modül katkı vektörü (pozisyondan miras).
     open_module_contributions: dict[str, float] | None = None
+    # F4-3 — partial-TP shadow: pozisyon 1R kârı gördü mü + görmüşse "1R'de %X
+    # kapat & breakeven" stratejisinin HİPOTETİK PnL'i (yalnız r-hit'li TAM
+    # kapanışlarda dolar; gerçek partial-TP uygulanan pozisyonda None — gerçek
+    # leg'ler zaten ölçüm). Owner aktivasyon kanıtı: shadow vs actual toplamı.
+    ptp_r_hit: bool = False
+    ptp_shadow_pnl_usd: float | None = None
 
 
 @dataclass

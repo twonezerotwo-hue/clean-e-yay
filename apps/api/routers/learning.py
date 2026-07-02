@@ -22,6 +22,7 @@ from packages.learning import (
     historical_edge,
     missed_opportunity,
     mistake_memory,
+    partial_tp_shadow,
     tf_target_rollback,
     tf_target_store,
     tf_target_trainer,
@@ -72,6 +73,13 @@ def get_calibration() -> dict:
 @router.post("/learning/calibration/retrain")
 def post_retrain_calibration() -> dict:
     return calibration_trainer.train()
+
+
+@router.get("/learning/partial-tp-shadow")
+def get_partial_tp_shadow() -> dict:
+    """F4-3 — partial-TP shadow-vs-actual özeti (read-only). Owner
+    `partial_tp.enabled` aktivasyon kararını bu kanıtla verir."""
+    return partial_tp_shadow.summary()
 
 
 @router.get("/learning/tf-weights")
