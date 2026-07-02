@@ -484,20 +484,28 @@ def build(
         modules.append(ModuleScore(name=name, score=round(s, 2), weight=round(wt, 4), contribution=round(c, 3)))
     dominant = max(modules, key=lambda m: m.contribution).name if modules else ""
     final = max(0.0, min(100.0, weighted))
-    # Confluence: en az 3 modül 50'nin üstünde veya altında aynı yönde
-    above = sum(1 for m in modules if m.score >= 55)
-    below = sum(1 for m in modules if m.score <= 45)
-    confluence = above >= 3 or below >= 3
     # Yön etiketi trade aksiyon eşikleriyle aynı banttan (tek kaynak) okunur.
     cons_th = load_thresholds().get("consensus", {})
+    bullish_min = float(cons_th.get("bullish_min", 55.0))
+    bearish_max = float(cons_th.get("bearish_max", 45.0))
+    # Confluence (bugfix 2026-07-02, owner onayı): en az 3 modül SİNYALİN KENDİ
+    # yönünde hemfikir olmalı. Eski kod yön ayrımı yapmıyordu (above>=3 OR
+    # below>=3) — 3 modül işlemin TERSİNE hizalıyken bile "uyumlu" sayıp boyut
+    # yarılamasını atlıyordu. Nötr sinyalde taraf yok → False (işlem de yok).
+    # Modül eşikleri de artık aksiyon eşikleriyle aynı config bandından okunur
+    # (eskiden 55/45 sabitti — owner eşiği değiştirince sessizce ayrışırdı).
+    above = sum(1 for m in modules if m.score >= bullish_min)
+    below = sum(1 for m in modules if m.score <= bearish_max)
+    if final >= bullish_min:
+        confluence = above >= 3
+    elif final <= bearish_max:
+        confluence = below >= 3
+    else:
+        confluence = False
     return ConsensusResult(
         symbol=symbol,
         score=round(final, 1),
-        direction=_direction(
-            final,
-            float(cons_th.get("bullish_min", 55.0)),
-            float(cons_th.get("bearish_max", 45.0)),
-        ),
+        direction=_direction(final, bullish_min, bearish_max),
         modules=modules,
         confluence_aligned=confluence,
         dominant_module=dominant,

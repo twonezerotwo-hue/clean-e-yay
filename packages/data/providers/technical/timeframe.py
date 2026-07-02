@@ -389,7 +389,9 @@ def _direction_score(
     agreement = num / den if den > 0 else 0.0  # −1..+1, evidence vs momentum side
 
     gain = cfg.tilt_confirm_gain if agreement >= 0 else cfg.tilt_penalty_gain
-    mult = 1.0 + gain * agreement
+    # Taban 0 (bugfix 2026-07-02): "kapı asla yön çevirmez" sözleşmesi artık kodda —
+    # config'e penalty_gain>1 yazılsa bile çarpan eksiye düşüp yönü flip edemez.
+    mult = max(0.0, 1.0 + gain * agreement)
     diag["gate_mult"] = round(mult, 3)
 
     final = 50.0 + (core - 50.0) * mult

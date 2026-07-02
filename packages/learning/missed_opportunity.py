@@ -228,7 +228,10 @@ def _resolve_event(tracking: dict, outcome: str, now: datetime, mfe_r: float, ba
         "trade_profile": tracking.get("trade_profile"),
         "setup_type": tracking.get("setup_type"),
         "outcome": outcome,
-        "mfe_r": round(mfe_r, 3),
+        # Bugfix 2026-07-02: SL girişe aşırı yakınken r_unit paydası patlıyordu
+        # (canlıda 250R görüldü) — gösterge 20R'de kırpılır (win/loss sayımları
+        # etkilenmez, yalnız görüntü dürüstlüğü).
+        "mfe_r": round(min(mfe_r, 20.0), 3),
         "bars_seen": bars_seen,
         "opened_at": tracking.get("opened_at"),
         "resolved_at": now.isoformat(),

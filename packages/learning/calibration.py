@@ -25,10 +25,13 @@ def reliability_bins(
     bins: list[CalibrationBin] = []
     for i in range(n_bins):
         lo, hi = edges[i], edges[i + 1]
+        # Bugfix 2026-07-02: son kovanın "p == hi dahil" istisnası alt sınırı
+        # unutuyordu (p <= hi TÜM örnekleri eşliyordu) — son kova veri setinin
+        # tamamını çifte sayıyordu (0.8-1.0 kovasında 130/130 görünmesinin sebebi).
         in_bin = [
             (p, w)
             for p, w in samples
-            if (p >= lo and p < hi) or (i == n_bins - 1 and p <= hi)
+            if p >= lo and (p < hi or (i == n_bins - 1 and p <= hi))
         ]
         if not in_bin:
             bins.append(CalibrationBin(bin_lo=lo, bin_hi=hi, predicted=0.0, observed=0.0, count=0))
