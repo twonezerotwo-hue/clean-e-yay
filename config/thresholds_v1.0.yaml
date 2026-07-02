@@ -67,9 +67,16 @@ calibration:
 # sahte p uydurulmaz). Hiyerarşi: tf|rejim → tf. Tabloyu learning worker yazar
 # (data/runtime/empirical_pwin.json). min_samples: hücrenin sayılması için
 # gereken kazanç+kayıp adedi (başabaş paydaya girmez, F1-2).
+# F5-1 — blend_counterfactual: false (DEFAULT) → yalnız gerçek outcome'lar
+# (bayt-aynı); counterfactual'lar tabloda AYRI kanalda gözlem olarak durur
+# (cf_by_tf + /learning/missed-opportunities by_timeframe). true → gerçek
+# kanıtı YETERSİZ TF'lerde son-çare fallback: gerçek+counterfactual sayımları
+# harmanlanır (kaynak "tf_blend_cf"). Gerekçe: bloklanan TF gerçek outcome
+# üretmez (geri-besleme kör noktası); counterfactual o TF'i ölçmeye devam eder.
 empirical_pwin:
   enabled: false
   min_samples: 20
+  blend_counterfactual: false
 
 # F4-3 — Partial-TP + breakeven stop. enabled=false (DEFAULT) → davranış
 # bayt-aynı; her pozisyonda SHADOW gözlemi yine işler: kâr ilk kez
