@@ -113,7 +113,10 @@ risk_gates:
   correlation_min_overlap_days: 5    # bunun altında computed rho kullanılmaz
   max_cluster_pct: 0.30              # aynı risk cluster'ın toplam %equity tavanı
   vol_regime_zscore: 2.0
-  position_cap_per_asset_pct: 0.25   # equity'nin %25'i
+  # M6 (2026-07-02): ölü `position_cap_per_asset_pct` (%25) KALDIRILDI — hiçbir
+  # kod yolu okumuyordu. Per-asset tavan zaten iki CANLI mekanizmayla sıkı:
+  # paper_trading.max_position_usd (sizing'de enforce) + book_audit.
+  # concentration_guard.max_symbol_pct (%5, çok daha sıkı).
 
 # T0 — timeframe risk politikası (contract seed; T2'de decision/paper
 # katmanı uygular). risk_multiplier yalnızca küçültür (≤1.0) —
@@ -276,7 +279,7 @@ paper_trading:
   # aynı sembolün tüm TF'lerinin tek-pass toplam exposure'ı, diğer korelasyonlu
   # pozisyonlarla birlikte equity'nin %30'unu aşamaz (XAGUSD-tarzı 15m/1h/4h yığını
   # artık cap'lenir). Risk-azaltıcı (yalnız küçültür/bloklar); fazla sıkarsa false ile
-  # geri alınır. NOT: position_cap_per_asset_pct (%25) hâlâ enforce edilmiyor (ölü config).
+  # geri alınır.
   intra_batch_cluster_guard: true
   sl_pct:
     BTCUSD: 0.04
