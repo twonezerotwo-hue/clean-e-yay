@@ -41,6 +41,27 @@ from packages.learning import rebalance_store, weight_autoapply_store
 _MIN_OUTCOMES_DEFAULT = 15
 _MONITOR_MAX_AGE_HOURS_DEFAULT = 336.0  # 14 gün; 0 → süre koruması kapalı
 
+# F1-1 — R-bazlı expectancy modu (owner-flag, default KAPALI = USD bayt-aynı).
+# USD-expectancy pozisyon boyutuyla confound olur (15m küçük poz + 1d büyük poz
+# aynı ortalamada); R-katı (pnl / açılış riski) boyut-bağımsız edge ölçer.
+# AÇIKKEN yalnız r_multiple taşıyan verified outcome'lar örneğe girer (legacy/
+# SL'siz dışarıda — dürüst daralma). DİKKAT: izleme penceresi ortasında mod
+# DEĞİŞTİRME — baseline apply anında aynı modla yazılır; mod değişirse baseline
+# ile post kıyası elmayla armut olur (yeni moda geçmeden aktif izlemeyi bitir).
+_R_MODE_OFF = {"0", "false", "no", "off", ""}
+
+
+def _r_mode() -> bool:
+    return os.environ.get("EXPECTANCY_R_MODE", "0").strip().lower() not in _R_MODE_OFF
+
+
+def _outcome_value(o) -> float | None:
+    """Expectancy örneği: R-mode'da r_multiple (yoksa None → örnek dışı),
+    USD-mode'da pnl (mevcut davranış birebir)."""
+    if _r_mode():
+        return o.r_multiple
+    return o.pnl
+
 
 def _min_outcomes() -> int:
     try:
@@ -95,12 +116,12 @@ def pre_apply_expectancy(window: int | None = None) -> tuple[int, float]:
     outs = [
         o
         for o in outcomes_mod.outcomes_from_state()
-        if o.data_verified and o.opened_at
+        if o.data_verified and o.opened_at and _outcome_value(o) is not None
     ]
     outs.sort(key=lambda o: o.opened_at or "", reverse=True)
     sample = outs[:need]
     n = len(sample)
-    exp = round(sum(o.pnl for o in sample) / n, 4) if n else 0.0
+    exp = round(sum(_outcome_value(o) for o in sample) / n, 4) if n else 0.0
     return n, exp
 
 
@@ -114,10 +135,10 @@ def post_open_expectancy(since: str) -> tuple[int, float]:
     outs = [
         o
         for o in outcomes_mod.outcomes_from_state()
-        if o.data_verified and _after(o.opened_at, since)
+        if o.data_verified and _after(o.opened_at, since) and _outcome_value(o) is not None
     ]
     n = len(outs)
-    exp = round(sum(o.pnl for o in outs) / n, 4) if n else 0.0
+    exp = round(sum(_outcome_value(o) for o in outs) / n, 4) if n else 0.0
     return n, exp
 
 

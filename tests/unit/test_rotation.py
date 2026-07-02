@@ -90,5 +90,11 @@ def test_consensus_drops_quantum_when_rotation_unavailable() -> None:
     module_names = {m.name for m in cons.modules}
     assert "quantum" not in module_names
     assert 0 <= cons.score <= 100
-    # Kalan modüllerin ağırlığı 1.0'a redistribute edilmeli.
-    assert abs(sum(m.weight for m in cons.modules) - 1.0) < 1e-6
+    # Kalan modüllerin ağırlığı 1.0'a redistribute edilmeli. Tolerans 1e-3:
+    # ModuleScore.weight GÖSTERİM için 4 ondalığa yuvarlanır (skor matematiği
+    # yuvarlanmamış wt ile hesaplanır, bkz. engine.build: c = s * wt). Aktif
+    # weights dosyası 4-ondalıklı değerler taşıyınca (auto-apply üretimi, örn.
+    # v1.10.0) yuvarlama toplamı 1.0'dan ±(modül_sayısı × 5e-5) sapabilir —
+    # eski 1e-6 toleransı bu kozmetik yuvarlamada kırılıyordu (invariant
+    # yuvarlama ÖNCESİ toplamda korunur).
+    assert abs(sum(m.weight for m in cons.modules) - 1.0) < 1e-3

@@ -309,6 +309,11 @@ async def run_once() -> None:
                 raw_confidence=d.raw_confidence,
                 confidence_source=d.confidence_source,
                 atr=tf_atr,
+                # F1-3 — modül katkı vektörü (score×weight): dominant_module tek-modül
+                # attribution'unun ham verisi; kapanışta decision_log'a taşınır.
+                module_contributions={
+                    m.name: m.contribution for m in d.consensus.modules
+                },
                 **routed.session_attribution,
             )
             if pos is not None:

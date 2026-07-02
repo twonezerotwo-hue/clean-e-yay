@@ -31,7 +31,12 @@ def build_summary() -> dict:
     outcomes = outcomes_mod.outcomes_from_state(s)
     total = len(outcomes)
     wins = sum(1 for o in outcomes if o.pnl > 0)
-    win_rate = round(wins / total, 3) if total else 0.0
+    losses = sum(1 for o in outcomes if o.pnl < 0)
+    breakeven = total - wins - losses
+    # F1-2 — win_rate paydası kararlı trade'ler (wins+losses); başabaş
+    # (time-stop BE çıkışı gibi) win_rate'i suni düşürmez, ayrı sayılır.
+    decided = wins + losses
+    win_rate = round(wins / decided, 3) if decided else 0.0
 
     pnls = [o.pnl for o in outcomes]
     sharpe = None
@@ -60,8 +65,16 @@ def build_summary() -> dict:
     bd = outcomes_mod.breakdowns(outcomes)
     verified_outcomes = sum(1 for o in outcomes if o.data_verified)
 
+    # F1-1 — R-bazlı expectancy (boyut-bağımsız edge): yalnız r_multiple taşıyan
+    # outcome'lar (legacy/SL'siz girmez). USD metrikleri olduğu gibi sürer.
+    r_vals = [o.r_multiple for o in outcomes if o.r_multiple is not None]
+    expectancy_r = round(sum(r_vals) / len(r_vals), 4) if r_vals else None
+
     return {
         "total_trades": total,
+        "breakeven_trades": breakeven,  # F1-2 additive — BE görünür, loss değil
+        "expectancy_r": expectancy_r,   # F1-1 additive — R-katı ortalama
+        "r_sample": len(r_vals),        # F1-1 additive — R hesaplanabilen outcome sayısı
         "min_sample": MIN_RELIABLE_TRADES,
         "sample_sufficient": total >= MIN_RELIABLE_TRADES,
         "win_rate": win_rate,
@@ -87,6 +100,9 @@ def build_summary() -> dict:
         "by_regime": bd["by_regime"],
         "by_dominant_module": bd["by_dominant_module"],
         "by_close_reason": bd["by_close_reason"],
+        # F1-3 additive — modül katkı vektörü attribution'u (kazanan vs kaybeden
+        # trade'lerdeki ortalama katkı). Salt gözlem; F3 regresyonunun ham yüzeyi.
+        "module_attribution": outcomes_mod.module_attribution(outcomes),
         "worker_last_run": run_store.load(),
         "proposal_status": _proposal_status(),
     }
