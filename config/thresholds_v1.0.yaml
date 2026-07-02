@@ -49,6 +49,19 @@ news:
 regime:
   drop_unavailable_layers: false
 
+# M4 — sentinel v2: tek-gösterge VIX yerine çok-girdili stres kompoziti (0-100,
+# yüksek = sakin / risk iştahı). enabled false (DEFAULT) → v1 birebir (yalnız
+# VIX katmanı; CRISIS'te 0.45 ağırlığı tek sayı taşır — 2026-07-02 denetimi bunu
+# kırılgan buldu). true → v2: VIX + realized-vol z-skoru + kripto squeeze proxy +
+# options stres rejimi kompoziti. Girdiler snapshot'ta ZATEN hesaplanıyor (yeni ağ
+# çağrısı yok); yalnız verified + status OK girdiler sayılır (DATA_POLICY), eksik
+# girdinin ağırlığı kalanlara redistribute edilir (quantum deseni). İki varyant her
+# hücrede `sentinel_v2_observe:v1=..:v2=..` warning satırıyla yan yana izlenir;
+# owner ayrışmayı görüp bu flag'i tarihli kararla açar.
+sentinel_v2:
+  enabled: false
+  weights: { vix: 0.5, volatility: 0.25, derivatives: 0.15, options: 0.10 }
+
 # F5 — EV (beklenen değer) kapısı. Olasılık + ödül/risk BİRLİKTE pozitif değilse açma:
 # EV = p(win)×RR − (1−p(win))×1 − cost_r (R-katı). RR timeframe_targets'tan. EV her
 # zaman hesaplanır (decision.expected_value gözlem); enabled iken EV<min_ev → hold.

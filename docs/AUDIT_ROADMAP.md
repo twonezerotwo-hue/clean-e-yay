@@ -15,17 +15,19 @@ Bu belge farklı bir asistan/oturum tarafından SIFIR bağlamla devralınabilir
 - **Tamamlanan:** F0-1, F0-2, F1-1…F1-5, R2-3 + F2-1 gözlem fazı
   (aşağıdaki tabloda ✅/🔶 ve ayrıntılar). Suite 1189/1189 yeşil, ruff'ta
   yeni hata yok (tests/ altında ~45 eski baseline bulgusu var, dokunulmadı).
-- **Sıradaki iş:** M4 (sentinel v2 — çok-girdili stres kompoziti, flag'li)
-  → M5/M6. F2-2 bu seriden bağımsız, araya alınabilir.
+- **Sıradaki iş:** M5 (chart_pattern ölü slot temizliği) → M6. F2-2 bu
+  seriden bağımsız, araya alınabilir.
 - **Bekleyen owner aktivasyonları:** (1) `news.sentiment_v2` (M1 kodu
   canlıda, flag OFF — regime-report'taki v1/v2 ayrışması izlenip açılır);
   (2) `regime.drop_unavailable_layers` (F2-3 kodu canlıda, flag OFF —
   `macro_data_missing` uyarısı + `dropped_layers` izlenip açılır);
   (3) `consensus.fundamental_v2` (M3 kodu canlıda, flag OFF — hücre
   warning'lerindeki `fundamental_v2_observe` ayrışması izlenip açılır);
-  (4) F2-1 gate-bağlama (snapshot store'daki
+  (4) `sentinel_v2.enabled` (M4 kodu canlıda, flag OFF — hücre
+  warning'lerindeki `sentinel_v2_observe` ayrışması izlenip açılır);
+  (5) F2-1 gate-bağlama (snapshot store'daki
   `paper_state_summary.mtm_equity_usd` bandı izlenip RiskInput'a flag'le
-  bağlanır); (5) `EXPECTANCY_R_MODE` (R-damgalı outcome birikince).
+  bağlanır); (6) `EXPECTANCY_R_MODE` (R-damgalı outcome birikince).
 - **Bekleyen owner kararları:** `EXPECTANCY_R_MODE` (R-bazlı expectancy)
   default KAPALI — R-damgalı outcome birikince açılacak (open_risk_pct
   yalnız YENİ kapanışlarda damgalanıyor; eski kayıtlarda yok).
@@ -79,7 +81,7 @@ Risk: 🟢 davranış değiştirmez (ölçüm/altyapı) · 🟡 flag'li davranı
 | M1 | News sentiment morfoloji düzeltmesi: tam-kelime eşleşmesi çekimli halleri kaçırıyor ("rebounds"/"surges"/"plunges" → neutral); "escalat"/"retaliat" kök girdileri hiç eşleşemiyor. Token kök-normalizasyonu (EN -s/-es/-ed/-ing) + flag `news.sentiment_v2` (default OFF) + v1/v2 yan yana gözlem logu | 2026-07-02 modül denetimi §1 | ✅ (2026-07-02) `classify_sentiment_v2` + `classify_sentiment_active` (flag OFF → v1 bayt-aynı, 67 canlı başlıkta doğrulandı); her headline `sentiment_v2` gözlem alanı taşır (regime-report + sözleşme). Canlı kanıt: 67 başlığın 17'si v2'de yön kazandı. AKTİVASYON BEKLİYOR: owner regime-report'ta v1/v2 ayrışmasını izleyip `news.sentiment_v2: true` yapar (tarihli yorum) | 🟡 | M |
 | M2 | Makro veri kaybında görünürlük: FRED quote'ları düşünce warnings'e `macro_data_missing` yaz (bugün sessiz default'a düşüyor; canlıda FRED çalışıyor ama kesinti sessiz kalıyor) — F2-3 ile aynı PR'da gider | 2026-07-02 modül denetimi §2 | ✅ (2026-07-02) `pipeline._regime_macro_missing` → snapshot warnings (flag'siz, her zaman); canlı doğrulandı | 🟢 | M |
 | M3 | Fundamental v2: Kripto Momentum'u fundamental'den çıkar (BTC teknikleri touche'ta zaten var — çifte sayım); fundamental = likidite+rotasyon. Flag `consensus.fundamental_v2` (default OFF), shadow'da v1/v2 skoru yan yana | 2026-07-02 modül denetimi §3 | ✅ (2026-07-02) `_fundamental_v2` + flag (OFF → v1 bayt-aynı); her hücrede `fundamental_v2_observe:v1=..:v2=..` warning satırı (dashboard cells). Canlı kanıt: v1=57.4 → v2=63.6 (BTC 45.0 çifte sayımı çıktı). AKTİVASYON BEKLİYOR | 🟡 | M |
-| M4 | Sentinel v2: tek-gösterge VIX yerine çok-girdili stres kompoziti (VIX + realized-vol z + funding extreme + options stress; eksik girdi → redistribute). Flag'li, shadow-önce (CRISIS'te ağırlığı 0.45 — tek sayı taşımasın) | 2026-07-02 modül denetimi §4 | ⬜ | 🟡 | M |
+| M4 | Sentinel v2: tek-gösterge VIX yerine çok-girdili stres kompoziti (VIX + realized-vol z + funding extreme + options stress; eksik girdi → redistribute). Flag'li, shadow-önce (CRISIS'te ağırlığı 0.45 — tek sayı taşımasın) | 2026-07-02 modül denetimi §4 | ✅ (2026-07-02) `_sentinel_v2` + flag `sentinel_v2.enabled` (OFF → v1 bayt-aynı). Kompozit: VIX 0.5 + realized-vol z-skoru 0.25 + kripto squeeze proxy 0.15 (funding extreme proxy bileşeni) + options stres rejimi 0.10 — hepsi snapshot'ta zaten hesaplanan girdiler (yeni ağ çağrısı yok), yalnız verified+OK sayılır (DATA_POLICY), eksik girdi redistribute (VIX yokken v2 kalan girdilerle YAŞAR — v1'in tek-nokta kırılganlığı böylece kapanır). Her hücrede `sentinel_v2_observe:v1=..:v2=..` warning satırı. AKTİVASYON BEKLİYOR | 🟡 | M |
 | M5 | chart_pattern ölü slotunu KALDIR (owner kararı 2026-07-02): gerçek formasyon tespiti zaten touche içinde çalışıyor (`technical/timeframe.py` `patterns.detect` + `_pattern_alignment`, direction_tilt %25) — ayrı konsensüs modülü aynı kanıtı İKİ KEZ sayardı (M3'teki çifte-sayım hatasının aynısı). Stub provider (`providers/patterns/`) + MODULE_ORDER + weights şablonlarındaki `chart_pattern` girdileri silinir; redistribute davranışı bayt-aynı kalır (slot zaten hep boştu) | 2026-07-02 modül denetimi §5 | ⬜ | 🟢 | M |
 | M6 | Ölü config temizliği: `position_cap_per_asset_pct` (%25) enforce-veya-kaldır (thresholds yorumunda "ölü config" itirafı); regime classifier docstring'indeki bayat "mock veriyle" ifadesi F2-3'te güncellenir | 2026-07-02 modül denetimi §6 | ⬜ | 🟢 | M |
 

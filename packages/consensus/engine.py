@@ -245,6 +245,96 @@ def _sentinel(regime: RegimeOutput) -> float | None:
     )
 
 
+# M4 — sentinel v2: tek-gösterge VIX yerine çok-girdili stres kompoziti.
+# Tüm girdiler snapshot'ta ZATEN hesaplanıyor (yeni ağ çağrısı yok); v2 yalnız
+# bunları tek 0-100 eksende (yüksek = sakin / risk iştahı) birleştirir.
+# Eksik girdi ağırlığı kalanlara redistribute edilir (quantum deseni; DATA_POLICY:
+# eksik girdi için skor uydurulmaz). Bileşen ağırlıkları config'ten okunur.
+_SENTINEL_V2_DEFAULT_WEIGHTS = {
+    "vix": 0.5,          # makro korku endeksi (mevcut v1 girdisi)
+    "volatility": 0.25,  # sembolün (symbol, tf) realized-vol z-skoru + shock
+    "derivatives": 0.15, # kripto squeeze proxy (yalnız kripto sembolleri)
+    "options": 0.10,     # BTC/ETH IV/skew/term stres rejimi
+}
+
+# Options stres rejimi → sakinlik skoru (0-100). Sıralama gerekçesi:
+# PUT_SKEW_STRESS en stresli (çöküş hedge talebi), RICH_VOL/TERM_STRESS
+# yüksek stres, CALL_SKEW_EUPHORIA aşırı iyimserlik (nötr-altı sağlıklı
+# değil), CHEAP_VOL/NORMAL sakin.
+_OPTIONS_REGIME_CALM = {
+    "NORMAL": 70.0,
+    "CHEAP_VOL": 60.0,
+    "CALL_SKEW_EUPHORIA": 50.0,
+    "RICH_VOL": 30.0,
+    "TERM_STRESS": 30.0,
+    "PUT_SKEW_STRESS": 25.0,
+}
+
+
+def _sentinel_v2_cfg() -> dict:
+    """`sentinel_v2` config bloğu (enabled default False = v1 birebir)."""
+    try:
+        return load_thresholds().get("sentinel_v2") or {}
+    except (OSError, KeyError, ValueError, TypeError):
+        return {}
+
+
+def _sentinel_v2_enabled() -> bool:
+    """`sentinel_v2.enabled` owner-flag'i (default KAPALI = v1 birebir).
+
+    Aktivasyon ayrı tarihli owner kararı; açılana kadar v2 skoru her hücrede
+    `sentinel_v2_observe` warning satırıyla SALT-GÖZLEM olarak izlenir."""
+    return bool(_sentinel_v2_cfg().get("enabled", False))
+
+
+def _sentinel_v2(
+    regime: RegimeOutput, snap: MarketSnapshot, symbol: str, timeframe: str
+) -> float | None:
+    """M4 — stres kompoziti (0-100, yüksek = sakin). Girdi yoksa None → modül düşer.
+
+    DATA_POLICY: VIX dışındaki girdiler yalnız verified + status OK ise sayılır
+    (fixture/degraded veri karar zincirine girmez)."""
+    parts: dict[str, float] = {}
+    vix = _sentinel(regime)
+    if vix is not None:
+        parts["vix"] = float(vix)
+    v = (getattr(snap, "volatility", None) or {}).get(symbol, {}).get(timeframe)
+    if (
+        v is not None
+        and getattr(v, "status", None) == "OK"
+        and getattr(v, "verified", False)
+        and v.vol_zscore is not None
+    ):
+        # z=0 → 50 nötr; z=-2 (çok sakin) → 100; z=+2 (extreme) → 0. Shock
+        # durumunda tavan 25 (ani hareket sakinlik sayılamaz).
+        s = max(0.0, min(100.0, 50.0 - 25.0 * float(v.vol_zscore)))
+        if getattr(v, "vol_state", "") == "shock":
+            s = min(s, 25.0)
+        parts["volatility"] = s
+    d = (getattr(snap, "derivatives", None) or {}).get(symbol)
+    if (
+        d is not None
+        and getattr(d, "status", None) == "OK"
+        and getattr(d, "verified", False)
+        and d.squeeze_proxy is not None
+    ):
+        # squeeze_proxy 0-100 (yüksek = squeeze baskısı) → sakinlik = 100 − proxy.
+        parts["derivatives"] = max(0.0, min(100.0, 100.0 - float(d.squeeze_proxy)))
+    o = (getattr(snap, "options", None) or {}).get(symbol)
+    if o is not None and getattr(o, "status", None) == "OK" and getattr(o, "verified", False):
+        calm = _OPTIONS_REGIME_CALM.get(str(getattr(o, "regime", "")))
+        if calm is not None:
+            parts["options"] = calm
+    if not parts:
+        return None
+    cfg_w = _sentinel_v2_cfg().get("weights") or {}
+    base = {
+        k: float(cfg_w.get(k, dv)) for k, dv in _SENTINEL_V2_DEFAULT_WEIGHTS.items()
+    }
+    w = _redistribute(base, set(parts))
+    return sum(parts[k] * w.get(k, 0.0) for k in parts)
+
+
 def _quantum(snap: MarketSnapshot) -> float:
     return snap.rotation.score
 
@@ -286,7 +376,18 @@ def build(
         raw["fundamental"] = fundamental
     else:
         tf_warnings.append(f"fundamental_dropped:no_macro_layers:{symbol}:{timeframe}")
-    sentinel = _sentinel(regime)
+    # M4 — sentinel_v2 (çok-girdili stres kompoziti): flag açıkken v2 canlı,
+    # kapalıyken v1 (yalnız VIX) canlı — bayt-aynı. İki varyant her zaman
+    # warning satırında yan yana (owner aktivasyon kanıtını buradan izler).
+    sent_v1 = _sentinel(regime)
+    sent_v2 = _sentinel_v2(regime, snap, symbol, timeframe)
+    sentinel = sent_v2 if _sentinel_v2_enabled() else sent_v1
+    if sent_v1 is not None or sent_v2 is not None:
+        tf_warnings.append(
+            "sentinel_v2_observe:"
+            f"v1={'none' if sent_v1 is None else f'{sent_v1:.1f}'}:"
+            f"v2={'none' if sent_v2 is None else f'{sent_v2:.1f}'}"
+        )
     if sentinel is not None:
         raw["sentinel"] = sentinel
     else:
