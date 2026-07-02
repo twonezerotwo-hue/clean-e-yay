@@ -350,6 +350,15 @@ def read_recent(limit: int = DEFAULT_MAX_READ) -> list[dict]:
     return out
 
 
+def resolutions(limit: int = DEFAULT_MAX_READ) -> list[dict]:
+    """F5-1 — çözülmüş counterfactual'lar (yalnız `resolve` event'leri).
+
+    Kanıt tüketicileri (empirical_pwin cf-kanalı, edge raporu) için public
+    okuyucu; her satır outcome (missed_win/avoided_loss/expired) + tf + side
+    + mfe_r taşır. Dosya yok/bozuk → boş liste (crash yok)."""
+    return [e for e in read_recent(limit=limit) if e.get("event") == "resolve"]
+
+
 # ----------------- viewmodel (panel/endpoint) -----------------
 
 def summary_viewmodel(limit: int = DEFAULT_MAX_READ) -> dict:
@@ -365,6 +374,7 @@ def summary_viewmodel(limit: int = DEFAULT_MAX_READ) -> dict:
             "enabled": enabled,
             "outcomes": {"missed_win": 0, "avoided_loss": 0, "expired": 0},
             "by_profile": {},
+            "by_timeframe": {},
             "active": [],
             "recent": [],
         }
@@ -382,11 +392,28 @@ def summary_viewmodel(limit: int = DEFAULT_MAX_READ) -> dict:
         if oc in bp:
             bp[oc] += 1
     resolves = [e for e in events if e.get("event") == "resolve"]
+    # F5-1 — TF bazlı counterfactual isabet kanıtı: "açsaydık kazanır mıydık?"
+    # cf_win_rate = missed_win / (missed_win + avoided_loss); expired paydaya
+    # girmez (net sonuç yok). empirical_pwin cf-kanalıyla aynı sayım kuralı.
+    by_timeframe: dict[str, dict] = {}
+    for ev in resolves:
+        tf = str(ev.get("timeframe") or "?")
+        bt = by_timeframe.setdefault(
+            tf, {"missed_win": 0, "avoided_loss": 0, "expired": 0}
+        )
+        oc = ev.get("outcome")
+        if oc in bt:
+            bt[oc] += 1
+    for bt in by_timeframe.values():
+        n = bt["missed_win"] + bt["avoided_loss"]
+        bt["n"] = n
+        bt["cf_win_rate"] = round(bt["missed_win"] / n, 4) if n else None
     return {
         "available": True,
         "enabled": enabled,
         "outcomes": outcomes,
         "by_profile": by_profile,
+        "by_timeframe": by_timeframe,
         "active": [
             {
                 "symbol": a.get("symbol"),
