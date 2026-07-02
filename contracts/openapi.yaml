@@ -1318,6 +1318,11 @@ components:
       properties:
         meta: { $ref: "#/components/schemas/SnapshotMeta" }
         regime_label: { type: string, enum: [OFFENSIVE, NEUTRAL, DEFENSIVE, CRISIS] }
+        # F2-3 — veri yetersizliğinden düşen katman adları (drop_unavailable_layers
+        # flag'i kapalıyken her zaman boş liste).
+        dropped_layers:
+          type: array
+          items: { type: string }
         layers:
           type: array
           items: { $ref: "#/components/schemas/RegimeLayer" }

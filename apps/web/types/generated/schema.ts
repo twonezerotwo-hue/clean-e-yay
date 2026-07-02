@@ -1400,6 +1400,7 @@ export interface components {
             meta: components["schemas"]["SnapshotMeta"];
             /** @enum {string} */
             regime_label: "OFFENSIVE" | "NEUTRAL" | "DEFENSIVE" | "CRISIS";
+            dropped_layers?: string[];
             layers: components["schemas"]["RegimeLayer"][];
             assets: components["schemas"]["AssetSignal"][];
             headlines?: components["schemas"]["NewsHeadline"][];

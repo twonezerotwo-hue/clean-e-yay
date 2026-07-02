@@ -63,6 +63,9 @@ def get_regime_report_current() -> dict:
         },
         "mode": data_provenance(snap),
         "regime_label": regime.label,
+        # F2-3 — veri yetersizliğinden düşen katmanlar (flag kapalıyken hep boş).
+        # Owner "Likidite neden yok?" sorusunun cevabını burada görür.
+        "dropped_layers": list(regime.dropped),
         "layers": [
             {
                 "name": layer.name,

@@ -82,6 +82,18 @@ def _make_id(now: datetime) -> str:
     return "snap::" + hashlib.sha1(now.isoformat().encode()).hexdigest()[:12]
 
 
+# M2 — rejim sınıflandırıcısının makro girdileri (packages/regime/classifier.py
+# katman girdileriyle hizalı). Fiyatı gelmeyenler snapshot warning'i üretir.
+_REGIME_MACRO_SYMBOLS = ("CPI", "DXY", "US02Y", "US10Y", "VIX")
+
+
+def _regime_macro_missing(prices: list[PriceQuote]) -> list[str]:
+    """Fiyatı olmayan rejim-makro sembolleri (sıralı, deterministik)."""
+    return sorted(
+        q.symbol for q in prices if q.symbol in _REGIME_MACRO_SYMBOLS and q.price is None
+    )
+
+
 def build_snapshot(symbols: list[str] | None = None) -> MarketSnapshot:
     # Taze okunur (modül-seviyesi DEFAULT_SYMBOLS/MULTI_TF_SYMBOLS DEĞİL) —
     # kullanıcı runtime'da custom trade asset eklerse bir sonraki snapshot'ta
@@ -170,6 +182,12 @@ def build_snapshot(symbols: list[str] | None = None) -> MarketSnapshot:
         warnings.append("calendar_unavailable")
     if rotation.status == "UNAVAILABLE":
         warnings.append("rotation_unavailable: " + (rotation.error or "data insufficient"))
+    # M2 — rejim sınıflandırıcısının makro girdileri (FRED/endeks) düşünce açık
+    # uyarı: eksik veri sessiz kalmasın (F2-3 flag'i kapalıyken default'la
+    # hesaplanır — owner bu uyarıdan fark eder; açıkken katman düşer).
+    missing_macro = _regime_macro_missing(prices)
+    if missing_macro:
+        warnings.append("macro_data_missing: " + ", ".join(missing_macro))
     degraded_deriv = [s for s, d in derivatives.items() if d.status == "DEGRADED"]
     if degraded_deriv:
         warnings.append("derivatives_degraded: " + ", ".join(sorted(degraded_deriv)))

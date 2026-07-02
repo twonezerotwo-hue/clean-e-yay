@@ -157,10 +157,14 @@ def _touche(
     return t.score, warnings
 
 
-def _fundamental(regime: RegimeOutput) -> float:
+def _fundamental(regime: RegimeOutput) -> float | None:
     # likidite + crypto + rotation layer'larının ortalaması
     layers = [layer for layer in regime.layers if layer.name != "Risk İştahı"]
-    return sum(layer.score for layer in layers) / max(1, len(layers))
+    if not layers:
+        # F2-3: makro katman kalmadı (drop_unavailable_layers) — 0/1=0 gibi
+        # saçma skor üretme; modül düşer, ağırlığı redistribute edilir.
+        return None
+    return sum(layer.score for layer in layers) / len(layers)
 
 
 def _news_symbol_filter_enabled() -> bool:
@@ -206,12 +210,13 @@ def _news(snap: MarketSnapshot, symbol: str | None = None) -> float:
     return 50.0 + (tally["bullish"] - tally["bearish"]) / total * 25.0
 
 
-def _sentinel(regime: RegimeOutput) -> float:
-    appetite = next(
+def _sentinel(regime: RegimeOutput) -> float | None:
+    # F2-3: Risk İştahı katmanı düştüyse (VIX verisi yok) nötr-50 uydurulmaz;
+    # modül düşer, ağırlığı redistribute edilir. Flag kapalıyken katman hep var.
+    return next(
         (layer.score for layer in regime.layers if layer.name == "Risk İştahı"),
-        50.0,
+        None,
     )
-    return appetite
 
 
 def _quantum(snap: MarketSnapshot) -> float:
@@ -233,11 +238,22 @@ def build(
     touche_score, tf_warnings = _touche(symbol, snap, timeframe)
     raw = {
         "touche": touche_score,
-        "fundamental": _fundamental(regime),
         "news": _news(snap, symbol),
-        "sentinel": _sentinel(regime),
         # chart_pattern: şimdilik yok — ağırlığı redistribute edilir
     }
+    # F2-3 — fundamental/sentinel katman verisi yoksa (drop_unavailable_layers
+    # açıkken) modül düşer; ağırlığı redistribute edilir (quantum deseniyle aynı).
+    # Flag kapalıyken katmanlar hep dolu → bu iki modül her zaman girer (bayt-aynı).
+    fundamental = _fundamental(regime)
+    if fundamental is not None:
+        raw["fundamental"] = fundamental
+    else:
+        tf_warnings.append(f"fundamental_dropped:no_macro_layers:{symbol}:{timeframe}")
+    sentinel = _sentinel(regime)
+    if sentinel is not None:
+        raw["sentinel"] = sentinel
+    else:
+        tf_warnings.append(f"sentinel_dropped:no_risk_appetite_layer:{symbol}:{timeframe}")
     # Rotasyon UNAVAILABLE ise quantum modülü düşer; ağırlığı _redistribute
     # ile diğer modüllere dağıtılır (mock skor karar zincirine girmez).
     if snap.rotation.status != "UNAVAILABLE":

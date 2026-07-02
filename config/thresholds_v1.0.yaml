@@ -32,6 +32,16 @@ consensus:
 news:
   sentiment_v2: false
 
+# F2-3 — rejim katmanı veri dürüstlüğü. false (DEFAULT) → eski davranış birebir:
+# eksik makro veri sabit default'la doldurulur (US10Y yoksa 4.3 varsayılır —
+# 2026-07-02 denetiminde bu "sessiz sahte skor" Likidite katmanını 96.2'ye şişirip
+# konsensüsü ~4 puan oynatıyordu). true → veri olmayan katman skor üretmez, DÜŞER
+# (regime-report `dropped_layers`); fundamental/sentinel katmansız kalırsa consensus
+# modülü de düşer ve ağırlığı redistribute edilir (quantum deseni; DATA_POLICY).
+# Snapshot warnings'e `macro_data_missing` her durumda yazılır (M2, flag'siz gözlem).
+regime:
+  drop_unavailable_layers: false
+
 # F5 — EV (beklenen değer) kapısı. Olasılık + ödül/risk BİRLİKTE pozitif değilse açma:
 # EV = p(win)×RR − (1−p(win))×1 − cost_r (R-katı). RR timeframe_targets'tan. EV her
 # zaman hesaplanır (decision.expected_value gözlem); enabled iken EV<min_ev → hold.
