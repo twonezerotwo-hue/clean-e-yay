@@ -22,32 +22,31 @@ Bu belge farklı bir asistan/oturum tarafından SIFIR bağlamla devralınabilir
   bekleyen flag'ler kanıt eşliğinde TEK TEK açılır (sıra ve yöntem owner'la
   planlanır). F5-3 aktivasyon watchdog'u canlıda: her OFF→ON geçişini
   otomatik izler, bozulmada DEGRADED önerir (oto-kapatmaz).
-- **Bekleyen owner aktivasyonları:** (1) `news.sentiment_v2` (M1 kodu
-  canlıda, flag OFF — regime-report'taki v1/v2 ayrışması izlenip açılır);
-  (2) `regime.drop_unavailable_layers` (F2-3 kodu canlıda, flag OFF —
-  `macro_data_missing` uyarısı + `dropped_layers` izlenip açılır);
-  (3) `consensus.fundamental_v2` (M3 kodu canlıda, flag OFF — hücre
-  warning'lerindeki `fundamental_v2_observe` ayrışması izlenip açılır);
-  (4) `sentinel_v2.enabled` (M4 kodu canlıda, flag OFF — hücre
-  warning'lerindeki `sentinel_v2_observe` ayrışması izlenip açılır);
-  (5) `risk_gates.correlation_price_returns` (F2-2 kodu canlıda, flag OFF —
-  /risk/correlation matrisindeki `rho_price` gözlemi izlenip açılır);
-  (6) `WEIGHT_REGIME_FILTER` env (F3-2 — rejim başına INSUFFICIENT/proposal
-  dağılımı izlenip açılır); (7) `MISTAKE_MEMORY_V2` env (F3-3 — verdict
-  dağılımındaki `[L1]/[L2]` fallback + WARNING/AVOID oranı izlenip açılır);
-  (8) F2-1 gate-bağlama (snapshot store'daki
-  `paper_state_summary.mtm_equity_usd` bandı izlenip RiskInput'a flag'le
-  bağlanır); (9) `EXPECTANCY_R_MODE` (R-damgalı outcome birikince);
-  (10) `calibration.tf_platt` (F4-1 kodu canlıda, flag OFF —
-  GET /learning/calibration `per_timeframe` örnek/fit ayrışması izlenip
-  açılır); (11) `empirical_pwin.enabled` (F4-2 kodu canlıda, flag OFF —
-  matrix hücrelerindeki `p_win_empirical`/`expected_value_empirical`
-  gözlemi izlenip açılır; kanıt: 15m ampirik EV negatif);
-  (12) `partial_tp.enabled` (F4-3 kodu canlıda, flag OFF, 🔴 — shadow
-  yan-yana ölçüm ZORUNLU: GET /learning/partial-tp-shadow uplift kanıtı
-  birikmeden AÇILMAZ); (13) `empirical_pwin.blend_counterfactual` (F5-1
-  kodu canlıda, flag OFF — /learning/missed-opportunities `by_timeframe`
-  cf_win_rate/n gözlemi izlenip açılır; (11)'den SONRA anlamlı).
+- **AÇILDI — Paket 1 girdi-düzeltmeleri (2026-07-02, owner kararı):**
+  `news.sentiment_v2`, `regime.drop_unavailable_layers`,
+  `consensus.fundamental_v2`, `sentinel_v2.enabled`,
+  `risk_gates.correlation_price_returns` — beşi birlikte açıldı (her biri
+  kendi v1/v2 yan-yana gözlem kaydını tutmaya devam eder; aktivasyon
+  watchdog'u beşini birden izler). Owner talimatı: v1 kod yolları
+  PARAŞÜT olarak YERİNDE kalır — silme, doğrulama penceresi sonrası ayrı
+  owner onayı. Test suite'i canlı default'lardan bağımsızlaştırıldı
+  (conftest `_package1_flags_off_by_default`: unit testler v1 baseline'ı
+  pinler, v2 testleri threshold_override ile açar — sonraki aktivasyonlar
+  test kırmaz).
+- **Bekleyen owner aktivasyonları (Paket 2 — öğrenme, TEK TEK sırayla):**
+  (1) `calibration.tf_platt` (F4-1 — GET /learning/calibration
+  `per_timeframe` örnek/fit ayrışması); (2) `empirical_pwin.enabled`
+  (F4-2 — kanıt: 15m ampirik EV negatif); (3) `WEIGHT_REGIME_FILTER` env
+  (F3-2 — rejim başına INSUFFICIENT/proposal dağılımı); (4)
+  `MISTAKE_MEMORY_V2` env (F3-3 — `[L1]/[L2]` fallback + WARNING/AVOID
+  oranı); (5) `EXPECTANCY_R_MODE` (R-damgalı outcome birikince).
+- **Bekleyen owner aktivasyonları (Paket 3 — davranış, kanıt şartlı):**
+  (6) `partial_tp.enabled` (F4-3, 🔴 — GET /learning/partial-tp-shadow
+  uplift kanıtı birikmeden AÇILMAZ); (7) `empirical_pwin.
+  blend_counterfactual` (F5-1 — Paket 2/(2)'den SONRA anlamlı;
+  /learning/missed-opportunities `by_timeframe` gözlemi); (8) F2-1
+  gate-bağlama (`paper_state_summary.mtm_equity_usd` bandı izlenip
+  RiskInput'a flag'le bağlanır — ayrı owner kararı).
 - **Bekleyen owner kararları:** `EXPECTANCY_R_MODE` (R-bazlı expectancy)
   default KAPALI — R-damgalı outcome birikince açılacak (open_risk_pct
   yalnız YENİ kapanışlarda damgalanıyor; eski kayıtlarda yok).

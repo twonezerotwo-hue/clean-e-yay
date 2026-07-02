@@ -27,7 +27,9 @@ consensus:
   # Momentum hariç (saf makro: Likidite + Rotasyon). İki varyant her hücrede
   # `fundamental_v2_observe:v1=..:v2=..` warning satırıyla yan yana izlenir;
   # owner ayrışmayı görüp bu flag'i tarihli kararla açar.
-  fundamental_v2: false
+  # AKTİF (2026-07-02, owner kararı — Paket 1 girdi-düzeltmeleri; v1 kodu
+  # geri-dönüş paraşütü olarak YERİNDE, silme owner onayına bağlı).
+  fundamental_v2: true
 
 # M1 — haber sentiment sınıflandırıcı sürümü. false (DEFAULT) → v1 birebir
 # (tam-kelime eşleşme; "Bitcoin rebounds…" gibi çekimli başlıklar neutral kalır).
@@ -37,7 +39,9 @@ consensus:
 # regime-report'taki v1/v2 ayrışmasını izleyip bu flag'i tarihli kararla açar.
 # Etki alanı: news modül skoru + asset_impact yönü + catalyst/surprise motoru.
 news:
-  sentiment_v2: false
+  # AKTİF (2026-07-02, owner kararı — Paket 1; canlı kanıt: 67 başlığın 17'si
+  # v2'de yön kazandı. v1 kodu paraşüt olarak yerinde).
+  sentiment_v2: true
 
 # F2-3 — rejim katmanı veri dürüstlüğü. false (DEFAULT) → eski davranış birebir:
 # eksik makro veri sabit default'la doldurulur (US10Y yoksa 4.3 varsayılır —
@@ -47,7 +51,9 @@ news:
 # modülü de düşer ve ağırlığı redistribute edilir (quantum deseni; DATA_POLICY).
 # Snapshot warnings'e `macro_data_missing` her durumda yazılır (M2, flag'siz gözlem).
 regime:
-  drop_unavailable_layers: false
+  # AKTİF (2026-07-02, owner kararı — Paket 1; canlı kanıt: FRED'siz ortamda
+  # sahte Likidite 96.6 → konsensüs ~4.2p şişme. v1 davranışı flag'le geri gelir).
+  drop_unavailable_layers: true
 
 # F4-1 — TF-bazlı Platt kalibrasyonu. false (DEFAULT) → global tek fit birebir
 # (bayt-aynı). true → karar anında o TF'in KENDİ fit'i kullanılır (kaynak
@@ -113,7 +119,9 @@ promotion_criteria:
 # hücrede `sentinel_v2_observe:v1=..:v2=..` warning satırıyla yan yana izlenir;
 # owner ayrışmayı görüp bu flag'i tarihli kararla açar.
 sentinel_v2:
-  enabled: false
+  # AKTİF (2026-07-02, owner kararı — Paket 1; canlı kanıt: v1 hep 80.9 iken
+  # v2 sembol/TF'e göre 67.7–80.0 ayrıştı. v1 kodu paraşüt olarak yerinde).
+  enabled: true
   weights: { vix: 0.5, volatility: 0.25, derivatives: 0.15, options: 0.10 }
 
 # F5 — EV (beklenen değer) kapısı. Olasılık + ödül/risk BİRLİKTE pozitif değilse açma:
@@ -174,7 +182,10 @@ risk_gates:
   # Gerekçe: trade-PnL rho'su seyrek/gürültülü (iki sembolde aynı gün kapanmış
   # trade ister), baseline elle yazılmış sabit — fiyat serisi tek dürüst kaynak.
   # Owner gözlem sonrası tarihli kararla açar.
-  correlation_price_returns: false
+  # AKTİF (2026-07-02, owner kararı — Paket 1; canlı kanıt: 45 çiftin 43'ü
+  # neutral'dı, fiyat-rho 38'ini dolduruyor; BTC|ETH 0.75→0.882, XAG|XAU
+  # 0.80→0.868 — küme riski olduğundan az görünüyordu).
+  correlation_price_returns: true
   correlation_price_min_overlap_days: 20   # bunun altında ortak günle fiyat-rho AKTİF olamaz (gözlemde görünür)
   max_cluster_pct: 0.30              # aynı risk cluster'ın toplam %equity tavanı
   vol_regime_zscore: 2.0

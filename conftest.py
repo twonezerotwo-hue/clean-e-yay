@@ -34,6 +34,27 @@ def _f5_disabled_by_default(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(engine, "_kelly_cfg", lambda: {"enabled": False})
 
 
+@pytest.fixture(autouse=True)
+def _package1_flags_off_by_default(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Paket-1 aktivasyonu (2026-07-02, owner kararı) canlı config'te 5 girdi-düzeltme
+    flag'ini AÇTI; unit testlerin çoğu v1 baseline davranışını varsayar (matrix
+    fixture'ları, bayt-aynılık assertion'ları). Testlerde default KAPAT — v2
+    davranışını doğrulayan testler `threshold_override` ile açar (ctx override
+    base'in ÜSTÜNE merge edilir, bu pin onları etkilemez). `_f5_disabled_by_default`
+    deseninin devamı: canlı aktivasyonlar test suite'ini KIRMAZ, her davranış
+    testi hangi modda koştuğunu kendi seçer."""
+    import copy
+
+    from packages.data.registry import loader
+    pinned = copy.deepcopy(loader._load_thresholds_base())
+    pinned.setdefault("consensus", {})["fundamental_v2"] = False
+    pinned.setdefault("news", {})["sentiment_v2"] = False
+    pinned.setdefault("regime", {})["drop_unavailable_layers"] = False
+    pinned.setdefault("sentinel_v2", {})["enabled"] = False
+    pinned.setdefault("risk_gates", {})["correlation_price_returns"] = False
+    monkeypatch.setattr(loader, "_load_thresholds_base", lambda: pinned)
+
+
 @pytest.fixture(autouse=True, scope="session")
 def _isolate_runtime_stores(tmp_path_factory: pytest.TempPathFactory) -> None:
     """Redirect file-backed runtime stores under data/runtime/ to session tmp files so
