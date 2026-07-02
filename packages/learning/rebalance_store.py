@@ -18,8 +18,8 @@ from typing import Literal
 import yaml
 
 from packages.data.registry.loader import (
-    CONFIG_DIR,
     REPO_ROOT,
+    WEIGHTS_RUNTIME_DIR,
     weights_manifest_path,
 )
 from packages.learning import weight_autoapply_store
@@ -57,12 +57,15 @@ def _store_path() -> Path:
 
 def _weights_output_dir() -> Path:
     """Yeni weights yaml dosyalarının yazıldığı dizin. Test override için
-    `WEIGHTS_OUTPUT_DIR` env değişkeni kullanılır; default config/."""
+    `WEIGHTS_OUTPUT_DIR` env değişkeni kullanılır; default data/runtime/weights/
+    (F5-4 — makine üretimi config/'i kirletmesin, gitignore'lu kalsın). Eski
+    config/ altındaki dosyalar loader'ın çift-yol fallback'iyle okunmaya devam
+    eder."""
     p = os.environ.get("WEIGHTS_OUTPUT_DIR")
     if p:
         path = Path(p)
         return path if path.is_absolute() else REPO_ROOT / path
-    return CONFIG_DIR
+    return WEIGHTS_RUNTIME_DIR
 
 
 def _resolve(p: Path) -> Path:
