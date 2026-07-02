@@ -163,7 +163,39 @@ def _fundamental(regime: RegimeOutput) -> float:
     return sum(layer.score for layer in layers) / max(1, len(layers))
 
 
-def _news(snap: MarketSnapshot) -> float:
+def _news_symbol_filter_enabled() -> bool:
+    """consensus.news_symbol_filter — owner-flag (default KAPALI = eski davranış).
+
+    Açıkken _news yalnız o sembole `asset_impact` taşıyan VERIFIED başlıkları
+    sayar (DATA_POLICY: verified=False consensus'a girmez). Kapalıyken global
+    sentiment tally'si birebir korunur (bozulma yok, tek satır geri dönüş)."""
+    try:
+        return bool(load_thresholds().get("consensus", {}).get("news_symbol_filter", False))
+    except (OSError, KeyError, ValueError, TypeError):
+        return False
+
+
+def _news(snap: MarketSnapshot, symbol: str | None = None) -> float:
+    """Haber modülü skoru (0-100, 50 = nötr).
+
+    Sembol-ilişkili mod (news_symbol_filter açık + symbol verilmiş): yalnız
+    `headline.asset_impact[symbol]` taşıyan verified başlıklar sayılır; yön
+    global sentiment yerine sembole özgü impact'ten gelir (örn. hawkish Fed
+    haberi bearish sentiment'lidir ama DXY için +1). İlgili başlık yoksa 50
+    (nötr) — asset_impact haritasında olmayan semboller (örn. custom hisseler)
+    alakasız küresel haber gürültüsüyle OYNAMAZ.
+
+    Legacy mod (flag kapalı veya symbol None): tüm başlıkların sentiment
+    tally'si — mevcut davranış birebir."""
+    if symbol is not None and _news_symbol_filter_enabled():
+        vals = [
+            float(h.asset_impact[symbol])
+            for h in snap.headlines
+            if h.verified and symbol in h.asset_impact
+        ]
+        if not vals:
+            return 50.0
+        return 50.0 + (sum(vals) / len(vals)) * 25.0
     tally = {"bullish": 0, "bearish": 0, "neutral": 0}
     for h in snap.headlines:
         if h.sentiment:
@@ -202,7 +234,7 @@ def build(
     raw = {
         "touche": touche_score,
         "fundamental": _fundamental(regime),
-        "news": _news(snap),
+        "news": _news(snap, symbol),
         "sentinel": _sentinel(regime),
         # chart_pattern: şimdilik yok — ağırlığı redistribute edilir
     }

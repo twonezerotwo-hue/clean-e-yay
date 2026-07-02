@@ -14,6 +14,13 @@ consensus:
   # kalibre güven bunun altındaysa pozisyon AÇILMAZ (hold). Düşük-güvenli
   # nötr sinyallerle pozisyon açılmasını engeller. Owner-tunable; 0 = kapalı.
   min_open_confidence: 0.20
+  # 2026-07-02: AÇILDI (owner kararı). Haber modülü sembol-ilişkili skorlama:
+  # yalnız headline.asset_impact[symbol] taşıyan VERIFIED başlıklar o sembolün
+  # news skorunu oynatır (yön sembole özgü impact'ten; hawkish Fed → DXY +1).
+  # Eskiden TÜM başlıkların global sentiment'i her sembole aynı giriyordu —
+  # BTC haberi XAGUSD skorunu oynatıyordu. İlgili başlığı olmayan sembol
+  # (örn. custom hisseler) nötr 50 alır. false → eski davranış birebir.
+  news_symbol_filter: true
 
 # F5 — EV (beklenen değer) kapısı. Olasılık + ödül/risk BİRLİKTE pozitif değilse açma:
 # EV = p(win)×RR − (1−p(win))×1 − cost_r (R-katı). RR timeframe_targets'tan. EV her
