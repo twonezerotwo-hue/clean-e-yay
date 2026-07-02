@@ -69,10 +69,16 @@ def _aggregate(trades) -> list[Mistake]:
     for fp, items in by_fp.items():
         items_sorted = sorted(items, key=lambda x: x.closed_at or "")
         wins = sum(1 for t in items_sorted if t.pnl_usd > 0)
-        losses = len(items_sorted) - wins
+        # F1-2 — başabaş (pnl==0, örn. time-stop BE çıkışı) kayıp DEĞİLDİR:
+        # eskiden loss sayılıp win_rate'i suni düşürüyor, AVOID'u yanlış
+        # tetikleyebiliyordu. losses yalnız pnl<0; win_rate paydası kararlı
+        # trade'ler (wins+losses). Streak de yalnız gerçek kayıpları sayar —
+        # BE araya girerse seriyi keser (kayıp serisi değildir).
+        losses = sum(1 for t in items_sorted if t.pnl_usd < 0)
+        decided = wins + losses
         streak = 0
         for t in reversed(items_sorted):
-            if t.pnl_usd <= 0:
+            if t.pnl_usd < 0:
                 streak += 1
             else:
                 break
@@ -82,7 +88,7 @@ def _aggregate(trades) -> list[Mistake]:
                 trades=len(items_sorted),
                 wins=wins,
                 losses=losses,
-                win_rate=round(wins / len(items_sorted), 3),
+                win_rate=round(wins / decided, 3) if decided else 0.0,
                 total_pnl=round(sum(t.pnl_usd for t in items_sorted), 2),
                 last_seen_at=items_sorted[-1].closed_at if items_sorted else None,
                 streak_losses=streak,
@@ -97,12 +103,15 @@ def summary() -> list[Mistake]:
 
 
 def _verdict_for(rec: Mistake | None, fp: str) -> MistakeVerdict:
-    if rec is None or rec.trades < MIN_TRADES:
+    # F1-2 — eşik KARARLI trade sayısına (wins+losses) bakar: 3 başabaş trade'lik
+    # bir fingerprint win_rate=0 ile AVOID tetikleyemez (BE kayıp değildir).
+    decided = (rec.wins + rec.losses) if rec else 0
+    if rec is None or decided < MIN_TRADES:
         return MistakeVerdict(
             action="NEUTRAL",
             reason="yetersiz veri",
             size_factor=SIZE_FACTOR_NEUTRAL,
-            evidence=[f"trades={rec.trades if rec else 0} < {MIN_TRADES}"],
+            evidence=[f"decided={decided} < {MIN_TRADES}"],
             fingerprint=fp,
             record=rec,
         )

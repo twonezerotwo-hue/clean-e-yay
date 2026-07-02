@@ -11,7 +11,7 @@ PAPER_SAFE / NO_EXECUTION: gerçek emir yok; RiskGate/halt yalnızca kısıtlay�
 from __future__ import annotations
 
 import hashlib
-from datetime import UTC, date, datetime, timedelta
+from datetime import UTC, datetime, timedelta
 
 from packages.data.registry.loader import load_thresholds
 from packages.learning import decision_log
@@ -50,7 +50,10 @@ def _new_id(symbol: str, opened_at: str) -> str:
 
 
 def _ensure_daily_anchor(state: PaperState) -> None:
-    today = date.today().isoformat()
+    # F1-4 — gün çapası UTC: sistemin geri kalanı (opened_at/closed_at/audit)
+    # UTC damgalı; date.today() lokal gün kullanınca gün sınırında daily-loss
+    # reset'i UTC'ye göre saatlerce kayıyordu.
+    today = datetime.now(UTC).date().isoformat()
     if state.daily_anchor_date != today:
         state.daily_anchor_date = today
         state.daily_pnl_usd = 0.0
@@ -83,6 +86,7 @@ def open_position(
     manual: bool = False,
     size_usd_override: float | None = None,
     atr: float | None = None,
+    module_contributions: dict[str, float] | None = None,
 ) -> Position:
     # Konviksiyon kademesi (kalibre p(win) → risk çarpanları). Zayıf konviksiyon:
     # küçük boyut + YAKIN stop + KISA vade + sıkı trailing. Floor (min_open_confidence)
@@ -161,6 +165,8 @@ def open_position(
         trail_activate_pct=conviction.trail_activate(),
         trail_peak=entry_price,
         trail_active=False,
+        # F1-3 — consensus modül katkı vektörü (manuel/legacy açılışta None).
+        open_module_contributions=module_contributions,
     )
     state.open_positions.append(pos)
     audit.record(
@@ -240,6 +246,7 @@ def attempt_open(
     open_session_primary_market_open: bool | None = None,
     open_session_evidence: str | None = None,
     atr: float | None = None,
+    module_contributions: dict[str, float] | None = None,
 ) -> tuple[Position | None, dict]:
     """P1 — tek açılış giriş noktası: denetim → blocked/opened + audit.
 
@@ -309,6 +316,7 @@ def attempt_open(
         open_session_primary_market_open=open_session_primary_market_open,
         open_session_evidence=open_session_evidence,
         atr=atr,
+        module_contributions=module_contributions,
     )
     return pos, decision
 
@@ -325,18 +333,35 @@ def close_position(
     # realize edilir, pozisyon kalan boyutla AÇIK kalır. Aksi halde tam kapatma.
     full = close_size is None or close_size >= pos.size_usd - 1e-6
     realized_size = pos.size_usd if full else float(close_size)
+    closed_at = utc_iso()
+    # F1-5 — kısmi kapanışta trade id benzersiz olmalı: aynı pos.id ile birden çok
+    # Trade üretmek decision_log kurtarma dedupe'unda (outcomes_from_state,
+    # trade_id bazlı) kısmi leg'lerden birini düşürüyordu. Tam kapanış pos.id'yi
+    # birebir korur (mevcut davranış); kısmi leg türetilmiş deterministik id alır.
+    trade_id = (
+        pos.id
+        if full
+        else hashlib.sha1(f"{pos.id}|{closed_at}|{realized_size}".encode()).hexdigest()[:10]
+    )
+    # F1-1 — açılış risk mesafesi (R-multiple paydası): |entry−SL|/entry.
+    # SL'siz/legacy pozisyon → None (uydurma yok; R hesaplanamaz, outcome'da None).
+    open_risk_pct = (
+        round(abs(pos.entry_price - pos.sl) / pos.entry_price, 6)
+        if pos.sl is not None and pos.entry_price > 0
+        else None
+    )
     # Realized fill P&L — formalized in execution_sim (no broker; paper fill math).
     pnl = execution_sim.realized_pnl(pos.side, pos.entry_price, exit_price, realized_size)
     lifecycle_status = "FORCE_CLOSED" if reason in _FORCE_CLOSE_REASONS else "CLOSED"
     trade = Trade(
-        id=pos.id,
+        id=trade_id,
         symbol=pos.symbol,
         side=pos.side,
         entry_price=pos.entry_price,
         exit_price=round(exit_price, 4),
         pnl_usd=round(pnl, 2),
         opened_at=pos.opened_at,
-        closed_at=utc_iso(),
+        closed_at=closed_at,
         close_reason=reason,
         fingerprint=pos.fingerprint,
         data_verified=pos.data_verified,
@@ -357,6 +382,8 @@ def close_position(
         open_session_evidence=pos.open_session_evidence,
         mae_pct=pos.mae_pct,
         mfe_pct=pos.mfe_pct,
+        open_risk_pct=open_risk_pct,
+        open_module_contributions=pos.open_module_contributions,
     )
     state.recent_trades.append(trade)
     # Signal attribution: kapanan trade'in karar izini kalıcı decision_log'a yaz

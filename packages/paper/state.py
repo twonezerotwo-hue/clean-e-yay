@@ -99,6 +99,11 @@ class Position:
     # mfe_pct: entry'ye göre lehte gördüğü en uç hareket (pozitif %).
     mae_pct: float = 0.0
     mfe_pct: float = 0.0
+    # F1-3 — açılış anındaki consensus modül katkı vektörü (modül → score×weight).
+    # dominant_module tek-modül attribution'unun yerini alacak ham veri: kapanışta
+    # Trade'e, oradan decision_log'a taşınır; learning summary attribution okur.
+    # Manuel/legacy açılışlar None (consensus vektörü yok — uydurma yok).
+    open_module_contributions: dict[str, float] | None = None
 
     @property
     def unrealized_pnl_usd(self) -> float:
@@ -142,6 +147,11 @@ class Trade:
     # MAE/MFE pozisyondan miras alınır (TF-target trainer girdisi).
     mae_pct: float = 0.0
     mfe_pct: float = 0.0
+    # F1-1 — açılış risk mesafesi |entry−SL|/entry (fraksiyon; R-multiple paydası).
+    # SL'siz/legacy kayıtlar None (R hesaplanamaz — uydurma yok).
+    open_risk_pct: float | None = None
+    # F1-3 — açılış anındaki consensus modül katkı vektörü (pozisyondan miras).
+    open_module_contributions: dict[str, float] | None = None
 
 
 @dataclass

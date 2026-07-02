@@ -47,9 +47,24 @@ class CanonicalOutcome:
     # MAE/MFE (TF-target trainer girdisi). Legacy kayıtlar 0.0 default ile gelir.
     mae_pct: float = 0.0
     mfe_pct: float = 0.0
-    # Calibration trainer girdisi — açılış anında damgalanmış güven (Trade +
-    # decision_log taşır). Legacy/eksik kayıtlar None ile gelir (fit'e girmez).
+    # Açılış anında damgalanmış KALİBRE güven (Trade + decision_log taşır).
+    # Raporlama/reliability yüzeyi bunu okur. Legacy/eksik kayıtlar None.
     predicted_confidence: float | None = None
+    # Calibration trainer'ın FIT girdisi — kalibrasyon ÖNCESİ ham güven.
+    # predict_calibrated karar anında ham güvene uygulanır; fit de aynı
+    # dağılımdan öğrenmeli (predicted ile fit = kendi çıktısıyla eğitim,
+    # özyinelemeli kayma). Legacy/eksik kayıtlar None ile gelir (fit'e girmez).
+    raw_confidence: float | None = None
+    # F1-1 — açılış risk mesafesi |entry−SL|/entry (fraksiyon) ve R-multiple:
+    # r = pnl_pct / (risk_pct×100). USD-expectancy pozisyon boyutuyla confound
+    # olur (15m küçük poz + 1d büyük poz aynı havuzda); R-katı boyut-bağımsız
+    # gerçek edge'i ölçer. Legacy/SL'siz kayıtlar None (uydurma yok).
+    risk_pct: float | None = None
+    r_multiple: float | None = None
+    # F1-3 — açılış anındaki consensus modül katkı vektörü (modül → score×weight).
+    # dominant_module tek-modül attribution'unun ham verisi; module_attribution()
+    # bunu okur. Manuel/legacy açılışlar None.
+    module_contributions: dict[str, float] | None = None
 
 
 def _duration_seconds(opened_at: str | None, closed_at: str | None) -> float | None:
@@ -80,6 +95,29 @@ def _final_action(side: str) -> str | None:
     return None
 
 
+def _r_multiple(pnl_pct: float | None, risk_pct: float | None) -> float | None:
+    """R-katı: gerçekleşen % hareket / açılıştaki risk mesafesi (%).
+
+    pnl_pct yön-düzeltilmiş % (long/short işareti uygulanmış), risk_pct
+    fraksiyon (0.03 = %3). İkisinden biri yoksa None — uydurma yok."""
+    if pnl_pct is None or risk_pct is None or risk_pct <= 0:
+        return None
+    return round((pnl_pct / 100.0) / risk_pct, 4)
+
+
+def _module_contributions(raw) -> dict[str, float] | None:
+    """Modül katkı vektörünü güvenli süz (bozuk değer → alan atlanır)."""
+    if not isinstance(raw, dict) or not raw:
+        return None
+    out: dict[str, float] = {}
+    for k, v in raw.items():
+        try:
+            out[str(k)] = float(v)
+        except (TypeError, ValueError):
+            continue
+    return out or None
+
+
 def build_outcome(t: Trade) -> CanonicalOutcome:
     """Tek Trade → CanonicalOutcome (legacy default'larla; asla patlamaz)."""
     parsed = fp.parse(getattr(t, "fingerprint", None))
@@ -89,6 +127,8 @@ def build_outcome(t: Trade) -> CanonicalOutcome:
     final = _final_action(side)
     entry = getattr(t, "entry_price", None)
     exit_ = getattr(t, "exit_price", None)
+    pnl_pct = _pnl_pct(entry, exit_, side)
+    risk_pct = _opt_float(getattr(t, "open_risk_pct", None))
     return CanonicalOutcome(
         trade_id=str(getattr(t, "id", "") or ""),
         symbol=str(getattr(t, "symbol", "") or ""),
@@ -102,7 +142,7 @@ def build_outcome(t: Trade) -> CanonicalOutcome:
         open_price=entry,
         close_price=exit_,
         pnl=float(getattr(t, "pnl_usd", 0.0) or 0.0),
-        pnl_pct=_pnl_pct(entry, exit_, side),
+        pnl_pct=pnl_pct,
         open_reason=getattr(t, "open_reason", None),
         close_reason=getattr(t, "close_reason", None),
         fingerprint=getattr(t, "fingerprint", None),
@@ -122,6 +162,12 @@ def build_outcome(t: Trade) -> CanonicalOutcome:
         mae_pct=float(getattr(t, "mae_pct", 0.0) or 0.0),
         mfe_pct=float(getattr(t, "mfe_pct", 0.0) or 0.0),
         predicted_confidence=_opt_float(getattr(t, "predicted_confidence", None)),
+        raw_confidence=_opt_float(getattr(t, "raw_confidence", None)),
+        risk_pct=risk_pct,
+        r_multiple=_r_multiple(pnl_pct, risk_pct),
+        module_contributions=_module_contributions(
+            getattr(t, "open_module_contributions", None)
+        ),
     )
 
 
@@ -155,6 +201,8 @@ def build_outcome_from_log_entry(entry: dict) -> CanonicalOutcome:
     final = _final_action(side)
     entry_price = outcome.get("entry_price")
     exit_price = outcome.get("exit_price")
+    pnl_pct = _pnl_pct(entry_price, exit_price, side)
+    risk_pct = _opt_float(outcome.get("risk_pct"))
     return CanonicalOutcome(
         trade_id=str(entry.get("trade_id") or ""),
         symbol=str(entry.get("symbol") or ""),
@@ -166,7 +214,7 @@ def build_outcome_from_log_entry(entry: dict) -> CanonicalOutcome:
         open_price=entry_price,
         close_price=exit_price,
         pnl=float(outcome.get("pnl_usd") or 0.0),
-        pnl_pct=_pnl_pct(entry_price, exit_price, side),
+        pnl_pct=pnl_pct,
         open_reason=opening.get("reason"),
         close_reason=exit_.get("reason"),
         fingerprint=fingerprint,
@@ -184,6 +232,10 @@ def build_outcome_from_log_entry(entry: dict) -> CanonicalOutcome:
         mae_pct=float(outcome.get("mae_pct") or 0.0),
         mfe_pct=float(outcome.get("mfe_pct") or 0.0),
         predicted_confidence=_opt_float(opening.get("predicted_confidence")),
+        raw_confidence=_opt_float(opening.get("raw_confidence")),
+        risk_pct=risk_pct,
+        r_multiple=_r_multiple(pnl_pct, risk_pct),
+        module_contributions=_module_contributions(opening.get("module_contributions")),
     )
 
 
@@ -227,15 +279,26 @@ def _empty_bucket() -> dict:
         "trades": 0,
         "wins": 0,
         "losses": 0,
+        # F1-2 — başabaş (pnl==0, örn. time-stop BE çıkışı) ayrı sayılır;
+        # eskiden loss sayılıp win_rate'i suni düşürüyordu.
+        "breakeven": 0,
         "win_rate": 0.0,
         "total_pnl": 0.0,
         "avg_pnl": 0.0,
         "verified": 0,
+        # F1-1 — R-multiple istatistikleri (yalnız r_multiple taşıyan outcome'lar;
+        # legacy/SL'siz kayıtlar r_trades'e girmez — USD alanları herkes için sürer).
+        "r_trades": 0,
+        "total_r": 0.0,
+        "avg_r": 0.0,
     }
 
 
 def bucketize(outcomes: list[CanonicalOutcome], key) -> dict[str, dict]:
-    """`key(outcome) -> str` ile grupla; bucket başına istatistik üret."""
+    """`key(outcome) -> str` ile grupla; bucket başına istatistik üret.
+
+    F1-2 — win_rate paydası KARARLI trade'lerdir (wins+losses); başabaş
+    (pnl==0) ayrı `breakeven` sayacında izlenir, win_rate'i sulandırmaz."""
     acc: dict[str, dict] = {}
     for o in outcomes:
         k = key(o)
@@ -243,15 +306,22 @@ def bucketize(outcomes: list[CanonicalOutcome], key) -> dict[str, dict]:
         b["trades"] += 1
         if o.pnl > 0:
             b["wins"] += 1
-        else:
+        elif o.pnl < 0:
             b["losses"] += 1
+        else:
+            b["breakeven"] += 1
         b["total_pnl"] = round(b["total_pnl"] + o.pnl, 2)
         if o.data_verified:
             b["verified"] += 1
+        if o.r_multiple is not None:
+            b["r_trades"] += 1
+            b["total_r"] = round(b["total_r"] + o.r_multiple, 4)
     for b in acc.values():
         n = b["trades"]
-        b["win_rate"] = round(b["wins"] / n, 3) if n else 0.0
+        decided = b["wins"] + b["losses"]
+        b["win_rate"] = round(b["wins"] / decided, 3) if decided else 0.0
         b["avg_pnl"] = round(b["total_pnl"] / n, 2) if n else 0.0
+        b["avg_r"] = round(b["total_r"] / b["r_trades"], 4) if b["r_trades"] else 0.0
     return acc
 
 
@@ -271,4 +341,42 @@ def distribution(outcomes: list[CanonicalOutcome], key) -> dict[str, int]:
     for o in outcomes:
         k = str(key(o) if key(o) is not None else "unknown")
         out[k] = out.get(k, 0) + 1
+    return out
+
+
+def module_attribution(outcomes: list[CanonicalOutcome]) -> dict[str, dict]:
+    """F1-3 — modül katkı vektöründen kazanç/kayıp attribution'u.
+
+    dominant_module tüm sonucu TEK modüle yazar (skor bir karışımken); bu rapor
+    her modülün kazanan ve kaybeden trade'lerdeki ORTALAMA katkısını (score×weight)
+    yan yana koyar — "kazananlarda katkısı yüksek, kaybedenlerde düşük" modül
+    gerçek edge taşıyandır. Yalnız vektör taşıyan outcome'lar girer (legacy/
+    manuel None → dışarıda); başabaş (pnl==0) karara girmez (F1-2 ile tutarlı).
+    Salt-okuma raporu — hiçbir karar/ağırlık BU fonksiyondan beslenmez (F3'te
+    regresyon tabanı olacak ham veri yüzeyi)."""
+    acc: dict[str, dict] = {}
+    for o in outcomes:
+        if not o.module_contributions or o.pnl == 0:
+            continue
+        won = o.pnl > 0
+        for mod, contrib in o.module_contributions.items():
+            m = acc.setdefault(mod, {
+                "win_trades": 0, "loss_trades": 0,
+                "_win_contrib_sum": 0.0, "_loss_contrib_sum": 0.0,
+            })
+            if won:
+                m["win_trades"] += 1
+                m["_win_contrib_sum"] += contrib
+            else:
+                m["loss_trades"] += 1
+                m["_loss_contrib_sum"] += contrib
+    out: dict[str, dict] = {}
+    for mod, m in acc.items():
+        wn, ln = m["win_trades"], m["loss_trades"]
+        out[mod] = {
+            "win_trades": wn,
+            "loss_trades": ln,
+            "avg_contrib_win": round(m["_win_contrib_sum"] / wn, 3) if wn else None,
+            "avg_contrib_loss": round(m["_loss_contrib_sum"] / ln, 3) if ln else None,
+        }
     return out

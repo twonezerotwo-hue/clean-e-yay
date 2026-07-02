@@ -72,6 +72,9 @@ def entry_for(trade: Trade) -> dict:
             "raw_confidence": trade.raw_confidence,
             "confidence_source": trade.confidence_source,
             "data_verified": trade.data_verified,
+            # F1-3 — consensus modül katkı vektörü (modül → score×weight);
+            # manuel/legacy açılışlar None. Attribution raporunun ham verisi.
+            "module_contributions": getattr(trade, "open_module_contributions", None),
         },
         # Market-session context at open (if available; getattr keeps legacy trades
         # backward-compatible — missing context stays null, never invented).
@@ -95,6 +98,9 @@ def entry_for(trade: Trade) -> dict:
             # MAE/MFE — TF-target trainer'ın yakıtı (legacy: 0.0).
             "mae_pct": float(getattr(trade, "mae_pct", 0.0) or 0.0),
             "mfe_pct": float(getattr(trade, "mfe_pct", 0.0) or 0.0),
+            # F1-1 — açılış risk mesafesi |entry−SL|/entry (R-multiple paydası);
+            # SL'siz/legacy None (R hesaplanamaz — uydurma yok).
+            "risk_pct": getattr(trade, "open_risk_pct", None),
         },
         "opened_at": trade.opened_at,
         "closed_at": trade.closed_at,

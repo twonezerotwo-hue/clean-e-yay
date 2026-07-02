@@ -1,0 +1,106 @@
+# Denetim Yol Haritası — Kodlama Süreci
+
+> 2026-07-02 tam-repo denetiminin bulgularını sıralı, güvenli bir kodlama
+> sürecine çevirir. **Yaşayan belge** — her slice tamamlanınca durum sütunu
+> güncellenir. Kaynak denetim raporu: PR #48 açıklaması + oturum kaydı.
+
+## Devir notu (son güncelleme: 2026-07-02)
+
+Bu belge farklı bir asistan/oturum tarafından SIFIR bağlamla devralınabilir
+şekilde yazılmıştır. Mevcut durum:
+
+- **Branch:** `fix/learning-calibration-news-filter` (PR #48, AÇIK — henüz
+  merge edilmedi). Main'e merge = AWS'e otomatik deploy (systemd worker
+  restart dahil). Lokalde de bu branch checkout'lu olabilir — merge sonrası
+  `main`'e dönülmeli (lokal keep-alive watchdog worker'ları lokal koddan
+  çalıştırır).
+- **Tamamlanan:** F0-1, F0-2, F1-1…F1-5, R2-3 (aşağıdaki tabloda ✅ ve
+  ayrıntılar). Suite 1181/1181 yeşil, ruff temiz.
+- **Sıradaki iş:** F2-1 (mark-to-market equity → RiskInput). 🔴 sınıfı:
+  önce MTM equity/unrealized toplamı snapshot+heartbeat'e SALT-GÖZLEM olarak
+  yazılır, bant görüldükten sonra ayrı owner kararıyla flag'le RiskGate
+  girdisine bağlanır.
+- **Bekleyen owner kararları:** `EXPECTANCY_R_MODE` (R-bazlı expectancy)
+  default KAPALI — R-damgalı outcome birikince açılacak (open_risk_pct
+  yalnız YENİ kapanışlarda damgalanıyor; eski kayıtlarda yok).
+- **Test komutu:** `.venv/Scripts/python -m pytest --basetemp=.pytest_tmp/run_X -q`
+  (basetemp şart — Windows Temp kilit sorunu). Ruff: `.venv/Scripts/python -m ruff check packages apps tests`.
+- **Kurallar:** commit/push'tan önce owner'a sor; işler ayrı commit'lerle
+  gider; aşağıdaki Anayasa her slice için bağlayıcıdır.
+
+## Anayasa (her slice için geçerli — pazarlıksız)
+
+1. **Çalışan sistem ASLA bozulmaz** — davranış değiştiren her şey ya
+   owner-flag (default KAPALI) ya measurement-only (gözlem) olarak girer.
+   Aktivasyon ayrı, tarihli owner kararıdır (config yorumuna yazılır).
+2. **Ölü kod yok** — eklenen her alan/fonksiyon aynı PR'da gerçekten
+   okunur/kullanılır. "İleride lazım olur" diye alan eklenmez.
+3. **Mimari bozulmaz** — RiskGate son otorite, no-AI-boost (öğrenme yalnız
+   küçültür/bloklar), additive-only, DATA_POLICY (uydurma veri yok),
+   shadow-önce, her aktivasyona outcome-rollback.
+4. **Her slice bağımsız geri alınabilir** — tek flag / tek revert ile.
+5. **Test:** tam suite yeşil (bilinen istisna: `test_rotation` yuvarlama,
+   bkz. R2-3) + slice'a özgü yeni testler. Ruff'ta yeni hata yok.
+
+## Durum Tablosu
+
+Durum: ✅ tamam · 🔶 kısmen · ⬜ yapılmadı
+Risk: 🟢 davranış değiştirmez (ölçüm/altyapı) · 🟡 flag'li davranış değişimi · 🔴 karar zincirini değiştirir (shadow şart)
+
+| # | İş | Denetim ref | Durum | Risk | Faz |
+|---|---|---|---|---|---|
+| F0-1 | Kalibrasyon fit'i ham güvene (`raw_confidence`) çevir | 1.1 | ✅ PR #48 | 🟢 | F0 |
+| F0-2 | News modülü sembol-ilişkili (`news_symbol_filter`) | 2, 3.2 | ✅ PR #48 | 🟡 açık | F0 |
+| F1-1 | R-multiple standardı: `CanonicalOutcome.r_multiple` + expectancy'lerin R tabanına geçişi | 3.4, 1.6d | ✅ (flag `EXPECTANCY_R_MODE` default OFF — aktivasyon owner kararı, R-damgalı outcome birikince) | 🟢→🟡 | F1 |
+| F1-2 | `bucketize`/mistake-memory'de pnl==0 başabaş ayrımı (loss sayılmasın) | 1.6c | ✅ | 🟢 | F1 |
+| F1-3 | decision_log'a modül katkı vektörü (score×weight) yaz + edge/attribution raporunda oku | 4.2 | ✅ (learning summary `module_attribution`) | 🟢 | F1 |
+| F1-4 | Gün çapası UTC fix (`date.today()` → UTC) | 1.6a | ✅ | 🟢 | F1 |
+| F1-5 | Kısmi kapanışta trade id benzersizliği (leg suffix) + dedupe düzeltmesi | 1.6b | ✅ | 🟢 | F1 |
+| F2-1 | Mark-to-market equity → RiskInput (önce gözlem alanı, sonra flag'li gate girdisi) | 1.3, 3.5 | ⬜ | 🔴 | F2 |
+| F2-2 | Korelasyonu fiyat getirisinden hesapla (OHLCV cache; kaynak önceliği computed_price > baseline > neutral) | 1.5, 3.7 | ⬜ | 🟡 | F2 |
+| F2-3 | Regime layer'ları veri yokken düşür+redistribute (quantum deseni; default-sabit sahte skor yok) | 2 (classifier) | ⬜ | 🟡 | F2 |
+| F3-1 | Wilson/bootstrap CI + üç-durumlu rollback kararı (geri al / onayla / izlemeye devam) | 1.6d, 4.1 | ⬜ | 🟡 | F3 |
+| F3-2 | Ağırlık trainer'ına rejim filtresi + 4 rejimin ayrı eğitimi | 1.2 | ⬜ | 🟡 | F3 |
+| F3-3 | Mistake memory: decision_log kaynağı + hiyerarşik fingerprint fallback + Wilson alt sınırı | 1.4, 4.4 | ⬜ | 🟡 | F3 |
+| F4-1 | TF-bazlı Platt kalibrasyonu (tf_calibration altyapısı üstüne) | 3.1 | ⬜ | 🟡 | F4 |
+| F4-2 | EV/Kelly p(win)'ini ampirik TF+rejim hit-rate'ine bağla | 3.3 | ⬜ | 🟡 | F4 |
+| F4-3 | Partial-TP + breakeven stop (1R'de %50 kapat; önce shadow yan-yana ölçüm) | 3.6 | ⬜ | 🔴 | F4 |
+| F5-1 | Counterfactual (missed_opportunity) verisini kalibrasyon/eşik kanıtına bağla | 4.3 | ⬜ | 🟡 | F5 |
+| F5-2 | Champion/challenger terfi kriteri formalize (N eşleşmiş karar + CI ayrık → owner paketi) | 4.5 | ⬜ | 🟡 | F5 |
+| F5-3 | Outcome-watchdog'u (guard_safety deseni) tüm canlı davranış değişikliklerine standart sarmalayıcı yap | 4.6 | ⬜ | 🟢 | F5 |
+| F5-4 | Üretilen weights YAML'larını `data/runtime/weights/`e taşı (loader çift-yol okur; config=insan, data=makine) | 4.7 | ⬜ | 🟡 | F5 |
+| R2-3 | `test_rotation` yuvarlama kırığı (weights 4-ondalık redistribute, 1e-6 tolerans) | suite | ✅ (tolerans 1e-3; invariant yuvarlama-öncesi korunuyor) | 🟢 | F1 |
+
+## Neden bu sıra?
+
+**F1 (ölçüm standardı) her şeyden önce** — F3+ trainer'ları ve rollback'ler
+"expectancy" sayısına göre karar veriyor. O sayı bugün USD-bazlı ve
+başabaş-kirli. Ölçüm düzelmeden optimizasyon yapmak, bozuk cetvelle
+marangozluk. F1 slice'ları davranış değiştirmez (🟢) → hızlı ve güvenli.
+
+**F2 (risk gerçek-zamanlılığı) ikinci** — sermaye koruması, sonraki tüm
+deneylerin sigortası. F2-1 kırmızı: önce MTM değerleri snapshot/heartbeat'e
+sadece YAZILIR (gözlem), banttaki davranış görülünce flag'le gate'e bağlanır.
+
+**F3 (öğrenme istatistiği) üçüncü** — F1'in R-metriği + CI'ları üstüne
+oturur. Rejim-filtreli eğitim (F3-2) doğal olarak veri setini küçültür;
+CI'lı karar mekanizması (F3-1) olmadan açılırsa gürültüyle ağırlık oynatır —
+bu yüzden F3-1, F3-2'den önce.
+
+**F4 (karar zinciri kalitesi) dördüncü** — kalibre p(win) zincirin her
+halkasını sürüyor; F0-1+F4-1 ile girdi dürüstleşince EV/Kelly (F4-2) ve
+exit geometrisi (F4-3) gerçek edge'e göre ayarlanabilir.
+
+**F5 (otonomi) en son** — CP5 köprüsü. Terfi/counterfactual mekanizmaları
+ancak güvenilir ölçüm (F1) + istatistik (F3) üzerinde anlamlı. Yön terfisi
+KIRMIZI ÇİZGİ: hiçbir slice otomatik yön değişikliği yapmaz, owner onay
+paketi üretir.
+
+## Slice şablonu (her iş bu adımlarla gider)
+
+1. **Additive kod** + flag default-OFF (veya salt-gözlem alanı) — davranış bayt-aynı.
+2. **Testler:** eski davranışın birebir korunduğu regresyon testi + yeni davranış testleri.
+3. **Shadow/gözlem penceresi** (🔴 işler için zorunlu, 🟡 için önerilir).
+4. **Owner aktivasyonu** — config'te tarihli yorum ("2026-XX-XX: AÇILDI, owner kararı").
+5. **Rollback izleme** — mümkün olan her yerde outcome-bazlı otomatik geri alma.
+6. Bu tabloda durum güncellemesi.
