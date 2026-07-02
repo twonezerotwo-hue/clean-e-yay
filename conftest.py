@@ -46,3 +46,10 @@ def _isolate_runtime_stores(tmp_path_factory: pytest.TempPathFactory) -> None:
     runtime = tmp_path_factory.mktemp("runtime")
     os.environ["DECISION_LOG_PATH"] = str(runtime / "decision_log.jsonl")
     os.environ["RISK_HALT_PATH"] = str(runtime / "risk_halts.json")
+    # F4-2 — karar motoru her decide çağrısında bu artifact'ı okur; suite gerçek
+    # diskteki tabloyu görmesin (bayt-aynılık assertion'ları deterministik kalsın).
+    os.environ["EMPIRICAL_PWIN_PATH"] = str(runtime / "empirical_pwin.json")
+    # Aynı sebep: canlı learning worker'ın fit ettiği data/runtime/platt.json karar
+    # motorunun predict_calibrated'ına sızıyordu (testte identity bekleyen assertion
+    # makinede fit varken şaşar). Per-test fixture'lar yine override edebilir.
+    os.environ["CALIBRATION_STORE_PATH"] = str(runtime / "platt.json")

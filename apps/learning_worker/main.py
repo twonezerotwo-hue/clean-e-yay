@@ -22,6 +22,7 @@ from packages.learning import auto_weight_trainer as trainer
 from packages.learning import (
     calibration_trainer,
     edge_report,
+    empirical_pwin,
     guard_safety,
     rebalance_store,
     run_store,
@@ -156,6 +157,17 @@ def run_once() -> dict:
         )
     except Exception as exc:  # defensive
         errors.append(f"calibration:{type(exc).__name__}")
+
+    # F4-2 — ampirik p(win) tablosu: (tf|rejim) hit-rate artifact'ı. Karar
+    # motoru okur (flag kapalıyken salt-gözlem alanları için).
+    try:
+        emp_table = empirical_pwin.write_table()
+        log.info(
+            "empirical_pwin: cells=%s sufficient=%s",
+            emp_table.get("cell_count"), emp_table.get("sufficient_count"),
+        )
+    except Exception as exc:  # defensive — worker patlamamalı
+        errors.append(f"empirical_pwin:{type(exc).__name__}")
 
     # Step 8 — per-TF calibration + tf_weights trust gate. Derives per-timeframe
     # hit-rate/expectancy from VERIFIED outcomes and the trust verdict (PRIOR until a

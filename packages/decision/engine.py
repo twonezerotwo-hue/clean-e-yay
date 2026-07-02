@@ -34,7 +34,7 @@ from packages.data.providers import technical as tech_provider
 from packages.data.registry import guard_overrides
 from packages.data.registry.loader import load_thresholds
 from packages.data.types import TIMEFRAMES
-from packages.learning import mistake_memory
+from packages.learning import empirical_pwin, mistake_memory
 from packages.learning.calibration_store import (
     apply_inflation_guardrail,
     predict_calibrated_tf,
@@ -97,6 +97,11 @@ class TradeDecision:
     # F5 — beklenen değer (R-katı): p(win)×RR − (1−p)×1 − maliyet. Her zaman hesaplanır
     # (gözlem); ev_gate.enabled iken < min_ev olan trade bloklanır. None = hesaplanmadı.
     expected_value: float | None = None
+    # F4-2 — ampirik p(win) gözlemi: (tf|rejim → tf) gerçekleşmiş isabet oranı.
+    # `empirical_pwin.enabled` KAPALIYKEN yalnız gözlem (EV/Kelly cal_conf ile);
+    # açıkken EV/Kelly bu p ile hesaplanır. None = yeterli ampirik kanıt yok.
+    p_win_empirical: float | None = None
+    expected_value_empirical: float | None = None
 
 
 def _timeframe_policy(timeframe: str) -> dict:
@@ -391,9 +396,20 @@ def decide_for_symbol(
     # ----- F5: EV (beklenen değer) kapısı — olasılık + ödül/risk BİRLİKTE pozitif
     #  değilse açma. EV her zaman hesaplanır (gözlem); ev_gate.enabled iken kısıtlar.
     #  RiskGate'i bypass etmez; yalnızca ek ekonomik filtre. (Owner config'ten.) -----
+    # F4-2 — ampirik p(win): (tf|rejim) gerçekleşmiş isabet oranı her zaman
+    # GÖZLENİR; `empirical_pwin.enabled` açık VE hücre yeterli örnekliyse EV +
+    # Kelly bu p ile hesaplanır (skor-türevi güven yerine ölçülmüş isabet).
+    # Kapalıyken / kanıt yokken cal_conf (bayt-aynı — sahte p uydurulmaz).
     rr = _tf_rr(timeframe)
     ev_cfg = _ev_gate_cfg()
-    expected_value = _expected_value(cal_conf, rr, float(ev_cfg.get("cost_r", 0.1)))
+    cost_r = float(ev_cfg.get("cost_r", 0.1))
+    emp = empirical_pwin.lookup(timeframe, regime.label)
+    p_for_ev = emp.p_win if (emp is not None and empirical_pwin.enabled()) else cal_conf
+    expected_value = _expected_value(p_for_ev, rr, cost_r)
+    p_win_empirical = None if emp is None else round(emp.p_win, 4)
+    expected_value_empirical = (
+        None if emp is None else round(_expected_value(emp.p_win, rr, cost_r), 4)
+    )
     if ev_cfg.get("enabled", False) and expected_value < float(ev_cfg.get("min_ev", 0.0)):
         return TradeDecision(
             symbol=symbol,
@@ -402,7 +418,7 @@ def decide_for_symbol(
             size_multiplier=0.0,
             consensus=cons,
             risk=risk,
-            reason=f"Negatif EV: {expected_value:.2f}R (p={cal_conf:.2f}, RR={rr})",
+            reason=f"Negatif EV: {expected_value:.2f}R (p={p_for_ev:.2f}, RR={rr})",
             raw_confidence=round(raw_conf, 4),
             confidence_source=conf_source,
             fingerprint=fp,
@@ -410,6 +426,8 @@ def decide_for_symbol(
             candidate_action=candidate,
             blocked_by=["ev_gate"],
             expected_value=round(expected_value, 4),
+            p_win_empirical=p_win_empirical,
+            expected_value_empirical=expected_value_empirical,
         )
 
     # Confluence yoksa boyut yarıya iner
@@ -773,7 +791,9 @@ def decide_for_symbol(
     if kelly_cfg.get("enabled", False) and equity_usd > 0:
         max_pos = float((load_thresholds().get("paper_trading") or {}).get("max_position_usd", 0.0))
         if max_pos > 0:
-            f_star = _kelly_fraction(cal_conf, rr)
+            # F4-2 — flag açıkken Kelly de ampirik p ile (EV ile aynı kaynak);
+            # kapalıyken p_for_ev == cal_conf (bayt-aynı).
+            f_star = _kelly_fraction(p_for_ev, rr)
             fraction = float(kelly_cfg.get("fraction", 0.25))
             kelly_mult_cap = fraction * f_star * equity_usd / max_pos
             if kelly_mult_cap < size:
@@ -829,6 +849,8 @@ def decide_for_symbol(
         blocked_by=blocked_by,
         actionable=size > 0.0,
         expected_value=round(expected_value, 4),
+        p_win_empirical=p_win_empirical,
+        expected_value_empirical=expected_value_empirical,
     )
 
 
@@ -1103,6 +1125,11 @@ def matrix_view(
                 # F5 gözlem — beklenen değer (R-katı); ev_gate KAPALI olsa da dolu.
                 # Dashboard/owner pozitif-EV dağılımını görüp ev_gate enable kararını verir.
                 "expected_value": d.expected_value,
+                # F4-2 gözlem — ampirik (tf|rejim) p(win) + onunla hesaplanan EV.
+                # Owner cal_conf-EV ile ampirik-EV ayrışmasını izleyip
+                # empirical_pwin.enabled aktivasyon kararını verir.
+                "p_win_empirical": d.p_win_empirical,
+                "expected_value_empirical": d.expected_value_empirical,
             }
         )
     return {
