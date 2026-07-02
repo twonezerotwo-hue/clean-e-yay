@@ -22,6 +22,7 @@ from packages.learning import (
     historical_edge,
     missed_opportunity,
     mistake_memory,
+    promotion_criteria,
     tf_target_rollback,
     tf_target_store,
     tf_target_trainer,
@@ -306,6 +307,14 @@ def get_missed_opportunities() -> dict:
     expired, trade_profile bazında. PAPER_SAFE — paper'a dokunmaz, yalnızca
     izleme logundan sayar. Faz 4 (conflict-gate genişletme) kararına veri."""
     return missed_opportunity.summary_viewmodel()
+
+
+@router.get("/learning/promotion-criteria")
+def get_promotion_criteria() -> dict:
+    """F5-2 — champion/challenger terfi kriteri (read-only). Eşleşmiş karar
+    hacmi + ayrışma kanıtı + Wilson CI ayrıklığı; READY olsa bile terfi
+    otomatik DEĞİL — governor'daki owner onay paketi üzerinden yürür."""
+    return promotion_criteria.evaluate()
 
 
 @router.get("/learning/calibration-jumps")

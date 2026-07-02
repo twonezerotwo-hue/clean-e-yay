@@ -71,6 +71,16 @@ empirical_pwin:
   enabled: false
   min_samples: 20
 
+# F5-2 — champion/challenger terfi kriteri (flag'siz gözlem — davranış değişmez).
+# Kriter: (1) shadow log'da ≥ min_matched_decisions eşleşmiş karar; (2) missed-
+# opportunity çözümlü ayrışma ≥ min_resolved_disagreements; (3) challenger'ın
+# ayrışma isabetinin %95 Wilson ALT sınırı > 0.5. ÜÇÜ DE tutarsa learning worker
+# governor defterine OWNER ONAY PAKETİ sunar (STRATEGY_ENABLE, dedupe'lu).
+# Terfi otomatik DEĞİL — KIRMIZI ÇİZGİ; onay bile yalnız defteri günceller.
+promotion_criteria:
+  min_matched_decisions: 200
+  min_resolved_disagreements: 30
+
 # M4 — sentinel v2: tek-gösterge VIX yerine çok-girdili stres kompoziti (0-100,
 # yüksek = sakin / risk iştahı). enabled false (DEFAULT) → v1 birebir (yalnız
 # VIX katmanı; CRISIS'te 0.45 ağırlığı tek sayı taşır — 2026-07-02 denetimi bunu
