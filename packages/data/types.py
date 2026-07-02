@@ -447,6 +447,10 @@ class NewsHeadline(BaseModel):
     title: str
     title_tr: str | None = None
     sentiment: Sentiment | None = None
+    # M1 — v2 (çekim-eki normalize) sınıflandırıcının okuması; SALT-GÖZLEM.
+    # `news.sentiment_v2` flag'i KAPALIYKEN karar zinciri `sentiment`(v1) okur;
+    # bu alan v1/v2 ayrışmasını API/dashboard'da görünür kılar (aktivasyon kanıtı).
+    sentiment_v2: Sentiment | None = None
     asset_impact: dict[str, float] = Field(default_factory=dict)
     url: str | None = None
     verified: bool = False

@@ -82,6 +82,9 @@ def get_regime_report_current() -> dict:
                 "title": h.title,
                 "title_tr": h.title_tr,
                 "sentiment": h.sentiment,
+                # M1 — v2 sınıflandırıcı gözlemi: owner v1/v2 ayrışmasını buradan
+                # izleyip `news.sentiment_v2` aktivasyon kararını verir.
+                "sentiment_v2": h.sentiment_v2,
                 "asset_impact": h.asset_impact,
                 # UI haber kartlarından kaynak makaleye geçiş için.
                 "url": h.url,

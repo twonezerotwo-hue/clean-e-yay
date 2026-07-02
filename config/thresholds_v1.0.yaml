@@ -22,6 +22,16 @@ consensus:
   # (örn. custom hisseler) nötr 50 alır. false → eski davranış birebir.
   news_symbol_filter: true
 
+# M1 — haber sentiment sınıflandırıcı sürümü. false (DEFAULT) → v1 birebir
+# (tam-kelime eşleşme; "Bitcoin rebounds…" gibi çekimli başlıklar neutral kalır).
+# true → v2: çekim-eki normalizasyonu ("rebounds"/"surges"/"plunges" eşleşir)
+# + ≥6 harfli kök-prefix ("escalat" → escalates/escalation). Her başlıkta v2
+# okuması `sentiment_v2` alanına HER ZAMAN yazılır (salt-gözlem); owner
+# regime-report'taki v1/v2 ayrışmasını izleyip bu flag'i tarihli kararla açar.
+# Etki alanı: news modül skoru + asset_impact yönü + catalyst/surprise motoru.
+news:
+  sentiment_v2: false
+
 # F5 — EV (beklenen değer) kapısı. Olasılık + ödül/risk BİRLİKTE pozitif değilse açma:
 # EV = p(win)×RR − (1−p(win))×1 − cost_r (R-katı). RR timeframe_targets'tan. EV her
 # zaman hesaplanır (decision.expected_value gözlem); enabled iken EV<min_ev → hold.

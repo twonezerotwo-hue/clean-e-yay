@@ -188,7 +188,9 @@ def parse_feed(
         region = classify.detect_region(title)
         if geo and region is None:
             continue
-        sentiment = classify.classify_sentiment(title)
+        # M1 — aktif sentiment (flag kapalıyken v1, bayt-aynı); v2 her zaman
+        # `sentiment_v2` gözlem alanına yazılır (v1/v2 ayrışması izlenir).
+        sentiment = classify.classify_sentiment_active(title)
         hid = hashlib.sha1(f"{source}|{title}".encode()).hexdigest()[:12]
         raw_items.append(
             (
@@ -200,6 +202,7 @@ def parse_feed(
                     ts=pub_dt,
                     title=title,
                     sentiment=sentiment,
+                    sentiment_v2=classify.classify_sentiment_v2(title),
                     asset_impact=classify.classify_asset_impact(title, sentiment),
                     url=url or None,
                     verified=True,

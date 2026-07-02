@@ -75,7 +75,8 @@ def parse_articles(
         if age_h > MAX_AGE_HOURS or age_h < -1:
             continue
         source = art.get("domain") or "GDELT"
-        sentiment = classify.classify_sentiment(title)
+        # M1 — aktif sentiment (flag kapalıyken v1, bayt-aynı); v2 gözlem alanı.
+        sentiment = classify.classify_sentiment_active(title)
         hid = hashlib.sha1(f"gdelt|{source}|{title}".encode()).hexdigest()[:12]
         out.append(
             (
@@ -87,6 +88,7 @@ def parse_articles(
                     ts=pub_dt,
                     title=title,
                     sentiment=sentiment,
+                    sentiment_v2=classify.classify_sentiment_v2(title),
                     asset_impact=classify.classify_asset_impact(title, sentiment),
                     url=art.get("url") or None,
                     verified=True,

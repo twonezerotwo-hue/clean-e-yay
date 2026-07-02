@@ -15,12 +15,14 @@ Bu belge farklı bir asistan/oturum tarafından SIFIR bağlamla devralınabilir
 - **Tamamlanan:** F0-1, F0-2, F1-1…F1-5, R2-3 + F2-1 gözlem fazı
   (aşağıdaki tabloda ✅/🔶 ve ayrıntılar). Suite 1189/1189 yeşil, ruff'ta
   yeni hata yok (tests/ altında ~45 eski baseline bulgusu var, dokunulmadı).
-- **Sıradaki iş:** M1 (news sentiment morfoloji — bkz. "Modül katmanı
-  denetimi" bölümü), ardından F2-3(+M2) → M3 → M4. F2-2 bu seriden
-  bağımsız, araya alınabilir. F2-1'in gate-bağlama yarısı bant gözlemi
-  bekliyor: snapshot store'daki `paper_state_summary.mtm_equity_usd`
-  serisi birkaç gün izlendikten sonra ayrı owner kararıyla flag'le
-  RiskInput'a bağlanacak.
+- **Sıradaki iş:** F2-3(+M2) — rejim katmanı veri yokken düşür+redistribute
+  + `macro_data_missing` uyarısı. Ardından M3 → M4 → M5/M6. F2-2 bu
+  seriden bağımsız, araya alınabilir.
+- **Bekleyen owner aktivasyonları:** (1) `news.sentiment_v2` (M1 kodu
+  canlıda, flag OFF — regime-report'taki v1/v2 ayrışması izlenip açılır);
+  (2) F2-1 gate-bağlama (snapshot store'daki
+  `paper_state_summary.mtm_equity_usd` bandı izlenip RiskInput'a flag'le
+  bağlanır); (3) `EXPECTANCY_R_MODE` (R-damgalı outcome birikince).
 - **Bekleyen owner kararları:** `EXPECTANCY_R_MODE` (R-bazlı expectancy)
   default KAPALI — R-damgalı outcome birikince açılacak (open_risk_pct
   yalnız YENİ kapanışlarda damgalanıyor; eski kayıtlarda yok).
@@ -71,7 +73,7 @@ Risk: 🟢 davranış değiştirmez (ölçüm/altyapı) · 🟡 flag'li davranı
 | F5-3 | Outcome-watchdog'u (guard_safety deseni) tüm canlı davranış değişikliklerine standart sarmalayıcı yap | 4.6 | ⬜ | 🟢 | F5 |
 | F5-4 | Üretilen weights YAML'larını `data/runtime/weights/`e taşı (loader çift-yol okur; config=insan, data=makine) | 4.7 | ⬜ | 🟡 | F5 |
 | R2-3 | `test_rotation` yuvarlama kırığı (weights 4-ondalık redistribute, 1e-6 tolerans) | suite | ✅ (tolerans 1e-3; invariant yuvarlama-öncesi korunuyor) | 🟢 | F1 |
-| M1 | News sentiment morfoloji düzeltmesi: tam-kelime eşleşmesi çekimli halleri kaçırıyor ("rebounds"/"surges"/"plunges" → neutral); "escalat"/"retaliat" kök girdileri hiç eşleşemiyor. Token kök-normalizasyonu (EN -s/-es/-ed/-ing) + flag `news.sentiment_v2` (default OFF) + v1/v2 yan yana gözlem logu | 2026-07-02 modül denetimi §1 | ⬜ | 🟡 | M |
+| M1 | News sentiment morfoloji düzeltmesi: tam-kelime eşleşmesi çekimli halleri kaçırıyor ("rebounds"/"surges"/"plunges" → neutral); "escalat"/"retaliat" kök girdileri hiç eşleşemiyor. Token kök-normalizasyonu (EN -s/-es/-ed/-ing) + flag `news.sentiment_v2` (default OFF) + v1/v2 yan yana gözlem logu | 2026-07-02 modül denetimi §1 | ✅ (2026-07-02) `classify_sentiment_v2` + `classify_sentiment_active` (flag OFF → v1 bayt-aynı, 67 canlı başlıkta doğrulandı); her headline `sentiment_v2` gözlem alanı taşır (regime-report + sözleşme). Canlı kanıt: 67 başlığın 17'si v2'de yön kazandı. AKTİVASYON BEKLİYOR: owner regime-report'ta v1/v2 ayrışmasını izleyip `news.sentiment_v2: true` yapar (tarihli yorum) | 🟡 | M |
 | M2 | Makro veri kaybında görünürlük: FRED quote'ları düşünce warnings'e `macro_data_missing` yaz (bugün sessiz default'a düşüyor; canlıda FRED çalışıyor ama kesinti sessiz kalıyor) — F2-3 ile aynı PR'da gider | 2026-07-02 modül denetimi §2 | ⬜ | 🟢 | M |
 | M3 | Fundamental v2: Kripto Momentum'u fundamental'den çıkar (BTC teknikleri touche'ta zaten var — çifte sayım); fundamental = likidite+rotasyon. Flag `consensus.fundamental_v2` (default OFF), shadow'da v1/v2 skoru yan yana | 2026-07-02 modül denetimi §3 | ⬜ | 🟡 | M |
 | M4 | Sentinel v2: tek-gösterge VIX yerine çok-girdili stres kompoziti (VIX + realized-vol z + funding extreme + options stress; eksik girdi → redistribute). Flag'li, shadow-önce (CRISIS'te ağırlığı 0.45 — tek sayı taşımasın) | 2026-07-02 modül denetimi §4 | ⬜ | 🟡 | M |

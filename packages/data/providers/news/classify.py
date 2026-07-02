@@ -62,6 +62,98 @@ def classify_sentiment(text: str) -> Sentiment:
 
 
 # ---------------------------------------------------------------------------
+# M1 — sentiment v2: çekim-eki normalizasyonu (owner-flag `news.sentiment_v2`,
+# default KAPALI = v1 birebir). v1'in tam-kelime eşleşmesi İngilizce başlıkların
+# 3. tekil çekimini ("Bitcoin rebounds…") sistematik kaçırıyordu; sözlükteki
+# "escalat"/"retaliat" kök girdileri ise tam-kelime modunda HİÇ eşleşemiyordu.
+# v2 aynı sözlük + aynı oylamayı kullanır; yalnız eşleşme kuralı değişir.
+# ---------------------------------------------------------------------------
+
+_PUNCT_STRIP = ".,;:!?()[]{}\"'’‘“”…"
+
+# Kök-prefix eşleşmesi yalnız ≥6 harfli sözlük girdileri için ("escalat" →
+# escalates/escalation). Kısa kelimeler ("cut", "down") prefix sayılmaz —
+# "cutting"/"downtown" gibi yanlış pozitifleri engeller.
+_STEM_PREFIX_MIN = 6
+
+
+def _token_variants(token: str) -> set[str]:
+    """Token'ın olası sözlük biçimleri — deterministik İngilizce çekim
+    indirgemesi (bağımlılık yok). Token'ın kendisi her zaman dahil: kök
+    halinde geçen kelimeler ve çekimli halleri listelenmiş TR kelimeler
+    v1 ile aynı şekilde eşleşmeye devam eder."""
+    t = token.strip(_PUNCT_STRIP)
+    out = {token, t}
+    if t.endswith("'s") or t.endswith("’s"):
+        t = t[:-2]
+        out.add(t)
+    n = len(t)
+    if n >= 4:
+        if t.endswith("ies"):
+            out.add(t[:-3] + "y")       # rallies → rally
+        if t.endswith("ied"):
+            out.add(t[:-3] + "y")       # rallied → rally
+        if t.endswith("es"):
+            out.add(t[:-2])             # crashes → crash
+        if t.endswith("s"):
+            out.add(t[:-1])             # rebounds → rebound
+        if t.endswith("ed"):
+            out.add(t[:-2])             # jumped → jump
+        if t.endswith("d"):
+            out.add(t[:-1])             # surged → surge
+        if n >= 5 and t.endswith("ing"):
+            out.add(t[:-3])             # falling → fall
+            out.add(t[:-3] + "e")       # surging → surge
+    out.discard("")
+    return out
+
+
+def _match_count_v2(lower: str, words: frozenset[str], phrases: tuple[str, ...]) -> int:
+    count = 0
+    for tok in set(lower.split()):
+        if _token_variants(tok) & words:
+            count += 1
+            continue
+        base = tok.strip(_PUNCT_STRIP)
+        if any(len(w) >= _STEM_PREFIX_MIN and base.startswith(w) for w in words):
+            count += 1
+    count += sum(1 for p in phrases if p in lower)
+    return count
+
+
+def classify_sentiment_v2(text: str) -> Sentiment:
+    """v1 ile aynı sözlük + aynı oylama; fark yalnız eşleşme kuralı:
+    çekim ekleri indirgenir (rebounds→rebound) ve ≥6 harfli sözlük kökleri
+    prefix olarak eşleşir (escalat→escalates)."""
+    lower = text.lower()
+    bullish = _match_count_v2(lower, _BULLISH_WORDS, _BULLISH_PHRASES)
+    bearish = _match_count_v2(lower, _BEARISH_WORDS, _BEARISH_PHRASES)
+    if bearish > bullish:
+        return "bearish"
+    if bullish > bearish:
+        return "bullish"
+    return "neutral"
+
+
+def sentiment_v2_enabled() -> bool:
+    """`news.sentiment_v2` owner-flag'i (default KAPALI = v1 birebir).
+
+    Açılış ayrı tarihli owner kararıdır (config yorumuna yazılır); açılana
+    kadar karar zinciri v1 okur, v2 yalnız `sentiment_v2` gözlem alanına yazılır."""
+    try:
+        from packages.data.registry.loader import load_thresholds
+
+        return bool((load_thresholds().get("news") or {}).get("sentiment_v2", False))
+    except Exception:
+        return False  # config okunamazsa en güvenli: mevcut davranış (v1)
+
+
+def classify_sentiment_active(text: str) -> Sentiment:
+    """Karar zincirine giren sentiment: flag açıkken v2, kapalıyken v1 (bayt-aynı)."""
+    return classify_sentiment_v2(text) if sentiment_v2_enabled() else classify_sentiment(text)
+
+
+# ---------------------------------------------------------------------------
 # Konu etiketleri + relevance
 # ---------------------------------------------------------------------------
 

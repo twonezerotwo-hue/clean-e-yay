@@ -1416,6 +1416,8 @@ export interface components {
             title_tr?: string;
             /** @enum {string} */
             sentiment?: "bullish" | "bearish" | "neutral";
+            /** @enum {string|null} */
+            sentiment_v2?: "bullish" | "bearish" | "neutral" | null;
             asset_impact?: {
                 [key: string]: number;
             };

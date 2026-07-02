@@ -1343,6 +1343,9 @@ components:
         title: { type: string }
         title_tr: { type: string }
         sentiment: { type: string, enum: [bullish, bearish, neutral] }
+        # M1 — v2 (çekim-eki normalize) sınıflandırıcı okuması; salt-gözlem.
+        # Flag (news.sentiment_v2) kapalıyken karar zinciri `sentiment`(v1) okur.
+        sentiment_v2: { type: string, enum: [bullish, bearish, neutral], nullable: true }
         asset_impact:
           type: object
           additionalProperties: { type: number }
