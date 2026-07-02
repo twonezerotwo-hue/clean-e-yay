@@ -429,6 +429,34 @@ paths:
               schema:
                 $ref: "#/components/schemas/TfWeightsReport"
 
+  /api/v1/learning/activation-watchdog:
+    get:
+      operationId: getActivationWatchdog
+      summary: F5-3 — owner-flag aktivasyon izleyicisi (read-only; YALNIZ-ÖNERİ, oto-kapatma yok)
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                description: activation_watchdog.report() sonucu (additive).
+                additionalProperties: true
+
+  /api/v1/learning/partial-tp-shadow:
+    get:
+      operationId: getPartialTpShadow
+      summary: F4-3 — partial-TP shadow-vs-actual özeti (read-only; aktivasyon kanıtı)
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                description: partial_tp_shadow.summary() sonucu (additive).
+                additionalProperties: true
+
   /api/v1/learning/calibration/retrain:
     post:
       operationId: postLearningCalibrationRetrain
