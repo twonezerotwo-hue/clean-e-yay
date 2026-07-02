@@ -149,7 +149,11 @@ def run_once() -> dict:
     try:
         cal = calibration_trainer.train()
         calibration_status = str(cal.get("status", "UNKNOWN"))
-        log.info("calibration: %s n=%s", calibration_status, cal.get("samples"))
+        # F4-1 — per-TF Platt gözlemi: hangi TF'ler fit edildi (aktivasyon kanıtı).
+        log.info(
+            "calibration: %s n=%s tf_fitted=%s",
+            calibration_status, cal.get("samples"), cal.get("tf_fitted") or [],
+        )
     except Exception as exc:  # defensive
         errors.append(f"calibration:{type(exc).__name__}")
 

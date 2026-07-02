@@ -2393,6 +2393,10 @@ export interface components {
             min_required: number;
             samples_in_state: number;
             bins: components["schemas"]["CalibrationBin"][];
+            per_timeframe?: {
+                [key: string]: components["schemas"]["CalibrationParams"];
+            };
+            tf_platt_enabled?: boolean;
         };
         MistakeRecord: {
             fingerprint: string;

@@ -35,29 +35,77 @@ class CalibrationParams:
     status: str = "identity"  # identity | fitted | insufficient
 
 
+def _load_raw() -> dict:
+    """Store dosyasının ham içeriği (kilitsiz iç yardımcı; çağıran kilitler)."""
+    path = _store_path()
+    if not path.exists():
+        return {}
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+        return data if isinstance(data, dict) else {}
+    except (OSError, json.JSONDecodeError, ValueError):
+        return {}
+
+
+def _params_from(data: dict) -> CalibrationParams:
+    try:
+        return CalibrationParams(
+            a=float(data.get("a", 1.0)),
+            b=float(data.get("b", 0.0)),
+            samples=int(data.get("samples", 0)),
+            fitted_at=data.get("fitted_at"),
+            status=data.get("status", "identity"),
+        )
+    except (TypeError, ValueError):
+        return CalibrationParams()
+
+
 def load() -> CalibrationParams:
-    path = _store_path()
     with _LOCK:
-        if not path.exists():
-            return CalibrationParams()
-        try:
-            data = json.loads(path.read_text(encoding="utf-8"))
-            return CalibrationParams(
-                a=float(data.get("a", 1.0)),
-                b=float(data.get("b", 0.0)),
-                samples=int(data.get("samples", 0)),
-                fitted_at=data.get("fitted_at"),
-                status=data.get("status", "identity"),
-            )
-        except (OSError, json.JSONDecodeError, ValueError):
-            return CalibrationParams()
+        data = _load_raw()
+    if not data:
+        return CalibrationParams()
+    return _params_from(data)
 
 
-def save(params: CalibrationParams) -> CalibrationParams:
+def load_per_timeframe() -> dict[str, CalibrationParams]:
+    """F4-1 — TF başına Platt parametreleri (yoksa boş dict; legacy dosya uyumlu)."""
+    with _LOCK:
+        data = _load_raw()
+    per = data.get("per_timeframe")
+    if not isinstance(per, dict):
+        return {}
+    return {
+        str(tf): _params_from(p) for tf, p in per.items() if isinstance(p, dict)
+    }
+
+
+def load_tf(timeframe: str) -> CalibrationParams | None:
+    """F4-1 — tek TF'in fit'i; hiç fit edilmemişse None (uydurma parametre yok)."""
+    return load_per_timeframe().get(timeframe)
+
+
+def save(
+    params: CalibrationParams,
+    per_timeframe: dict[str, CalibrationParams] | None = None,
+) -> CalibrationParams:
+    """Global parametreleri (ve verildiyse TF fit'lerini) atomik-yakın yaz.
+
+    `per_timeframe=None` → dosyadaki mevcut TF fit'leri KORUNUR (global-only
+    çağrılar TF verisini silmesin)."""
     path = _store_path()
     with _LOCK:
+        payload = dict(asdict(params))
+        if per_timeframe is None:
+            existing = _load_raw().get("per_timeframe")
+            if isinstance(existing, dict):
+                payload["per_timeframe"] = existing
+        else:
+            payload["per_timeframe"] = {
+                tf: asdict(p) for tf, p in per_timeframe.items()
+            }
         path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(json.dumps(asdict(params), indent=2), encoding="utf-8")
+        path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
     return params
 
 
@@ -88,6 +136,34 @@ def predict_calibrated(
     return round(min(max(val, 0.0), 1.0), 4), "fitted"
 
 
+def tf_platt_enabled() -> bool:
+    """F4-1 — `calibration.tf_platt` owner-flag'i (default KAPALI = global fit).
+
+    Aktivasyon ayrı tarihli owner kararı: /learning/calibration'daki
+    `per_timeframe` örnek sayıları + fit ayrışması izlenip açılır."""
+    try:
+        return bool(load_thresholds().get("calibration", {}).get("tf_platt", False))
+    except (OSError, KeyError, ValueError, TypeError):
+        return False
+
+
+def predict_calibrated_tf(raw_p: float, timeframe: str) -> tuple[float, str]:
+    """F4-1 — TF-duyarlı kalibrasyon. Flag KAPALIYKEN global `predict_calibrated`
+    birebir (bayt-aynı). AÇIKKEN: o TF'in fit'i varsa uygulanır (kaynak
+    "fitted_tf"); TF fit'i yoksa/yetersizse global fit'e düşer (dürüst fallback,
+    sahte TF parametresi uydurulmaz). RiskGate'i bypass etmez."""
+    if not tf_platt_enabled():
+        return predict_calibrated(raw_p)
+    tf_params = load_tf(timeframe)
+    if tf_params is None or tf_params.status != "fitted":
+        return predict_calibrated(raw_p)
+    raw = min(max(raw_p, 0.0), 1.0)
+    val = apply_platt(raw, tf_params.a, tf_params.b)
+    if math.isnan(val) or math.isinf(val):
+        return round(raw, 4), "insufficient"
+    return round(min(max(val, 0.0), 1.0), 4), "fitted_tf"
+
+
 def _guardrail_cfg() -> dict:
     try:
         return load_thresholds().get("calibration_guardrail", {}) or {}
@@ -109,7 +185,9 @@ def apply_inflation_guardrail(raw_p: float, fitted_p: float, source: str) -> tup
     kıstırılır ve kaynak "fitted_capped" olarak damgalanır (ledger'da görünür).
     Yalnızca KISITLAR — fitted'i asla artırmaz, RiskGate/DQS'i bypass etmez.
     """
-    if source != "fitted":
+    # F4-1: TF-fit ("fitted_tf") de aynı şişme guardrail'ine tabi — TF katmanı
+    # guardrail'i bypass edemez.
+    if source not in ("fitted", "fitted_tf"):
         return fitted_p, source
     cfg = _guardrail_cfg()
     if not cfg.get("enabled", False):
@@ -122,5 +200,5 @@ def apply_inflation_guardrail(raw_p: float, fitted_p: float, source: str) -> tup
         return fitted_p, source
     if float(fitted_p) - float(raw_p) > max_delta:
         capped = round(min(1.0, max(0.0, float(raw_p) + max_delta)), 4)
-        return capped, "fitted_capped"
+        return capped, f"{source}_capped"
     return fitted_p, source

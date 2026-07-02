@@ -2771,6 +2771,12 @@ components:
         bins:
           type: array
           items: { $ref: "#/components/schemas/CalibrationBin" }
+        # F4-1 — TF başına Platt fit'i (a/b/samples/status) + flag durumu.
+        # Owner tf_platt aktivasyon kanıtını buradan izler.
+        per_timeframe:
+          type: object
+          additionalProperties: { $ref: "#/components/schemas/CalibrationParams" }
+        tf_platt_enabled: { type: boolean }
 
     MistakeRecord:
       type: object

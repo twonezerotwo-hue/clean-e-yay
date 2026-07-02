@@ -134,8 +134,14 @@ def summary_viewmodel(limit: int = 200) -> dict:
     """
     rows = read_recent(limit)
     deltas = [r.get("inflation_delta") for r in rows if isinstance(r.get("inflation_delta"), (int, float))]
-    fitted_count = sum(1 for r in rows if r.get("confidence_source") == "fitted")
-    capped_count = sum(1 for r in rows if r.get("confidence_source") == "fitted_capped")
+    # F4-1: TF-fit kaynakları da sayılır ("fitted_tf" / "fitted_tf_capped");
+    # flag kapalıyken yalnız eski değerler geçer — sayımlar birebir aynı kalır.
+    fitted_count = sum(
+        1 for r in rows if r.get("confidence_source") in ("fitted", "fitted_tf")
+    )
+    capped_count = sum(
+        1 for r in rows if str(r.get("confidence_source") or "").endswith("_capped")
+    )
     by_tier: dict[str, int] = {}
     by_dominant: dict[str, int] = {}
     for r in rows:

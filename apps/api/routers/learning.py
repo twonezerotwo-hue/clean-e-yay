@@ -59,6 +59,13 @@ def get_calibration() -> dict:
         "min_required": calibration_store.MIN_SAMPLES,
         "samples_in_state": len(samples),
         "bins": bins,
+        # F4-1 — TF başına fit + flag durumu: owner aktivasyon kanıtını
+        # (TF örnek sayıları, fit ayrışması) buradan izler.
+        "per_timeframe": {
+            tf: asdict(p)
+            for tf, p in calibration_store.load_per_timeframe().items()
+        },
+        "tf_platt_enabled": calibration_store.tf_platt_enabled(),
     }
 
 

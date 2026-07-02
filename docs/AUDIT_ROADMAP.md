@@ -15,9 +15,9 @@ Bu belge farklı bir asistan/oturum tarafından SIFIR bağlamla devralınabilir
 - **Tamamlanan:** F0-1, F0-2, F1-1…F1-5, R2-3 + F2-1 gözlem fazı
   (aşağıdaki tabloda ✅/🔶 ve ayrıntılar). Suite 1189/1189 yeşil, ruff'ta
   yeni hata yok (tests/ altında ~45 eski baseline bulgusu var, dokunulmadı).
-- **Sıradaki iş:** F4-1 (TF-bazlı Platt kalibrasyonu). F3 serisi kapandı:
-  F3-1 owner kararıyla YAPILMAYACAK, F3-2+F3-3 kodlandı (flag OFF).
-  F2-1 gate-bağlama owner kararı bekliyor.
+- **Sıradaki iş:** F4-2 (EV/Kelly p(win)'ini ampirik TF+rejim hit-rate'ine
+  bağla). F3 serisi kapandı: F3-1 owner kararıyla YAPILMAYACAK, F3-2+F3-3
+  kodlandı (flag OFF). F2-1 gate-bağlama owner kararı bekliyor.
 - **Bekleyen owner aktivasyonları:** (1) `news.sentiment_v2` (M1 kodu
   canlıda, flag OFF — regime-report'taki v1/v2 ayrışması izlenip açılır);
   (2) `regime.drop_unavailable_layers` (F2-3 kodu canlıda, flag OFF —
@@ -33,7 +33,10 @@ Bu belge farklı bir asistan/oturum tarafından SIFIR bağlamla devralınabilir
   dağılımındaki `[L1]/[L2]` fallback + WARNING/AVOID oranı izlenip açılır);
   (8) F2-1 gate-bağlama (snapshot store'daki
   `paper_state_summary.mtm_equity_usd` bandı izlenip RiskInput'a flag'le
-  bağlanır); (9) `EXPECTANCY_R_MODE` (R-damgalı outcome birikince).
+  bağlanır); (9) `EXPECTANCY_R_MODE` (R-damgalı outcome birikince);
+  (10) `calibration.tf_platt` (F4-1 kodu canlıda, flag OFF —
+  GET /learning/calibration `per_timeframe` örnek/fit ayrışması izlenip
+  açılır).
 - **Bekleyen owner kararları:** `EXPECTANCY_R_MODE` (R-bazlı expectancy)
   default KAPALI — R-damgalı outcome birikince açılacak (open_risk_pct
   yalnız YENİ kapanışlarda damgalanıyor; eski kayıtlarda yok).
@@ -76,7 +79,7 @@ Risk: 🟢 davranış değiştirmez (ölçüm/altyapı) · 🟡 flag'li davranı
 | F3-1 | Wilson/bootstrap CI + üç-durumlu rollback kararı (geri al / onayla / izlemeye devam) | 1.6d, 4.1 | ❌ YAPILMAYACAK (owner kararı 2026-07-02: "aceleci karar freni olmasın"). Güvenlik ağı mevcut mekanizmalarda kalır: trainer minimum-örnek eşikleri (MIN_TOTAL_TRADES/MIN_TRADES_PER_MODULE), dar auto-apply bandı, G3 outcome-rollback. Wilson istatistiği F3-3 kapsamında mistake memory'ye YİNE girdi (o ayrı iş) | 🟡 | F3 |
 | F3-2 | Ağırlık trainer'ına rejim filtresi + 4 rejimin ayrı eğitimi | 1.2 | ✅ (2026-07-02) flag `WEIGHT_REGIME_FILTER` (env, DEFAULT OFF = bayt-aynı: tüm rejimler tek torbada, yalnız NEUTRAL eğitilir). AÇIKKEN: dataset hedef rejimin KENDİ outcome'larına daralır; worker hedefi = en son kapanan verified outcome'un rejimi (verisi değişen rejim — saat değil veri sürer, deterministik); bilinmeyen rejim etiketi NEUTRAL'a düşer (weights'e sahte satır yok); MIN_TOTAL_TRADES/MIN_TRADES_PER_MODULE rejim başına doğal fren. INSUFFICIENT çıktıları + proposal audit'i rejim etiketli. AKTİVASYON BEKLİYOR | 🟡 | F3 |
 | F3-3 | Mistake memory: decision_log kaynağı + hiyerarşik fingerprint fallback + Wilson alt sınırı | 1.4, 4.4 | ✅ (2026-07-02) flag `MISTAKE_MEMORY_V2` (env, DEFAULT OFF = bayt-aynı: recent_trades + exact-match + nokta tahmini). AÇIKKEN: (1) kalıcı kaynak `outcomes_from_state` (decision_log dahil — trainer deseni); (2) hiyerarşik fallback: exact imza yetersizse `~L1\|sym\|tf\|rejim\|yön` → `~L2\|sym\|yön` kovası (sentetik kayıtlar gerçek imzayla çakışamaz, verdict reason `[L1]/[L2]` etiketli); (3) AVOID yalnız Wilson ÜST sınır < eşik, BOOST yalnız ALT sınır > eşikse (1W/2L artık AVOID değil WARNING — aceleci blok yok; streak kuralı aynen). AKTİVASYON BEKLİYOR | 🟡 | F3 |
-| F4-1 | TF-bazlı Platt kalibrasyonu (tf_calibration altyapısı üstüne) | 3.1 | ⬜ | 🟡 | F4 |
+| F4-1 | TF-bazlı Platt kalibrasyonu (tf_calibration altyapısı üstüne) | 3.1 | ✅ (2026-07-02) flag `calibration.tf_platt` DEFAULT OFF (global fit bayt-aynı). Trainer her koşuda TF başına fit yazar (`platt.json per_timeframe`, additive; MIN_SAMPLES altı TF → insufficient+identity, sahte fit yok); karar anında `predict_calibrated_tf` (OFF → global birebir; ON → TF fit'i, kaynak "fitted_tf", yoksa global fallback). Şişme guardrail'i fitted_tf'e de uygulanır ("fitted_tf_capped"); calibration_audit sayımları iki kaynağı da görür. Gözlem: GET /learning/calibration `per_timeframe`+`tf_platt_enabled` + worker log `tf_fitted`. Canlı kanıt (108 verified outcome): 4 TF'in 4'ü fit; raw 0.10 → global 0.39 ama 15m 0.29 / 4h 0.49 — global fit 15m'de aşırı iyimser. AKTİVASYON BEKLİYOR | 🟡 | F4 |
 | F4-2 | EV/Kelly p(win)'ini ampirik TF+rejim hit-rate'ine bağla | 3.3 | ⬜ | 🟡 | F4 |
 | F4-3 | Partial-TP + breakeven stop (1R'de %50 kapat; önce shadow yan-yana ölçüm) | 3.6 | ⬜ | 🔴 | F4 |
 | F5-1 | Counterfactual (missed_opportunity) verisini kalibrasyon/eşik kanıtına bağla | 4.3 | ⬜ | 🟡 | F5 |
