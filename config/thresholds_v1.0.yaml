@@ -21,6 +21,13 @@ consensus:
   # BTC haberi XAGUSD skorunu oynatıyordu. İlgili başlığı olmayan sembol
   # (örn. custom hisseler) nötr 50 alır. false → eski davranış birebir.
   news_symbol_filter: true
+  # M3 — fundamental v2. false (DEFAULT) → v1 birebir: fundamental = ortalama(
+  # Likidite, Kripto Momentum, Rotasyon) — BTC teknik skoru hem touche'ta hem
+  # burada sayılıyor (çifte sayım, 2026-07-02 denetimi). true → v2: Kripto
+  # Momentum hariç (saf makro: Likidite + Rotasyon). İki varyant her hücrede
+  # `fundamental_v2_observe:v1=..:v2=..` warning satırıyla yan yana izlenir;
+  # owner ayrışmayı görüp bu flag'i tarihli kararla açar.
+  fundamental_v2: false
 
 # M1 — haber sentiment sınıflandırıcı sürümü. false (DEFAULT) → v1 birebir
 # (tam-kelime eşleşme; "Bitcoin rebounds…" gibi çekimli başlıklar neutral kalır).

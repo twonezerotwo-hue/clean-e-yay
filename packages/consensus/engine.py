@@ -167,6 +167,32 @@ def _fundamental(regime: RegimeOutput) -> float | None:
     return sum(layer.score for layer in layers) / len(layers)
 
 
+def _fundamental_v2(regime: RegimeOutput) -> float | None:
+    """M3 — fundamental v2: Kripto Momentum katmanı HARİÇ (likidite + rotasyon).
+
+    v1'de BTC'nin 1d teknik skoru hem touche modülünde hem fundamental'in
+    içindeki Kripto Momentum katmanında sayılıyordu (çifte sayım). v2 makroyu
+    saf tutar. Katman kalmazsa None → modül düşer (redistribute)."""
+    layers = [
+        layer for layer in regime.layers
+        if layer.name not in ("Risk İştahı", "Kripto Momentum")
+    ]
+    if not layers:
+        return None
+    return sum(layer.score for layer in layers) / len(layers)
+
+
+def _fundamental_v2_enabled() -> bool:
+    """`consensus.fundamental_v2` owner-flag'i (default KAPALI = v1 birebir).
+
+    Aktivasyon ayrı tarihli owner kararı; açılana kadar v2 skoru her hücrede
+    `fundamental_v2_observe` warning satırıyla SALT-GÖZLEM olarak izlenir."""
+    try:
+        return bool(load_thresholds().get("consensus", {}).get("fundamental_v2", False))
+    except (OSError, KeyError, ValueError, TypeError):
+        return False
+
+
 def _news_symbol_filter_enabled() -> bool:
     """consensus.news_symbol_filter — owner-flag (default KAPALI = eski davranış).
 
@@ -244,7 +270,18 @@ def build(
     # F2-3 — fundamental/sentinel katman verisi yoksa (drop_unavailable_layers
     # açıkken) modül düşer; ağırlığı redistribute edilir (quantum deseniyle aynı).
     # Flag kapalıyken katmanlar hep dolu → bu iki modül her zaman girer (bayt-aynı).
-    fundamental = _fundamental(regime)
+    # M3 — fundamental_v2 (Kripto Momentum hariç): flag açıkken v2 canlı, v1
+    # gözlem; kapalıyken v1 canlı (bayt-aynı), v2 gözlem. İki varyant her zaman
+    # warning satırında yan yana — owner aktivasyon kanıtını buradan izler.
+    fund_v1 = _fundamental(regime)
+    fund_v2 = _fundamental_v2(regime)
+    fundamental = fund_v2 if _fundamental_v2_enabled() else fund_v1
+    if fund_v1 is not None or fund_v2 is not None:
+        tf_warnings.append(
+            "fundamental_v2_observe:"
+            f"v1={'none' if fund_v1 is None else f'{fund_v1:.1f}'}:"
+            f"v2={'none' if fund_v2 is None else f'{fund_v2:.1f}'}"
+        )
     if fundamental is not None:
         raw["fundamental"] = fundamental
     else:
