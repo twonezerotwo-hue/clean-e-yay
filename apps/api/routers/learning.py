@@ -23,6 +23,7 @@ from packages.learning import (
     historical_edge,
     missed_opportunity,
     mistake_memory,
+    partial_tp_shadow,
     tf_target_rollback,
     tf_target_store,
     tf_target_trainer,
@@ -80,6 +81,13 @@ def get_activation_watchdog() -> dict:
     """F5-3 — owner-flag aktivasyon izleyicisi (read-only, yalnız-öneri).
     Hangi flag açık, izleme ilerlemesi, CONFIRMED/DEGRADED geçmişi."""
     return activation_watchdog.report()
+
+
+@router.get("/learning/partial-tp-shadow")
+def get_partial_tp_shadow() -> dict:
+    """F4-3 — partial-TP shadow-vs-actual özeti (read-only). Owner
+    `partial_tp.enabled` aktivasyon kararını bu kanıtla verir."""
+    return partial_tp_shadow.summary()
 
 
 @router.get("/learning/tf-weights")
