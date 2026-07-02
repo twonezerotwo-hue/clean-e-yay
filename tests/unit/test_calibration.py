@@ -4,8 +4,11 @@ Politika:
 - Calibrated confidence hiçbir koşulda RiskGate'i bypass etmez.
 - Az veri → identity (a=1, b=0); confidence_source="identity"/"insufficient".
 - Yeterli veriyle fit edilir; bins + (a, b) endpoint'te döner.
-- Sadece data_verified=True + predicted_confidence is not None trade'ler
-  fit'e/bins'e girer.
+- Sadece data_verified=True + raw_confidence is not None trade'ler fit'e/bins'e
+  girer. Fit girdisi HAM güvendir (kalibrasyon öncesi) — predict_calibrated
+  karar anında ham güvene uygulandığı için fit aynı dağılımdan öğrenmeli.
+  predicted_confidence (önceki fit'in çıktısı) fit'e GİRMEZ (özyinelemeli
+  kendi-çıktısıyla-eğitim döngüsünü engeller).
 """
 from __future__ import annotations
 
@@ -142,6 +145,62 @@ def test_unverified_or_missing_predicted_excluded(fresh_env) -> None:
     from packages.learning import calibration_trainer as ct
     res = ct.train()
     assert res["samples"] == 12  # unverified ekiler atlandı
+
+
+def test_fit_uses_raw_confidence_not_predicted(fresh_env) -> None:
+    """Regresyon — fit girdisi ham güven; predicted (önceki fit çıktısı) girmez.
+
+    (a) raw_confidence taşımayan verified trade fit'e alınmaz (legacy dürüst
+    daralma), (b) raw ≠ predicted olan trade'lerde fit raw dağılımından öğrenir
+    — predicted şişkin olsa bile yön (a>0) ham sinyal/sonuç ilişkisinden gelir.
+    """
+    ps, _ = fresh_env
+    state = ps.load()
+    # 12 örnek: ham güven ayrışıyor (yüksek raw → win, düşük raw → loss);
+    # predicted kasıtlı olarak ters/şişkin damgalı — fit'i etkilememeli.
+    for i in range(6):
+        state.recent_trades.append(
+            ps.Trade(
+                id=f"rw{i}", symbol="BTCUSD", side="long",
+                entry_price=100.0, exit_price=101.0, pnl_usd=50.0,
+                opened_at="2026-06-11T00:00:00+00:00",
+                closed_at="2026-06-11T01:00:00+00:00",
+                close_reason="TP_HIT", fingerprint="fp", data_verified=True,
+                predicted_confidence=0.1,  # şişkin/ters damga — fit'e girmemeli
+                raw_confidence=0.8, confidence_source="fitted",
+            )
+        )
+    for j in range(6):
+        state.recent_trades.append(
+            ps.Trade(
+                id=f"rl{j}", symbol="BTCUSD", side="long",
+                entry_price=100.0, exit_price=99.0, pnl_usd=-50.0,
+                opened_at="2026-06-11T00:00:00+00:00",
+                closed_at="2026-06-11T01:00:00+00:00",
+                close_reason="SL_HIT", fingerprint="fp", data_verified=True,
+                predicted_confidence=0.9,  # şişkin/ters damga — fit'e girmemeli
+                raw_confidence=0.2, confidence_source="fitted",
+            )
+        )
+    # raw_confidence taşımayan legacy verified trade → fit dışı (sayılmaz).
+    state.recent_trades.append(
+        ps.Trade(
+            id="legacy0", symbol="BTCUSD", side="long",
+            entry_price=100.0, exit_price=101.0, pnl_usd=10.0,
+            opened_at="2026-06-11T00:00:00+00:00",
+            closed_at="2026-06-11T01:00:00+00:00",
+            close_reason="TP_HIT", fingerprint="fp", data_verified=True,
+            predicted_confidence=0.7, raw_confidence=None,
+        )
+    )
+    ps.save(state)
+    from packages.learning import calibration_trainer as ct
+    res = ct.train()
+    assert res["status"] == "FITTED"
+    assert res["samples"] == 12  # legacy (raw'sız) kayıt fit'e girmedi
+    # Fit raw dağılımından öğrendi: yüksek raw ↔ win → pozitif eğim.
+    # (predicted ters damgalı olduğundan, predicted kullanılsaydı a<0 çıkardı.)
+    assert res["params"]["a"] > 0
 
 
 def test_decision_calibration_does_not_bypass_kill_switch(fresh_env) -> None:

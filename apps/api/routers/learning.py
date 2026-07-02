@@ -45,12 +45,13 @@ def get_learning_summary() -> dict:
 @router.get("/learning/calibration")
 def get_calibration() -> dict:
     params = calibration_store.load()
-    # Reliability bins — fit'le AYNI durable kaynak (recent_trades + decision_log).
-    # Fit'i tekrar koşmaya gerek yok; sadece son örnekleri göster.
+    # Reliability bins — fit'le AYNI durable kaynak (recent_trades + decision_log)
+    # ve AYNI girdi: raw_confidence (kalibrasyon öncesi ham güven). Fit'i tekrar
+    # koşmaya gerek yok; sadece son örnekleri göster.
     samples = [
-        (float(o.predicted_confidence), bool(o.pnl > 0))
+        (float(o.raw_confidence), bool(o.pnl > 0))
         for o in outcomes_mod.outcomes_from_state()
-        if o.data_verified and o.predicted_confidence is not None
+        if o.data_verified and o.raw_confidence is not None
     ]
     bins = [asdict(b) for b in reliability_bins(samples, n_bins=5)]
     return {

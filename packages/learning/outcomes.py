@@ -47,9 +47,14 @@ class CanonicalOutcome:
     # MAE/MFE (TF-target trainer girdisi). Legacy kayıtlar 0.0 default ile gelir.
     mae_pct: float = 0.0
     mfe_pct: float = 0.0
-    # Calibration trainer girdisi — açılış anında damgalanmış güven (Trade +
-    # decision_log taşır). Legacy/eksik kayıtlar None ile gelir (fit'e girmez).
+    # Açılış anında damgalanmış KALİBRE güven (Trade + decision_log taşır).
+    # Raporlama/reliability yüzeyi bunu okur. Legacy/eksik kayıtlar None.
     predicted_confidence: float | None = None
+    # Calibration trainer'ın FIT girdisi — kalibrasyon ÖNCESİ ham güven.
+    # predict_calibrated karar anında ham güvene uygulanır; fit de aynı
+    # dağılımdan öğrenmeli (predicted ile fit = kendi çıktısıyla eğitim,
+    # özyinelemeli kayma). Legacy/eksik kayıtlar None ile gelir (fit'e girmez).
+    raw_confidence: float | None = None
 
 
 def _duration_seconds(opened_at: str | None, closed_at: str | None) -> float | None:
@@ -122,6 +127,7 @@ def build_outcome(t: Trade) -> CanonicalOutcome:
         mae_pct=float(getattr(t, "mae_pct", 0.0) or 0.0),
         mfe_pct=float(getattr(t, "mfe_pct", 0.0) or 0.0),
         predicted_confidence=_opt_float(getattr(t, "predicted_confidence", None)),
+        raw_confidence=_opt_float(getattr(t, "raw_confidence", None)),
     )
 
 
@@ -184,6 +190,7 @@ def build_outcome_from_log_entry(entry: dict) -> CanonicalOutcome:
         mae_pct=float(outcome.get("mae_pct") or 0.0),
         mfe_pct=float(outcome.get("mfe_pct") or 0.0),
         predicted_confidence=_opt_float(opening.get("predicted_confidence")),
+        raw_confidence=_opt_float(opening.get("raw_confidence")),
     )
 
 

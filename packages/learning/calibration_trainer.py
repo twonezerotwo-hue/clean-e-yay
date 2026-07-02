@@ -1,8 +1,13 @@
 """G6 — Calibration trainer.
 
 Politika:
-- Yalnızca `data_verified=True` ve `predicted_confidence is not None`
-  trade'ler örneklere alınır (DATA_POLICY).
+- Yalnızca `data_verified=True` ve `raw_confidence is not None` trade'ler
+  örneklere alınır (DATA_POLICY). Fit girdisi HAM güvendir: predict_calibrated
+  karar anında ham güvene uygulanır, dolayısıyla fit de aynı dağılımdan
+  öğrenmeli. (Eskiden `predicted_confidence` — yani önceki fit'in ÇIKTISI —
+  kullanılıyordu; model kendi çıktısıyla eğitilip her re-fit'te girdi dağılımı
+  kayıyordu. raw_confidence taşımayan legacy kayıtlar fit'e girmez — dürüst
+  daralma, uydurma fallback yok.)
 - En az `MIN_SAMPLES` örnek olmadan fit yapılmaz; insufficient durumunda
   identity (a=1, b=0) saklanır.
 - Owner approval gerekmez; calibration parametreleri audit'lenir (status
@@ -21,12 +26,15 @@ from packages.learning.calibration import fit_platt, reliability_bins
 def _samples_from_state() -> list[tuple[float, bool]]:
     """Canonical outcome'lardan (recent_trades + decision_log birleşimi) fit
     örnekleri. Volatile recent_trades penceresi yerine kalıcı kaydı kullanır —
-    paper_state bozulması/200-pencere taşması veri kaybına yol açmaz."""
+    paper_state bozulması/200-pencere taşması veri kaybına yol açmaz.
+
+    x = raw_confidence (kalibrasyon ÖNCESİ) — predict_calibrated'ın karar
+    anında aldığı girdiyle aynı dağılım. predicted_confidence fit'e GİRMEZ."""
     out: list[tuple[float, bool]] = []
     for o in outcomes_mod.outcomes_from_state():
-        if not o.data_verified or o.predicted_confidence is None:
+        if not o.data_verified or o.raw_confidence is None:
             continue
-        out.append((float(o.predicted_confidence), bool(o.pnl > 0)))
+        out.append((float(o.raw_confidence), bool(o.pnl > 0)))
     return out
 
 
