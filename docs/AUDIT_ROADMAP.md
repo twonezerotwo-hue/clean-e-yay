@@ -15,11 +15,12 @@ Bu belge farklı bir asistan/oturum tarafından SIFIR bağlamla devralınabilir
 - **Tamamlanan:** F0-1, F0-2, F1-1…F1-5, R2-3 + F2-1 gözlem fazı
   (aşağıdaki tabloda ✅/🔶 ve ayrıntılar). Suite 1189/1189 yeşil, ruff'ta
   yeni hata yok (tests/ altında ~45 eski baseline bulgusu var, dokunulmadı).
-- **Sıradaki iş:** F2-2 (korelasyonu fiyat getirisinden hesapla — OHLCV
-  cache; kaynak önceliği computed_price > baseline > neutral). F2-1'in
-  gate-bağlama yarısı bant gözlemi bekliyor: snapshot store'daki
-  `paper_state_summary.mtm_equity_usd` serisi birkaç gün izlendikten sonra
-  ayrı owner kararıyla flag'le RiskInput'a bağlanacak.
+- **Sıradaki iş:** M1 (news sentiment morfoloji — bkz. "Modül katmanı
+  denetimi" bölümü), ardından F2-3(+M2) → M3 → M4. F2-2 bu seriden
+  bağımsız, araya alınabilir. F2-1'in gate-bağlama yarısı bant gözlemi
+  bekliyor: snapshot store'daki `paper_state_summary.mtm_equity_usd`
+  serisi birkaç gün izlendikten sonra ayrı owner kararıyla flag'le
+  RiskInput'a bağlanacak.
 - **Bekleyen owner kararları:** `EXPECTANCY_R_MODE` (R-bazlı expectancy)
   default KAPALI — R-damgalı outcome birikince açılacak (open_risk_pct
   yalnız YENİ kapanışlarda damgalanıyor; eski kayıtlarda yok).
@@ -70,6 +71,12 @@ Risk: 🟢 davranış değiştirmez (ölçüm/altyapı) · 🟡 flag'li davranı
 | F5-3 | Outcome-watchdog'u (guard_safety deseni) tüm canlı davranış değişikliklerine standart sarmalayıcı yap | 4.6 | ⬜ | 🟢 | F5 |
 | F5-4 | Üretilen weights YAML'larını `data/runtime/weights/`e taşı (loader çift-yol okur; config=insan, data=makine) | 4.7 | ⬜ | 🟡 | F5 |
 | R2-3 | `test_rotation` yuvarlama kırığı (weights 4-ondalık redistribute, 1e-6 tolerans) | suite | ✅ (tolerans 1e-3; invariant yuvarlama-öncesi korunuyor) | 🟢 | F1 |
+| M1 | News sentiment morfoloji düzeltmesi: tam-kelime eşleşmesi çekimli halleri kaçırıyor ("rebounds"/"surges"/"plunges" → neutral); "escalat"/"retaliat" kök girdileri hiç eşleşemiyor. Token kök-normalizasyonu (EN -s/-es/-ed/-ing) + flag `news.sentiment_v2` (default OFF) + v1/v2 yan yana gözlem logu | 2026-07-02 modül denetimi §1 | ⬜ | 🟡 | M |
+| M2 | Makro veri kaybında görünürlük: FRED quote'ları düşünce warnings'e `macro_data_missing` yaz (bugün sessiz default'a düşüyor; canlıda FRED çalışıyor ama kesinti sessiz kalıyor) — F2-3 ile aynı PR'da gider | 2026-07-02 modül denetimi §2 | ⬜ | 🟢 | M |
+| M3 | Fundamental v2: Kripto Momentum'u fundamental'den çıkar (BTC teknikleri touche'ta zaten var — çifte sayım); fundamental = likidite+rotasyon. Flag `consensus.fundamental_v2` (default OFF), shadow'da v1/v2 skoru yan yana | 2026-07-02 modül denetimi §3 | ⬜ | 🟡 | M |
+| M4 | Sentinel v2: tek-gösterge VIX yerine çok-girdili stres kompoziti (VIX + realized-vol z + funding extreme + options stress; eksik girdi → redistribute). Flag'li, shadow-önce (CRISIS'te ağırlığı 0.45 — tek sayı taşımasın) | 2026-07-02 modül denetimi §4 | ⬜ | 🟡 | M |
+| M5 | chart_pattern ölü slotunu KALDIR (owner kararı 2026-07-02): gerçek formasyon tespiti zaten touche içinde çalışıyor (`technical/timeframe.py` `patterns.detect` + `_pattern_alignment`, direction_tilt %25) — ayrı konsensüs modülü aynı kanıtı İKİ KEZ sayardı (M3'teki çifte-sayım hatasının aynısı). Stub provider (`providers/patterns/`) + MODULE_ORDER + weights şablonlarındaki `chart_pattern` girdileri silinir; redistribute davranışı bayt-aynı kalır (slot zaten hep boştu) | 2026-07-02 modül denetimi §5 | ⬜ | 🟢 | M |
+| M6 | Ölü config temizliği: `position_cap_per_asset_pct` (%25) enforce-veya-kaldır (thresholds yorumunda "ölü config" itirafı); regime classifier docstring'indeki bayat "mock veriyle" ifadesi F2-3'te güncellenir | 2026-07-02 modül denetimi §6 | ⬜ | 🟢 | M |
 
 ## Neden bu sıra?
 
@@ -95,6 +102,37 @@ exit geometrisi (F4-3) gerçek edge'e göre ayarlanabilir.
 ancak güvenilir ölçüm (F1) + istatistik (F3) üzerinde anlamlı. Yön terfisi
 KIRMIZI ÇİZGİ: hiçbir slice otomatik yön değişikliği yapmaz, owner onay
 paketi üretir.
+
+## Modül katmanı denetimi (2026-07-02) — M serisi
+
+Canlı BTC simülasyonu + kod denetimiyle konsensüs modül katmanı incelendi
+(kanıtlar oturum kaydında; sentiment sondası + FRED sondası + rotasyon
+kanıt satırları). Hüküm özeti:
+
+- **touche ✅ / quantum ✅ sağlıklı** — gerçek OHLCV/momentum, dürüst
+  degradasyon, TF farklılaşması çalışıyor. Dokunma.
+- **news ❌ fiilen kör (M1)**: `classify_sentiment` tam-kelime eşleşmesi;
+  İngilizce başlıkların 3. tekil çekimi ("Bitcoin rebounds…") sistematik
+  neutral kalıyor → news skoru neredeyse hep 50. F0-2'nin sembol filtresi
+  ancak M1'den sonra gerçek sinyal taşır. Aynı sentiment catalyst/surprise
+  motorlarını da besliyor — düzeltmenin etki alanı geniş, o yüzden flag'li.
+- **fundamental ⚠️ (F2-3 + M2 + M3)**: FRED kesintisinde katman sessizce
+  sahte default'la (US10Y=4.3) hesaplanıyor (sondayla kanıtlandı; katman
+  96.2 üretti, konsensüsü ~4 puan oynatır — nötr/short sınırını değiştirir).
+  Ayrıca Kripto Momentum katmanı BTC 1d teknik skorunun kopyası → BTC
+  kararında çifte sayım.
+- **sentinel ⚠️ (M4)**: hesap doğru, veri gerçek ama tek gösterge (VIX);
+  CRISIS rejiminde ağırlığı 0.45 — tek sayıya aşırı güç.
+- **chart_pattern ❌ (M5)**: hiç yazılmamış kalıcı boş slot. Gerçek
+  formasyon tespiti touche'un direction_tilt kapısında zaten canlı
+  (pattern %25 ağırlıkla güveni eğer, yön üretmez) — bu yüzden slot
+  inşa edilmez, KALDIRILIR (ayrı modül = çifte sayım, bkz. M3).
+
+**M sırası:** M1 → F2-3(+M2, tek PR) → M3 → M4 → M5 → M6. Gerekçe: en
+yüksek sinyal/maliyet M1'de (kör modül görmeye başlar); sonra veri
+dürüstlüğü (F2-3); yapısal değişiklikler (M3/M4) ağırlık trainer'ı (F3-2)
+modüllere anlamlı ağırlık öğrenebilsin diye ondan ÖNCE bitmeli. Mevcut
+F2-2 bu seriden bağımsız, paralel gidebilir.
 
 ## Slice şablonu (her iş bu adımlarla gider)
 
