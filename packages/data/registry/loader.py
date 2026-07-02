@@ -12,6 +12,9 @@ import yaml
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 CONFIG_DIR = REPO_ROOT / "config"
+# F5-4 — makine üretimi weights yaml'larının dizini (gitignore'lu). config/ = insan
+# elinden çıkan dosyalar, data/runtime/weights/ = trainer/auto-apply üretimi.
+WEIGHTS_RUNTIME_DIR = REPO_ROOT / "data" / "runtime" / "weights"
 
 DEFAULT_WEIGHTS_FILE = "weights_v1.0.yaml"
 
@@ -109,6 +112,20 @@ def _resolve_path(p: str) -> Path:
     return pth if pth.is_absolute() else REPO_ROOT / pth
 
 
+def _find_weights_by_name(yaml_path: str) -> Path | None:
+    """F5-4 çift-yol arama: manifest'teki yol yoksa aynı dosya adını önce
+    data/runtime/weights/ (makine), sonra config/ (insan) altında dene. Eski
+    manifest'ler config/'e işaret eder; dosya taşınmışsa da bulunur."""
+    name = Path(yaml_path.replace("\\", "/")).name
+    if not name:
+        return None
+    for base in (WEIGHTS_RUNTIME_DIR, CONFIG_DIR):
+        cand = base / name
+        if cand.exists():
+            return cand
+    return None
+
+
 def _active_weights_yaml() -> Path:
     """Aktif weights yaml dosyasının yolu (approve sonrası güncellenir)."""
     manifest = weights_manifest_path()
@@ -120,6 +137,9 @@ def _active_weights_yaml() -> Path:
                 p = _resolve_path(yaml_path)
                 if p.exists():
                     return p
+                found = _find_weights_by_name(str(yaml_path))
+                if found is not None:
+                    return found
         except (OSError, json.JSONDecodeError):
             pass
     return CONFIG_DIR / DEFAULT_WEIGHTS_FILE
