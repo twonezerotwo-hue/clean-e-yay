@@ -384,6 +384,10 @@ def close_position(
         mfe_pct=pos.mfe_pct,
         open_risk_pct=open_risk_pct,
         open_module_contributions=pos.open_module_contributions,
+        # F4-3 — partial-TP shadow izi: r-hit görüldü mü + hipotetik strateji PnL'i
+        # (yalnız r-hit'li, gerçek ptp uygulanmamış TAM kapanışlarda dolar).
+        ptp_r_hit=pos.ptp_r_hit_at is not None,
+        ptp_shadow_pnl_usd=_ptp_shadow_pnl(pos, exit_price, full),
     )
     state.recent_trades.append(trade)
     # Signal attribution: kapanan trade'in karar izini kalıcı decision_log'a yaz
@@ -459,6 +463,93 @@ def _update_excursions(pos: Position, price: float) -> None:
         pos.mfe_pct = round(favorable, 4)
     if adverse > pos.mae_pct:
         pos.mae_pct = round(adverse, 4)
+
+
+def _partial_tp_cfg() -> dict:
+    """F4-3 — `partial_tp` config'i (enabled DEFAULT False = davranış bayt-aynı).
+
+    trigger_r: kısmi kapatmanın tetiklendiği kâr mesafesi (R katı; R=|entry−SL|).
+    close_fraction: tetikte kapatılan oran. breakeven: kalan yarının SL'i girişe
+    çekilsin mi (yalnız SIKILAŞTIRIR — SL asla gevşetilmez)."""
+    try:
+        raw = load_thresholds().get("partial_tp") or {}
+        return {
+            "enabled": bool(raw.get("enabled", False)),
+            "trigger_r": max(0.1, float(raw.get("trigger_r", 1.0))),
+            "close_fraction": min(0.9, max(0.1, float(raw.get("close_fraction", 0.5)))),
+            "breakeven": bool(raw.get("breakeven", True)),
+        }
+    except (OSError, KeyError, ValueError, TypeError):
+        return {"enabled": False, "trigger_r": 1.0, "close_fraction": 0.5, "breakeven": True}
+
+
+def _ptp_observe_and_apply(
+    state: PaperState, pos: Position, price: float, closed: list[Trade]
+) -> None:
+    """F4-3 — partial-TP: shadow gözlemi HER ZAMAN, gerçek aksiyon yalnız flag ON.
+
+    Gözlem (flag'ten bağımsız): kâr ilk kez trigger_r×R'ye değince damgala
+    (ptp_r_hit_at/ptp_price_at_r); r-hit SONRASI fiyat girişe dönerse
+    ptp_be_touched=True (breakeven senaryosu gerçekleşirdi). Tick-fiyat
+    bazlı dürüst yaklaşım — gap'te kaçan seviye uydurulmaz.
+
+    Aksiyon (partial_tp.enabled=True): tetikte close_fraction kadar kısmi
+    kapat (PARTIAL_TP_EXIT; F1-5 benzersiz leg id) + breakeven açıksa SL'i
+    girişe çek (yalnız sıkılaştırır). RiskGate/DQS/halt'ı bypass etmez —
+    yalnız kâr realize eder ve riski KÜÇÜLTÜR."""
+    if pos.sl is None or pos.entry_price <= 0:
+        return  # R tanımsız (SL'siz/legacy) — uydurma risk mesafesi yok
+    risk = abs(pos.entry_price - pos.sl)
+    if risk <= 0:
+        return
+    favorable = (price - pos.entry_price) if pos.side == "long" else (pos.entry_price - price)
+    cfg = _partial_tp_cfg()
+    if pos.ptp_r_hit_at is None:
+        if favorable >= cfg["trigger_r"] * risk:
+            pos.ptp_r_hit_at = utc_iso()
+            pos.ptp_price_at_r = round(price, 4)
+            if cfg["enabled"] and not pos.ptp_done:
+                closed.append(
+                    close_position(
+                        state, pos, exit_price=price, reason="PARTIAL_TP_EXIT",
+                        close_size=pos.size_usd * cfg["close_fraction"],
+                    )
+                )
+                pos.ptp_done = True
+                if cfg["breakeven"]:
+                    tighter = (
+                        pos.entry_price > pos.sl if pos.side == "long"
+                        else pos.entry_price < pos.sl
+                    )
+                    if tighter:
+                        pos.sl = round(pos.entry_price, 4)
+        return
+    # r-hit sonrası: fiyat girişe geri döndü mü (shadow breakeven kanıtı)
+    if not pos.ptp_be_touched:
+        returned = price <= pos.entry_price if pos.side == "long" else price >= pos.entry_price
+        if returned:
+            pos.ptp_be_touched = True
+
+
+def _ptp_shadow_pnl(pos: Position, exit_price: float, full: bool) -> float | None:
+    """F4-3 — 'trigger'da %X kapat + breakeven' stratejisinin HİPOTETİK PnL'i.
+
+    Yalnız: TAM kapanış + r-hit görülmüş + gerçek partial-TP UYGULANMAMIŞ
+    pozisyonlarda hesaplanır (gerçek uygulananın ölçümü zaten gerçek leg'ler).
+    Kapatılan kısım r-hit fiyatından; kalan kısım be_touched ise girişten (0),
+    değilse gerçek çıkış fiyatından realize edilmiş sayılır."""
+    if not full or pos.ptp_done or pos.ptp_r_hit_at is None or pos.ptp_price_at_r is None:
+        return None
+    frac = _partial_tp_cfg()["close_fraction"]
+    first = execution_sim.realized_pnl(
+        pos.side, pos.entry_price, pos.ptp_price_at_r, pos.size_usd * frac
+    )
+    rest_size = pos.size_usd * (1.0 - frac)
+    rest = (
+        0.0 if pos.ptp_be_touched
+        else execution_sim.realized_pnl(pos.side, pos.entry_price, exit_price, rest_size)
+    )
+    return round(first + rest, 2)
 
 
 def _trailing_breached(pos: Position, price: float) -> bool:
@@ -605,6 +696,10 @@ def tick(
                 close_position(state, pos, exit_price=price, reason="TIME_STOP_EXIT")
             )
             continue
+        # F4-3 — partial-TP: shadow gözlemi her tick; gerçek kısmi kapatma yalnız
+        # flag ON. SL/TP/trailing/time-stop'tan SONRA çalışır — tam çıkış her
+        # zaman önceliklidir (gap'te TP'ye giden pozisyon parçalanmaz).
+        _ptp_observe_and_apply(state, pos, price, closed)
         # Normal aktif — bekleyen exit varsa temizle (OPEN'a dön).
         if pos.lifecycle_status != "OPEN":
             _set_status(pos, "OPEN")

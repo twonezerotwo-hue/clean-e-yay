@@ -71,6 +71,21 @@ empirical_pwin:
   enabled: false
   min_samples: 20
 
+# F4-3 — Partial-TP + breakeven stop. enabled=false (DEFAULT) → davranış
+# bayt-aynı; her pozisyonda SHADOW gözlemi yine işler: kâr ilk kez
+# trigger_r×|entry−SL|'e değince damgalanır, sonrasında fiyat girişe dönerse
+# breakeven senaryosu işaretlenir; TAM kapanışta hipotetik strateji PnL'i
+# Trade.ptp_shadow_pnl_usd'ye yazılır. Owner GET /learning/partial-tp-shadow
+# özetindeki shadow-vs-actual farkını izleyip bu flag'i tarihli kararla açar.
+# true → tetikte close_fraction kadar kısmi kapat (PARTIAL_TP_EXIT) +
+# breakeven=true ise kalan yarının SL'i girişe çekilir (yalnız SIKILAŞTIRIR).
+# Not: eski ölü `paper_trading.partial_tp1_pct` anahtarı bu bölümle değiştirildi.
+partial_tp:
+  enabled: false
+  trigger_r: 1.0
+  close_fraction: 0.5
+  breakeven: true
+
 # M4 — sentinel v2: tek-gösterge VIX yerine çok-girdili stres kompoziti (0-100,
 # yüksek = sakin / risk iştahı). enabled false (DEFAULT) → v1 birebir (yalnız
 # VIX katmanı; CRISIS'te 0.45 ağırlığı tek sayı taşır — 2026-07-02 denetimi bunu
@@ -321,7 +336,6 @@ paper_trading:
     XAGUSD: 0.04
   tp_rr_ratio: 2.0
   trailing_stop_enabled: true
-  partial_tp1_pct: 0.5
 
 # Strateji-farkında işlem şekillendirme (Faz 4) — her setup tipi (TREND/REVERSAL/
 # RANGE/BREAKOUT/PULLBACK/SCALP) kendi risk profiliyle açılsın: TREND geniş trailing'le
