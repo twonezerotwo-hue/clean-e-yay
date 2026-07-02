@@ -429,6 +429,20 @@ paths:
               schema:
                 $ref: "#/components/schemas/TfWeightsReport"
 
+  /api/v1/learning/promotion-criteria:
+    get:
+      operationId: getPromotionCriteria
+      summary: F5-2 — champion/challenger terfi kriteri (read-only; terfi otomatik DEĞİL)
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                description: promotion_criteria.evaluate() sonucu (additive).
+                additionalProperties: true
+
   /api/v1/learning/activation-watchdog:
     get:
       operationId: getActivationWatchdog

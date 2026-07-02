@@ -24,6 +24,7 @@ from packages.learning import (
     edge_report,
     empirical_pwin,
     guard_safety,
+    promotion_criteria,
     rebalance_store,
     run_store,
     tf_calibration,
@@ -126,6 +127,7 @@ def run_once() -> dict:
     rebalance_decision: str | None = None  # G3: auto_applied | pending_* | no_change
     rollback_status = "UNKNOWN"             # G3: no_active | monitoring | CONFIRMED | ROLLED_BACK
     guard_safety_status: dict = {}          # CP3: yön guard kasası (armed/rolled_back/...)
+    promotion_status = "UNKNOWN"            # F5-2: terfi kriteri (READY/NOT_READY)
     activation_watchdog_status: dict = {}   # F5-3: owner-flag izleyici (yalnız-öneri)
 
     try:
@@ -374,6 +376,21 @@ def run_once() -> dict:
     except Exception as exc:  # defensive — worker patlamamalı
         errors.append(f"guard_safety:{type(exc).__name__}")
 
+    # F5-2 — champion/challenger terfi kriteri: her cycle değerlendirilir; READY
+    # olursa governor defterine OWNER ONAY PAKETİ sunulur (dedupe'lu — tek PENDING).
+    # Terfi otomatik DEĞİL (KIRMIZI ÇİZGİ); onay bile canlı config'i değiştirmez.
+    try:
+        promo = promotion_criteria.run()
+        promotion_status = promo.get("status", "UNKNOWN")
+        if promotion_status == "READY":
+            log.info(
+                "promotion_criteria READY — owner paketi sunuldu (proposal_id=%s)",
+                promo.get("proposal_id"),
+            )
+    except Exception as exc:  # defensive — worker patlamamalı
+        promotion_status = "UNKNOWN"
+        errors.append(f"promotion_criteria:{type(exc).__name__}")
+
     # F5-3 — aktivasyon watchdog'u: owner-flag OFF→ON geçişlerini izler,
     # post-enable expectancy düşerse DEGRADED önerir (YALNIZ-ÖNERİ — hiçbir
     # flag'i oto-kapatmaz; yön guard'larının oto-kapatlı kasası yukarıda).
@@ -415,6 +432,7 @@ def run_once() -> dict:
         "rebalance_decision": rebalance_decision,  # G3
         "rollback_status": rollback_status,          # G3
         "guard_safety_status": guard_safety_status,  # CP3
+        "promotion_status": promotion_status,        # F5-2 (READY/NOT_READY)
         "activation_watchdog_status": activation_watchdog_status,  # F5-3
 
         "calibration_status": calibration_status,
