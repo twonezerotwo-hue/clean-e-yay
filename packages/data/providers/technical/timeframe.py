@@ -17,7 +17,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 
-from packages.data.providers.technical import fibonacci, indicators, patterns, reversal
+from packages.data.providers.technical import candles, fibonacci, indicators, patterns, reversal
 from packages.data.registry import guard_overrides
 from packages.data.registry.loader import load_thresholds
 from packages.data.types import (
@@ -97,6 +97,17 @@ class TechnicalConfig:
     exh_rev_low: float = 20.0         # ≤ bu = güçlü downside tükenmesi (long reversal)
     exh_rev_high: float = 80.0        # ≥ bu = güçlü upside tükenmesi (short reversal)
     rev_magnitude: float = 25.0       # çevrilen skor 50±bu (consensus seyrelmesini aşmak için güçlü)
+    # T-2 — Elliott × Fib confluence: geçerli sayımın kural-türevi seviyeleri
+    # confluence bölgelerine bileşen olarak girer; fib+elliott aynı bölgedeyse
+    # konum kanadı 0.6→0.8 tartar. OFF → bölgeler + skor bayt-aynı (shadow evidence).
+    elliott_confluence_enabled: bool = False
+    elliott_min_confidence: float = 60.0
+    # T-3 — S/R gücü: pivot geçmişindeki dokunma sayısı konum kanadını tartar
+    # (1 dokunuş 0.5 / 2 → 0.6 / 3+ → 0.7). OFF → 0.6 sabit (bayt-aynı, gözlem).
+    sr_strength_enabled: bool = False
+    # T-4 — kilit seviyede mum teyidi: pin bar/engulfing YALNIZ confluence
+    # bölgesindeyken formasyon kanadına ek bileşen. OFF → skor bayt-aynı (gözlem).
+    candle_confirm_enabled: bool = False
 
 
 def load_config() -> TechnicalConfig:
@@ -150,6 +161,13 @@ def load_config() -> TechnicalConfig:
         exh_rev_low=float(rv.get("exh_rev_low", 20.0)),
         exh_rev_high=float(rv.get("exh_rev_high", 80.0)),
         rev_magnitude=float(rv.get("rev_magnitude", 25.0)),
+        # T-2/T-3/T-4 — owner-flag'ler (default KAPALI = bayt-aynı)
+        elliott_confluence_enabled=bool((t.get("elliott_confluence") or {}).get("enabled", False)),
+        elliott_min_confidence=float(
+            (t.get("elliott_confluence") or {}).get("min_confidence", 60.0)
+        ),
+        sr_strength_enabled=bool((t.get("sr_strength") or {}).get("enabled", False)),
+        candle_confirm_enabled=bool((t.get("candle_confirm") or {}).get("enabled", False)),
     )
 
 
@@ -216,10 +234,48 @@ _FIB_ZONE_BULL: dict[str, float] = {
 _BIAS_BULL: dict[str, float] = {"BULLISH": 1.0, "BEARISH": -1.0, "NEUTRAL": 0.0}
 
 
+def _zone_side_weight(
+    role: str,
+    zones: list[TechnicalConfluenceZone],
+    *,
+    sr_touches: dict[str, int] | None = None,
+    sr_strength_on: bool = False,
+    elliott_boost_on: bool = False,
+) -> float:
+    """T-3/T-4 destekli taraf ağırlığı. Flag'ler KAPALIYKEN sabit 0.6 (bayt-aynı).
+
+    sr_strength AÇIK: 1 dokunuş → 0.5, 2 → 0.6, 3+ → 0.7 (çok test edilmiş
+    seviye daha güvenilir). elliott_confluence AÇIK: aynı bölgede fib_* VE
+    elliott_* bileşeni varsa (iki bağımsız yöntem aynı seviyeyi gösteriyor)
+    +0.2. Tavan 0.9 — konum kanadı tek başına ±1'i dolduramaz."""
+    side = [z for z in zones if z.kind == role]
+    if not side:
+        return 0.0
+    w = 0.6
+    if sr_strength_on and sr_touches:
+        t = sr_touches.get(role)
+        if t is not None:
+            if t <= 1:
+                w -= 0.1
+            elif t >= 3:
+                w += 0.1
+    if elliott_boost_on and any(
+        any(c.startswith("fib_") for c in z.components)
+        and any(c.startswith("elliott_") for c in z.components)
+        for z in side
+    ):
+        w += 0.2
+    return round(min(0.9, w), 4)
+
+
 def _location_alignment(
     dir_sign: float,
     fib: FibonacciAnalysis | None,
     zones: list[TechnicalConfluenceZone],
+    *,
+    sr_touches: dict[str, int] | None = None,
+    sr_strength_on: bool = False,
+    elliott_boost_on: bool = False,
 ) -> float | None:
     """How well current LOCATION favors the momentum direction (−1..+1). None = no
     location evidence. + = good entry location for this side, − = chasing into S/R."""
@@ -228,10 +284,17 @@ def _location_alignment(
         comps.append(_FIB_ZONE_BULL.get(fib.zone, 0.0) * dir_sign)
     if zones:
         # _confluence_zones already keys support<current / resistance>current.
-        sup = any(z.kind == "support" for z in zones)
-        res = any(z.kind == "resistance" for z in zones)
-        struct_bull = _clamp((0.6 if sup else 0.0) - (0.6 if res else 0.0), -1.0, 1.0)
-        if sup or res:
+        # T-3/T-2: taraf ağırlığı flag'lere göre tartılır (flag'ler OFF → 0.6 sabit).
+        sup_w = _zone_side_weight(
+            "support", zones, sr_touches=sr_touches,
+            sr_strength_on=sr_strength_on, elliott_boost_on=elliott_boost_on,
+        )
+        res_w = _zone_side_weight(
+            "resistance", zones, sr_touches=sr_touches,
+            sr_strength_on=sr_strength_on, elliott_boost_on=elliott_boost_on,
+        )
+        struct_bull = _clamp(sup_w - res_w, -1.0, 1.0)
+        if sup_w > 0.0 or res_w > 0.0:
             comps.append(struct_bull * dir_sign)
     return sum(comps) / len(comps) if comps else None
 
@@ -240,14 +303,20 @@ def _pattern_alignment(
     dir_sign: float,
     reversal: TechnicalReversalSignals | None,
     chart: TechnicalChartPatterns | None,
+    candle_bias: str | None = None,
 ) -> float | None:
     """Reversal + chart-pattern bias agreement with the momentum direction (−1..+1).
-    A bearish reversal under a long trigger (e.g. divergence at the top) → penalty."""
+    A bearish reversal under a long trigger (e.g. divergence at the top) → penalty.
+
+    T-4: `candle_bias` (BULLISH/BEARISH) yalnız flag AÇIK ve fiyat kilit
+    seviyedeyken geçilir — kilit seviyedeki dönüş mumu ek formasyon kanıtıdır."""
     comps: list[float] = []
     if reversal is not None and reversal.bias != "NEUTRAL":
         comps.append(_BIAS_BULL[reversal.bias] * dir_sign)
     if chart is not None and chart.bias != "NEUTRAL":
         comps.append(_BIAS_BULL[chart.bias] * dir_sign)
+    if candle_bias in ("BULLISH", "BEARISH"):
+        comps.append(_BIAS_BULL[candle_bias] * dir_sign)
     return sum(comps) / len(comps) if comps else None
 
 
@@ -275,6 +344,8 @@ def _direction_score(
     exhaustion_score: float | None = None,
     market_regime: str | None = None,
     cfg: TechnicalConfig | None = None,
+    sr_touches: dict[str, int] | None = None,
+    candle_bias: str | None = None,
 ) -> tuple[float | None, dict[str, float]]:
     """Top-down directional read (0–100, 50 = neutral). None = insufficient momentum.
 
@@ -294,8 +365,16 @@ def _direction_score(
     if dir_sign == 0.0:
         return core, diag  # neutral trigger — evidence does not fabricate a side
 
-    loc = _location_alignment(dir_sign, fib, zones or [])
-    pat = _pattern_alignment(dir_sign, reversal, chart)
+    loc = _location_alignment(
+        dir_sign, fib, zones or [],
+        sr_touches=sr_touches,
+        sr_strength_on=cfg.sr_strength_enabled,
+        elliott_boost_on=cfg.elliott_confluence_enabled,
+    )
+    pat = _pattern_alignment(
+        dir_sign, reversal, chart,
+        candle_bias=candle_bias if cfg.candle_confirm_enabled else None,
+    )
     vol = _volume_alignment(dir_sign, vwap_v, current)
     parts = (("location", loc), ("pattern", pat), ("volume", vol))
 
@@ -482,7 +561,11 @@ def _confluence_zones(
     resistance: float | None,
     vwap_v: float | None,
     fib: FibonacciAnalysis | None,
+    extra_levels: list[tuple[str, float]] | None = None,
 ) -> list[TechnicalConfluenceZone]:
+    """S/R + fib + VWAP (+ T-2: elliott gibi ek kural-türevi seviyeler) aynı
+    fiyat bandına düşünce "confluence bölgesi" üretir. `extra_levels` additive:
+    None (default) → mevcut davranış bayt-aynı."""
     if current is None or current <= 0:
         return []
     tol_pct = _clamp(atr_pct if atr_pct is not None else 1.0, 0.25, 2.0)
@@ -507,6 +590,13 @@ def _confluence_zones(
             if vrole == role:
                 comps.append("vwap")
                 prices.append(vwap_v)
+        for label, price in extra_levels or []:
+            if price <= 0:
+                continue
+            lrole = "support" if price <= current else "resistance"
+            if lrole == role:
+                comps.append(label)
+                prices.append(price)
         if len(prices) >= 2:
             anchor = sum(prices) / len(prices)
             if anchor > 0 and all(abs(p - anchor) / anchor * 100.0 <= tol_pct for p in prices):
@@ -624,9 +714,69 @@ def build_timeframe_result(
     trend = _trend_strength(adx_t, cfg)
     vol_regime = _volatility_regime(adx_v, bb_w, cfg)
     market_regime = _market_regime(adx_v, vol_regime, cfg)  # Faz 4 — model anahtarı
-    zones = _confluence_zones(
+
+    # T-2 — Elliott kural-türevi seviyeleri (yalnız 4h/1d, fib ile aynı semantik).
+    # Geçerli sayım (hard-rule geçmiş + confidence eşiği) yoksa liste boş —
+    # NO_VALID_COUNT meşru sonuçtur, seviye uydurulmaz. Lokal import: paket-init
+    # cycle'ı önler (exhaustion deseniyle aynı).
+    elliott_levels: list[tuple[str, float]] = []
+    if timeframe in ("4h", "1d") and current is not None and current > 0:
+        from packages.elliott import engine as _elliott_engine
+        _ell = _elliott_engine.analyze(bars, timeframe=timeframe)
+        if (
+            _ell.primary_scenario != "NO_VALID_COUNT"
+            and float(_ell.confidence) >= cfg.elliott_min_confidence
+        ):
+            inv = _ell.invalidation_price
+            if inv is not None and inv > 0:
+                elliott_levels.append(("elliott_invalidation", float(inv)))
+            tz = getattr(_ell, "target_zone", None)
+            if tz:
+                mid = (float(tz[0]) + float(tz[1])) / 2.0
+                if mid > 0:
+                    elliott_levels.append(("elliott_target", mid))
+
+    zones_base = _confluence_zones(
         current, atr_pct, key_levels.support, key_levels.resistance, vwap_v, fib
     )
+    zones_with_elliott = (
+        _confluence_zones(
+            current, atr_pct, key_levels.support, key_levels.resistance, vwap_v, fib,
+            extra_levels=elliott_levels,
+        )
+        if elliott_levels
+        else zones_base
+    )
+    # Flag AÇIK → elliott'lu bölgeler canlı; KAPALI → bayt-aynı baseline
+    # (elliott'lu fark evidence'a shadow satırı olarak yazılır, aşağıda).
+    zones = zones_with_elliott if cfg.elliott_confluence_enabled else zones_base
+
+    # T-3 — S/R dokunma sayısı: pivot geçmişinde seviyeye (ATR toleransında) kaç
+    # kez dokunulmuş. Her zaman hesaplanır (gözlem); yalnız flag açıkken tartar.
+    sr_touches: dict[str, int] = {}
+    if pivots is not None and current is not None and current > 0:
+        _tol = _clamp(atr_pct if atr_pct is not None else 1.0, 0.25, 2.0)
+        _highs, _lows = pivots
+        if key_levels.support is not None and key_levels.support > 0:
+            sr_touches["support"] = sum(
+                1 for lvl in _lows
+                if abs(lvl - key_levels.support) / key_levels.support * 100.0 <= _tol
+            )
+        if key_levels.resistance is not None and key_levels.resistance > 0:
+            sr_touches["resistance"] = sum(
+                1 for lvl in _highs
+                if abs(lvl - key_levels.resistance) / key_levels.resistance * 100.0 <= _tol
+            )
+
+    # T-4 — kilit seviyede mum teyidi: tespit her zaman (gözlem); skora girmesi
+    # için flag AÇIK + fiyat bir confluence bölgesinin toleransında olmalı.
+    candle_sig = candles.detect(bars)
+    candle_at_zone = False
+    if candle_sig is not None and current is not None and current > 0 and zones:
+        _tol = _clamp(atr_pct if atr_pct is not None else 1.0, 0.25, 2.0)
+        candle_at_zone = any(
+            abs(current - z.price) / current * 100.0 <= _tol for z in zones
+        )
 
     # ── scoring (SEPARATE axes) — top-down: momentum trigger gated by location/
     #    pattern/volume evidence (§4.5 now feeds direction, no longer evidence-only).
@@ -646,6 +796,8 @@ def build_timeframe_result(
         fib=fib, zones=zones, reversal=reversal_signals, chart=chart_patterns,
         vwap_v=vwap_v, current=current, adx_v=adx_v,
         exhaustion_score=exhaustion_score, market_regime=market_regime, cfg=cfg,
+        sr_touches=sr_touches or None,
+        candle_bias=(candle_sig.bias if candle_sig is not None and candle_at_zone else None),
     )
     strength = _strength_score(adx_v, direction)
     bias = _bias(direction, cfg)
@@ -684,6 +836,27 @@ def build_timeframe_result(
         evidence.append(f"pattern={chart_patterns.active_patterns[0].name}")
     for z in zones:
         evidence.append(f"confluence:{z.kind}@{z.price} [{'+'.join(z.components)}]")
+    # T-2 — elliott'lu bölge farkı (flag KAPALIYKEN shadow gözlem; owner
+    # aktivasyon kanıtını buradan izler). Flag AÇIKKEN zones zaten elliott'lu.
+    if elliott_levels and not cfg.elliott_confluence_enabled:
+        _base_keys = {(z.kind, tuple(z.components)) for z in zones_base}
+        for z in zones_with_elliott:
+            if (z.kind, tuple(z.components)) not in _base_keys:
+                evidence.append(
+                    f"elliott_confluence_shadow:{z.kind}@{z.price} [{'+'.join(z.components)}]"
+                )
+    # T-3 — dokunma sayıları her zaman gözlemde (flag durumundan bağımsız).
+    for _role, _n in sorted(sr_touches.items()):
+        _lvl = key_levels.support if _role == "support" else key_levels.resistance
+        _tag = "sr_strength" if cfg.sr_strength_enabled else "sr_strength_shadow"
+        evidence.append(f"{_tag}:{_role}@{_lvl}x{_n}")
+    # T-4 — mum tespiti her zaman gözlemde; skora girip girmediği açık yazılır.
+    if candle_sig is not None:
+        _applied = cfg.candle_confirm_enabled and candle_at_zone
+        _tag = "candle_confirm" if _applied else "candle_confirm_shadow"
+        evidence.append(
+            f"{_tag}:{candle_sig.name}:{candle_sig.bias}:at_zone={'yes' if candle_at_zone else 'no'}"
+        )
 
     summary = TechnicalTimeframeSummary(bias=bias, evidence=evidence, warnings=warnings)
 

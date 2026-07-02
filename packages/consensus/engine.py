@@ -117,7 +117,76 @@ def _degraded_direction_score(raw_score: float, reasons: list[str]) -> tuple[flo
     return max(0.0, min(100.0, adjusted)), factor
 
 
+# T-1 — üst-TF hiza basamağı (Elder triple-screen oranı ~×4-6): her alt dilim
+# bir üst basamağın yönüne karşı tartılır. 1d'nin üstü yok (1w snapshot'ta
+# hesaplanmıyor — uydurma basamak eklenmez).
+_HTF_LADDER = {"15m": "1h", "1h": "4h", "4h": "1d"}
+_HTF_NEUTRAL_BAND = 5.0  # üst TF |lean| < 5 → nötr sayılır, sönümleme yok
+
+
+def _htf_alignment_cfg() -> dict:
+    """`technical.htf_alignment` bloğu (enabled default False = bayt-aynı)."""
+    try:
+        return (load_thresholds().get("technical") or {}).get("htf_alignment") or {}
+    except (OSError, KeyError, ValueError, TypeError):
+        return {}
+
+
+def _htf_dampen(
+    symbol: str, snap: MarketSnapshot, timeframe: str, score: float
+) -> tuple[float, str | None]:
+    """T-1 — alt TF skoru üst basamağın yönüne TERSse 50'ye doğru kıs.
+
+    YALNIZ KÜÇÜLTÜR: aynı yön → dokunmaz (boost yok); üst TF nötr/verisiz →
+    dokunmaz; yön ASLA çevrilmez (çarpan [min_mult..1.0]). Çarpan her karşıtlıkta
+    hesaplanıp warning satırına yazılır (shadow); yalnız flag açıkken uygulanır."""
+    htf = _HTF_LADDER.get(timeframe)
+    if htf is None:
+        return score, None
+    t = (snap.technicals_by_tf or {}).get(symbol, {}).get(htf)
+    ds = getattr(t, "direction_score", None) if t is not None else None
+    if ds is None:
+        return score, None
+    ltf_lean = score - 50.0
+    htf_lean = float(ds) - 50.0
+    if ltf_lean == 0.0 or abs(htf_lean) < _HTF_NEUTRAL_BAND:
+        return score, None
+    if (ltf_lean > 0) == (htf_lean > 0):
+        return score, None  # aynı yön — asla boost edilmez
+    cfg = _htf_alignment_cfg()
+    try:
+        min_mult = min(1.0, max(0.0, float(cfg.get("min_mult", 0.6))))
+    except (TypeError, ValueError):
+        min_mult = 0.6
+    strength = min(1.0, abs(htf_lean) / 50.0)  # üst TF ne kadar kararlı
+    mult = 1.0 - (1.0 - min_mult) * strength
+    adjusted = 50.0 + ltf_lean * mult
+    enabled = bool(cfg.get("enabled", False))
+    tag = "htf_alignment" if enabled else "htf_alignment_shadow"
+    warning = (
+        f"{tag}:{symbol}:{timeframe}vs{htf}:htf_score={float(ds):.1f}:"
+        f"mult={mult:.3f}:raw={score:.2f}:used={adjusted if enabled else score:.2f}"
+    )
+    return (adjusted if enabled else score), warning
+
+
 def _touche(
+    symbol: str,
+    snap: MarketSnapshot,
+    timeframe: str = "1d",
+) -> tuple[float, list[str]]:
+    """Technical module score for one (symbol, timeframe).
+
+    T-1: taban skor `_touche_base`'ten gelir; üst-TF karşıtlığında flag'li
+    sönümleme (`_htf_dampen`) uygulanır — shadow satırı her karşıtlıkta yazılır."""
+    score, warnings = _touche_base(symbol, snap, timeframe)
+    adjusted, htf_warning = _htf_dampen(symbol, snap, timeframe, score)
+    if htf_warning is not None:
+        warnings.append(htf_warning)
+    return adjusted, warnings
+
+
+def _touche_base(
     symbol: str,
     snap: MarketSnapshot,
     timeframe: str = "1d",

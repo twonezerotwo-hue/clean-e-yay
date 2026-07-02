@@ -91,6 +91,24 @@ REGISTRY: dict[str, dict] = {
         "label": "R-bazlı expectancy (F1-1)",
         "source": ("env", "EXPECTANCY_R_MODE"),
     },
+    # T serisi — teknik analiz genişletmesi (owner onayı 2026-07-02, kodlama;
+    # aktivasyonlar ayrı tarihli kararlarla).
+    "htf_alignment": {
+        "label": "Üst-TF hiza filtresi (T-1)",
+        "source": ("thresholds", ("technical", "htf_alignment", "enabled")),
+    },
+    "elliott_confluence": {
+        "label": "Elliott × Fib confluence (T-2)",
+        "source": ("thresholds", ("technical", "elliott_confluence", "enabled")),
+    },
+    "sr_strength": {
+        "label": "Destek/direnç gücü (T-3)",
+        "source": ("thresholds", ("technical", "sr_strength", "enabled")),
+    },
+    "candle_confirm": {
+        "label": "Kilit seviyede mum teyidi (T-4)",
+        "source": ("thresholds", ("technical", "candle_confirm", "enabled")),
+    },
 }
 
 

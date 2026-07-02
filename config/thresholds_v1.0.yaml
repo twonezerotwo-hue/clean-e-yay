@@ -632,6 +632,49 @@ technical:
     exh_rev_high: 80.0
     rev_magnitude: 25.0
 
+  # T-1 — Üst-TF hiza filtresi (owner onayı 2026-07-02, kodlama; aktivasyon ayrı).
+  # Alt TF sinyali, bir üst basamağın (15m→1h→4h→1d) yön skoruyla TERS düşüyorsa
+  # touche skoru 50'ye doğru kısılır (×[min_mult..1.0], karşıtlık gücüyle orantılı).
+  # YALNIZ KÜÇÜLTÜR: aynı yönse dokunmaz (boost yok), üst TF nötrse (|lean|<5)
+  # dokunmaz, üst TF verisi yoksa dokunmaz. Kanıt: 15m ampirik EV negatif +
+  # bloklanan 15m fırsatlarının %87'si kayıptan kaçınma (missed-opp) — alt dilim
+  # muhtemelen üst-dilim trende karşı işlem üretiyor. enabled=false → bayt-aynı;
+  # çarpan her hücrede htf_alignment warning satırına (shadow) yazılır.
+  htf_alignment:
+    enabled: false
+    min_mult: 0.6       # tam karşıtlıkta (üst TF |lean|=50) mesafe ×0.6
+
+  # T-2 — Elliott × Fib confluence (owner onayı 2026-07-02, kodlama; aktivasyon ayrı).
+  # GEÇERLİ Elliott sayımlarının (hard-rule geçmiş, confidence≥min_confidence)
+  # kural-türevi seviyeleri (invalidation + hedef bölge orta noktası) confluence
+  # bölgelerine "elliott" bileşeni olarak girer (yalnız 4h/1d — fib ile aynı
+  # semantik). Fib + Elliott aynı bölgeye düşerse konum kanadında bölge daha ağır
+  # tartılır (0.6→0.8); kapı tavanı (+%15) DEĞİŞMEZ — Elliott asla tek başına yön
+  # üretemez/şişiremez. enabled=false → bölgeler bayt-aynı; elliott'lu bölge
+  # farkı evidence'a shadow satırı olarak yazılır.
+  elliott_confluence:
+    enabled: false
+    min_confidence: 60.0   # hard-rule geçen sayımların tabanı (60 = kurallar tamam)
+
+  # T-3 — Destek/direnç gücü (owner onayı 2026-07-02, kodlama; aktivasyon ayrı).
+  # Seviye "var/yok" ikiliği yerine dokunma sayısı tartılır: pivot geçmişinde
+  # seviyeye (ATR toleransında) kaç kez dokunulmuş. enabled=false → konum kanadı
+  # bayt-aynı (0.6 sabit); dokunma sayıları evidence'a her zaman yazılır (gözlem).
+  # Açıkken: 1 dokunuş 0.5, 2 dokunuş 0.6, 3+ dokunuş 0.7 (+elliott confluence
+  # ile birlikte tavan 0.9) — çok test edilmiş seviye daha güvenilir kanıt.
+  sr_strength:
+    enabled: false
+
+  # T-4 — Kilit seviyede mum teyidi (owner onayı 2026-07-02, kodlama; aktivasyon ayrı).
+  # Pin bar (hammer/shooting star) + engulfing tespiti (yalnız KAPANMIŞ barlar,
+  # min 3 bar). YALNIZ fiyat bir confluence bölgesine değmişken sayılır — genel
+  # mum taraması gürültü, kilit seviyedeki dönüş mumu kanıttır. Kapının formasyon
+  # kanadına (pattern %25) ek bileşen olarak girer; yön üretmez, momentumla
+  # uyum/çelişki tartar. enabled=false → skor bayt-aynı; tespit evidence'a her
+  # zaman yazılır (gözlem).
+  candle_confirm:
+    enabled: false
+
 # T2 — AgentDecision (deterministic). ConsensusSnapshot + RiskGate aksiyonu →
 # tek yüksek-seviye aksiyon + entry_timeframe. EVIDENCE→aksiyon köprüsü; trade
 # AÇMAZ (paper open matrix/RiskGate işi). Kurallar: RiskGate her zaman final
