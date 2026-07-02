@@ -1,4 +1,4 @@
-"""Konsensüs motoru — 5+1 modül, rejim ağırlıklı toplam.
+"""Konsensüs motoru — 5 modül, rejim ağırlıklı toplam.
 
 Modüller:
   - touche        (teknik)
@@ -6,7 +6,11 @@ Modüller:
   - news          (haber)
   - sentinel      (volatilite/stres)
   - quantum       (rotasyon)
-  - chart_pattern (opsiyonel — yoksa ağırlık yeniden dağıtılır)
+
+Not (M5, 2026-07-02): eski `chart_pattern` slotu KALDIRILDI — hiç implement
+edilmemişti ve gerçek formasyon tespiti zaten touche içinde çalışıyor
+(`technical/timeframe.py` direction_tilt). Ayrı modül aynı kanıtı iki kez
+sayardı (M3'teki çifte-sayım hatasının aynısı).
 
 Eski projede `_redistribute_weights` davranışı korundu: eksik modül varsa
 ağırlık otomatik yeniden dağıtılır.
@@ -339,7 +343,7 @@ def _quantum(snap: MarketSnapshot) -> float:
     return snap.rotation.score
 
 
-MODULE_ORDER = ["touche", "fundamental", "news", "sentinel", "quantum", "chart_pattern"]
+MODULE_ORDER = ["touche", "fundamental", "news", "sentinel", "quantum"]
 
 
 def build(
@@ -355,7 +359,6 @@ def build(
     raw = {
         "touche": touche_score,
         "news": _news(snap, symbol),
-        # chart_pattern: şimdilik yok — ağırlığı redistribute edilir
     }
     # F2-3 — fundamental/sentinel katman verisi yoksa (drop_unavailable_layers
     # açıkken) modül düşer; ağırlığı redistribute edilir (quantum deseniyle aynı).

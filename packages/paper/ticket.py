@@ -155,7 +155,6 @@ def _modules_table(decision: TradeDecision) -> list[dict[str, Any]]:
         "news": "Haber sentiment",
         "sentinel": "Risk iştahı",
         "quantum": "Sermaye rotasyonu",
-        "chart_pattern": "Grafik desen",
     }
     return [
         {

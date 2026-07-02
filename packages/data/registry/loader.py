@@ -37,12 +37,6 @@ def load_feature_registry() -> dict:
 
 
 @lru_cache(maxsize=1)
-def load_weights() -> dict:
-    path = CONFIG_DIR / "weights_v1.0.yaml"
-    return yaml.safe_load(path.read_text(encoding="utf-8"))
-
-
-@lru_cache(maxsize=1)
 def _load_thresholds_base() -> dict:
     """Disk'ten okunan ham thresholds config (cache'li, tek kaynak)."""
     path = CONFIG_DIR / "thresholds_v1.0.yaml"

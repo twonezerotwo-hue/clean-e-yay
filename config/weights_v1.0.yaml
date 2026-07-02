@@ -3,6 +3,10 @@ created_at: "2026-06-11"
 description: |
   Consensus module weights per regime. Auto-tuned versions are written as
   weights_v1.x.yaml. Baseline must not be mutated in place — audit trail.
+  M5 (2026-07-02): ölü `chart_pattern` slotu kaldırıldı (hiç implement
+  edilmedi; formasyon kanıtı touche/direction_tilt içinde yaşıyor). Rejim
+  toplamları bilerek <1.0 bırakıldı — engine `_redistribute` mevcut modüller
+  üzerinden normalize eder, oranlar (dolayısıyla davranış) bayt-aynı.
 
 regimes:
   OFFENSIVE:
@@ -11,28 +15,24 @@ regimes:
     news: 0.15
     sentinel: 0.10
     quantum: 0.15
-    chart_pattern: 0.10
   NEUTRAL:
     touche: 0.25
     fundamental: 0.25
     news: 0.15
     sentinel: 0.15
     quantum: 0.10
-    chart_pattern: 0.10
   DEFENSIVE:
     touche: 0.15
     fundamental: 0.25
     news: 0.15
     sentinel: 0.30
     quantum: 0.10
-    chart_pattern: 0.05
   CRISIS:
     touche: 0.10
     fundamental: 0.15
     news: 0.10
     sentinel: 0.50
     quantum: 0.10
-    chart_pattern: 0.05
 
 constraints:
   min_module_floor: 0.02

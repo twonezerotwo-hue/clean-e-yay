@@ -7,7 +7,7 @@ description: |
   ~53.8 nötr bantta kilitleniyordu). Bu sürüm touche'ye gerçek söz
   hakkı veriyor — diğer modüller hâlâ TF-agnostic, ama touche'nin payı
   yeterince yüksek ki teknik bir oversold/overbought TF'de yön çevirsin.
-  chart_pattern hâlâ yok → 0.00 (kodda yeniden dağıtım da kapatıldı).
+  M5 (2026-07-02): ölü chart_pattern slotu (0.00) kaldırıldı — davranış aynı.
 
 regimes:
   OFFENSIVE:
@@ -16,28 +16,24 @@ regimes:
     news: 0.15
     sentinel: 0.10
     quantum: 0.15
-    chart_pattern: 0.00
   NEUTRAL:
     touche: 0.40
     fundamental: 0.20
     news: 0.15
     sentinel: 0.15
     quantum: 0.10
-    chart_pattern: 0.00
   DEFENSIVE:
     touche: 0.30
     fundamental: 0.20
     news: 0.15
     sentinel: 0.25
     quantum: 0.10
-    chart_pattern: 0.00
   CRISIS:
     touche: 0.20
     fundamental: 0.15
     news: 0.10
     sentinel: 0.45
     quantum: 0.10
-    chart_pattern: 0.00
 
 constraints:
   min_module_floor: 0.02

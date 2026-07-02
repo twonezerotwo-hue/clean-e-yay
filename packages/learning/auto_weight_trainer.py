@@ -329,8 +329,15 @@ def train(regime: str = "NEUTRAL") -> RebalanceProposal | dict:
     regime_dist = outcomes_mod.distribution(verified_outcomes, lambda o: o.regime)
     module_dist = outcomes_mod.distribution(verified_outcomes, lambda o: o.dominant_module)
 
-    new_regimes = dict(weights_cfg["regimes"])
-    new_regimes[regime] = new_w
+    # M5 (2026-07-02) — ölü `chart_pattern` slotu kaldırıldı; eski üretilmiş
+    # weights dosyalarından carry-forward olmasın diye burada da süzülür
+    # (değeri hep 0.0'dı → davranış aynı). Tüm aktif dosyalar temizlenince
+    # bu süzgeç kaldırılabilir.
+    new_regimes = {
+        reg: {m: w for m, w in mods.items() if m != "chart_pattern"}
+        for reg, mods in weights_cfg["regimes"].items()
+    }
+    new_regimes[regime] = {m: w for m, w in new_w.items() if m != "chart_pattern"}
     proposed_yaml = {
         "version": to_version,
         "created_at": datetime.now(UTC).date().isoformat(),
