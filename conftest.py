@@ -52,6 +52,9 @@ def _package1_flags_off_by_default(monkeypatch: pytest.MonkeyPatch) -> None:
     pinned.setdefault("regime", {})["drop_unavailable_layers"] = False
     pinned.setdefault("sentinel_v2", {})["enabled"] = False
     pinned.setdefault("risk_gates", {})["correlation_price_returns"] = False
+    # Paket 2 / (1) — tf_platt AÇILDI (2026-07-02); testler global-fit baseline'ı
+    # pinler, F4-1 davranış testleri threshold_override ile açar.
+    pinned.setdefault("calibration", {})["tf_platt"] = False
     monkeypatch.setattr(loader, "_load_thresholds_base", lambda: pinned)
 
 

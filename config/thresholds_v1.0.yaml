@@ -63,7 +63,13 @@ regime:
 # status) + learning worker log `tf_fitted=[..]`; owner TF örnek sayıları
 # yeterince ayrışınca bu flag'i tarihli kararla açar.
 calibration:
-  tf_platt: false
+  # AKTİF (2026-07-02, owner kararı — Paket 2 / (1); v1 global fit paraşüt olarak
+  # yerinde). Kanıt: 130 verified outcome, 4 TF'in 4'ü de fit (15m=55, 1h=31,
+  # 4h=31, 1d=13 örnek, hepsi MIN_SAMPLES≥10). Fit'ler global'den anlamlı ayrıştı
+  # (a: 15m=0.44, 1h=0.33, 4h=0.26, 1d=0.11 vs global 0.32) → global fit TF'lere
+  # göre yanlış kalibre. Örneği yetersiz TF global'e düşer, şişme guardrail'i
+  # fitted_tf'e de uygulanır. Tek-flag revert (false → global birebir).
+  tf_platt: true
 
 # F4-2 — EV/Kelly p(win) kaynağı. enabled=false (DEFAULT) → EV kapısı ve Kelly
 # sizing skor-türevi kalibre güveni kullanır (bayt-aynı); ampirik (tf|rejim)
