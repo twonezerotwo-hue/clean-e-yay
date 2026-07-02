@@ -11,6 +11,7 @@ from fastapi import APIRouter
 from packages.data.registry.loader import load_thresholds
 from packages.decision import conflict_gate, conflict_gate_backtest
 from packages.learning import (
+    activation_watchdog,
     book_audit,
     calibration_audit,
     calibration_store,
@@ -73,6 +74,13 @@ def get_calibration() -> dict:
 @router.post("/learning/calibration/retrain")
 def post_retrain_calibration() -> dict:
     return calibration_trainer.train()
+
+
+@router.get("/learning/activation-watchdog")
+def get_activation_watchdog() -> dict:
+    """F5-3 — owner-flag aktivasyon izleyicisi (read-only, yalnız-öneri).
+    Hangi flag açık, izleme ilerlemesi, CONFIRMED/DEGRADED geçmişi."""
+    return activation_watchdog.report()
 
 
 @router.get("/learning/partial-tp-shadow")

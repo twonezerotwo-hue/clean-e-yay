@@ -18,8 +18,8 @@ import uuid
 from datetime import UTC, datetime
 from pathlib import Path
 
-from packages.learning import auto_weight_trainer as trainer
 from packages.learning import (
+    activation_watchdog,
     calibration_trainer,
     edge_report,
     empirical_pwin,
@@ -34,6 +34,7 @@ from packages.learning import (
     threshold_trainer,
     weight_rollback,
 )
+from packages.learning import auto_weight_trainer as trainer
 from packages.learning import (
     outcomes as outcomes_mod,
 )
@@ -125,6 +126,7 @@ def run_once() -> dict:
     rebalance_decision: str | None = None  # G3: auto_applied | pending_* | no_change
     rollback_status = "UNKNOWN"             # G3: no_active | monitoring | CONFIRMED | ROLLED_BACK
     guard_safety_status: dict = {}          # CP3: yön guard kasası (armed/rolled_back/...)
+    activation_watchdog_status: dict = {}   # F5-3: owner-flag izleyici (yalnız-öneri)
 
     try:
         outcomes_seen = len(outcomes_mod.outcomes_from_state())
@@ -372,6 +374,20 @@ def run_once() -> dict:
     except Exception as exc:  # defensive — worker patlamamalı
         errors.append(f"guard_safety:{type(exc).__name__}")
 
+    # F5-3 — aktivasyon watchdog'u: owner-flag OFF→ON geçişlerini izler,
+    # post-enable expectancy düşerse DEGRADED önerir (YALNIZ-ÖNERİ — hiçbir
+    # flag'i oto-kapatmaz; yön guard'larının oto-kapatlı kasası yukarıda).
+    try:
+        aw = activation_watchdog.run()
+        activation_watchdog_status = aw
+        if aw.get("armed"):
+            log.info("activation_watchdog ARMED: %s", aw["armed"])
+        if aw.get("degraded"):
+            log.info("activation_watchdog DEGRADED (öneri): %s", aw["degraded"])
+    except Exception as exc:  # defensive — worker patlamamalı
+        activation_watchdog_status = {}
+        errors.append(f"activation_watchdog:{type(exc).__name__}")
+
     if errors:
         status = "COMPLETED_WITH_ERRORS"
     elif outcomes_seen == 0:
@@ -399,6 +415,7 @@ def run_once() -> dict:
         "rebalance_decision": rebalance_decision,  # G3
         "rollback_status": rollback_status,          # G3
         "guard_safety_status": guard_safety_status,  # CP3
+        "activation_watchdog_status": activation_watchdog_status,  # F5-3
 
         "calibration_status": calibration_status,
         "tf_calibration_status": tf_calibration_status,
