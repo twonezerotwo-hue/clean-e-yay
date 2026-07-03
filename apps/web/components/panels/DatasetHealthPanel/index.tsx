@@ -89,6 +89,7 @@ export function DatasetHealthPanel() {
           <CoverageBar label="Doğrulanmış" value={cov.verified_pct} />
           <CoverageBar label="Güven damgalı" value={cov.confidence_pct} />
           <CoverageBar label="MAE/MFE'li" value={cov.excursion_pct} />
+          <CoverageBar label="$ boyutlu (çıkış tahmini)" value={cov.size_usd_pct} />
         </div>
       ) : null}
 

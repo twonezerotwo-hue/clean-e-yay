@@ -21,7 +21,8 @@ def fresh_env(tmp_path, monkeypatch):
     return ps
 
 
-def _trade(ps, i: int, *, verified: bool, conf: float | None, pnl: float = 10.0):
+def _trade(ps, i: int, *, verified: bool, conf: float | None, pnl: float = 10.0,
+           size_usd: float | None = None):
     return ps.Trade(
         id=f"t{i}",
         symbol="BTCUSD",
@@ -37,6 +38,7 @@ def _trade(ps, i: int, *, verified: bool, conf: float | None, pnl: float = 10.0)
         timeframe="1h",
         mae_pct=0.5,
         mfe_pct=1.2,
+        size_usd=size_usd,
     )
 
 
@@ -82,6 +84,22 @@ def test_unverified_not_trainable(fresh_env) -> None:
     assert r["total"] == 5
     assert r["verified"] == 0
     assert r["trainable"] == 0  # verified değil → kalibrasyon yakıtı değil
+
+
+def test_size_usd_coverage(fresh_env) -> None:
+    """size_usd_pct = Çıkış Otopsisi $ tahmininin güvenilirlik göstergesi
+    (denetim 2026-07-03). Legacy kayıt (size_usd yok) orana girmez."""
+    from packages.learning import dataset_health
+    ps = fresh_env
+    state = ps.load()
+    for i in range(3):  # size_usd damgalı (yeni kayıt)
+        state.recent_trades.append(_trade(ps, i, verified=True, conf=0.6, size_usd=250.0))
+    for i in range(3, 4):  # legacy (size_usd None)
+        state.recent_trades.append(_trade(ps, i, verified=True, conf=0.6, size_usd=None))
+    ps.save(state)
+    r = dataset_health.report()
+    assert r["total"] == 4
+    assert r["coverage"]["size_usd_pct"] == 0.75  # 3/4
 
 
 def test_dataset_health_endpoint(fresh_env) -> None:

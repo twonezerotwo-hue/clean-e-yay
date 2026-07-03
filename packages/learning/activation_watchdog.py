@@ -109,6 +109,21 @@ REGISTRY: dict[str, dict] = {
         "label": "Kilit seviyede mum teyidi (T-4)",
         "source": ("thresholds", ("technical", "candle_confirm", "enabled")),
     },
+    # E serisi — Çıkış/Stop öğrenme derinleştirme (denetim 2026-07-03). Bu üç
+    # env flag'i de OFF→ON geçişinde diğerleri gibi izlensin (aktivasyon deliği
+    # kapandı: önceden E flag'leri açılınca baseline damgalanmıyordu).
+    "tf_target_auto_only": {
+        "label": "TF-target girdi hijyeni — yalnız AUTO kohort (E-4)",
+        "source": ("env", "TF_TARGET_AUTO_ONLY"),
+    },
+    "tf_target_edge_gate": {
+        "label": "TF-target edge-stability auto-apply kapısı (E)",
+        "source": ("env", "TF_TARGET_EDGE_GATE"),
+    },
+    "exit_forensics_nudge": {
+        "label": "Çıkış otopsisi — oransal nudge adımı (E-5)",
+        "source": ("env", "EXIT_FORENSICS_NUDGE"),
+    },
 }
 
 

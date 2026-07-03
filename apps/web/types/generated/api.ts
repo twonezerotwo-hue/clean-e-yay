@@ -2089,6 +2089,7 @@ export type DatasetHealthView = {
     verified_pct: number;
     confidence_pct: number;
     excursion_pct: number;
+    size_usd_pct: number;
   };
   learners: DatasetHealthLearner[];
   all_ready: boolean;

@@ -4,6 +4,39 @@ _Bu dosya kısa ve güncel tutulur. Her görev sonunda güncellenir._
 
 ## Last known status
 
+- **E serisi tamamlayıcı — aktivasyon güvenliği + görünürlük** (2026-07-03,
+  rapor-üstü denetim; roadmap E-6/E-7/E-8). Rapor değerlendirmesinden çıkan 3
+  gerçek eksik kapatıldı (geri kalan öneriler ya zaten vardı ya kapsam dışı —
+  aşağıda):
+  - **E-6 — aktivasyon izleme deliği**: E flag'leri (`TF_TARGET_AUTO_ONLY`,
+    `TF_TARGET_EDGE_GATE`, `EXIT_FORENSICS_NUDGE`) `activation_watchdog.
+    REGISTRY`'de yoktu → açılınca bozulma izlenmiyordu. Diğer 16 flag gibi
+    kaydedildi. **Kritik sıralama**: watchdog yalnız `last_seen=False→ON`
+    geçişinde baseline damgalar; bu yüzden kayıt (flag'ler OFF) ile aktivasyon
+    AYRI commit/deploy — aksi halde ilk görüşte zaten-ON sayılıp monitör
+    kurulmaz.
+  - **E-7 — $ güvenilirlik göstergesi**: `dataset_health.coverage.
+    size_usd_pct` + DatasetHealthPanel "$ boyutlu (çıkış tahmini)" çubuğu.
+    Forensics dolar rakamlarının ne kadarı kesin (size_usd) vs notional-çıkarım
+    vekili olduğunu gösterir. Rapor'un "Exit Coverage Monitor"ı — yeni panel
+    değil, mevcut panele additive.
+  - **E-8 — flag sapma guard'ı**: `scripts/flag-sync-check.sh` lokal `.env` ↔
+    AWS `deploy-from-github.sh` davranış-flag sapmasını görünür kılar
+    (ensure_env yalnız-yoksa-ekle olduğu için sapma mümkündü). `test_flag_sync`
+    CI'da checker'ın kör-noktası olmadığını zorlar. Canlı: 11 flag, sapma yok.
+  - **Rapor'dan REDDEDİLENLER** (kanıtla): "TRAIL_AUTOTUNE kapalı" YANLIŞ (iki
+    ortamda da AÇIK); "Auto-only Scoreboard 10/10 acil" bu sabah zaten yapıldı
+    (commit a87f4408, summary `cohorts` bloğu); "no_excursion MAE/MFE zorunlu
+    takip" gereksiz (yeni pozisyonlarda zaten zorunlu, 40 eski miras);
+    "Position Management modülü" KIRMIZI ÇİZGİ (yeni modül = owner "derinleştir,
+    kurma" kararı ihlali). EDGE_GATE aktivasyonu da REDDEDİLDİ: kodu ON=kısıtla-
+    yıcı, deploy bugün bilinçle `set_env 0` ("aktif çalışsın") — owner kapalı
+    tutmayı onayladı.
+  - **AKTİVASYON (ayrı, sıradaki commit)**: `TF_TARGET_AUTO_ONLY=1` (lokal .env
+    + deploy ensure_env). EDGE_GATE=0 kalır. NUDGE 2 hafta shadow sonrası.
+  - **Validation**: hedefli testler + contract 58 + tsc + ruff (CI scope) temiz;
+    codegen idempotent (dataset-health kontratsız, friendly tip elle).
+
 - **E serisi — Çıkış/Stop öğrenme makinesi derinleştirme** (2026-07-03,
   denetim paketi; bkz. docs/AUDIT_ROADMAP.md E-1…E-5): Otomatik sistem net
   −$864/133 AUTO işlem; zararın kaynağı çıkış kalitesi (SL_HIT 38 işlem

@@ -26,6 +26,10 @@ def report(outcomes: list | None = None) -> dict:
     verified = sum(1 for o in outs if o.data_verified)
     with_conf = sum(1 for o in outs if o.predicted_confidence is not None)
     with_excursion = sum(1 for o in outs if (o.mae_pct or 0.0) > 0 or (o.mfe_pct or 0.0) > 0)
+    # Çıkış Otopsisi $ tahmininin güvenilirliği: size_usd olan outcome oranı.
+    # Düşükse forensics'in dolar rakamları çoğunlukla notional-çıkarım vekiliyle
+    # geliyor demektir (denetim 2026-07-03, E-serisi görünürlük tamamlayıcısı).
+    with_size = sum(1 for o in outs if getattr(o, "size_usd", None) is not None)
     # Kalibrasyonun gerçek yakıtı: verified VE açılışta güven damgası olan outcome.
     trainable = sum(1 for o in outs if o.data_verified and o.predicted_confidence is not None)
 
@@ -55,6 +59,7 @@ def report(outcomes: list | None = None) -> dict:
             "verified_pct": _pct(verified),
             "confidence_pct": _pct(with_conf),
             "excursion_pct": _pct(with_excursion),
+            "size_usd_pct": _pct(with_size),
         },
         "learners": learners,
         "all_ready": all(item["ready"] for item in learners),

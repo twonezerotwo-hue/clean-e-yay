@@ -60,6 +60,7 @@ def _package1_flags_off_by_default(monkeypatch: pytest.MonkeyPatch) -> None:
     # (dev makinesinde .env yüklenmiş olabilir; testler baseline'ı varsayar).
     monkeypatch.delenv("TF_TARGET_AUTO_ONLY", raising=False)
     monkeypatch.delenv("EXIT_FORENSICS_NUDGE", raising=False)
+    monkeypatch.delenv("TF_TARGET_EDGE_GATE", raising=False)
     # Aynı sızıntı sınıfı, canlıda görüldü: apps.api.main import'u .env'i
     # os.environ'a yükler; sabah aktivasyonu TF_CALIBRATION_AUTO_ONLY=1 tam
     # koşuda tf_calibration testlerine sızıyordu (fingerprint'siz fikstürler

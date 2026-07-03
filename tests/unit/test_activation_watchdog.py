@@ -57,6 +57,18 @@ def test_env_flag_transition(wd_env, monkeypatch) -> None:
     assert out["armed"] == ["mistake_memory_v2"]
 
 
+def test_tf_target_auto_only_arms_on_activation(wd_env, monkeypatch) -> None:
+    """E-4 aktivasyonu izlenir: ilk sync OFF snapshot'lar, AUTO_ONLY=1 → arm.
+    Aktivasyon sıralamasının (önce kaydet, sonra aç) kanıtı."""
+    aw.sync()  # ilk görüş: AUTO_ONLY OFF olarak last_seen'e yazılır
+    monkeypatch.setenv("TF_TARGET_AUTO_ONLY", "1")
+    out = aw.sync()
+    assert out["armed"] == ["tf_target_auto_only"]
+    flag = next(f for f in aw.report()["flags"] if f["flag_key"] == "tf_target_auto_only")
+    assert flag["monitoring"] is True
+    assert flag["monitor"]["baseline_expectancy"] == 10.0
+
+
 def test_confirmed_and_degraded_decisions(wd_env, monkeypatch) -> None:
     aw.sync()
     with threshold_override(_FLAG_ON):
@@ -116,6 +128,8 @@ def test_registry_covers_pending_activations() -> None:
         "consensus_fundamental_v2", "sentinel_v2", "correlation_price_returns",
         "tf_platt", "empirical_pwin", "partial_tp",
         "weight_regime_filter", "mistake_memory_v2", "expectancy_r_mode",
+        # E serisi — çıkış/stop öğrenme flag'leri (denetim 2026-07-03)
+        "tf_target_auto_only", "tf_target_edge_gate", "exit_forensics_nudge",
     } <= keys
     payload = json.dumps(aw.report(), default=str)
     assert "recommend_only" in payload
