@@ -64,6 +64,10 @@ set_env TF_TARGET_EDGE_GATE 0
 # fingerprint'siz kayıtlar TF kalibrasyonuna sızmasın (1d'de 6 manuel işlem sızıyordu,
 # 19→13). Lokal .env'de =1; AWS'e de aynısı (owner kuralı: lokal+AWS her zaman senkron).
 ensure_env TF_CALIBRATION_AUTO_ONLY 1
+# E-4 aktivasyon (2026-07-03, owner kararı): aynı veri hijyeni çıkış/geometri
+# öğrenmesinde de — tf_target_trainer + entry_exit_quality dataset'i yalnız AUTO
+# kohort. EDGE_GATE=0 KALIR (aktif tuning); EXIT_FORENSICS_NUDGE 2 hafta shadow sonra.
+ensure_env TF_TARGET_AUTO_ONLY 1
 
 echo "deploy: restart services"
 sudo systemctl restart eyay-supervisor.service
