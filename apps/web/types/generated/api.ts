@@ -576,6 +576,28 @@ export type LearningSummary = {
   by_close_reason?: Record<string, OutcomeBucket>;
   worker_last_run?: LearningWorkerRun | null;
   proposal_status?: string;
+  // Denetim 2026-07-03 additive — AUTO/MANUAL/EXCLUDED kohort ayrımı
+  // (packages/learning/cohorts.py). Mevcut alanlar tüm outcome'ları sayar;
+  // auto sistemin gerçek performansı bu bloktadır.
+  cohorts?: LearningCohorts;
+};
+
+export type CohortStats = {
+  trades: number;
+  wins: number;
+  losses: number;
+  breakeven: number;
+  win_rate: number;
+  total_pnl: number;
+};
+
+export type LearningCohorts = {
+  auto: CohortStats & {
+    by_timeframe?: Record<string, CohortStats>;
+    manual_closed?: number;
+  };
+  manual: CohortStats;
+  excluded: CohortStats;
 };
 
 export type OutcomeBucket = {

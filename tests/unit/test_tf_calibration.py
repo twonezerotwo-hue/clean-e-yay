@@ -126,3 +126,29 @@ def test_positive_expectancy_opens_gate():
     rep = tc.calibration_report(outs, min_trades=3)
     assert rep["tf_weights_trusted"] is True
     assert rep["edge_proven_timeframes"] == ["1d"]
+
+
+# ── Denetim 2026-07-03: TF_CALIBRATION_AUTO_ONLY flag'i ───────────────────────
+# Bulgu: owner_manual kayıtlar verified olabildiği için TF kalibrasyonuna
+# sızıyordu. Flag ON → fingerprint'siz (auto olmayan) verified kayıt kalibre etmez.
+
+def _oc_fp(tf: str, pnl: float, fingerprint: str | None) -> CanonicalOutcome:
+    import dataclasses
+
+    return dataclasses.replace(_oc(tf, pnl, verified=True), fingerprint=fingerprint)
+
+
+def test_flag_off_manual_verified_still_calibrates(monkeypatch):
+    """Default (OFF) davranış bayt-aynı: verified yeter, fingerprint aranmaz."""
+    monkeypatch.delenv("TF_CALIBRATION_AUTO_ONLY", raising=False)
+    outs = [_oc_fp("1d", 10.0, "sig|mod"), _oc_fp("1d", -14.0, None)]
+    c = tc.per_timeframe_calibration(outs, min_trades=1)[0]
+    assert c.trades == 2
+
+
+def test_flag_on_excludes_fingerprintless(monkeypatch):
+    monkeypatch.setenv("TF_CALIBRATION_AUTO_ONLY", "1")
+    outs = [_oc_fp("1d", 10.0, "sig|mod"), _oc_fp("1d", -14.0, None)]
+    c = tc.per_timeframe_calibration(outs, min_trades=1)[0]
+    assert c.trades == 1
+    assert c.expectancy == 10.0

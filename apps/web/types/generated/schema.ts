@@ -1928,6 +1928,28 @@ export interface components {
             worker_last_run?: components["schemas"]["LearningWorkerRun"] | null;
             /** @description L1 — rebalance proposal durumu (PENDING/APPROVED/REJECTED/NONE). */
             proposal_status?: string;
+            /** @description Denetim 2026-07-03 additive — AUTO/MANUAL/EXCLUDED kohort ayrımı (packages/learning/cohorts.py). Mevcut alanlar tüm outcome'ları saymaya devam eder; auto sistemin gerçek performansı buradadır. */
+            cohorts?: components["schemas"]["LearningCohorts"];
+        };
+        LearningCohorts: {
+            auto: components["schemas"]["CohortStats"] & {
+                by_timeframe?: {
+                    [key: string]: components["schemas"]["CohortStats"];
+                };
+                /** @description Auto açılıp owner'ın kapattığı işlem sayısı. */
+                manual_closed?: number;
+            };
+            manual: components["schemas"]["CohortStats"];
+            excluded: components["schemas"]["CohortStats"];
+        };
+        /** @description Kohort başına outcome özeti (win_rate paydası kararlı işlemler — breakeven ayrı sayılır; F1-2 deseniyle hizalı). */
+        CohortStats: {
+            trades: number;
+            wins: number;
+            losses: number;
+            breakeven: number;
+            win_rate: number;
+            total_pnl: number;
         };
         /** @description L1 — timeframe/symbol/regime/module/close_reason kırılımı başına outcome özeti (packages/learning/outcomes.py türetir; presentation-only). */
         OutcomeBucket: {

@@ -2045,6 +2045,44 @@ components:
         proposal_status:
           type: string
           description: L1 — rebalance proposal durumu (PENDING/APPROVED/REJECTED/NONE).
+        cohorts:
+          description: >
+            Denetim 2026-07-03 additive — AUTO/MANUAL/EXCLUDED kohort ayrımı
+            (packages/learning/cohorts.py). Mevcut alanlar tüm outcome'ları
+            saymaya devam eder; auto sistemin gerçek performansı buradadır.
+          $ref: "#/components/schemas/LearningCohorts"
+
+    LearningCohorts:
+      type: object
+      required: [auto, manual, excluded]
+      properties:
+        auto:
+          allOf:
+            - $ref: "#/components/schemas/CohortStats"
+            - type: object
+              properties:
+                by_timeframe:
+                  type: object
+                  additionalProperties: { $ref: "#/components/schemas/CohortStats" }
+                manual_closed:
+                  type: integer
+                  description: Auto açılıp owner'ın kapattığı işlem sayısı.
+        manual: { $ref: "#/components/schemas/CohortStats" }
+        excluded: { $ref: "#/components/schemas/CohortStats" }
+
+    CohortStats:
+      type: object
+      description: >
+        Kohort başına outcome özeti (win_rate paydası kararlı işlemler —
+        breakeven ayrı sayılır; F1-2 deseniyle hizalı).
+      required: [trades, wins, losses, breakeven, win_rate, total_pnl]
+      properties:
+        trades: { type: integer }
+        wins: { type: integer }
+        losses: { type: integer }
+        breakeven: { type: integer }
+        win_rate: { type: number }
+        total_pnl: { type: number }
 
     OutcomeBucket:
       type: object

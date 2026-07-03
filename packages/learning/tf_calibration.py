@@ -15,11 +15,22 @@ gate that keeps tf_weights at PRIOR until there is enough verified evidence.
 """
 from __future__ import annotations
 
+import os
 from dataclasses import asdict, dataclass
 
 from packages.data.registry.loader import load_active_weights
 from packages.learning import outcomes as outcomes_mod
 from packages.learning.outcomes import CanonicalOutcome
+
+
+def _auto_only_enabled() -> bool:
+    """TF_CALIBRATION_AUTO_ONLY=1 → yalnız fingerprint'li (auto) outcome'lar
+    kalibre eder. Denetim bulgusu 2026-07-03: owner_manual kayıtlar verified
+    olabildiği için TF kalibrasyonuna sızıyordu; trainer'daki fingerprint
+    şartının aynısı burada da flag arkasında uygulanır. Default OFF (bayt-aynı)."""
+    return os.environ.get("TF_CALIBRATION_AUTO_ONLY", "0").strip().lower() in {
+        "1", "true", "yes", "on",
+    }
 
 # Verified-outcome count a TF needs before its weight may be trusted/tuned.
 MIN_TRADES_PER_TF = 20
@@ -53,10 +64,13 @@ def per_timeframe_calibration(
     A timeframe is `CALIBRATED` only once it has ≥ ``min_trades`` verified
     outcomes; otherwise it stays `PRIOR` (its weight must not be trusted yet).
     """
+    auto_only = _auto_only_enabled()
     by_tf: dict[str, list[CanonicalOutcome]] = {}
     for o in outcomes:
         if not o.data_verified:
             continue  # unverified / mock / DATA_UNAVAILABLE never calibrates
+        if auto_only and not o.fingerprint:
+            continue  # flag ON → owner_manual (verified ama auto olmayan) sızmaz
         by_tf.setdefault(o.timeframe, []).append(o)
 
     cals: list[TimeframeCalibration] = []

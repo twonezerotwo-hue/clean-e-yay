@@ -4,6 +4,7 @@ from __future__ import annotations
 from dataclasses import asdict
 
 from packages.data.registry.loader import active_weights_version
+from packages.learning import cohorts as cohorts_mod
 from packages.learning import outcomes as outcomes_mod
 from packages.learning import rebalance_store, run_store
 from packages.learning.calibration import reliability_bins
@@ -103,6 +104,11 @@ def build_summary() -> dict:
         # F1-3 additive — modül katkı vektörü attribution'u (kazanan vs kaybeden
         # trade'lerdeki ortalama katkı). Salt gözlem; F3 regresyonunun ham yüzeyi.
         "module_attribution": outcomes_mod.module_attribution(outcomes),
+        # Denetim 2026-07-03 additive — AUTO/MANUAL/EXCLUDED kohort ayrımı.
+        # Mevcut alanlar (total_trades/win_rate/by_timeframe...) TÜM outcome'ları
+        # saymaya devam eder (kırılım yok); auto sistemin gerçek performansı ve
+        # manuel/test kirliliği bu blokta ayrı ayrı görünür.
+        "cohorts": cohorts_mod.cohort_summary(outcomes),
         "worker_last_run": run_store.load(),
         "proposal_status": _proposal_status(),
     }
