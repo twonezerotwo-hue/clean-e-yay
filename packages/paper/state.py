@@ -166,6 +166,9 @@ class Trade:
     # leg'ler zaten ölçüm). Owner aktivasyon kanıtı: shadow vs actual toplamı.
     ptp_r_hit: bool = False
     ptp_shadow_pnl_usd: float | None = None
+    # Exit-forensics — kapanan dilimin $ büyüklüğü (kısmi kapanışta realized_size).
+    # Kötü çıkışın $ maliyetini kesin hesaplamak için; legacy kayıtlar None.
+    size_usd: float | None = None
 
 
 @dataclass

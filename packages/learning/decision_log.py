@@ -101,6 +101,9 @@ def entry_for(trade: Trade) -> dict:
             # F1-1 — açılış risk mesafesi |entry−SL|/entry (R-multiple paydası);
             # SL'siz/legacy None (R hesaplanamaz — uydurma yok).
             "risk_pct": getattr(trade, "open_risk_pct", None),
+            # Exit-forensics — pozisyon büyüklüğü ($). Kesin $ maliyeti için;
+            # legacy kayıtlar None (notional çıkarımına düşülür, uydurma yok).
+            "size_usd": getattr(trade, "size_usd", None),
         },
         "opened_at": trade.opened_at,
         "closed_at": trade.closed_at,

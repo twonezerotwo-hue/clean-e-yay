@@ -770,6 +770,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/learning/exit-forensics": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Çıkış Otopsisi — kötü çıkışın nerede/kaça olduğu (AUTO kohort, read-only) */
+        get: operations["getLearningExitForensics"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/learning/rebalance/proposal": {
         parameters: {
             query?: never;
@@ -3410,6 +3427,74 @@ export interface components {
             history: {
                 [key: string]: unknown;
             }[];
+            /** @description TF-başı eğitim kapsamı (denetim 2026-07-03, additive) — trainer'ın hangi TF'lerde yeterli AUTO kanıtı olduğu; 1d gibi eksik TF'ler dürüstçe UNTRAINED görünür (kanıt havuzlama/eşik indirme YOK). */
+            coverage?: {
+                [key: string]: components["schemas"]["TfTargetCoverage"];
+            };
+            /** @description Trainer girdi-hijyen flag'lerinin o anki durumu (gözlem). */
+            trainer_inputs?: {
+                auto_only_enabled?: boolean;
+                forensics_nudge_enabled?: boolean;
+            };
+        };
+        /** @description Bir TF'in trainer kanıt kapsamı (AUTO kohort sayımı). */
+        TfTargetCoverage: {
+            auto_n: number;
+            verified_n: number;
+            min_required: number;
+            /** @enum {string} */
+            status: "TRAINED" | "UNTRAINED";
+        };
+        /** @description Çıkış Otopsisi (denetim 2026-07-03) — AUTO kohort çıkış kalitesi. MFE/MAE yalnız pozisyon açıkken kaydedilir; kapanış-sonrası hiçbir şey hesaplanmaz. $ alanları tahminidir (size_usd ya da notional çıkarımı). */
+        ExitForensicsView: {
+            generated_at: string;
+            cohort: string;
+            total: number;
+            usable: number;
+            min_bucket: number;
+            buckets: components["schemas"]["ExitForensicsBucket"][];
+            top_costs: components["schemas"]["ExitCostCard"][];
+            excluded: {
+                manual?: number;
+                non_auto?: number;
+                no_excursion?: number;
+            };
+            limits: string[];
+            /** @description Son snapshot trend noktaları (capture/toplam maliyet). */
+            history_tail?: {
+                [key: string]: unknown;
+            }[];
+        };
+        /** @description TF × kapanış-kategorisi çıkış istatistiği (AUTO kohort). */
+        ExitForensicsBucket: {
+            timeframe: string;
+            /** @enum {string} */
+            category: "sl" | "tp" | "time_stop" | "trailing" | "manual" | "other";
+            n: number;
+            total_pnl: number;
+            avg_pnl: number;
+            avg_capture?: number | null;
+            avg_give_back_pct?: number | null;
+            give_back_usd_est_total?: number | null;
+            avg_missed_capture_pct?: number | null;
+            missed_usd_est_total?: number | null;
+            sl_roundtrip?: number;
+            sl_straight?: number;
+            sl_gray?: number;
+            never_worked?: number;
+            no_excursion?: number;
+            usd_est_covered_n?: number;
+            avg_mfe_pct?: number | null;
+            top_module?: string | null;
+        };
+        /** @description En pahalı çıkış hatası kartı (Türkçe düz-dil, en fazla 3). */
+        ExitCostCard: {
+            /** @enum {string} */
+            kind: "TRAILING_GIVEBACK" | "SL_ROUNDTRIP" | "TIMESTOP_MISSED";
+            timeframe: string;
+            n: number;
+            cost_usd_est?: number | null;
+            label: string;
         };
         TfTargetsActionResult: {
             approved?: boolean;
@@ -4578,6 +4663,26 @@ export interface operations {
                     "application/json": {
                         [key: string]: unknown;
                     };
+                };
+            };
+        };
+    };
+    getLearningExitForensics: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExitForensicsView"];
                 };
             };
         };

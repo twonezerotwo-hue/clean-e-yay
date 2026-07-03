@@ -1938,12 +1938,69 @@ export type TfTargetsView = {
   history: Array<Record<string, unknown>>;
   edge_gate: TfTargetEdgeGate;
   trail_autotune: TfTargetTrailAutotune;
+  // Denetim 2026-07-03 additive — TF-başı eğitim kapsamı + girdi-hijyen flag'leri.
+  coverage?: Record<string, TfTargetCoverage>;
+  trainer_inputs?: {
+    auto_only_enabled?: boolean;
+    forensics_nudge_enabled?: boolean;
+  };
+};
+
+export type TfTargetCoverage = {
+  auto_n: number;
+  verified_n: number;
+  min_required: number;
+  status: "TRAINED" | "UNTRAINED";
 };
 
 export type TfTargetsActionResult = {
   approved?: boolean;
   rejected?: boolean;
   record: Record<string, unknown> | null;
+};
+
+// --- Çıkış Otopsisi (exit forensics, denetim 2026-07-03) ---
+
+export type ExitForensicsBucket = {
+  timeframe: string;
+  category: "sl" | "tp" | "time_stop" | "trailing" | "manual" | "other";
+  n: number;
+  total_pnl: number;
+  avg_pnl: number;
+  avg_capture: number | null;
+  avg_give_back_pct: number | null;
+  give_back_usd_est_total: number | null;
+  avg_missed_capture_pct: number | null;
+  missed_usd_est_total: number | null;
+  sl_roundtrip: number;
+  sl_straight: number;
+  sl_gray: number;
+  never_worked: number;
+  no_excursion: number;
+  usd_est_covered_n: number;
+  avg_mfe_pct: number | null;
+  top_module: string | null;
+};
+
+export type ExitCostCard = {
+  kind: "TRAILING_GIVEBACK" | "SL_ROUNDTRIP" | "TIMESTOP_MISSED";
+  timeframe: string;
+  n: number;
+  cost_usd_est: number | null;
+  label: string;
+};
+
+export type ExitForensicsView = {
+  generated_at: string;
+  cohort: string;
+  total: number;
+  usable: number;
+  min_bucket: number;
+  buckets: ExitForensicsBucket[];
+  top_costs: ExitCostCard[];
+  excluded: { manual?: number; non_auto?: number; no_excursion?: number };
+  limits: string[];
+  history_tail?: Array<Record<string, unknown>>;
 };
 
 export type MissedOpportunityOutcomes = {

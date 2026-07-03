@@ -3,6 +3,7 @@ POST /api/v1/learning/calibration/retrain
 """
 from __future__ import annotations
 
+import json
 import os
 from dataclasses import asdict
 
@@ -16,9 +17,11 @@ from packages.learning import (
     calibration_audit,
     calibration_store,
     calibration_trainer,
+    cohorts,
     dataset_health,
     edge_report,
     entry_exit_quality,
+    exit_forensics,
     guard_safety,
     historical_edge,
     missed_opportunity,
@@ -277,7 +280,63 @@ def get_tf_targets() -> dict:
             "rollback_history": list(rb.get("history") or [])[:5],
         },
         "trail_autotune": trail,
+        # Denetim 2026-07-03 additive — TF-başı eğitim kapsamı: hangi TF'te
+        # yeterli AUTO kanıtı var? 1d gibi eksikler dürüstçe UNTRAINED görünür
+        # (kanıt havuzlama / eşik indirme YOK).
+        "coverage": _tf_target_coverage(),
+        "trainer_inputs": {
+            "auto_only_enabled": tf_target_trainer.auto_only_enabled(),
+            "forensics_nudge_enabled": tf_target_trainer.forensics_nudge_enabled(),
+        },
     }
+
+
+def _tf_target_coverage() -> dict:
+    """TF-başı trainer kanıt sayımı (AUTO kohort vs verified).
+
+    status trainer'ın FİİLEN kullandığı sayıya bakar: TF_TARGET_AUTO_ONLY
+    açıkken auto_n, kapalıyken verified_n — gösterge makinenin gerçeğini söyler.
+    """
+    outs = outcomes_mod.outcomes_from_state()
+    auto_only = tf_target_trainer.auto_only_enabled()
+    cov: dict[str, dict] = {}
+    for tf in ("15m", "1h", "4h", "1d"):
+        items = [o for o in outs if o.timeframe == tf]
+        auto_n = sum(1 for o in items if cohorts.classify(o) == cohorts.AUTO)
+        verified_n = sum(1 for o in items if o.data_verified)
+        n_used = auto_n if auto_only else verified_n
+        cov[tf] = {
+            "auto_n": auto_n,
+            "verified_n": verified_n,
+            "min_required": tf_target_trainer.MIN_TRADES_PER_TF,
+            "status": (
+                "TRAINED"
+                if n_used >= tf_target_trainer.MIN_TRADES_PER_TF
+                else "UNTRAINED"
+            ),
+        }
+    return cov
+
+
+@router.get("/learning/exit-forensics")
+def get_exit_forensics() -> dict:
+    """Çıkış Otopsisi — kötü çıkışın NEREDE ve tahmini KAÇA olduğu (read-only).
+
+    AUTO kohort (fingerprint + verified); manuel/test şeffaflık sayacında.
+    MFE/MAE yalnız pozisyon açıkken kaydedilir — kapanış-sonrası hiçbir şey
+    hesaplanmaz; $ değerleri tahminidir. Worker snapshot'ının trend kuyruğu
+    history_tail olarak eklenir (panel trend oku)."""
+    rep = exit_forensics.report()
+    tail: list = []
+    try:
+        snap_path = exit_forensics.snapshot_path()
+        if snap_path.exists():
+            snap = json.loads(snap_path.read_text(encoding="utf-8"))
+            tail = list(snap.get("history") or [])[-10:]
+    except (OSError, ValueError):
+        tail = []  # snapshot bozuksa rapor yine döner (panel trendsiz kalır)
+    rep["history_tail"] = tail
+    return rep
 
 
 @router.post("/learning/tf-targets/approve")

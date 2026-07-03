@@ -342,3 +342,39 @@ def test_summary_surfaces_breakdowns_and_worker_run(learn_env) -> None:
     assert "15m" in out["by_timeframe"] and "1d" in out["by_timeframe"]
     assert out["by_dominant_module"]["touche"]["trades"] == 6
     assert out["proposal_status"] in {"NONE", "PENDING", "APPROVED", "REJECTED"}
+
+
+# ----------------------------- size_usd (exit-forensics D1) -----------------------------
+
+def test_size_usd_from_trade_and_legacy_none() -> None:
+    from packages.learning import outcomes as om
+    from packages.paper.state import Trade
+    base = dict(
+        id="s1", symbol="BTCUSD", side="long", entry_price=100.0,
+        exit_price=110.0, pnl_usd=50.0,
+        opened_at="2026-07-03T00:00:00+00:00", closed_at="2026-07-03T02:00:00+00:00",
+        close_reason="TP_HIT", fingerprint=V2, data_verified=True,
+    )
+    # Yeni kayıt: size_usd taşır.
+    o = om.build_outcome(Trade(**base, size_usd=500.0))
+    assert o.size_usd == 500.0
+    # Legacy kayıt: alan yok → None (uydurma yok).
+    o2 = om.build_outcome(Trade(**base))
+    assert o2.size_usd is None
+
+
+def test_size_usd_from_log_entry() -> None:
+    from packages.learning import outcomes as om
+    entry = {
+        "trade_id": "lg1", "symbol": "BTCUSD", "side": "long", "timeframe": "1h",
+        "opened_at": "2026-07-03T00:00:00+00:00", "closed_at": "2026-07-03T01:00:00+00:00",
+        "opening_signal": {"fingerprint": V2, "data_verified": True},
+        "exit": {"reason": "SL_HIT"},
+        "outcome": {"entry_price": 100.0, "exit_price": 98.0, "pnl_usd": -10.0,
+                    "size_usd": 500.0},
+    }
+    o = om.build_outcome_from_log_entry(entry)
+    assert o.size_usd == 500.0
+    # Legacy log kaydı (size_usd alanı yok) → None.
+    entry["outcome"].pop("size_usd")
+    assert om.build_outcome_from_log_entry(entry).size_usd is None

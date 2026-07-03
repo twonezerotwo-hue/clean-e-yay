@@ -640,6 +640,17 @@ paths:
                 type: object
                 additionalProperties: true
 
+  /api/v1/learning/exit-forensics:
+    get:
+      operationId: getLearningExitForensics
+      summary: Çıkış Otopsisi — kötü çıkışın nerede/kaça olduğu (AUTO kohort, read-only)
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ExitForensicsView" }
+
   /api/v1/learning/rebalance/proposal:
     get:
       operationId: getLearningRebalanceProposal
@@ -4289,6 +4300,99 @@ components:
           items:
             type: object
             additionalProperties: true
+        coverage:
+          description: >
+            TF-başı eğitim kapsamı (denetim 2026-07-03, additive) — trainer'ın
+            hangi TF'lerde yeterli AUTO kanıtı olduğu; 1d gibi eksik TF'ler
+            dürüstçe UNTRAINED görünür (kanıt havuzlama/eşik indirme YOK).
+          type: object
+          additionalProperties: { $ref: "#/components/schemas/TfTargetCoverage" }
+        trainer_inputs:
+          description: Trainer girdi-hijyen flag'lerinin o anki durumu (gözlem).
+          type: object
+          properties:
+            auto_only_enabled: { type: boolean }
+            forensics_nudge_enabled: { type: boolean }
+
+    TfTargetCoverage:
+      type: object
+      description: Bir TF'in trainer kanıt kapsamı (AUTO kohort sayımı).
+      required: [auto_n, verified_n, min_required, status]
+      properties:
+        auto_n: { type: integer }
+        verified_n: { type: integer }
+        min_required: { type: integer }
+        status: { type: string, enum: [TRAINED, UNTRAINED] }
+
+    ExitForensicsView:
+      type: object
+      description: >
+        Çıkış Otopsisi (denetim 2026-07-03) — AUTO kohort çıkış kalitesi.
+        MFE/MAE yalnız pozisyon açıkken kaydedilir; kapanış-sonrası hiçbir şey
+        hesaplanmaz. $ alanları tahminidir (size_usd ya da notional çıkarımı).
+      required: [generated_at, cohort, total, usable, min_bucket, buckets, top_costs, excluded, limits]
+      properties:
+        generated_at: { type: string }
+        cohort: { type: string }
+        total: { type: integer }
+        usable: { type: integer }
+        min_bucket: { type: integer }
+        buckets:
+          type: array
+          items: { $ref: "#/components/schemas/ExitForensicsBucket" }
+        top_costs:
+          type: array
+          items: { $ref: "#/components/schemas/ExitCostCard" }
+        excluded:
+          type: object
+          properties:
+            manual: { type: integer }
+            non_auto: { type: integer }
+            no_excursion: { type: integer }
+        limits:
+          type: array
+          items: { type: string }
+        history_tail:
+          description: Son snapshot trend noktaları (capture/toplam maliyet).
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+
+    ExitForensicsBucket:
+      type: object
+      description: TF × kapanış-kategorisi çıkış istatistiği (AUTO kohort).
+      required: [timeframe, category, n, total_pnl, avg_pnl]
+      properties:
+        timeframe: { type: string }
+        category: { type: string, enum: [sl, tp, time_stop, trailing, manual, other] }
+        n: { type: integer }
+        total_pnl: { type: number }
+        avg_pnl: { type: number }
+        avg_capture: { type: number, nullable: true }
+        avg_give_back_pct: { type: number, nullable: true }
+        give_back_usd_est_total: { type: number, nullable: true }
+        avg_missed_capture_pct: { type: number, nullable: true }
+        missed_usd_est_total: { type: number, nullable: true }
+        sl_roundtrip: { type: integer }
+        sl_straight: { type: integer }
+        sl_gray: { type: integer }
+        never_worked: { type: integer }
+        no_excursion: { type: integer }
+        usd_est_covered_n: { type: integer }
+        avg_mfe_pct: { type: number, nullable: true }
+        top_module: { type: string, nullable: true }
+
+    ExitCostCard:
+      type: object
+      description: En pahalı çıkış hatası kartı (Türkçe düz-dil, en fazla 3).
+      required: [kind, timeframe, n, label]
+      properties:
+        kind: { type: string, enum: [TRAILING_GIVEBACK, SL_ROUNDTRIP, TIMESTOP_MISSED] }
+        timeframe: { type: string }
+        n: { type: integer }
+        cost_usd_est: { type: number, nullable: true }
+        label: { type: string }
 
     TfTargetsActionResult:
       type: object

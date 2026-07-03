@@ -56,6 +56,15 @@ def _package1_flags_off_by_default(monkeypatch: pytest.MonkeyPatch) -> None:
     # pinler, F4-1 davranış testleri threshold_override ile açar.
     pinned.setdefault("calibration", {})["tf_platt"] = False
     monkeypatch.setattr(loader, "_load_thresholds_base", lambda: pinned)
+    # Denetim 2026-07-03 — çıkış-makinesi env flag'leri testlerde default OFF
+    # (dev makinesinde .env yüklenmiş olabilir; testler baseline'ı varsayar).
+    monkeypatch.delenv("TF_TARGET_AUTO_ONLY", raising=False)
+    monkeypatch.delenv("EXIT_FORENSICS_NUDGE", raising=False)
+    # Aynı sızıntı sınıfı, canlıda görüldü: apps.api.main import'u .env'i
+    # os.environ'a yükler; sabah aktivasyonu TF_CALIBRATION_AUTO_ONLY=1 tam
+    # koşuda tf_calibration testlerine sızıyordu (fingerprint'siz fikstürler
+    # boş dönüyor). Flag'i test eden testler kendi monkeypatch.setenv'iyle açar.
+    monkeypatch.delenv("TF_CALIBRATION_AUTO_ONLY", raising=False)
 
 
 @pytest.fixture(autouse=True, scope="session")
@@ -80,3 +89,5 @@ def _isolate_runtime_stores(tmp_path_factory: pytest.TempPathFactory) -> None:
     # F5-3 — learning worker testleri activation watchdog store'unu gerçek
     # data/runtime'a yazmasın.
     os.environ["ACTIVATION_WATCHDOG_PATH"] = str(runtime / "activation_watchdog.json")
+    # Çıkış Otopsisi (2026-07-03) — worker testleri gerçek snapshot'ı ezmesin.
+    os.environ["EXIT_FORENSICS_OUT_PATH"] = str(runtime / "exit_forensics.json")

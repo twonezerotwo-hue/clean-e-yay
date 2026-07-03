@@ -46,6 +46,7 @@ export const qk = {
   thresholdAb: (paramPath: string, values: string, symbol: string, timeframe: string) =>
     ["learning", "threshold-ab", paramPath, values, symbol, timeframe] as const,
   entryExitQuality: ["learning", "entry-exit-quality"] as const,
+  exitForensics: ["learning", "exit-forensics"] as const,
   guardSafety: ["learning", "guard-safety"] as const,
   calibrationJumps: ["learning", "calibration-jumps"] as const,
   historicalEdge: (fingerprint: string) =>

@@ -61,6 +61,10 @@ class CanonicalOutcome:
     # gerçek edge'i ölçer. Legacy/SL'siz kayıtlar None (uydurma yok).
     risk_pct: float | None = None
     r_multiple: float | None = None
+    # Exit-forensics — pozisyon büyüklüğü ($). Kötü çıkışın $ maliyetini KESİN
+    # hesaplamak için (notional çıkarımı pnl/(pnl_pct/100) başabaşta çöker).
+    # Legacy kayıtlar None (uydurma yok).
+    size_usd: float | None = None
     # F1-3 — açılış anındaki consensus modül katkı vektörü (modül → score×weight).
     # dominant_module tek-modül attribution'unun ham verisi; module_attribution()
     # bunu okur. Manuel/legacy açılışlar None.
@@ -165,6 +169,7 @@ def build_outcome(t: Trade) -> CanonicalOutcome:
         raw_confidence=_opt_float(getattr(t, "raw_confidence", None)),
         risk_pct=risk_pct,
         r_multiple=_r_multiple(pnl_pct, risk_pct),
+        size_usd=_opt_float(getattr(t, "size_usd", None)),
         module_contributions=_module_contributions(
             getattr(t, "open_module_contributions", None)
         ),
@@ -235,6 +240,7 @@ def build_outcome_from_log_entry(entry: dict) -> CanonicalOutcome:
         raw_confidence=_opt_float(opening.get("raw_confidence")),
         risk_pct=risk_pct,
         r_multiple=_r_multiple(pnl_pct, risk_pct),
+        size_usd=_opt_float(outcome.get("size_usd")),
         module_contributions=_module_contributions(opening.get("module_contributions")),
     )
 

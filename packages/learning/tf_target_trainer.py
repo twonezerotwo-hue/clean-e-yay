@@ -19,6 +19,7 @@ Trainer çalıştığında verdict + öneri döner; persistance store'un işi.
 """
 from __future__ import annotations
 
+import os
 from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime
 
@@ -27,6 +28,24 @@ from packages.learning import outcomes as outcomes_mod
 from packages.paper import state as paper_state
 
 MIN_TRADES_PER_TF = 20
+
+
+def _flag(name: str) -> bool:
+    return os.environ.get(name, "0").strip().lower() in {"1", "true", "yes", "on"}
+
+
+def auto_only_enabled() -> bool:
+    """TF_TARGET_AUTO_ONLY=1 → trainer dataset'i yalnız AUTO kohort (fingerprint
+    + verified). Denetim bulgusu 2026-07-03: owner_manual kayıtlar verified
+    olabildiği için geometri öğrenmesine sızıyordu — tf_calibration'daki
+    TF_CALIBRATION_AUTO_ONLY deseninin klonu. Default OFF (bayt-aynı)."""
+    return _flag("TF_TARGET_AUTO_ONLY")
+
+
+def forensics_nudge_enabled() -> bool:
+    """EXIT_FORENSICS_NUDGE=1 → sabit ±%10 yerine ölçülen şiddete oranlı adım
+    (klamp [0.05, 0.15]; AUTO_APPLY_BAND_PCT'yi asla aşmaz). Default OFF."""
+    return _flag("EXIT_FORENSICS_NUDGE")
 
 # Nudge eşikleri — muhafazakâr. Trigger'lar conservative kalır ki gürültüye
 # nudge yapılmasın; ufak değişiklikler band içinde auto-apply olur.
@@ -77,6 +96,60 @@ class TfNudge:
     new: float
     delta_pct: float
     reason: str
+    # Dilim 5 additive — adımın kaynağı ("fixed" | "proportional(forensics)" |
+    # "proportional(stats)") ve dayandığı ölçüm (onay kaydında/panelde görünür).
+    step_source: str = "fixed"
+    evidence: str = ""
+
+
+# Dilim 5 (EXIT_FORENSICS_NUDGE) — oransal adım sınırları. Üst sınır
+# AUTO_APPLY_BAND_PCT (0.15) ile aynı: oransal nudge hibrit-kapı semantiğini
+# yapısal olarak KORUR (bant-içi auto / bant-dışı PENDING hiç değişmez).
+STEP_MIN = 0.05
+STEP_MAX = 0.15
+
+
+def _clamp01(v: float) -> float:
+    return max(0.0, min(1.0, v))
+
+
+def _step_for(
+    rule: str, stats: TfStats, forensics_tf: dict | None, mfe_ratio: float
+) -> tuple[float, str, str]:
+    """Kural başına nudge adımı: flag OFF → sabit NUDGE_STEP (bayt-aynı).
+    ON → ölçülen şiddete oranlı [STEP_MIN, STEP_MAX]; kanıt önce exit_forensics
+    (trainer_evidence), yoksa TfStats fallback'i — ikisi de ölçüm, fake yok."""
+    if not forensics_nudge_enabled():
+        return NUDGE_STEP, "fixed", ""
+    fx = forensics_tf or {}
+    if rule == "TIGHT_SL":
+        if "sl_roundtrip_share" in fx:
+            s = _clamp01(float(fx["sl_roundtrip_share"]))
+            src, ev = "proportional(forensics)", f"sl_roundtrip_share={fx['sl_roundtrip_share']}"
+        else:
+            s = _clamp01((stats.sl_hit_rate - HIGH_SL_HIT) / 0.30)
+            src, ev = "proportional(stats)", f"sl_hit_rate={stats.sl_hit_rate}"
+    elif rule == "DISTANT_TP":
+        if "timestop_missed_ratio" in fx:
+            s = _clamp01(float(fx["timestop_missed_ratio"]))
+            src, ev = "proportional(forensics)", f"timestop_missed_ratio={fx['timestop_missed_ratio']}"
+        else:
+            s = _clamp01((DISTANT_TP_RATIO - mfe_ratio) / DISTANT_TP_RATIO)
+            src, ev = "proportional(stats)", f"mfe_ratio={mfe_ratio:.2f}"
+    elif rule == "RICH_MFE":
+        s = _clamp01((mfe_ratio - RICH_MFE_RATIO) / 0.60)
+        src, ev = "proportional(stats)", f"mfe_ratio={mfe_ratio:.2f}"
+    elif rule == "TRAILING_LOOSE":
+        if "trailing_giveback_ratio" in fx:
+            s = _clamp01(float(fx["trailing_giveback_ratio"]))
+            src, ev = "proportional(forensics)", f"trailing_giveback_ratio={fx['trailing_giveback_ratio']}"
+        else:
+            s = _clamp01((LOW_CAPTURE - stats.avg_capture) / LOW_CAPTURE)
+            src, ev = "proportional(stats)", f"avg_capture={stats.avg_capture}"
+    else:  # tanınmayan kural → güvenli sabit adım
+        return NUDGE_STEP, "fixed", ""
+    step = round(STEP_MIN + (STEP_MAX - STEP_MIN) * s, 4)
+    return step, src, ev
 
 
 @dataclass
@@ -90,14 +163,19 @@ class TfTargetProposal:
     skipped: dict[str, str] = field(default_factory=dict)  # tf → neden atlandı
 
 
-# close_reason → kategori. lifecycle.py'nin yazdığı sabit string'ler:
-#   "SL" / "TP" : execution_sim.simulate_exit_fill çıktıları
-#   "TIME_STOP_EXIT", "TRAILING_STOP_EXIT", "KILL_SWITCH_EXIT", "MANUAL_CLOSE"
+# close_reason → kategori. execution_sim sabitleri "SL_HIT"/"TP_HIT" (bkz.
+# execution_sim.py:25-26); lifecycle bunları olduğu gibi yazar. Ayrıca
+# "TIME_STOP_EXIT", "TRAILING_STOP_EXIT", "KILL_SWITCH_EXIT", "MANUAL".
+# Bugfix 2026-07-03: eski eşleme "SL"/"TP" bekliyordu — canlı "SL_HIT"/"TP_HIT"
+# değerleri "other"a düşüyor, sl_hit/tp_hit sayaçları HEP 0 kalıyordu (canlı
+# proposal'da görüldü). TIGHT_SL/RICH_MFE kuralları bu yüzden hiç ateşlenemedi.
 def _classify_close(reason: str | None) -> str:
     r = (reason or "").upper()
-    if r == "SL" or ("STOP" in r and "TIME" not in r and "TRAIL" not in r):
+    if r in ("SL", "SL_HIT") or (
+        "STOP" in r and "TIME" not in r and "TRAIL" not in r
+    ):
         return "sl"
-    if r == "TP" or r.endswith("_TP"):
+    if r in ("TP", "TP_HIT") or r.endswith("_TP"):
         return "tp"
     if "TIME_STOP" in r:
         return "time_stop"
@@ -164,7 +242,11 @@ def _baseline_for_tf(tf: str, store_current: dict[str, dict[str, float]]) -> dic
     return base
 
 
-def _nudge_tf(stats: TfStats, baseline: dict[str, float]) -> tuple[dict[str, float], list[TfNudge]]:
+def _nudge_tf(
+    stats: TfStats,
+    baseline: dict[str, float],
+    forensics_tf: dict | None = None,
+) -> tuple[dict[str, float], list[TfNudge]]:
     """TF stats + mevcut baseline → yeni parametreler + nudge gerekçeleri."""
     new = dict(baseline)
     nudges: list[TfNudge] = []
@@ -179,55 +261,63 @@ def _nudge_tf(stats: TfStats, baseline: dict[str, float]) -> tuple[dict[str, flo
 
     # Kural 1: SL gereksiz dar (sık vuruyor + MAE düşük) → sl_atr_mult ↑
     if stats.sl_hit_rate > HIGH_SL_HIT and mae_ratio < TIGHT_MAE_RATIO:
+        step, src, ev = _step_for("TIGHT_SL", stats, forensics_tf, mfe_ratio)
         old = new["sl_atr_mult"]
-        proposed = old * (1.0 + NUDGE_STEP)
+        proposed = old * (1.0 + step)
         new["sl_atr_mult"] = round(proposed, 4)
         nudges.append(TfNudge(
             timeframe=stats.timeframe, param="sl_atr_mult",
-            old=old, new=new["sl_atr_mult"], delta_pct=NUDGE_STEP,
+            old=old, new=new["sl_atr_mult"], delta_pct=step,
             reason=f"sl_hit_rate={stats.sl_hit_rate} > {HIGH_SL_HIT}; "
                    f"avg_mae/typical_sl={mae_ratio:.2f} < {TIGHT_MAE_RATIO} → stop çok dar",
+            step_source=src, evidence=ev,
         ))
 
     # Kural 2: TP çok uzak (ulaşılmıyor + time-stop yüksek + MFE düşük) → rr ↓
     if (stats.tp_hit_rate < LOW_TP_HIT
             and stats.time_stop_rate > HIGH_TIMESTOP
             and mfe_ratio < DISTANT_TP_RATIO):
+        step, src, ev = _step_for("DISTANT_TP", stats, forensics_tf, mfe_ratio)
         old = new["rr"]
-        proposed = old * (1.0 - NUDGE_STEP)
+        proposed = old * (1.0 - step)
         new["rr"] = round(proposed, 4)
         nudges.append(TfNudge(
             timeframe=stats.timeframe, param="rr",
-            old=old, new=new["rr"], delta_pct=-NUDGE_STEP,
+            old=old, new=new["rr"], delta_pct=-step,
             reason=f"tp_hit={stats.tp_hit_rate} < {LOW_TP_HIT}; "
                    f"time_stop={stats.time_stop_rate} > {HIGH_TIMESTOP}; "
                    f"avg_mfe/typical_tp={mfe_ratio:.2f} < {DISTANT_TP_RATIO} → TP çok uzak",
+            step_source=src, evidence=ev,
         ))
 
     # Kural 3: Kâr masada kalıyor (MFE >> TP) → rr ↑
     elif mfe_ratio > RICH_MFE_RATIO and stats.tp_hit_rate > 0.5:
+        step, src, ev = _step_for("RICH_MFE", stats, forensics_tf, mfe_ratio)
         old = new["rr"]
-        proposed = old * (1.0 + NUDGE_STEP)
+        proposed = old * (1.0 + step)
         new["rr"] = round(proposed, 4)
         nudges.append(TfNudge(
             timeframe=stats.timeframe, param="rr",
-            old=old, new=new["rr"], delta_pct=NUDGE_STEP,
+            old=old, new=new["rr"], delta_pct=step,
             reason=f"avg_mfe/typical_tp={mfe_ratio:.2f} > {RICH_MFE_RATIO}; "
                    f"tp_hit={stats.tp_hit_rate} > 0.5 → kâr genişletilebilir",
+            step_source=src, evidence=ev,
         ))
 
     # Kural 4 (CP4 slice 3): trailing erken kesiyor (yüksek trailing oranı + düşük
     # yakalama) → trail_mult ↑ (trail gevşer, kâr daha çok koşar). entry_exit_quality
     # EXIT_EARLY bulgusunun geometriye uygulanan karşılığı.
     if stats.trailing_rate > HIGH_TRAILING_RATE and stats.avg_capture < LOW_CAPTURE:
+        step, src, ev = _step_for("TRAILING_LOOSE", stats, forensics_tf, mfe_ratio)
         old = new.get("trail_mult", 1.0)
-        proposed = old * (1.0 + NUDGE_STEP)
+        proposed = old * (1.0 + step)
         new["trail_mult"] = round(proposed, 4)
         nudges.append(TfNudge(
             timeframe=stats.timeframe, param="trail_mult",
-            old=old, new=new["trail_mult"], delta_pct=NUDGE_STEP,
+            old=old, new=new["trail_mult"], delta_pct=step,
             reason=f"trailing_rate={stats.trailing_rate} > {HIGH_TRAILING_RATE}; "
                    f"avg_capture={stats.avg_capture} < {LOW_CAPTURE} → trail çok sıkı",
+            step_source=src, evidence=ev,
         ))
 
     return new, nudges
@@ -241,7 +331,16 @@ def train(
     tfs = timeframes or ["15m", "1h", "4h", "1d"]
     s = paper_state.load()
     rows = outcomes_mod.outcomes_from_state(s)
-    verified = [o for o in rows if o.data_verified]
+    # Dilim 4 (TF_TARGET_AUTO_ONLY, default OFF): flag ON → yalnız AUTO kohort
+    # (fingerprint + verified) — owner_manual verified kayıtlar geometri
+    # öğrenmesine sızmaz. OFF → mevcut data_verified filtresi bayt-aynı.
+    if auto_only_enabled():
+        from packages.learning import cohorts  # döngüsel import kaçınması
+        verified = [o for o in rows if cohorts.classify(o) == cohorts.AUTO]
+        dataset_tag = "auto_cohort"
+    else:
+        verified = [o for o in rows if o.data_verified]
+        dataset_tag = "verified"
     if not verified:
         return {"status": "INSUFFICIENT", "reason": "no_verified_trades",
                 "dataset_size": 0}
@@ -252,6 +351,17 @@ def train(
     all_nudges: list[TfNudge] = []
     skipped: dict[str, str] = {}
 
+    # Dilim 5 (EXIT_FORENSICS_NUDGE, default OFF): flag ON → exit_forensics'ten
+    # TF-başı şiddet kanıtı çek; veri yetersiz/hata → {} (kural stats fallback'ine
+    # veya sabit adıma düşer — sahte kanıt üretilmez). OFF → hiç dokunulmaz.
+    forensics_evidence: dict[str, dict] = {}
+    if forensics_nudge_enabled():
+        try:
+            from packages.learning import exit_forensics
+            forensics_evidence = exit_forensics.trainer_evidence(rows) or {}
+        except Exception:
+            forensics_evidence = {}
+
     for tf in tfs:
         st = _stats_for_tf(verified, tf)
         if st is None:
@@ -260,7 +370,7 @@ def train(
             continue
         all_stats.append(st)
         baseline = _baseline_for_tf(tf, store_cur)
-        new_params, nudges = _nudge_tf(st, baseline)
+        new_params, nudges = _nudge_tf(st, baseline, forensics_evidence.get(tf))
         if nudges:  # sadece değişiklik varsa proposal'a koy
             proposal_tfs[tf] = new_params
             all_nudges.extend(nudges)
@@ -272,7 +382,7 @@ def train(
         stats=all_stats,
         nudges=all_nudges,
         audit_note=(
-            f"{len(verified)} verified outcome incelendi; "
+            f"dataset={dataset_tag}; {len(verified)} outcome incelendi; "
             f"{len(all_stats)} TF MIN_TRADES_PER_TF={MIN_TRADES_PER_TF} eşiğini geçti; "
             f"{len(all_nudges)} nudge önerildi; {len(skipped)} TF atlandı."
         ),

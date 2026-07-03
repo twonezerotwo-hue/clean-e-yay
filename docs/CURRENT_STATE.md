@@ -4,6 +4,53 @@ _Bu dosya kısa ve güncel tutulur. Her görev sonunda güncellenir._
 
 ## Last known status
 
+- **E serisi — Çıkış/Stop öğrenme makinesi derinleştirme** (2026-07-03,
+  denetim paketi; bkz. docs/AUDIT_ROADMAP.md E-1…E-5): Otomatik sistem net
+  −$864/133 AUTO işlem; zararın kaynağı çıkış kalitesi (SL_HIT 38 işlem
+  −$1978 vs TP_HIT 22 işlem +$3313). Yeni modül kurulmadı — mevcut CP4
+  makinesi (tf_target_trainer + entry_exit_quality + store/rollback)
+  derinleştirildi. 5 dilim:
+  - **D1 `size_usd`** (flag'siz additive): decision_log outcome bloğu +
+    `CanonicalOutcome.size_usd` (legacy → None) — $ maliyeti tahmin yerine
+    kesin (notional çıkarımı başabaş time-stop'ta çöker).
+  - **D2 `packages/learning/exit_forensics.py`** — "Çıkış Otopsisi",
+    salt-gözlem: yalnız AUTO kohort; TF × kapanış-kategorisi bucket;
+    trailing give-back/capture, time-stop kaçan hareket (never_worked =
+    giriş sorunu, çıkış maliyetine girmez), SL üçlü sınıf (roundtrip /
+    straight-hariç / gray-atıfsız); tüm $ alanları `*_usd_est` (size_usd
+    tercih → notional çıkarım |pnl_pct|≥0.05 → None); en pahalı 3 hata
+    Türkçe düz-dil kart; kapanış-sonrası karşı-olgu YOK. Worker snapshot
+    `data/runtime/exit_forensics.json` {latest, history≤60} + run meta
+    `exit_forensics_status` (canlı: usable=133 buckets=16 top_costs=3).
+  - **D3 API+kontrat+dashboard**: `GET /learning/exit-forensics`;
+    `/learning/tf-targets`e additive `coverage` (status trainer'ın FİİLEN
+    kullandığı sayıya bakar; canlı: 1d dürüstçe "EĞİTİLMEMİŞ 13/20" —
+    havuzlama/eşik indirme REDDEDİLDİ) + `trainer_inputs`. YENİ
+    `ExitForensicsPanel` (Cockpit grup 03, EntryExitQuality'den sonra);
+    TfTargetsPanel coverage çipleri + flag rozetleri. Frontend hesap yapmaz.
+  - **D4 `TF_TARGET_AUTO_ONLY`** (env, DEFAULT OFF=bayt-aynı): ON →
+    trainer VE entry_exit_quality dataset'i yalnız AUTO kohort (verified
+    MANUEL sızıntısı biter — sabah kapatılan TF_CALIBRATION deliğinin
+    kardeşi; tek flag iki tüketici). `audit_note` dataset damgalı.
+  - **D5 `EXIT_FORENSICS_NUDGE`** (env, DEFAULT OFF=sabit ±%10 bayt-aynı):
+    ON → adım = 0.05 + 0.10×şiddet, klamp [0.05, 0.15] = AUTO_APPLY_BAND
+    tavanı (hibrit kapı yapısal korunur); şiddet önce
+    `exit_forensics.trainer_evidence()`, yoksa TfStats fallback;
+    `TfNudge.step_source`+`evidence` additive.
+  - **Rollout**: SHADOW ≥2 hafta (panel $ ↔ OutcomeLedger by_close_reason
+    mutabakatı) → `TF_TARGET_AUTO_ONLY=1` → `TF_TARGET_EDGE_GATE=1` →
+    `EXIT_FORENSICS_NUDGE=1`; hepsi lokal .env + deploy ensure_env birlikte.
+  - **Yan bulgu/fix**: apps.api.main import'u .env'i os.environ'a yüklüyor;
+    sabah açılan `TF_CALIBRATION_AUTO_ONLY=1` tam suite'te tf_calibration
+    testlerine sızıp 8 testi kırıyordu — conftest'e delenv eklendi (aynı
+    desen: testler baseline varsayar, flag testleri kendisi setenv yapar).
+  - **Validation**: pytest tam suite **1376 passed** (+44 yeni: 15
+    exit_forensics, D1 size_usd, D4/D5 trainer, coverage flag testi);
+    contract 58 yeşil; ruff CI-scope temiz; codegen idempotent; tsc +
+    `pnpm build` + `.next-prod` build yeşil; worker koşusu
+    exit_forensics=OK; canlı :9000 exit-forensics/tf-targets 200 + :4000
+    web 200 (API+web yeni kodla restart edildi).
+
 - **Layer 0 hologram sohbet kalite paketi** (2026-07-03): owner şikayeti
   (robotik/aynı cevap, soru anlamama, İngilizce haber, jargonlu brifing) —
   4 kök neden düzeltildi; karar zinciri sıfır diff, anlatı katmanı only:

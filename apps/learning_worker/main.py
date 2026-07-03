@@ -23,6 +23,7 @@ from packages.learning import (
     calibration_trainer,
     edge_report,
     empirical_pwin,
+    exit_forensics,
     guard_safety,
     promotion_criteria,
     rebalance_store,
@@ -172,6 +173,23 @@ def run_once() -> dict:
         )
     except Exception as exc:  # defensive — worker patlamamalı
         errors.append(f"empirical_pwin:{type(exc).__name__}")
+
+    # Çıkış Otopsisi (denetim 2026-07-03) — kötü çıkışın nerede/kaça olduğu
+    # (AUTO kohort, observe-only). Snapshot + trend geçmişi; panel/API okur.
+    exit_forensics_status = "SKIPPED"
+    try:
+        ef = exit_forensics.write_snapshot()
+        ef_latest = ef.get("latest") or {}
+        exit_forensics_status = "OK"
+        log.info(
+            "exit_forensics: usable=%s buckets=%s top_costs=%s",
+            ef_latest.get("usable"),
+            len(ef_latest.get("buckets") or []),
+            len(ef_latest.get("top_costs") or []),
+        )
+    except Exception as exc:  # defensive — worker patlamamalı
+        exit_forensics_status = f"ERROR:{type(exc).__name__}"
+        errors.append(f"exit_forensics:{type(exc).__name__}")
 
     # Step 8 — per-TF calibration + tf_weights trust gate. Derives per-timeframe
     # hit-rate/expectancy from VERIFIED outcomes and the trust verdict (PRIOR until a
@@ -441,6 +459,7 @@ def run_once() -> dict:
         "tf_weight_proposal_status": tf_weight_proposal_status,
         "tf_target_status": tf_target_status,
         "tf_target_decisions": tf_target_decisions,
+        "exit_forensics_status": exit_forensics_status,  # Çıkış Otopsisi (2026-07-03)
         "duration_ms": duration_ms,        # CP1 — perf görünürlüğü
         "over_budget": over_budget,        # CP1 — bütçe aşımı bayrağı
         "errors": errors,

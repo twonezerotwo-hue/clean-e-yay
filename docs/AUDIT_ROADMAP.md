@@ -4,7 +4,7 @@
 > sürecine çevirir. **Yaşayan belge** — her slice tamamlanınca durum sütunu
 > güncellenir. Kaynak denetim raporu: PR #48 açıklaması + oturum kaydı.
 
-## Devir notu (son güncelleme: 2026-07-02)
+## Devir notu (son güncelleme: 2026-07-03)
 
 Bu belge farklı bir asistan/oturum tarafından SIFIR bağlamla devralınabilir
 şekilde yazılmıştır. Mevcut durum:
@@ -60,6 +60,22 @@ Bu belge farklı bir asistan/oturum tarafından SIFIR bağlamla devralınabilir
 - **Bekleyen owner kararları:** `EXPECTANCY_R_MODE` (R-bazlı expectancy)
   default KAPALI — R-damgalı outcome birikince açılacak (open_risk_pct
   yalnız YENİ kapanışlarda damgalanıyor; eski kayıtlarda yok).
+- **E serisi — Çıkış/Stop öğrenme derinleştirme (2026-07-03, kodlama
+  TAMAM, aşağıda tabloda):** Gerekçe: AUTO kohort net −$864/133 işlem;
+  zararın kaynağı çıkış kalitesi (SL_HIT 38 işlem −$1978 vs TP_HIT 22
+  işlem +$3313). Yeni modül `exit_forensics` (Çıkış Otopsisi, salt-gözlem)
+  + `size_usd` zenginleştirme + dashboard paneli flag'siz/additive canlı;
+  iki davranış flag'i DEFAULT OFF: `TF_TARGET_AUTO_ONLY` (trainer +
+  entry_exit_quality dataset'i yalnız AUTO kohort — TF_CALIBRATION_
+  AUTO_ONLY'nin klonu; o flag sabah 2026-07-03 AÇILDI) ve
+  `EXIT_FORENSICS_NUDGE` (sabit ±%10 yerine ölçülen şiddete oranlı adım,
+  klamp [0.05, 0.15] = AUTO_APPLY_BAND_PCT tavanı). Rollout sırası:
+  SHADOW ≥2 hafta (panel $ toplamları OutcomeLedger by_close_reason ile
+  mutabık olmalı) → `TF_TARGET_AUTO_ONLY=1` → `TF_TARGET_EDGE_GATE=1` →
+  `EXIT_FORENSICS_NUDGE=1` (hepsi lokal .env + deploy-from-github.sh
+  ensure_env birlikte). Bilerek reddedilenler: 1d için 4h kanıtı
+  havuzlama, MIN_TRADES_PER_TF indirme (1d panelde dürüst "EĞİTİLMEMİŞ
+  13/20" gösterilir), kapanış-sonrası karşı-olgu hesabı.
 - **Test komutu:** `.venv/Scripts/python -m pytest --basetemp=.pytest_tmp/run_X -q`
   (basetemp şart — Windows Temp kilit sorunu). Ruff: `.venv/Scripts/python -m ruff check packages apps tests`.
 - **Kurallar:** commit/push'tan önce owner'a sor; işler ayrı commit'lerle
@@ -117,6 +133,11 @@ Risk: 🟢 davranış değiştirmez (ölçüm/altyapı) · 🟡 flag'li davranı
 | T-2 | Elliott × Fib confluence: GEÇERLİ Elliott sayımının (hard-rule + confidence≥60) invalidation/hedef seviyeleri confluence bölgelerine `elliott_*` bileşeni olarak girer (4h/1d); fib+elliott aynı bölgede → konum kanadı 0.6→0.8 (kapı tavanı +%15 DEĞİŞMEZ — Elliott tek başına yön üretemez/bölge kuramaz) | 2026-07-02 owner onayı (TA genişletme; owner fikri: "iki yöntem aynı seviyedeyse skor daha kaliteli") | ✅ (2026-07-02) flag `technical.elliott_confluence` DEFAULT OFF (bölgeler bayt-aynı); elliott'lu bölge farkı `elliott_confluence_shadow` evidence satırı. Elliott motoru İLK KEZ bir karar-yüzeyine bağlandı — yalnız kural-türevi seviyeler, senaryo/yön DEĞİL. 10 test. AKTİVASYON BEKLİYOR | 🟡 | T |
 | T-3 | Destek/direnç gücü: seviye "var/yok" yerine pivot-geçmişi dokunma sayısı tartılır (1 dokunuş 0.5 / 2 → 0.6 / 3+ → 0.7; T-2 ile birlikte tavan 0.9) | 2026-07-02 owner onayı (TA genişletme) | ✅ (2026-07-02) flag `technical.sr_strength` DEFAULT OFF (0.6 sabit, bayt-aynı); dokunma sayıları `sr_strength[_shadow]` evidence satırında her zaman gözlemde. 6 test. AKTİVASYON BEKLİYOR | 🟡 | T |
 | T-4 | Kilit seviyede mum teyidi: pin bar (hammer/shooting star) + engulfing dedektörü (`providers/technical/candles.py`, kapanmış barlar, uydurma yok); YALNIZ fiyat confluence bölgesindeyken formasyon kanadına ek bileşen (yön üretmez, momentumla uyum/çelişki tartar) | 2026-07-02 owner onayı (TA genişletme) | ✅ (2026-07-02) flag `technical.candle_confirm` DEFAULT OFF (skor bayt-aynı); tespit `candle_confirm[_shadow]:name:bias:at_zone=` evidence satırında her zaman gözlemde. 11 test. AKTİVASYON BEKLİYOR | 🟡 | T |
+| E-1 | `size_usd` zenginleştirme: decision_log outcome bloğu + `CanonicalOutcome.size_usd` (legacy kayıt → None) — $ maliyeti tahmin yerine kesin ölçülebilsin (notional çıkarımı başabaş time-stop'ta çöker) | 2026-07-03 çıkış denetimi | ✅ (2026-07-03) flag'siz saf-additive alan (risk_pct/F1-1 deseninin aynısı); iki outcome builder'da okunur | 🟢 | E |
+| E-2 | `packages/learning/exit_forensics.py` — Çıkış Otopsisi (salt-gözlem): yalnız AUTO kohort; TF × kapanış-kategorisi bucket'ları; trailing give-back/capture, time-stop kaçan hareket (never_worked = giriş sorunu, çıkış maliyetine GİRMEZ), SL üçlü sınıf (roundtrip=makine kârı koruyamadı / straight=giriş sorunu HARİÇ / gray=atıfsız); $ alanları `*_usd_est` (size_usd tercih, yoksa notional çıkarım, yoksa None); en pahalı 3 hata Türkçe düz-dil kart; `trainer_evidence()` E-5 girdisi; worker snapshot `data/runtime/exit_forensics.json` {latest, history≤60} | 2026-07-03 çıkış denetimi | ✅ (2026-07-03) kapanış-sonrası karşı-olgu YOK (veri yok, hesaplanamaz); MIN_BUCKET=5 altı bucket kart üretmez; excluded/limits şeffaflık blokları; worker run meta `exit_forensics_status` (canlı: usable=133 buckets=16 top_costs=3) | 🟢 | E |
+| E-3 | API + kontrat + dashboard: `GET /learning/exit-forensics` (yeni şemalar) + `/learning/tf-targets`e additive `coverage` (TF-başı auto_n/verified_n/min_required/TRAINED\|UNTRAINED — 1d dürüst "EĞİTİLMEMİŞ 13/20") ve `trainer_inputs` (iki flag durumu); YENİ `ExitForensicsPanel` ("Çıkış Otopsisi": 3 maliyet kartı + TF×neden $ çapraz tablo "tahmini" rozetiyle + capture trend + dürüstlük satırı, frontend HESAP YAPMAZ); TfTargetsPanel coverage çipleri + flag rozetleri; CockpitView grup 03 yeni adım | 2026-07-03 çıkış denetimi | ✅ (2026-07-03) contract-first (openapi.yaml → codegen, ratchet geçer); canlı 200 doğrulandı | 🟢 | E |
+| E-4 | Girdi hijyeni `TF_TARGET_AUTO_ONLY` (env, DEFAULT OFF = bayt-aynı): ON → `tf_target_trainer.train()` VE `entry_exit_quality.report()` dataset'i yalnız `cohorts.classify()==AUTO` (verified MANUEL işlemler geometri öğrenmesine/çıkış-kalite hükümlerine sızmaz — TF kalibrasyonunda kapatılan deliğin aynısı, tek flag iki tüketici); `audit_note` `dataset=auto_cohort\|verified` damgalı | 2026-07-03 çıkış denetimi (kod teyidi: tf_target_trainer.py + entry_exit_quality.py yalnız data_verified filtreliyordu) | ✅ (2026-07-03) OFF bayt-uyum bekçi testi; apply yolu değişmez (±%15 bant + guardrail + tf_target_rollback zaten kapsar). AKTİVASYON BEKLİYOR (rollout: shadow sonrası İLK açılacak flag) | 🟡 | E |
+| E-5 | Oransal nudge adımı `EXIT_FORENSICS_NUDGE` (env, DEFAULT OFF = sabit ±%10 bayt-aynı): ON → `step = 0.05 + 0.10×şiddet`, klamp [0.05, 0.15] — tavan AUTO_APPLY_BAND_PCT'ye eşit, hibrit-kapı semantiği yapısal korunur; şiddet önce `exit_forensics.trainer_evidence()` (sl_roundtrip_share / timestop_missed_ratio / trailing_giveback_ratio), yoksa TfStats fallback (ikisi de ölçüm, sahtelik yok); `TfNudge.step_source`+`evidence` additive (onay kaydı + panelde) | 2026-07-03 çıkış denetimi | ✅ (2026-07-03) OFF sabit-0.10 regresyon bekçisi + klamp/fallback/bant-sınırı testleri. AKTİVASYON BEKLİYOR (rollout: EN SON, E-4 + TF_TARGET_EDGE_GATE'ten sonra) | 🟡 | E |
 
 ## Neden bu sıra?
 

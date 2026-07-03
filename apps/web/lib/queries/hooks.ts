@@ -413,6 +413,16 @@ export const useEntryExitQuality = () => {
   });
 };
 
+export const useExitForensics = () => {
+  const policy = usePanelQueryPolicy(5 * 60_000);
+  return useQuery({
+    queryKey: qk.exitForensics,
+    queryFn: api.exitForensics,
+    staleTime: 60_000,
+    ...policy,
+  });
+};
+
 export const useGuardSafety = () => {
   const policy = usePanelQueryPolicy(5 * 60_000);
   return useQuery({

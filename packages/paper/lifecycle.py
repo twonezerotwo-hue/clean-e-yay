@@ -388,6 +388,8 @@ def close_position(
         # (yalnız r-hit'li, gerçek ptp uygulanmamış TAM kapanışlarda dolar).
         ptp_r_hit=pos.ptp_r_hit_at is not None,
         ptp_shadow_pnl_usd=_ptp_shadow_pnl(pos, exit_price, full),
+        # Exit-forensics — kapanan dilimin $ büyüklüğü (kısmi legde realized_size).
+        size_usd=round(realized_size, 2),
     )
     state.recent_trades.append(trade)
     # Signal attribution: kapanan trade'in karar izini kalıcı decision_log'a yaz

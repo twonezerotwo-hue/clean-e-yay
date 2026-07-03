@@ -43,6 +43,7 @@ import type {
   ThresholdAutotuneView,
   ThresholdAbView,
   EntryExitQualityView,
+  ExitForensicsView,
   GuardSafetyView,
   CalibrationJumpsView,
   AgentModeConfigView,
@@ -629,6 +630,8 @@ export const api = {
     ),
   entryExitQuality: () =>
     fetchJSON<EntryExitQualityView>("/api/v1/learning/entry-exit-quality"),
+  exitForensics: () =>
+    fetchJSON<ExitForensicsView>("/api/v1/learning/exit-forensics"),
   guardSafety: () =>
     fetchJSON<GuardSafetyView>("/api/v1/learning/guard-safety"),
   guardSafetyAdopt: () =>

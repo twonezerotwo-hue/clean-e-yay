@@ -101,6 +101,40 @@ export function TfTargetsPanel() {
           : "Faz A — shadow mode: motor hesaplıyor, log birikiyor; canlı SL/TP hâlâ sabit-%. Aktivasyon ayrı onayla."}{" "}
         Trainer ±{bandPct}% bant içi nudge'u otomatik uygular; dışı owner onayı bekler.
       </p>
+      {d?.coverage ? (
+        <div className="mb-2 flex flex-wrap items-center gap-1.5">
+          {TFS.map((tf) => {
+            const c = d.coverage?.[tf];
+            if (!c) return null;
+            const trained = c.status === "TRAINED";
+            // Trainer'ın fiilen kullandığı sayı: yalnız-auto modda auto_n
+            const nUsed = d.trainer_inputs?.auto_only_enabled ? c.auto_n : c.verified_n;
+            return (
+              <span
+                key={tf}
+                title={`AUTO işlem: ${c.auto_n} · verified: ${c.verified_n} · eşik: ${c.min_required}`}
+                className={`rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${
+                  trained
+                    ? "bg-signal-up/15 text-signal-up/90"
+                    : "bg-amber-400/20 text-amber-300"
+                }`}
+              >
+                {tf} {trained ? "EĞİTİLİYOR" : `EĞİTİLMEMİŞ ${nUsed}/${c.min_required}`}
+              </span>
+            );
+          })}
+          {d.trainer_inputs?.auto_only_enabled ? (
+            <span className="rounded bg-sky-400/15 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-sky-300">
+              yalnız-auto veri
+            </span>
+          ) : null}
+          {d.trainer_inputs?.forensics_nudge_enabled ? (
+            <span className="rounded bg-sky-400/15 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-sky-300">
+              kanıt-oranlı adım
+            </span>
+          ) : null}
+        </div>
+      ) : null}
       <div className="overflow-x-auto">
         <table className="w-full min-w-[20rem] border-collapse text-xs">
           <thead>

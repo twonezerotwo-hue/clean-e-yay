@@ -26,6 +26,7 @@ PAPER_SAFE / NO_EXECUTION — observe-only.
 from __future__ import annotations
 
 from packages.learning import outcomes as outcomes_mod
+from packages.learning import tf_target_trainer
 from packages.learning.outcomes import CanonicalOutcome
 
 # --- eşikler (açık, sabit; magic-number değil) ---------------------------------
@@ -158,8 +159,17 @@ def _bucket_key(o: CanonicalOutcome) -> tuple[str, str]:
 
 def report() -> dict:
     """Giriş/çıkış kalitesi özeti: module×tf kovaları + ders/öneri + en sorunlu
-    kovalar. Observe-only — karar zincirine etkisi yoktur."""
-    outs = [o for o in outcomes_mod.outcomes_from_state() if o.data_verified]
+    kovalar. Observe-only — karar zincirine etkisi yoktur.
+
+    Dilim 4 (TF_TARGET_AUTO_ONLY, default OFF): trainer'la AYNI flag — ON iken
+    dataset yalnız AUTO kohort (owner_manual verified kayıtlar hükümleri
+    kirletmez); OFF iken mevcut data_verified filtresi bayt-aynı."""
+    rows = outcomes_mod.outcomes_from_state()
+    if tf_target_trainer.auto_only_enabled():
+        from packages.learning import cohorts
+        outs = [o for o in rows if cohorts.classify(o) == cohorts.AUTO]
+    else:
+        outs = [o for o in rows if o.data_verified]
 
     grouped: dict[tuple[str, str], list[CanonicalOutcome]] = {}
     for o in outs:

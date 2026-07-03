@@ -48,6 +48,7 @@ import { BookAuditPanel } from "@/components/panels/BookAuditPanel";
 import { DatasetHealthPanel } from "@/components/panels/DatasetHealthPanel";
 import { EdgeReportPanel } from "@/components/panels/EdgeReportPanel";
 import { EntryExitQualityPanel } from "@/components/panels/EntryExitQualityPanel";
+import { ExitForensicsPanel } from "@/components/panels/ExitForensicsPanel";
 import { ThresholdAutotunePanel } from "@/components/panels/ThresholdAutotunePanel";
 import { ThresholdAbPanel } from "@/components/panels/ThresholdAbPanel";
 import { GuardSafetyPanel } from "@/components/panels/GuardSafetyPanel";
@@ -1319,13 +1320,16 @@ export function CockpitView() {
               <LearnStep step="06" label="Teşhis — kayıp nereden sızıyor">
                 <EntryExitQualityPanel />
               </LearnStep>
-              <LearnStep step="07" label="Otomatik ince-ayar — kapı açıksa, rollback'li">
+              <LearnStep step="07" label="Çıkış otopsisi — en pahalı çıkış hataları">
+                <ExitForensicsPanel />
+              </LearnStep>
+              <LearnStep step="08" label="Otomatik ince-ayar — kapı açıksa, rollback'li">
                 <ThresholdAutotunePanel />
               </LearnStep>
-              <LearnStep step="08" label="Koruma filtreleri — zarar verirse oto-kapanır">
+              <LearnStep step="09" label="Koruma filtreleri — zarar verirse oto-kapanır">
                 <GuardSafetyPanel />
               </LearnStep>
-              <LearnStep step="09" label="Elle deney — A/B backtest, canlıya dokunmaz">
+              <LearnStep step="10" label="Elle deney — A/B backtest, canlıya dokunmaz">
                 <ThresholdAbPanel />
               </LearnStep>
             </div>
