@@ -60,6 +60,10 @@ ensure_env THRESHOLD_AUTOTUNE 1
 # düzeltsin (±%15 bant + outcome-rollback net). Owner kararı — bekletme, aktif çalışsın.
 # set_env: AWS .env'de =1 kalmışsa ZORLA 0'a çevirir (ensure_env yetmez).
 set_env TF_TARGET_EDGE_GATE 0
+# Denetim 2026-07-03 — TF kalibrasyon veri hijyeni: owner_manual gibi verified ama
+# fingerprint'siz kayıtlar TF kalibrasyonuna sızmasın (1d'de 6 manuel işlem sızıyordu,
+# 19→13). Lokal .env'de =1; AWS'e de aynısı (owner kuralı: lokal+AWS her zaman senkron).
+ensure_env TF_CALIBRATION_AUTO_ONLY 1
 
 echo "deploy: restart services"
 sudo systemctl restart eyay-supervisor.service
