@@ -1434,11 +1434,11 @@ html, body {
   text-align: center;
 }
 
+/* Renk bilerek yok — Giriş izni verdikti (AÇIK/KISITLI/KAPALI) tone sınıfından gelir. */
 .brain-matrix-readiness strong {
   margin-top: 0.06rem;
-  color: #67e8f9;
   font-family: var(--font-mono, monospace);
-  font-size: 1rem;
+  font-size: 0.82rem;
   text-shadow: none;
 }
 
@@ -1475,6 +1475,10 @@ html, body {
     rgba(2, 8, 18, 0.58);
 }
 
+.brain-matrix-cell--full {
+  grid-column: 1 / -1;
+}
+
 .brain-matrix-cell strong {
   display: block;
   margin-top: 0.12rem;
@@ -1489,7 +1493,7 @@ html, body {
 
 .brain-matrix-actions {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 0.32rem;
   margin-top: 0.44rem;
 }
@@ -1734,12 +1738,17 @@ html, body {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
+  /* Dar ekranda tek kolon dikey liste — yarım kalan hücre boşluğu olmasın. */
   .brain-matrix-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .brain-matrix-cell--wide {
+    grid-column: auto;
   }
 
   .brain-matrix-actions {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 }
 

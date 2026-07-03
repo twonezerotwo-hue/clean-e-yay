@@ -391,9 +391,14 @@ export function NotificationBell() {
     if (!text || chat.isPending) return;
     setOpen(true);
     setMode("ask");
+    // Son turlar LLM bağlamına gider — takip sorusu bağlamıyla anlaşılır.
+    const history = messages
+      .slice(-6)
+      .filter((m) => m.text.trim())
+      .map((m) => ({ role: m.role, text: m.text.slice(0, 500) }));
     setMessages((xs) => [...xs, { role: "user", text }]);
     setInput("");
-    chat.mutate(text, {
+    chat.mutate({ message: text, history }, {
       onSuccess: (res) => {
         setMessages((xs) => [...xs, { role: "agent", text: res.answer, meta: res }]);
         void speak(res.answer);
@@ -404,7 +409,7 @@ export function NotificationBell() {
         void speak(fallback);
       },
     });
-  }, [chat, speak]);
+  }, [chat, speak, messages]);
 
   const startListening = useCallback(() => {
     if (chat.isPending || listening) return;

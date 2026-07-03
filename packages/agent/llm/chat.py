@@ -46,10 +46,14 @@ _ANALYZE_ALIASES = {
 }
 
 # Analiz niyeti — sembol + bu kelimelerden biri → ephemeral teknik analiz.
+# "veri/göster/durum/bilgi/özet" veri-isteme kalıpları da buradadır: "btc nin
+# verilerini ver" neden-işlem-yok'a düşüp "verileri yok" gibi saçma cevap
+# üretmesin (owner bug raporu 2026-07-03).
 _ANALYZE_INTENT = (
     "analiz", "teknik", "incele", "yorumla", "yorum", "rsi", "trend",
     "nasıl görün", "nasil gorun", "ne durumda", "grafik", "momentum",
     "fiyat", "kaç para", "kac para", "ne kadar", "değer", "deger", "kaça",
+    "veri", "göster", "goster", "durum", "bilgi", "detay", "özet", "ozet",
 )
 
 # Destek/direnç niyeti — sembol + bu kelimelerden biri → multi-TF Fibonacci
@@ -1105,9 +1109,17 @@ def _grounded_answer(message: str, ctx: dict) -> tuple[str, list[str]]:
                   "neden islem", "niye işlem", "niye islem", "neden açmıyor", "neden acmiyor")
     ):
         return _waiting_answer(ctx)
+    # Çıplak sembol (niyet eşleşmedi): kullanıcı büyük ihtimalle o varlığın
+    # durumunu/verisini istiyor → teknik analiz. "Neden açmadın?" tarzı sorular
+    # yukarıda symbol+neden dalında zaten yakalanıyor.
     if symbol:
-        return _why_no_trade_answer(ctx, symbol, timeframe)
-    return _overview_answer(ctx)
+        return _asset_analysis_answer(symbol)
+    # Hiçbir niyet eşleşmedi → genel durum özeti. "intent:overview" işareti,
+    # answer() içinde LLM'e "soruya özel kural bulunamadı; soruyu bağlam
+    # JSON'undan kendin yanıtla" talimatına dönüşür — her eşleşmeyen sorunun
+    # aynı bülteni papağanlaması bu yüzden biter.
+    text, ev = _overview_answer(ctx)
+    return text, [*ev, "intent:overview"]
 
 
 # LLM'in "veri yok" tarzı reddi — canlı web bulgusu varken bu PROVABLY yanlış.
@@ -1131,7 +1143,40 @@ def _llm_dropped_findings(llm_text: str, grounded: str, live_evidence: bool) -> 
     return said_denial and grounded_has_findings
 
 
-def answer(message: str) -> dict:
+# Sohbet geçmişi: prompt'a giren tur/karakter sınırı (bağlam şişmesin).
+_HISTORY_MAX_TURNS = 8
+_HISTORY_MAX_CHARS = 300
+
+# Chat üretim sıcaklığı — 0.2 şablon gibi tekrar eden cümleler üretiyordu;
+# persona raporları (report.py) 0.2'de kalır, sohbet biraz daha doğal akar.
+_CHAT_TEMPERATURE = 0.5
+
+# Cache anahtar sürümü — prompt/yönlendirme değişince artır ki file-backed
+# cache'teki (2 saat TTL) eski üsluptaki cevaplar dönmesin.
+_PROMPT_VERSION = "v2"
+
+
+def _history_block(history: list[dict] | None) -> str:
+    """Son konuşma turlarını LLM prompt'una giren kısa bloğa çevirir.
+
+    Yalnızca anlatım bağlamıdır — karar zincirine girmez. Kullanıcı turları
+    injection guard'dan geçirilir; şüpheli tur sessizce atlanır.
+    """
+    if not history:
+        return ""
+    lines: list[str] = []
+    for turn in history[-_HISTORY_MAX_TURNS:]:
+        role = str((turn or {}).get("role") or "")
+        text = " ".join(str((turn or {}).get("text") or "").split())[:_HISTORY_MAX_CHARS]
+        if not text or role not in ("user", "agent"):
+            continue
+        if role == "user" and guard.screen(text) is not None:
+            continue
+        lines.append(f"{'Kullanici' if role == 'user' else 'Sen'}: {text}")
+    return "\n".join(lines)
+
+
+def answer(message: str, history: list[dict] | None = None) -> dict:
     """Chat yanıtı — her zaman state-grounded; LLM sadece anlatımı akıcılaştırır."""
     refusal = guard.screen(message)
     if refusal is not None:
@@ -1146,6 +1191,7 @@ def answer(message: str) -> dict:
     ctx = ctx_mod.build_compact_context()
     grounded, evidence = _grounded_answer(message, ctx)
     live_evidence = any(e.startswith("web:tavily") or e.startswith("web:http") for e in evidence)
+    generic = "intent:overview" in evidence
     mode = llm_client.get_mode()
     base = {
         "refused": False,
@@ -1162,10 +1208,12 @@ def answer(message: str) -> dict:
                     "fallback_reason": "llm_off" if mode == "off" else "no_api_key"},
         }
 
+    hist = _history_block(history)
     digest = ctx_mod.context_digest(ctx)
     msg_hash = hashlib.sha1(message.casefold().strip().encode("utf-8")).hexdigest()[:12]
+    hist_hash = f"|h:{hashlib.sha1(hist.encode('utf-8')).hexdigest()[:8]}" if hist else ""
     live_bucket = f"|live:{int(time.time() // 900)}" if live_evidence else ""
-    cache_key = f"chat|{mode}|{digest}|{msg_hash}{live_bucket}"
+    cache_key = f"chat|{_PROMPT_VERSION}|{mode}|{digest}|{msg_hash}{hist_hash}{live_bucket}"
     cached = cache.get(cache_key)
     if cached is not None:
         return {**base, **cached, "llm": {**(cached.get("llm") or {}), "cached": True}}
@@ -1179,20 +1227,45 @@ def answer(message: str) -> dict:
         "Yanitini YALNIZCA state baglami ve kaynakli web bulgularina dayandir."
         if live_evidence else "Yanitini YALNIZCA bu state baglamina dayandir."
     )
+    if generic:
+        findings_label = (
+            "Soruya ozel kural eslesmedi; asagidaki metin yalnizca GENEL durum ozetidir"
+        )
+        task_rule = (
+            "SORUYU yukaridaki state baglamindaki (JSON) verilerden KENDIN yanitla; "
+            "genel ozeti ancak soruyla dogrudan ilgiliyse kullan, olduğu gibi tekrarlama. "
+            "Soru state ile cevaplanamiyorsa bunu durustce soyle ve state'in soru hakkinda "
+            "soyleyebildigi en yakin bilgiyi ver."
+        )
+    else:
+        findings_label = "Sistemin bu soru icin topladigi kanit-temelli bulgular"
+        task_rule = (
+            "Bulgulardaki somut bilgiyi (baslik, sayi, kaynak) MUTLAKA koru ama bulgu "
+            "metnini kelime kelime kopyalama; ayni bilgiyi SORUYA cevap olacak sekilde "
+            "kendi dogal cumlelerinle yaz. Bulgu varken 'veri yok' deme; 'state'te yok' "
+            "ifadesini SADECE bulgularda da gercekten hic bilgi olmayan konular icin kullan."
+        )
+    translate_rule = (
+        " Ingilizce baslik/ozetleri TURKCEYE CEVIREREK aktar; Ingilizce cumleyi oldugu "
+        "gibi kopyalama (kaynak adi/URL kalabilir)."
+        if live_evidence else ""
+    )
     user = (
         f"{source_label}:\n"
         f"{ctx_mod.context_for_prompt(ctx)}\n\n"
-        "Deterministik motorun bu soru icin cikardigi kanit-temelli yanit:\n"
-        f"{grounded}\n\n"
+        + (f"ONCEKI KONUSMA (eskiden yeniye; baglam icindir):\n{hist}\n\n" if hist else "")
+        + f"{findings_label}:\n{grounded}\n\n"
         f"KULLANICI SORUSU: {message}\n\n"
-        f"{scope_rule} Deterministik motorun yanitinda somut bulgu (baslik, ozet, kaynak) "
-        "varsa bunu MUTLAKA aktar — 'veri yok' deme, var olan bulguyu ozetle. 'state'te yok' "
-        "ifadesini SADECE deterministik yanitta da gercekten hic bulgu olmayan konular icin kullan. "
-        "Karar/islem onerme. Kisa Turkce yanit ver."
+        f"GOREV: Kullanicinin sorusunu dogrudan yanitla. {task_rule}{translate_rule} "
+        f"{scope_rule} Karar/islem onerme. Kisa, akici Turkce yanit ver."
     )
     max_out = budget.max_tokens_per_request()
     est = (len(system) + len(user)) // 4 + max_out
-    comp = client.complete(system, user, max_out) if budget.can_spend(est) else None
+    comp = (
+        client.complete(system, user, max_out, _CHAT_TEMPERATURE)
+        if budget.can_spend(est)
+        else None
+    )
     if comp is None:
         reason = "budget_exceeded" if not budget.can_spend(est) else "llm_error"
         return {

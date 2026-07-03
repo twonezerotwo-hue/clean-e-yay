@@ -1580,11 +1580,26 @@ components:
         cached: { type: boolean }
         tokens_used: { type: integer }
 
+    ChatTurn:
+      type: object
+      description: Tek konuşma turu — yalnızca LLM anlatım bağlamı içindir.
+      required: [role, text]
+      properties:
+        role: { type: string, enum: [user, agent] }
+        text: { type: string, minLength: 1, maxLength: 500 }
+
     ChatRequest:
       type: object
       required: [message]
       properties:
         message: { type: string, minLength: 1, maxLength: 2000 }
+        history:
+          type: array
+          description: >
+            Son konuşma turları (eskiden yeniye). Yalnızca LLM anlatım bağlamı
+            içindir; karar zincirine girmez. Client son ~6-8 turu gönderir.
+          maxItems: 12
+          items: { $ref: "#/components/schemas/ChatTurn" }
 
     VoiceSpeakRequest:
       type: object

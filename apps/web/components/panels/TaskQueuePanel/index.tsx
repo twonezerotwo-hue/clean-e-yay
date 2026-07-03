@@ -59,7 +59,11 @@ export function TaskQueuePanel() {
     <PanelFrame id="governor_tasks">
       <PanelHeader
         title="Bekleyen İncelemeler"
-        subtitle={`${queue.length} bekleyen inceleme`}
+        subtitle={
+          queue.length
+            ? `${queue.length} bekleyen — en geç 15 dk içinde otomatik koşulur`
+            : "kuyruk boş — otomatik döngü aktif"
+        }
         actions={
           <button
             type="button"
@@ -67,7 +71,7 @@ export function TaskQueuePanel() {
             disabled={busy}
             className="rounded border border-white/15 bg-white/5 px-2 py-0.5 text-[11px] text-white/70 hover:bg-white/10 disabled:opacity-50"
           >
-            {generate.isPending ? "Üretiliyor…" : "Görev üret"}
+            {generate.isPending ? "Taranıyor…" : "Şimdi tara"}
           </button>
         }
       />
@@ -107,7 +111,8 @@ export function TaskQueuePanel() {
         </ul>
       ) : (
         <div className="rounded border border-white/10 bg-white/[0.02] px-2 py-2 text-[11px] text-white/40">
-          Bekleyen görev yok. Sistem taraması için Görev üret düğmesini kullan.
+          Bekleyen görev yok — governor 15 dakikada bir kendisi tarar ve koşar;
+          sonuçlar aşağıda &quot;Son çalıştırılanlar&quot;da birikir.
         </div>
       )}
 

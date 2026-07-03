@@ -1602,8 +1602,16 @@ export interface components {
             cached?: boolean;
             tokens_used?: number;
         };
+        /** @description Tek konuşma turu — yalnızca LLM anlatım bağlamı içindir. */
+        ChatTurn: {
+            /** @enum {string} */
+            role: "user" | "agent";
+            text: string;
+        };
         ChatRequest: {
             message: string;
+            /** @description Son konuşma turları (eskiden yeniye). Yalnızca LLM anlatım bağlamı içindir; karar zincirine girmez. Client son ~6-8 turu gönderir. */
+            history?: components["schemas"]["ChatTurn"][];
         };
         VoiceSpeakRequest: {
             text: string;

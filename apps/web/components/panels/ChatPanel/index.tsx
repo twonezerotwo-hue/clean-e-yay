@@ -26,9 +26,14 @@ export function ChatPanel() {
   const send = (message: string) => {
     const text = message.trim();
     if (!text || chat.isPending) return;
+    // Son turlar LLM bağlamına gider — takip sorusu bağlamıyla anlaşılır.
+    const history = items
+      .slice(-6)
+      .filter((m) => m.text.trim())
+      .map((m) => ({ role: m.role, text: m.text.slice(0, 500) }));
     setItems((xs) => [...xs, { role: "user", text }]);
     setInput("");
-    chat.mutate(text, {
+    chat.mutate({ message: text, history }, {
       onSuccess: (res) =>
         setItems((xs) => [...xs, { role: "agent", text: res.answer, meta: res }]),
       onError: () =>

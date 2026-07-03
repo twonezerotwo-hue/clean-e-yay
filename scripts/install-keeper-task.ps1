@@ -26,6 +26,13 @@ Register-ScheduledTask -TaskName "EyAyDashboardKeeper" `
     -Description "Clean E-yAy dashboard keep-alive loop (API/web/ngrok self-healing). Startup klasoru VBS'inin yerini alir." `
     -Force
 
+# 2026-07-03 fix: Register-ScheduledTask'in hatasi non-terminating cikabiliyor
+# (Erisim engellendi) ve script VBS'i yine de siliyordu -> keeper tamamen
+# mekanizmasiz kaliyordu. Silmeden once gorevin GERCEKTEN var oldugunu dogrula.
+if (-not (Get-ScheduledTask -TaskName "EyAyDashboardKeeper" -ErrorAction SilentlyContinue)) {
+    throw "Gorev kaydedilemedi (yonetici konsolu gerekebilir) - Startup VBS'ine DOKUNULMADI."
+}
+
 Write-Host "Görev oluşturuldu. Eski Başlangıç VBS'ini siliyorum (çift keeper döngüsü olmasın)..."
 $vbs = "$env:APPDATA\Microsoft\Windows\Start Menu\Programs\Startup\EyAyDashboard.vbs"
 if (Test-Path $vbs) {

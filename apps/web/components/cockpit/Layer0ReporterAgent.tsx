@@ -68,20 +68,25 @@ type AgentBriefingWithExecutive = AgentBriefing & {
   engine?: BriefingEngine | null;
 };
 
-/** Center "ilk ekran" karar paneli için CockpitView'den gelen hazır veriler. */
+/** Center "ilk ekran" durum paneli için CockpitView'den gelen hazır veriler. */
 type ScanState = "OK" | "IZLE" | "ENGEL";
-type ScanItem = { label: string; value: string; ok: boolean; state?: ScanState; href?: string };
+type ScanItem = {
+  label: string;
+  value: string;
+  ok: boolean;
+  state?: ScanState;
+  href?: string;
+  /** Ham backend kodu (örn. NO_POSITION_INCREASE) — teknik referans satırı için. */
+  code?: string;
+};
 export type Layer0HeroProps = {
   title: string;
   detail: string;
   tone: string;
-  status: { label: string; tone: string };
   dqs: { value: string; tone: string };
   pnl: { value: string; tone: string };
-  candidates: number;
-  positions: number;
   topSymbols: string;
-  scans: { veri: ScanItem; risk: ScanItem; sinyal: ScanItem; ticket: ScanItem };
+  scans: { veri: ScanItem; risk: ScanItem; sinyal: ScanItem };
   watch: { key: string; label: string }[];
 };
 
@@ -145,6 +150,46 @@ function fmtSignedMoney(value: number | null | undefined) {
   if (value == null || !Number.isFinite(value)) return "---";
   const prefix = value >= 0 ? "+" : "";
   return `${prefix}$${fmtMoney(value)}`;
+}
+
+function fmtMoneyCompact(value: number | null | undefined) {
+  if (value == null || !Number.isFinite(value)) return "---";
+  const abs = Math.abs(value);
+  if (abs >= 1_000_000) return `$${(value / 1_000_000).toFixed(2)}M`;
+  if (abs >= 10_000) return `$${(value / 1_000).toFixed(1)}K`;
+  return `$${fmtMoney(value)}`;
+}
+
+function fmtHoldingAge(seconds: number) {
+  if (seconds < 60) return "şimdi";
+  if (seconds < 3600) return `${Math.floor(seconds / 60)}dk`;
+  if (seconds < 86400) {
+    const hours = Math.floor(seconds / 3600);
+    const minutes = Math.floor((seconds % 3600) / 60);
+    return minutes ? `${hours}sa ${minutes}dk` : `${hours}sa`;
+  }
+  const days = Math.floor(seconds / 86400);
+  const hours = Math.floor((seconds % 86400) / 3600);
+  return hours ? `${days}g ${hours}sa` : `${days}g`;
+}
+
+/** opened_at (UTC ISO) → yerel "02 Tem 14:35" + pozisyon yaşı. Parse edilemezse null. */
+function fmtOpenedStamp(iso: string | null | undefined) {
+  if (!iso) return null;
+  const parsed = Date.parse(iso);
+  if (!Number.isFinite(parsed)) return null;
+  const date = new Date(parsed);
+  const sameYear = date.getFullYear() === new Date().getFullYear();
+  const day = date.toLocaleDateString("tr-TR", {
+    day: "2-digit",
+    month: "short",
+    ...(sameYear ? {} : { year: "2-digit" as const }),
+  });
+  const time = date.toLocaleTimeString("tr-TR", { hour: "2-digit", minute: "2-digit" });
+  return {
+    label: `${day} ${time}`,
+    age: fmtHoldingAge(Math.max(0, (Date.now() - parsed) / 1000)),
+  };
 }
 
 function fmtPrice(value: number | null | undefined) {
@@ -294,9 +339,17 @@ function Layer0PositionManager({
           value={loading ? "..." : fmtSignedMoney(totalPnl)}
           tone={positionPnlTone(totalPnl)}
         />
-        <PositionMetric label="Büyüklük" value={loading ? "..." : `$${fmtMoney(totalSize)}`} />
-        <PositionMetric label="SL eksik" value={loading ? "..." : String(missingSl)} tone={missingSl ? "text-amber-200" : "text-emerald-300"} />
-        <PositionMetric label="TP eksik" value={loading ? "..." : String(missingTp)} tone={missingTp ? "text-amber-200" : "text-emerald-300"} />
+        <PositionMetric label="Büyüklük" value={loading ? "..." : fmtMoneyCompact(totalSize)} />
+        <PositionMetric
+          label="SL Kapsama"
+          value={loading ? "..." : positions.length ? `${positions.length - missingSl}/${positions.length}` : "—"}
+          tone={missingSl ? "text-amber-200" : "text-emerald-300"}
+        />
+        <PositionMetric
+          label="TP Kapsama"
+          value={loading ? "..." : positions.length ? `${positions.length - missingTp}/${positions.length}` : "—"}
+          tone={missingTp ? "text-amber-200" : "text-emerald-300"}
+        />
       </div>
 
       <div className="relative mt-3 min-h-0 flex-1 overflow-y-auto pr-1">
@@ -362,6 +415,7 @@ function PositionCard({
   onManage: () => void;
 }) {
   const pnl = position.unrealized_pnl_usd ?? 0;
+  const openedStamp = fmtOpenedStamp(position.opened_at);
   const isLong = position.side === "long";
   const accentClass = isLong
     ? "border-emerald-300/25 bg-[radial-gradient(circle_at_0%_0%,rgba(16,185,129,0.13),transparent_36%),linear-gradient(135deg,rgba(4,18,18,0.88),rgba(1,7,13,0.94))] shadow-[0_0_22px_rgba(16,185,129,0.08),inset_0_1px_0_rgba(255,255,255,0.04)]"
@@ -388,6 +442,24 @@ function PositionCard({
               {String(position.timeframe ?? "--").toUpperCase()}
             </span>
           </div>
+          {openedStamp ? (
+            <div className="mt-1.5 flex items-center gap-1.5 text-[9px] uppercase tracking-[0.14em] text-white/34">
+              <svg
+                viewBox="0 0 12 12"
+                className="h-2.5 w-2.5 shrink-0 text-white/28"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.2"
+                aria-hidden
+              >
+                <circle cx="6" cy="6" r="4.4" />
+                <path d="M6 3.8V6l1.7 1.1" strokeLinecap="round" />
+              </svg>
+              <span className="font-mono tabular-nums text-white/44">{openedStamp.label}</span>
+              <span className="text-white/20">·</span>
+              <span>{openedStamp.age}</span>
+            </div>
+          ) : null}
           <div className="mt-2 grid grid-cols-3 gap-1.5">
             <PositionMiniValue label="Entry" value={fmtPrice(position.entry_price)} />
             <PositionMiniValue label="Current" value={fmtPrice(position.current_price)} />
@@ -432,6 +504,8 @@ function PositionCard({
             <PositionField label="TP" value={fmtPrice(position.tp)} tone={position.tp == null ? "text-amber-200" : "text-white/76"} />
             <PositionField label="Lifecycle" value={statusText(position.lifecycle_status)} />
             <PositionField label="Time-stop" value={statusText(position.time_stop_status)} />
+            <PositionField label="Açılış" value={openedStamp?.label ?? "---"} />
+            <PositionField label="Süre" value={openedStamp?.age ?? "---"} />
           </div>
           <div className="mt-2 flex items-center justify-between gap-2 text-[9px] uppercase tracking-widest">
             <span className="rounded border border-white/10 bg-white/[0.03] px-2 py-1 text-white/38">
@@ -505,6 +579,7 @@ function PositionManageModal({
   }, [position]);
 
   const beState = breakEvenState(position);
+  const openedStamp = fmtOpenedStamp(position.opened_at);
 
   const saveRiskPlan = () => {
     const parsedSl = parseRiskDraft(slDraft);
@@ -564,6 +639,11 @@ function PositionManageModal({
             <div className="mt-1 text-[11px] uppercase tracking-widest text-accent-cyan/70">
               {position.symbol} · {positionSideLabel(position.side)} · {position.timeframe ?? "--"}
             </div>
+            {openedStamp ? (
+              <div className="mt-1 text-[10px] uppercase tracking-widest text-white/38">
+                Açılış {openedStamp.label} · {openedStamp.age}
+              </div>
+            ) : null}
           </div>
           <button
             type="button"
@@ -715,7 +795,7 @@ function PositionManageModal({
   );
 }
 
-/** Layer 0 orta sutundaki karar, metrik ve tarama HUD'u. */
+/** Layer 0 orta sütun durum özeti — hologramın altında; yalnız karar için gerekli bilgi. */
 function Layer0StatusCore({
   hero,
   onNavigate,
@@ -723,73 +803,64 @@ function Layer0StatusCore({
   hero: Layer0HeroProps;
   onNavigate: (layer: 0 | 1 | 2 | 3) => void;
 }) {
-  const scanEntries = [
-    { key: "veri", item: hero.scans.veri, target: "Conscious" },
-    { key: "risk", item: hero.scans.risk, target: "Risk" },
-    { key: "sinyal", item: hero.scans.sinyal, target: "Heart" },
-    { key: "ticket", item: hero.scans.ticket, target: "Ticket" },
-  ];
   const readState = (item: ScanItem) => item.state ?? (item.ok ? "OK" : "IZLE");
-  const blocked = scanEntries.filter(({ item }) => readState(item) === "ENGEL");
-  const watching = scanEntries.filter(({ item }) => readState(item) === "IZLE");
-  const primary = blocked[0] ?? watching[0] ?? scanEntries[0];
-  const readyCount = scanEntries.filter(({ item }) => readState(item) === "OK").length;
-  const actionLabel =
-    hero.positions > 0
-      ? "Acik islemi yonet"
-      : hero.scans.ticket.ok
-        ? "Ticket kontrol et"
-        : hero.scans.sinyal.ok
-          ? "Sinyali dogrula"
-          : blocked.length
-            ? "Yeni giris kapali"
-            : "Radari izle";
-  const actionDetail =
-    hero.positions > 0 || hero.scans.ticket.ok
-      ? hero.detail
-      : primary && readState(primary.item) !== "OK"
-        ? `${primary.item.label}: ${primary.item.value}`
-        : hero.detail;
-  const nextWatch = hero.watch[0]?.label ?? "Yeni sinyal, risk veya ticket degisimi bekleniyor.";
-  const matrixItems = [
-    { label: "Canli durum", value: hero.title, detail: hero.detail, tone: hero.tone, wide: true },
-    { label: "P&L", value: hero.pnl.value, detail: hero.positions > 0 ? "Acik pozisyon izleniyor" : "Portfoy flat", tone: hero.pnl.tone },
-    { label: "Risk", value: hero.scans.risk.value, detail: readState(hero.scans.risk) === "OK" ? "Kapi acik" : "Kontrol gerekli", tone: readState(hero.scans.risk) === "OK" ? "text-emerald-300" : "text-amber-200" },
-    {
-      label: "Sinyal",
-      value: hero.scans.sinyal.ok ? "aktif" : `${hero.candidates} izleniyor`,
-      detail: hero.scans.sinyal.value,
-      tone: hero.scans.sinyal.ok ? "text-emerald-300" : "text-amber-200",
-    },
-    { label: "Ticket", value: hero.scans.ticket.value, detail: hero.scans.ticket.ok ? "Broker onayi bekler" : "Emir uretme yok", tone: hero.scans.ticket.ok ? "text-emerald-300" : "text-slate-300" },
-    { label: readState(primary.item) === "ENGEL" ? "Ana engel" : "Siradaki takip", value: primary.item.label, detail: primary.item.value, tone: readState(primary.item) === "ENGEL" ? "text-red-200" : "text-cyan-100" },
-    { label: "Radar", value: hero.topSymbols, detail: nextWatch, tone: "text-cyan-100" },
-  ];
+  const veriState = readState(hero.scans.veri);
+  const riskState = readState(hero.scans.risk);
+  // Giriş izni = veri + risk kapılarının en kötüsü. Sinyal sayısı izin değil,
+  // akış bilgisidir — bu yüzden karara dahil edilmez.
+  const entry =
+    veriState === "ENGEL"
+      ? { word: "KAPALI", tone: "text-red-200", source: "veri güveni düşük" }
+      : riskState === "ENGEL"
+        ? { word: "KAPALI", tone: "text-red-200", source: "risk kapısı" }
+        : riskState === "IZLE"
+          ? { word: "KISITLI", tone: "text-amber-200", source: "risk kapısı" }
+          : { word: "AÇIK", tone: "text-emerald-300", source: "kapılar açık" };
+  const headline = hero.pnl.value === "flat" ? hero.title : `${hero.title} · ${hero.pnl.value}`;
+  const riskTone =
+    riskState === "OK" ? "text-emerald-300" : riskState === "IZLE" ? "text-amber-200" : "text-red-200";
+  const watchLabel = hero.watch[0]?.label;
 
   return (
     <div className="layer0-status-core layer0-brain-matrix shrink-0">
       <div className="layer0-status-core__scan" aria-hidden />
       <div className="brain-matrix-top">
         <div>
-          <div className="brain-matrix-kicker">Brain karar matrisi</div>
-          <strong className={hero.tone}>{actionLabel}</strong>
-          <p>{actionDetail}</p>
+          <div className="brain-matrix-kicker">Brain durum özeti</div>
+          <strong className={hero.tone}>{headline}</strong>
+          <p>{hero.detail}</p>
         </div>
         <div className="brain-matrix-readiness">
-          <span>Hazirlik</span>
-          <strong>{readyCount}/4</strong>
-          <em>DQS {hero.dqs.value}</em>
+          <span>Giriş izni</span>
+          <strong className={entry.tone}>{entry.word}</strong>
+          <em>{entry.source}</em>
         </div>
       </div>
 
       <div className="brain-matrix-grid">
-        {matrixItems.map((item) => (
-          <div key={item.label} className={`brain-matrix-cell ${item.wide ? "brain-matrix-cell--wide" : ""}`}>
-            <span>{item.label}</span>
-            <strong className={item.tone}>{item.value}</strong>
-            <p>{item.detail}</p>
+        <div className="brain-matrix-cell brain-matrix-cell--wide">
+          <span>Risk kapısı</span>
+          <strong className={riskTone}>{hero.scans.risk.value}</strong>
+          {hero.scans.risk.code ? <p>kod: {hero.scans.risk.code}</p> : null}
+        </div>
+        <div className="brain-matrix-cell">
+          <span>Veri</span>
+          <strong className={hero.dqs.tone}>DQS {hero.dqs.value}</strong>
+          <p>{hero.scans.veri.value}</p>
+        </div>
+        <div className="brain-matrix-cell brain-matrix-cell--full">
+          <span>Sinyal radarı — işleme en yakın adaylar</span>
+          <strong className={hero.scans.sinyal.ok ? "text-emerald-300" : "text-cyan-100"}>
+            {hero.scans.sinyal.value}
+          </strong>
+          <p>{hero.topSymbols}</p>
+        </div>
+        {watchLabel ? (
+          <div className="brain-matrix-cell brain-matrix-cell--full">
+            <span>Sıradaki takip</span>
+            <p>{watchLabel}</p>
           </div>
-        ))}
+        ) : null}
       </div>
 
       <div className="brain-matrix-actions">
@@ -800,7 +871,6 @@ function Layer0StatusCore({
           Conscious
         </button>
         {hero.scans.risk.href ? <a href={hero.scans.risk.href}>Risk gate</a> : null}
-        {hero.scans.ticket.href ? <a href={hero.scans.ticket.href}>Ticket</a> : null}
       </div>
     </div>
   );
@@ -1093,9 +1163,15 @@ export function Layer0ReporterAgent({
     if (!text || chat.isPending) return;
     setLiveTranscript("");
     setLastUserText(text);
+    // Son turlar backend LLM bağlamına gider — takip sorusu ("peki neden?")
+    // önceki cevabıyla birlikte anlaşılır. Yeni soru history'ye girmez.
+    const history = messages
+      .slice(-6)
+      .filter((m) => m.text.trim())
+      .map((m) => ({ role: m.role, text: m.text.slice(0, 500) }));
     setMessages((items) => [...items, { role: "user", text }]);
     setInput("");
-    chat.mutate(text, {
+    chat.mutate({ message: text, history }, {
       onSuccess: (response) => {
         setMessages((items) => [
           ...items,

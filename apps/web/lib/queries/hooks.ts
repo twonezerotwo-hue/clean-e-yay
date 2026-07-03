@@ -3,6 +3,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { api, type ChartTimeframe, type UpdateRiskPlanRequest } from "@/lib/api/client";
+import type { ChatTurn } from "@/types/generated/api";
 import { usePanelQueryPolicy } from "@/lib/panel-runtime";
 import { qk } from "./keys";
 
@@ -677,8 +678,15 @@ export const useReplayDecisionTrace = (snapshotId?: string | null) => {
   });
 };
 
+export type ChatInput = string | { message: string; history?: ChatTurn[] };
+
 export const useChat = () =>
-  useMutation({ mutationFn: (message: string) => api.chat(message) });
+  useMutation({
+    // string (eski çağrı) veya { message, history } — history son konuşma
+    // turlarını backend LLM bağlamına taşır (takip sorusu anlaşılsın diye).
+    mutationFn: (input: ChatInput) =>
+      typeof input === "string" ? api.chat(input) : api.chat(input.message, input.history),
+  });
 
 export const useTradeTickets = () => {
   const policy = usePanelQueryPolicy(15_000);

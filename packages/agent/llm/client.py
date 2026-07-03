@@ -77,7 +77,9 @@ class MockLLMClient:
     name = "mock"
     model = "mock-llm"
 
-    def complete(self, system: str, user: str, max_tokens: int) -> LLMCompletion | None:
+    def complete(
+        self, system: str, user: str, max_tokens: int, temperature: float = 0.2
+    ) -> LLMCompletion | None:
         # Deterministik, prompt'a bağlı kısa çıktı — testler içerik değil
         # akış (fallback vs llm) doğrular.
         head = user.strip().splitlines()[0][:120] if user.strip() else ""
@@ -101,14 +103,16 @@ class GroqClient:
         self.api_key = os.environ.get("GROQ_API_KEY", "").strip()
         self.model = os.environ.get("GROQ_MODEL", DEFAULT_GROQ_MODEL).strip()
 
-    def complete(self, system: str, user: str, max_tokens: int) -> LLMCompletion | None:
+    def complete(
+        self, system: str, user: str, max_tokens: int, temperature: float = 0.2
+    ) -> LLMCompletion | None:
         if not self.api_key:
             return None  # anahtar yok → network çağrısı yok
         body = json.dumps(
             {
                 "model": self.model,
                 "max_tokens": int(max_tokens),
-                "temperature": 0.2,
+                "temperature": float(temperature),
                 "messages": [
                     {"role": "system", "content": system},
                     {"role": "user", "content": user},
@@ -157,12 +161,14 @@ class OpenRouterClient:
         self.site_url = os.environ.get("OPENROUTER_SITE_URL", "").strip()
         self.app_name = os.environ.get("OPENROUTER_APP_NAME", "Clean E-yAy").strip()
 
-    def _request(self, system: str, user: str, max_tokens: int) -> urllib.request.Request:
+    def _request(
+        self, system: str, user: str, max_tokens: int, temperature: float = 0.2
+    ) -> urllib.request.Request:
         body = json.dumps(
             {
                 "model": self.model,
                 "max_tokens": int(max_tokens),
-                "temperature": 0.2,
+                "temperature": float(temperature),
                 "messages": [
                     {"role": "system", "content": system},
                     {"role": "user", "content": user},
@@ -180,7 +186,9 @@ class OpenRouterClient:
             headers["X-OpenRouter-Title"] = self.app_name
         return urllib.request.Request(self.api_url, data=body, headers=headers, method="POST")
 
-    def complete(self, system: str, user: str, max_tokens: int) -> LLMCompletion | None:
+    def complete(
+        self, system: str, user: str, max_tokens: int, temperature: float = 0.2
+    ) -> LLMCompletion | None:
         if not self.api_key:
             return None  # anahtar yok → network çağrısı yok
         attempt_tokens = int(max_tokens)
@@ -188,7 +196,7 @@ class OpenRouterClient:
         # düşüp BİR kez yeniden dene. Düşük bakiyede de chat çalışsın diye;
         # kredi tamamen biterse zaten son denemede de None döner (fallback devreye girer).
         for _ in range(2):
-            req = self._request(system, user, attempt_tokens)
+            req = self._request(system, user, attempt_tokens, temperature)
             try:
                 with urllib.request.urlopen(req, timeout=TIMEOUT_SEC) as resp:
                     data = json.loads(resp.read().decode("utf-8"))
@@ -243,7 +251,9 @@ class OllamaClient:
         # Modeli RAM'de tut → soğuk yükleme (ilk istekteki ~15s) tekrar etmesin.
         self.keep_alive = os.environ.get("OLLAMA_KEEP_ALIVE", "30m").strip()
 
-    def complete(self, system: str, user: str, max_tokens: int) -> LLMCompletion | None:
+    def complete(
+        self, system: str, user: str, max_tokens: int, temperature: float = 0.2
+    ) -> LLMCompletion | None:
         body = json.dumps(
             {
                 "model": self.model,
@@ -254,7 +264,7 @@ class OllamaClient:
                     {"role": "user", "content": user},
                 ],
                 "options": {
-                    "temperature": 0.2,
+                    "temperature": float(temperature),
                     "num_predict": int(max_tokens),
                 },
             }
@@ -296,9 +306,11 @@ class FallbackLLMClient:
         self.clients = clients
         self.model = " -> ".join(c.model for c in clients)
 
-    def complete(self, system: str, user: str, max_tokens: int) -> LLMCompletion | None:
+    def complete(
+        self, system: str, user: str, max_tokens: int, temperature: float = 0.2
+    ) -> LLMCompletion | None:
         for client in self.clients:
-            comp = client.complete(system, user, max_tokens)
+            comp = client.complete(system, user, max_tokens, temperature)
             if comp is not None:
                 return comp
         return None

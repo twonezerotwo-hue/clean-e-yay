@@ -358,6 +358,34 @@ def _notification_headlines() -> list[Headline]:
     return out
 
 
+# ── Patron dili: kod/jargon yerine günlük Türkçe (yönetici özeti sesli okunur) ──
+_REGIME_TR = {"OFFENSIVE": "atak", "NEUTRAL": "nötr", "DEFENSIVE": "savunmacı", "CRISIS": "kriz"}
+_SYMBOL_TR = {"BTCUSD": "Bitcoin", "ETHUSD": "Ethereum", "XAUUSD": "Altın", "XAGUSD": "Gümüş"}
+_TF_TR = {
+    "15m": "15 dakikalık grafik", "1h": "1 saatlik grafik", "4h": "4 saatlik grafik",
+    "1d": "günlük grafik", "1w": "haftalık grafik",
+}
+_DIRECTION_TR = {"bullish": "alış (yukarı)", "bearish": "satış (aşağı)", "neutral": "henüz yönsüz"}
+
+
+def _regime_tr(label: str | None) -> str:
+    return _REGIME_TR.get(str(label or "").upper(), str(label or "belirsiz").lower())
+
+
+def _symbol_tr(symbol: str | None) -> str:
+    sym = str(symbol or "?")
+    return _SYMBOL_TR.get(sym, sym)
+
+
+def _tf_tr(tf: str | None) -> str:
+    return _TF_TR.get(str(tf or ""), str(tf or "?"))
+
+
+def _usd_tr(value: float) -> str:
+    """10538.4 → '10.538 dolar' (Türkçe binlik ayraç, sesli okunur)."""
+    return f"{value:,.0f}".replace(",", ".") + " dolar"
+
+
 def _nearest_event(snap):
     """En yakın gelecek olay (saat cinsinden, label) — yoksa None."""
     now = datetime.now(UTC)
@@ -388,6 +416,7 @@ def _executive(snap, regime, cells, engine) -> dict[str, Any]:
     sonra olguları patron diline çevirir. Karar VERMEZ — sadece durumu okur.
     """
     regime_label = getattr(regime, "label", None) or getattr(regime, "regime", None) or "?"
+    regime_clause = f"piyasanın genel modu {_regime_tr(regime_label)}"
     dqs_status = snap.quality.status
     dqs_score = snap.quality.score
 
@@ -399,9 +428,9 @@ def _executive(snap, regime, cells, engine) -> dict[str, Any]:
         positions = []
     if positions:
         total = sum(p.size_usd for p in positions)
-        pos_clause = f"{len(positions)} açık pozisyon (${total:,.0f})"
+        pos_clause = f"masada {len(positions)} açık pozisyon var (toplam {_usd_tr(total)})"
     else:
-        pos_clause = "açık pozisyon yok"
+        pos_clause = "masada açık pozisyon yok"
 
     # Aktif halt
     try:
@@ -418,105 +447,125 @@ def _executive(snap, regime, cells, engine) -> dict[str, Any]:
         elif st == "degraded":
             deg.append(name)
 
-    # En güçlü hücre
+    # En güçlü hücre — patron diline çevrilir: hangi varlık, hangi grafik,
+    # hangi yön, sinyal gücü ne ve eşiğe göre nerede.
     top = max(cells, key=lambda c: c.get("score") or 0) if cells else None
     top_score = (top.get("score") or 0) if top else 0
     gap = SCORE_DIRECTIONAL - top_score
     if top:
-        sym, tf = top.get("symbol", "?"), top.get("timeframe", "?")
+        sym_txt = _symbol_tr(top.get("symbol"))
+        tf_txt = _tf_tr(top.get("timeframe"))
+        dir_txt = _DIRECTION_TR.get(str(top.get("direction") or ""), "yukarı")
         if gap <= 0:
-            market_clause = f"en güçlü kanaat {sym} {tf} skor {top_score:.0f}/{SCORE_DIRECTIONAL:.0f}, yön eşiğini geçti"
+            market_clause = (
+                f"en güçlü sinyal {sym_txt} tarafında: {tf_txt}, {dir_txt} yönü; sinyal gücü "
+                f"{top_score:.0f} puan ve işlem için aradığımız alt sınır ({SCORE_DIRECTIONAL:.0f} puan) aşıldı"
+            )
         else:
-            market_clause = f"en güçlü aday {sym} {tf} skor {top_score:.0f}/{SCORE_DIRECTIONAL:.0f}, eşiğin {gap:.1f} puan altında"
+            market_clause = (
+                f"en güçlü aday {sym_txt} tarafında: {tf_txt}; sinyal gücü {top_score:.0f} puan, "
+                f"işlem sınırı {SCORE_DIRECTIONAL:.0f} puan, yani {gap:.1f} puan eksik"
+            )
     else:
-        market_clause = "karar matrisi boş, veri bekleniyor"
+        market_clause = "karar tablosu şu an boş, sistem veri bekliyor"
 
     ev = _nearest_event(snap)
     if ev:
         hours, label, _imp = ev
-        when = f"{hours / 24:.0f} gün sonra" if hours >= 24 else f"{hours:.0f} sa sonra"
-        event_clause = f"en yakın olay {label} ({when})"
+        when = f"{hours / 24:.0f} gün sonra" if hours >= 24 else f"{hours:.0f} saat sonra"
+        event_clause = f"takvimdeki en yakın önemli olay {label}, {when}"
     else:
-        event_clause = "takvimde yakın olay yok"
+        event_clause = "takvimde yakın zamanda piyasayı oynatacak bir olay görünmüyor"
 
     flags: list[str] = []
     if halts:
-        flags.append(f"AKTİF HALT: {len(halts)} — yalnızca owner reset kapatır")
+        flags.append(f"Acil durdurma devrede ({len(halts)} adet) — yalnızca elle kaldırılır")
     if engine["stale"]:
         age = engine["age_seconds"]
-        when = f"son cycle {_fmt_age(age)} önce" if age is not None else "son cycle zamanı bilinmiyor"
-        flags.append(f"Karar motoru taze cycle üretmiyor ({when}, durum {engine['status']})")
+        when = f"son tur {_fmt_age(age)} önce" if age is not None else "son tur zamanı bilinmiyor"
+        flags.append(f"Karar motoru yeni tur üretmiyor ({when}, durum {engine['status']})")
     if down:
-        flags.append(f"Sağlayıcı DOWN: {', '.join(down)}")
+        flags.append(f"Veri kaynağı çevrimdışı: {', '.join(down)}")
     if dqs_status == "BLOCKED":
-        flags.append(f"DQS BLOCKED ({dqs_score:.0f}) — doğrulanmış veri yetersiz")
+        flags.append(f"Veri kalitesi engelli (puan {dqs_score:.0f}) — doğrulanmış veri yetersiz")
     if deg:
-        flags.append(f"Sağlayıcı degraded: {', '.join(deg)}")
+        flags.append(f"Veri kaynağı zayıf çalışıyor: {', '.join(deg)}")
 
     # ── Duruş (öncelik sırası: en kritik kazanır) ──
     if halts:
         stance, label_, tone = "halt", "İŞLEM DURDURULDU", "alert"
-        headline = f"İşlem durduruldu — {len(halts)} aktif halt var, sistem yeni pozisyon açmıyor."
+        headline = f"İşlemler güvenlik nedeniyle durduruldu — {len(halts)} acil durdurma devrede."
         narrative = (
-            f"Patron, risk tarafında halt tetiklendi ve yalnızca senin manuel reset'inle açılır. "
-            f"O zamana kadar motor beklemede. Rejim {regime_label}, {pos_clause}."
+            f"Risk tarafında acil durdurma tetiklendi; sistem yeni pozisyon açmıyor ve bu kilidi "
+            f"yalnızca sen elle kaldırabilirsin. {pos_clause.capitalize()}; mevcut pozisyonlar "
+            f"yönetilmeye devam ediyor. {regime_clause.capitalize()}."
         )
-        recommendation = "Halt sebebini risk panelinden gör; uygun bulursan owner reset ile aç, aksi halde bekle."
+        recommendation = (
+            "Durdurmanın sebebini risk panelinden incele; uygun görürsen kilidi elle kaldır, "
+            "aksi halde beklemek en güvenlisi."
+        )
     elif engine["stale"]:
         stance, label_, tone = "stale", "MOTOR BAYAT", "alert"
         age = engine["age_seconds"]
         when = f"{_fmt_age(age)} önce" if age is not None else "ne zaman olduğu belirsiz bir süre önce"
         headline = (
-            f"Karar motoru durdu ({when} son cycle) — masadaki pozisyon/karar rakamları artık canlı değil."
+            f"Karar motoru durdu (son tur {when}) — ekrandaki pozisyon ve sinyal rakamları artık güncel değil."
         )
         narrative = (
-            f"Patron, piyasa verisi taze (DQS {dqs_score:.0f}/{dqs_status}) ama tick worker {when} cycle "
-            f"kapattı ve o gün durdu. Bu süre boyunca yeni fırsatı da risk değişimini de yakalayamadık; "
-            f"{market_clause} bilgisi o son cycle'a ait."
+            f"Piyasa verisi akmaya devam ediyor ama kararları üreten motor son turunu {when} kapattı "
+            f"ve o zamandan beri yeni tur açmadı. Bu süre boyunca ne yeni fırsat yakalanabildi ne de "
+            f"risk değişimi izlenebildi; ekranda gördüğün her rakam o son tura ait."
         )
         recommendation = (
-            "Önce motoru ayağa kaldıralım (python -m apps.tick_worker.main); o çalışmadan işlem kararına güvenme."
+            "Önce motoru yeniden başlatmak gerekiyor (python -m apps.tick_worker.main); "
+            "o çalışmadan ekrandaki hiçbir işlem kararına güvenme."
         )
     elif dqs_status == "BLOCKED":
         stance, label_, tone = "blocked", "VERİ KISITI", "warn"
-        headline = f"İşlem yok — DQS BLOCKED (skor {dqs_score:.0f}), doğrulanmış veri yetersiz."
-        narrative = (
-            f"Patron, veri kalitesi karar üretmeye yetmiyor, bu yüzden yeni pozisyon açılmıyor. "
-            f"Rejim {regime_label}, {pos_clause}. Eksikler kapanınca motor tekrar aday üretir."
+        headline = (
+            f"Yeni işlem yok — veri kalitesi puanı {dqs_score:.0f} ile yetersiz, sistem kendini korumaya aldı."
         )
-        recommendation = "Sağlayıcı/veri eksiklerinin kapanmasını bekle; bu skorla işlem açmak körlemedir."
+        narrative = (
+            f"Gelen piyasa verisi doğrulanamadığı için sistem bilerek yeni pozisyon açmıyor; "
+            f"eksik veriyle işlem açmak körleme olurdu. {pos_clause.capitalize()}. "
+            f"Veri düzelince adaylar otomatik olarak yeniden üretilir."
+        )
+        recommendation = "Veri kaynaklarının düzelmesini bekle; bu tabloda işlem zorlamak risklidir."
     elif down:
         stance, label_, tone = "data_gap", "VERİ BOŞLUĞU", "warn"
-        headline = f"Veri boşluğu — {', '.join(down)} DOWN, kör nokta var."
+        headline = f"Veri boşluğu var — şu kaynaklar yanıt vermiyor: {', '.join(down)}."
         narrative = (
-            f"Patron, bir veya birden fazla sağlayıcı çökmüş durumda. Karar hâlâ üretiliyor ama "
-            f"eksik girdiyle; {market_clause}. Rejim {regime_label}, {pos_clause}."
+            f"Bir veya birden fazla veri kaynağı çevrimdışı; sistem karar üretmeye devam ediyor ama "
+            f"kör noktası var. Şu an {market_clause}. {regime_clause.capitalize()}; {pos_clause}."
         )
-        recommendation = "Sağlayıcı sağlığı düzelene kadar yeni riske temkinli yaklaş."
+        recommendation = "Veri kaynakları düzelene kadar yeni pozisyonlara temkinli yaklaşmak doğru olur."
     elif gap <= 0:
         stance, label_, tone = "signal", "SİNYAL VAR", "ok"
-        headline = f"Yön sinyali oluştu — {market_clause}."
+        headline = f"İşlem sinyali oluştu — {market_clause}."
         narrative = (
-            f"Patron, en az bir hücre yön eşiğini geçti. Rejim {regime_label}, risk temiz, {pos_clause}. "
+            f"{regime_clause.capitalize()}, risk tarafında engel yok; {pos_clause}. "
             f"{event_clause.capitalize()}."
         )
-        recommendation = "Aday RiskGate'ten geçerse paper tick'te uygulanır; Trade Ticket panelini izle."
+        recommendation = (
+            "Sinyal şimdi risk kontrolünden geçecek; onaylanırsa işlem deneme hesabında (gerçek para "
+            "değil) otomatik açılır ve Trade Ticket panelinde görünür. Senin bir şey yapman gerekmiyor."
+        )
     elif gap <= 2:
         stance, label_, tone = "watching", "İZLEMEDE", "info"
-        headline = f"Fırsata yakınız — {market_clause}."
+        headline = f"Fırsata yaklaşıyoruz — {market_clause}."
         narrative = (
-            f"Patron, henüz tetik yok ama bir aday eşiğin hemen altında. Rejim {regime_label}, risk temiz, "
-            f"{pos_clause}. {event_clause.capitalize()}."
+            f"Henüz işlem açacak güçte bir sinyal yok ama bir aday sınırın hemen altında. "
+            f"{regime_clause.capitalize()}, risk tarafı temiz; {pos_clause}. {event_clause.capitalize()}."
         )
-        recommendation = "İşlem henüz yok; aday eşiği geçerse anında haber veririm, beklemede kal."
+        recommendation = "Şu an yapılacak bir şey yok; aday sınırı geçerse anında haber veririm."
     else:
         stance, label_, tone = "calm", "SAKİN", "info"
-        headline = f"İşlem yok — yön sinyali zayıf, {market_clause}."
+        headline = "Piyasa sakin — işlem açacak güçte bir sinyal yok."
         narrative = (
-            f"Patron, piyasa sakin: {market_clause}. Rejim {regime_label}, risk temiz, {pos_clause}. "
-            f"{event_clause.capitalize()} — kısa vadede takvim baskısı düşük."
+            f"Şu an {market_clause}. {regime_clause.capitalize()}, risk tarafı temiz; {pos_clause}. "
+            f"{event_clause.capitalize()}."
         )
-        recommendation = "Beklemeye devam; güçlü bir sinyal gelmeden zorlama işlem yok."
+        recommendation = "Beklemek en doğrusu; sistem güçlü bir sinyal görmeden işlem zorlamaz."
 
     return {
         "stance": stance,

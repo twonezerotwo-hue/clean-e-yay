@@ -73,7 +73,7 @@ export function GovernorPanel() {
     <PanelFrame id="governor">
       <PanelHeader
         title="Sistem Yöneticisi"
-        subtitle="Sistemi izler, öğrenir, iyileştirme önerir"
+        subtitle="Görevlerini kendisi üretir ve koşar — 15 dk'da bir"
         actions={
           <button
             type="button"
@@ -81,14 +81,15 @@ export function GovernorPanel() {
             disabled={generate.isPending}
             className="rounded border border-white/15 bg-white/5 px-2 py-0.5 text-[11px] text-white/70 hover:bg-white/10 disabled:opacity-50"
           >
-            {generate.isPending ? "Üretiliyor…" : "Görev üret"}
+            {generate.isPending ? "Taranıyor…" : "Şimdi tara"}
           </button>
         }
       />
 
       <p className="mb-2 rounded border border-white/10 bg-white/[0.02] px-2 py-1 text-[11px] text-white/55">
-        Governor işlem açmaz, ayar değiştirmez. Yalnızca read-only görev üretir ve
-        owner onayına veri hazırlar.
+        Otomatik döngü: 15 dakikada bir sistemi tarar, gereken incelemeleri üretir ve
+        kendisi koşar; sonuç raporları aşağıda birikir. İşlem açmaz, ayar değiştirmez
+        — yalnızca okur ve owner onayına veri hazırlar.
       </p>
 
       {generatedMessage ? (

@@ -1,0 +1,83 @@
+version: 1.3.0
+created_at: '2026-06-29'
+description: Auto-weight trainer proposal from 1.2.0 (regime=NEUTRAL, dataset=25).
+regimes:
+  OFFENSIVE:
+    touche: 0.45
+    fundamental: 0.15
+    news: 0.15
+    sentinel: 0.1
+    quantum: 0.15
+    chart_pattern: 0.0
+  NEUTRAL:
+    touche: 0.398
+    fundamental: 0.2
+    news: 0.15
+    sentinel: 0.152
+    quantum: 0.1
+    chart_pattern: 0.0
+  DEFENSIVE:
+    touche: 0.3
+    fundamental: 0.2
+    news: 0.15
+    sentinel: 0.25
+    quantum: 0.1
+    chart_pattern: 0.0
+  CRISIS:
+    touche: 0.2
+    fundamental: 0.15
+    news: 0.1
+    sentinel: 0.45
+    quantum: 0.1
+    chart_pattern: 0.0
+constraints:
+  min_module_floor: 0.02
+  max_delta_per_module: 0.03
+  max_total_drift: 0.1
+audit:
+  based_on_trades: 25
+  rejected_records: 0
+  module_performance:
+  - module: sentinel
+    trades: 6
+    wins: 3
+    win_rate: 0.5
+    avg_pnl: -8.48
+    total_pnl: -50.9
+    score: 49.992
+  - module: touche
+    trades: 19
+    wins: 7
+    win_rate: 0.368
+    avg_pnl: 2.97
+    total_pnl: 56.36
+    score: 36.845
+  timeframe_distribution:
+    1h: 11
+    15m: 27
+    1d: 10
+    4h: 16
+  regime_distribution:
+    NEUTRAL: 58
+    UNKNOWN: 6
+  module_distribution:
+    sentinel: 23
+    touche: 30
+    unknown: 6
+    fundamental: 5
+tf_weights:
+  swing:
+    d1: 0.5
+    h4: 0.35
+    h1: 0.15
+    m15: 0.0
+  intraday:
+    d1: 0.15
+    h4: 0.35
+    h1: 0.35
+    m15: 0.15
+  scalp:
+    d1: 0.0
+    h4: 0.15
+    h1: 0.35
+    m15: 0.5

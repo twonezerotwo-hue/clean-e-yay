@@ -6,6 +6,7 @@ import type {
   AgentMatrix,
   AIReport,
   ChatResponse,
+  ChatTurn,
   CockpitBrief,
   DecisionMatrix,
   CalibrationState,
@@ -720,10 +721,11 @@ export const api = {
     fetchJSON<ReplayDecisionTrace>(
       `/api/v1/replay/${encodeURIComponent(snapshotId)}/decision-trace`,
     ),
-  chat: (message: string) =>
+  chat: (message: string, history?: ChatTurn[]) =>
     fetchJSON<ChatResponse>("/api/v1/chat", {
       method: "POST",
-      body: JSON.stringify({ message }),
+      // history: son konuşma turları — backend LLM'i bağlam için kullanır.
+      body: JSON.stringify(history?.length ? { message, history } : { message }),
     }),
   agentBriefing: () => fetchJSON<AgentBriefing>("/api/v1/agent/briefing"),
   voiceSpeak: (payload: VoiceSpeakRequest) =>

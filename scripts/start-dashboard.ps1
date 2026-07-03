@@ -73,6 +73,27 @@ if (-not $learningRunning) {
         -RedirectStandardOutput "$logs\learning.out.log" -RedirectStandardError "$logs\learning.err.log"
 }
 
+# 1b3) governor_worker — AYRI süreç (observe-only: 15 dk'da bir görev üretir +
+# read-only koşar; owner butona basmadan sonuçlar birikir). AWS'te supervisor
+# aynı döngüyü kendi içinde çalıştırır; bu blok yalnız lokal üç-süreç deseni için.
+$governorRunning = Get-CimInstance Win32_Process -Filter "name='python.exe'" -ErrorAction SilentlyContinue |
+    Where-Object { $_.CommandLine -like '*governor_worker.loop*' }
+if (-not $governorRunning) {
+    Start-Process -WindowStyle Hidden -FilePath $py `
+        -ArgumentList "-m","apps.governor_worker.loop" -WorkingDirectory $root `
+        -RedirectStandardOutput "$logs\governor.out.log" -RedirectStandardError "$logs\governor.err.log"
+}
+
+# 1b4) Ollama — lokal LLM (chat/persona anlatımı). Süreç ölünce chat sessizce
+# deterministik şablon moduna düşüyordu ("robotik cevap" şikayetinin kök nedeni).
+# Startup'taki tray kısayolu yeniden başlatmaz; keeper döngüsü buradan kaldırır.
+# Port sağlıklıysa (tray zaten açtıysa) blok atlanır — çakışma olmaz.
+$ollamaExe = "$env:LOCALAPPDATA\Programs\Ollama\ollama.exe"
+if ((Test-Path $ollamaExe) -and -not (Test-Http "http://127.0.0.1:11434/api/tags" 3)) {
+    Start-Process -WindowStyle Hidden -FilePath $ollamaExe -ArgumentList "serve" `
+        -RedirectStandardOutput "$logs\ollama.out.log" -RedirectStandardError "$logs\ollama.err.log"
+}
+
 # 1c) Cold cache ısıtma — API health gelince bir kez cockpit/brief tetikle (fire-and-forget).
 #     İlk snapshot derlemesi arka planda olsun; kullanıcı ilk açılışta beklemesin.
 Start-Job -ScriptBlock {

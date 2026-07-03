@@ -149,6 +149,17 @@ function formatScore(value?: number | null) {
   return value == null ? "--" : String(Math.round(value));
 }
 
+// Risk kapısı aksiyon kodu → Katman 0 kutusuna sığan kısa Türkçe durum.
+// Ham kod ScanItem.code ile ayrıca taşınır (teknik referans satırı).
+const RISK_ACTION_LABEL: Record<string, string> = {
+  HOLD: "Yeni girişe açık",
+  WATCH: "İzleme modunda",
+  HEDGE_INCREASE: "Hedge artırımı önerili",
+  NO_POSITION_INCREASE: "Yeni pozisyon açılmaz",
+  RISK_REDUCE: "Risk azaltımı gerekli",
+  KILL_SWITCH: "Acil fren aktif",
+};
+
 function formatLayer0WatchCondition(item: { key: string; label: string; detail?: string }) {
   if (item.key === "provider_restored") return null;
 
@@ -259,6 +270,32 @@ function Layer2DetailGroup({
       </header>
       <div className="relative z-10">{children}</div>
     </section>
+  );
+}
+
+/** Öğrenme Hattı adım sarmalayıcısı — panelin üstüne akış sırası + tek satır
+ *  günlük-dil açıklama koyar. Panel içeriğine dokunmaz. */
+function LearnStep({
+  step,
+  label,
+  wide = false,
+  children,
+}: {
+  step: string;
+  label: string;
+  wide?: boolean;
+  children: ReactNode;
+}) {
+  return (
+    <div className={wide ? "lg:col-span-2" : undefined}>
+      <div className="mb-1.5 flex items-center gap-2 text-[10px] uppercase tracking-[0.14em] text-white/40">
+        <span className="shrink-0 rounded border border-accent-cyan/25 bg-accent-cyan/10 px-1.5 py-0.5 font-mono font-bold text-accent-cyan/85">
+          ADIM {step}
+        </span>
+        <span className="min-w-0 truncate">{label}</span>
+      </div>
+      {children}
+    </div>
   );
 }
 
@@ -1011,20 +1048,16 @@ export function CockpitView() {
     : null;
   // Hero "ilk ekran": canlı portföy önce. Açık pozisyon varsa onları göster
   // (aktif ticket = broker'a devredilecek YENİ sinyal; ayrı kavram, detayda not).
+  // P&L başlığa hero.pnl üzerinden eklenir — detail satırında TEKRAR edilmez.
   const decisionTitle = hasOpenPositions
-    ? `${openPaperPositions} acik islem`
+    ? `${openPaperPositions} açık işlem`
     : activeTicket
       ? `${activeTicket.symbol} ${activeTicket.side.toUpperCase()}`
-      : "Su an islem yok";
+      : "Şu an işlem yok";
   const decisionDetail = hasOpenPositions
-    ? [
-        `Acik P&L ${unrealizedPnl >= 0 ? "+" : ""}$${Math.round(unrealizedPnl).toLocaleString()}`,
-        newSignalNote,
-      ]
-        .filter(Boolean)
-        .join(" / ")
+    ? newSignalNote ?? "Yeni sinyal yok — motor adayları izliyor."
     : activeTicket
-      ? `${activeTicket.timeframe} / R:R ${ticketRr != null ? ticketRr.toFixed(2) : "--"} / ${activeTicket.display.confidence_text}`
+      ? `${activeTicket.timeframe} · ${activeTicket.display.confidence_text}`
       : brief.main_blocker.detail ?? brief.main_blocker.label ?? brief.recommended_stance;
   const decisionTone = hasOpenPositions
     ? unrealizedPnl >= 0
@@ -1035,12 +1068,12 @@ export function CockpitView() {
       : brief.status === "BLOCKED" || brief.status === "FROZEN"
         ? "text-red-200"
         : "text-amber-200";
+  // Aynı sembol birden çok TF'te aday olabilir — listede tekilleştir.
   const topSymbols = candidates.length
-    ? candidates
+    ? [...new Set(candidates.map((candidate) => candidate.symbol ?? "?"))]
         .slice(0, 4)
-        .map((candidate) => candidate.symbol ?? "?")
         .join(" / ")
-    : "radar bos";
+    : "radar boş";
 
   const currentMeta = LAYERS[activeLayer];
   let layerContent: ReactNode;
@@ -1062,10 +1095,6 @@ export function CockpitView() {
     title: decisionTitle,
     detail: decisionDetail,
     tone: decisionTone,
-    status: {
-      label: AGENT_STATUS_LABEL[brief.status] ?? brief.status,
-      tone: AGENT_STATUS_TONE[brief.status],
-    },
     dqs: { value: formatScore(dqs), tone: dqsTone },
     pnl: {
       value: hasOpenPositions
@@ -1081,35 +1110,27 @@ export function CockpitView() {
           ? "text-emerald-200"
           : "text-slate-300",
     },
-    candidates: candidates.length,
-    positions: openPaperPositions,
     topSymbols,
     scans: {
       veri: {
-        label: "Veri omurgasi",
-        value: `DQS ${formatScore(dqs)} / ${brief.data_mode}`,
+        label: "Veri omurgası",
+        value: `${brief.data_mode} · ${dataTrusted ? "güvenilir" : "düşük güven"}`,
         ok: dataTrusted,
         state: dataTrusted ? "OK" : "ENGEL",
       },
       risk: {
-        label: "Risk kapisi",
-        value: riskAction,
+        label: "Risk kapısı",
+        value: RISK_ACTION_LABEL[riskAction] ?? riskAction,
+        code: riskAction,
         ok: riskClear,
         state: riskScanState,
         href: "/dashboard#risk_gate",
       },
       sinyal: {
-        label: "Sinyal adaylari",
-        value: `${actionableCount} actionable / ${candidates.length} izlenen`,
+        label: "Sinyal adayları",
+        value: `${actionableCount}/${candidates.length} işleme hazır`,
         ok: actionableCount > 0,
         state: actionableCount > 0 ? "OK" : "IZLE",
-      },
-      ticket: {
-        label: "Trade ticket",
-        value: activeTicket ? activeTicket.symbol : "ticket yok",
-        ok: Boolean(activeTicket),
-        state: activeTicket ? "OK" : "IZLE",
-        href: "/dashboard#trade_ticket",
       },
     },
     watch,
@@ -1275,20 +1296,38 @@ export function CockpitView() {
 
           <Layer2DetailGroup
             index="03"
-            title="Ogrenme Ozeti"
-            detail="Kapanan islemlerden cikan genel ogrenme, sonuc defteri ve ogrenme worker sagligi."
+            title="Ogrenme Hatti"
+            detail="Paneller ogrenme akisinin sirasinda dizildi: once ham veri toplanir ve dogrulanir, veri yeterliyse motor ogrenir, kazanc tutarliligi kapisi acilirsa otomatik ince-ayar devreye girer. Her adim read-only rapordur; config'e yazan adimlar rollback aglidir."
             badge="read-only"
           >
             <div className="grid gap-3 lg:grid-cols-2">
-              <DatasetHealthPanel />
-              <EdgeReportPanel />
-              <ThresholdAutotunePanel />
-              <ThresholdAbPanel />
-              <EntryExitQualityPanel />
-              <GuardSafetyPanel />
-              <LearningPanel />
-              <LearningWorkerPanel />
-              <div className="lg:col-span-2"><OutcomeLedgerPanel /></div>
+              <LearnStep step="01" label="Ham veri — kapanan her işlem deftere yazılır" wide>
+                <OutcomeLedgerPanel />
+              </LearnStep>
+              <LearnStep step="02" label="Veri yeterli ve temiz mi">
+                <DatasetHealthPanel />
+              </LearnStep>
+              <LearnStep step="03" label="Öğrenme motoru — 5 dk'da bir koşar">
+                <LearningWorkerPanel />
+              </LearnStep>
+              <LearnStep step="04" label="Ne öğrendi — kalibrasyon + ağırlıklar">
+                <LearningPanel />
+              </LearnStep>
+              <LearnStep step="05" label="Güvenlik kapısı — kazanç kalıcı mı, şans mı">
+                <EdgeReportPanel />
+              </LearnStep>
+              <LearnStep step="06" label="Teşhis — kayıp nereden sızıyor">
+                <EntryExitQualityPanel />
+              </LearnStep>
+              <LearnStep step="07" label="Otomatik ince-ayar — kapı açıksa, rollback'li">
+                <ThresholdAutotunePanel />
+              </LearnStep>
+              <LearnStep step="08" label="Koruma filtreleri — zarar verirse oto-kapanır">
+                <GuardSafetyPanel />
+              </LearnStep>
+              <LearnStep step="09" label="Elle deney — A/B backtest, canlıya dokunmaz">
+                <ThresholdAbPanel />
+              </LearnStep>
             </div>
           </Layer2DetailGroup>
 

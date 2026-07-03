@@ -4,6 +4,35 @@ _Bu dosya kısa ve güncel tutulur. Her görev sonunda güncellenir._
 
 ## Last known status
 
+- **Layer 0 hologram sohbet kalite paketi** (2026-07-03): owner şikayeti
+  (robotik/aynı cevap, soru anlamama, İngilizce haber, jargonlu brifing) —
+  4 kök neden düzeltildi; karar zinciri sıfır diff, anlatı katmanı only:
+  - `briefing.py _executive`: "Patron/hücre/kanaat/skor 67/55/NEUTRAL" jargonu
+    → düz kurumsal Türkçe; sinyalin YÖNÜ (alış/satış) ve sayıların anlamı
+    (eşik açıklaması) artık söyleniyor. Sembol/TF/rejim TR haritaları eklendi.
+  - `llm/chat.py answer()`: LLM artık hazır cevabı papağanlamıyor — soruya
+    kendi cevabını üretiyor; anahtar kelime eşleşmeyen sorular "intent:overview"
+    işaretiyle "bağlamdan kendin yanıtla" talimatı alıyor. Chat temperature 0.5
+    (client'lara opsiyonel `temperature` parametresi; persona raporları 0.2'de).
+  - Canlı web (Tavily) bulguları için prompt'a TÜRKÇEYE ÇEVİR talimatı —
+    "son 1 saat haberleri"nin İngilizce okunması bitti (LLM yolunda).
+  - Sohbet geçmişi uçtan uca: `ChatTurn` şeması (openapi + codegen), router
+    `history[]` kabul eder, 3 FE yüzeyi (Layer0/ChatPanel/NotificationBell)
+    son 6 turu gönderir → takip soruları bağlamıyla anlaşılır. Cache anahtarına
+    history hash'i eklendi. `guard.SYSTEM_RULES` üslubu: soruya-doğrudan-cevap.
+  - Follow-up (owner canlı testi): "btc nin verilerini ver" → yanlış rota
+    (bare-symbol → why_no_trade → "verileri yok" saçmalığı). Fix: `_ANALYZE_INTENT`
+    veri-isteme kelimeleri (veri/göster/durum/bilgi/detay/özet) + çıplak sembol
+    default'u teknik analize döndü; cache anahtarına `_PROMPT_VERSION` eklendi
+    (eski üslup 2 saat cache'ten dönmesin).
+  - Kök neden (canlı): **Ollama süreci ölüydü** — chat sessizce deterministik
+    şablona düşüyordu ("robotik" şikayetinin ana kaynağı). start-dashboard.ps1
+    artık 11434 sağlıksızsa `ollama serve` başlatır (keeper 20sn döngüsü).
+  - **Validation**: pytest 1332 passed (tam suite; test_ai_report_no_actionable_
+    when_dqs_blocked tek-koşumda ortam bağımlı flake — main'de de aynı, gdelt/
+    no_network); ruff temiz; codegen senkron; tsc temiz; `.next-prod` build yeşil;
+    canlı uçtan uca doğrulama (briefing + history'li chat + haber çevirisi + BTC verisi).
+
 - **F2-1 (gözlem fazı) — Mark-to-market SALT-GÖZLEM alanları** (2026-07-02):
   denetim yol haritasının (docs/AUDIT_ROADMAP.md) F2-1 ilk yarısı. RiskGate
   bugüne dek yalnız realized `equity_usd` görüyordu; açık pozisyonların MTM'i

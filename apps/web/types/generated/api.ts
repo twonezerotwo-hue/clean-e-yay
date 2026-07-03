@@ -280,7 +280,9 @@ export type AIReport = {
   llm?: LLMMeta;
 };
 
-export type ChatRequest = { message: string };
+export type ChatTurn = { role: "user" | "agent"; text: string };
+
+export type ChatRequest = { message: string; history?: ChatTurn[] };
 
 export type VoiceSpeakRequest = {
   text: string;
