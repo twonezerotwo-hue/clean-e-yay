@@ -1,0 +1,26 @@
+name: Net Probe (temporary, N1 verify)
+
+# Geçici teşhis — RSS genişletme (40085c27) sonrası AWS canlı doğrulama.
+# Salt-okuma; iş bitince branch'le silinir (Kural 2).
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - ".github/workflows/net-probe.yml"
+
+jobs:
+  probe:
+    runs-on: [self-hosted, clean-e-yay-ec2]
+    timeout-minutes: 5
+    steps:
+      - name: System health (tick suresi + provider ozeti + degraded)
+        run: |
+          curl -fsS -m 10 http://127.0.0.1:9000/api/v1/system/health || echo "health FAILED"
+          echo
+
+      - name: Canli basliklar — yeni kaynaklar akiyor mu
+        run: |
+          curl -fsS -m 20 http://127.0.0.1:9000/api/v1/regime-report/current \
+            | python3 -c "import json,sys; d=json.load(sys.stdin); hs=d.get('headlines') or []; srcs={}; [srcs.__setitem__(h.get('source'), srcs.get(h.get('source'),0)+1) for h in hs]; print('headline sayisi:', len(hs)); print('kaynaklar:', json.dumps(srcs, ensure_ascii=False))" \
+            || echo "regime-report FAILED"
