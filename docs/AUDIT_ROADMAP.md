@@ -22,13 +22,13 @@
 | 14 Hız | 5 | 10 | **FAZ-1:** S1-1 GDELT cooldown + S1-2 log rotasyon + S1-3 TF memo (tik 22s→~3s ölçüldü). **FAZ-1b (kalırsa):** snapshot pool'a technicals paralel (şu an seri 1.3s) — ölçülen kazanç küçük, ertelenebilir | ✅ FAZ-1 kodlandı (S1) |
 | 13 Gölge sistem | 7 | 10 | S1-2 (221MB log → tail+rotasyon) + tek-kurulum (S1-3). 10/10 = F5-2 terfi paketi READY olunca gölgenin haklılığı ölçülüp owner'a sunulur (mekanizma hazır, veri birikmeli: ≥200 eşleşme + 30 çözüm) | ✅ FAZ-1 (S1-2/3); terfi veri-bekliyor |
 | 9 EV kapısı | 5 | 10 | **FAZ-2:** S3-1 empirical_pwin AÇIK → p(win) şişik güvenden değil gerçekleşen isabetten. 10/10 = payoff_weighted'ın R-verisi birikince devreye girmesi (min_r_samples=8; şu an en dolu hücre 7) — R-damgalı kapanışlar biriktikçe DOĞAL dolar | ✅ FAZ-2 (S3-1); R-verisi birikiyor |
-| 4 Haber | 6 | 10 | S1-1 GDELT dürüst degraded (tek kanala düşüş görünür). 10/10 = ek doğrulanmış haber kaynağı (RSS feed genişletme) VEYA GDELT'e alternatif erişim — **YENİ İŞ, henüz planlanmadı** (owner ağ-erişim kararı: bu makineden GDELT/Deribit bloklu, AWS'ten erişilebilir olabilir — kontrol edilmeli) | ⬜ N1 (aşağıda) |
-| 1 Veri toplama | 7 | 10 | Haber (kat 4) + S1-4 opsiyonel-sağlayıcı ayrımı (gerçek arıza görünür). 10/10 = options ETH/BTC erişimi (Deribit bloklu) için fallback veya AWS-taraflı çekim; N1 ile aynı ağ-erişim kararı | ⬜ N1 |
+| 4 Haber | 6 | 10 | S1-1 GDELT dürüst degraded (tek kanala düşüş görünür). 10/10 = ek doğrulanmış haber kaynağı (RSS feed genişletme) VEYA GDELT'e alternatif erişim — **YENİ İŞ, henüz planlanmadı** (owner ağ-erişim kararı: bu makineden GDELT/Deribit bloklu; **2026-07-04 probe: AWS'ten de 429 rate-limit — AWS-taraflı çekim çözüm değil, alternatif kaynak şart**) | ⬜ N1 (aşağıda) |
+| 1 Veri toplama | 7 | 10 | Haber (kat 4) + S1-4 opsiyonel-sağlayıcı ayrımı (gerçek arıza görünür). 10/10 = options ETH/BTC erişimi (Deribit bloklu) için fallback veya AWS-taraflı çekim; N1 ile aynı ağ-erişim kararı. **2026-07-04 probe: Deribit AWS'ten OK — canlıda zaten besleniyor, blok yalnız lokal; kalan iş yalnız haber (kat 4)** | 🔶 options ✅; haber N1 |
 | 11 ÇIKIŞLAR | 4 | 10 | **FAZ-3 (en büyük $ kaçağı ~$2.4k):** partial_tp shadow kanıtı birikince AÇ (şu an n=2 uplift −$16, YETERSİZ — 🔴 kural). Yardımcı: TF_TARGET_TRAIL_AUTOTUNE zaten AÇIK (trailing mesafesini capture'dan öğrenir). 10/10 = partial_tp AÇIK + EXIT_FORENSICS_NUDGE AÇIK (oransal düzeltme) | ⏳ FAZ-3 kanıt-bekliyor |
 | 7 Konsensüs+ağırlık | 6 | 10 | **FAZ-4 (sinyal kalitesi):** skorlar iyi/kötü işlemi ayıramıyor (katkı kazanan≈kaybeden). WEIGHT_REGIME_FILTER (rejim-bazlı eğitim) + MISTAKE_MEMORY_V2 (Wilson-sınırlı hata hafızası) AÇ. 10/10 = ağırlık trainer'ın rejim-ayrık öğrenmesi + kalite ayrımı ölçülür | ⬜ FAZ-4 |
 | 6 Quantum | 6 | 10 | FAZ-4 kapsamında: ağırlık trainer quantum'un gerçek katkısını ölçüp ağırlığını rejim-bazlı ayarlar (şu an sabit ~%10-15). 10/10 = etkisi veriyle doğrulanmış ağırlık | ⬜ FAZ-4 |
 | 3 Makro (fundamental) | 7 | 10 | Çifte-sayım çözüldü (v2 AÇIK). 10/10 = FRED kesintisinde katman-düşürme (regime.drop_unavailable_layers AÇIK) + makro veri kanıtının ağırlıkta ölçülmesi (FAZ-4) | 🔶 büyük kısmı AÇIK |
-| 5 Sentinel | 7 | 10 | Çok-girdili kompozit AÇIK (v2). 10/10 = options-stres girdisi gerçek Deribit verisiyle (şu an bloklu → N1); kompozit tam beslenince | 🔶 N1'e bağlı |
+| 5 Sentinel | 7 | 10 | Çok-girdili kompozit AÇIK (v2). 10/10 = options-stres girdisi gerçek Deribit verisiyle (şu an bloklu → N1); kompozit tam beslenince. **2026-07-04 probe: Deribit AWS'ten OK (200) — canlı kompozit options-stres girdisini alıyor; blok yalnız lokal makinede** | 🔶 canlıda besleniyor |
 | 2 Teknik (touche) | 8 | 10 | **FAZ-5:** T-1 htf_alignment AÇIK (S3-2). Kalan T-2 (Elliott×Fib), T-3 (S/R gücü), T-4 (mum teyidi) shadow kanıtı birikince tek tek AÇ. 10/10 = dördü de aktif + kanıtla doğrulanmış | 🔶 T-1 AÇIK; T-2/3/4 shadow |
 | 8 Kalibrasyon | 8 | 10 | tf_platt AÇIK + guardrail sıkı (0.10). 10/10 = reliability_bins çifte-sayım fix (denetim bulgusu #3) + TF başına yeterli örnekle fit doğrulanır | 🔶 küçük fix + veri |
 | 12 Öğrenme | 8 | 10 | Kanıt üreten ama karara bağlanmamış flag'ler açıldıkça (empirical_pwin ✅, MM_V2, WRF). 10/10 = tüm öğrenme kanıtı ya karara bağlı ya bilinçli-shadow, boşta kanıt yok | 🔶 aktivasyonlarla |
@@ -43,6 +43,14 @@ ilerledi; 2/3/5/12 kısmen. **Kalan işler (ayrı fazlar, henüz kodlanmadı):**
   Owner kararı gerekli: (a) AWS-tarafı erişim var mı test et (AWS farklı IP),
   (b) yoksa alternatif haber/options kaynağı planla. YENİ İŞ — kod öncesi
   owner ağ-erişim teyidi şart (uydurma veri YASAK — DATA_POLICY).
+  **TEST EDİLDİ (2026-07-04, EC2 probe — PR #54, merge edilmeden kapatıldı):**
+  (1) **Deribit AWS'ten SORUNSUZ** — 200/0.1s, gerçek opsiyon zinciri; canlı
+  tick worker `degraded_reasons`'ta yalnız gdelt var → options canlıda ZATEN
+  besleniyor, kat 1/5 için AWS-taraflı ek iş GEREKMİYOR (blok yalnız lokal
+  makinede). (2) **GDELT AWS'ten de fiilen erişilemez** — SSL bloğu yok ama
+  her istek 429 rate-limit (~8-10s; GDELT AWS IP aralıklarını kısıyor), canlı
+  worker da `degraded:gdelt`. Sonuç: kat 4 için AWS-taraflı çekim ÇÖZÜM DEĞİL;
+  alternatif haber kaynağı (RSS genişletme vb.) owner kararı bekliyor.
 - **FAZ-3 — Çıkış kalitesi (kat 11):** partial_tp shadow uplift kanıtı ≥N
   işlem birikince owner onayıyla AÇ. En büyük $ kaçağı ama 🔴 kanıtsız açılmaz.
 - **FAZ-4 — Sinyal kalitesi (kat 6/7):** WEIGHT_REGIME_FILTER +
