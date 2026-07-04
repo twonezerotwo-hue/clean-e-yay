@@ -255,19 +255,40 @@ def run_if_due(
     regime_label = _regime_label()
     results = dict(prev.get("results") or {})
     scanned: list[str] = []
+    result_ttl = int(scan_cfg.get("result_ttl_sec", 14400))
+
+    def _is_fresh(sym: str) -> bool:
+        # API-bütçe kapısı: sonucu taze aday yeniden ANALİZ EDİLMEZ (learning
+        # worker tek-seferlik süreç — provider'ın bellek-içi TTL cache'i
+        # koşular arası yaşamaz; tazelik ancak burada, artifact'ta tutulur).
+        raw = str((results.get(sym) or {}).get("checked_at") or "")
+        if not raw:
+            return False
+        try:
+            return 0 <= (now - datetime.fromisoformat(raw)).total_seconds() < result_ttl
+        except ValueError:
+            return False
+
     if candidates:
         cursor = int(prev.get("cursor") or 0) % len(candidates)
         fetch_crypto = fetch_crypto_bars or cg_ohlcv.fetch_by_ticker
         bars_fn = get_bars or ohlcv.get_bars
-        for i in range(min(per_run, len(candidates))):
+        advanced = 0
+        for i in range(len(candidates)):  # kota dolana dek taze olmayan ara
+            if len(scanned) >= per_run:
+                break
             cand = candidates[(cursor + i) % len(candidates)]
+            advanced = i + 1
+            sym = str(cand["symbol"])
+            if _is_fresh(sym):
+                continue
             res = _analyze(
                 cand, regime_label=regime_label, min_bars=min_bars,
                 get_bars=bars_fn, fetch_crypto=fetch_crypto, now=now,
             )
-            results[str(cand["symbol"])] = res
-            scanned.append(str(cand["symbol"]))
-        cursor = (cursor + len(scanned)) % len(candidates)
+            results[sym] = res
+            scanned.append(sym)
+        cursor = (cursor + advanced) % len(candidates)
     else:
         cursor = 0
 

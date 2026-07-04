@@ -29,6 +29,12 @@ scan:
   interval_sec: 900     # tarayıcı en sık 15 dk'da bir koşar
   per_run: 5            # koşu başına tam-analiz aday kotası (round-robin)
   min_bars: 60          # TF başına asgari doğrulanmış bar (altı NO_DATA)
+  # Aday yeniden-analiz tazeliği (sn): sonucu bundan taze aday ATLANIR.
+  # Kritik API-bütçe kapısı — learning worker tek-seferlik süreç olduğundan
+  # CoinGecko'nun bellek-içi TTL cache'i koşular arası YAŞAMAZ; bu kapı
+  # olmadan kripto adayları 30 dk'da bir gerçek çağrıyla taranırdı
+  # (~14k çağrı/ay = limit aşımı). 4 saat: ~60 çağrı/gün, bütçeye sığar.
+  result_ttl_sec: 14400
 
 sector_rotation:
   # Göreli güç kıyas çıpası (assets.yaml'daki S&P 500 — OHLCV'de zaten var).

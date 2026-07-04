@@ -219,6 +219,36 @@ def test_quota_round_robin_and_cache(monkeypatch, tmp_path):
     assert art["results"]["SOLUSD"]["kind"] == "crypto"
 
 
+def test_result_ttl_skips_fresh_candidates(monkeypatch, tmp_path):
+    # API-bütçe kapısı: sonucu taze aday yeniden analiz edilmez (learning
+    # worker tek-seferlik süreç — provider bellek-cache'i koşular arası ölür).
+    sectors = [{"sector": "XLV", "label": "Sağlık", "verdict": "RISING", "rank": 1, "score": 6.5}]
+    crypto = [{"symbol": "SOLUSD", "cg_id": "solana", "momentum": 13.6}]
+    _setup(monkeypatch, tmp_path, scores={}, sectors=sectors, crypto=crypto, per_run=5)
+
+    t0 = datetime(2026, 7, 4, 12, 0, tzinfo=UTC)
+    r1 = _run(t0)
+    assert sorted(r1["scanned"]) == ["SOLUSD", "XLV"]
+
+    # interval doldu ama sonuçlar taze (result_ttl_sec=14400) → hiç analiz yok
+    calls = {"n": 0}
+
+    def counting(cg_id, s, tf):
+        calls["n"] += 1
+        return _bars_stub(tf, n=300)
+
+    r2 = scanner.run_if_due(
+        now=t0 + timedelta(minutes=20),
+        get_bars=lambda s, tf: _bars_stub(tf),
+        fetch_crypto_bars=counting,
+    )
+    assert r2["status"] == "OK" and r2["scanned"] == [] and calls["n"] == 0
+
+    # tazelik doldu (>4h) → yeniden analiz
+    r3 = _run(t0 + timedelta(hours=5))
+    assert sorted(r3["scanned"]) == ["SOLUSD", "XLV"]
+
+
 def test_crypto_universe_reused_within_ttl(monkeypatch, tmp_path):
     sectors = []
     crypto = [{"symbol": "SOLUSD", "cg_id": "solana", "momentum": 13.6}]
@@ -234,4 +264,7 @@ def test_crypto_universe_reused_within_ttl(monkeypatch, tmp_path):
 
     monkeypatch.setattr(uni, "crypto_shortlist", boom)
     r = _run(t0 + timedelta(minutes=20))  # scan interval doldu, markets TTL dolmadı
-    assert r["status"] == "OK" and r["scanned"] == ["SOLUSD"]
+    # markets listesi YENİDEN ÇEKİLMEDİ (boom patlamadı); aday da sonuç-TTL
+    # kapısıyla taze olduğundan yeniden analiz edilmedi.
+    assert r["status"] == "OK" and r["scanned"] == []
+    assert _artifact()["crypto_universe"]["candidates"][0]["symbol"] == "SOLUSD"
