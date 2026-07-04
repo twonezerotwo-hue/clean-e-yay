@@ -444,6 +444,25 @@ def run_once() -> dict:
         discovery_status = f"ERROR:{type(exc).__name__}"
         errors.append(f"sector_rotation:{type(exc).__name__}")
 
+    # K-1 — keşif tarayıcısı (aynı flag): kota kadar adayı (sıcak sektör ETF'leri
+    # + kripto kısa listesi) gölge analiz eder, yalnız artifact yazar. İşlem
+    # AÇMAZ; RiskGate'e girmez. Import lazy — flag kapalıyken decision-engine
+    # bağımlılıkları hiç yüklenmez (bayt-eşdeğer koşu).
+    discovery_scan_status = "DISABLED"
+    try:
+        if discovery.scan_enabled():
+            from packages.discovery import scanner as discovery_scanner
+            sc = discovery_scanner.run_if_due()
+            discovery_scan_status = str(sc.get("status", "UNKNOWN"))
+            if discovery_scan_status == "OK":
+                log.info(
+                    "discovery_scan: scanned=%s signals=%s candidates=%s",
+                    sc.get("scanned"), sc.get("signals_n"), sc.get("candidates_total"),
+                )
+    except Exception as exc:  # defensive — worker patlamamalı
+        discovery_scan_status = f"ERROR:{type(exc).__name__}"
+        errors.append(f"discovery_scan:{type(exc).__name__}")
+
     if errors:
         status = "COMPLETED_WITH_ERRORS"
     elif outcomes_seen == 0:
@@ -482,6 +501,7 @@ def run_once() -> dict:
         "tf_target_decisions": tf_target_decisions,
         "exit_forensics_status": exit_forensics_status,  # Çıkış Otopsisi (2026-07-03)
         "discovery_status": discovery_status,  # K-0b sektör rotasyonu (DISABLED=flag OFF)
+        "discovery_scan_status": discovery_scan_status,  # K-1 tarayıcı
         "duration_ms": duration_ms,        # CP1 — perf görünürlüğü
         "over_budget": over_budget,        # CP1 — bütçe aşımı bayrağı
         "errors": errors,

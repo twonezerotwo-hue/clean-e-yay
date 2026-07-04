@@ -9,6 +9,27 @@
 # BİRLİKTE) eklenir — okunmayan config anahtarı bırakılmaz (Kural 2 / M6).
 version: "1.0.0"
 
+# K-1 — kripto evreni (owner kararı: top-50). API bütçesi dürüstlüğü:
+# CoinGecko ücretsiz plan aylık ~10k çağrı ve canlı sistem (BTC/ETH OHLCV)
+# bunu ZATEN kullanıyor. Bu yüzden 50 coin'e kör OHLCV ÇEKİLMEZ: tek
+# `markets` liste çağrısı (50 coin'in fiyat+momentum verisi tek cevapta)
+# ön-süzgeçtir; tam analiz yalnız kısa listeye (shortlist_n) yapılır.
+crypto:
+  top_n: 50
+  # 24s hacmi bunun altındaki coin aday olamaz (likidite tabanı).
+  min_total_volume_usd: 20000000
+  # Tam analiz kısa listesi: momentum (0.6×30g + 0.4×7g, yalnız pozitif —
+  # v1 LONG-only) sıralamasının ilk N'i.
+  shortlist_n: 5
+  # markets liste çağrısı önbelleği (sn) — saatte 1 liste yeter.
+  markets_ttl_sec: 3600
+
+# K-1 — tarama adımı: learning worker koşusu başına bütçe.
+scan:
+  interval_sec: 900     # tarayıcı en sık 15 dk'da bir koşar
+  per_run: 5            # koşu başına tam-analiz aday kotası (round-robin)
+  min_bars: 60          # TF başına asgari doğrulanmış bar (altı NO_DATA)
+
 sector_rotation:
   # Göreli güç kıyas çıpası (assets.yaml'daki S&P 500 — OHLCV'de zaten var).
   benchmark: SP500
