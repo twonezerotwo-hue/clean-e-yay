@@ -30,7 +30,7 @@
 | 3 Makro (fundamental) | 7 | 10 | Çifte-sayım çözüldü (v2 AÇIK). 10/10 = FRED kesintisinde katman-düşürme (regime.drop_unavailable_layers AÇIK) + makro veri kanıtının ağırlıkta ölçülmesi (FAZ-4) | 🔶 büyük kısmı AÇIK |
 | 5 Sentinel | 7 | 10 | Çok-girdili kompozit AÇIK (v2). 10/10 = options-stres girdisi gerçek Deribit verisiyle (şu an bloklu → N1); kompozit tam beslenince. **2026-07-04 probe: Deribit AWS'ten OK (200) — canlı kompozit options-stres girdisini alıyor; blok yalnız lokal makinede** | 🔶 canlıda besleniyor |
 | 2 Teknik (touche) | 8 | 10 | **FAZ-5:** T-1 htf_alignment AÇIK (S3-2). Kalan T-2 (Elliott×Fib), T-3 (S/R gücü), T-4 (mum teyidi) shadow kanıtı birikince tek tek AÇ. 10/10 = dördü de aktif + kanıtla doğrulanmış | 🔶 T-1 AÇIK; T-2/3/4 shadow |
-| 8 Kalibrasyon | 8 | 10 | tf_platt AÇIK + guardrail sıkı (0.10). 10/10 = reliability_bins çifte-sayım fix (denetim bulgusu #3) + TF başına yeterli örnekle fit doğrulanır | 🔶 küçük fix + veri |
+| 8 Kalibrasyon | 8 | 10 | tf_platt AÇIK + guardrail sıkı (0.10). 10/10 = reliability_bins çifte-sayım fix (denetim bulgusu #3) + TF başına yeterli örnekle fit doğrulanır. **2026-07-04 teyit: çifte-sayım fix ZATEN main'de (d52d44fd, owner onayı 2026-07-02, `test_reliability_bins_no_double_count` yeşil) — kalan yalnız veri birikimi** | 🔶 fix ✅; veri birikiyor |
 | 12 Öğrenme | 8 | 10 | Kanıt üreten ama karara bağlanmamış flag'ler açıldıkça (empirical_pwin ✅, MM_V2, WRF). 10/10 = tüm öğrenme kanıtı ya karara bağlı ya bilinçli-shadow, boşta kanıt yok | 🔶 aktivasyonlarla |
 | 10 Risk kapıları | 9 | 10 | Zaten en güçlü. 10/10 = S2-1/S3-3 MTM gate (açık pozisyon eriyince realized beklemeden fren) — bu bağlanınca risk gerçek-zamanlı olur | ✅ S2-1 kodlandı; S3-3 flip sırada |
 | 15 Panolar | 8 | 10 | 40+ panel. 10/10 = degraded_reasons (S1-4) + coverage çipleri panele yansıtılır (küçük FE işi) | 🔶 BE hazır, FE dokunuşu |
@@ -57,9 +57,12 @@ ilerledi; 2/3/5/12 kısmen. **Kalan işler (ayrı fazlar, henüz kodlanmadı):**
   MISTAKE_MEMORY_V2 tek tek (bekleme penceresiyle). Skorların iyi/kötü
   ayrımını ölçmek için modül-katkı analizi (rapor madde 4.5) izlenmeli.
 - **FAZ-5 — TA genişletme (kat 2):** T-2/T-3/T-4 shadow kanıtı sırayla.
-- **Küçük fix'ler:** reliability_bins çifte-sayım (kat 8), FE degraded/coverage
-  çipleri (kat 15), denetim bulguları #1/#2/#4 (confluence yön, penalty taban,
-  mfe_r clamp — 2026-07-02'de raporlanmış, owner onayı bekliyor).
+- **Küçük fix'ler:** ~~reliability_bins çifte-sayım (kat 8)~~ ve ~~denetim
+  bulguları #1/#2/#4 (confluence yön, penalty taban, mfe_r clamp)~~ —
+  **2026-07-04 teyit: DÖRDÜ DE zaten düzeltilmiş** (commit d52d44fd "4 bugfix
+  paketi, owner onayı 2026-07-02", `tests/unit/test_bugfix_2026_07_02.py`
+  5/5 yeşil; bu satır bayattı). Kalan tek küçük iş: FE degraded_reasons/
+  coverage çipleri (kat 15).
 
 ## S serisi — Hız + Acil + Aktivasyon sprinti (2026-07-04, owner talimatı)
 
