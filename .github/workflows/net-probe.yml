@@ -1,0 +1,41 @@
+name: Net Probe (temporary, N1)
+
+# Geçici teşhis — N1 (docs/AUDIT_ROADMAP.md): GDELT + Deribit lokal makineden
+# ağ-bloklu; EC2'den (farklı IP) erişilebilir mi test eder + canlı kanıt okur.
+# Salt-okuma: hiçbir servisi/dosyayı değiştirmez. İş bitince branch'le silinir.
+
+on:
+  workflow_dispatch:
+
+jobs:
+  probe:
+    runs-on: [self-hosted, clean-e-yay-ec2]
+    timeout-minutes: 5
+    steps:
+      - name: GDELT probe (provider URL'siyle birebir host/path)
+        run: |
+          curl -sS -m 20 -o /tmp/gdelt.json -w "gdelt http_code=%{http_code} time=%{time_total}s\n" \
+            "https://api.gdeltproject.org/api/v2/doc/doc?query=bitcoin&mode=artlist&maxrecords=2&format=json" \
+            || echo "gdelt FAILED exit=$?"
+          head -c 400 /tmp/gdelt.json || true; echo
+
+      - name: Deribit probe (provider'in gercek endpoint'i)
+        run: |
+          curl -sS -m 20 -o /tmp/deribit.json -w "deribit http_code=%{http_code} time=%{time_total}s\n" \
+            "https://www.deribit.com/api/v2/public/get_book_summary_by_currency?currency=BTC&kind=option" \
+            || echo "deribit FAILED exit=$?"
+          head -c 400 /tmp/deribit.json || true; echo
+
+      - name: Canli kanit — partial-tp shadow
+        run: |
+          curl -fsS -m 10 http://127.0.0.1:9000/api/v1/learning/partial-tp-shadow \
+            || curl -fsS -m 10 http://127.0.0.1:9000/learning/partial-tp-shadow \
+            || echo "partial-tp endpoint FAILED"
+          echo
+
+      - name: Canli kanit — activation watchdog
+        run: |
+          curl -fsS -m 10 http://127.0.0.1:9000/api/v1/learning/activation-watchdog \
+            || curl -fsS -m 10 http://127.0.0.1:9000/learning/activation-watchdog \
+            || echo "watchdog endpoint FAILED"
+          echo
