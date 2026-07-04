@@ -6,6 +6,9 @@ name: Net Probe (temporary, N1)
 
 on:
   workflow_dispatch:
+  pull_request:
+    paths:
+      - ".github/workflows/net-probe.yml"
 
 jobs:
   probe:
