@@ -51,6 +51,30 @@ MARKET_FEEDS: Final[tuple[dict[str, str], ...]] = (
         ),
         "source": "Bloomberg/FT",
     },
+    # 2026-07-04 RSS genişletme (owner kararı — N1/kat 4): GDELT hem lokalden
+    # hem AWS'ten fiilen erişilemez (429); kaybı ek doğrulanmış RSS kanalları
+    # kapatır. Aşağıdakilerin HEPSİ ekleme günü canlı test edildi (repo'nun
+    # kendi fetch+parse'ıyla taze başlık döndürdüler). Test edilip ELENENLER
+    # (boş/404/reset döndü — DATA_POLICY, çalışmayan kaynak eklenmez):
+    # Bitcoin Magazine, ForexLive, FXStreet, Kitco, ECB Press, Investing
+    # Kripto (news_285), DW World.
+    {"url": "https://www.theblock.co/rss.xml", "source": "The Block"},
+    {"url": "https://cryptoslate.com/feed/", "source": "CryptoSlate"},
+    {"url": "https://news.bitcoin.com/feed/", "source": "Bitcoin.com"},
+    {"url": "https://finance.yahoo.com/news/rssindex", "source": "Yahoo Finance"},
+    {
+        "url": "https://feeds.content.dowjones.io/public/rss/mw_topstories",
+        "source": "MarketWatch Top",
+    },
+    # XAU/XAG için değerli-metal kanalı — bugüne dek hiç yoktu (Google News
+    # proxy deseni Reuters/Bloomberg girdileriyle aynı, kanıtlanmış yol).
+    {
+        "url": (
+            "https://news.google.com/rss/search?q=when:1d+(gold+OR+silver+OR+"
+            "%22precious+metals%22)&hl=en-US&gl=US&ceid=US:en"
+        ),
+        "source": "Gold Wire",
+    },
 )
 
 GEO_FEEDS: Final[tuple[dict[str, str], ...]] = (
@@ -65,6 +89,9 @@ GEO_FEEDS: Final[tuple[dict[str, str], ...]] = (
         ),
         "source": "World Wire",
     },
+    # 2026-07-04 RSS genişletme (owner kararı — N1/kat 4, üstteki not).
+    {"url": "https://www.theguardian.com/world/rss", "source": "Guardian World"},
+    {"url": "https://www.france24.com/en/rss", "source": "France24"},
 )
 
 
@@ -236,7 +263,10 @@ def fetch_feed_group(
         except Exception as exc:
             return [], f"{feed['source']}: {str(exc)[:120]}"
 
-    with ThreadPoolExecutor(max_workers=6) as pool:
+    # 2026-07-04: 6 → 10 worker. Market grubu 19 feed'e çıktı; 6 worker'la
+    # soğuk yenileme 4 tur sürer (yavaş feed başına 8s'e kadar) — 10 worker
+    # 2 turda bitirir, S1 hız kazanımı (kat 14) feed genişlemesiyle erimez.
+    with ThreadPoolExecutor(max_workers=10) as pool:
         futures = [pool.submit(_one, f) for f in feeds]
         for fut in as_completed(futures):
             parsed, err = fut.result()
