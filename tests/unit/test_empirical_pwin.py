@@ -20,8 +20,10 @@ _ON = {"empirical_pwin": {"enabled": True, "min_samples": 5}}
 _OFF_MIN5 = {"empirical_pwin": {"enabled": False, "min_samples": 5}}
 
 
-def _o(tf: str, regime: str, pnl: float, verified: bool = True):
-    return SimpleNamespace(timeframe=tf, regime=regime, pnl=pnl, data_verified=verified)
+def _o(tf: str, regime: str, pnl: float, verified: bool = True, r_multiple=None):
+    return SimpleNamespace(
+        timeframe=tf, regime=regime, pnl=pnl, data_verified=verified, r_multiple=r_multiple
+    )
 
 
 @pytest.fixture
@@ -47,6 +49,58 @@ def test_build_table_counts_and_filters() -> None:
     assert t["by_tf"]["4h"]["n"] == 4  # NEUTRAL 3 + OFFENSIVE 1
     assert t["cells"]["1d|NEUTRAL"]["p_win"] == 1.0
     assert t["cell_count"] == 3
+
+
+# --------------------- F5-3: ayrık gerçekleşen R (payoff) ---------------------
+
+def test_build_table_separates_win_and_loss_r() -> None:
+    # 2 kazanç (+1.5R, +0.5R → avg +1.0R), 2 kayıp (−1.0R, −1.0R → avg 1.0R mag)
+    outcomes = [
+        _o("4h", "NEUTRAL", +10, r_multiple=1.5),
+        _o("4h", "NEUTRAL", +5, r_multiple=0.5),
+        _o("4h", "NEUTRAL", -3, r_multiple=-1.0),
+        _o("4h", "NEUTRAL", -3, r_multiple=-1.0),
+        _o("4h", "NEUTRAL", +7, r_multiple=None),  # R yok → magnitüde girmez, wins'e girer
+    ]
+    cell = ep.build_table(outcomes)["cells"]["4h|NEUTRAL"]
+    assert cell["avg_win_r"] == pytest.approx(1.0)   # (1.5+0.5)/2 — R'siz kazanç hariç
+    assert cell["avg_loss_r"] == pytest.approx(1.0)  # kayıp magnitüdü
+    assert (cell["win_r_n"], cell["loss_r_n"]) == (2, 2)
+
+
+def test_build_table_r_none_when_no_r_data() -> None:
+    outcomes = [_o("1d", "NEUTRAL", +1), _o("1d", "NEUTRAL", -1)]  # r_multiple None
+    cell = ep.build_table(outcomes)["cells"]["1d|NEUTRAL"]
+    assert cell["avg_win_r"] is None and cell["avg_loss_r"] is None
+
+
+def test_lookup_carries_r_stats(ep_env) -> None:
+    (ep_env / "empirical_pwin.json").write_text(
+        json.dumps({
+            "cells": {"4h|NEUTRAL": {
+                "p_win": 0.55, "wins": 11, "losses": 9, "n": 20,
+                "avg_win_r": 0.8, "avg_loss_r": 1.1, "win_r_n": 11, "loss_r_n": 9,
+            }},
+            "by_tf": {},
+        }),
+        encoding="utf-8",
+    )
+    with threshold_override(_OFF_MIN5):
+        hit = ep.lookup("4h", "NEUTRAL")
+    assert hit is not None
+    assert hit.avg_win_r == pytest.approx(0.8) and hit.avg_loss_r == pytest.approx(1.1)
+
+
+def test_lookup_r_stats_none_for_legacy_cell(ep_env) -> None:
+    # R alanları olmayan eski artifact → None (crash yok)
+    _write(
+        ep_env,
+        cells={"4h|NEUTRAL": {"p_win": 0.55, "wins": 11, "losses": 9, "n": 20}},
+        by_tf={},
+    )
+    with threshold_override(_OFF_MIN5):
+        hit = ep.lookup("4h", "NEUTRAL")
+    assert hit is not None and hit.avg_win_r is None and hit.avg_loss_r is None
 
 
 # --------------------------------- lookup ------------------------------------
@@ -164,3 +218,57 @@ def test_engine_flag_on_falls_back_without_evidence(ep_env, monkeypatch) -> None
     assert d.expected_value == pytest.approx(dec._expected_value(0.30, 2.0, 0.1), abs=1e-3)
     assert d.p_win_empirical is None
     assert d.expected_value_empirical is None
+
+
+# --------------------- F5-3: ödül-ağırlıklı EV kapısı ------------------------
+# NOT: conftest autouse fixture'ı `_ev_gate_cfg`'yi {"enabled": False}'a sabitler
+# (F5 canlı ama çoğu test pre-F5 davranışını varsayar). Bu yüzden EV kapısını
+# doğrulayan testler mevcut F5 deseni gibi `_ev_gate_cfg`'yi DOĞRUDAN monkeypatch
+# eder (threshold_override EV config'ini bu pin yüzünden göremez).
+
+_EMP_CELL = dict(p_win=0.58, wins=29, losses=21, n=50, source="tf_regime",
+                 avg_win_r=0.6, avg_loss_r=1.2, win_r_n=29, loss_r_n=21)
+
+
+def _ev_on(monkeypatch, *, payoff_weighted: bool, cell: dict | None = _EMP_CELL) -> None:
+    from packages.decision import engine as dec
+    monkeypatch.setattr(
+        dec, "_ev_gate_cfg",
+        lambda: {"enabled": True, "min_ev": 0.0, "cost_r": 0.1,
+                 "payoff_weighted": payoff_weighted},
+    )
+    monkeypatch.setattr(dec.empirical_pwin, "enabled", lambda: True)  # p kaynağı = empirical
+    monkeypatch.setattr(
+        dec.empirical_pwin, "lookup",
+        lambda tf, rg: ep.EmpiricalPwin(**cell) if cell else None,
+    )
+
+
+def test_payoff_weighted_blocks_when_realized_payoff_negative(ep_env, monkeypatch) -> None:
+    # p=0.58 ama gerçekleşen kazanç küçük (+0.6R), kayıp büyük (−1.2R):
+    # EV = 0.58×0.6 − 0.42×1.2 − 0.1 = 0.348 − 0.504 − 0.1 = −0.256 < 0 → blok.
+    _ev_on(monkeypatch, payoff_weighted=True)
+    d, _ = _decide(monkeypatch)
+    assert d.action == "hold"
+    assert "ev_gate" in d.blocked_by
+    assert d.expected_value == pytest.approx(0.58 * 0.6 - 0.42 * 1.2 - 0.1, abs=1e-3)
+
+
+def test_fixed_rr_would_have_allowed_same_trade(ep_env, monkeypatch) -> None:
+    # AYNI hücre sabit-RR ile: EV = 0.58×2.0 − 0.42×1 − 0.1 = 0.64 > 0 → açılırdı.
+    # Ödül-ağırlıklının asıl değeri: sabit-RR'nin gizlediği negatif edge'i yakalar.
+    _ev_on(monkeypatch, payoff_weighted=False)
+    d, _ = _decide(monkeypatch)
+    assert d.action == "open_long"  # sabit-RR EV pozitif → geçer (eski davranış)
+
+
+def test_payoff_weighted_falls_back_without_r_data(ep_env, monkeypatch) -> None:
+    # Flag ON ama hücrede R verisi yok → dürüstçe sabit-RR formülüne düşer.
+    from packages.decision import engine as dec
+
+    _ev_on(monkeypatch, payoff_weighted=True,
+           cell=dict(p_win=0.65, wins=13, losses=7, n=20, source="tf_regime",
+                     avg_win_r=None, avg_loss_r=None))
+    d, _ = _decide(monkeypatch)
+    # R yok → sabit-RR formülü, empirical p (0.65) ile — payoff devreye girmez
+    assert d.expected_value == pytest.approx(dec._expected_value(0.65, 2.0, 0.1), abs=1e-3)

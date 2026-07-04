@@ -4,6 +4,31 @@ _Bu dosya kısa ve güncel tutulur. Her görev sonunda güncellenir._
 
 ## Last known status
 
+- **F5-3 — Ödül-ağırlıklı EV kapısı** (2026-07-04, owner kararı; disiplin
+  paketinin devamı — "ham güven neden şişiyor" kök analizi sonrası):
+  - **Kök bulgu**: ham güven = |skor−50|/50 (yalnız skor mesafesi); Platt fit'i
+    ayrım gücünü kaybetmiş (1d eğim a=0.04 ≈ düz çizgi → her karara taban ~%58
+    dağıtıyor) ve fit etiketi `pnl > 0` (ADET kazanma) olduğu için para
+    kaybeden sistemde bile taban yüksek. Sabit-RR EV bu şişik p ile hep
+    pozitif → EV kapısı fiilen kör.
+  - **Fix (kısıtlayıcı-yalnız)**: `ev_gate.payoff_weighted: true` (YENİ flag,
+    false = bayt-aynı). ON + yeterli örnekli hücrede EV artık GERÇEKLEŞEN
+    ortalama kazanç-R/kayıp-R + ampirik p(win) ile: EV = p×avg_win_r −
+    (1−p)×avg_loss_r − cost_r. Trailing/time-stop kazancı erken kesince
+    (avg_win_r < hedef RR) sabit-RR'nin gizlediği negatif edge açığa çıkar.
+  - **Altyapı**: `empirical_pwin.build_table` hücrelere `avg_win_r/avg_loss_r/
+    win_r_n/loss_r_n` yazar (r_multiple'dan; legacy/R'siz outcome R
+    istatistiğine girmez, counterfactual R'ye hiç girmez); `lookup` taşır;
+    eski artifact'la geriye-uyumlu (alanlar None). Karar motoru
+    `_expected_value_payoff` + R verisi yoksa dürüst sabit-RR fallback.
+  - **Validation**: pytest tam suite **1418 passed** (+7: ayrık R build/lookup
+    ×4, payoff blok/sabit-RR-karşılaştırma/fallback ×3; cf testi yeni alanlara
+    güncellendi); ruff temiz; API/kontrat yüzeyi yok → codegen gerekmez.
+    NOT: conftest `_ev_gate_cfg`'yi pinler — EV testleri doğrudan monkeypatch
+    deseniyle yazıldı (mevcut F5 deseni).
+  - Tablo alanları learning worker'ın SONRAKİ koşusunda dolar (write_table
+    her cycle); o zamana dek payoff yolu dürüstçe sabit-RR'de kalır.
+
 - **Paper açılış disiplin paketi — 3 canlı sorun kapatıldı** (2026-07-04, owner
   "acil" talebi; hepsi kısıtlayıcı-yalnız, Iron Law ihlali yok):
   - **Seans deliği 1 (SPCX/TEM)**: map'siz custom hisse "calendar unknown →

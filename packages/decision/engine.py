@@ -242,6 +242,19 @@ def _expected_value(p_win: float, rr: float, cost_r: float) -> float:
     return p_win * rr - (1.0 - p_win) * 1.0 - cost_r
 
 
+def _expected_value_payoff(
+    p_win: float, avg_win_r: float, avg_loss_r: float, cost_r: float
+) -> float:
+    """F5-3 — ödül-ağırlıklı beklenen değer (R-katı).
+
+    Sabit hedef-RR (kazanç=+RR, kayıp=−1) varsayımı yerine GERÇEKLEŞEN ortalama
+    kazanç-R ve kayıp-R kullanır: EV = p×avg_win_r − (1−p)×avg_loss_r − cost_r.
+    Trailing/time-stop kazancı hedeften erken kesince (avg_win_r < hedef RR) veya
+    kayıplar 1R'yi aşınca (avg_loss_r > 1) bu, sabit-RR EV'sinin gizlediği negatif
+    edge'i açığa çıkarır. Yalnızca KISITLAYICI kapı girdisi — RiskGate'i bypass etmez."""
+    return p_win * avg_win_r - (1.0 - p_win) * avg_loss_r - cost_r
+
+
 def _kelly_fraction(p_win: float, rr: float) -> float:
     """Tam Kelly oranı f* = (p×RR − (1−p)) / RR (edge/odds); negatif → 0."""
     if rr <= 0:
@@ -405,7 +418,28 @@ def decide_for_symbol(
     cost_r = float(ev_cfg.get("cost_r", 0.1))
     emp = empirical_pwin.lookup(timeframe, regime.label)
     p_for_ev = emp.p_win if (emp is not None and empirical_pwin.enabled()) else cal_conf
-    expected_value = _expected_value(p_for_ev, rr, cost_r)
+    # F5-3 — ödül-ağırlıklı EV. Flag OFF (default) → sabit-RR formülü birebir
+    # (bayt-aynı). ON + yeterli örnekli hücrede GERÇEKLEŞEN kazanç-R/kayıp-R
+    # varsa: EV = p_emp×avg_win_r − (1−p_emp)×avg_loss_r − cost_r (kazanma
+    # olasılığı DA ampirik — şişik kalibre güven değil). R verisi yoksa dürüstçe
+    # sabit-RR'ye düşer (sahte payoff uydurulmaz).
+    payoff_ready = (
+        bool(ev_cfg.get("payoff_weighted", False))
+        and emp is not None
+        and emp.avg_win_r is not None
+        and emp.avg_loss_r is not None
+    )
+    if payoff_ready:
+        expected_value = _expected_value_payoff(
+            emp.p_win, emp.avg_win_r, emp.avg_loss_r, cost_r
+        )
+        ev_reason = (
+            f"Negatif EV: {expected_value:.2f}R (p={emp.p_win:.2f}, "
+            f"+{emp.avg_win_r:.2f}R/−{emp.avg_loss_r:.2f}R gerçekleşen)"
+        )
+    else:
+        expected_value = _expected_value(p_for_ev, rr, cost_r)
+        ev_reason = f"Negatif EV: {expected_value:.2f}R (p={p_for_ev:.2f}, RR={rr})"
     p_win_empirical = None if emp is None else round(emp.p_win, 4)
     expected_value_empirical = (
         None if emp is None else round(_expected_value(emp.p_win, rr, cost_r), 4)
@@ -418,7 +452,7 @@ def decide_for_symbol(
             size_multiplier=0.0,
             consensus=cons,
             risk=risk,
-            reason=f"Negatif EV: {expected_value:.2f}R (p={p_for_ev:.2f}, RR={rr})",
+            reason=ev_reason,
             raw_confidence=round(raw_conf, 4),
             confidence_source=conf_source,
             fingerprint=fp,

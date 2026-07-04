@@ -64,8 +64,12 @@ def test_cf_channel_separate_from_actual() -> None:
     # gerçek kanal counterfactual'dan ETKİLENMEDİ
     assert t["by_tf"]["1h"]["n"] == 2
     assert t["cells"]["1h|NEUTRAL"]["n"] == 2
-    # cf kanalı: 2 win + 1 loss (expired paydaya girmedi)
-    assert t["cf_by_tf"]["1h"] == {"wins": 2, "losses": 1, "n": 3, "p_win": pytest.approx(2 / 3, abs=1e-3)}
+    # cf kanalı: 2 win + 1 loss (expired paydaya girmedi). F5-3: cf'in gerçekleşen
+    # R'si yok (paper açılmadı) → R alanları None/0.
+    cf = t["cf_by_tf"]["1h"]
+    assert (cf["wins"], cf["losses"], cf["n"]) == (2, 1, 3)
+    assert cf["p_win"] == pytest.approx(2 / 3, abs=1e-3)
+    assert cf["avg_win_r"] is None and cf["avg_loss_r"] is None
 
 
 # --------------------------------- lookup ------------------------------------

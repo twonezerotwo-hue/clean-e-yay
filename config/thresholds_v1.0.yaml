@@ -142,6 +142,15 @@ ev_gate:
   enabled: true
   min_ev: 0.0       # R-katı; <bu beklenen değerli trade açılmaz
   cost_r: 0.1       # round-trip maliyet (spread/fee) R cinsinden
+  # F5-3 — ödül-ağırlıklı EV (owner kararı 2026-07-04). false → sabit hedef-RR
+  # formülü birebir (kazanç=+RR, kayıp=−1R varsayımı). true → yeterli örnekli
+  # (tf|rejim→tf) hücrede GERÇEKLEŞEN ortalama kazanç-R/kayıp-R + ampirik p(win)
+  # kullanılır: trailing/time-stop kazancı hedeften erken kesince (avg_win_r <
+  # RR) sabit-RR EV'sinin gizlediği negatif edge açığa çıkar → zayıf trade'ler
+  # EV kapısında bloklanır. R verisi olmayan hücre dürüstçe sabit-RR'ye düşer.
+  # Kanıt: kalibre güven şişik (flat-slope Platt → taban ~%58), sabit-RR EV bu
+  # şişik p ile hep pozitif çıkıyordu; gerçekleşen R payoff'u asimetriyi görür.
+  payoff_weighted: true
 
 # F5 — Kelly sizing. Boyutu ölçülen edge'e oransal CAP'ler: $ = fraction × f* × equity
 # (f* = (p×RR−(1−p))/RR). Yalnız KÜÇÜLTÜR (no-AI-boost). DEFAULT KAPALI.

@@ -72,7 +72,16 @@ class EmpiricalPwin:
     wins: int
     losses: int
     n: int          # wins + losses (başabaş hariç — F1-2 standardı)
-    source: str     # "tf_regime" | "tf"
+    source: str     # "tf_regime" | "tf" | "tf_blend_cf"
+    # F5-3 — ödül-ağırlıklı EV girdisi: GERÇEKLEŞEN ortalama kazanç-R ve kayıp-R
+    # (r_multiple = getiri% / açılış risk mesafesi). Sabit hedef-RR yerine bunlar
+    # kullanılınca "adet kazanıyor ama trailing/time-stop erken çıkıyor → kazanç
+    # hedeften küçük" gerçeği EV'ye girer. r_multiple taşımayan (legacy/SL'siz)
+    # outcome'lar R istatistiğine girmez; hiç R yoksa None (uydurma yok).
+    avg_win_r: float | None = None   # kazananların ortalama +R (pozitif büyüklük)
+    avg_loss_r: float | None = None  # kaybedenlerin ortalama R (pozitif büyüklük)
+    win_r_n: int = 0
+    loss_r_n: int = 0
 
 
 def _cell_key(timeframe: str, regime: str) -> str:
@@ -90,9 +99,21 @@ def build_table(outcomes, counterfactuals: list[dict] | None = None) -> dict:
     by_tf: dict[str, dict] = {}
     cf_by_tf: dict[str, dict] = {}
 
-    def _bump(bucket: dict, key: str, won: bool) -> None:
-        c = bucket.setdefault(key, {"wins": 0, "losses": 0})
+    def _bump(bucket: dict, key: str, won: bool, r_mult: float | None = None) -> None:
+        c = bucket.setdefault(
+            key,
+            {"wins": 0, "losses": 0, "win_r_sum": 0.0, "win_r_n": 0,
+             "loss_r_sum": 0.0, "loss_r_n": 0},
+        )
         c["wins" if won else "losses"] += 1
+        # F5-3 — gerçekleşen R'yi ayrık topla (kazanç magnitüdü +, kayıp magnitüdü |·|).
+        if r_mult is not None:
+            if won:
+                c["win_r_sum"] += float(r_mult)
+                c["win_r_n"] += 1
+            else:
+                c["loss_r_sum"] += abs(float(r_mult))
+                c["loss_r_n"] += 1
 
     for o in outcomes:
         if not o.data_verified:
@@ -102,24 +123,34 @@ def build_table(outcomes, counterfactuals: list[dict] | None = None) -> dict:
         won = o.pnl > 0
         tf = str(o.timeframe or "1d")
         regime = str(o.regime or "UNKNOWN")
-        _bump(cells, _cell_key(tf, regime), won)
-        _bump(by_tf, tf, won)
+        r_mult = getattr(o, "r_multiple", None)  # legacy/mock-güvenli
+        _bump(cells, _cell_key(tf, regime), won, r_mult)
+        _bump(by_tf, tf, won, r_mult)
 
     for r in counterfactuals or []:
         oc = r.get("outcome")
         if oc not in ("missed_win", "avoided_loss"):
             continue  # expired: net sonuç yok
+        # Counterfactual'ların gerçekleşen R'si yok (paper açılmadı) → R istatistiği
+        # yalnız gerçek outcome'lardan; cf sadece p_win harmanına girer.
         _bump(cf_by_tf, str(r.get("timeframe") or "1d"), oc == "missed_win")
 
     def _finalize(bucket: dict) -> dict:
         out = {}
         for key, c in sorted(bucket.items()):
             n = c["wins"] + c["losses"]
+            win_r_n = c.get("win_r_n", 0)
+            loss_r_n = c.get("loss_r_n", 0)
             out[key] = {
                 "wins": c["wins"],
                 "losses": c["losses"],
                 "n": n,
                 "p_win": round(c["wins"] / n, 4) if n else 0.0,
+                # F5-3 — ayrık gerçekleşen R (yoksa None; uydurma yok)
+                "avg_win_r": round(c["win_r_sum"] / win_r_n, 4) if win_r_n else None,
+                "avg_loss_r": round(c["loss_r_sum"] / loss_r_n, 4) if loss_r_n else None,
+                "win_r_n": win_r_n,
+                "loss_r_n": loss_r_n,
             }
         return out
 
@@ -208,12 +239,18 @@ def lookup(timeframe: str, regime: str) -> EmpiricalPwin | None:
             n = int(cell.get("n", 0))
             if n < min_samples:
                 continue
+            awr = cell.get("avg_win_r")
+            alr = cell.get("avg_loss_r")
             return EmpiricalPwin(
                 p_win=float(cell["p_win"]),
                 wins=int(cell.get("wins", 0)),
                 losses=int(cell.get("losses", 0)),
                 n=n,
                 source=source,
+                avg_win_r=float(awr) if awr is not None else None,
+                avg_loss_r=float(alr) if alr is not None else None,
+                win_r_n=int(cell.get("win_r_n", 0)),
+                loss_r_n=int(cell.get("loss_r_n", 0)),
             )
         except (TypeError, ValueError, KeyError):
             continue
