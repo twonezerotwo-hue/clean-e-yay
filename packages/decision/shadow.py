@@ -57,6 +57,14 @@ DEFAULT_PATH = "data/runtime/shadow_decisions.jsonl"
 DEFAULT_MAX_READ = 200
 EXECUTION_MODE = "PAPER"  # NO_EXECUTION contract — observation is paper-only.
 
+# S1-2 (2026-07-04) — log rotasyonu: dosya bu boyutu aşınca `.1` yan-dosyasına
+# devrilir (tek nesil arşiv; eski `.1` ezilir). Okuyucu gerekirse `.1`'e uzanır,
+# bu yüzden rotasyon anında bile son DEFAULT_MAX_READ kayıt hep erişilebilir.
+_MAX_MB_ENV = "SHADOW_LOG_MAX_MB"
+_DEFAULT_MAX_MB = 128.0
+# Tail okuma chunk boyutu — ortalama satır ~8KB; 200 satır ≈ 1.6MB, iki chunk yeter.
+_TAIL_CHUNK_BYTES = 1_048_576
+
 # Live engine actions that represent a NEW entry intent.
 _LIVE_ENTRY_ACTIONS = ("open_long", "open_short")
 # Shadow (AgentDecision) actions that represent a NEW entry intent.
@@ -658,11 +666,33 @@ def latest_viewmodel() -> dict:
     return comparison_viewmodel(recent[-1] if recent else None)
 
 
+def _max_log_bytes() -> int:
+    try:
+        mb = float(os.environ.get(_MAX_MB_ENV, str(_DEFAULT_MAX_MB)))
+    except ValueError:
+        mb = _DEFAULT_MAX_MB
+    return int(mb * 1_048_576)
+
+
+def _rotate_if_needed(p: Path) -> None:
+    """Dosya tavanı aştıysa `.1`'e devir (eski `.1` ezilir). Best-effort."""
+    try:
+        if p.exists() and p.stat().st_size >= _max_log_bytes() > 0:
+            archive = p.with_name(p.name + ".1")
+            archive.unlink(missing_ok=True)
+            p.rename(archive)
+    except OSError:
+        # Rotasyon başarısızsa (ör. dosya başka süreçte açık) append devam eder;
+        # bir sonraki record yeniden dener. Tick ASLA kesilmez.
+        pass
+
+
 def record(entry: dict) -> dict:
     """Append a shadow comparison record (best-effort; never raises)."""
     try:
         p = _path()
         p.parent.mkdir(parents=True, exist_ok=True)
+        _rotate_if_needed(p)
         with p.open("a", encoding="utf-8") as f:
             f.write(json.dumps(entry, ensure_ascii=False, default=str) + "\n")
     except OSError:
@@ -671,15 +701,44 @@ def record(entry: dict) -> dict:
     return entry
 
 
-def read_recent(limit: int = DEFAULT_MAX_READ) -> list[dict]:
-    """Son `limit` shadow kaydı (en yeni en sonda); bozuk satır atlanır."""
-    p = _path()
-    if not p.exists():
-        return []
+def _tail_lines(p: Path, limit: int) -> list[str]:
+    """Dosyanın son `limit` satırını sondan chunk'la okur — tam-dosya
+    `read_text` YOK (221MB'lık log bu yüzden her okuyuşta belleğe iniyordu)."""
     try:
-        lines = p.read_text(encoding="utf-8").splitlines()
+        size = p.stat().st_size
     except OSError:
         return []
+    if size == 0:
+        return []
+    chunks: list[bytes] = []
+    newlines = 0
+    try:
+        with p.open("rb") as f:
+            pos = size
+            while pos > 0 and newlines <= limit:
+                step = min(_TAIL_CHUNK_BYTES, pos)
+                pos -= step
+                f.seek(pos)
+                chunk = f.read(step)
+                chunks.append(chunk)
+                newlines += chunk.count(b"\n")
+    except OSError:
+        return []
+    data = b"".join(reversed(chunks)).decode("utf-8", errors="replace")
+    return data.splitlines()[-max(1, limit):]
+
+
+def read_recent(limit: int = DEFAULT_MAX_READ) -> list[dict]:
+    """Son `limit` shadow kaydı (en yeni en sonda); bozuk satır atlanır.
+
+    S1-2: sondan okur; aktif dosyada yeterli satır yoksa `.1` arşivine uzanır
+    (rotasyon sınırında bile aynı kayıt kümesi döner — davranış-nötr)."""
+    p = _path()
+    lines = _tail_lines(p, limit) if p.exists() else []
+    if len(lines) < limit:
+        archive = p.with_name(p.name + ".1")
+        if archive.exists():
+            lines = _tail_lines(archive, limit - len(lines)) + lines
     out: list[dict] = []
     for line in lines[-max(1, limit):]:
         line = line.strip()

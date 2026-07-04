@@ -82,6 +82,7 @@ def record(
     duration_ms: int | None = None,
     unrealized_pnl_usd: float | None = None,
     mtm_equity_usd: float | None = None,
+    degraded_reasons: list[str] | None = None,
 ) -> dict:
     """Heartbeat yaz (atomik); yazılan dict'i döner (best-effort).
 
@@ -121,6 +122,9 @@ def record(
             "mtm_equity_usd": (
                 None if mtm_equity_usd is None else float(mtm_equity_usd)
             ),
+            # S1-4 — DEGRADED'in NEDENİ görünür olsun (additive): hangi girdi
+            # bozuk? Boş liste = sebep yok (status zaten OK) veya eski kayıt.
+            "degraded_reasons": list(degraded_reasons or []),
         }
         all_hb[worker_name] = hb
         _save(all_hb)

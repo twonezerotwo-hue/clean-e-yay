@@ -43,6 +43,11 @@ class RiskInput:
     peak_equity_usd: float
     daily_pnl_usd: float
     open_position_count: int
+    # S2-1 (F2-1 gate bağlama) — mark-to-market equity (açık pozisyonlar dahil).
+    # None = ölçüm yok (eski çağıranlar, API yolları) → davranış birebir eski.
+    # Yalnız tick_worker doldurur; flag `risk_gates.mtm_equity_enabled` AÇIKKEN
+    # drawdown kontrolü min(realized, mtm) ile SIKILAŞIR (asla gevşemez).
+    mtm_equity_usd: float | None = None
 
 
 @dataclass
@@ -84,14 +89,26 @@ def evaluate(
         )
 
     # 3) Max drawdown
+    # S2-1 — flag açık + MTM ölçümü varsa efektif equity = min(realized, mtm):
+    # açık pozisyonlar toplamda eriyorsa fren realized kapanışı BEKLEMEZ.
+    # min() garantisi: MTM kârı gate'i asla gevşetemez (yalnız sıkılaştırır).
+    dd_equity = inp.equity_usd
+    dd_label = "DD"
+    if (
+        bool(th.get("mtm_equity_enabled", False))
+        and inp.mtm_equity_usd is not None
+        and inp.mtm_equity_usd < dd_equity
+    ):
+        dd_equity = inp.mtm_equity_usd
+        dd_label = "DD(mtm)"
     if inp.peak_equity_usd > 0:
-        dd = (inp.peak_equity_usd - inp.equity_usd) / inp.peak_equity_usd
+        dd = (inp.peak_equity_usd - dd_equity) / inp.peak_equity_usd
         if dd >= th["max_drawdown_pct"]:
             candidates.append(
                 (
                     "RISK_REDUCE",
                     "Maksimum drawdown sınırı aşıldı",
-                    [f"DD {dd:.1%} ≥ {th['max_drawdown_pct']:.0%}"],
+                    [f"{dd_label} {dd:.1%} ≥ {th['max_drawdown_pct']:.0%}"],
                 )
             )
 

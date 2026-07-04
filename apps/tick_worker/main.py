@@ -58,12 +58,22 @@ def _utc_iso() -> str:
     return datetime.now(UTC).isoformat()
 
 
-def _provider_degraded(snap) -> bool:
-    for info in (getattr(snap, "provider_status", None) or {}).values():
+# S1-4 — OPSİYONEL sağlayıcılar: bazı ağlardan kalıcı erişilemeyen yan
+# kaynaklar (GDELT bloklu, Deribit bölgesel engelli). Bunların arızası tek
+# başına worker'ı DEGRADED yapmaz (alarm yorgunluğu gerçek arızayı maskeler);
+# sebep yine degraded_reasons'ta listelenir, provider_status'ta görünür kalır.
+OPTIONAL_PROVIDERS = frozenset({"gdelt", "options_deribit"})
+
+
+def _degraded_providers(snap) -> tuple[list[str], list[str]]:
+    """(kritik, opsiyonel) arızalı sağlayıcı adları."""
+    critical: list[str] = []
+    optional: list[str] = []
+    for name, info in (getattr(snap, "provider_status", None) or {}).items():
         raw = info.get("status") if isinstance(info, dict) else info
         if str(raw or "").lower() in {"degraded", "down"}:
-            return True
-    return False
+            (optional if name in OPTIONAL_PROVIDERS else critical).append(name)
+    return sorted(critical), sorted(optional)
 
 
 def _pid_alive(pid: int) -> bool:
@@ -220,6 +230,9 @@ async def run_once() -> None:
             peak_equity_usd=ps.peak_equity_usd,
             daily_pnl_usd=ps.daily_pnl_usd,
             open_position_count=len(ps.open_positions),
+            # S2-1 — MTM gate girdisi (flag risk_gates.mtm_equity_enabled
+            # KAPALIYKEN engine bunu okumaz → davranış birebir eski).
+            mtm_equity_usd=ps.mtm_equity_usd,
         )
 
         # G5 — halt durumunu oku/persist et; KILL_SWITCH halt → flatten,
@@ -237,6 +250,7 @@ async def run_once() -> None:
                 peak_equity_usd=ps.peak_equity_usd,
                 daily_pnl_usd=ps.daily_pnl_usd,
                 open_position_count=len(ps.open_positions),
+                mtm_equity_usd=ps.mtm_equity_usd,
             )
         if halts:
             log.warning("active halts: %s", [h.type for h in halts])
@@ -437,10 +451,19 @@ async def run_once() -> None:
             log.exception("snapshot store record failed (tick devam ediyor)")
 
         # DEGRADED: veri/sağlayıcı bozuk ya da aktif halt var (yine de cycle tamam).
+        # S1-4: opsiyonel sağlayıcı arızası (gdelt/options) tek başına DEGRADED
+        # YAPMAZ; sebepler degraded_reasons'ta her durumda görünür.
+        crit_providers, opt_providers = _degraded_providers(snap)
+        reasons: list[str] = []
+        if str(snap.quality.status) in {"BLOCKED", "DEGRADED"}:
+            reasons.append(f"dqs:{snap.quality.status}")
+        reasons.extend(f"halt:{h.type}" for h in halts)
+        reasons.extend(f"provider:{n}" for n in crit_providers)
+        reasons.extend(f"provider_optional:{n}" for n in opt_providers)
         degraded = (
             str(snap.quality.status) in {"BLOCKED", "DEGRADED"}
             or bool(halts)
-            or _provider_degraded(snap)
+            or bool(crit_providers)
         )
         heartbeat.record(
             WORKER_NAME,
@@ -455,6 +478,7 @@ async def run_once() -> None:
             # F2-1 — MTM salt-gözlem (RiskGate girdisi değil; bkz. _snapshot_record).
             unrealized_pnl_usd=round(ps.unrealized_pnl_usd, 2),
             mtm_equity_usd=round(ps.mtm_equity_usd, 2),
+            degraded_reasons=reasons,
         )
         # SSE: cockpit'in canlı nabzı — UI bu event'i alınca brief/decision/
         # paper cache'lerini invalidate eder.

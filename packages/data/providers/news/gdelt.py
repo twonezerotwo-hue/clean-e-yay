@@ -7,6 +7,8 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
+import time
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -20,6 +22,35 @@ API = "https://api.gdeltproject.org/api/v2/doc/doc"
 TIMEOUT_SEC = 8.0
 MAX_AGE_HOURS: Final[int] = 24
 MAX_ARTICLES: Final[int] = 12
+
+# S1-1 (2026-07-04) — başarısızlık cooldown'u. GDELT bazı ağlardan kalıcı
+# erişilemez (SSL handshake 8s timeout); her news-refresh'te bu timeout'u
+# yeniden yemek tick döngüsünü kilitliyordu. Hata sonrası cooldown boyunca
+# fetch atlanır; status dürüstçe degraded kalır (veri uydurulmaz), süre
+# dolunca yeniden denenir. 0 → cooldown kapalı (eski davranış birebir).
+_last_failure_monotonic: float | None = None
+_last_error: str | None = None
+
+
+def _cooldown_sec() -> float:
+    try:
+        return float(os.environ.get("GDELT_COOLDOWN_SEC", "900"))
+    except ValueError:
+        return 900.0
+
+
+def _in_cooldown() -> bool:
+    if _last_failure_monotonic is None:
+        return False
+    cd = _cooldown_sec()
+    return cd > 0 and (time.monotonic() - _last_failure_monotonic) < cd
+
+
+def reset_cooldown() -> None:
+    """Test izolasyonu: cooldown durumunu sıfırla."""
+    global _last_failure_monotonic, _last_error
+    _last_failure_monotonic = None
+    _last_error = None
 
 # Anahtar gerektirmeyen — finans + makro odaklı arama sorgusu.
 QUERY = (
@@ -101,10 +132,21 @@ def parse_articles(
 
 
 def fetch_headlines(fetch_fn=None) -> tuple[list[NewsHeadline], str | None]:
-    """Döner: (headlines, error). Hata olsa da crash etmez, boş liste döner."""
+    """Döner: (headlines, error). Hata olsa da crash etmez, boş liste döner.
+
+    S1-1: son deneme başarısızsa cooldown penceresi boyunca ağa hiç çıkılmaz
+    (boş liste + cooldown etiketli hata döner) — kalıcı-arızalı uçtan her
+    seferinde timeout yemek yerine dürüst degraded + hızlı dönüş."""
+    global _last_failure_monotonic, _last_error
+    if _in_cooldown():
+        return [], f"GDELT cooldown ({int(_cooldown_sec())}s) — son hata: {_last_error}"
     fetch = fetch_fn or default_fetch
     try:
         raw = fetch(QUERY)
     except (urllib.error.URLError, TimeoutError, OSError) as exc:
-        return [], f"GDELT: {str(exc)[:120]}"
+        _last_failure_monotonic = time.monotonic()
+        _last_error = str(exc)[:120]
+        return [], f"GDELT: {_last_error}"
+    _last_failure_monotonic = None
+    _last_error = None
     return parse_articles(raw), None

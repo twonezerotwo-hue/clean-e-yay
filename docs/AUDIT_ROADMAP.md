@@ -4,6 +4,50 @@
 > sürecine çevirir. **Yaşayan belge** — her slice tamamlanınca durum sütunu
 > güncellenir. Kaynak denetim raporu: PR #48 açıklaması + oturum kaydı.
 
+## S serisi — Hız + Acil + Aktivasyon sprinti (2026-07-04, owner talimatı)
+
+> Kaynak: 2026-07-04 tam-repo denetim raporu (oturum kaydı). Owner talimatı:
+> hız sorunlarını çöz, kanıtı hazır kapalı özellikleri aç, acil bozuklukları
+> düzelt. Kurallar: (1) çalışan sistem bozulmaz, (2) ölü kod/şişmiş mimari
+> yok, (3) harcanan her token sistemi iyiye götürür.
+>
+> **Ölçülmüş taban (bu sprint öncesi):** tick süresi ~22.4s (30s aralıkta);
+> `build_snapshot` ~19.9s; bunun içinde news cold ~11.2s (GDELT SSL
+> handshake 8s timeout — bu makineden ağ seviyesinde ERİŞİLEMİYOR, canlı
+> test 2026-07-04) + prices ~3.9s; agent matrix 1.3s × tick başına 2 kez;
+> `shadow_decisions.jsonl` 221MB / 27.704 satır ve `read_recent` her
+> çağrıda TÜM dosyayı okuyor. Deribit options da bu makineden bloklu
+> (WinError 10054). Canlı sonuç: realized −$1.495; SL_HIT 42/−$2.877,
+> TP_HIT 23/+$3.382, TRAILING 34/+$280 (kârın %66–83'ü geri veriliyor,
+> forensics tahmini kaçak ~$2.400), TIME_STOP 31/−$3.
+
+| # | İş | Durum | Risk | Not |
+|---|---|---|---|---|
+| S1-1 | GDELT başarısızlık-cooldown'u: ardışık hata sonrası `GDELT_COOLDOWN_SEC` (default 900) boyunca fetch atlanır; status dürüstçe degraded + cooldown notu. Tekrarlayan 8s SSL timeout'un her news-refresh'te (~120s TTL) tick'i kilitlemesini keser | ✅ (2026-07-04) 3 test | 🟢 | davranış-nötr (veri zaten gelmiyordu) |
+| S1-2 | Shadow log tail-read + rotasyon: `read_recent` dosya sonundan chunk'la okur (tam-dosya `read_text` yerine); `record` dosya `SHADOW_LOG_MAX_MB` (default 128) aşınca `.1` yan-dosyasına devirir, okuyucu gerekirse `.1`'e uzanır. En büyük tüketici promotion_criteria (limit 200 satır ≈ 1.6MB) | ✅ (2026-07-04) 3 test; mevcut 221MB dosya ilk record'da `.1`'e devrilir | 🟢 | davranış-nötr (aynı kayıtlar döner) |
+| S1-3 | Agent matrix tek kurulum/tick: `build_timeframe_result` sonuçlarına kısa-TTL memo (symbol+tf+içerik-parmak-izi anahtarlı, TTL 25s; explicit `now` verilirse — testler — memo DEVRE DIŞI) — conflict-gate precompute + shadow.observe aynı ağır hesabı 2 kez yapmasın. tf_weights farkı memo'yu etkilemez (weights memo'dan SONRA, consensus birleşiminde) | ✅ (2026-07-04) 2 test | 🟢 | çıktı bayt-eşdeğer (aynı kapanmış barlar) |
+| S1-4 | Heartbeat dürüstlüğü: worker DEGRADED hesabına `degraded_reasons` (additive) + OPSİYONEL sağlayıcı ayrımı (`OPTIONAL_PROVIDERS = {gdelt, options_deribit}`) — yalnız bunlar arızalıysa worker OK kalır (sebepler yine listelenir). Kalıcı-arızalı yan sağlayıcının gerçek arızayı maskelemesini bitirir | ✅ (2026-07-04) 1 test | 🟢 | yalnız gözlem yüzeyi |
+| S2-1 | F2-1 gate bağlama (kayıt fazı): `RiskInput.mtm_equity_usd` (additive, default None) + `risk_gates.mtm_equity_enabled` flag (bu commit'te FALSE) → açıkken drawdown kontrolü `min(equity, mtm_equity)` ile (yalnız SIKILAŞTIRIR; MTM kârı gate'i asla gevşetemez — testle kilitli). tick_worker değeri geçer; watchdog REGISTRY `mtm_equity_gate` kaydı AYNI commit (flag OFF — E-6 dersi: kayıt ve aktivasyon AYRI deploy) | ✅ (2026-07-04) 4 test | 🟡 | aktivasyon S3-3'te |
+| S2-2 | `data/runtime/paper_state.corrupt-*.json` (19 dosya) → `data/runtime/archive/` altına taşındı (kök neden PR#4'te çözülmüştü; dosyalar çöp). Kod değişikliği yok | ✅ (2026-07-04) | 🟢 | geri alınabilir (taşıma) |
+| S3-1 | **AKTİVASYON** `empirical_pwin.enabled: true` (owner kararı 2026-07-04). Kanıt: 15m\|NEUTRAL p=0.449 (n=49) → cal_conf yerine gerçekleşen isabetle EV/Kelly; 15m Kelly cap f*≈0.08 → zayıf TF otomatik küçülür. Paket 2/(2) — sırası gelmişti. conftest OFF-pin eklendi (suite v1 baseline'da kalır) | ✅ (2026-07-04) | 🟡 | watchdog kayıtlı (OFF→ON arm olur) |
+| S3-2 | **AKTİVASYON** `technical.htf_alignment.enabled: true` (T-1; owner kararı 2026-07-04). Kanıt: bloklanan 15m fırsatlarının %87'si avoided_loss + 15m ampirik EV negatif — alt dilim üst-dilim trende karşı işlem üretiyor; filtre YALNIZ kısar. conftest OFF-pin eklendi | ✅ (2026-07-04) | 🟡 | watchdog kayıtlı |
+| S3-3 | **AKTİVASYON** `risk_gates.mtm_equity_enabled: true` — S2-1'den AYRI deploy (watchdog önce OFF görmeli: S2-1 deploy'u + ≥1 learning cycle SONRA bu tek satır true yapılıp ayrı commit/push edilir). Açık pozisyonlar toplamda eriyorsa drawdown freni realized beklemeden çeker | ⬜ SIRADAKİ — tek satır config flip | 🟡 | S2-1 deploy'undan ≥1 learning cycle sonra |
+
+**Bilinçli AÇILMAYANLAR (2026-07-04 kanıt durumu — kural 3):**
+`partial_tp` (shadow kanıtı n=2, uplift −$16 → YETERSİZ; 🔴 kural: uplift
+kanıtı birikmeden AÇILMAZ — trailing giveback'in asıl ilacı bu, kanıt
+biriktikçe İLK aday), `empirical_pwin.blend_counterfactual` (S3-1
+penceresinden SONRA anlamlı), `EXIT_FORENSICS_NUDGE` (rollout sırası:
+TF_TARGET_AUTO_ONLY penceresi temiz + EDGE_GATE kararı sonrası),
+`TF_TARGET_EDGE_GATE=0` (owner kararı 2026-07-03: aktif tuning sürsün),
+`WEIGHT_REGIME_FILTER` / `MISTAKE_MEMORY_V2` / `EXPECTANCY_R_MODE` (kanıt/
+R-verisi bekliyor), T-2/T-3/T-4 (shadow kanıtı birikiyor),
+`strategy_shaping` (gölge setup dağılımı izlenmeden açılmaz),
+`conflict_gate` SCALP/SWING (önce INTRADAY/TACTICAL HARD sonuçları),
+`data_policy.block_stale_ohlcv_for_trade` (dampening yeterli, sert blok
+kanıtsız), `shadow.affect_decision` + `conflict_resolver_activation`
+(KIRMIZI ÇİZGİ — owner onay paketi F5-2 READY olmadan asla).
+
 ## Devir notu (son güncelleme: 2026-07-03)
 
 Bu belge farklı bir asistan/oturum tarafından SIFIR bağlamla devralınabilir

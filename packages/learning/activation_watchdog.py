@@ -67,6 +67,10 @@ REGISTRY: dict[str, dict] = {
         "label": "Fiyat-getirisi korelasyonu (F2-2)",
         "source": ("thresholds", ("risk_gates", "correlation_price_returns")),
     },
+    "mtm_equity_gate": {
+        "label": "MTM drawdown gate girdisi (S2-1/F2-1)",
+        "source": ("thresholds", ("risk_gates", "mtm_equity_enabled")),
+    },
     "tf_platt": {
         "label": "TF-bazlı Platt kalibrasyonu (F4-1)",
         "source": ("thresholds", ("calibration", "tf_platt")),

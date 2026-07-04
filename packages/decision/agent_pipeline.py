@@ -16,6 +16,8 @@ NOT touched — this is a parallel, additive read surface (spec §9 step 7).
 """
 from __future__ import annotations
 
+import threading
+import time
 from dataclasses import asdict, dataclass
 from datetime import datetime
 
@@ -108,6 +110,47 @@ def _spot_from_bars(bars_by_tf: dict[Timeframe, list[OHLCVBar]]) -> float | None
     return None
 
 
+# S1-3 (2026-07-04) — tick-içi memo: build_timeframe_result (indikatör/pattern/
+# elliott/zone hesabı) tick başına İKİ kez çalışıyordu (conflict-gate precompute
+# + shadow.observe, aynı kapanmış barlar). Sonuç kapanmış barların deterministik
+# fonksiyonu olduğundan (symbol, tf, bar-sayısı, son-bar-ts) anahtarıyla kısa
+# TTL'de aynen döner — çıktı bayt-eşdeğer, ağır hesap tek sefer. `now` explicit
+# verilirse (testler) memo DEVRE DIŞI: test determinizmi bozulmaz.
+_TF_MEMO_TTL_SEC = 25.0
+_TF_MEMO_MAX = 256
+_tf_memo: dict[tuple, tuple[float, TechnicalTimeframeResult]] = {}
+_tf_memo_lock = threading.Lock()
+
+
+def _tf_result_memoized(
+    symbol: str, tf: Timeframe, bars: list[OHLCVBar]
+) -> TechnicalTimeframeResult:
+    # İçerik parmak izi: aynı anahtar ancak aynı bar serisiyle mümkün —
+    # (sayı, ilk/son ts, son 3 close, toplam close) çakışması pratikte imkânsız.
+    if bars:
+        fp = (
+            len(bars),
+            bars[0].ts.isoformat(),
+            bars[-1].ts.isoformat(),
+            tuple(round(b.close, 8) for b in bars[-3:]),
+            round(sum(b.close for b in bars), 6),
+        )
+    else:
+        fp = (0,)
+    key = (symbol, tf, fp)
+    now_m = time.monotonic()
+    with _tf_memo_lock:
+        hit = _tf_memo.get(key)
+        if hit is not None and (now_m - hit[0]) < _TF_MEMO_TTL_SEC:
+            return hit[1]
+    result = build_timeframe_result(symbol, tf, bars)
+    with _tf_memo_lock:
+        if len(_tf_memo) >= _TF_MEMO_MAX:
+            _tf_memo.clear()
+        _tf_memo[key] = (now_m, result)
+    return result
+
+
 def build_symbol_view_from_bars(
     symbol: str,
     bars_by_tf: dict[Timeframe, list[OHLCVBar]],
@@ -118,10 +161,16 @@ def build_symbol_view_from_bars(
     now: datetime | None = None,
 ) -> SymbolAgentView:
     """Build per-TF results from closed bars, then compose the symbol view."""
-    per_tf = {
-        tf: build_timeframe_result(symbol, tf, bars_by_tf.get(tf, []), now=now)
-        for tf in PIPELINE_TFS
-    }
+    if now is None:
+        per_tf = {
+            tf: _tf_result_memoized(symbol, tf, bars_by_tf.get(tf, []))
+            for tf in PIPELINE_TFS
+        }
+    else:
+        per_tf = {
+            tf: build_timeframe_result(symbol, tf, bars_by_tf.get(tf, []), now=now)
+            for tf in PIPELINE_TFS
+        }
     return build_symbol_view(
         symbol,
         per_tf,

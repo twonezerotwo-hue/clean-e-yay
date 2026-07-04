@@ -55,6 +55,13 @@ def _package1_flags_off_by_default(monkeypatch: pytest.MonkeyPatch) -> None:
     # Paket 2 / (1) — tf_platt AÇILDI (2026-07-02); testler global-fit baseline'ı
     # pinler, F4-1 davranış testleri threshold_override ile açar.
     pinned.setdefault("calibration", {})["tf_platt"] = False
+    # S3-1/S3-2 (2026-07-04) — empirical_pwin + htf_alignment AÇILDI; suite v1
+    # baseline'ı pinler, davranış testleri threshold_override/monkeypatch ile açar.
+    pinned.setdefault("empirical_pwin", {})["enabled"] = False
+    pinned.setdefault("technical", {}).setdefault("htf_alignment", {})["enabled"] = False
+    # S2-1 — MTM gate flag'i kayıt fazında zaten false; ileride aktive edilince
+    # suite baseline'da kalsın diye şimdiden pinlenir (testler explicit açar).
+    pinned.setdefault("risk_gates", {})["mtm_equity_enabled"] = False
     monkeypatch.setattr(loader, "_load_thresholds_base", lambda: pinned)
     # Denetim 2026-07-03 — çıkış-makinesi env flag'leri testlerde default OFF
     # (dev makinesinde .env yüklenmiş olabilir; testler baseline'ı varsayar).
