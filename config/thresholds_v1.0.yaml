@@ -151,6 +151,12 @@ ev_gate:
   # Kanıt: kalibre güven şişik (flat-slope Platt → taban ~%58), sabit-RR EV bu
   # şişik p ile hep pozitif çıkıyordu; gerçekleşen R payoff'u asimetriyi görür.
   payoff_weighted: true
+  # Payoff yolu için minimum gerçekleşen-R örneği (her yönde). Bunun altındaki
+  # hücre payoff EV'sine güvenmez, dürüstçe sabit-RR'ye düşer — böylece avuç
+  # dolusu R (örn. 6 kazanç/4 kayıp) koca bir timeframe'in kapısını çeviremez.
+  # R verisi (open_risk_pct taşıyan kapanışlar) biriktikçe kapı doğal devreye
+  # girer. 0 → guard kapalı (yalnız avg_win_r/avg_loss_r var-mı kontrolü).
+  min_r_samples: 8
 
 # F5 — Kelly sizing. Boyutu ölçülen edge'e oransal CAP'ler: $ = fraction × f* × equity
 # (f* = (p×RR−(1−p))/RR). Yalnız KÜÇÜLTÜR (no-AI-boost). DEFAULT KAPALI.

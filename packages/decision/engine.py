@@ -423,11 +423,18 @@ def decide_for_symbol(
     # varsa: EV = p_emp×avg_win_r − (1−p_emp)×avg_loss_r − cost_r (kazanma
     # olasılığı DA ampirik — şişik kalibre güven değil). R verisi yoksa dürüstçe
     # sabit-RR'ye düşer (sahte payoff uydurulmaz).
+    # F5-3 guard — payoff yolu için MİN R-örneği: avg_win_r/avg_loss_r'nin
+    # istatistiksel anlamı olsun (avuç dolusu gerçekleşen R koca bir timeframe'i
+    # kapatmasın). Her yönde win_r_n/loss_r_n ≥ min_r_samples değilse dürüstçe
+    # sabit-RR'ye düşer. min_r_samples 0 → guard kapalı (yalnız None kontrolü).
+    min_r = int(ev_cfg.get("min_r_samples", 8))
     payoff_ready = (
         bool(ev_cfg.get("payoff_weighted", False))
         and emp is not None
         and emp.avg_win_r is not None
         and emp.avg_loss_r is not None
+        and emp.win_r_n >= min_r
+        and emp.loss_r_n >= min_r
     )
     if payoff_ready:
         expected_value = _expected_value_payoff(

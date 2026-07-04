@@ -230,12 +230,13 @@ _EMP_CELL = dict(p_win=0.58, wins=29, losses=21, n=50, source="tf_regime",
                  avg_win_r=0.6, avg_loss_r=1.2, win_r_n=29, loss_r_n=21)
 
 
-def _ev_on(monkeypatch, *, payoff_weighted: bool, cell: dict | None = _EMP_CELL) -> None:
+def _ev_on(monkeypatch, *, payoff_weighted: bool, cell: dict | None = _EMP_CELL,
+           min_r_samples: int = 8) -> None:
     from packages.decision import engine as dec
     monkeypatch.setattr(
         dec, "_ev_gate_cfg",
         lambda: {"enabled": True, "min_ev": 0.0, "cost_r": 0.1,
-                 "payoff_weighted": payoff_weighted},
+                 "payoff_weighted": payoff_weighted, "min_r_samples": min_r_samples},
     )
     monkeypatch.setattr(dec.empirical_pwin, "enabled", lambda: True)  # p kaynağı = empirical
     monkeypatch.setattr(
@@ -272,3 +273,31 @@ def test_payoff_weighted_falls_back_without_r_data(ep_env, monkeypatch) -> None:
     d, _ = _decide(monkeypatch)
     # R yok → sabit-RR formülü, empirical p (0.65) ile — payoff devreye girmez
     assert d.expected_value == pytest.approx(dec._expected_value(0.65, 2.0, 0.1), abs=1e-3)
+
+
+def test_payoff_weighted_falls_back_when_r_samples_thin(ep_env, monkeypatch) -> None:
+    # R var ama ince (6 kazanç / 4 kayıp < min_r_samples 8) → koca timeframe'i
+    # avuç dolusu R kapatmasın; dürüstçe sabit-RR'ye düşer.
+    from packages.decision import engine as dec
+
+    _ev_on(
+        monkeypatch, payoff_weighted=True, min_r_samples=8,
+        cell=dict(p_win=0.51, wins=18, losses=17, n=35, source="tf_regime",
+                  avg_win_r=0.91, avg_loss_r=1.15, win_r_n=6, loss_r_n=4),
+    )
+    d, _ = _decide(monkeypatch)
+    # payoff yolu atlandı → sabit-RR, empirical p (0.51) — negatif payoff EV'sine
+    # DÜŞMEDİ (ince kanıt); açılır (eski davranış korunur).
+    assert d.expected_value == pytest.approx(dec._expected_value(0.51, 2.0, 0.1), abs=1e-3)
+
+
+def test_payoff_weighted_engages_when_r_samples_sufficient(ep_env, monkeypatch) -> None:
+    # Aynı negatif payoff ama yeterli R örneği (10/10 ≥ 8) → payoff yolu devrede,
+    # EV negatif → blok. min_r_samples guard'ının eşiği geçince açıldığını doğrular.
+    _ev_on(
+        monkeypatch, payoff_weighted=True, min_r_samples=8,
+        cell=dict(p_win=0.51, wins=18, losses=17, n=35, source="tf_regime",
+                  avg_win_r=0.6, avg_loss_r=1.2, win_r_n=10, loss_r_n=10),
+    )
+    d, _ = _decide(monkeypatch)
+    assert d.action == "hold" and "ev_gate" in d.blocked_by
