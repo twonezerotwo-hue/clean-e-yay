@@ -14,10 +14,14 @@ jobs:
     runs-on: [self-hosted, clean-e-yay-ec2]
     timeout-minutes: 5
     steps:
-      - name: System health (tick suresi + provider ozeti + degraded)
+      - name: Tick suresi orneklemesi (4 ornek, ~35s arayla)
         run: |
-          curl -fsS -m 10 http://127.0.0.1:9000/api/v1/system/health || echo "health FAILED"
-          echo
+          for i in 1 2 3 4; do
+            curl -fsS -m 10 http://127.0.0.1:9000/api/v1/system/health \
+              | python3 -c "import json,sys; d=json.load(sys.stdin); w=d['workers']['tick_worker']; print('tick', w['run_id'], 'duration_ms=', w['duration_ms'], 'degraded=', w['degraded_reasons'])" \
+              || echo "health FAILED"
+            [ "$i" -lt 4 ] && sleep 35
+          done
 
       - name: Canli basliklar — yeni kaynaklar akiyor mu
         run: |
