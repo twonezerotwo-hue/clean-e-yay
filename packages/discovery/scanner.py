@@ -36,7 +36,7 @@ from packages.data.providers.technical.timeframe import build_timeframe_result
 from packages.data.registry.loader import CONFIG_DIR, load_thresholds
 from packages.data.types import OHLCVBar
 from packages.decision import engine as decision_engine
-from packages.discovery import shadow_ledger
+from packages.discovery import scan_enabled, shadow_ledger
 from packages.learning import empirical_pwin
 from packages.learning.calibration_store import (
     predict_calibrated_tf,
@@ -347,4 +347,110 @@ def run_if_due(
         "signals_n": len(signals),
         "cursor": cursor,
         "shadow": ledger_run,  # K-2: tracked_new / resolved / active
+    }
+
+
+# ----------------- K-3 görünüm modeli (API + panel besini) -----------------
+
+# Dürüstlük satırı — panelde HER ZAMAN görünür (hiçbiri gerçek işlem değil).
+_HONESTY = (
+    "Hipotetik keşif: bu tablodaki hiçbir hükümle GERÇEK işlem açılmadı. "
+    "Aday, gölge karnesi terfi eşiğini (≥20 çözüm, isabet alt-sınırı, ≥2 TF) "
+    "geçerse yalnızca owner paketine ÖNERİ olur."
+)
+
+
+def _candidate_row(sym: str, res: dict, sc: dict) -> dict:
+    """Bir adayın satırı: güncel analiz hükmü + biriken gölge karnesi.
+
+    res boş olabilir (aday results'tan düşmüş ama gölge geçmişi sürüyor) → o
+    zaman yalnız karne alanları dolu, verdict "—" gösterilir."""
+    return {
+        "symbol": sym,
+        "kind": str(res.get("kind") or sc.get("kind") or "?"),
+        "verdict": str(res.get("verdict") or "—"),
+        "entry_timeframe": res.get("entry_timeframe"),
+        "confidence": res.get("confidence"),
+        "expected_value": res.get("expected_value"),
+        "rr": res.get("rr"),
+        "direction_score": res.get("direction_score"),
+        "reasons": list(res.get("reasons") or []),
+        "checked_at": res.get("checked_at"),
+        # K-2 gölge karne (biriken hipotetik kanıt)
+        "shadow_signals": int(sc.get("n_signals") or 0),
+        "shadow_resolved": int(sc.get("resolved") or 0),
+        "missed_win": int(sc.get("missed_win") or 0),
+        "avoided_loss": int(sc.get("avoided_loss") or 0),
+        "cf_win_rate": sc.get("cf_win_rate"),
+        "avg_r": sc.get("avg_r"),
+        "shadow_timeframes": list(sc.get("timeframes") or []),
+        "last_signal_at": sc.get("last_signal_at"),
+    }
+
+
+def viewmodel() -> dict:
+    """K-3 — `GET /learning/discovery` görünüm modeli (read-only, hesap YAPMAZ).
+
+    Artifact'tan (K-1 tarama + K-2 gölge karne) türetilir. Aday tablosu =
+    güncel WOULD_OPEN_LONG sinyalleri ∪ gölge geçmişi olan semboller (yalnız
+    "tarandı, bir şey çıkmadı" satırları elenir — tablo gürültüsüz kalır)."""
+    art = _load_artifact()
+    shadow = dict(art.get("shadow") or {})
+    shadow_cands = dict(shadow.get("candidates") or {})
+    results = dict(art.get("results") or {})
+    last_run = dict(shadow.get("last_run") or {})
+
+    # Anlamlı satır kümesi: güncel sinyal + karnesi olan her sembol.
+    keys = {
+        s for s, r in results.items() if r.get("verdict") == "WOULD_OPEN_LONG"
+    } | {s for s, sc in shadow_cands.items() if int(sc.get("n_signals") or 0) > 0}
+    rows = [
+        _candidate_row(sym, results.get(sym) or {}, shadow_cands.get(sym) or {})
+        for sym in keys
+    ]
+    # Sıra: canlı sinyaller önce, sonra en çok çözülen karne / isabet / skor.
+    rows.sort(
+        key=lambda r: (
+            r["verdict"] == "WOULD_OPEN_LONG",
+            r["shadow_resolved"],
+            r["cf_win_rate"] if r["cf_win_rate"] is not None else -1.0,
+            r["expected_value"] if r["expected_value"] is not None else -1.0,
+        ),
+        reverse=True,
+    )
+
+    crypto_uni = dict(art.get("crypto_universe") or {})
+    rising = list(art.get("rising_sectors") or [])
+    signal_symbols = list(art.get("signal_symbols") or [])
+
+    return {
+        "enabled": scan_enabled(),
+        "generated_at": art.get("generated_at"),
+        "engine": art.get("engine"),
+        "regime": art.get("regime"),
+        "honesty": _HONESTY,
+        "universe": {
+            "results_n": len(results),
+            "crypto": {
+                "status": str(crypto_uni.get("status") or "UNKNOWN"),
+                "count": len(crypto_uni.get("candidates") or []),
+                "fetched_at": crypto_uni.get("fetched_at"),
+            },
+            "sectors": {
+                "rising_n": len(rising),
+                "symbols": [str(c.get("symbol")) for c in rising if c.get("symbol")],
+            },
+        },
+        "scan": {
+            "cursor": int(art.get("cursor") or 0),
+            "signals_n": len(signal_symbols),
+            "signal_symbols": signal_symbols,
+        },
+        "shadow": {
+            "active_n": int(shadow.get("active_n") or 0),
+            "tracked_new": int(last_run.get("tracked_new") or 0),
+            "resolved": int(last_run.get("resolved") or 0),
+            "active": int(last_run.get("active") or 0),
+        },
+        "candidates": rows,
     }

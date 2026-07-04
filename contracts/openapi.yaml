@@ -679,6 +679,17 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/ExitForensicsView" }
 
+  /api/v1/learning/discovery:
+    get:
+      operationId: getLearningDiscovery
+      summary: Keşif tarayıcısı — hipotetik "açılırdı" adayları + gölge karnesi (read-only)
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DiscoveryView" }
+
   /api/v1/learning/rebalance/proposal:
     get:
       operationId: getLearningRebalanceProposal
@@ -4421,6 +4432,91 @@ components:
         n: { type: integer }
         cost_usd_est: { type: number, nullable: true }
         label: { type: string }
+
+    DiscoveryView:
+      type: object
+      description: >
+        Keşif tarayıcısı (K serisi) — "analiz sabit, varlık değişken". Geniş
+        evren (yükselen sektör ETF'leri + kripto top-50) canlı analiz
+        çekirdeğinden geçer ama işlem AÇILMAZ; tüm hükümler hipotetik. flag
+        DISCOVERY_SCAN_ENABLED kapalıysa enabled=false + boş tablo döner.
+      required: [enabled, honesty, universe, scan, shadow, candidates]
+      properties:
+        enabled: { type: boolean }
+        generated_at: { type: string, nullable: true }
+        engine: { type: string, nullable: true }
+        regime: { type: string, nullable: true }
+        honesty: { type: string }
+        universe: { $ref: "#/components/schemas/DiscoveryUniverse" }
+        scan: { $ref: "#/components/schemas/DiscoveryScan" }
+        shadow: { $ref: "#/components/schemas/DiscoveryShadowSummary" }
+        candidates:
+          type: array
+          items: { $ref: "#/components/schemas/DiscoveryCandidate" }
+
+    DiscoveryUniverse:
+      type: object
+      required: [results_n, crypto, sectors]
+      properties:
+        results_n: { type: integer }
+        crypto:
+          type: object
+          required: [status, count]
+          properties:
+            status: { type: string }
+            count: { type: integer }
+            fetched_at: { type: string, nullable: true }
+        sectors:
+          type: object
+          required: [rising_n, symbols]
+          properties:
+            rising_n: { type: integer }
+            symbols: { type: array, items: { type: string } }
+
+    DiscoveryScan:
+      type: object
+      required: [cursor, signals_n, signal_symbols]
+      properties:
+        cursor: { type: integer }
+        signals_n: { type: integer }
+        signal_symbols: { type: array, items: { type: string } }
+
+    DiscoveryShadowSummary:
+      type: object
+      description: Bu koşunun gölge defteri sayaçları + aktif izleme sayısı.
+      required: [active_n, tracked_new, resolved, active]
+      properties:
+        active_n: { type: integer }
+        tracked_new: { type: integer }
+        resolved: { type: integer }
+        active: { type: integer }
+
+    DiscoveryCandidate:
+      type: object
+      description: >
+        Bir aday — güncel "açılırdı" hükmü + biriken K-2 gölge karnesi. Tüm
+        hipotetik: cf_win_rate = missed_win/(missed_win+avoided_loss), avg_r
+        gerçekleşen hipotetik R (expired paydaya girmez).
+      required: [symbol, kind, verdict, reasons, shadow_signals, shadow_resolved, shadow_timeframes]
+      properties:
+        symbol: { type: string }
+        kind: { type: string }
+        verdict: { type: string }
+        entry_timeframe: { type: string, nullable: true }
+        confidence: { type: number, nullable: true }
+        expected_value: { type: number, nullable: true }
+        rr: { type: number, nullable: true }
+        direction_score: { type: number, nullable: true }
+        reasons: { type: array, items: { type: string } }
+        checked_at: { type: string, nullable: true }
+        shadow_signals: { type: integer }
+        shadow_resolved: { type: integer }
+        missed_win: { type: integer }
+        avoided_loss: { type: integer }
+        cf_win_rate: { type: number, nullable: true }
+        avg_r: { type: number, nullable: true }
+        shadow_timeframes: { type: array, items: { type: string } }
+        last_signal_at: { type: string, nullable: true }
 
     TfTargetsActionResult:
       type: object

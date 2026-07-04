@@ -2003,6 +2003,59 @@ export type ExitForensicsView = {
   history_tail?: Array<Record<string, unknown>>;
 };
 
+// K-3 — Keşif tarayıcısı görünümü (hipotetik; işlem AÇILMADI).
+export type DiscoveryCandidate = {
+  symbol: string;
+  kind: string;
+  verdict: string;
+  entry_timeframe?: string | null;
+  confidence?: number | null;
+  expected_value?: number | null;
+  rr?: number | null;
+  direction_score?: number | null;
+  reasons: string[];
+  checked_at?: string | null;
+  shadow_signals: number;
+  shadow_resolved: number;
+  missed_win?: number;
+  avoided_loss?: number;
+  cf_win_rate?: number | null;
+  avg_r?: number | null;
+  shadow_timeframes: string[];
+  last_signal_at?: string | null;
+};
+
+export type DiscoveryUniverse = {
+  results_n: number;
+  crypto: { status: string; count: number; fetched_at?: string | null };
+  sectors: { rising_n: number; symbols: string[] };
+};
+
+export type DiscoveryScan = {
+  cursor: number;
+  signals_n: number;
+  signal_symbols: string[];
+};
+
+export type DiscoveryShadowSummary = {
+  active_n: number;
+  tracked_new: number;
+  resolved: number;
+  active: number;
+};
+
+export type DiscoveryView = {
+  enabled: boolean;
+  generated_at?: string | null;
+  engine?: string | null;
+  regime?: string | null;
+  honesty: string;
+  universe: DiscoveryUniverse;
+  scan: DiscoveryScan;
+  shadow: DiscoveryShadowSummary;
+  candidates: DiscoveryCandidate[];
+};
+
 export type MissedOpportunityOutcomes = {
   missed_win: number;
   avoided_loss: number;

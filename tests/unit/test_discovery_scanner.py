@@ -270,3 +270,88 @@ def test_crypto_universe_reused_within_ttl(monkeypatch, tmp_path):
     # kapısıyla taze olduğundan yeniden analiz edilmedi.
     assert r["status"] == "OK" and r["scanned"] == []
     assert _artifact()["crypto_universe"]["candidates"][0]["symbol"] == "SOLUSD"
+
+
+# ---------------------------------------------------------------------------
+# K-3 — viewmodel (GET /learning/discovery besini)
+# ---------------------------------------------------------------------------
+
+def _write_artifact(tmp_path, monkeypatch, art, *, enabled="1"):
+    monkeypatch.setenv("DISCOVERY_SCAN_PATH", str(tmp_path / "scan.json"))
+    if enabled is None:
+        monkeypatch.delenv("DISCOVERY_SCAN_ENABLED", raising=False)
+    else:
+        monkeypatch.setenv("DISCOVERY_SCAN_ENABLED", enabled)
+    (tmp_path / "scan.json").write_text(json.dumps(art), encoding="utf-8")
+
+
+def test_viewmodel_empty_when_no_artifact(monkeypatch, tmp_path):
+    monkeypatch.setenv("DISCOVERY_SCAN_PATH", str(tmp_path / "absent.json"))
+    monkeypatch.delenv("DISCOVERY_SCAN_ENABLED", raising=False)
+    vm = scanner.viewmodel()
+    assert vm["enabled"] is False  # flag yok = kapalı
+    assert vm["candidates"] == []
+    assert vm["honesty"]  # dürüstlük satırı her zaman dolu
+    assert vm["universe"]["results_n"] == 0
+    assert vm["scan"]["signals_n"] == 0
+
+
+def test_viewmodel_enabled_flag_reflected(monkeypatch, tmp_path):
+    _write_artifact(tmp_path, monkeypatch, {"generated_at": "x"}, enabled="off")
+    assert scanner.viewmodel()["enabled"] is False
+    monkeypatch.setenv("DISCOVERY_SCAN_ENABLED", "1")
+    assert scanner.viewmodel()["enabled"] is True
+
+
+def test_viewmodel_rows_merge_signal_and_shadow(monkeypatch, tmp_path):
+    art = {
+        "generated_at": "2026-07-04T20:00:00+00:00",
+        "engine": "discovery_lite_v1",
+        "regime": "NEUTRAL",
+        "cursor": 7,
+        "crypto_universe": {
+            "status": "OK", "fetched_at": "2026-07-04T19:00:00+00:00",
+            "candidates": [{"symbol": "SOL"}, {"symbol": "AVAX"}],
+        },
+        "rising_sectors": [{"symbol": "XLV"}, {"symbol": "XLF"}],
+        "results": {
+            "XLV": {"symbol": "XLV", "kind": "sector_etf", "verdict": "WOULD_OPEN_LONG",
+                    "entry_timeframe": "1h", "confidence": 0.58, "expected_value": 0.42,
+                    "rr": 2.6, "direction_score": 63.1, "reasons": [],
+                    "checked_at": "2026-07-04T20:00:00+00:00"},
+            "AVAX": {"symbol": "AVAX", "kind": "crypto", "verdict": "NO_SIGNAL",
+                     "reasons": ["htf_1d_not_bullish"], "checked_at": "x"},
+        },
+        "signal_symbols": ["XLV"],
+        "shadow": {
+            "active_n": 3,
+            "last_run": {"tracked_new": 1, "resolved": 2, "active": 3},
+            "candidates": {
+                "XLV": {"n_signals": 5, "resolved": 4, "missed_win": 3,
+                        "avoided_loss": 1, "cf_win_rate": 0.75, "avg_r": 1.1,
+                        "timeframes": ["1h", "4h"], "kind": "sector_etf"},
+                "XLK": {"n_signals": 2, "resolved": 1, "missed_win": 0,
+                        "avoided_loss": 1, "cf_win_rate": 0.0, "avg_r": -1.0,
+                        "timeframes": ["4h"], "kind": "sector_etf"},
+            },
+        },
+    }
+    _write_artifact(tmp_path, monkeypatch, art)
+    vm = scanner.viewmodel()
+
+    assert vm["universe"] == {
+        "results_n": 2,
+        "crypto": {"status": "OK", "count": 2, "fetched_at": "2026-07-04T19:00:00+00:00"},
+        "sectors": {"rising_n": 2, "symbols": ["XLV", "XLF"]},
+    }
+    assert vm["scan"] == {"cursor": 7, "signals_n": 1, "signal_symbols": ["XLV"]}
+    assert vm["shadow"] == {"active_n": 3, "tracked_new": 1, "resolved": 2, "active": 3}
+
+    syms = [c["symbol"] for c in vm["candidates"]]
+    # AVAX (karnesiz NO_SIGNAL) elenir; XLV canlı sinyal önce, XLK gölge-only sonra.
+    assert syms == ["XLV", "XLK"]
+    xlv, xlk = vm["candidates"]
+    assert xlv["verdict"] == "WOULD_OPEN_LONG" and xlv["cf_win_rate"] == 0.75
+    assert xlv["confidence"] == 0.58 and xlv["shadow_timeframes"] == ["1h", "4h"]
+    assert xlk["verdict"] == "—" and xlk["confidence"] is None
+    assert xlk["shadow_signals"] == 2 and xlk["avg_r"] == -1.0

@@ -423,6 +423,16 @@ export const useExitForensics = () => {
   });
 };
 
+export const useDiscovery = () => {
+  const policy = usePanelQueryPolicy(5 * 60_000);
+  return useQuery({
+    queryKey: qk.discovery,
+    queryFn: api.discovery,
+    staleTime: 60_000,
+    ...policy,
+  });
+};
+
 export const useGuardSafety = () => {
   const policy = usePanelQueryPolicy(5 * 60_000);
   return useQuery({

@@ -11,6 +11,7 @@ from fastapi import APIRouter
 
 from packages.data.registry.loader import load_thresholds
 from packages.decision import conflict_gate, conflict_gate_backtest
+from packages.discovery import scanner as discovery_scanner
 from packages.learning import (
     activation_watchdog,
     book_audit,
@@ -337,6 +338,18 @@ def get_exit_forensics() -> dict:
         tail = []  # snapshot bozuksa rapor yine döner (panel trendsiz kalır)
     rep["history_tail"] = tail
     return rep
+
+
+@router.get("/learning/discovery")
+def get_discovery() -> dict:
+    """K-3 — Keşif tarayıcısı görünümü (read-only, PAPER_SAFE).
+
+    "Analiz sabit, varlık değişken": geniş evren (yükselen sektör ETF'leri +
+    kripto top-50) canlı analiz zincirinin ÇEKİRDEĞİNDEN geçer ama işlem AÇILMAZ.
+    Tablo = güncel "açılırdı" hükümleri + K-2 gölge karnesi (hipotetik TP/SL
+    çözümleri). Dürüstlük satırı her zaman döner: hiçbiri gerçek işlem değil.
+    Flag DISCOVERY_SCAN_ENABLED kapalıysa enabled=false + boş tablo."""
+    return discovery_scanner.viewmodel()
 
 
 @router.post("/learning/tf-targets/approve")

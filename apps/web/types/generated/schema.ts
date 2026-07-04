@@ -807,6 +807,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/learning/discovery": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Keşif tarayıcısı — hipotetik "açılırdı" adayları + gölge karnesi (read-only) */
+        get: operations["getLearningDiscovery"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/learning/rebalance/proposal": {
         parameters: {
             query?: never;
@@ -3516,6 +3533,63 @@ export interface components {
             cost_usd_est?: number | null;
             label: string;
         };
+        /** @description Keşif tarayıcısı (K serisi) — "analiz sabit, varlık değişken". Geniş evren (yükselen sektör ETF'leri + kripto top-50) canlı analiz çekirdeğinden geçer ama işlem AÇILMAZ; tüm hükümler hipotetik. flag DISCOVERY_SCAN_ENABLED kapalıysa enabled=false + boş tablo döner. */
+        DiscoveryView: {
+            enabled: boolean;
+            generated_at?: string | null;
+            engine?: string | null;
+            regime?: string | null;
+            honesty: string;
+            universe: components["schemas"]["DiscoveryUniverse"];
+            scan: components["schemas"]["DiscoveryScan"];
+            shadow: components["schemas"]["DiscoveryShadowSummary"];
+            candidates: components["schemas"]["DiscoveryCandidate"][];
+        };
+        DiscoveryUniverse: {
+            results_n: number;
+            crypto: {
+                status: string;
+                count: number;
+                fetched_at?: string | null;
+            };
+            sectors: {
+                rising_n: number;
+                symbols: string[];
+            };
+        };
+        DiscoveryScan: {
+            cursor: number;
+            signals_n: number;
+            signal_symbols: string[];
+        };
+        /** @description Bu koşunun gölge defteri sayaçları + aktif izleme sayısı. */
+        DiscoveryShadowSummary: {
+            active_n: number;
+            tracked_new: number;
+            resolved: number;
+            active: number;
+        };
+        /** @description Bir aday — güncel "açılırdı" hükmü + biriken K-2 gölge karnesi. Tüm hipotetik: cf_win_rate = missed_win/(missed_win+avoided_loss), avg_r gerçekleşen hipotetik R (expired paydaya girmez). */
+        DiscoveryCandidate: {
+            symbol: string;
+            kind: string;
+            verdict: string;
+            entry_timeframe?: string | null;
+            confidence?: number | null;
+            expected_value?: number | null;
+            rr?: number | null;
+            direction_score?: number | null;
+            reasons: string[];
+            checked_at?: string | null;
+            shadow_signals: number;
+            shadow_resolved: number;
+            missed_win?: number;
+            avoided_loss?: number;
+            cf_win_rate?: number | null;
+            avg_r?: number | null;
+            shadow_timeframes: string[];
+            last_signal_at?: string | null;
+        };
         TfTargetsActionResult: {
             approved?: boolean;
             rejected?: boolean;
@@ -4727,6 +4801,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ExitForensicsView"];
+                };
+            };
+        };
+    };
+    getLearningDiscovery: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DiscoveryView"];
                 };
             };
         };
