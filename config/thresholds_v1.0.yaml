@@ -90,7 +90,12 @@ calibration:
 # harmanlanır (kaynak "tf_blend_cf"). Gerekçe: bloklanan TF gerçek outcome
 # üretmez (geri-besleme kör noktası); counterfactual o TF'i ölçmeye devam eder.
 empirical_pwin:
-  enabled: false
+  # AKTİF (2026-07-04, owner kararı — Paket 2/(2), S3-1). Kanıt: 15m|NEUTRAL
+  # gerçekleşen isabet p=0.449 (n=49) iken kalibre güven ~0.58 tabanla EV hep
+  # pozitif çıkıyordu; ampirik p ile EV/Kelly gerçek isabete oturur, zayıf TF
+  # otomatik küçülür (15m Kelly f*≈0.08). Yeterli örneği olmayan hücre kalibre
+  # güvene düşer (sahte p uydurulmaz). Tek-flag revert. Watchdog izliyor.
+  enabled: true
   min_samples: 20
   blend_counterfactual: false
 
@@ -676,7 +681,12 @@ technical:
   # muhtemelen üst-dilim trende karşı işlem üretiyor. enabled=false → bayt-aynı;
   # çarpan her hücrede htf_alignment warning satırına (shadow) yazılır.
   htf_alignment:
-    enabled: false
+    # AKTİF (2026-07-04, owner kararı — S3-2). Kanıt: bloklanan 15m
+    # fırsatlarının %87'si avoided_loss (missed-opp) + 15m ampirik EV negatif
+    # — alt dilim üst-dilim trende KARŞI işlem üretiyordu. Filtre YALNIZ kısar
+    # (aynı yönde boost yok, üst TF nötr/verisiz → dokunmaz, yön çevrilmez).
+    # Tek-flag revert. Watchdog izliyor.
+    enabled: true
     min_mult: 0.6       # tam karşıtlıkta (üst TF |lean|=50) mesafe ×0.6
 
   # T-2 — Elliott × Fib confluence (owner onayı 2026-07-02, kodlama; aktivasyon ayrı).
