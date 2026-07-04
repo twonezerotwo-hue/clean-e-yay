@@ -75,21 +75,26 @@ ilerledi; 2/3/5/12 kısmen. **Kalan işler (ayrı fazlar, henüz kodlanmadı):**
 
 | # | İş | Kapsam | Risk |
 |---|---|---|---|
-| K-0 | **Evren + flag:** `config/discovery.yaml` — (a) kripto: CoinGecko markets top-N (default 50, hacim eşiği, stablecoin + mevcut assets.yaml/custom dışlanır), (b) statik izleme listesi (hisse/ETF/emtia; yfinance ticker — yfinance'ta "liste" API'si yok, elle liste şart). Env flag `DISCOVERY_SCAN_ENABLED` DEFAULT OFF → adım tam no-op (learning run bayt-aynı). Yeni env-flag kuralları: conftest delenv + flag-sync-check SYNC_FLAGS + lokal .env↔AWS ensure_env birlikte | config + kayıt | 🟢 |
+| K-0 | **Evren + flag (owner kararları 2026-07-04):** `config/discovery.yaml` — (a) kripto: CoinGecko markets top-50 (hacim eşiği, stablecoin + mevcut assets.yaml/custom dışlanır), (b) hisse/ETF tarafı SEKTÖR-GÜDÜMLÜ (K-0b) — statik genel liste YOK. Env flag `DISCOVERY_SCAN_ENABLED` DEFAULT OFF → adım tam no-op (learning run bayt-aynı). Yeni env-flag kuralları: conftest delenv + flag-sync-check SYNC_FLAGS + lokal .env↔AWS ensure_env birlikte | config + kayıt | 🟢 |
+| K-0b | **Sektör rotasyon motoru** `packages/discovery/sector_rotation.py` (owner kararı 2026-07-04): 12 sektör ETF'si (XLK/XLE/XLF/XLV/XLI/XLY/XLP/XLU/XLB/XLRE/XLC/IYT) discovery.yaml'da tanımlı; 1d barlar mevcut OHLCV provider+cache'ten (assets.yaml'a GİRMEZ — snapshot/işlem evreni değişmez, likidite rotasyonuna EKLENMEZ: o canlı konsensüsü besler ve sınıf-arası soruya cevap verir, sektör motoru sınıf-İÇİ alt katman). Ölçüm rotation/engine deseniyle: SPY'a göreli getiri (1w/1m/3m) + 30g momentum → sektör başına YÜKSELEN/NÖTR/DÜŞEN + sıralama; veri yoksa ÖLÇÜLEMEDİ (mock yok). Saatte 1 koşum yeter. **Sektör karnesi:** her hüküm damgalanır, N gün sonra gerçekle kıyas (ETF/SPY gerçekleşen) → motorun isabet karnesi panelde; hiçbir karar bu motora karneden önce bağlanmaz. v1 kapsam: yalnız YÜKSELEN sektörler → LONG adayı; short tarafı sonraki faz (owner). Aday üretimi v1: sektör ETF'sinin KENDİSİ; v2: sektör→~10 likit hisse haritası (config'te statik seed; akıl seçimde, üyelik listesi nadiren değişen veri) | yeni modül | 🟢 |
 | K-1 | **Tarayıcı çekirdeği** `packages/discovery/scanner.py`: learning worker `run_once`'a kendi try/except + status'lu YENİ adım (mevcut adım deseni). Koşu başına kota `DISCOVERY_SCAN_PER_RUN` (default 5 aday) + round-robin cursor (`data/runtime/discovery_scan.json`) → ~50'lik evren ~50dk'da bir tam tur (worker ~5dk cadence). Aday başına: OHLCV multi-TF (mevcut provider+cache; verified bar yoksa SKIP — DATA_POLICY, mock yok) → `build_timeframe_result` (touche) per TF; global bağlam (rejim/sentinel/news) SON canlı snapshot'tan okunur (yeni ağ çağrısı yok, aday başına haber çekilmez). Karar simülasyonu: mevcut eşikler + kalibrasyon + empirical_pwin (tf\|rejim — varlık-bağımsız tablolar) → verdict {açılırdı/açılmazdı, yön, güven, hipotetik SL/TP (tf_targets geometrisi)}. Bütçe: LEARNING_BUDGET_MS'in yarısı aşılırsa o koşuda durur, cursor'dan devam | yeni modül + worker adımı | 🟢 |
 | K-2 | **Gölge kanıt defteri** `packages/discovery/shadow_ledger.py`: "açılırdı" verdiktleri AYRI append-only jsonl'e (`data/runtime/discovery_shadow.jsonl`; S1-2 rotasyon deseni). Çözümleme missed_opportunity deseniyle: sonraki koşularda OHLCV'den TP-önce/SL-önce/TTL → missed_win / avoided_loss / expired. MEVCUT missed-opp ve shadow_decisions verisine KARIŞMAZ (ayrı dosya — gerçek ölçüm hücreleri kirlenmez, F5-1 cf_by_tf ilkesi). Aday özeti: n_signals, resolved, cf_win_rate, ort. R | yeni modül | 🟢 |
 | K-3 | **API + panel** (contract-first): `GET /learning/discovery` (openapi.yaml → codegen) — evren durumu, tarama ilerlemesi, aday tablosu (sembol, sinyal n, cf_win_rate, son sinyal, TF dağılımı) + dürüstlük satırı ("hipotetik — işlem açılmadı"). DiscoveryPanel (mevcut panel desenleri, FE hesap yapmaz) | API + FE | 🟢 |
 | K-4 | **Faz C terfi kriteri — yalnız TANIM (kod yok):** aday owner paketine girer ancak: ≥20 çözülmüş gölge sinyali + cf_win_rate %95 Wilson ALT sınırı > 0.5 + ≥2 farklı TF'de sinyal (F5-2 deseninin uyarlaması). Paket = custom_assets'e ekleme ÖNERİSİ (owner onayı; otomatik ekleme YOK) | tanım | — |
 
-**Dilimleme:** (1) K-0+K-1 birlikte, (2) K-2, (3) K-4 kriterini rapora gömerek
-K-3 — her dilim ayrı commit + OFF-bekçi regresyon testi (flag kapalıyken
-learning run bayt-eşdeğer). Aktivasyon (`DISCOVERY_SCAN_ENABLED=1`) davranış-nötr
+**Dilimleme:** (1) K-0+K-0b (evren + sektör motoru + karne temeli), (2) K-1
+(tarayıcı; kota sıcak sektörlere ve kripto top-50'ye akar), (3) K-2, (4) K-4
+kriterini rapora gömerek K-3 — her dilim ayrı commit + OFF-bekçi regresyon
+testi (flag kapalıyken learning run bayt-eşdeğer). Aktivasyon (`DISCOVERY_SCAN_ENABLED=1`) davranış-nötr
 🟢 olduğundan S3 izleme penceresini BOZMAZ; yine de ayrı tarihli commit.
 **Riskler:** CoinGecko ücretsiz plan rate-limit (kota+cache ile yönetilir; 429
 görülürse aday SKIP+cooldown), missed-opp çözümü için OHLCV bar derinliği,
 statik hisse listesinin bakım yükü (owner düzenler).
-**Owner'dan netleşecekler:** (a) evren: kripto top-N'de N (öneri 50) + statik
-liste istenip istenmediği; (b) koşu başına kota (öneri 5); (c) panel önceliği.
+**Owner kararları (2026-07-04):** kripto top-50 ✅; hisse/ETF sektör-güdümlü
+(statik genel liste yerine) ✅; v1'de aday = sektör ETF'sinin kendisi ✅; v2
+hisse haritası sektör başına ~10 ✅; v1 yalnız LONG (yükselen sektör) ✅;
+sektör ETF'leri likidite rotasyonuna EKLENMEZ ✅. Açık kalan: koşu başına
+kota (öneri 5) + panel önceliği — kodlama sırasında default'la gidilir.
 
 ## S serisi — Hız + Acil + Aktivasyon sprinti (2026-07-04, owner talimatı)
 
