@@ -42,3 +42,8 @@ jobs:
             || curl -fsS -m 10 http://127.0.0.1:9000/learning/activation-watchdog \
             || echo "watchdog endpoint FAILED"
           echo
+
+      - name: Canli kanit — system health (provider durumu dahil)
+        run: |
+          curl -fsS -m 10 http://127.0.0.1:9000/api/v1/system/health || echo "health FAILED"
+          echo
