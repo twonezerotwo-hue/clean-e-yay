@@ -4,6 +4,36 @@ _Bu dosya kısa ve güncel tutulur. Her görev sonunda güncellenir._
 
 ## Last known status
 
+- **Paper açılış disiplin paketi — 3 canlı sorun kapatıldı** (2026-07-04, owner
+  "acil" talebi; hepsi kısıtlayıcı-yalnız, Iron Law ihlali yok):
+  - **Seans deliği 1 (SPCX/TEM)**: map'siz custom hisse "calendar unknown →
+    caution(0.75, route=open)" yoluyla PİYASA KAPALIYKEN otomatik açılıyordu.
+    Fix: (a) `market_sessions.engine` unknown → **manual_ready** (0.5, otomatik
+    açılış yok); (b) SPCX/CLNN/NVDA/TEM `market_sessions.yaml` US_EQUITY'ye
+    map'lendi (mid-session normal açılır, kapalıyken manual_ready).
+  - **Seans deliği 2 (BRENT Cuma)**: ENERGY/METALS_GLOBAL kapanışı 23:59 NY
+    (gerçek dışı) → Cuma akşamı "mid_session" görünüp hafta sonu gap'ine
+    pozisyon taşınıyordu. Fix: kapanış **17:00 NY** (gerçek CME/ICE) + YENİ
+    `weekend_gap_pre_minutes: 120` guard'ı — ilgili piyasaların SON açık seansı
+    Cuma kapanışına ≤120dk kala açılış manual_ready (`market_session_weekend_gap`).
+  - **Zayıf-sinyal şişmesi**: açık kitabın 6/6 pozisyonu raw %13–23 sinyalle
+    açılmıştı (`fitted_tf_capped` hep +0.25 tavana dayanıyor → MODERATE/STRONG
+    kademe bedava). Fix: `calibration_guardrail.max_inflation_delta` 0.25→**0.10**
+    + `consensus.min_open_confidence` 0.20→**0.30** — artık raw ≥ ~%20 şart,
+    STRONG kademe raw ≥ %35 ister.
+  - **Pozisyon sayısı limiti**: risk/engine.py hardcoded 6 → owner-tunable
+    `risk_gates.max_open_positions` (default 6, davranış bayt-aynı). "İyi sinyal
+    kaçıyor" şikayetinin kök nedeni zayıf pozisyonların slot doldurmasıydı —
+    yukarıdaki fix slotları boşaltır; owner isterse YAML'dan limit yükseltir.
+  - **Validation**: pytest tam suite **1411 passed** (yeni: weekend-gap +
+    custom-stock map + max_open_positions testleri; 3 test davranış
+    değişikliğine güncellendi — unknown→manual_ready ×2, ev_gate skor 66);
+    ruff temiz; openapi/kontrat sıfır diff (codegen gerekmez).
+  - **NOT (canlı)**: lokal tick_worker eski kodla koşuyor — yeni kurallar için
+    worker restart gerekir (AWS deploy zaten restart eder). Açık 6 zayıf
+    pozisyon limiti doldurduğu için yeni açılışlar zaten bloklu; owner bunları
+    manuel kapatmayı değerlendirebilir (dashboard PaperActionPanel).
+
 - **Katman 0 chat — gerçek SSE streaming + kalite yeniden tasarımı** (2026-07-04,
   owner talebi: "eski yazı yeniden akıyor + cevaplar 1. sınıf değil"):
   - **Kök neden 1 (UX)**: Layer0ReporterAgent'taki sahte daktilo efekti

@@ -13,7 +13,11 @@ consensus:
   # Minimum kalibre-güven tabanı (p(win) ∈ [0,1]). Skor eşiği geçilse bile
   # kalibre güven bunun altındaysa pozisyon AÇILMAZ (hold). Düşük-güvenli
   # nötr sinyallerle pozisyon açılmasını engeller. Owner-tunable; 0 = kapalı.
-  min_open_confidence: 0.20
+  # 2026-07-04 (owner, ACİL): 0.20 → 0.30. Canlı kanıt: açık kitabın 6/6
+  # pozisyonu raw %13–23 (sınırda S45/S55) sinyalle açılmıştı; guardrail
+  # deltasıyla (aşağıda 0.10'a indirildi) birlikte artık raw ≥ ~%20 gerekir.
+  # Sistem zarardaydı (realized −$1456); zayıf-sinyal açılışları ana kaynak.
+  min_open_confidence: 0.30
   # 2026-07-02: AÇILDI (owner kararı). Haber modülü sembol-ilişkili skorlama:
   # yalnız headline.asset_impact[symbol] taşıyan VERIFIED başlıklar o sembolün
   # news skorunu oynatır (yön sembole özgü impact'ten; hawkish Fed → DXY +1).
@@ -170,12 +174,21 @@ calibration_guardrail:
   # 2026-06-29: AÇILDI. Zayıf ham sinyalin (örn. raw 0.13) Platt ile STRONG
   # kademe eşiğine (0.45) şişip büyük pozisyon açmasını engeller; fitted - raw
   # bu deltayı aşarsa fitted = raw + max_inflation_delta'ya kıstırılır.
+  # 2026-07-04 (owner, ACİL): 0.25 → 0.10. Canlı kanıt: 0.25 deltayla raw 0.14
+  # → fitted 0.39 (MODERATE), raw 0.23 → 0.48 (neredeyse STRONG) — kalibrasyon
+  # kademe sistemini anlamsızlaştırıyordu; açık kitabın 6/6'sı "fitted_tf_capped"
+  # kaynaklı tavana dayanmıştı. 0.10 ile STRONG kademe raw ≥ 0.35 ister.
   enabled: true
-  max_inflation_delta: 0.25
+  max_inflation_delta: 0.10
 
 risk_gates:
   max_daily_loss_pct: 0.02      # equity'nin %2'si
   max_drawdown_pct: 0.08        # peak'ten %8
+  # 2026-07-04: eskiden risk/engine.py'de hardcoded 6 idi — config'e taşındı
+  # (davranış aynı). Bu sayı ve üstünde açık pozisyon varken yeni açılış
+  # NO_POSITION_INCREASE ile bloklanır. Zayıf-sinyal düzeltmeleriyle (yukarıda)
+  # slotları çöp pozisyon doldurmayacağı için gerçek sinyaller yer bulur.
+  max_open_positions: 6
   correlation_threshold: 0.7
   correlation_window_days: 30
   correlation_min_overlap_days: 5    # bunun altında computed (PnL) rho kullanılmaz

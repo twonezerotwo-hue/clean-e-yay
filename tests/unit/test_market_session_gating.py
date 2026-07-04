@@ -72,12 +72,14 @@ def test_effective_multiplier_never_exceeds_one():
             assert 0.0 <= g.effective_multiplier <= 1.0
 
 
-def test_caution_attribution_carries_restrictive_multiplier():
-    g = session_gate.evaluate_open("ZZZZ", "long", "1d", now_utc=MON_MID)  # unmapped → caution
-    assert g.route == "open"  # caution proceeds but restricted
+def test_unknown_calendar_routes_manual_ready_not_open():
+    # 2026-07-04: map'siz varlık (takvim bilinmiyor) artık otomatik AÇILMAZ —
+    # eskiden caution/route=open idi (SPCX/TEM piyasa kapalıyken açılıyordu).
+    g = session_gate.evaluate_open("ZZZZ", "long", "1d", now_utc=MON_MID)
+    assert g.route == "manual_ready"
     attr = g.attribution()
-    assert attr["open_session_action"] == "caution"
-    assert attr["open_session_size_multiplier"] == 0.75
+    assert attr["open_session_action"] == "manual_ready"
+    assert attr["open_session_size_multiplier"] == 0.5
 
 
 # ── Restrictive size application ─────────────────────────────────────────────

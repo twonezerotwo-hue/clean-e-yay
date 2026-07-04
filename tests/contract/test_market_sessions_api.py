@@ -48,9 +48,10 @@ def test_asset_crypto_allows_24_7():
     assert body["decision"]["size_multiplier"] == 1.0
 
 
-def test_unknown_asset_is_caution_not_fake_allow():
+def test_unknown_asset_is_manual_ready_not_fake_allow():
+    # 2026-07-04: caution → manual_ready (takvimi bilinmeyen varlık otomatik açılmaz).
     body = client.get("/api/v1/market-sessions/asset/ZZZZ").json()
-    assert body["decision"]["action"] == "caution"
+    assert body["decision"]["action"] == "manual_ready"
     assert "asset_unmapped" in body["asset_context"]["diagnostics"]
 
 

@@ -24,6 +24,10 @@ session_thresholds:
   opening_post_minutes: 30     # opening_window lasts 30m after open
   closing_pre_minutes: 30      # closing_window starts 30m before close
   pre_open_watch_minutes: 120  # closed but next open within 120m -> pre_open
+  # 2026-07-04 (owner): hafta sonu boşluğu guard'ı — ilgili piyasaların SON açık
+  # seansı Cuma kapanışına bu kadar dakika kala yeni otomatik açılış manual_ready'e
+  # düşer (pozisyon hafta sonu boşluğuna, fiyatlanamayan 2 günlük gap'e girmesin).
+  weekend_gap_pre_minutes: 120
 
 markets:
   US_EQUITY:
@@ -33,7 +37,10 @@ markets:
     kind: "exchange"
     regular_open: "09:30"
     regular_close: "16:00"
-    assets: ["SPY", "QQQ", "IWM", "SMH", "XLF", "HYG", "LQD"]
+    # 2026-07-04 (owner): custom yfinance hisseleri eklendi — bunlar map'siz
+    # kaldığı için "calendar unknown → caution" yoluyla PİYASA KAPALIYKEN
+    # otomatik açılıyordu (SPCX/TEM Cuma akşamı örneği). Hepsi ABD borsasında.
+    assets: ["SPY", "QQQ", "IWM", "SMH", "XLF", "HYG", "LQD", "SPCX", "CLNN", "NVDA", "TEM"]
 
   NASDAQ:
     label: "Nasdaq"
@@ -98,13 +105,18 @@ markets:
     regular_close: "23:59"
     assets: ["BTCUSD", "ETHUSD", "BTC_DOMINANCE", "USDT_DOMINANCE", "TOTAL", "TOTAL2"]
 
+  # 2026-07-04 (owner): 23:59 kapanış GERÇEK DIŞIYDI — CME/ICE enerji+metal
+  # vadelileri her gün 17:00 NY'de kapanır (Cuma 17:00 → hafta sonu kapalı).
+  # 23:59 modeliyle BRENT Cuma akşamı "mid_session" görünüp hafta sonuna
+  # pozisyon taşıyordu. 17:00–24:00 NY arası "kapalı" görünmesi bilinçli
+  # muhafazakâr yaklaşım (gerçekte 18:00'de yeniden açılır; kısıtlayıcı yön güvenli).
   ENERGY_GLOBAL:
     label: "Energy Futures"
     exchange: "ENERGY_FUTURES"
     timezone: "America/New_York"
     kind: "futures_global"
     regular_open: "00:00"
-    regular_close: "23:59"
+    regular_close: "17:00"
     assets: ["BRENT", "WTI"]
 
   METALS_GLOBAL:
@@ -113,5 +125,5 @@ markets:
     timezone: "America/New_York"
     kind: "futures_global"
     regular_open: "00:00"
-    regular_close: "23:59"
+    regular_close: "17:00"
     assets: ["XAUUSD", "XAGUSD", "XCUUSD"]

@@ -215,13 +215,16 @@ def evaluate(
             diagnostics=diagnostics,
         )
 
-    # Unmapped asset or calendar genuinely unknown → caution (restrictive, not fake allow).
+    # Unmapped asset or calendar genuinely unknown → manual_ready. 2026-07-04
+    # (owner): eskiden "caution" (0.75× ama route=open) idi — map'siz custom
+    # hisseler (SPCX/TEM) bu delikten PİYASA KAPALIYKEN otomatik açılıyordu.
+    # Takvimini bilmediğimiz piyasada otomatik açılış YOK; owner onayına düşer.
     if ctx.session_risk == "unknown":
         diagnostics.append("calendar_unknown")
         return MarketSessionDecision(
-            action="caution",
-            size_multiplier=_clamp_multiplier(0.75),
-            reason="Session calendar unknown — restrictive",
+            action="manual_ready",
+            size_multiplier=_clamp_multiplier(0.5),
+            reason="Session calendar unknown — auto-open disabled",
             reason_code="market_session_calendar_unknown",
             evidence=evidence,
             diagnostics=_dedup(diagnostics),
@@ -260,6 +263,35 @@ def evaluate(
             evidence=[f"{s.market_id} {s.session_phase}" for s in ctx.relevant_markets],
             diagnostics=_dedup(diagnostics),
         )
+
+    # 2026-07-04 (owner) — hafta sonu boşluğu guard'ı: ilgili piyasaların SON
+    # kapanan açık seansı Cuma kapanışına ≤ weekend_gap_pre_minutes kala yeni
+    # otomatik açılış manual_ready'e düşer. Sebep: closing_window (30dk) tek
+    # başına dar — Cuma öğleden sonra açılan pozisyon 2 günlük fiyatlanamayan
+    # hafta sonu gap'ine giriyordu (BRENT örneği). Yalnızca kısıtlar.
+    open_statuses = [
+        s
+        for s in ctx.relevant_markets
+        if s.is_open and s.minutes_to_close is not None and s.close_time_utc
+    ]
+    if open_statuses:
+        last = max(open_statuses, key=lambda s: s.minutes_to_close or 0)
+        close_dt = datetime.fromisoformat(str(last.close_time_utc))
+        if (
+            close_dt.weekday() == 4  # Cuma (UTC)
+            and (last.minutes_to_close or 0) <= cfg.thresholds.weekend_gap_pre_minutes
+        ):
+            evidence.append(
+                f"{last.market_id} closes in {last.minutes_to_close}m (Friday — weekend gap)"
+            )
+            return MarketSessionDecision(
+                action="manual_ready",
+                size_multiplier=_clamp_multiplier(0.5),
+                reason="Pre-weekend close — position would carry the weekend gap",
+                reason_code="market_session_weekend_gap",
+                evidence=evidence,
+                diagnostics=_dedup(diagnostics),
+            )
 
     # Relevant market open, mid-session → allow at full (deterministic) size.
     return MarketSessionDecision(

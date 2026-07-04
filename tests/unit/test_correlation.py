@@ -334,21 +334,23 @@ def test_correlation_endpoint(fresh_env) -> None:
 
 
 def test_ev_gate_blocks_negative_ev(fresh_env, monkeypatch) -> None:
-    # F5: ev_gate AÇIK + skor açılır (62→cal_conf 0.24, floor'u geçer) ama EV negatif
-    # (0.24×2.5 − 0.76 − 0.1 = −0.26) → hold (blocked_by ev_gate).
+    # F5: ev_gate AÇIK + skor açılır (66→cal_conf 0.32, floor 0.30'u geçer) ama EV
+    # negatif (0.32×2.5 − 0.68 − 0.5 = −0.38, cost_r 0.5) → hold (blocked_by ev_gate).
+    # 2026-07-04: min_open_confidence 0.20→0.30 sonrası skor 62 floor'da takılıyordu;
+    # skor 66'ya çekildi + cost_r yükseltildi ki test GERÇEKTEN ev_gate'i sınasın.
     from packages.consensus.engine import ConsensusResult, ModuleScore
     from packages.decision import engine as dec
     from packages.risk.engine import RiskDecision
 
     snap, regime = _force_decision_pass(monkeypatch)
     fake = ConsensusResult(
-        symbol="BTCUSD", score=62.0, direction="bullish", confluence_aligned=True,
+        symbol="BTCUSD", score=66.0, direction="bullish", confluence_aligned=True,
         dominant_module="touche",
-        modules=[ModuleScore(name="touche", score=62.0, weight=1.0, contribution=62.0)],
+        modules=[ModuleScore(name="touche", score=66.0, weight=1.0, contribution=66.0)],
     )
     monkeypatch.setattr(dec, "build_consensus", lambda *a, **kw: fake)
     # autouse fixture ev_gate'i kapatmıştı — bu testte AÇ (1d → RR 2.5).
-    monkeypatch.setattr(dec, "_ev_gate_cfg", lambda: {"enabled": True, "min_ev": 0.0, "cost_r": 0.1})
+    monkeypatch.setattr(dec, "_ev_gate_cfg", lambda: {"enabled": True, "min_ev": 0.0, "cost_r": 0.5})
     hold_risk = RiskDecision(action="HOLD", reason="ok", evidence=[])
     d = dec.decide_for_symbol(
         "BTCUSD", snap, regime, hold_risk, open_positions=[], equity_usd=100_000, timeframe="1d"

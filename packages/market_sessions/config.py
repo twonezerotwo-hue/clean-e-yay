@@ -35,6 +35,9 @@ class SessionThresholds:
     opening_post_minutes: int = 30
     closing_pre_minutes: int = 30
     pre_open_watch_minutes: int = 120
+    # Hafta sonu boşluğu guard'ı: ilgili piyasaların SON açık seansı Cuma
+    # kapanışına bu kadar dakika kala otomatik açılış manual_ready'e düşer.
+    weekend_gap_pre_minutes: int = 120
 
 
 @dataclass(frozen=True)
@@ -65,6 +68,7 @@ def load_config(path: Path | None = None) -> MarketSessionsConfig:
         opening_post_minutes=int(th.get("opening_post_minutes", 30)),
         closing_pre_minutes=int(th.get("closing_pre_minutes", 30)),
         pre_open_watch_minutes=int(th.get("pre_open_watch_minutes", 120)),
+        weekend_gap_pre_minutes=int(th.get("weekend_gap_pre_minutes", 120)),
     )
 
     markets: list[MarketConfig] = []

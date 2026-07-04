@@ -95,13 +95,15 @@ def evaluate(
                 )
             )
 
-    # 4) Çok fazla açık pozisyon
-    if inp.open_position_count >= 6:
+    # 4) Çok fazla açık pozisyon — 2026-07-04: hardcoded 6 → owner-tunable
+    #    (risk_gates.max_open_positions). Default aynı (6); davranış bayt-aynı.
+    max_open = int(th.get("max_open_positions", 6))
+    if inp.open_position_count >= max_open:
         candidates.append(
             (
                 "NO_POSITION_INCREASE",
                 "Açık pozisyon sayısı yüksek",
-                [f"{inp.open_position_count} pozisyon"],
+                [f"{inp.open_position_count} pozisyon ≥ limit {max_open}"],
             )
         )
 

@@ -174,10 +174,13 @@ def test_closing_window_routes_manual_ready(cfg):
     assert d.reason_code == "market_session_closing_window"
 
 
-def test_unknown_calendar_is_caution_not_fake_allow(cfg):
+def test_unknown_calendar_routes_manual_ready_not_auto_open(cfg):
+    # 2026-07-04: caution (route=open) → manual_ready. Map'siz varlık artık
+    # otomatik AÇILMAZ — takvimi bilinmeyen piyasada açılış owner onayına düşer.
     d = _decide("ZZZZ", MON_MID, cfg)
-    assert d.action == "caution"
-    assert d.size_multiplier == 0.75
+    assert d.action == "manual_ready"
+    assert d.size_multiplier == 0.5
+    assert d.reason_code == "market_session_calendar_unknown"
     assert "calendar_unknown" in d.diagnostics
     assert d.action != "allow"
 
@@ -186,6 +189,47 @@ def test_mid_session_allows(cfg):
     d = _decide("SPY", MON_MID, cfg)
     assert d.action == "allow"
     assert d.size_multiplier == 1.0
+
+
+# ── 2026-07-04 fixes: weekend gap + custom US stock mapping ──────────────────
+
+# 2026-06-19 is a Friday. ENERGY_GLOBAL closes 17:00 ET = 21:00 UTC (EDT).
+FRI_PRE_CLOSE = datetime(2026, 6, 19, 19, 30, tzinfo=UTC)  # 15:30 ET — 90m to close
+WED_SAME_TIME = datetime(2026, 6, 17, 19, 30, tzinfo=UTC)  # Wednesday — no gap
+
+
+def test_brent_friday_pre_close_routes_manual_ready(cfg):
+    # Cuma kapanışına ≤120dk kala otomatik açılış YOK — hafta sonu gap guard'ı.
+    d = _decide("BRENT", FRI_PRE_CLOSE, cfg)
+    assert d.action == "manual_ready"
+    assert d.reason_code == "market_session_weekend_gap"
+    assert d.size_multiplier == 0.5
+
+
+def test_brent_wednesday_same_time_still_allows(cfg):
+    # Aynı saat hafta içi (Çarşamba) → gap yok → mid-session allow.
+    d = _decide("BRENT", WED_SAME_TIME, cfg)
+    assert d.action == "allow"
+
+
+def test_metals_friday_pre_close_routes_manual_ready(cfg):
+    d = _decide("XAUUSD", FRI_PRE_CLOSE, cfg)
+    assert d.action == "manual_ready"
+    assert d.reason_code == "market_session_weekend_gap"
+
+
+def test_custom_us_stock_closed_market_no_auto_open(cfg):
+    # SPCX/TEM artık US_EQUITY'ye map'li: piyasa kapaliyken (Cumartesi)
+    # "calendar unknown → open" deliği yerine manual_ready.
+    for sym in ("TEM", "SPCX", "CLNN", "NVDA"):
+        d = _decide(sym, SAT, cfg)
+        assert d.action == "manual_ready", sym
+        assert d.reason_code == "market_session_no_relevant_market", sym
+
+
+def test_custom_us_stock_mid_session_allows(cfg):
+    d = _decide("TEM", MON_MID, cfg)
+    assert d.action == "allow"
 
 
 def test_crypto_allowed_24_7_but_can_carry_caution_evidence(cfg):
