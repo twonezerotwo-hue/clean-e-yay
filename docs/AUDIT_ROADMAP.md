@@ -4,6 +4,55 @@
 > sürecine çevirir. **Yaşayan belge** — her slice tamamlanınca durum sütunu
 > güncellenir. Kaynak denetim raporu: PR #48 açıklaması + oturum kaydı.
 
+## 16 KATEGORİ → 10/10 YOL HARİTASI (2026-07-04, owner talimatı)
+
+> Owner talimatı: 2026-07-04 denetim raporundaki 16 puanlı kategorinin HER
+> BİRİNİ 10/10'a taşıyacak fazlı plan. Kural 1 (sistem bozulmaz), Kural 2
+> (ölü kod / şişmiş mimari yok), Kural 3 (harcanan her token sistemi iyiye
+> götürür). **Token biterse başka asistan bu tablodan sıfır bağlamla devralır.**
+> S serisi (aşağıda) bu planın FAZ-1'idir ve çoğu KODLANDI (2026-07-04).
+>
+> Faz sırası neden böyle: önce HIZ (her deneyi hızlandırır, davranış-nötr) →
+> sonra AKTİVASYON (kanıtı hazır kapalı özellikler) → sonra ÇIKIŞ kalitesi
+> (en büyük $ kaçağı ama kanıt biriktirmeli) → sonra SİNYAL kalitesi (skorlar
+> iyi/kötü işlemi ayırsın) → en son OTONOMİ (kırmızı çizgi).
+
+| Kat | Bugün | Hedef | 10/10 için gereken (faz) | Durum |
+|---|---:|---:|---|---|
+| 14 Hız | 5 | 10 | **FAZ-1:** S1-1 GDELT cooldown + S1-2 log rotasyon + S1-3 TF memo (tik 22s→~3s ölçüldü). **FAZ-1b (kalırsa):** snapshot pool'a technicals paralel (şu an seri 1.3s) — ölçülen kazanç küçük, ertelenebilir | ✅ FAZ-1 kodlandı (S1) |
+| 13 Gölge sistem | 7 | 10 | S1-2 (221MB log → tail+rotasyon) + tek-kurulum (S1-3). 10/10 = F5-2 terfi paketi READY olunca gölgenin haklılığı ölçülüp owner'a sunulur (mekanizma hazır, veri birikmeli: ≥200 eşleşme + 30 çözüm) | ✅ FAZ-1 (S1-2/3); terfi veri-bekliyor |
+| 9 EV kapısı | 5 | 10 | **FAZ-2:** S3-1 empirical_pwin AÇIK → p(win) şişik güvenden değil gerçekleşen isabetten. 10/10 = payoff_weighted'ın R-verisi birikince devreye girmesi (min_r_samples=8; şu an en dolu hücre 7) — R-damgalı kapanışlar biriktikçe DOĞAL dolar | ✅ FAZ-2 (S3-1); R-verisi birikiyor |
+| 4 Haber | 6 | 10 | S1-1 GDELT dürüst degraded (tek kanala düşüş görünür). 10/10 = ek doğrulanmış haber kaynağı (RSS feed genişletme) VEYA GDELT'e alternatif erişim — **YENİ İŞ, henüz planlanmadı** (owner ağ-erişim kararı: bu makineden GDELT/Deribit bloklu, AWS'ten erişilebilir olabilir — kontrol edilmeli) | ⬜ N1 (aşağıda) |
+| 1 Veri toplama | 7 | 10 | Haber (kat 4) + S1-4 opsiyonel-sağlayıcı ayrımı (gerçek arıza görünür). 10/10 = options ETH/BTC erişimi (Deribit bloklu) için fallback veya AWS-taraflı çekim; N1 ile aynı ağ-erişim kararı | ⬜ N1 |
+| 11 ÇIKIŞLAR | 4 | 10 | **FAZ-3 (en büyük $ kaçağı ~$2.4k):** partial_tp shadow kanıtı birikince AÇ (şu an n=2 uplift −$16, YETERSİZ — 🔴 kural). Yardımcı: TF_TARGET_TRAIL_AUTOTUNE zaten AÇIK (trailing mesafesini capture'dan öğrenir). 10/10 = partial_tp AÇIK + EXIT_FORENSICS_NUDGE AÇIK (oransal düzeltme) | ⏳ FAZ-3 kanıt-bekliyor |
+| 7 Konsensüs+ağırlık | 6 | 10 | **FAZ-4 (sinyal kalitesi):** skorlar iyi/kötü işlemi ayıramıyor (katkı kazanan≈kaybeden). WEIGHT_REGIME_FILTER (rejim-bazlı eğitim) + MISTAKE_MEMORY_V2 (Wilson-sınırlı hata hafızası) AÇ. 10/10 = ağırlık trainer'ın rejim-ayrık öğrenmesi + kalite ayrımı ölçülür | ⬜ FAZ-4 |
+| 6 Quantum | 6 | 10 | FAZ-4 kapsamında: ağırlık trainer quantum'un gerçek katkısını ölçüp ağırlığını rejim-bazlı ayarlar (şu an sabit ~%10-15). 10/10 = etkisi veriyle doğrulanmış ağırlık | ⬜ FAZ-4 |
+| 3 Makro (fundamental) | 7 | 10 | Çifte-sayım çözüldü (v2 AÇIK). 10/10 = FRED kesintisinde katman-düşürme (regime.drop_unavailable_layers AÇIK) + makro veri kanıtının ağırlıkta ölçülmesi (FAZ-4) | 🔶 büyük kısmı AÇIK |
+| 5 Sentinel | 7 | 10 | Çok-girdili kompozit AÇIK (v2). 10/10 = options-stres girdisi gerçek Deribit verisiyle (şu an bloklu → N1); kompozit tam beslenince | 🔶 N1'e bağlı |
+| 2 Teknik (touche) | 8 | 10 | **FAZ-5:** T-1 htf_alignment AÇIK (S3-2). Kalan T-2 (Elliott×Fib), T-3 (S/R gücü), T-4 (mum teyidi) shadow kanıtı birikince tek tek AÇ. 10/10 = dördü de aktif + kanıtla doğrulanmış | 🔶 T-1 AÇIK; T-2/3/4 shadow |
+| 8 Kalibrasyon | 8 | 10 | tf_platt AÇIK + guardrail sıkı (0.10). 10/10 = reliability_bins çifte-sayım fix (denetim bulgusu #3) + TF başına yeterli örnekle fit doğrulanır | 🔶 küçük fix + veri |
+| 12 Öğrenme | 8 | 10 | Kanıt üreten ama karara bağlanmamış flag'ler açıldıkça (empirical_pwin ✅, MM_V2, WRF). 10/10 = tüm öğrenme kanıtı ya karara bağlı ya bilinçli-shadow, boşta kanıt yok | 🔶 aktivasyonlarla |
+| 10 Risk kapıları | 9 | 10 | Zaten en güçlü. 10/10 = S2-1/S3-3 MTM gate (açık pozisyon eriyince realized beklemeden fren) — bu bağlanınca risk gerçek-zamanlı olur | ✅ S2-1 kodlandı; S3-3 flip sırada |
+| 15 Panolar | 8 | 10 | 40+ panel. 10/10 = degraded_reasons (S1-4) + coverage çipleri panele yansıtılır (küçük FE işi) | 🔶 BE hazır, FE dokunuşu |
+| 16 Güvenlik ağı | 9 | 10 | 1433 test, watchdog, rollback. 10/10 = zaten neredeyse tam; her yeni aktivasyona watchdog+rollback (S serisi bunu korudu) | ✅ korunuyor |
+
+**Bu sprintte KODLANAN (FAZ-1 + FAZ-2 kısmı):** kat 14/13/9/10 doğrudan
+ilerledi; 2/3/5/12 kısmen. **Kalan işler (ayrı fazlar, henüz kodlanmadı):**
+
+- **N1 — Ağ/veri erişimi (kat 1/4/5):** GDELT + Deribit bu makineden bloklu.
+  Owner kararı gerekli: (a) AWS-tarafı erişim var mı test et (AWS farklı IP),
+  (b) yoksa alternatif haber/options kaynağı planla. YENİ İŞ — kod öncesi
+  owner ağ-erişim teyidi şart (uydurma veri YASAK — DATA_POLICY).
+- **FAZ-3 — Çıkış kalitesi (kat 11):** partial_tp shadow uplift kanıtı ≥N
+  işlem birikince owner onayıyla AÇ. En büyük $ kaçağı ama 🔴 kanıtsız açılmaz.
+- **FAZ-4 — Sinyal kalitesi (kat 6/7):** WEIGHT_REGIME_FILTER +
+  MISTAKE_MEMORY_V2 tek tek (bekleme penceresiyle). Skorların iyi/kötü
+  ayrımını ölçmek için modül-katkı analizi (rapor madde 4.5) izlenmeli.
+- **FAZ-5 — TA genişletme (kat 2):** T-2/T-3/T-4 shadow kanıtı sırayla.
+- **Küçük fix'ler:** reliability_bins çifte-sayım (kat 8), FE degraded/coverage
+  çipleri (kat 15), denetim bulguları #1/#2/#4 (confluence yön, penalty taban,
+  mfe_r clamp — 2026-07-02'de raporlanmış, owner onayı bekliyor).
+
 ## S serisi — Hız + Acil + Aktivasyon sprinti (2026-07-04, owner talimatı)
 
 > Kaynak: 2026-07-04 tam-repo denetim raporu (oturum kaydı). Owner talimatı:
