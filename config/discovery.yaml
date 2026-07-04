@@ -36,6 +36,15 @@ scan:
   # (~14k çağrı/ay = limit aşımı). 4 saat: ~60 çağrı/gün, bütçeye sığar.
   result_ttl_sec: 14400
 
+# K-2 — gölge kanıt defteri: "açılırdı" hükmü TP/SL'e değmeden bu süreyi
+# aşarsa "expired" (net sonuç yok, karneye girmez). missed_opportunity TTL
+# tablosuyla aynı değerler (keşifte 15m/1w dilimi yok).
+shadow:
+  ttl_hours:
+    "1h": 24
+    "4h": 72
+    "1d": 240
+
 sector_rotation:
   # Göreli güç kıyas çıpası (assets.yaml'daki S&P 500 — OHLCV'de zaten var).
   benchmark: SP500

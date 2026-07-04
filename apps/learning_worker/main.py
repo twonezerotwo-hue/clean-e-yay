@@ -456,8 +456,9 @@ def run_once() -> dict:
             discovery_scan_status = str(sc.get("status", "UNKNOWN"))
             if discovery_scan_status == "OK":
                 log.info(
-                    "discovery_scan: scanned=%s signals=%s candidates=%s",
-                    sc.get("scanned"), sc.get("signals_n"), sc.get("candidates_total"),
+                    "discovery_scan: scanned=%s signals=%s candidates=%s shadow=%s",
+                    sc.get("scanned"), sc.get("signals_n"),
+                    sc.get("candidates_total"), sc.get("shadow"),
                 )
     except Exception as exc:  # defensive — worker patlamamalı
         discovery_scan_status = f"ERROR:{type(exc).__name__}"

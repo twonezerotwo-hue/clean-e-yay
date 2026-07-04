@@ -36,6 +36,7 @@ from packages.data.providers.technical.timeframe import build_timeframe_result
 from packages.data.registry.loader import CONFIG_DIR, load_thresholds
 from packages.data.types import OHLCVBar
 from packages.decision import engine as decision_engine
+from packages.discovery import shadow_ledger
 from packages.learning import empirical_pwin
 from packages.learning.calibration_store import (
     predict_calibrated_tf,
@@ -269,10 +270,10 @@ def run_if_due(
         except ValueError:
             return False
 
+    fetch_crypto = fetch_crypto_bars or cg_ohlcv.fetch_by_ticker
+    bars_fn = get_bars or ohlcv.get_bars
     if candidates:
         cursor = int(prev.get("cursor") or 0) % len(candidates)
-        fetch_crypto = fetch_crypto_bars or cg_ohlcv.fetch_by_ticker
-        bars_fn = get_bars or ohlcv.get_bars
         advanced = 0
         for i in range(len(candidates)):  # kota dolana dek taze olmayan ara
             if len(scanned) >= per_run:
@@ -297,6 +298,31 @@ def run_if_due(
         keep = sorted(results.values(), key=lambda r: str(r.get("checked_at")))[-_RESULTS_CAP:]
         results = {str(r["symbol"]): r for r in keep}
 
+    # K-2 — gölge kanıt defteri: aktif izlemeleri çöz + bu koşunun taze
+    # WOULD_OPEN_LONG verdiktlerini damgala. Bütçe kuralı closure'da: kripto
+    # barı yalnız bu koşuda ZATEN taranan sembol için istenir (sağlayıcının
+    # bellek-içi cache'i sıcak → sıfır ek API çağrısı); ETF her zaman (ucuz,
+    # cache'li orkestratör); aday listesinden düşmüş kripto yalnız yaş-expiry.
+    cand_by_sym = {str(c["symbol"]): c for c in candidates}
+    scanned_set = set(scanned)
+
+    def _ledger_bars(sym: str, tf: str, kind: str) -> list[OHLCVBar] | None:
+        cand = cand_by_sym.get(sym)
+        if cand is None:
+            if kind != "sector_etf":
+                return None
+            cand = {"symbol": sym, "kind": "sector_etf"}
+        if cand.get("kind") == "crypto" and sym not in scanned_set:
+            return None
+        bars = _candidate_bars(cand, tf, get_bars=bars_fn, fetch_crypto=fetch_crypto)
+        return [b for b in bars if b.verified]
+
+    ledger_run = shadow_ledger.process_run(
+        results=results, scanned=scanned, now=now,
+        bars_for=_ledger_bars, cfg=dict(cfg.get("shadow") or {}),
+    )
+    shadow_view = shadow_ledger.candidate_summary()
+
     signals = [r for r in results.values() if r.get("verdict") == "WOULD_OPEN_LONG"]
     artifact = {
         "generated_at": now.isoformat(),
@@ -307,6 +333,8 @@ def run_if_due(
         "rising_sectors": sector_cands,
         "results": results,
         "signal_symbols": sorted(str(s["symbol"]) for s in signals),
+        # K-2 — gölge karne (hipotetik; işlem AÇILMADI): K-3 paneli/API besini.
+        "shadow": {**shadow_view, "last_run": ledger_run},
     }
     path = _out_path()
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -318,4 +346,5 @@ def run_if_due(
         "scanned": scanned,
         "signals_n": len(signals),
         "cursor": cursor,
+        "shadow": ledger_run,  # K-2: tracked_new / resolved / active
     }

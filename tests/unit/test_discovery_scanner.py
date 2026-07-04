@@ -106,6 +106,8 @@ def _bars_stub(tf="1d", n=70, close=100.0):
 
 def _setup(monkeypatch, tmp_path, *, scores, sectors=None, crypto=None, per_run=5):
     monkeypatch.setenv("DISCOVERY_SCAN_PATH", str(tmp_path / "scan.json"))
+    # K-2: gölge defteri test başına izole (aktif izlemeler testler arası sızmasın)
+    monkeypatch.setenv("DISCOVERY_SHADOW_PATH", str(tmp_path / "shadow.jsonl"))
     _write_sector_artifact(tmp_path, monkeypatch, sectors or [])
     monkeypatch.setattr(
         scanner, "build_timeframe_result",

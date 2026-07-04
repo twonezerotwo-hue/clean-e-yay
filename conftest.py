@@ -109,3 +109,5 @@ def _isolate_runtime_stores(tmp_path_factory: pytest.TempPathFactory) -> None:
     os.environ["SECTOR_ROTATION_PATH"] = str(runtime / "sector_rotation.json")
     # K-1 (2026-07-04) — keşif tarayıcı artifact'ı suite'ten izole.
     os.environ["DISCOVERY_SCAN_PATH"] = str(runtime / "discovery_scan.json")
+    # K-2 (2026-07-04) — keşif gölge kanıt defteri suite'ten izole.
+    os.environ["DISCOVERY_SHADOW_PATH"] = str(runtime / "discovery_shadow.jsonl")
