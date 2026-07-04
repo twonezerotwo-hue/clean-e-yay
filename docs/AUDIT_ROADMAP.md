@@ -140,6 +140,36 @@ R-verisi bekliyor), T-2/T-3/T-4 (shadow kanıtı birikiyor),
 kanıtsız), `shadow.affect_decision` + `conflict_resolver_activation`
 (KIRMIZI ÇİZGİ — owner onay paketi F5-2 READY olmadan asla).
 
+## B serisi — Backtest-challenger motoru (2026-07-04, owner kararı)
+
+> Owner sorusu: "cat 6/7 (quantum/ağırlık) için canlı veri birikmesini
+> beklemek yerine backtest ile devam etsek?" Kanıt: NEUTRAL %88 (137/155
+> outcome), OFFENSIVE 7, DEFENSIVE/CRISIS 0 → rejim-çeşitliliği yok, ağırlık
+> trainer'ı öğrenemez; module_attribution kazanan≈kaybeden (touche 23.6/24.3
+> TERS, quantum 3.1/3.4 TERS). Mevcut iki backtest aracı yetersiz:
+> `strategy_backtest` touche-only, `backtest.py` snapshot-replay yalnız ~9
+> saatlik NEUTRAL pencere. ÇÖZÜM: quantum/fundamental/sentinel fiyat/makro
+> serilerinden TÜREDİĞİ için (BTC/altın/DXY/VIX 1-2 yıl gerçek geçmiş var,
+> news hariç) geçmişe dönük yeniden-kurulabilir → rejim-çeşitli GERÇEK-veri.
+>
+> **Pazarlıksız güvenlik:** (1) yalnız gerçek seri (news nötr+damgalı, uydurma
+> yok — DATA_POLICY); (2) İZOLASYON — backtest outcome'ları AYRI challenger
+> kanalına, canlı `verified` deftere/ağırlığa ASLA karışmaz; champion/
+> challenger (F5-2) deseniyle owner onayına sunulur, oto-uygulanmaz; (3)
+> bilinen sınır: geçmiş ilişkiler canlıda birebir tutmayabilir → backtest
+> KARAR VERMEZ, owner'a kanıt sunar.
+
+| # | İş | Durum | Risk | Not |
+|---|---|---|---|---|
+| B-1 | **Geçmiş çok-modül yeniden-kurma + fidelity harness** (`packages/learning/backtest_recon.py`, salt-ölçüm/izole): CANLI fonksiyonların kendisiyle (kopya yok) touche/quantum/fundamental_v2/sentinel'i geçmiş indekste yeniden kurar; LOOK-AHEAD yok (tarih-hizalı `ts ≤ as_of`); news nötr+damgalı. Fidelity: son indekste yeniden-kurulan quantum ↔ BAĞIMSIZ canlı `get_rotation()`; FAITHFUL/DRIFT. Flag `BACKTEST_RECON_ENABLED` OFF→no-op; artifact `backtest_recon.json` (izole). Learning worker adımı OFF-kapılı | ✅ (2026-07-04) 8 test; **canlı FAITHFUL (quantum_delta 0.0)** — tarih-hizalama bug'ı harness'le yakalanıp düzeltildi (indeks-hizalama farklı-uzunluk serilerde yanlış tarihi alıyordu). Bilinen sınır: Likidite katmanı düşüyor (US10Y/US02Y FRED'de, OHLCV cache'te yok) → B-2 FRED geçmişini ekler | 🟢 | fidelity kapısı FAITHFUL → B-2 yeşil ışık |
+| B-2 | **Rejim-çeşitli outcome üretimi:** B-1 çekirdeğini 1-2 yıllık her indekste koştur → her kararın (sembol×TF×tarih) forward-return outcome'u + rejim etiketi + module_contributions, AYRI `backtest_challenger.jsonl`'e (S1-2 rotasyon deseni). FRED geçmişi (US10Y/US02Y/CPI) eklenir (Likidite katmanı tam). news nötr kalır (damgalı). Canlı outcome defterine YAZMAZ | ⬜ B-1 FAITHFUL sonrası | 🟡 | izole kanal |
+| B-3 | **Challenger ağırlık eğitimi:** mevcut `auto_weight_trainer`'ı challenger kanalına yönelt (rejim-filtreli) → rejim başına challenger ağırlık seti + quantum'un rejim-bazlı ayrım karnesi (cat 6 cevabı). Champion (canlı) ağırlıkla shadow kıyas. Canlı ağırlığa YAZMAZ | ⬜ | 🟡 | F5-2 deseni |
+| B-4 | **Owner terfi paketi:** challenger champion'ı N eşleşmede + CI-ayrık geçerse governor defterine ÖNERİ (STRATEGY/WEIGHT). Owner onaylar; oto-uygulama YOK (KIRMIZI ÇİZGİ) | ⬜ | 🔴 | owner-onay |
+
+**B serisi ne açar:** cat 6 (quantum ayrımı rejim-bazlı ölçülür), cat 7
+(rejim-çeşitli challenger ağırlık), BONUS cat 11 (aynı motor devasa çıkış-
+outcome örneği üretir). Hepsi izole/shadow/owner-kapılı — canlı sistem bozulmaz.
+
 ## Devir notu (son güncelleme: 2026-07-03)
 
 Bu belge farklı bir asistan/oturum tarafından SIFIR bağlamla devralınabilir

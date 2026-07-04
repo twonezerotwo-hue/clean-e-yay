@@ -464,6 +464,24 @@ def run_once() -> dict:
         discovery_scan_status = f"ERROR:{type(exc).__name__}"
         errors.append(f"discovery_scan:{type(exc).__name__}")
 
+    # B-1 — geçmiş çok-modül yeniden-kurma sadakat (fidelity) kontrolü. Flag
+    # BACKTEST_RECON_ENABLED OFF → tam no-op. SALT-ÖLÇÜM/İZOLE: canlı outcome
+    # defterine/ağırlığa temas etmez, yalnız fidelity artifact'ı yazar. Import
+    # lazy — flag kapalıyken decision/consensus bağımlılıkları yüklenmez.
+    backtest_recon_status = "DISABLED"
+    try:
+        from packages.learning import backtest_recon
+        if backtest_recon.enabled():
+            fr = backtest_recon.fidelity_report()
+            backtest_recon_status = str(fr.get("verdict", "UNKNOWN"))
+            log.info(
+                "backtest_recon: verdict=%s quantum_delta=%s",
+                backtest_recon_status, fr.get("quantum_delta"),
+            )
+    except Exception as exc:  # defensive — worker patlamamalı
+        backtest_recon_status = f"ERROR:{type(exc).__name__}"
+        errors.append(f"backtest_recon:{type(exc).__name__}")
+
     if errors:
         status = "COMPLETED_WITH_ERRORS"
     elif outcomes_seen == 0:
@@ -503,6 +521,7 @@ def run_once() -> dict:
         "exit_forensics_status": exit_forensics_status,  # Çıkış Otopsisi (2026-07-03)
         "discovery_status": discovery_status,  # K-0b sektör rotasyonu (DISABLED=flag OFF)
         "discovery_scan_status": discovery_scan_status,  # K-1 tarayıcı
+        "backtest_recon_status": backtest_recon_status,  # B-1 fidelity (DISABLED=flag OFF)
         "duration_ms": duration_ms,        # CP1 — perf görünürlüğü
         "over_budget": over_budget,        # CP1 — bütçe aşımı bayrağı
         "errors": errors,

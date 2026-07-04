@@ -76,6 +76,8 @@ def _package1_flags_off_by_default(monkeypatch: pytest.MonkeyPatch) -> None:
     # Chat model sırası (2026-07-03) — testler default Groq-önce sırayı varsayar;
     # dev .env'inde lokal-önce açık olabilir, sızdırma.
     monkeypatch.delenv("CHAT_LLM_LOCAL_FIRST", raising=False)
+    # B-1 (2026-07-04) — geçmiş yeniden-kurma fidelity flag'i testlerde OFF.
+    monkeypatch.delenv("BACKTEST_RECON_ENABLED", raising=False)
     # K-0b (2026-07-04) — keşif motoru testlerde default OFF (baseline'da
     # learning koşusu bayt-eşdeğer); flag'i test eden testler kendisi açar.
     monkeypatch.delenv("DISCOVERY_SCAN_ENABLED", raising=False)
