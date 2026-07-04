@@ -68,6 +68,10 @@ ensure_env TF_CALIBRATION_AUTO_ONLY 1
 # öğrenmesinde de — tf_target_trainer + entry_exit_quality dataset'i yalnız AUTO
 # kohort. EDGE_GATE=0 KALIR (aktif tuning); EXIT_FORENSICS_NUDGE 2 hafta shadow sonra.
 ensure_env TF_TARGET_AUTO_ONLY 1
+# K-0b aktivasyonu (2026-07-04, owner karari): kesif motoru / sektor rotasyonu
+# AÇIK — salt-gozlem (karar zinciri/RiskGate/tik'e sifir temas), sektor karnesi
+# birikmeye baslar. Lokal .env'de de =1 (owner kurali: lokal+AWS senkron).
+ensure_env DISCOVERY_SCAN_ENABLED 1
 
 echo "deploy: restart services"
 sudo systemctl restart eyay-supervisor.service
