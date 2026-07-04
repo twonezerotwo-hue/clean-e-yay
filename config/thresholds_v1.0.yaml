@@ -204,13 +204,15 @@ calibration_guardrail:
 risk_gates:
   max_daily_loss_pct: 0.02      # equity'nin %2'si
   max_drawdown_pct: 0.08        # peak'ten %8
-  # S2-1 (F2-1 gate bağlama, 2026-07-04) — false (DEFAULT) → drawdown yalnız
-  # realized equity ile (bayt-aynı). true → drawdown kontrolü min(realized, mtm)
-  # ile: açık pozisyonlar toplamda eriyorsa RISK_REDUCE freni kapanış BEKLEMEDEN
+  # S2-1 (F2-1 gate bağlama, 2026-07-04) — false → drawdown yalnız realized
+  # equity ile (bayt-aynı). true → drawdown kontrolü min(realized, mtm) ile:
+  # açık pozisyonlar toplamda eriyorsa RISK_REDUCE freni kapanış BEKLEMEDEN
   # çeker. YALNIZ SIKILAŞTIRIR (MTM kârı gate'i gevşetemez — engine min() alır).
-  # KAYIT FAZI: bu commit'te false; aktivasyon AYRI deploy (E-6 dersi — watchdog
-  # önce OFF görmeli ki OFF→ON geçişinde baseline damgalansın).
-  mtm_equity_enabled: false
+  # AKTİF (2026-07-04, owner kararı — S3-3). Kayıt fazı (S2-1) commit 7ead845a'da
+  # deploy edildi; watchdog `mtm_equity_gate` baseline'ını OFF damgaladı (yerel +
+  # AWS learning cycle'ları arasında ≥1 tur OFF görüldü — E-6 sıralaması). Bu
+  # flip OFF→ON geçişi olduğu için watchdog monitörü ARM eder. Tek-flag revert.
+  mtm_equity_enabled: true
   # 2026-07-04: eskiden risk/engine.py'de hardcoded 6 idi — config'e taşındı
   # (davranış aynı). Bu sayı ve üstünde açık pozisyon varken yeni açılış
   # NO_POSITION_INCREASE ile bloklanır. Zayıf-sinyal düzeltmeleriyle (yukarıda)
