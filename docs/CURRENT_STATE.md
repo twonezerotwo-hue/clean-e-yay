@@ -4,6 +4,36 @@ _Bu dosya kısa ve güncel tutulur. Her görev sonunda güncellenir._
 
 ## Last known status
 
+- **Katman 0 chat — gerçek SSE streaming + kalite yeniden tasarımı** (2026-07-04,
+  owner talebi: "eski yazı yeniden akıyor + cevaplar 1. sınıf değil"):
+  - **Kök neden 1 (UX)**: Layer0ReporterAgent'taki sahte daktilo efekti
+    `modelMode` değişince resetlenip ESKİ cevabı baştan akıtıyordu → efekt
+    tamamen SİLİNDİ; klasik sohbet akışı (append-only transcript, yalnız aktif
+    cevap akar, otomatik dibe kaydırma, caret sadece akan mesajda).
+  - **Kök neden 2 (kalite)**: lokalde Ollama-first 7B + "parafraz" prompt'u →
+    chat için `get_chat_client()` **Groq-önce** ([Groq, OpenRouter, Ollama];
+    `CHAT_LLM_LOCAL_FIRST=1` eski sıra, lokal-only flag, conftest delenv'li).
+    Persona raporları (`get_client`) lokal-önce KALDI. Prompt: gerçek çok-turlu
+    messages (history user/assistant rolleriyle) + FAKT bloğu; `_PROMPT_VERSION=v3`.
+  - **Yeni endpoint** `POST /api/v1/chat/stream` (SSE; additive, /chat durur):
+    `status → meta → delta* → done` — done OTORİTE (FE biriken metni done.answer
+    ile değiştirir; kesinti/bulgu-düşürme düzeltmesi böyle taşınır). Guard reddi /
+    manuel emir–pozisyon op (artık LLM'e GİRMEZ, `deterministic_command`) /
+    cache-hit / LLM-off → delta'sız tek done. Endpoint+generator bilerek sync def
+    (threadpool; async'te blocking urllib loop'u kilitler).
+  - **client.py**: Groq/OpenRouter (OpenAI SSE) + Ollama (NDJSON) + Mock
+    `stream()`; FallbackLLMClient.stream ilk yield'den sonra kilitlenir.
+  - **FE**: `apps/web/lib/api/chatStream.ts` (fetch+ReadableStream SSE parser);
+    stream başlayamazsa non-stream /chat fallback. TTS done'da; PTT/sessiz mod
+    korundu. globals.css: `layer0-chat-*` balonları; ölü transcript CSS silindi.
+  - **Validation**: pytest 1401 (19 yeni: test_chat_stream, test_llm_client_stream)
+    — tam koşuda 1 çakışan test (test_openapi_schema_ts_in_sync) Node OOM'du,
+    tek başına geçiyor; make lint kapsamı temiz; codegen senkron; tsc + .next-prod
+    build yeşil; smoke 8/8; canlı doğrulama (izole 9060/4101): curl'de token-token
+    delta, UI'da eski mesaj sabitken yeni balon status→akış→final yaşam döngüsü.
+  - **NOT (lokal deploy)**: canlı API (9000) hâlâ eski süreç — yeni endpoint için
+    API restart + `.next-prod` zaten rebuild edildi, `next start` restart'ı yeter.
+
 - **E serisi tamamlayıcı — aktivasyon güvenliği + görünürlük** (2026-07-03,
   rapor-üstü denetim; roadmap E-6/E-7/E-8). Rapor değerlendirmesinden çıkan 3
   gerçek eksik kapatıldı (geri kalan öneriler ya zaten vardı ya kapsam dışı —

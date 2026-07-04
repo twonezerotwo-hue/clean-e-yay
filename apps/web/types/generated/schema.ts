@@ -140,6 +140,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/chat/stream": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * v2.8 — state-grounded chat, SSE token akışı (LLM karar vermez)
+         * @description POST gövdesi ChatRequest; yanıt text/event-stream. Event sözleşmesi: `status` {stage: context|grounded|llm, source} aşama geçişleri; `meta` {snapshot_id, evidence_used, refused:false} delta'lardan önce; `delta` {text} yalnızca gerçek LLM stream parçası; `done` tam ChatResponse — HER akışın son eventi ve OTORİTE: istemci biriken delta metnini done.answer ile değiştirir (bulgu-düşürme/kesinti düzeltmeleri böyle taşınır); `error` {message} beklenmedik hata. Guard reddi, deterministik komutlar (manuel emir/pozisyon op) ve cache-hit'te delta akıtılmaz, tek `done` gelir.
+         */
+        post: operations["postChatStream"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/voice/speak": {
         parameters: {
             query?: never;
@@ -3810,6 +3830,30 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ChatResponse"];
+                };
+            };
+        };
+    };
+    postChatStream: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ChatRequest"];
+            };
+        };
+        responses: {
+            /** @description SSE akışı (event/data çerçeveleri; done=ChatResponse) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/event-stream": string;
                 };
             };
         };

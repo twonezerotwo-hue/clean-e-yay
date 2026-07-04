@@ -1153,81 +1153,109 @@ _CHAT_TEMPERATURE = 0.5
 
 # Cache anahtar sürümü — prompt/yönlendirme değişince artır ki file-backed
 # cache'teki (2 saat TTL) eski üsluptaki cevaplar dönmesin.
-_PROMPT_VERSION = "v2"
+_PROMPT_VERSION = "v3"
+
+# Side-effect'li owner komutları (emir aç/iptal, pozisyon op'u): cevap
+# DETERMİNİSTİK kalır, LLM parafrazına GİRMEZ — sayı/SL-TP bozulmaz, cevap
+# anında döner (owner şikayeti 2026-07-03: chat "1. sınıf his" vermiyor).
+_DETERMINISTIC_EVIDENCE_PREFIXES = ("manual_order:", "pending_order:", "pending:", "pos_op:")
 
 
-def _history_block(history: list[dict] | None) -> str:
-    """Son konuşma turlarını LLM prompt'una giren kısa bloğa çevirir.
+def _screen(message: str) -> dict | None:
+    """Injection guard — reddedildiyse hazır ChatResponse döner, yoksa None."""
+    refusal = guard.screen(message)
+    if refusal is None:
+        return None
+    return {
+        "answer": refusal,
+        "refused": True,
+        "evidence_used": ["safety:prompt_injection_guard"],
+        "llm": {"mode": llm_client.get_mode(), "model": None, "source": "guard",
+                "cached": False},
+    }
+
+
+def _history_messages(history: list[dict] | None) -> list[dict]:
+    """Son konuşma turlarını GERÇEK rollerle mesaj listesine çevirir.
 
     Yalnızca anlatım bağlamıdır — karar zincirine girmez. Kullanıcı turları
     injection guard'dan geçirilir; şüpheli tur sessizce atlanır.
     """
-    if not history:
-        return ""
-    lines: list[str] = []
-    for turn in history[-_HISTORY_MAX_TURNS:]:
+    msgs: list[dict] = []
+    for turn in (history or [])[-_HISTORY_MAX_TURNS:]:
         role = str((turn or {}).get("role") or "")
         text = " ".join(str((turn or {}).get("text") or "").split())[:_HISTORY_MAX_CHARS]
         if not text or role not in ("user", "agent"):
             continue
         if role == "user" and guard.screen(text) is not None:
             continue
-        lines.append(f"{'Kullanici' if role == 'user' else 'Sen'}: {text}")
-    return "\n".join(lines)
+        msgs.append({"role": "user" if role == "user" else "assistant", "content": text})
+    return msgs
 
 
-def answer(message: str, history: list[dict] | None = None) -> dict:
-    """Chat yanıtı — her zaman state-grounded; LLM sadece anlatımı akıcılaştırır."""
-    refusal = guard.screen(message)
-    if refusal is not None:
-        return {
-            "answer": refusal,
-            "refused": True,
-            "evidence_used": ["safety:prompt_injection_guard"],
-            "llm": {"mode": llm_client.get_mode(), "model": None, "source": "guard",
-                    "cached": False},
-        }
+def _prepare(message: str, history: list[dict] | None) -> dict:
+    """Ortak hazırlık — _grounded_answer TAM 1 KEZ çalışır (side-effect güvenliği).
 
+    answer() ve stream_answer() aynı hazırlığı paylaşır; fallback dallarında hep
+    buradaki grounded kullanılır, ikinci çağrı YAPILMAZ (manuel emir çifte açılmasın).
+    """
     ctx = ctx_mod.build_compact_context()
     grounded, evidence = _grounded_answer(message, ctx)
     live_evidence = any(e.startswith("web:tavily") or e.startswith("web:http") for e in evidence)
-    generic = "intent:overview" in evidence
+    hist_msgs = _history_messages(history)
     mode = llm_client.get_mode()
-    base = {
-        "refused": False,
-        "evidence_used": evidence,
-        "snapshot_id": ctx["snapshot_id"],
-    }
-
-    client = llm_client.get_client()
-    if client is None:
-        return {
-            **base,
-            "answer": grounded,
-            "llm": {"mode": mode, "model": None, "source": "fallback", "cached": False,
-                    "fallback_reason": "llm_off" if mode == "off" else "no_api_key"},
-        }
-
-    hist = _history_block(history)
     digest = ctx_mod.context_digest(ctx)
     msg_hash = hashlib.sha1(message.casefold().strip().encode("utf-8")).hexdigest()[:12]
-    hist_hash = f"|h:{hashlib.sha1(hist.encode('utf-8')).hexdigest()[:8]}" if hist else ""
+    hist_text = "\n".join(f"{m['role']}: {m['content']}" for m in hist_msgs)
+    hist_hash = (
+        f"|h:{hashlib.sha1(hist_text.encode('utf-8')).hexdigest()[:8]}" if hist_text else ""
+    )
     live_bucket = f"|live:{int(time.time() // 900)}" if live_evidence else ""
-    cache_key = f"chat|{_PROMPT_VERSION}|{mode}|{digest}|{msg_hash}{hist_hash}{live_bucket}"
-    cached = cache.get(cache_key)
-    if cached is not None:
-        return {**base, **cached, "llm": {**(cached.get("llm") or {}), "cached": True}}
+    return {
+        "ctx": ctx,
+        "grounded": grounded,
+        "evidence": evidence,
+        "live_evidence": live_evidence,
+        "generic": "intent:overview" in evidence,
+        "deterministic_only": any(
+            e.startswith(p) for e in evidence for p in _DETERMINISTIC_EVIDENCE_PREFIXES
+        ),
+        "hist_msgs": hist_msgs,
+        "mode": mode,
+        "cache_key": f"chat|{_PROMPT_VERSION}|{mode}|{digest}|{msg_hash}{hist_hash}{live_bucket}",
+        "base": {
+            "refused": False,
+            "evidence_used": evidence,
+            "snapshot_id": ctx["snapshot_id"],
+        },
+    }
 
-    system = guard.SYSTEM_RULES
+
+def _fallback_response(prep: dict, reason: str, model: str | None = None) -> dict:
+    return {
+        **prep["base"],
+        "answer": prep["grounded"],
+        "llm": {"mode": prep["mode"], "model": model, "source": "fallback",
+                "cached": False, "fallback_reason": reason},
+    }
+
+
+def _chat_messages(prep: dict, message: str) -> list[dict]:
+    """LLM'e giden GERÇEK çok-turlu mesaj dizisi: system + history + final user.
+
+    Grounded bulgular final user mesajında FAKT bloğu olarak verilir — LLM'e hazır
+    cümle değil ham fakt taşırız; cevabı soruya göre kendisi kurar.
+    """
+    live = prep["live_evidence"]
     source_label = (
-        "STATE BAGLAMI + deterministik yanitta kaynak URL'leri verilen CANLI WEB BULGULARI"
-        if live_evidence else "STATE BAGLAMI"
+        "STATE BAGLAMI + deterministik bulgularda kaynak URL'leri verilen CANLI WEB BULGULARI"
+        if live else "STATE BAGLAMI"
     )
     scope_rule = (
         "Yanitini YALNIZCA state baglami ve kaynakli web bulgularina dayandir."
-        if live_evidence else "Yanitini YALNIZCA bu state baglamina dayandir."
+        if live else "Yanitini YALNIZCA bu state baglamina dayandir."
     )
-    if generic:
+    if prep["generic"]:
         findings_label = (
             "Soruya ozel kural eslesmedi; asagidaki metin yalnizca GENEL durum ozetidir"
         )
@@ -1238,27 +1266,84 @@ def answer(message: str, history: list[dict] | None = None) -> dict:
             "soyleyebildigi en yakin bilgiyi ver."
         )
     else:
-        findings_label = "Sistemin bu soru icin topladigi kanit-temelli bulgular"
+        findings_label = "FAKTLER — sistemin bu soru icin topladigi kanit-temelli bulgular"
         task_rule = (
-            "Bulgulardaki somut bilgiyi (baslik, sayi, kaynak) MUTLAKA koru ama bulgu "
+            "FAKTLER'deki somut bilgiyi (baslik, sayi, kaynak) MUTLAKA koru ama fakt "
             "metnini kelime kelime kopyalama; ayni bilgiyi SORUYA cevap olacak sekilde "
-            "kendi dogal cumlelerinle yaz. Bulgu varken 'veri yok' deme; 'state'te yok' "
-            "ifadesini SADECE bulgularda da gercekten hic bilgi olmayan konular icin kullan."
+            "kendi dogal cumlelerinle yaz. Fakt varken 'veri yok' deme; 'state'te yok' "
+            "ifadesini SADECE faktlerde de gercekten hic bilgi olmayan konular icin kullan."
         )
     translate_rule = (
         " Ingilizce baslik/ozetleri TURKCEYE CEVIREREK aktar; Ingilizce cumleyi oldugu "
         "gibi kopyalama (kaynak adi/URL kalabilir)."
-        if live_evidence else ""
+        if live else ""
     )
     user = (
         f"{source_label}:\n"
-        f"{ctx_mod.context_for_prompt(ctx)}\n\n"
-        + (f"ONCEKI KONUSMA (eskiden yeniye; baglam icindir):\n{hist}\n\n" if hist else "")
-        + f"{findings_label}:\n{grounded}\n\n"
+        f"{ctx_mod.context_for_prompt(prep['ctx'])}\n\n"
+        f"{findings_label}:\n{prep['grounded']}\n\n"
         f"KULLANICI SORUSU: {message}\n\n"
         f"GOREV: Kullanicinin sorusunu dogrudan yanitla. {task_rule}{translate_rule} "
         f"{scope_rule} Karar/islem onerme. Kisa, akici Turkce yanit ver."
     )
+    return [
+        {"role": "system", "content": guard.SYSTEM_RULES},
+        *prep["hist_msgs"],
+        {"role": "user", "content": user},
+    ]
+
+
+def _flatten_messages(messages: list[dict]) -> tuple[str, str]:
+    """Mesaj dizisini non-stream complete(system, user) imzasına indirger."""
+    system = messages[0]["content"]
+    hist = messages[1:-1]
+    final = messages[-1]["content"]
+    if hist:
+        lines = "\n".join(
+            ("Kullanici: " if m["role"] == "user" else "Sen: ") + m["content"] for m in hist
+        )
+        final = f"ONCEKI KONUSMA (eskiden yeniye; baglam icindir):\n{lines}\n\n{final}"
+    return system, final
+
+
+def _clean_llm_result(prep: dict, comp) -> dict:
+    """Başarılı LLM çıktısını sonuca çevirir + cache'e yazar; bulgu düşürdüyse
+    deterministik cevaba döner (cache YAZILMAZ)."""
+    if _llm_dropped_findings(comp.text, prep["grounded"], prep["live_evidence"]):
+        # Güvenlik ağı: LLM (özellikle zayıf yerel model) canlı web bulgularını çöpe
+        # atıp "veri yok" derse, deterministik özet (gerçek bulguları taşır) döner.
+        return _fallback_response(prep, "llm_dropped_findings", model=comp.model)
+    result = {
+        "answer": comp.text,
+        "llm": {"mode": prep["mode"], "model": comp.model, "source": "llm",
+                "cached": False, "fallback_reason": None},
+    }
+    cache.put(prep["cache_key"], result)
+    return {**prep["base"], **result}
+
+
+def answer(message: str, history: list[dict] | None = None) -> dict:
+    """Chat yanıtı — her zaman state-grounded; LLM sadece anlatımı akıcılaştırır."""
+    refusal = _screen(message)
+    if refusal is not None:
+        return refusal
+
+    prep = _prepare(message, history)
+    if prep["deterministic_only"]:
+        return _fallback_response(prep, "deterministic_command")
+
+    client = llm_client.get_chat_client()
+    if client is None:
+        return _fallback_response(
+            prep, "llm_off" if prep["mode"] == "off" else "no_api_key"
+        )
+
+    cached = cache.get(prep["cache_key"])
+    if cached is not None:
+        return {**prep["base"], **cached, "llm": {**(cached.get("llm") or {}), "cached": True}}
+
+    messages = _chat_messages(prep, message)
+    system, user = _flatten_messages(messages)
     max_out = budget.max_tokens_per_request()
     est = (len(system) + len(user)) // 4 + max_out
     comp = (
@@ -1268,27 +1353,78 @@ def answer(message: str, history: list[dict] | None = None) -> dict:
     )
     if comp is None:
         reason = "budget_exceeded" if not budget.can_spend(est) else "llm_error"
-        return {
-            **base,
-            "answer": grounded,
-            "llm": {"mode": mode, "model": None, "source": "fallback", "cached": False,
-                    "fallback_reason": reason},
-        }
+        return _fallback_response(prep, reason)
     budget.record(comp.input_tokens + comp.output_tokens)
-    # Güvenlik ağı: LLM (özellikle zayıf yerel model) canlı web bulgularını çöpe atıp
-    # "veri yok" derse, deterministik özeti (gerçek bulguları taşır) kullan. Modelden
-    # bağımsız — Ollama/remote fark etmez; gerçek veri asla kaybolmaz.
-    if _llm_dropped_findings(comp.text, grounded, live_evidence):
-        return {
-            **base,
-            "answer": grounded,
-            "llm": {"mode": mode, "model": comp.model, "source": "fallback",
-                    "cached": False, "fallback_reason": "llm_dropped_findings"},
-        }
-    result = {
-        "answer": comp.text,
-        "llm": {"mode": mode, "model": comp.model, "source": "llm", "cached": False,
-                "fallback_reason": None},
-    }
-    cache.put(cache_key, result)
-    return {**base, **result}
+    return _clean_llm_result(prep, comp)
+
+
+def stream_answer(message: str, history: list[dict] | None = None):
+    """SSE chat akışı — (event, payload) çiftleri üretir; her akış "done" ile biter.
+
+    Event sözleşmesi (apps/api/routers/chat.py bunu SSE frame'lerine çevirir):
+      status {stage, source} → meta {snapshot_id, evidence_used, refused}
+      → delta {text}* → done {tam ChatResponse}. "done" OTORİTEDİR: frontend
+    biriken delta metnini done.answer ile DEĞİŞTİRİR — bulgu-düşürme/kesinti
+    düzeltmeleri ayrı mekanizma gerektirmez.
+    """
+    refusal = _screen(message)
+    if refusal is not None:
+        yield ("done", refusal)
+        return
+
+    yield ("status", {"stage": "context", "source": None})
+    prep = _prepare(message, history)
+    yield ("status", {"stage": "grounded", "source": None})
+    yield (
+        "meta",
+        {
+            "snapshot_id": prep["base"]["snapshot_id"],
+            "evidence_used": prep["evidence"],
+            "refused": False,
+        },
+    )
+
+    if prep["deterministic_only"]:
+        yield ("done", _fallback_response(prep, "deterministic_command"))
+        return
+
+    client = llm_client.get_chat_client()
+    if client is None:
+        yield ("done", _fallback_response(
+            prep, "llm_off" if prep["mode"] == "off" else "no_api_key"
+        ))
+        return
+
+    cached = cache.get(prep["cache_key"])
+    if cached is not None:
+        # Cache-hit'te delta akıtılmaz — anında tam cevap (sahte akış yasak).
+        yield ("done", {**prep["base"], **cached,
+                        "llm": {**(cached.get("llm") or {}), "cached": True}})
+        return
+
+    messages = _chat_messages(prep, message)
+    max_out = budget.max_tokens_per_request()
+    est = sum(len(m["content"]) for m in messages) // 4 + max_out
+    if not budget.can_spend(est):
+        yield ("done", _fallback_response(prep, "budget_exceeded"))
+        return
+
+    yield ("status", {"stage": "llm", "source": getattr(client, "name", None)})
+    comp = None
+    streamed_any = False
+    for kind, payload in client.stream(messages, max_out, _CHAT_TEMPERATURE):
+        if kind == "delta":
+            streamed_any = True
+            yield ("delta", {"text": payload})
+        elif kind == "done":
+            comp = payload
+    if comp is None:
+        # Hiç parça gelmediyse LLM hatası; parça geldiyse akış ortası kesinti.
+        # İki durumda da done.answer = grounded (frontend REPLACE eder).
+        yield ("done", _fallback_response(
+            prep, "llm_stream_interrupted" if streamed_any else "llm_error"
+        ))
+        return
+    used = comp.input_tokens + comp.output_tokens
+    budget.record(used if used > 0 else est)
+    yield ("done", _clean_llm_result(prep, comp))

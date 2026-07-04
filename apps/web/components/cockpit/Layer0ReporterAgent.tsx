@@ -11,8 +11,9 @@ import {
   usePaperTradingState,
 } from "@/lib/queries/hooks";
 import { api } from "@/lib/api/client";
+import { streamChat, type ChatStreamStatus } from "@/lib/api/chatStream";
 import { selectDqs, selectSnapshotMeta } from "@/lib/selectors/snapshot";
-import type { AgentBriefing, ChatResponse, Position } from "@/types/generated/api";
+import type { AgentBriefing, ChatResponse, ChatTurn, Position } from "@/types/generated/api";
 import {
   Layer0HumanComputerModel,
   type Layer0DataQualityPulse,
@@ -22,6 +23,10 @@ type ReporterMessage = {
   role: "user" | "agent";
   text: string;
   meta?: ChatResponse;
+  /** true → cevap şu an canlı akıyor (yalnız transcript'in son agent mesajı). */
+  streaming?: boolean;
+  /** Akış başlamadan gösterilen aşama etiketi ("Sistem state okunuyor..."). */
+  status?: string;
 };
 
 type SpeechRecognitionResultLike = {
@@ -900,8 +905,13 @@ export function Layer0ReporterAgent({
   const [voiceError, setVoiceError] = useState<string | null>(null);
   const [micReady, setMicReady] = useState(false);
   const [lastUserText, setLastUserText] = useState("");
-  const [streamedText, setStreamedText] = useState("");
   const [liveTranscript, setLiveTranscript] = useState("");
+  // Gerçek SSE akış fazı: pending = ilk parça bekleniyor, streaming = parçalar akıyor.
+  const [streamPhase, setStreamPhase] = useState<"idle" | "pending" | "streaming">("idle");
+  const streamAbortRef = useRef<AbortController | null>(null);
+  const chatScrollRef = useRef<HTMLDivElement | null>(null);
+  // Kullanıcı yukarı scroll ettiyse otomatik dibe çekme kapanır (okumayı bozma).
+  const stickToBottomRef = useRef(true);
   const silentRef = useRef(false);
   const listeningRef = useRef(false);
   const speakingRef = useRef(false);
@@ -973,6 +983,7 @@ export function Layer0ReporterAgent({
         // yut
       }
       recognitionRef.current = null;
+      streamAbortRef.current?.abort();
     };
   }, []);
 
@@ -988,9 +999,6 @@ export function Layer0ReporterAgent({
     speakingRef.current = speaking;
   }, [speaking]);
 
-  useEffect(() => {
-    chatPendingRef.current = chat.isPending;
-  }, [chat.isPending]);
 
   const briefingData = briefing.data as AgentBriefingWithExecutive | undefined;
   const executive = briefingData?.executive ?? null;
@@ -1006,39 +1014,6 @@ export function Layer0ReporterAgent({
       .map((item) => `${CATEGORY_LABEL[item.category] ?? item.category}: ${item.title}`)
       .join(". ");
   }, [briefingData?.headlines, executive]);
-
-  const activeExchange = useMemo(() => {
-    let agentIndex = -1;
-    for (let index = messages.length - 1; index >= 0; index -= 1) {
-      if (messages[index]?.role === "agent") {
-        agentIndex = index;
-        break;
-      }
-    }
-
-    const questionSearchLimit = agentIndex >= 0 ? agentIndex : messages.length;
-    let userIndex = -1;
-    for (let index = questionSearchLimit - 1; index >= 0; index -= 1) {
-      if (messages[index]?.role === "user") {
-        userIndex = index;
-        break;
-      }
-    }
-
-    const pendingUserIndex =
-      agentIndex < 0 && messages[messages.length - 1]?.role === "user" ? messages.length - 1 : -1;
-
-    return {
-      agent: agentIndex >= 0 ? messages[agentIndex] : null,
-      agentIndex,
-      user: userIndex >= 0 ? messages[userIndex] : pendingUserIndex >= 0 ? messages[pendingUserIndex] : null,
-      userIndex: userIndex >= 0 ? userIndex : pendingUserIndex,
-    };
-  }, [messages]);
-
-  const latestAgentText = useMemo(() => {
-    return activeExchange.agent?.text ?? briefingText;
-  }, [activeExchange.agent?.text, briefingText]);
 
   const dataQualityPulse = useMemo<Layer0DataQualityPulse | null>(() => {
     const dqs = selectDqs(snapshot.data);
@@ -1158,9 +1133,116 @@ export function Layer0ReporterAgent({
     }
   };
 
+  // Gönderim kilidi: stream sürerken ya da non-stream fallback beklerken yeni soru yok.
+  const chatBusy = streamPhase !== "idle" || chat.isPending;
+
+  useEffect(() => {
+    chatPendingRef.current = chatBusy;
+  }, [chatBusy]);
+
+  // Transcript'in son agent mesajını (aktif akış balonu) günceller. Append-only
+  // yapı + chatBusy kilidi sayesinde aktif balon her zaman listenin sonundadır.
+  const patchLastAgent = (patch: (message: ReporterMessage) => ReporterMessage) => {
+    setMessages((items) => {
+      const last = items[items.length - 1];
+      if (!last || last.role !== "agent") return items;
+      return [...items.slice(0, -1), patch(last)];
+    });
+  };
+
+  const streamStatusLabel = (status: ChatStreamStatus) => {
+    if (status.stage === "llm") {
+      return status.source === "ollama" ? "Yerel model yaziyor..." : "Cevap yaziliyor...";
+    }
+    if (status.stage === "grounded") return "Kanitlar toplandi, cevap hazirlaniyor...";
+    return "Sistem state okunuyor...";
+  };
+
+  const finalizeAgent = (response: ChatResponse) => {
+    patchLastAgent((m) => ({
+      ...m,
+      streaming: false,
+      status: undefined,
+      // done OTORİTE: biriken delta metni done.answer ile DEĞİŞTİRİLİR
+      // (kesinti/bulgu-düşürme düzeltmeleri backend'de answer'a işlenir).
+      text: response.answer,
+      meta: response,
+    }));
+    // Sesli modda cevabi otomatik oku; sessizde sessizce gecer (yazi-only).
+    void speak(response.answer);
+  };
+
+  const failAgent = (note: string) => {
+    patchLastAgent((m) => ({
+      ...m,
+      streaming: false,
+      status: undefined,
+      text: m.text.trim() ? `${m.text}\n\n(${note})` : note,
+    }));
+  };
+
+  // Stream hiç başlayamadıysa (endpoint yok / ağ hatası) eski non-stream POST /chat
+  // ile aynı soruyu dener — cevap kaybolmaz, sadece canlı akış olmaz.
+  const fallbackNonStream = (text: string, history: ChatTurn[]) => {
+    chat.mutate({ message: text, history }, {
+      onSuccess: (response) => finalizeAgent(response),
+      onError: () => {
+        const fallback =
+          "API chat yaniti alinamadi. Katman 0 sadece mevcut backend verisine bagli calisir; baglanti gelince soruyu yeniden cevaplayabilirim.";
+        failAgent(fallback);
+        void speak(fallback);
+      },
+    });
+  };
+
+  const runChatStream = async (text: string, history: ChatTurn[]) => {
+    streamAbortRef.current?.abort();
+    const controller = new AbortController();
+    streamAbortRef.current = controller;
+    setStreamPhase("pending");
+    let sawDelta = false;
+    try {
+      const done = await streamChat(
+        { message: text, history },
+        {
+          onStatus: (status) =>
+            patchLastAgent((m) =>
+              m.streaming ? { ...m, status: streamStatusLabel(status) } : m,
+            ),
+          onDelta: (chunk) => {
+            sawDelta = true;
+            setStreamPhase("streaming");
+            patchLastAgent((m) =>
+              m.streaming ? { ...m, status: undefined, text: m.text + chunk } : m,
+            );
+          },
+        },
+        controller.signal,
+      );
+      if (done) {
+        finalizeAgent(done);
+      } else if (sawDelta) {
+        failAgent("Baglanti akis ortasinda kesildi — cevabin kalan kismi gelmedi.");
+      } else {
+        fallbackNonStream(text, history);
+      }
+    } catch {
+      if (controller.signal.aborted) return;
+      if (sawDelta) {
+        failAgent("Baglanti akis ortasinda kesildi — cevabin kalan kismi gelmedi.");
+      } else {
+        fallbackNonStream(text, history);
+      }
+    } finally {
+      if (streamAbortRef.current === controller) {
+        setStreamPhase("idle");
+      }
+    }
+  };
+
   const send = (message: string) => {
     const text = message.trim();
-    if (!text || chat.isPending) return;
+    if (!text || chatBusy) return;
     setLiveTranscript("");
     setLastUserText(text);
     // Son turlar backend LLM bağlamına gider — takip sorusu ("peki neden?")
@@ -1169,24 +1251,15 @@ export function Layer0ReporterAgent({
       .slice(-6)
       .filter((m) => m.text.trim())
       .map((m) => ({ role: m.role, text: m.text.slice(0, 500) }));
-    setMessages((items) => [...items, { role: "user", text }]);
+    // Soru + boş agent balonu birlikte eklenir; eski mesajlar SABİT kalır,
+    // yalnız yeni balon akar (owner şikayeti: eski yazı yeniden akıyordu).
+    setMessages((items) => [
+      ...items,
+      { role: "user", text },
+      { role: "agent", text: "", streaming: true, status: "Sistem state okunuyor..." },
+    ]);
     setInput("");
-    chat.mutate({ message: text, history }, {
-      onSuccess: (response) => {
-        setMessages((items) => [
-          ...items,
-          { role: "agent", text: response.answer, meta: response },
-        ]);
-        // Sesli modda cevabi otomatik oku; sessizde sessizce gecer (yazi-only).
-        void speak(response.answer);
-      },
-      onError: () => {
-        const fallback =
-          "API chat yaniti alinamadi. Katman 0 sadece mevcut backend verisine bagli calisir; baglanti gelince soruyu yeniden cevaplayabilirim.";
-        setMessages((items) => [...items, { role: "agent", text: fallback }]);
-        void speak(fallback);
-      },
-    });
+    void runChatStream(text, history);
   };
 
   // Tum ses cikisini durdur (TTS + audio). Bas-konus baslarken ve Sessiz'e
@@ -1288,13 +1361,11 @@ export function Layer0ReporterAgent({
 
   const modelMode = listening
     ? "listening"
-    : chat.isPending
+    : streamPhase === "pending" || chat.isPending || voiceLoading
       ? "thinking"
-      : voiceLoading
-        ? "thinking"
-        : speaking
-          ? "speaking"
-          : "idle";
+      : streamPhase === "streaming" || speaking
+        ? "speaking"
+        : "idle";
   const positions = paper.data?.open_positions ?? [];
   const totalPnl = paper.data?.unrealized_pnl_usd ?? 0;
   const subtitleSpeaker =
@@ -1305,8 +1376,6 @@ export function Layer0ReporterAgent({
         : modelMode === "speaking"
           ? "E-yAy"
           : "E-yAy";
-  // NOT: streamedText asagida AYNI mesaji (latestAgentText) zaten yazdiriyor —
-  // burada onu TEKRAR etmiyoruz, sadece durum etiketi gosteriyoruz (yinelenme bug fix'i).
   const subtitleText =
     modelMode === "listening"
       ? "Dinliyorum — holograma basili tut; biraktiginda otomatik cevaplarim."
@@ -1315,46 +1384,20 @@ export function Layer0ReporterAgent({
           ? `Sorun okunuyor: ${shortLine(lastUserText, 110)}`
           : "Sistem state, haber, risk ve sinyal katmanlarini tararken bekle."
         : modelMode === "speaking"
-          ? "E-yAy yaniti okunuyor."
+          ? streamPhase === "streaming"
+            ? "E-yAy canli yaziyor."
+            : "E-yAy yaniti okunuyor."
           : silent
             ? "Sessiz mod acik — yaziyla sor, cevap yazili gelir."
             : "Holograma basili tut konus, birak; ya da asagidan yaz.";
-  const activeQuestionText = listening && liveTranscript
-    ? liveTranscript
-    : activeExchange.user?.text ?? lastUserText;
-  const activeEvidence = activeExchange.agent?.meta?.evidence_used?.slice(0, 4) ?? [];
-  const historyMessages = messages
-    .filter((_, index) => index !== activeExchange.agentIndex && index !== activeExchange.userIndex)
-    .slice(-4);
 
+  // Yeni mesaj/parça geldikçe transcript dibe kilitli kalır — kullanıcı yukarı
+  // scroll ettiyse (stickToBottom=false) okuma bozulmaz.
   useEffect(() => {
-    const text = latestAgentText.trim();
-    if (!text) {
-      setStreamedText("");
-      return;
-    }
-
-    let index = 0;
-    let cancelled = false;
-    const stride = modelMode === "speaking" ? 3 : modelMode === "thinking" ? 2 : 5;
-    const delay = modelMode === "speaking" ? 20 : modelMode === "thinking" ? 28 : 12;
-    setStreamedText("");
-
-    const tick = () => {
-      if (cancelled) return;
-      index = Math.min(text.length, index + stride);
-      setStreamedText(text.slice(0, index));
-      if (index < text.length) {
-        window.setTimeout(tick, delay);
-      }
-    };
-
-    const id = window.setTimeout(tick, 80);
-    return () => {
-      cancelled = true;
-      window.clearTimeout(id);
-    };
-  }, [latestAgentText, modelMode]);
+    const el = chatScrollRef.current;
+    if (!el || !stickToBottomRef.current) return;
+    el.scrollTop = el.scrollHeight;
+  }, [messages, liveTranscript]);
 
   return (
     <section className="layer0-mobile-flow grid h-full min-h-0 gap-4 overflow-y-auto pb-2 pr-1 xl:grid-cols-[minmax(360px,1fr)_minmax(380px,1fr)_minmax(360px,1fr)] xl:overflow-hidden xl:pb-0 xl:pr-0">
@@ -1444,71 +1487,73 @@ export function Layer0ReporterAgent({
           </span>
         </div>
 
-        <div className="layer0-voice-scroll mt-2 min-h-0 flex-1 space-y-2 overflow-y-auto pr-1">
-          <div className="layer0-voice-transcript">
-            <div className="layer0-voice-transcript-glow" aria-hidden />
-            <div className="layer0-voice-kicker">{subtitleText}</div>
-            {activeQuestionText ? (
-              <div className="layer0-voice-question-chip">
-                <span>Sen</span>
-                <p>{activeQuestionText}</p>
-              </div>
-            ) : null}
-            <p className="layer0-voice-stream-text">
-              {streamedText}
-              <span className="layer0-voice-caret" aria-hidden />
-            </p>
-            {activeEvidence.length ? (
-              <div className="layer0-voice-evidence">
-                <span className="layer0-voice-evidence__label">kanit</span>
-                {activeEvidence.map((item) => (
-                  <span key={item}>{item}</span>
-                ))}
-              </div>
-            ) : null}
-            {!silent && (speaking || voiceLoading) ? (
-              <button
-                type="button"
-                onClick={stopAllVoice}
-                className="layer0-voice-read-button"
-              >
-                {voiceLoading ? "SES URETILIYOR..." : "DURDUR"}
-              </button>
-            ) : null}
-            {voiceError ? <div className="layer0-voice-error">{voiceError}</div> : null}
-          </div>
-          {historyMessages.length ? (
-            <>
-              <div className="layer0-voice-history-label">Onceki konusmalar</div>
-              {historyMessages.map((message, index) => (
-              <div
-                key={`${message.role}-${index}`}
-                className={`layer0-voice-log-row ${
-                  message.role === "user"
-                    ? "layer0-voice-log-row--user"
-                    : message.meta?.refused
-                      ? "layer0-voice-log-row--blocked"
-                      : "layer0-voice-log-row--agent"
-                }`}
-              >
-                <div className="layer0-voice-log-role">
-                  {message.role === "user" ? "Sen" : "E-yAy"}
-                </div>
-                <div className="layer0-voice-log-text">{message.text}</div>
-                {message.role === "agent" && message.meta?.evidence_used?.length ? (
-                  <div className="layer0-voice-log-evidence">
-                    kanit: {message.meta.evidence_used.slice(0, 3).join(" / ")}
-                  </div>
-                ) : null}
-              </div>
-              ))}
-            </>
-          ) : null}
-          {chat.isPending ? (
-            <div className="rounded-2xl border border-accent-cyan/20 bg-accent-cyan/8 px-3 py-2 text-xs uppercase tracking-widest text-accent-cyan/76">
-              Sistem state okunuyor...
+        <div
+          ref={chatScrollRef}
+          onScroll={(event) => {
+            const el = event.currentTarget;
+            stickToBottomRef.current =
+              el.scrollHeight - el.scrollTop - el.clientHeight < 120;
+          }}
+          className="layer0-voice-scroll mt-2 min-h-0 flex-1 space-y-2 overflow-y-auto pr-1"
+        >
+          <div className="layer0-voice-kicker">{subtitleText}</div>
+          {messages.length === 0 ? (
+            <div className="layer0-chat-msg layer0-chat-msg--agent">
+              <div className="layer0-chat-msg-role">E-yAy · brifing</div>
+              <div className="layer0-chat-msg-text">{briefingText}</div>
             </div>
           ) : null}
+          {messages.map((message, index) => (
+            <div
+              key={`${message.role}-${index}`}
+              className={`layer0-chat-msg ${
+                message.role === "user"
+                  ? "layer0-chat-msg--user"
+                  : message.meta?.refused
+                    ? "layer0-chat-msg--blocked"
+                    : "layer0-chat-msg--agent"
+              }`}
+            >
+              <div className="layer0-chat-msg-role">
+                {message.role === "user" ? "Sen" : "E-yAy"}
+              </div>
+              <div className="layer0-chat-msg-text">
+                {message.text}
+                {message.streaming && message.text ? (
+                  <span className="layer0-chat-caret" aria-hidden />
+                ) : null}
+              </div>
+              {message.streaming && !message.text ? (
+                <div className="layer0-chat-status">
+                  {message.status ?? "Analiz ediliyor..."}
+                </div>
+              ) : null}
+              {message.role === "agent" && !message.streaming && message.meta?.evidence_used?.length ? (
+                <div className="layer0-voice-evidence">
+                  <span className="layer0-voice-evidence__label">kanit</span>
+                  {message.meta.evidence_used.slice(0, 4).map((item) => (
+                    <span key={item}>{item}</span>
+                  ))}
+                </div>
+              ) : null}
+            </div>
+          ))}
+          {listening && liveTranscript ? (
+            <div className="layer0-chat-msg layer0-chat-msg--user layer0-chat-msg--live">
+              <div className="layer0-chat-msg-role">Sen · canli</div>
+              <div className="layer0-chat-msg-text">{liveTranscript}</div>
+            </div>
+          ) : null}
+          {!silent && (speaking || voiceLoading) ? (
+            <button
+              type="button"
+              onClick={stopAllVoice}
+              className="layer0-voice-read-button"
+            >
+              {voiceLoading ? "SES URETILIYOR..." : "DURDUR"}
+            </button>
+          ) : null}
+          {voiceError ? <div className="layer0-voice-error">{voiceError}</div> : null}
         </div>
 
         <div className="layer0-voice-prompts">
@@ -1517,7 +1562,7 @@ export function Layer0ReporterAgent({
               key={prompt}
               type="button"
               onClick={() => send(prompt)}
-              disabled={chat.isPending}
+              disabled={chatBusy}
             >
               {prompt}
             </button>
@@ -1539,7 +1584,7 @@ export function Layer0ReporterAgent({
           />
           <button
             type="submit"
-            disabled={chat.isPending || !input.trim()}
+            disabled={chatBusy || !input.trim()}
           >
             Sor
           </button>

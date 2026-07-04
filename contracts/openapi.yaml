@@ -111,6 +111,34 @@ paths:
               schema:
                 $ref: "#/components/schemas/ChatResponse"
 
+  /api/v1/chat/stream:
+    post:
+      operationId: postChatStream
+      summary: v2.8 — state-grounded chat, SSE token akışı (LLM karar vermez)
+      description: >
+        POST gövdesi ChatRequest; yanıt text/event-stream. Event sözleşmesi:
+        `status` {stage: context|grounded|llm, source} aşama geçişleri;
+        `meta` {snapshot_id, evidence_used, refused:false} delta'lardan önce;
+        `delta` {text} yalnızca gerçek LLM stream parçası;
+        `done` tam ChatResponse — HER akışın son eventi ve OTORİTE: istemci
+        biriken delta metnini done.answer ile değiştirir (bulgu-düşürme/kesinti
+        düzeltmeleri böyle taşınır); `error` {message} beklenmedik hata.
+        Guard reddi, deterministik komutlar (manuel emir/pozisyon op) ve
+        cache-hit'te delta akıtılmaz, tek `done` gelir.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ChatRequest"
+      responses:
+        "200":
+          description: SSE akışı (event/data çerçeveleri; done=ChatResponse)
+          content:
+            text/event-stream:
+              schema:
+                type: string
+
   /api/voice/speak:
     post:
       operationId: postVoiceSpeak

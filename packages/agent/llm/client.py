@@ -13,6 +13,7 @@ import os
 import re
 import urllib.error
 import urllib.request
+from collections.abc import Iterator
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -60,6 +61,64 @@ class LLMCompletion:
     source: str  # "groq" | "openrouter" | "ollama" | "mock"
 
 
+# Streaming sözleşmesi: ("delta", str) parçaları, ardından ("done", LLMCompletion).
+# Hata İLK parçadan önce olursa generator hiç yield etmeden biter (caller fallback'e
+# geçebilir); parça geldikten SONRA koparsa "done"suz biter (kesinti sinyali).
+StreamEvent = tuple[str, "str | LLMCompletion"]
+
+ChatMessage = dict[str, str]  # {"role": "system"|"user"|"assistant", "content": str}
+
+
+def _iter_openai_sse(
+    resp, default_model: str, source: str
+) -> Iterator[StreamEvent]:
+    """OpenAI-uyumlu SSE gövdesini (Groq/OpenRouter) StreamEvent'lere çevirir.
+
+    `resp.read()` KULLANILMAZ — satır satır okunur (chunked'ı http.client çözer).
+    Usage, sağlayıcıya göre son chunk'ta `usage` ya da `x_groq.usage` altında gelir;
+    yoksa 0 kalır (caller tahmin eder).
+    """
+    text_parts: list[str] = []
+    model = default_model
+    input_tokens = 0
+    output_tokens = 0
+    for raw in resp:
+        line = raw.decode("utf-8", errors="replace").strip()
+        if not line.startswith("data:"):
+            continue
+        payload = line[len("data:"):].strip()
+        if payload == "[DONE]":
+            break
+        try:
+            data = json.loads(payload)
+        except json.JSONDecodeError:
+            continue
+        usage = data.get("usage") or (data.get("x_groq") or {}).get("usage") or {}
+        if usage:
+            input_tokens = int(usage.get("prompt_tokens") or 0)
+            output_tokens = int(usage.get("completion_tokens") or 0)
+        model = str(data.get("model") or model)
+        choices = data.get("choices") or []
+        delta = ""
+        if choices:
+            delta = ((choices[0] or {}).get("delta") or {}).get("content") or ""
+        if delta:
+            text_parts.append(delta)
+            yield ("delta", delta)
+    full = "".join(text_parts).strip()
+    if full:
+        yield (
+            "done",
+            LLMCompletion(
+                text=full,
+                model=model,
+                input_tokens=input_tokens,
+                output_tokens=output_tokens,
+                source=source,
+            ),
+        )
+
+
 def get_mode() -> str:
     """off|mock|groq|openrouter|ollama — env LLM_MODE; set değilse anahtara göre auto."""
     _load_repo_dotenv_once()
@@ -90,6 +149,32 @@ class MockLLMClient:
             input_tokens=(len(system) + len(user)) // 4,
             output_tokens=len(text) // 4,
             source="mock",
+        )
+
+    def stream(
+        self, messages: list[ChatMessage], max_tokens: int, temperature: float = 0.2
+    ) -> Iterator[StreamEvent]:
+        """Deterministik 3 parçalı stream — testler delta birleşimi == done.text doğrular."""
+        user = next(
+            (m.get("content", "") for m in reversed(messages) if m.get("role") == "user"),
+            "",
+        )
+        head = user.strip().splitlines()[0][:120] if user.strip() else ""
+        text = f"[mock-llm] {head}"
+        third = max(1, len(text) // 3)
+        chunks = [text[:third], text[third : 2 * third], text[2 * third :]]
+        for chunk in chunks:
+            if chunk:
+                yield ("delta", chunk)
+        yield (
+            "done",
+            LLMCompletion(
+                text=text,
+                model=self.model,
+                input_tokens=sum(len(m.get("content", "")) for m in messages) // 4,
+                output_tokens=len(text) // 4,
+                source="mock",
+            ),
         )
 
 
@@ -146,6 +231,41 @@ class GroqClient:
         except (urllib.error.URLError, TimeoutError, OSError, KeyError,
                 IndexError, TypeError, ValueError):
             return None  # crash yok — fallback narrative devreye girer
+
+    def stream(
+        self, messages: list[ChatMessage], max_tokens: int, temperature: float = 0.2
+    ) -> Iterator[StreamEvent]:
+        if not self.api_key:
+            return
+        body = json.dumps(
+            {
+                "model": self.model,
+                "max_tokens": int(max_tokens),
+                "temperature": float(temperature),
+                "stream": True,
+                "messages": messages,
+            }
+        ).encode("utf-8")
+        req = urllib.request.Request(
+            GROQ_API_URL,
+            data=body,
+            headers={
+                "Content-Type": "application/json",
+                "Authorization": f"Bearer {self.api_key}",
+                "User-Agent": "clean-e-yay/2.7",
+            },
+            method="POST",
+        )
+        try:
+            resp = urllib.request.urlopen(req, timeout=TIMEOUT_SEC)
+        except (urllib.error.URLError, TimeoutError, OSError, ValueError):
+            return  # ilk parça öncesi hata → hiç yield yok, caller fallback'e geçer
+        try:
+            yield from _iter_openai_sse(resp, self.model, "groq")
+        except (urllib.error.URLError, TimeoutError, OSError, ValueError):
+            return  # akış ortası kesinti → "done"suz biter
+        finally:
+            resp.close()
 
 
 class OpenRouterClient:
@@ -229,6 +349,41 @@ class OpenRouterClient:
                 return None  # crash yok — fallback narrative devreye girer
         return None
 
+    def stream(
+        self, messages: list[ChatMessage], max_tokens: int, temperature: float = 0.2
+    ) -> Iterator[StreamEvent]:
+        if not self.api_key:
+            return
+        body = json.dumps(
+            {
+                "model": self.model,
+                "max_tokens": int(max_tokens),
+                "temperature": float(temperature),
+                "stream": True,
+                "messages": messages,
+            }
+        ).encode("utf-8")
+        headers = {
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {self.api_key}",
+            "User-Agent": "clean-e-yay/2.7",
+        }
+        if self.site_url:
+            headers["HTTP-Referer"] = self.site_url
+        if self.app_name:
+            headers["X-OpenRouter-Title"] = self.app_name
+        req = urllib.request.Request(self.api_url, data=body, headers=headers, method="POST")
+        try:
+            resp = urllib.request.urlopen(req, timeout=TIMEOUT_SEC)
+        except (urllib.error.URLError, TimeoutError, OSError, ValueError):
+            return
+        try:
+            yield from _iter_openai_sse(resp, self.model, "openrouter")
+        except (urllib.error.URLError, TimeoutError, OSError, ValueError):
+            return
+        finally:
+            resp.close()
+
 
 class OllamaClient:
     """Local Ollama chat adapter; no API key required.
@@ -296,6 +451,75 @@ class OllamaClient:
                 TypeError, ValueError, json.JSONDecodeError):
             return None
 
+    def stream(
+        self, messages: list[ChatMessage], max_tokens: int, temperature: float = 0.2
+    ) -> Iterator[StreamEvent]:
+        """Ollama NDJSON stream'i — her satır bir JSON; final satır done:true + usage."""
+        body = json.dumps(
+            {
+                "model": self.model,
+                "stream": True,
+                "keep_alive": self.keep_alive,
+                "messages": messages,
+                "options": {
+                    "temperature": float(temperature),
+                    "num_predict": int(max_tokens),
+                },
+            }
+        ).encode("utf-8")
+        req = urllib.request.Request(
+            self.api_url,
+            data=body,
+            headers={
+                "Content-Type": "application/json",
+                "User-Agent": "clean-e-yay/2.7",
+            },
+            method="POST",
+        )
+        try:
+            resp = urllib.request.urlopen(req, timeout=self.timeout)
+        except (urllib.error.URLError, TimeoutError, OSError, ValueError):
+            return
+        text_parts: list[str] = []
+        model = self.model
+        input_tokens = 0
+        output_tokens = 0
+        try:
+            for raw in resp:
+                line = raw.decode("utf-8", errors="replace").strip()
+                if not line:
+                    continue
+                try:
+                    data = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+                model = str(data.get("model") or model)
+                msg = data.get("message") or {}
+                delta = msg.get("content") if isinstance(msg, dict) else None
+                if isinstance(delta, str) and delta:
+                    text_parts.append(delta)
+                    yield ("delta", delta)
+                if data.get("done"):
+                    input_tokens = int(data.get("prompt_eval_count") or 0)
+                    output_tokens = int(data.get("eval_count") or 0)
+                    break
+        except (urllib.error.URLError, TimeoutError, OSError, ValueError):
+            return
+        finally:
+            resp.close()
+        full = "".join(text_parts).strip()
+        if full:
+            yield (
+                "done",
+                LLMCompletion(
+                    text=full,
+                    model=model,
+                    input_tokens=input_tokens,
+                    output_tokens=output_tokens,
+                    source="ollama",
+                ),
+            )
+
 
 class FallbackLLMClient:
     """Try LLM clients in order; used for Ollama local-first mode."""
@@ -314,6 +538,23 @@ class FallbackLLMClient:
             if comp is not None:
                 return comp
         return None
+
+    def stream(
+        self, messages: list[ChatMessage], max_tokens: int, temperature: float = 0.2
+    ) -> Iterator[StreamEvent]:
+        """Sırayla dene; bir client İLK event'ini verdiyse artık ona kilitlen.
+
+        İlk parça kullanıcıya gösterildikten sonra client değiştirmek metni
+        karıştırır — kesinti olursa "done"suz biter, caller grounded'a döner.
+        Hiç yield etmeden biten client (anahtar yok / bağlantı hatası) atlanır.
+        """
+        for client in self.clients:
+            yielded = False
+            for event in client.stream(messages, max_tokens, temperature):
+                yielded = True
+                yield event
+            if yielded:
+                return
 
 
 def _remote_fallback_clients() -> list[OpenRouterClient | GroqClient]:
@@ -341,3 +582,31 @@ def get_client() -> MockLLMClient | GroqClient | OpenRouterClient | OllamaClient
     if mode == "ollama":
         return FallbackLLMClient([OllamaClient(), *_remote_fallback_clients()])
     return None
+
+
+def _truthy_env(name: str) -> bool:
+    return (os.environ.get(name) or "").strip().lower() in {"1", "true", "yes", "on"}
+
+
+def get_chat_client() -> MockLLMClient | GroqClient | OpenRouterClient | OllamaClient | FallbackLLMClient | None:
+    """Chat (canlı panel) için client — persona raporlarından FARKLI sıra.
+
+    Ollama modunda default Groq-önce ([Groq?, OpenRouter?, Ollama]): chat'te hız +
+    kalite birincil, lokal 7B model yedek (owner kararı 2026-07-03).
+    CHAT_LLM_LOCAL_FIRST=1 eski lokal-önce sıraya döndürür. Persona raporları
+    get_client() ile aynen lokal-önce kalır.
+    """
+    mode = get_mode()
+    if mode != "ollama":
+        return get_client()
+    if _truthy_env("CHAT_LLM_LOCAL_FIRST"):
+        return FallbackLLMClient([OllamaClient(), *_remote_fallback_clients()])
+    clients: list[GroqClient | OpenRouterClient | OllamaClient] = []
+    groq = GroqClient()
+    if groq.api_key:
+        clients.append(groq)
+    openrouter = OpenRouterClient()
+    if openrouter.api_key:
+        clients.append(openrouter)
+    clients.append(OllamaClient())
+    return FallbackLLMClient(clients)

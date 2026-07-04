@@ -68,6 +68,9 @@ const BASE =
   process.env.NEXT_PUBLIC_API_BASE ??
   "";
 
+// SSE chat stream'i gibi elle fetch yapan modüller aynı origin çözümünü kullansın.
+export const API_BASE = BASE;
+
 export type ClosePositionResult = {
   status: string;
   position_id: string;
