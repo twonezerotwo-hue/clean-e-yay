@@ -76,6 +76,9 @@ def _package1_flags_off_by_default(monkeypatch: pytest.MonkeyPatch) -> None:
     # Chat model sırası (2026-07-03) — testler default Groq-önce sırayı varsayar;
     # dev .env'inde lokal-önce açık olabilir, sızdırma.
     monkeypatch.delenv("CHAT_LLM_LOCAL_FIRST", raising=False)
+    # K-0b (2026-07-04) — keşif motoru testlerde default OFF (baseline'da
+    # learning koşusu bayt-eşdeğer); flag'i test eden testler kendisi açar.
+    monkeypatch.delenv("DISCOVERY_SCAN_ENABLED", raising=False)
 
 
 @pytest.fixture(autouse=True, scope="session")
@@ -102,3 +105,5 @@ def _isolate_runtime_stores(tmp_path_factory: pytest.TempPathFactory) -> None:
     os.environ["ACTIVATION_WATCHDOG_PATH"] = str(runtime / "activation_watchdog.json")
     # Çıkış Otopsisi (2026-07-03) — worker testleri gerçek snapshot'ı ezmesin.
     os.environ["EXIT_FORENSICS_OUT_PATH"] = str(runtime / "exit_forensics.json")
+    # K-0b (2026-07-04) — sektör rotasyon artifact'ı suite'ten izole.
+    os.environ["SECTOR_ROTATION_PATH"] = str(runtime / "sector_rotation.json")

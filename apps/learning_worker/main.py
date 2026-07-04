@@ -18,6 +18,8 @@ import uuid
 from datetime import UTC, datetime
 from pathlib import Path
 
+from packages import discovery
+from packages.discovery import sector_rotation
 from packages.learning import (
     activation_watchdog,
     calibration_trainer,
@@ -423,6 +425,25 @@ def run_once() -> dict:
         activation_watchdog_status = {}
         errors.append(f"activation_watchdog:{type(exc).__name__}")
 
+    # K-0b — keşif: sektör rotasyon motoru (DISCOVERY_SCAN_ENABLED, default
+    # OFF → tam no-op: ağa çıkmaz, dosya yazmaz, learning koşusu bayt-eşdeğer).
+    # Açıkken saatte bir (interval_sec) 12 sektör ETF'sinin S&P'ye göreli gücünü
+    # ölçer + karne damgası/çözümü; canlı karar zincirine dokunmaz (salt-gözlem).
+    discovery_status = "DISABLED"
+    try:
+        if discovery.scan_enabled():
+            sr = sector_rotation.run_if_due()
+            discovery_status = str(sr.get("status", "UNKNOWN"))
+            if discovery_status == "OK":
+                log.info(
+                    "sector_rotation: rising=%s unavailable=%s stamped=%s resolved_new=%s",
+                    sr.get("rising"), sr.get("unavailable_n"),
+                    sr.get("stamped"), sr.get("resolved_new"),
+                )
+    except Exception as exc:  # defensive — worker patlamamalı
+        discovery_status = f"ERROR:{type(exc).__name__}"
+        errors.append(f"sector_rotation:{type(exc).__name__}")
+
     if errors:
         status = "COMPLETED_WITH_ERRORS"
     elif outcomes_seen == 0:
@@ -460,6 +481,7 @@ def run_once() -> dict:
         "tf_target_status": tf_target_status,
         "tf_target_decisions": tf_target_decisions,
         "exit_forensics_status": exit_forensics_status,  # Çıkış Otopsisi (2026-07-03)
+        "discovery_status": discovery_status,  # K-0b sektör rotasyonu (DISABLED=flag OFF)
         "duration_ms": duration_ms,        # CP1 — perf görünürlüğü
         "over_budget": over_budget,        # CP1 — bütçe aşımı bayrağı
         "errors": errors,

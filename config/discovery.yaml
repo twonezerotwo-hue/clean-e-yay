@@ -1,0 +1,38 @@
+# Keşif motoru (K serisi) — "analiz sabit, varlık değişken".
+# Owner kararları 2026-07-04: kripto top-50; hisse/ETF sektör-güdümlü;
+# v1 aday = yükselen sektörün ETF'si (yalnız LONG); sektör ETF'leri likidite
+# rotasyonuna EKLENMEZ (canlı konsensüs korunur — bu ayrı bir alt katmandır).
+#
+# Çalışma DISCOVERY_SCAN_ENABLED env flag'ine bağlıdır (DEFAULT OFF) —
+# kapalıyken hiçbir tarama/yazım olmaz, learning koşusu bayt-eşdeğerdir.
+# NOT: kripto evreni + tarama kotası bölümleri K-1 diliminde (okuyucu kodla
+# BİRLİKTE) eklenir — okunmayan config anahtarı bırakılmaz (Kural 2 / M6).
+version: "1.0.0"
+
+sector_rotation:
+  # Göreli güç kıyas çıpası (assets.yaml'daki S&P 500 — OHLCV'de zaten var).
+  benchmark: SP500
+  # Motor koşum aralığı (sn) — sektörler dakikada bir dönmez; saatte 1 yeter.
+  interval_sec: 3600
+  # Hüküm eşiği: bileşik göreli-güç skoru bu yüzdenin üstünde → RISING,
+  # altında (−) → FALLING, arada → NEUTRAL.
+  verdict_threshold_pct: 1.0
+  # Karne çözüm ufku: damgadan ~5 işlem günü (7 takvim günü) sonra hüküm
+  # gerçekleşen göreli getiriyle kıyaslanır. NEUTRAL puanlanmaz (F1-2 ilkesi).
+  resolve_after_days: 7
+  # Çözümlenemeden bu yaşı aşan damga düşürülür (süresiz bekleme olmaz).
+  pending_max_age_days: 30
+  # 12 sektör ETF'si (Yahoo ticker = sembol; OHLCV yfinance haritasında).
+  sectors:
+    XLK:  { label: "Teknoloji" }
+    XLE:  { label: "Enerji" }
+    XLF:  { label: "Finans" }
+    XLV:  { label: "Sağlık" }
+    XLI:  { label: "Sanayi" }
+    XLY:  { label: "Tüketim (seçmeli)" }
+    XLP:  { label: "Tüketim (temel)" }
+    XLU:  { label: "Altyapı" }
+    XLB:  { label: "Hammadde" }
+    XLRE: { label: "Emlak" }
+    XLC:  { label: "İletişim" }
+    IYT:  { label: "Ulaşım" }

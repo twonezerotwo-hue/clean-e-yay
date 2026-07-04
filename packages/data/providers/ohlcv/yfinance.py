@@ -33,6 +33,21 @@ _SYMBOL_MAP = {
     "TLT":    "TLT",        # 20+ yıl ABD Hazine (savunma/faiz)
     "HYG":    "HYG",        # Yüksek getirili (HY) kredi
     "LQD":    "LQD",        # Yatırım yapılabilir (IG) kredi
+    # K-0b (2026-07-04) — sektör rotasyon motorunun ETF bacakları (Yahoo
+    # ticker = sembol). Yalnız OHLCV yönlendirmesi: snapshot/işlem evrenine
+    # GİRMEZLER (assets.yaml değişmedi), likidite rotasyonuna EKLENMEZLER.
+    "XLK":  "XLK",   # Teknoloji
+    "XLE":  "XLE",   # Enerji
+    "XLF":  "XLF",   # Finans
+    "XLV":  "XLV",   # Sağlık
+    "XLI":  "XLI",   # Sanayi
+    "XLY":  "XLY",   # Tüketim (seçmeli)
+    "XLP":  "XLP",   # Tüketim (temel)
+    "XLU":  "XLU",   # Altyapı
+    "XLB":  "XLB",   # Hammadde
+    "XLRE": "XLRE",  # Emlak
+    "XLC":  "XLC",   # İletişim
+    "IYT":  "IYT",   # Ulaşım
 }
 
 SUPPORTED = custom_assets.DynamicSymbolSet(frozenset(_SYMBOL_MAP.keys()), "yfinance")
