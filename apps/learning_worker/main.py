@@ -524,6 +524,32 @@ def run_once() -> dict:
         challenger_train_status = f"ERROR:{type(exc).__name__}"
         errors.append(f"challenger_trainer:{type(exc).__name__}")
 
+    # B-4 — challenger ağırlık TERFİ kriteri (owner ÖNERİ; KIRMIZI ÇİZGİ). AYNI
+    # BACKTEST_CHALLENGER_ENABLED kapısı: B-3 eğitimden SONRA challenger ağırlık
+    # setlerini champion'a karşı EŞLEŞMELİ kıyaslar (kayıtları yeniden-harmanlar);
+    # üç kriter tutarsa governor defterine STRATEGY_ENABLE paketi sunar (dedupe'lu,
+    # tek PENDING). Ağırlık terfisi OTOMATİK DEĞİL — onay bile canlı ağırlığı
+    # değiştirmez (owner-gated rebalance ayrı). Ucuz (jsonl okur + yeniden-harman).
+    challenger_promotion_status = "DISABLED"
+    try:
+        from packages.learning import backtest_recon as _br_promo
+        if _br_promo.challenger_enabled():
+            from packages.learning import challenger_promotion
+            cp = challenger_promotion.run()
+            challenger_promotion_status = str(cp.get("status", "UNKNOWN"))
+            if challenger_promotion_status == "READY":
+                log.info(
+                    "challenger_promotion READY — owner paketi sunuldu "
+                    "(proposal_id=%s challenger_wins=%s/%s regimes=%s)",
+                    cp.get("proposal_id"),
+                    cp.get("challenger_wins"),
+                    cp.get("challenger_wins", 0) + cp.get("champion_wins", 0),
+                    cp.get("proposed_regimes"),
+                )
+    except Exception as exc:  # defensive — worker patlamamalı
+        challenger_promotion_status = f"ERROR:{type(exc).__name__}"
+        errors.append(f"challenger_promotion:{type(exc).__name__}")
+
     if errors:
         status = "COMPLETED_WITH_ERRORS"
     elif outcomes_seen == 0:
@@ -566,6 +592,7 @@ def run_once() -> dict:
         "backtest_recon_status": backtest_recon_status,  # B-1 fidelity (DISABLED=flag OFF)
         "backtest_challenger_status": backtest_challenger_status,  # B-2 üretim (DISABLED=flag OFF)
         "challenger_train_status": challenger_train_status,  # B-3 ağırlık+quantum karne (DISABLED=flag OFF)
+        "challenger_promotion_status": challenger_promotion_status,  # B-4 terfi kriteri (DISABLED=flag OFF)
         "duration_ms": duration_ms,        # CP1 — perf görünürlüğü
         "over_budget": over_budget,        # CP1 — bütçe aşımı bayrağı
         "errors": errors,
