@@ -464,6 +464,27 @@ def run_once() -> dict:
         discovery_scan_status = f"ERROR:{type(exc).__name__}"
         errors.append(f"discovery_scan:{type(exc).__name__}")
 
+    # K-4 — keşif adayı TERFİ kriteri (aynı DISCOVERY_SCAN_ENABLED kapısı):
+    # tarayıcı+defter tazelendikten SONRA aday gölge karnesini üç eşiğe (≥20
+    # çözüm + ≥2 TF + Wilson alt sınırı > 0.5) vurur; geçen aday için governor
+    # defterine STRATEGY_ENABLE paketi (add_custom_asset, dedupe'lu). Varlık
+    # OTOMATİK EKLENMEZ — onay bile canlı evreni değiştirmez (KIRMIZI ÇİZGİ).
+    discovery_promotion_status = "DISABLED"
+    try:
+        if discovery.scan_enabled():
+            from packages.discovery import promotion as discovery_promotion
+            dp = discovery_promotion.run()
+            discovery_promotion_status = str(dp.get("status", "UNKNOWN"))
+            if discovery_promotion_status == "READY":
+                log.info(
+                    "discovery_promotion READY — owner paketi sunuldu "
+                    "(ready=%s proposal_ids=%s)",
+                    dp.get("ready_symbols"), dp.get("proposal_ids"),
+                )
+    except Exception as exc:  # defensive — worker patlamamalı
+        discovery_promotion_status = f"ERROR:{type(exc).__name__}"
+        errors.append(f"discovery_promotion:{type(exc).__name__}")
+
     # B-1 — geçmiş çok-modül yeniden-kurma sadakat (fidelity) kontrolü. Flag
     # BACKTEST_RECON_ENABLED OFF → tam no-op. SALT-ÖLÇÜM/İZOLE: canlı outcome
     # defterine/ağırlığa temas etmez, yalnız fidelity artifact'ı yazar. Import
@@ -589,6 +610,7 @@ def run_once() -> dict:
         "exit_forensics_status": exit_forensics_status,  # Çıkış Otopsisi (2026-07-03)
         "discovery_status": discovery_status,  # K-0b sektör rotasyonu (DISABLED=flag OFF)
         "discovery_scan_status": discovery_scan_status,  # K-1 tarayıcı
+        "discovery_promotion_status": discovery_promotion_status,  # K-4 terfi kriteri (DISABLED=flag OFF)
         "backtest_recon_status": backtest_recon_status,  # B-1 fidelity (DISABLED=flag OFF)
         "backtest_challenger_status": backtest_challenger_status,  # B-2 üretim (DISABLED=flag OFF)
         "challenger_train_status": challenger_train_status,  # B-3 ağırlık+quantum karne (DISABLED=flag OFF)

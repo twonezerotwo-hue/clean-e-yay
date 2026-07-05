@@ -45,6 +45,15 @@ shadow:
     "4h": 72
     "1d": 240
 
+# K-4 — terfi kriteri: bir adayın gölge karnesi bu eşikleri geçerse governor
+# defterine OWNER ÖNERİ paketi olur (custom_assets'e ekleme ÖNERİSİ; OTOMATİK
+# ekleme YOK — kırmızı çizgi). F5-2 champion/challenger deseninin aday-evrenine
+# uyarlaması. cf_win_rate %95 Wilson ALT sınırı > 0.5 sabit kriterdir (şans
+# değil kanıtı); aşağıdakiler owner-ayarlanabilir hacim/çeşitlilik eşikleri.
+promotion:
+  min_resolved_decisive: 20   # ≥20 çözülmüş kararlı sinyal (missed_win+avoided_loss; expired hariç)
+  min_timeframes: 2           # ≥2 farklı TF'de sinyal (tek-TF şansı elenir)
+
 sector_rotation:
   # Göreli güç kıyas çıpası (assets.yaml'daki S&P 500 — OHLCV'de zaten var).
   benchmark: SP500
