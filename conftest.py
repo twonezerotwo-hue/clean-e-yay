@@ -84,6 +84,9 @@ def _package1_flags_off_by_default(monkeypatch: pytest.MonkeyPatch) -> None:
     # K-0b (2026-07-04) — keşif motoru testlerde default OFF (baseline'da
     # learning koşusu bayt-eşdeğer); flag'i test eden testler kendisi açar.
     monkeypatch.delenv("DISCOVERY_SCAN_ENABLED", raising=False)
+    # I3 (2026-07-05) — kaynak seçici shadow-dahil flag'i testlerde default OFF
+    # (salt-canlı baseline); flag'i test eden testler kendi setenv'iyle açar.
+    monkeypatch.delenv("LEARNING_INCLUDE_SHADOW", raising=False)
 
 
 @pytest.fixture(autouse=True, scope="session")

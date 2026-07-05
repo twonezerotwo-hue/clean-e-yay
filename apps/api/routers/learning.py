@@ -31,6 +31,7 @@ from packages.learning import (
     mistake_memory,
     partial_tp_shadow,
     promotion_criteria,
+    source_selector,
     tf_target_rollback,
     tf_target_store,
     tf_target_trainer,
@@ -414,6 +415,16 @@ def get_evidence_bus() -> dict:
     TEK normalize kanıt listesine toplar. Kaynak damgalı (live/shadow/backtest).
     Salt-gözlem — hiçbir karara bağlı değil (I2/I3 bunun üstüne kurulur)."""
     return evidence_bus.viewmodel()
+
+
+@router.get("/learning/source-selection")
+def get_source_selection() -> dict:
+    """I3 — Kaynak Seçici (read-only, PAPER_SAFE). Sinyal-kalitesi rejim-kapsaması:
+    her rejimde canlı kanıt var mı / ince mi; `LEARNING_INCLUDE_SHADOW` açıksa
+    ince/boş rejimlere AYRI DAMGALI backtest/shadow fallback (gerçek canlı sayı
+    kirlenmez). Flag kapalıyken salt-canlı görünüm. Salt-gözlem — karara bağlı
+    değil (terfi/yön I4/I5, owner-gated)."""
+    return source_selector.viewmodel()
 
 
 @router.get("/learning/backtest-challenger")
