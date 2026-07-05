@@ -60,6 +60,8 @@ import type {
   AgentQuorumMatrixResponse,
   MarketSessionsTradeUniverseResponse,
 } from "@/types/generated/api";
+// Sözleşmesiz (observe-only) öğrenme görünümleri — codegen'e girmedi (I serisi).
+import type { EvidenceBusView } from "@/types/uncontracted";
 
 // NEXT_PUBLIC_API_BASE_URL tercih edilen; NEXT_PUBLIC_API_BASE geriye dönük
 // uyumluluk için fallback olarak okunur. Boş bırakılırsa same-origin
@@ -638,6 +640,7 @@ export const api = {
   exitForensics: () =>
     fetchJSON<ExitForensicsView>("/api/v1/learning/exit-forensics"),
   discovery: () => fetchJSON<DiscoveryView>("/api/v1/learning/discovery"),
+  evidenceBus: () => fetchJSON<EvidenceBusView>("/api/v1/learning/evidence-bus"),
   backtestChallenger: () =>
     fetchJSON<BacktestChallengerView>("/api/v1/learning/backtest-challenger"),
   guardSafety: () =>

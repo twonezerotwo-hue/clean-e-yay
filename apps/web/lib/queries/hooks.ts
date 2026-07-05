@@ -443,6 +443,17 @@ export const useBacktestChallenger = () => {
   });
 };
 
+// I6 — Öğrenme Beyni (evidence_bus): tüm öğrenme kanıtı + I2 olgunluk damgası.
+export const useEvidenceBus = () => {
+  const policy = usePanelQueryPolicy(5 * 60_000);
+  return useQuery({
+    queryKey: qk.evidenceBus,
+    queryFn: api.evidenceBus,
+    staleTime: 60_000,
+    ...policy,
+  });
+};
+
 export const useGuardSafety = () => {
   const policy = usePanelQueryPolicy(5 * 60_000);
   return useQuery({
