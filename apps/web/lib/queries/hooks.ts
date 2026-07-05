@@ -433,6 +433,16 @@ export const useDiscovery = () => {
   });
 };
 
+export const useBacktestChallenger = () => {
+  const policy = usePanelQueryPolicy(5 * 60_000);
+  return useQuery({
+    queryKey: qk.backtestChallenger,
+    queryFn: api.backtestChallenger,
+    staleTime: 60_000,
+    ...policy,
+  });
+};
+
 export const useGuardSafety = () => {
   const policy = usePanelQueryPolicy(5 * 60_000);
   return useQuery({

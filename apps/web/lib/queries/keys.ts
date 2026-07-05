@@ -48,6 +48,7 @@ export const qk = {
   entryExitQuality: ["learning", "entry-exit-quality"] as const,
   exitForensics: ["learning", "exit-forensics"] as const,
   discovery: ["learning", "discovery"] as const,
+  backtestChallenger: ["learning", "backtest-challenger"] as const,
   guardSafety: ["learning", "guard-safety"] as const,
   calibrationJumps: ["learning", "calibration-jumps"] as const,
   historicalEdge: (fingerprint: string) =>

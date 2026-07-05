@@ -2056,6 +2056,55 @@ export type DiscoveryView = {
   candidates: DiscoveryCandidate[];
 };
 
+// B serisi — backtest-challenger kanıt görünümü (observe-only; /learning/
+// backtest-challenger). Geçmiş backtest'ten türeyen quantum ayrım karnesi +
+// challenger ağırlık önerileri + B-4 terfi durumu. İZOLE/shadow.
+export type ChallengerQuantumRow = {
+  regime: string;
+  n?: number | null;
+  mean_quantum?: number | null;
+  separation?: number | null;
+  correlation?: number | null;
+  verdict: string;
+};
+
+export type ChallengerWeightDelta = {
+  module: string;
+  champion?: number | null;
+  challenger?: number | null;
+  delta?: number | null;
+};
+
+export type ChallengerWeightRow = {
+  regime: string;
+  status: string;
+  records: number;
+  deltas: ChallengerWeightDelta[];
+};
+
+export type ChallengerPromotion = {
+  status: string;
+  matched?: number | null;
+  resolved?: number | null;
+  challenger_wins?: number | null;
+  champion_wins?: number | null;
+  wilson_low?: number | null;
+};
+
+export type BacktestChallengerView = {
+  enabled: boolean;
+  status: string;
+  generated_at?: string | null;
+  source_records?: number | null;
+  loss_aware?: boolean | null;
+  regime_histogram: Record<string, number>;
+  quantum: ChallengerQuantumRow[];
+  quantum_summary?: string | null;
+  weights: ChallengerWeightRow[];
+  promotion: ChallengerPromotion;
+  honesty: string;
+};
+
 export type MissedOpportunityOutcomes = {
   missed_win: number;
   avoided_loss: number;

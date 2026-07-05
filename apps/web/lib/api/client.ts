@@ -45,6 +45,7 @@ import type {
   EntryExitQualityView,
   ExitForensicsView,
   DiscoveryView,
+  BacktestChallengerView,
   GuardSafetyView,
   CalibrationJumpsView,
   AgentModeConfigView,
@@ -637,6 +638,8 @@ export const api = {
   exitForensics: () =>
     fetchJSON<ExitForensicsView>("/api/v1/learning/exit-forensics"),
   discovery: () => fetchJSON<DiscoveryView>("/api/v1/learning/discovery"),
+  backtestChallenger: () =>
+    fetchJSON<BacktestChallengerView>("/api/v1/learning/backtest-challenger"),
   guardSafety: () =>
     fetchJSON<GuardSafetyView>("/api/v1/learning/guard-safety"),
   guardSafetyAdopt: () =>

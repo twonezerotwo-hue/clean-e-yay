@@ -18,6 +18,7 @@ from packages.learning import (
     calibration_audit,
     calibration_store,
     calibration_trainer,
+    challenger_trainer,
     cohorts,
     dataset_health,
     edge_report,
@@ -403,6 +404,17 @@ def get_promotion_criteria() -> dict:
     hacmi + ayrışma kanıtı + Wilson CI ayrıklığı; READY olsa bile terfi
     otomatik DEĞİL — governor'daki owner onay paketi üzerinden yürür."""
     return promotion_criteria.evaluate()
+
+
+@router.get("/learning/backtest-challenger")
+def get_backtest_challenger() -> dict:
+    """B serisi — backtest-challenger kanıt görünümü (read-only, PAPER_SAFE).
+
+    İZOLE/SHADOW: geçmiş backtest'ten türeyen quantum ayrım karnesi (rejim başına
+    DISCRIMINATES/INVERSE/FLAT), challenger ağırlık önerileri (champion delta) ve
+    B-4 terfi durumu. Canlı ağırlık/paper/karara ASLA dokunmaz. Flag
+    BACKTEST_CHALLENGER_ENABLED kapalıysa enabled=false + boş görünüm."""
+    return challenger_trainer.viewmodel()
 
 
 @router.get("/learning/calibration-jumps")

@@ -50,6 +50,7 @@ import { EdgeReportPanel } from "@/components/panels/EdgeReportPanel";
 import { EntryExitQualityPanel } from "@/components/panels/EntryExitQualityPanel";
 import { ExitForensicsPanel } from "@/components/panels/ExitForensicsPanel";
 import { DiscoveryPanel } from "@/components/panels/DiscoveryPanel";
+import { BacktestChallengerPanel } from "@/components/panels/BacktestChallengerPanel";
 import { ThresholdAutotunePanel } from "@/components/panels/ThresholdAutotunePanel";
 import { ThresholdAbPanel } from "@/components/panels/ThresholdAbPanel";
 import { GuardSafetyPanel } from "@/components/panels/GuardSafetyPanel";
@@ -1335,6 +1336,9 @@ export function CockpitView() {
               </LearnStep>
               <LearnStep step="11" label="Keşif — yeni aday tarama (hipotetik, işlem açmaz)">
                 <DiscoveryPanel />
+              </LearnStep>
+              <LearnStep step="12" label="Backtest challenger — geçmiş-prova kanıtı (izole, canlıya dokunmaz)">
+                <BacktestChallengerPanel />
               </LearnStep>
             </div>
           </Layer2DetailGroup>

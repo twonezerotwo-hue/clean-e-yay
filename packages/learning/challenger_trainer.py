@@ -287,3 +287,99 @@ def _write_report(report: dict) -> None:
         p.write_text(json.dumps(report, ensure_ascii=False, indent=2, default=str), encoding="utf-8")
     except OSError:
         pass
+
+
+# ----------------------------------------------- öğrenme paneli görünümü (read-only)
+
+def _load_report() -> dict:
+    try:
+        p = _report_path()
+        if p.exists():
+            return dict(json.loads(p.read_text(encoding="utf-8")))
+    except (OSError, json.JSONDecodeError, ValueError):
+        pass
+    return {}
+
+
+_VM_HONESTY = (
+    "İzole/shadow: bu karneler GEÇMİŞ backtest'ten türer; canlı ağırlık/paper/"
+    "karara ASLA dokunmaz. Aday ağırlık ancak owner onayıyla terfi eder (elle iş)."
+)
+
+
+def viewmodel() -> dict:
+    """Öğrenme paneli görünümü: B-3 karne raporu + B-4 terfi durumu (read-only,
+    hesap YAPMAZ). Flag kapalıysa enabled=false + boş görünüm; rapor yoksa NO_DATA.
+
+    Panel-dostu düz listeler: quantum ayrım karnesi (rejim başına hüküm),
+    challenger ağırlık önerileri (champion delta) ve terfi (B-4) durumu."""
+    from packages.learning import backtest_recon, challenger_promotion
+
+    enabled = backtest_recon.challenger_enabled()
+    report = _load_report()
+    status = str(report.get("status") or ("NO_DATA" if enabled else "DISABLED"))
+
+    # Quantum ayrım karnesi → düz satırlar (rejim başına).
+    qsc = (report.get("quantum_scorecard") or {}).get("per_regime") or {}
+    quantum = [
+        {
+            "regime": reg,
+            "n": d.get("n"),
+            "mean_quantum": d.get("mean_quantum"),
+            "separation": d.get("separation"),
+            "correlation": d.get("correlation"),
+            "verdict": str(d.get("verdict") or d.get("status") or "INSUFFICIENT"),
+        }
+        for reg, d in qsc.items()
+    ]
+    quantum.sort(key=lambda r: (r["verdict"] != "DISCRIMINATES", r["regime"]))
+
+    # Challenger ağırlık önerileri → rejim başına en büyük 3 delta.
+    weights = []
+    regime_hist: dict[str, int] = {}
+    for reg, d in (report.get("regimes") or {}).items():
+        recs = int(d.get("records") or 0)
+        regime_hist[reg] = recs
+        deltas = [
+            {
+                "module": str(dl.get("module")),
+                "champion": dl.get("from"),
+                "challenger": dl.get("to"),
+                "delta": dl.get("delta"),
+            }
+            for dl in (d.get("deltas") or [])[:3]
+        ]
+        weights.append({
+            "regime": reg,
+            "status": str(d.get("status") or "INSUFFICIENT"),
+            "records": recs,
+            "deltas": deltas,
+        })
+    weights.sort(key=lambda r: (r["status"] != "PROPOSED", -r["records"]))
+
+    # B-4 terfi (aday ağırlık champion'ı geçti mi?) — özet + per-regime.
+    promo = challenger_promotion.evaluate()
+    pchecks = promo.get("checks") or {}
+    promotion = {
+        "status": str(promo.get("status") or "NOT_READY"),
+        "matched": (pchecks.get("matched_decisions") or {}).get("value"),
+        "resolved": (pchecks.get("resolved_disagreements") or {}).get("value"),
+        "challenger_wins": promo.get("challenger_wins"),
+        "champion_wins": promo.get("champion_wins"),
+        "wilson_low": (pchecks.get("ci_disjoint") or {}).get("wilson_low"),
+        "checks": pchecks,
+    }
+
+    return {
+        "enabled": enabled,
+        "status": status,
+        "generated_at": report.get("generated_at"),
+        "source_records": report.get("source_records"),
+        "loss_aware": report.get("loss_aware"),
+        "regime_histogram": regime_hist,
+        "quantum": quantum,
+        "quantum_summary": (report.get("quantum_scorecard") or {}).get("summary"),
+        "weights": weights,
+        "promotion": promotion,
+        "honesty": _VM_HONESTY,
+    }

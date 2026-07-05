@@ -74,6 +74,7 @@ export type PanelKey =
   | "tf_targets"
   | "exit_forensics"
   | "discovery"
+  | "backtest_challenger"
   | "missed_opportunities"
   | "calibration_jumps"
   | "agent_mode"
@@ -170,6 +171,7 @@ export const PANEL_REGISTRY: PanelMeta[] = [
   { id: "tf_targets",       title: "TF SL/TP Öğrenmesi",    defaultVisible: true, span: "2",   group: "learning",        tier: "detay" },
   { id: "exit_forensics",   title: "Çıkış Otopsisi",        defaultVisible: true, span: "2",   group: "learning",        tier: "detay" },
   { id: "discovery",        title: "Keşif Tarayıcısı",      defaultVisible: true, span: "2",   group: "learning",        tier: "detay" },
+  { id: "backtest_challenger", title: "Backtest Challenger", defaultVisible: true, span: "2",  group: "learning",        tier: "detay" },
   { id: "missed_opportunities", title: "Kaçan Fırsatlar",   defaultVisible: true, span: "2",   group: "learning",        tier: "detay" },
   { id: "calibration_jumps", title: "Kalibrasyon Sıçraması", defaultVisible: true, span: "2",  group: "learning",        tier: "detay" },
   { id: "agent_mode",       title: "Agent Mode",           defaultVisible: true, span: "2",   group: "learning",        tier: "detay" },

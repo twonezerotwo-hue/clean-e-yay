@@ -173,6 +173,14 @@ KNOWN_UNCONTRACTED: set[str] = {
     "ThresholdAutotuneView",
     "ThresholdMonitorEntry",
     "ThresholdOverrideEntry",
+    # B serisi backtest-challenger kanıt paneli (observe-only; /learning/
+    # backtest-challenger). Diğer learning view-model'leriyle aynı kategori —
+    # izole/shadow read-model, çekirdek trading API contract'ı değil.
+    "BacktestChallengerView",
+    "ChallengerQuantumRow",
+    "ChallengerWeightDelta",
+    "ChallengerWeightRow",
+    "ChallengerPromotion",
 }
 
 
