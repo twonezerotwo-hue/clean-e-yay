@@ -20,6 +20,8 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime
 
+from packages.learning import maturity_gate
+
 # Kaynak sınıfları (I3 kaynak seçicinin temeli).
 LIVE = "live"          # canlı paper outcome'larından
 SHADOW = "shadow"      # gölge kanallardan (keşif/missed-opp)
@@ -38,6 +40,7 @@ class EvidenceRecord:
     n_samples: int | None = None     # kanıtın örneklem büyüklüğü (olgunluğun girdisi — I2)
     statistic: float | None = None   # ana sayı (ayrım / cf_win_rate / expectancy / yoğunlaşma)
     verdict: str | None = None       # DISCRIMINATES / STABLE / CALIBRATED / RESOLVED / ...
+    maturity: dict | None = None     # I2 olgunluk damgası (level 0-3 + reason); collect() doldurur
     detail: dict = field(default_factory=dict)
 
 
@@ -139,17 +142,38 @@ _SOURCES = (
 )
 
 
+def _global_edge_safe(records: list[EvidenceRecord]) -> bool | None:
+    """Sistemin GLOBAL edge stabilitesi (edge_stability kaydından). I2 kapısı
+    her kaydın basamak-3 (oto) uygunluğunu buna göre değerlendirir."""
+    for r in records:
+        if r.topic == "edge_stability":
+            val = (r.detail or {}).get("safe_to_autotune")
+            if isinstance(val, bool):
+                return val
+    return None
+
+
 def collect() -> list[EvidenceRecord]:
-    """Tüm kaynakları tek normalize kanıt listesine topla (salt-gözlem).
+    """Tüm kaynakları tek normalize kanıt listesine topla + I2 olgunluk damgası
+    (salt-gözlem).
 
     Her kaynak İZOLE try içinde: biri patlarsa atlanır, otobüs asla düşmez
-    (worker deseni). Sıra kayıt sırasıdır (deterministik)."""
+    (worker deseni). Toplama sonrası her kayda `maturity` eklenir (global edge
+    stabilitesiyle) — kanıtın ne kadar olgun olduğu tek yerde görünür."""
     out: list[EvidenceRecord] = []
     for source_fn in _SOURCES:
         try:
             out.extend(source_fn())
         except Exception:  # defensive — bir kaynak otobüsü düşürmez
             continue
+    edge_safe = _global_edge_safe(out)
+    for r in out:
+        try:
+            r.maturity = maturity_gate.assess(
+                n_samples=r.n_samples, verdict=r.verdict, edge_safe=edge_safe
+            )
+        except Exception:  # defensive — damga hatası otobüsü düşürmez
+            r.maturity = None
     return out
 
 
@@ -159,17 +183,21 @@ def viewmodel() -> dict:
     by_source: dict[str, int] = {}
     by_topic: dict[str, int] = {}
     by_verdict: dict[str, int] = {}
+    by_maturity: dict[str, int] = {}
     for r in records:
         by_source[r.source] = by_source.get(r.source, 0) + 1
         by_topic[r.topic] = by_topic.get(r.topic, 0) + 1
         key = r.verdict or "—"
         by_verdict[key] = by_verdict.get(key, 0) + 1
+        mkey = (r.maturity or {}).get("maturity") or "—"
+        by_maturity[mkey] = by_maturity.get(mkey, 0) + 1
     return {
         "generated_at": datetime.now(UTC).isoformat(),
         "total": len(records),
         "by_source": by_source,
         "by_topic": by_topic,
         "by_verdict": by_verdict,
+        "by_maturity": by_maturity,
         "records": [asdict(r) for r in records],
         "note": (
             "salt-gözlem; tüm öğrenme ölçümlerinin tek normalize görünümü (I1). "
