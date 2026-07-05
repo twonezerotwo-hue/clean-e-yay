@@ -146,6 +146,12 @@ kanıtsız), `shadow.affect_decision` + `conflict_resolver_activation`
 
 ## B serisi — Backtest-challenger motoru (2026-07-04, owner kararı)
 
+> **AKTİF (2026-07-05, owner kararı): `BACKTEST_CHALLENGER_ENABLED=1`** (lokal
+> .env + deploy ensure_env + flag-sync SYNC_FLAGS birlikte). İzole/shadow:
+> geçmiş-yeniden-kurma verisi otomatik birikir (B-2 günlük interval + B-3 karne
+> + B-4 terfi değerlendirmesi her cycle); canlı ağırlık/paper/karara ASLA
+> dokunmaz. Sıradaki: bu kanıtı görselleştiren öğrenme-katmanı paneli.
+>
 > Owner sorusu: "cat 6/7 (quantum/ağırlık) için canlı veri birikmesini
 > beklemek yerine backtest ile devam etsek?" Kanıt: NEUTRAL %88 (137/155
 > outcome), OFFENSIVE 7, DEFENSIVE/CRISIS 0 → rejim-çeşitliliği yok, ağırlık

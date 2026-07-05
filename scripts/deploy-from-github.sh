@@ -72,6 +72,11 @@ ensure_env TF_TARGET_AUTO_ONLY 1
 # AÇIK — salt-gozlem (karar zinciri/RiskGate/tik'e sifir temas), sektor karnesi
 # birikmeye baslar. Lokal .env'de de =1 (owner kurali: lokal+AWS senkron).
 ensure_env DISCOVERY_SCAN_ENABLED 1
+# B serisi backtest-challenger (2026-07-05, owner karari): izole/shadow gecmis-
+# yeniden-kurma verisi otomatik biriksin. Canli agirlik/paper/karara temas ETMEZ
+# (yalniz backtest_challenger dosyalari); B-2 uretim (gunluk interval) + B-3 karne
+# + B-4 terfi degerlendirmesi. Lokal .env'de de =1 (owner kurali: lokal+AWS senkron).
+ensure_env BACKTEST_CHALLENGER_ENABLED 1
 
 echo "deploy: restart services"
 sudo systemctl restart eyay-supervisor.service
