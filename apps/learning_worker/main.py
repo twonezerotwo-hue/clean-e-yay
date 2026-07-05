@@ -502,6 +502,28 @@ def run_once() -> dict:
         backtest_challenger_status = f"ERROR:{type(exc).__name__}"
         errors.append(f"backtest_challenger:{type(exc).__name__}")
 
+    # B-3 — challenger ağırlık eğitimi + quantum ayrım karnesi (cat 6). AYNI
+    # BACKTEST_CHALLENGER_ENABLED kapısı (challenger boru hattı tek şey): B-2
+    # üretiminden SONRA jsonl'i okur → rejim başına challenger ağırlık (canlı
+    # trainer matematiği reuse) + quantum karnesi, İZOLE rapora. Canlı ağırlığa/
+    # config'e ASLA yazmaz (owner terfi = B-4, kırmızı çizgi). Ucuz (jsonl okur).
+    challenger_train_status = "DISABLED"
+    try:
+        from packages.learning import backtest_recon as _br_gate
+        if _br_gate.challenger_enabled():
+            from packages.learning import challenger_trainer
+            ct = challenger_trainer.run()
+            challenger_train_status = str(ct.get("status", "UNKNOWN"))
+            if challenger_train_status == "OK":
+                log.info(
+                    "challenger_trainer: proposed_regimes=%s quantum=%s",
+                    ct.get("proposed_regimes"),
+                    (ct.get("quantum_scorecard") or {}).get("summary"),
+                )
+    except Exception as exc:  # defensive — worker patlamamalı
+        challenger_train_status = f"ERROR:{type(exc).__name__}"
+        errors.append(f"challenger_trainer:{type(exc).__name__}")
+
     if errors:
         status = "COMPLETED_WITH_ERRORS"
     elif outcomes_seen == 0:
@@ -543,6 +565,7 @@ def run_once() -> dict:
         "discovery_scan_status": discovery_scan_status,  # K-1 tarayıcı
         "backtest_recon_status": backtest_recon_status,  # B-1 fidelity (DISABLED=flag OFF)
         "backtest_challenger_status": backtest_challenger_status,  # B-2 üretim (DISABLED=flag OFF)
+        "challenger_train_status": challenger_train_status,  # B-3 ağırlık+quantum karne (DISABLED=flag OFF)
         "duration_ms": duration_ms,        # CP1 — perf görünürlüğü
         "over_budget": over_budget,        # CP1 — bütçe aşımı bayrağı
         "errors": errors,
