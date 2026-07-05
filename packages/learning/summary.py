@@ -6,7 +6,7 @@ from dataclasses import asdict
 from packages.data.registry.loader import active_weights_version
 from packages.learning import cohorts as cohorts_mod
 from packages.learning import outcomes as outcomes_mod
-from packages.learning import rebalance_store, run_store
+from packages.learning import rebalance_store, run_store, signal_quality
 from packages.learning.calibration import reliability_bins
 from packages.learning.walkforward import summarize as wf_summarize
 from packages.paper import state as paper_state
@@ -104,6 +104,11 @@ def build_summary() -> dict:
         # F1-3 additive — modül katkı vektörü attribution'u (kazanan vs kaybeden
         # trade'lerdeki ortalama katkı). Salt gözlem; F3 regresyonunun ham yüzeyi.
         "module_attribution": outcomes_mod.module_attribution(outcomes),
+        # FAZ-4 additive — rejim başına modül KALİTE AYRIM karnesi (kazanan vs
+        # kaybeden katkı ayrımı + hüküm). module_attribution'ın rejim-ayrık +
+        # hükümlü hâli; WEIGHT_REGIME_FILTER aktivasyonu için kanıt kapısı.
+        # Salt-gözlem — hiçbir karar/ağırlık beslemez.
+        "signal_quality": signal_quality.regime_module_scorecard(outcomes),
         # Denetim 2026-07-03 additive — AUTO/MANUAL/EXCLUDED kohort ayrımı.
         # Mevcut alanlar (total_trades/win_rate/by_timeframe...) TÜM outcome'ları
         # saymaya devam eder (kırılım yok); auto sistemin gerçek performansı ve
