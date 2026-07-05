@@ -29,7 +29,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 
 from packages.discovery import scanner, shadow_ledger
-from packages.learning.mistake_memory import wilson_bounds
+from packages.learning import promotion_rail as rail
 
 _DEFAULTS = {
     "min_resolved_decisive": 20,
@@ -59,31 +59,20 @@ def _evaluate_candidate(sym: str, sc: dict, c: dict) -> dict:
     avoided = int(sc.get("avoided_loss") or 0)
     decisive = missed + avoided
     tfs = sorted(str(t) for t in (sc.get("timeframes") or []))
-    ci_low, ci_high = wilson_bounds(missed, decisive)
     checks = {
-        "resolved_decisive": {
-            "value": decisive,
-            "required": c["min_resolved_decisive"],
-            "pass": decisive >= c["min_resolved_decisive"],
-        },
+        "resolved_decisive": rail.count_check(decisive, c["min_resolved_decisive"]),
+        # TF çeşitliliği discovery'ye özel (aday-evreni kriteri): count_check + tfs listesi.
         "timeframe_spread": {
             "value": len(tfs),
             "timeframes": tfs,
             "required": c["min_timeframes"],
             "pass": len(tfs) >= c["min_timeframes"],
         },
-        "ci_disjoint": {
-            "cf_win_rate": round(missed / decisive, 4) if decisive else None,
-            "wilson_low": round(ci_low, 4),
-            "wilson_high": round(ci_high, 4),
-            "required": "wilson_low > 0.5",
-            "pass": decisive > 0 and ci_low > 0.5,
-        },
+        "ci_disjoint": rail.wilson_check(missed, decisive, rate_key="cf_win_rate"),
     }
-    ready = all(chk["pass"] for chk in checks.values())
     return {
         "symbol": sym,
-        "status": "READY" if ready else "NOT_READY",
+        "status": rail.status_of(checks),
         "checks": checks,
         "missed_win": missed,
         "avoided_loss": avoided,
@@ -128,30 +117,25 @@ def run() -> dict:
     package = evaluate()
     submitted: list[str] = []
     if package["ready_symbols"]:
-        from packages.governor import proposals
-
         for sym in package["ready_symbols"]:
             ev = package["per_candidate"][sym]
             ci = ev["checks"]["ci_disjoint"]
             n_dec = ev["missed_win"] + ev["avoided_loss"]
-            p = proposals.submit(
-                {
-                    "proposal_type": "STRATEGY_ENABLE",
-                    "title": f"Keşif adayı terfi kriterini karşıladı: {sym}",
-                    "summary": (
-                        f"{sym} gölge karnesi eşikleri geçti: {ev['missed_win']}/{n_dec} "
-                        f"kararlı isabet {ci['cf_win_rate']}, %95 alt sınır {ci['wilson_low']} "
-                        f"> 0.5, TF'ler {ev['timeframes']}. Hipotetik (işlem AÇILMADI). "
-                        "custom_assets'e ekleme ÖNERİSİ — otomatik EKLENMEZ; sen "
-                        "onaylasan bile canlı evren değişmez (elle iş). KIRMIZI ÇİZGİ."
-                    ),
-                    "evidence": ev,
-                    # Aday başına SABİT anahtar → dedupe (sembol başına tek PENDING);
-                    # promotion_criteria/challenger_promotion anahtarlarından FARKLI.
-                    "requested_change": {"add_custom_asset": sym},
-                    "rollback_plan": "Paket reddedilir/silinir; canlı evren değişmemiştir.",
-                    "source": "discovery_promotion",
-                }
+            p = rail.submit_enable(
+                title=f"Keşif adayı terfi kriterini karşıladı: {sym}",
+                summary=(
+                    f"{sym} gölge karnesi eşikleri geçti: {ev['missed_win']}/{n_dec} "
+                    f"kararlı isabet {ci['cf_win_rate']}, %95 alt sınır {ci['wilson_low']} "
+                    f"> 0.5, TF'ler {ev['timeframes']}. Hipotetik (işlem AÇILMADI). "
+                    "custom_assets'e ekleme ÖNERİSİ — otomatik EKLENMEZ; sen "
+                    "onaylasan bile canlı evren değişmez (elle iş). KIRMIZI ÇİZGİ."
+                ),
+                evidence=ev,
+                # Aday başına SABİT anahtar → dedupe (sembol başına tek PENDING);
+                # promotion_criteria/challenger_promotion anahtarlarından FARKLI.
+                requested_change={"add_custom_asset": sym},
+                rollback_plan="Paket reddedilir/silinir; canlı evren değişmemiştir.",
+                source="discovery_promotion",
             )
             if p:
                 submitted.append(p.get("proposal_id"))

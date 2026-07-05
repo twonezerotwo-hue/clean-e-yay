@@ -26,7 +26,7 @@ from datetime import UTC, datetime
 from packages.data.registry.loader import load_thresholds
 from packages.decision import shadow
 from packages.learning import missed_opportunity
-from packages.learning.mistake_memory import wilson_bounds
+from packages.learning import promotion_rail as rail
 
 _DEFAULTS = {
     "min_matched_decisions": 200,
@@ -81,33 +81,19 @@ def evaluate() -> dict:
     ]
     challenger_wins = sum(1 for e in resolves if e.get("outcome") == "missed_win")
     n_disagreements = len(resolves)
-    ci_low, ci_high = wilson_bounds(challenger_wins, n_disagreements)
 
     checks = {
-        "matched_decisions": {
-            "value": matched,
-            "required": c["min_matched_decisions"],
-            "pass": matched >= c["min_matched_decisions"],
-        },
-        "resolved_disagreements": {
-            "value": n_disagreements,
-            "required": c["min_resolved_disagreements"],
-            "pass": n_disagreements >= c["min_resolved_disagreements"],
-        },
-        "ci_disjoint": {
-            "challenger_win_rate": (
-                round(challenger_wins / n_disagreements, 4) if n_disagreements else None
-            ),
-            "wilson_low": round(ci_low, 4),
-            "wilson_high": round(ci_high, 4),
-            "required": "wilson_low > 0.5",
-            "pass": n_disagreements > 0 and ci_low > 0.5,
-        },
+        "matched_decisions": rail.count_check(matched, c["min_matched_decisions"]),
+        "resolved_disagreements": rail.count_check(
+            n_disagreements, c["min_resolved_disagreements"]
+        ),
+        "ci_disjoint": rail.wilson_check(
+            challenger_wins, n_disagreements, rate_key="challenger_win_rate"
+        ),
     }
-    ready = all(chk["pass"] for chk in checks.values())
     return {
         "generated_at": datetime.now(UTC).isoformat(),
-        "status": "READY" if ready else "NOT_READY",
+        "status": rail.status_of(checks),
         "checks": checks,
         "agreements": agreements,
         "challenger_wins": challenger_wins,
@@ -126,26 +112,21 @@ def run() -> dict:
     owner-onay paketi sun (submit dedupe'lu — her cycle yeni kayıt ÜRETMEZ)."""
     package = evaluate()
     if package["status"] == "READY":
-        from packages.governor import proposals
-
         ci = package["checks"]["ci_disjoint"]
-        submitted = proposals.submit(
-            {
-                "proposal_type": "STRATEGY_ENABLE",
-                "title": "Challenger (shadow pipeline) terfi kriterini karşıladı",
-                "summary": (
-                    "Eşleşmiş karar + ayrışma kanıtı + Wilson CI ayrıklığı sağlandı: "
-                    f"challenger ayrışma isabeti {ci['challenger_win_rate']}, "
-                    f"%95 alt sınır {ci['wilson_low']} > 0.5. Terfi OTOMATİK DEĞİL — "
-                    "owner inceleyip ayrı işle yürütür (KIRMIZI ÇİZGİ)."
-                ),
-                "evidence": {k: v for k, v in package.items() if k != "note"},
-                # requested_change SABİT anahtar → proposals.submit dedupe'u her
-                # cycle'da ikinci kaydı engeller (tek PENDING paket).
-                "requested_change": {"promote_challenger_review": True},
-                "rollback_plan": "Paket reddedilir/silinir; canlı motor değişmemiştir.",
-                "source": "promotion_criteria",
-            }
+        submitted = rail.submit_enable(
+            title="Challenger (shadow pipeline) terfi kriterini karşıladı",
+            summary=(
+                "Eşleşmiş karar + ayrışma kanıtı + Wilson CI ayrıklığı sağlandı: "
+                f"challenger ayrışma isabeti {ci['challenger_win_rate']}, "
+                f"%95 alt sınır {ci['wilson_low']} > 0.5. Terfi OTOMATİK DEĞİL — "
+                "owner inceleyip ayrı işle yürütür (KIRMIZI ÇİZGİ)."
+            ),
+            evidence={k: v for k, v in package.items() if k != "note"},
+            # requested_change SABİT anahtar → dedupe her cycle'da ikinci kaydı
+            # engeller (tek PENDING paket).
+            requested_change={"promote_challenger_review": True},
+            rollback_plan="Paket reddedilir/silinir; canlı motor değişmemiştir.",
+            source="promotion_criteria",
         )
         package["proposal_id"] = (submitted or {}).get("proposal_id")
     return package

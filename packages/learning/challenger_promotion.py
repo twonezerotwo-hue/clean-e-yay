@@ -36,8 +36,8 @@ from datetime import UTC, datetime
 from packages.consensus.engine import _direction, _redistribute
 from packages.data.registry.loader import load_active_weights, load_thresholds
 from packages.learning import backtest_recon, challenger_trainer
+from packages.learning import promotion_rail as rail
 from packages.learning.backtest_recon import _FLAT_BAND as _MARKET_FLAT_BAND
-from packages.learning.mistake_memory import wilson_bounds
 
 _DEFAULTS = {
     "min_matched_decisions": 200,
@@ -197,32 +197,18 @@ def evaluate(
             pr["champion_win"] += 1
 
     n_disagreements = challenger_wins + champion_wins
-    ci_low, ci_high = wilson_bounds(challenger_wins, n_disagreements)
     checks = {
-        "matched_decisions": {
-            "value": matched,
-            "required": c["min_matched_decisions"],
-            "pass": matched >= c["min_matched_decisions"],
-        },
-        "resolved_disagreements": {
-            "value": n_disagreements,
-            "required": c["min_resolved_disagreements"],
-            "pass": n_disagreements >= c["min_resolved_disagreements"],
-        },
-        "ci_disjoint": {
-            "challenger_win_rate": (
-                round(challenger_wins / n_disagreements, 4) if n_disagreements else None
-            ),
-            "wilson_low": round(ci_low, 4),
-            "wilson_high": round(ci_high, 4),
-            "required": "wilson_low > 0.5",
-            "pass": n_disagreements > 0 and ci_low > 0.5,
-        },
+        "matched_decisions": rail.count_check(matched, c["min_matched_decisions"]),
+        "resolved_disagreements": rail.count_check(
+            n_disagreements, c["min_resolved_disagreements"]
+        ),
+        "ci_disjoint": rail.wilson_check(
+            challenger_wins, n_disagreements, rate_key="challenger_win_rate"
+        ),
     }
-    ready = all(chk["pass"] for chk in checks.values())
     return {
         "generated_at": datetime.now(UTC).isoformat(),
-        "status": "READY" if ready else "NOT_READY",
+        "status": rail.status_of(checks),
         "checks": checks,
         "per_regime": per_regime,
         "challenger_wins": challenger_wins,
@@ -242,29 +228,24 @@ def run() -> dict:
     owner-onay paketi sun (submit dedupe'lu — her cycle yeni kayıt ÜRETMEZ)."""
     package = evaluate()
     if package["status"] == "READY":
-        from packages.governor import proposals
-
         ci = package["checks"]["ci_disjoint"]
         n_dis = package["challenger_wins"] + package["champion_wins"]
-        submitted = proposals.submit(
-            {
-                "proposal_type": "STRATEGY_ENABLE",
-                "title": "Challenger ağırlık seti terfi kriterini karşıladı (rejim-bazlı)",
-                "summary": (
-                    "Eşleşmeli backtest'te challenger ağırlıkları champion'ı geçti: "
-                    f"{package['challenger_wins']}/{n_dis} "
-                    f"ayrışma isabeti {ci['challenger_win_rate']}, %95 alt sınır "
-                    f"{ci['wilson_low']} > 0.5. Rejimler: {package['proposed_regimes']}. "
-                    "Otomatik UYGULANMAZ — sen onaylasan bile canlı ağırlık değişmez; "
-                    "terfi ayrı elle iştir (owner-gated rebalance). KIRMIZI ÇİZGİ."
-                ),
-                "evidence": {k: v for k, v in package.items() if k != "note"},
-                # requested_change SABİT anahtar → dedupe (tek PENDING paket).
-                # promotion_criteria'nın anahtarından FARKLI (ayrı kanal, çakışmaz).
-                "requested_change": {"promote_challenger_weights_review": True},
-                "rollback_plan": "Paket reddedilir/silinir; canlı ağırlıklar değişmemiştir.",
-                "source": "challenger_promotion",
-            }
+        submitted = rail.submit_enable(
+            title="Challenger ağırlık seti terfi kriterini karşıladı (rejim-bazlı)",
+            summary=(
+                "Eşleşmeli backtest'te challenger ağırlıkları champion'ı geçti: "
+                f"{package['challenger_wins']}/{n_dis} "
+                f"ayrışma isabeti {ci['challenger_win_rate']}, %95 alt sınır "
+                f"{ci['wilson_low']} > 0.5. Rejimler: {package['proposed_regimes']}. "
+                "Otomatik UYGULANMAZ — sen onaylasan bile canlı ağırlık değişmez; "
+                "terfi ayrı elle iştir (owner-gated rebalance). KIRMIZI ÇİZGİ."
+            ),
+            evidence={k: v for k, v in package.items() if k != "note"},
+            # requested_change SABİT anahtar → dedupe (tek PENDING paket).
+            # promotion_criteria'nın anahtarından FARKLI (ayrı kanal, çakışmaz).
+            requested_change={"promote_challenger_weights_review": True},
+            rollback_plan="Paket reddedilir/silinir; canlı ağırlıklar değişmemiştir.",
+            source="challenger_promotion",
         )
         package["proposal_id"] = (submitted or {}).get("proposal_id")
     return package
