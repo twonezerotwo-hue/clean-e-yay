@@ -180,6 +180,37 @@ kanıtsız), `shadow.affect_decision` + `conflict_resolver_activation`
 (rejim-çeşitli challenger ağırlık), BONUS cat 11 (aynı motor devasa çıkış-
 outcome örneği üretir). Hepsi izole/shadow/owner-kapılı — canlı sistem bozulmaz.
 
+## I serisi — Öğrenme katmanı entegrasyonu + otomasyonu (2026-07-05, owner talebi)
+
+> Tam analiz: **`docs/LEARNING_INTEGRATION_REPORT.md`** (mevcut durum + mimari +
+> shadow-dahil mekanizması). Owner talebi: 40+ öğreniciyi (bugün 4 ayrı olgunluk
+> katmanında ada) tek omurgaya bağla + shadow/toplanan veriyi GEREKTİĞİNDE dahil
+> et. Omurga: **Kanıt Otobüsü → Olgunluk Kapısı → Karar → İzleme → Rollback.**
+> Pazarlıksız: additive · flag-OFF=bayt-aynı · shadow-önce · rollback'li ·
+> off-tick · ölü-kod-yok. KIRMIZI ÇİZGİ: yön motoru + execution owner onayı
+> olmadan ASLA otomatik (I serisi bu ikisini basamak-2/öneride durdurur).
+>
+> **Otomasyon merdiveni (her öğrenici bu 5 basamaktan çıkar):** 0-Ölç (risksiz) →
+> 1-Gölge (risksiz) → 2-Öner (owner onayı) → 3-Dar-bant oto (edge-gate+rollback)
+> → 4-İzle (watchdog+guard_safety). Yön/execution basamak-2'yi geçemez.
+>
+> **Öneri sırası + gerekçe:** I1+I2 ÖNCE (omurganın kendisi; ikisi de güvenli
+> gözlem/refactor, davranış değişmez) → I3 (owner'ın asıl "shadow-dahil" isteği)
+> → I4/I5/I6 (omurga kurulunca hızlı+düşük risk).
+
+| # | İş | Kapsam (kod + kabul kriteri) | Durum | Risk |
+|---|---|---|---|---|
+| I1 | **Kanıt Otobüsü** `packages/learning/evidence_bus.py` | Tüm ölçümleri (edge_report, signal_quality, challenger quantum karnesi, discovery candidate_summary, tf_calibration, exit_forensics) TEK normalize şemaya topla: `EvidenceRecord{topic, regime, timeframe, n_samples, statistic, source: live\|shadow\|backtest, freshness}`. Salt-gözlem: mevcut artifact'ları OKUR, hiçbir şey üretmez/değiştirmez. `collect()` + `GET /learning/evidence-bus` + testler. **Kabul:** flag'siz additive, mevcut suite yeşil, endpoint canlı 200, her kaynak en az bir kayıt üretir. | ⬜ SIRADA | 🟢 |
+| I2 | **Olgunluk Kapısı** `packages/learning/maturity_gate.py` | Üç dağınık kapıyı TEK fonksiyona topla: `gate(n, edge_stable, wilson_low/separation) → {ready, basamak(0-4), reason}`. min-örnek + `edge_report.safe_to_autotune` + Wilson/ayrım eşiği. I1'in HER kaydına `maturity` alanı ekler (evidence_bus consume eder). Trainer'lara HENÜZ dokunmaz (onların migrasyonu I4). **Kabul:** saf fonksiyon + testler; evidence_bus çıktısı maturity taşır; mevcut trainer davranışı bayt-aynı. | ⬜ | 🟢 refactor |
+| I3 | **Kaynak Seçici** `packages/learning/source_selector.py` | **Owner'ın asıl isteği.** Bir öğrenici "bu rejim/TF için canlı kanıt ince" derse sırayla shadow → backtest_challenger → discovery_shadow'dan AYRI KANALDA damgalı kanıt çeker (F5-1 `cf_by_tf` ilkesi: gerçek hücreler KİRLENMEZ; kaynak damgalı). Tek switch `LEARNING_INCLUDE_SHADOW` (env, DEFAULT OFF=bayt-aynı). İlk tüketici: signal_quality/FAZ-4 boş rejimlerini backtest quantum karnesiyle destekle (damgalı). **Kabul:** flag OFF→bayt-aynı; ON→ince rejimde `source: backtest` damgalı kanıt; rollback = flag kapat. | ⬜ | 🟡 flag-OFF |
+| I4 | **Terfi Hattı** `packages/learning/promotion_rail.py` | 3 kopyayı (`promotion_criteria`/`challenger_promotion`/`discovery_promotion`) TEK motora indir: "kanıt → Wilson kapısı → governor.submit → dedupe". Üçü de rail'i çağırsın (davranış+dedupe anahtarları KORUNUR — bayt-aynı). Yeni terfi = config satırı. **Kabul:** üç modülün mevcut testleri yeşil kalır; governor paketleri aynı şekil. | ⬜ | 🟢 refactor |
+| I5 | **İzleme kapsama** (`activation_watchdog` + rollback standardı) | Canlıya dokunan HER terfiye watchdog+rollback otomatik takılsın. Eksik kalan aktivasyonları REGISTRY'ye ekle; auto-apply store'larının hepsi rollback'e bağlı olduğunu guard'la (test). **Kabul:** "izlemesiz canlı-dokunuş yok" testi; registry-kapsama testi. | ⬜ | 🟢 |
+| I6 | **Orkestrasyon paneli** "Öğrenme Beyni" | I1 evidence_bus + I2 maturity'yi tek panelde göster: her öğrenici hangi basamakta (0-4), hangi kanıtla (live/shadow/backtest), sıradaki eşik ne. Contract-first değil — observe-only friendly type (DiscoveryPanel/BacktestChallengerPanel deseni + KNOWN_UNCONTRACTED). **Kabul:** tsc temiz, izole preview render, panel Öğrenme Hattı'nda. | ⬜ | 🟢 |
+
+**Dilimleme:** her I-dilimi AYRI commit + OFF-bekçi/refactor-bayt-aynı testi + push öncesi tam suite yeşil. I3 aktivasyonu (`LEARNING_INCLUDE_SHADOW=1`) AYRI owner kararı + ayrı deploy (flag-kayıt vs aktivasyon ayrı — watchdog arm kuralı). Yeni env-flag (`LEARNING_INCLUDE_SHADOW`) → conftest delenv + flag-sync SYNC_FLAGS + lokal .env↔AWS ensure_env birlikte.
+
+**I serisi ne açar:** dağınık 40+ öğrenici tek nehir; shadow/backtest verisi gerektiğinde damgalı akar; her yeni öğrenici sıfır-tekrar omurgaya takılır. Owner kırmızı çizgileri (yön motoru + execution) sabit — I serisi onları basamak-2'de (öneri) tutar, asla otomatik terfi ettirmez.
+
 ## Devir notu (son güncelleme: 2026-07-03)
 
 Bu belge farklı bir asistan/oturum tarafından SIFIR bağlamla devralınabilir
