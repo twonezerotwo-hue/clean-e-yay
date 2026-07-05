@@ -23,6 +23,7 @@ from packages.learning import (
     dataset_health,
     edge_report,
     entry_exit_quality,
+    evidence_bus,
     exit_forensics,
     guard_safety,
     historical_edge,
@@ -404,6 +405,15 @@ def get_promotion_criteria() -> dict:
     hacmi + ayrışma kanıtı + Wilson CI ayrıklığı; READY olsa bile terfi
     otomatik DEĞİL — governor'daki owner onay paketi üzerinden yürür."""
     return promotion_criteria.evaluate()
+
+
+@router.get("/learning/evidence-bus")
+def get_evidence_bus() -> dict:
+    """I1 — Kanıt Otobüsü (read-only, PAPER_SAFE). Tüm öğrenme ölçümlerini
+    (sinyal kalitesi / edge / quantum karnesi / keşif gölgesi / TF kalibrasyon)
+    TEK normalize kanıt listesine toplar. Kaynak damgalı (live/shadow/backtest).
+    Salt-gözlem — hiçbir karara bağlı değil (I2/I3 bunun üstüne kurulur)."""
+    return evidence_bus.viewmodel()
 
 
 @router.get("/learning/backtest-challenger")

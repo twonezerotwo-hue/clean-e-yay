@@ -1,0 +1,181 @@
+"""I1 — Kanıt Otobüsü (Evidence Bus): tüm öğrenme ölçümlerini TEK normalize
+şemaya toplar (salt-gözlem).
+
+Amaç (owner talebi 2026-07-05, `docs/LEARNING_INTEGRATION_REPORT.md`): 40+
+öğrenici bugün ayrı dosya/panele yazıyor → "sistem şu an neyi biliyor?" sorusu
+dağınık. Bu otobüs mevcut ölçümleri (signal_quality/edge/quantum karnesi/keşif
+gölge karnesi/tf-kalibrasyon) TEK `EvidenceRecord` listesine indirger. Böylece
+tek sorgu = tüm kanıt; bir öğrenici başka bir öğrenicinin kanıtını okuyabilir
+(I2 olgunluk kapısı + I3 kaynak seçici bunun üstüne kurulur).
+
+PAZARLIKSIZ: SALT-GÖZLEM. Mevcut fonksiyonları/artifact'ları OKUR; hiçbir şey
+üretmez/değiştirmez/karara bağlamaz. Her kaynak İZOLE (biri patlarsa otobüs
+düşmez — worker deseni). Kaynak damgası (`source: live|shadow|backtest`) I3'ün
+temeli: canlı mı, gölge mi, backtest mi kanıt olduğu her zaman görünür.
+
+PAPER_SAFE / NO_EXECUTION.
+"""
+from __future__ import annotations
+
+from dataclasses import asdict, dataclass, field
+from datetime import UTC, datetime
+
+# Kaynak sınıfları (I3 kaynak seçicinin temeli).
+LIVE = "live"          # canlı paper outcome'larından
+SHADOW = "shadow"      # gölge kanallardan (keşif/missed-opp)
+BACKTEST = "backtest"  # geçmiş-prova (challenger) kayıtlarından
+
+
+@dataclass
+class EvidenceRecord:
+    """Bir ölçümün normalize kaydı — her öğrenme kanıtı bu şekle iner."""
+
+    topic: str                       # signal_quality / quantum_discrimination / edge_stability / ...
+    subject: str                     # ölçülen şey (touche@NEUTRAL / quantum@DEFENSIVE / XLV / 4h)
+    source: str                      # live | shadow | backtest
+    regime: str | None = None
+    timeframe: str | None = None
+    n_samples: int | None = None     # kanıtın örneklem büyüklüğü (olgunluğun girdisi — I2)
+    statistic: float | None = None   # ana sayı (ayrım / cf_win_rate / expectancy / yoğunlaşma)
+    verdict: str | None = None       # DISCRIMINATES / STABLE / CALIBRATED / RESOLVED / ...
+    detail: dict = field(default_factory=dict)
+
+
+# ------------------------------------------------------------ kaynak adaptörleri
+
+def _signal_quality_records() -> list[EvidenceRecord]:
+    """FAZ-4 sinyal kalitesi (CANLI outcome'lar): modül×rejim ayrım karnesi."""
+    from packages.learning import outcomes as om
+    from packages.learning import signal_quality as sq
+    from packages.paper import state as ps
+
+    card = sq.regime_module_scorecard(om.outcomes_from_state(ps.load()))
+    out: list[EvidenceRecord] = []
+    for regime, mods in (card.get("per_regime") or {}).items():
+        for module, d in mods.items():
+            nw, nl = int(d.get("n_win") or 0), int(d.get("n_loss") or 0)
+            out.append(EvidenceRecord(
+                topic="signal_quality", subject=f"{module}@{regime}", source=LIVE,
+                regime=regime, n_samples=nw + nl,
+                statistic=d.get("rel_separation"), verdict=d.get("verdict"),
+                detail={"n_win": nw, "n_loss": nl, "separation": d.get("separation")},
+            ))
+    return out
+
+
+def _quantum_records() -> list[EvidenceRecord]:
+    """Quantum ayrım karnesi (BACKTEST challenger): rejim başına DISCRIMINATES/…"""
+    from packages.learning import challenger_trainer as ct
+
+    vm = ct.viewmodel()
+    if not vm.get("enabled"):
+        return []
+    return [
+        EvidenceRecord(
+            topic="quantum_discrimination", subject=f"quantum@{q.get('regime')}",
+            source=BACKTEST, regime=q.get("regime"), n_samples=q.get("n"),
+            statistic=q.get("separation"), verdict=q.get("verdict"),
+            detail={"correlation": q.get("correlation")},
+        )
+        for q in (vm.get("quantum") or [])
+    ]
+
+
+def _edge_records() -> list[EvidenceRecord]:
+    """Edge stabilitesi (CANLI): otomatik-ayara güvenli mi (safe_to_autotune)."""
+    from packages.learning import edge_report
+
+    r = edge_report.report()
+    return [EvidenceRecord(
+        topic="edge_stability", subject="global", source=LIVE,
+        n_samples=r.get("total"), statistic=r.get("outlier_concentration"),
+        verdict=r.get("verdict"),
+        detail={
+            "safe_to_autotune": r.get("safe_to_autotune"),
+            "outlier_dependent": r.get("outlier_dependent"),
+        },
+    )]
+
+
+def _discovery_records() -> list[EvidenceRecord]:
+    """Keşif adayları (SHADOW): aday başına çözülmüş isabet karnesi."""
+    from packages.discovery import shadow_ledger
+
+    cs = shadow_ledger.candidate_summary()
+    out: list[EvidenceRecord] = []
+    for sym, d in (cs.get("candidates") or {}).items():
+        decisive = int(d.get("missed_win") or 0) + int(d.get("avoided_loss") or 0)
+        out.append(EvidenceRecord(
+            topic="discovery_candidate", subject=str(sym), source=SHADOW,
+            n_samples=decisive, statistic=d.get("cf_win_rate"),
+            verdict="RESOLVED" if decisive else "PENDING",
+            detail={"timeframes": d.get("timeframes"), "resolved": d.get("resolved")},
+        ))
+    return out
+
+
+def _tf_calibration_records() -> list[EvidenceRecord]:
+    """TF kalibrasyonu (CANLI): TF başına güven (CALIBRATED/PRIOR) + expectancy."""
+    from packages.learning import tf_calibration
+
+    r = tf_calibration.calibration_report()
+    return [
+        EvidenceRecord(
+            topic="tf_calibration", subject=str(c.get("timeframe")), source=LIVE,
+            timeframe=c.get("timeframe"), n_samples=c.get("trades"),
+            statistic=c.get("expectancy"), verdict=c.get("trust"),
+        )
+        for c in (r.get("per_timeframe") or [])
+    ]
+
+
+# Kayıtlı kaynak adaptörleri (yeni öğrenici eklendikçe buraya bir satır).
+_SOURCES = (
+    _signal_quality_records,
+    _quantum_records,
+    _edge_records,
+    _discovery_records,
+    _tf_calibration_records,
+)
+
+
+def collect() -> list[EvidenceRecord]:
+    """Tüm kaynakları tek normalize kanıt listesine topla (salt-gözlem).
+
+    Her kaynak İZOLE try içinde: biri patlarsa atlanır, otobüs asla düşmez
+    (worker deseni). Sıra kayıt sırasıdır (deterministik)."""
+    out: list[EvidenceRecord] = []
+    for source_fn in _SOURCES:
+        try:
+            out.extend(source_fn())
+        except Exception:  # defensive — bir kaynak otobüsü düşürmez
+            continue
+    return out
+
+
+def viewmodel() -> dict:
+    """`GET /learning/evidence-bus` görünümü: tüm kanıt + kaynak/konu/hüküm sayacı."""
+    records = collect()
+    by_source: dict[str, int] = {}
+    by_topic: dict[str, int] = {}
+    by_verdict: dict[str, int] = {}
+    for r in records:
+        by_source[r.source] = by_source.get(r.source, 0) + 1
+        by_topic[r.topic] = by_topic.get(r.topic, 0) + 1
+        key = r.verdict or "—"
+        by_verdict[key] = by_verdict.get(key, 0) + 1
+    return {
+        "generated_at": datetime.now(UTC).isoformat(),
+        "total": len(records),
+        "by_source": by_source,
+        "by_topic": by_topic,
+        "by_verdict": by_verdict,
+        "records": [asdict(r) for r in records],
+        "note": (
+            "salt-gözlem; tüm öğrenme ölçümlerinin tek normalize görünümü (I1). "
+            "kaynak: live=canlı paper, shadow=gölge kanal, backtest=geçmiş-prova."
+        ),
+    }
+
+
+__all__ = ["BACKTEST", "LIVE", "SHADOW", "EvidenceRecord", "collect", "viewmodel"]
