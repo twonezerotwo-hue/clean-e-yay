@@ -482,6 +482,26 @@ def run_once() -> dict:
         backtest_recon_status = f"ERROR:{type(exc).__name__}"
         errors.append(f"backtest_recon:{type(exc).__name__}")
 
+    # B-2 — rejim-çeşitli outcome üretimi (İZOLE challenger kanalı). Flag
+    # BACKTEST_CHALLENGER_ENABLED OFF → tam no-op. B-1 fidelity'den AYRI flag
+    # (üretim ağır: 1-2 yıl yürür). INTERVAL-kapılı (her cycle değil). Canlı
+    # outcome defterine/ağırlığa/paper'a ASLA yazmaz — yalnız challenger artifact.
+    backtest_challenger_status = "DISABLED"
+    try:
+        from packages.learning import backtest_recon as _br_prod
+        if _br_prod.challenger_enabled():
+            bc = _br_prod.run_if_due()
+            backtest_challenger_status = str(bc.get("status", "UNKNOWN"))
+            if backtest_challenger_status == "OK":
+                log.info(
+                    "backtest_challenger: records=%s regimes=%s labels=%s fred_liq=%s",
+                    bc.get("records"), bc.get("regime_histogram"),
+                    bc.get("label_histogram"), bc.get("fred_liquidity"),
+                )
+    except Exception as exc:  # defensive — worker patlamamalı
+        backtest_challenger_status = f"ERROR:{type(exc).__name__}"
+        errors.append(f"backtest_challenger:{type(exc).__name__}")
+
     if errors:
         status = "COMPLETED_WITH_ERRORS"
     elif outcomes_seen == 0:
@@ -522,6 +542,7 @@ def run_once() -> dict:
         "discovery_status": discovery_status,  # K-0b sektör rotasyonu (DISABLED=flag OFF)
         "discovery_scan_status": discovery_scan_status,  # K-1 tarayıcı
         "backtest_recon_status": backtest_recon_status,  # B-1 fidelity (DISABLED=flag OFF)
+        "backtest_challenger_status": backtest_challenger_status,  # B-2 üretim (DISABLED=flag OFF)
         "duration_ms": duration_ms,        # CP1 — perf görünürlüğü
         "over_budget": over_budget,        # CP1 — bütçe aşımı bayrağı
         "errors": errors,
