@@ -77,6 +77,10 @@ ensure_env DISCOVERY_SCAN_ENABLED 1
 # (yalniz backtest_challenger dosyalari); B-2 uretim (gunluk interval) + B-3 karne
 # + B-4 terfi degerlendirmesi. Lokal .env'de de =1 (owner kurali: lokal+AWS senkron).
 ensure_env BACKTEST_CHALLENGER_ENABLED 1
+# I3 Kaynak Secici (2026-07-05, owner karari "ogrenme hizlansin"): bos/ince rejimler
+# damgali backtest/shadow kanitiyla beslensin (canli_n=0-2 rejimler artik kor degil).
+# Gercek live_n KIRLENMEZ, yon/emre TEMAS ETMEZ, rollback=flag kapat. Lokal .env=1 (senkron).
+ensure_env LEARNING_INCLUDE_SHADOW 1
 
 echo "deploy: restart services"
 sudo systemctl restart eyay-supervisor.service
