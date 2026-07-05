@@ -137,6 +137,30 @@ function getString(row: Record<string, unknown>, keys: string[]) {
   return "--";
 }
 
+function traceVisibleKey(row: Record<string, unknown>) {
+  return [
+    getString(row, ["symbol", "asset"]),
+    getString(row, ["action", "decision", "paper_action"]),
+    getString(row, ["reason", "blocked_by", "status"]),
+  ].join("|");
+}
+
+function compactTraceRows(rows: Record<string, unknown>[]) {
+  const grouped = new Map<string, { key: string; row: Record<string, unknown>; count: number }>();
+
+  rows.slice(0, 5).forEach((row) => {
+    const key = traceVisibleKey(row);
+    const existing = grouped.get(key);
+    if (existing) {
+      existing.count += 1;
+      return;
+    }
+    grouped.set(key, { key, row, count: 1 });
+  });
+
+  return Array.from(grouped.values());
+}
+
 function LabMetric({
   label,
   value,
@@ -1876,59 +1900,79 @@ export function Layer2BacktestOutcomePanel({ selectedSymbol }: Layer2AssetPanelP
 
       <div className="rounded-2xl border border-white/10 bg-black/22 p-4 xl:col-span-2">
         <div className="grid gap-4 lg:grid-cols-2">
-          <div>
-            <div className="text-[10px] uppercase tracking-[0.24em] text-white/42">
-              {activeSymbol} top candidates
-            </div>
-            <div className="mt-3 space-y-2">
-              {topCandidates.slice(0, 5).map((candidate, index) => (
-                <TraceRow key={`candidate-${index}`} row={candidate} />
-              ))}
-              {topCandidates.length === 0 ? (
-                <div className="rounded-xl border border-white/10 bg-white/[0.035] p-4 text-sm text-white/45">
-                  Son snapshot icin aday yok veya trace bekleniyor.
-                </div>
-              ) : null}
-            </div>
-          </div>
-          <div>
-            <div className="text-[10px] uppercase tracking-[0.24em] text-white/42">
-              {activeSymbol} final decisions
-            </div>
-            <div className="mt-3 space-y-2">
-              {finalDecisions.slice(0, 5).map((decision, index) => (
-                <TraceRow key={`decision-${index}`} row={decision} />
-              ))}
-              {finalDecisions.length === 0 ? (
-                <div className="rounded-xl border border-white/10 bg-white/[0.035] p-4 text-sm text-white/45">
-                  Final decision kaydi yok.
-                </div>
-              ) : null}
-            </div>
-          </div>
+          <TraceList
+            title={`${activeSymbol} top candidates`}
+            rows={topCandidates}
+            emptyText="Son snapshot icin aday yok veya trace bekleniyor."
+          />
+          <TraceList
+            title={`${activeSymbol} final decisions`}
+            rows={finalDecisions}
+            emptyText="Final decision kaydi yok."
+          />
         </div>
       </div>
     </div>
   );
 }
 
-function TraceRow({ row }: { row: Record<string, unknown> }) {
+function TraceList({
+  title,
+  rows,
+  emptyText,
+}: {
+  title: string;
+  rows: Record<string, unknown>[];
+  emptyText: string;
+}) {
+  const compactRows = compactTraceRows(rows);
+  const visibleCount = Math.min(rows.length, 5);
+
   return (
-    <div className="grid gap-2 rounded-xl border border-white/10 bg-white/[0.035] p-3 md:grid-cols-[0.7fr_0.7fr_1fr]">
-      <div>
-        <div className="text-[10px] uppercase tracking-widest text-white/32">symbol</div>
-        <div className="mt-1 font-display text-white">{getString(row, ["symbol", "asset"])}</div>
+    <section className="layer2-trace-list">
+      <div className="layer2-trace-list__head">
+        <div className="text-[10px] uppercase tracking-[0.24em] text-white/42">{title}</div>
+        <span>
+          {rows.length > 0
+            ? `${visibleCount} kayit / ${compactRows.length} grup`
+            : "trace bekleniyor"}
+        </span>
       </div>
-      <div>
-        <div className="text-[10px] uppercase tracking-widest text-white/32">action</div>
-        <div className="mt-1 font-mono text-cyan-100">
-          {getString(row, ["action", "decision", "paper_action"])}
-        </div>
+
+      <div className="mt-3 space-y-2">
+        {compactRows.map((item) => (
+          <TraceRow key={item.key} row={item.row} count={item.count} />
+        ))}
+        {rows.length === 0 ? (
+          <div className="rounded-xl border border-white/10 bg-white/[0.035] p-4 text-sm text-white/45">
+            {emptyText}
+          </div>
+        ) : null}
       </div>
-      <div>
-        <div className="text-[10px] uppercase tracking-widest text-white/32">reason</div>
-        <div className="mt-1 truncate text-xs text-white/55">
-          {getString(row, ["reason", "blocked_by", "status"])}
+    </section>
+  );
+}
+
+function TraceRow({ row, count }: { row: Record<string, unknown>; count: number }) {
+  const symbol = getString(row, ["symbol", "asset"]);
+  const action = getString(row, ["action", "decision", "paper_action"]);
+  const reason = getString(row, ["reason", "blocked_by", "status"]);
+
+  return (
+    <div className="layer2-trace-row">
+      <div className="layer2-trace-cell layer2-trace-cell--symbol">
+        <span>symbol</span>
+        <strong>{symbol}</strong>
+      </div>
+      <div className="layer2-trace-cell">
+        <span>action</span>
+        <strong className={action === "--" ? "text-white/45" : "text-cyan-100"}>{action}</strong>
+        {count > 1 ? <em>{count} kayit</em> : null}
+      </div>
+      <div className="layer2-trace-cell layer2-trace-cell--reason">
+        <span>reason</span>
+        <div title={reason}>
+          {reason}
         </div>
       </div>
     </div>
@@ -2075,62 +2119,45 @@ export function Layer2AssetUniversePanel({ selectedSymbol }: Layer2AssetPanelPro
   const activeBuckets = roleBuckets.filter((bucket) =>
     bucket.symbols.some((symbol) => normalizeSymbol(symbol) === activeSymbol),
   );
+  const priceText = formatNumber(livePrice?.price, livePrice?.price && livePrice.price >= 100 ? 2 : 4);
+  const dqsText = formatNumber(snapshot.data?.dqs?.score, 0);
+  const registryStatus = registry.isLoading ? "loading" : "ready";
 
   return (
-    <div className="grid gap-4 xl:grid-cols-[0.8fr_1.2fr]">
-      <div className="rounded-2xl border border-cyan-300/14 bg-cyan-300/[0.035] p-4">
-        <div className="text-[10px] uppercase tracking-[0.24em] text-cyan-100/55">
-          {activeSymbol} universe record
+    <div className="layer2-universe-record rounded-2xl border border-cyan-300/14 bg-cyan-300/[0.035] p-4">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <div className="text-[10px] uppercase tracking-[0.24em] text-cyan-100/55">
+            {activeSymbol} universe record
+          </div>
+          <div className="mt-1 text-sm text-white/55">
+            Registry rolleri, bucket kaydi, snapshot fiyati ve DQS
+          </div>
         </div>
-        <div className="mt-3 grid grid-cols-2 gap-3">
-          <LabMetric
-            label="Price"
-            value={formatNumber(livePrice?.price, livePrice?.price && livePrice.price >= 100 ? 2 : 4)}
-            detail={livePrice?.status ?? "snapshot"}
-            tone="text-cyan-100"
-          />
-          <LabMetric
-            label="DQS"
-            value={formatNumber(snapshot.data?.dqs?.score, 0)}
-            detail={snapshot.data?.dqs?.status}
-            tone="text-emerald-100"
-          />
-        </div>
-        <div className="mt-4 space-y-3">
-          {activeBuckets.map((bucket) => (
-            <div key={bucket.label} className="rounded-xl border border-white/10 bg-black/20 p-3">
-              <div className="flex items-center justify-between gap-3">
-                <span className="font-display text-sm uppercase tracking-widest text-white/75">
-                  {bucket.label}
-                </span>
-                <span className="font-mono text-xs text-cyan-100">{activeSymbol}</span>
-              </div>
-            </div>
-          ))}
-          {activeBuckets.length === 0 ? (
-            <div className="rounded-xl border border-white/10 bg-black/20 p-3 text-sm text-white/45">
-              {activeSymbol} registry bucket'larinda bulunmuyor; yine de live/technical endpointleri okunur.
-            </div>
-          ) : null}
-        </div>
+        <StatusPill value={registryStatus} />
       </div>
 
-      <div className="rounded-2xl border border-white/10 bg-black/22 p-4">
-        <div className="flex items-center justify-between gap-3">
-          <div>
-            <div className="text-[10px] uppercase tracking-[0.24em] text-white/42">
-              Selected asset taxonomy
-            </div>
-            <div className="mt-1 text-sm text-white/55">
-              Backend registry kaydindan secili assetin rolleri
-            </div>
-          </div>
-          <StatusPill value={registry.isLoading ? "loading" : "ready"} />
+      <div className="mt-4 grid gap-3 lg:grid-cols-[0.8fr_0.8fr_1.35fr]">
+        <div className="layer2-universe-stat">
+          <span>Price</span>
+          <strong className="text-cyan-100">{priceText}</strong>
+          <em>{livePrice?.status ?? "snapshot"}</em>
         </div>
-        <div className="mt-4">
+
+        <div className="layer2-universe-stat">
+          <span>DQS</span>
+          <strong className="text-emerald-100">{dqsText}</strong>
+          <em>{snapshot.data?.dqs?.status ?? "--"}</em>
+        </div>
+
+        <div className="layer2-universe-taxonomy">
+          <div>
+            <span>Selected asset taxonomy</span>
+            <p>Backend registry kaydindan secili assetin rolleri</p>
+          </div>
           {activeAsset ? (
-            <div className="rounded-xl border border-white/10 bg-white/[0.035] p-4">
-              <div className="flex items-center justify-between gap-3">
+            <>
+              <div className="layer2-universe-identity">
                 <span className="font-display text-xl uppercase tracking-widest text-white">
                   {activeAsset.symbol}
                 </span>
@@ -2146,13 +2173,28 @@ export function Layer2AssetUniversePanel({ selectedSymbol }: Layer2AssetPanelPro
                   </span>
                 ))}
               </div>
-            </div>
+            </>
           ) : (
             <div className="rounded-xl border border-white/10 bg-white/[0.035] p-4 text-sm text-white/45">
               {activeSymbol} registry kaydi yok.
             </div>
           )}
         </div>
+      </div>
+
+      <div className="layer2-universe-buckets mt-3">
+        <span>Registry buckets</span>
+        <strong>{activeSymbol}</strong>
+        <div>
+          {activeBuckets.map((bucket) => (
+            <em key={bucket.label}>{bucket.label}</em>
+          ))}
+        </div>
+        {activeBuckets.length === 0 ? (
+          <p>
+            {activeSymbol} registry bucket'larinda bulunmuyor; yine de live/technical endpointleri okunur.
+          </p>
+        ) : null}
       </div>
     </div>
   );

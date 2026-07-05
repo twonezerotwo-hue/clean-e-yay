@@ -55,6 +55,7 @@ import { ThresholdAutotunePanel } from "@/components/panels/ThresholdAutotunePan
 import { ThresholdAbPanel } from "@/components/panels/ThresholdAbPanel";
 import { GuardSafetyPanel } from "@/components/panels/GuardSafetyPanel";
 import { AgentModePanel } from "@/components/panels/AgentModePanel";
+import { LearningBrainPanel } from "@/components/panels/LearningBrainPanel";
 import type { CockpitBrief } from "@/types/generated/api";
 
 import { HolographicSignalDeck } from "./HolographicSignalDeck";
@@ -255,29 +256,52 @@ function Layer2DetailGroup({
 }) {
   return (
     <section id={id} className="layer2-detail-group">
+      <div className="layer2-detail-beam" />
       <div className="layer2-detail-scan" />
-      <header className="relative z-10 mb-4 flex flex-col gap-3 border-b border-white/[0.08] pb-3 md:flex-row md:items-end md:justify-between">
+      <header className="layer2-detail-header relative z-10 mb-4 flex flex-col gap-3 border-b border-white/[0.08] pb-3 md:flex-row md:items-end md:justify-between">
         <div className="min-w-0">
-          <div className="flex items-center gap-3">
+          <div className="layer2-detail-title-row flex items-center gap-3">
             <span className="layer2-detail-index">{index}</span>
             <div className="h-px flex-1 bg-gradient-to-r from-accent-cyan/45 via-white/10 to-transparent" />
           </div>
-          <h3 className="mt-3 font-display text-xl leading-none text-white/92 md:text-2xl">
+          <h3 className="layer2-detail-title mt-3 font-display text-xl leading-none text-white/92 md:text-2xl">
             {title}
           </h3>
-          <p className="mt-2 max-w-4xl text-sm leading-6 text-white/52">{detail}</p>
+          <p className="layer2-detail-copy mt-2 max-w-4xl text-sm leading-6 text-white/52">{detail}</p>
         </div>
-        <span className={`shrink-0 rounded-full border px-3 py-1 text-[10px] uppercase tracking-widest ${badgeTone}`}>
+        <span className={`layer2-detail-badge shrink-0 rounded-full border px-3 py-1 text-[10px] uppercase tracking-widest ${badgeTone}`}>
           {badge}
         </span>
       </header>
-      <div className="relative z-10">{children}</div>
+      <div className="layer2-detail-body relative z-10">{children}</div>
     </section>
   );
 }
 
 /** Öğrenme Hattı adım sarmalayıcısı — panelin üstüne akış sırası + tek satır
  *  günlük-dil açıklama koyar. Panel içeriğine dokunmaz. */
+function Layer2CompositeBlock({
+  label,
+  detail,
+  wide = false,
+  children,
+}: {
+  label: string;
+  detail: string;
+  wide?: boolean;
+  children: ReactNode;
+}) {
+  return (
+    <section className={`layer2-composite-block ${wide ? "layer2-composite-block--wide" : ""}`}>
+      <header className="layer2-composite-block__head">
+        <span>{label}</span>
+        <p>{detail}</p>
+      </header>
+      <div className="layer2-composite-block__body">{children}</div>
+    </section>
+  );
+}
+
 function LearnStep({
   step,
   label,
@@ -1162,7 +1186,7 @@ export function CockpitView() {
   } else if (activeLayer === 2) {
     layerContent = (
         <div className="h-full overflow-y-auto p-4 md:p-5">
-          <div className="space-y-6 pb-12">
+          <div className="layer2-soul-stage space-y-6 pb-12">
             <LayerHeader
               meta={LAYERS[2]}
               detail="Soul, secili assetin ruhunu okur: Katman 1 asset kartlarindan secilen varlik icin teknik, seviye, dalga, likidite ve trace kanitlari tek akista incelenir."
@@ -1197,66 +1221,89 @@ export function CockpitView() {
 
             <Layer2DetailGroup
               index="01"
-              title={`${selectedLayer2Symbol} Core Terminal`}
-              detail="Secilen varlik icin backend analysis/asset, timeframe teknikleri ve market-session karar kapisi tek terminalde okunur."
+              title={`${selectedLayer2Symbol} Asset Command`}
+              detail="Secili assetin terminal okumasi, seans kapisi, registry rolleri ve evren kaydi tek yerde."
             >
-              <Layer2AssetDrilldownPanel selectedSymbol={selectedLayer2Symbol} />
+              <div className="layer2-composite-flow">
+                <Layer2CompositeBlock
+                  label="Core terminal"
+                  detail="Teknik skor, timeframe matrisi ve market-session kapisi"
+                  wide
+                >
+                  <Layer2AssetDrilldownPanel selectedSymbol={selectedLayer2Symbol} />
+                </Layer2CompositeBlock>
+                <Layer2CompositeBlock
+                  label="Universe record"
+                  detail="Registry rolleri, bucket kaydi, snapshot fiyati ve DQS"
+                  wide
+                >
+                  <Layer2AssetUniversePanel selectedSymbol={selectedLayer2Symbol} />
+                </Layer2CompositeBlock>
+              </div>
             </Layer2DetailGroup>
 
             <Layer2DetailGroup
               index="02"
-              title={`${selectedLayer2Symbol} Multi-Timeframe Chart`}
-              detail="Secilen asset icin raw OHLCV mumlari, timeframe degistirme, son bar tablosu ve ayni TF teknik snapshoti birlikte okunur."
+              title={`${selectedLayer2Symbol} Structure & Liquidity`}
+              detail="Chart, seviyeler, dalga/zone kaniti ve volume-liquidity motorlari ayni piyasa-yapisi panelinde."
             >
-              <Layer2TechnicalChartPanel selectedSymbol={selectedLayer2Symbol} />
+              <div className="layer2-composite-flow">
+                <Layer2CompositeBlock
+                  label="Multi-timeframe chart"
+                  detail="Raw OHLCV, timeframe secimi, son bar tablosu ve teknik snapshot"
+                  wide
+                >
+                  <Layer2TechnicalChartPanel selectedSymbol={selectedLayer2Symbol} />
+                </Layer2CompositeBlock>
+                <div className="layer2-composite-grid layer2-composite-grid--market">
+
+                  <Layer2CompositeBlock
+                    label="Fibonacci / levels"
+                    detail="1D ve 4H fib seviyeleri, yakin bolgeler ve confluence"
+                  >
+              <Layer2FibonacciLabPanel selectedSymbol={selectedLayer2Symbol} />
+                  </Layer2CompositeBlock>
+
+                  <Layer2CompositeBlock
+                    label="Elliott / zones"
+                    detail="EVIDENCE-only wave senaryosu ve support/resistance zone analizi"
+                  >
+              <Layer2ElliottZoneLabPanel selectedSymbol={selectedLayer2Symbol} />
+                  </Layer2CompositeBlock>
+
+                  <Layer2CompositeBlock
+                    label="Volume / VWAP / liquidity"
+                    detail="Validation, anchored VWAP, sweep, exhaustion, location ve trigger"
+                    wide
+                  >
+              <Layer2SetupConflictLabPanel selectedSymbol={selectedLayer2Symbol} />
+                  </Layer2CompositeBlock>
+                </div>
+              </div>
             </Layer2DetailGroup>
 
             <Layer2DetailGroup
               index="03"
-              title={`${selectedLayer2Symbol} Fibonacci / Level Lab`}
-              detail="Backend technical/insight ciktilariyla 1D ve 4H fib seviyeleri, yakin bolgeler ve confluence skoru okunur."
+              title={`${selectedLayer2Symbol} Evidence Memory`}
+              detail="Replay, outcome, decision trace, agent brief ve bildirim arsivi secili assete filtrelenmis tek hafiza panelinde."
             >
-              <Layer2FibonacciLabPanel selectedSymbol={selectedLayer2Symbol} />
-            </Layer2DetailGroup>
+              <div className="layer2-composite-flow">
+                <Layer2CompositeBlock
+                  label="Trace / outcome"
+                  detail="Replay store, backtest metrikleri ve son karar izleri"
+                  wide
+                >
+                  <Layer2BacktestOutcomePanel selectedSymbol={selectedLayer2Symbol} />
+                </Layer2CompositeBlock>
 
-            <Layer2DetailGroup
-              index="04"
-              title={`${selectedLayer2Symbol} Elliott / Zone Lab`}
-              detail="Backend Elliott Wave senaryosu (EVIDENCE only) ve support/resistance zone analizi; ayrica shadow gozlem kaydindan gelen Elliott + historical-edge ek kaniti. Hicbir karar zincirine bagli degildir."
-            >
-              <Layer2ElliottZoneLabPanel selectedSymbol={selectedLayer2Symbol} />
-            </Layer2DetailGroup>
-
-            <Layer2DetailGroup
-              index="05"
-              title={`${selectedLayer2Symbol} Volume / VWAP / Liquidity Lab`}
-              detail="Volume Validation, VWAP/Anchored VWAP, Liquidity Sweep, Exhaustion, Location ve Trigger motorlarinin EVIDENCE only ciktilari — hicbir karar zincirine bagli degildir."
-            >
-              <Layer2SetupConflictLabPanel selectedSymbol={selectedLayer2Symbol} />
-            </Layer2DetailGroup>
-
-            <Layer2DetailGroup
-              index="06"
-              title={`${selectedLayer2Symbol} Trace / Outcome Lab`}
-              detail="Replay store ve son decision trace kayitlari sadece secili assete filtrelenir."
-            >
-              <Layer2BacktestOutcomePanel selectedSymbol={selectedLayer2Symbol} />
-            </Layer2DetailGroup>
-
-            <Layer2DetailGroup
-              index="07"
-              title={`${selectedLayer2Symbol} Brief Archive`}
-              detail="Agent briefing ve bildirim akisi secili assete temas eden kayitlarla sinirlanir."
-            >
-              <Layer2SystemBriefArchivePanel selectedSymbol={selectedLayer2Symbol} />
-            </Layer2DetailGroup>
-
-            <Layer2DetailGroup
-              index="08"
-              title={`${selectedLayer2Symbol} Registry / Universe Record`}
-              detail="Tum evren listesi degil; secili assetin registry rolleri, snapshot fiyati ve bucket kaydi okunur."
-            >
-              <Layer2AssetUniversePanel selectedSymbol={selectedLayer2Symbol} />
+                <Layer2CompositeBlock
+                  label="Brief archive"
+                  detail="Agent briefing, bildirim akisi ve worker memory"
+                  wide
+                >
+                  <Layer2SystemBriefArchivePanel selectedSymbol={selectedLayer2Symbol} />
+                </Layer2CompositeBlock>
+              </div>
             </Layer2DetailGroup>
 
           </div>
@@ -1339,6 +1386,9 @@ export function CockpitView() {
               </LearnStep>
               <LearnStep step="12" label="Backtest challenger — geçmiş-prova kanıtı (izole, canlıya dokunmaz)">
                 <BacktestChallengerPanel />
+              </LearnStep>
+              <LearnStep step="13" label="Öğrenme Beyni — tüm kanıt tek ekranda (özet)" wide>
+                <LearningBrainPanel />
               </LearnStep>
             </div>
           </Layer2DetailGroup>

@@ -9,59 +9,96 @@ const TOAST_TTL_MS = 6_000;
 
 function bgFor(p: NotificationPriority): string {
   switch (p) {
-    case "critical": return "border-red-600/70 bg-red-950/80";
-    case "high":     return "border-orange-600/70 bg-orange-950/80";
-    case "medium":   return "border-amber-600/60 bg-amber-950/70";
-    case "low":      return "border-cyan-700/60 bg-cyan-950/70";
+    case "critical":
+      return "border-red-600/70 bg-red-950/80";
+    case "high":
+      return "border-orange-600/70 bg-orange-950/80";
+    case "medium":
+      return "border-amber-600/60 bg-amber-950/70";
+    case "low":
+      return "border-cyan-700/60 bg-cyan-950/70";
   }
 }
 
 function iconFor(p: NotificationPriority): string {
   switch (p) {
-    case "critical": return "🚨";
-    case "high":     return "🔔";
-    case "medium":   return "⚠";
-    case "low":      return "ℹ";
+    case "critical":
+      return "!";
+    case "high":
+      return "!";
+    case "medium":
+      return "!";
+    case "low":
+      return "i";
   }
+}
+
+function toastSignature(n: Notification) {
+  return `${n.priority}|${n.title}|${n.body_short}`;
 }
 
 export function NotificationToast() {
   const { data } = useNotifications();
   const seenIds = useRef<Set<string>>(new Set());
+  const seenToastSignatures = useRef<Set<string>>(new Set());
   const initialized = useRef(false);
   const [visible, setVisible] = useState<Notification[]>([]);
+  const [compactMode, setCompactMode] = useState(false);
+
+  useEffect(() => {
+    const sync = () => setCompactMode(window.location.hash === "#layer-2");
+    sync();
+    window.addEventListener("hashchange", sync);
+    window.addEventListener("popstate", sync);
+    return () => {
+      window.removeEventListener("hashchange", sync);
+      window.removeEventListener("popstate", sync);
+    };
+  }, []);
 
   useEffect(() => {
     const items: Notification[] = data?.notifications ?? [];
     if (!initialized.current) {
-      // İlk yüklemede tüm mevcut bildirimleri "görüldü" say (toast spam'i önle).
       items.forEach((n) => seenIds.current.add(n.id));
       initialized.current = true;
       return;
     }
-    // Yeni okunmamış bildirimleri (önceden görülmemiş) toast olarak göster.
+
     const newOnes = items.reduce<Notification[]>((acc, notification) => {
+      const signature = toastSignature(notification);
       if (notification.ack || seenIds.current.has(notification.id)) return acc;
+      if (seenToastSignatures.current.has(signature)) return acc;
       if (acc.some((item) => item.id === notification.id)) return acc;
+      if (acc.some((item) => toastSignature(item) === signature)) return acc;
       acc.push(notification);
       return acc;
     }, []);
-    if (newOnes.length === 0) return;
-    newOnes.forEach((n) => seenIds.current.add(n.id));
-    setVisible((prev) => [...prev, ...newOnes].slice(-3));  // max 3 görünür
 
-    // Her toast TTL_MS sonra düşer
+    if (newOnes.length === 0) return;
+
+    newOnes.forEach((n) => {
+      seenIds.current.add(n.id);
+      seenToastSignatures.current.add(toastSignature(n));
+    });
+    setVisible((prev) => [...prev, ...newOnes].slice(compactMode ? -1 : -3));
+
     newOnes.forEach((n) => {
       setTimeout(() => {
         setVisible((prev) => prev.filter((x) => x.id !== n.id));
       }, TOAST_TTL_MS);
     });
-  }, [data]);
+  }, [compactMode, data]);
 
-  if (visible.length === 0) return null;
+  const rendered = compactMode ? visible.slice(-1) : visible;
+
+  if (rendered.length === 0) return null;
   return (
-    <div className="notification-toast-stack fixed bottom-6 right-6 z-[100] flex flex-col gap-2 pointer-events-none">
-      {visible.map((n) => (
+    <div
+      className={`notification-toast-stack fixed bottom-6 right-6 z-[100] flex flex-col gap-2 pointer-events-none ${
+        compactMode ? "notification-toast-stack--compact" : ""
+      }`}
+    >
+      {rendered.map((n) => (
         <div
           key={n.id}
           className={`notification-toast-card pointer-events-auto rounded-xl border backdrop-blur-md px-4 py-3 shadow-2xl w-[340px] ${bgFor(n.priority)}`}
@@ -79,7 +116,7 @@ export function NotificationToast() {
               className="text-white/40 hover:text-white/80 text-xs"
               aria-label="Kapat"
             >
-              ✕
+              x
             </button>
           </div>
         </div>
