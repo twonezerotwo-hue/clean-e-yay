@@ -29,6 +29,7 @@ from packages.learning import (
     historical_edge,
     missed_opportunity,
     mistake_memory,
+    monitoring_coverage,
     partial_tp_shadow,
     promotion_criteria,
     source_selector,
@@ -425,6 +426,15 @@ def get_source_selection() -> dict:
     kirlenmez). Flag kapalıyken salt-canlı görünüm. Salt-gözlem — karara bağlı
     değil (terfi/yön I4/I5, owner-gated)."""
     return source_selector.viewmodel()
+
+
+@router.get("/learning/monitoring-coverage")
+def get_monitoring_coverage() -> dict:
+    """I5 — İzleme kapsama (read-only, PAPER_SAFE). Canlıya dokunan her davranış
+    flag'inin nasıl izlendiği (watchdog / kendi-rollback / girdi-hijyeni / tuning /
+    shadow-muaf) + WATCHDOG'ların REGISTRY'de kayıtlı olduğu. 'İzlemesiz canlı-
+    dokunuş yok' değişmezi test_monitoring_coverage ile guard'lı."""
+    return monitoring_coverage.coverage_summary()
 
 
 @router.get("/learning/backtest-challenger")
