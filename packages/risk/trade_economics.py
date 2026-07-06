@@ -398,6 +398,48 @@ def tf_trail_mult(timeframe: str) -> float:
         return 1.0
 
 
+# TF-farkında trailing profili (forensics kanıtı 2026-07-06: düz trailing higher-TF'de
+# çok sıkı → kârın %66-84'ünü geri veriyor, hareketin yalnız %16-34'ünü yakalıyor).
+# (distance_mult, activate_mult): higher TF → geniş mesafe + geç devreye = salınımı bin.
+_TRAIL_TF_DEFAULT = {
+    "15m": (1.0, 1.0),
+    "1h": (1.4, 1.5),
+    "4h": (2.0, 2.5),
+    "1d": (2.2, 2.5),
+    "1w": (2.5, 3.0),
+}
+
+
+def trailing_tf_aware_enabled() -> bool:
+    """`trailing_tf_aware.enabled` owner-flag (config, default KAPALI = düz trailing
+    birebir). Açıkken trailing mesafesi VE devreye-girme eşiği TF'e göre gevşetilir
+    (forensics: higher-TF erken çıkış sızıntısı). Geri-alma = flag false."""
+    try:
+        return bool(load_thresholds().get("trailing_tf_aware", {}).get("enabled", False))
+    except (OSError, KeyError, ValueError, TypeError):
+        return False
+
+
+def tf_trailing_mults(timeframe: str) -> tuple[float, float]:
+    """(distance_mult, activate_mult) — TF-farkında trailing çarpanları. Flag OFF →
+    (1.0, 1.0) (bayt-aynı). Config `trailing_tf_aware.tf_profile[tf]` varsa okunur,
+    yoksa `_TRAIL_TF_DEFAULT`. Bilinmeyen TF → (1.0, 1.0). Guardrail [1.0, 4.0]
+    (yalnız gevşetir — trailing'i asla sertleştirmez, sızıntıyı artırmaz)."""
+    if not trailing_tf_aware_enabled():
+        return (1.0, 1.0)
+    try:
+        prof = (load_thresholds().get("trailing_tf_aware", {}) or {}).get("tf_profile") or {}
+        row = prof.get(timeframe)
+        if row is not None:
+            d = float(row.get("distance_mult", 1.0))
+            a = float(row.get("activate_mult", 1.0))
+        else:
+            d, a = _TRAIL_TF_DEFAULT.get(timeframe, (1.0, 1.0))
+        return (max(1.0, min(4.0, d)), max(1.0, min(4.0, a)))
+    except (OSError, KeyError, ValueError, TypeError):
+        return (1.0, 1.0)
+
+
 def compute_tf_targets(
     symbol: str,
     side: str,

@@ -23,6 +23,7 @@ from packages.risk.trade_economics import (
     compute_tf_targets,
     tf_targets_enabled,
     tf_trail_mult,
+    tf_trailing_mults,
 )
 
 # Zorla kapanış nedenleri → terminal lifecycle_status=FORCE_CLOSED + ayrı audit
@@ -126,6 +127,12 @@ def open_position(
         if stop_hours > 0
         else None
     )
+    # TF-farkında trailing (forensics: düz trailing higher-TF'de erken çıkıp kârı
+    # geri veriyor). Flag OFF → mult (1.0,1.0), düz değer birebir (bayt-aynı). Eski
+    # (düz) değerler shadow olarak OPENED audit'ine yazılır (paraşüt + kıyas).
+    _trail_dist_mult, _trail_act_mult = tf_trailing_mults(timeframe)
+    _trail_dist_flat = tier.trail_distance * tf_trail_mult(timeframe)
+    _trail_act_flat = conviction.trail_activate()
     pos = Position(
         id=_new_id(f"{symbol}|{timeframe}", opened_at),
         symbol=symbol,
@@ -161,8 +168,8 @@ def open_position(
         # CP4 slice 3 — öğrenilen per-TF trailing gevşemesi. Flag OFF → tf_trail_mult
         # 1.0 döner, trail_distance birebir tier.trail_distance (bayt-aynı). MANUEL
         # emirde de uygulanır (timeframe'e bağlı, tier'dan bağımsız çarpan).
-        trail_distance_pct=tier.trail_distance * tf_trail_mult(timeframe),
-        trail_activate_pct=conviction.trail_activate(),
+        trail_distance_pct=_trail_dist_flat * _trail_dist_mult,
+        trail_activate_pct=_trail_act_flat * _trail_act_mult,
         trail_peak=entry_price,
         trail_active=False,
         # F1-3 — consensus modül katkı vektörü (manuel/legacy açılışta None).
@@ -182,6 +189,12 @@ def open_position(
         fingerprint=fingerprint,
         snapshot_id=snapshot_id,
         scale_in=bool(scale_in),
+        # TF-farkında trailing shadow (eski düz değer paraşüt + kıyas): canlı
+        # kullanılan vs eski-düz. Flag OFF iken ikisi eşit (bayt-aynı gözlem).
+        trail_distance_used=round(pos.trail_distance_pct, 5),
+        trail_distance_flat=round(_trail_dist_flat, 5),
+        trail_activate_used=round(pos.trail_activate_pct, 5),
+        trail_activate_flat=round(_trail_act_flat, 5),
     )
     return pos
 

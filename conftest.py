@@ -62,12 +62,20 @@ def _package1_flags_off_by_default(monkeypatch: pytest.MonkeyPatch) -> None:
     # S2-1 — MTM gate flag'i kayıt fazında zaten false; ileride aktive edilince
     # suite baseline'da kalsın diye şimdiden pinlenir (testler explicit açar).
     pinned.setdefault("risk_gates", {})["mtm_equity_enabled"] = False
+    # E-9 (2026-07-06) — trailing_tf_aware AÇILDI (çıkış otopsisi); suite düz-trailing
+    # baseline'ında kalır, davranış testleri (test_trailing_tf_aware) override ile açar.
+    pinned.setdefault("trailing_tf_aware", {})["enabled"] = False
     monkeypatch.setattr(loader, "_load_thresholds_base", lambda: pinned)
     # Denetim 2026-07-03 — çıkış-makinesi env flag'leri testlerde default OFF
     # (dev makinesinde .env yüklenmiş olabilir; testler baseline'ı varsayar).
     monkeypatch.delenv("TF_TARGET_AUTO_ONLY", raising=False)
     monkeypatch.delenv("EXIT_FORENSICS_NUDGE", raising=False)
     monkeypatch.delenv("TF_TARGET_EDGE_GATE", raising=False)
+    # E-9 kök-neden fix'i: CP4 slice-3 flag'i bu listeye hiç girmemişti; geniş koşuda
+    # apps.api.main import'u .env'i yükleyince (TF_TARGET_TRAIL_AUTOTUNE=1) canlı
+    # tf_targets store çarpanı (4h trail_mult≠1.0) suite'e sızıp trailing sabitlerini
+    # bozuyordu (sıra-bağımlı flake). test_trail_autotune kendi setenv'iyle açar.
+    monkeypatch.delenv("TF_TARGET_TRAIL_AUTOTUNE", raising=False)
     # Aynı sızıntı sınıfı, canlıda görüldü: apps.api.main import'u .env'i
     # os.environ'a yükler; sabah aktivasyonu TF_CALIBRATION_AUTO_ONLY=1 tam
     # koşuda tf_calibration testlerine sızıyordu (fingerprint'siz fikstürler

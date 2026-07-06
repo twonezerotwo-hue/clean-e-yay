@@ -463,6 +463,23 @@ strategy_shaping:
     PULLBACK:           { stop: 0.9,  tp_rr: 1.0,  trail: 1.0,  size: 1.0 }   # trende dönüş, kontrollü
     SCALP:              { stop: 0.75, tp_rr: 0.8,  trail: 0.75, size: 0.7 }   # hızlı gir-çık, çok sıkı
 
+# TF-farkında trailing (çıkış otopsisi 2026-07-06: düz trailing higher-TF'de çok sıkı —
+# kârın %66-84'ü geri veriliyor, hareketin yalnız %16-34'ü yakalanıyor; en kötüsü 4h).
+# Açıkken trailing MESAFESİ (distance_mult) ve DEVREYE-GİRME eşiği (activate_mult)
+# TF'e göre gevşetilir: higher TF → salınımı bin, erken kilitlenme. Eski (düz) değerler
+# OPENED audit'inde shadow olarak yan yana yazılır (paraşüt + kıyas). Guardrail
+# [1.0, 4.0]: yalnız gevşetir, trailing'i asla düz halden sıkılaştırmaz. Bilinmeyen
+# TF → nötr (1.0). Geri-alma = enabled: false (kod değişikliği gerekmez).
+trailing_tf_aware:
+  enabled: false
+  tf_profile:
+    #      mesafe        devreye-girme
+    15m: { distance_mult: 1.0, activate_mult: 1.0 }   # kısa TF: düz trailing zaten uygun
+    1h:  { distance_mult: 1.4, activate_mult: 1.5 }
+    4h:  { distance_mult: 2.0, activate_mult: 2.5 }   # en kötü sızıntı → en çok gevşeyen
+    1d:  { distance_mult: 2.2, activate_mult: 2.5 }
+    1w:  { distance_mult: 2.5, activate_mult: 3.0 }
+
 # Açık kitap yapısal denetimi (packages/learning/book_audit.py). Canlı açık
 # pozisyon kitabını tarar; KAPANIŞ BEKLEMEDEN yapısal mantık hatalarını (aynı
 # sembolde zıt yön, tek varlıkta yoğunlaşma, aynı sinyalin TF'lere kopyalanması,
