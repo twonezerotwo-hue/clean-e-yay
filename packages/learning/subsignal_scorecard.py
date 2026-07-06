@@ -16,6 +16,17 @@ KURAL 1 — canlı skora/karara SIFIR dokunuş:
   paper'a ASLA dokunmaz.
 - Flag `SUBSIGNAL_SCORECARD_ENABLED` (env, DEFAULT OFF) yalnız worker-adımı
   içindir; `analyze()` her zaman elle çağrılabilir (salt-ölçüm).
+
+v2 — CETVEL SERTLEŞTİRME (ölçüm bilimi düzeltmeleri; sinyaller değişmedi):
+1. BİNDİRMESİZ örnekleme: adım = ufuk (H). v1 her barda örnek alıyordu →
+   ardışık ileri-getiriler %85+ aynı hareketi paylaşıyor, n şişkin çıkıyordu.
+2. TF-ADİL kıyas: `edge_ratio` = edge / o TF'in tipik |hareket|'i. Mutlak
+   eşik (±0.15 puan) 1d'de kolay, 15m'de imkânsızdı (ölçek yanılsaması).
+3. TABAN ÇİZGİSİ: `baseline_edge_pct` = "hep yukarı de" getirisi. Boğa
+   döneminde her trend sinyali bedava pozitif görünür; EDGE damgası artık
+   tabanı GEÇMEYİ şart koşar (rejim karışması ayrışır).
+4. KARARLILIK: pencere kronolojik ikiye bölünür; iki yarıda aynı işaretli
+   edge vermeyen sinyal EDGE damgası alamaz (tek-döneme ezber elenir).
 """
 from __future__ import annotations
 
@@ -74,14 +85,26 @@ def sub_leans(closes: list[float], bars: list) -> dict[str, float]:
     return out
 
 
-def _verdict(edge_pct: float, n: int) -> str:
+# EDGE için sinyal, TF'in tipik hareketinin en az %10'unu yakalamalı (TF-adil).
+_EDGE_RATIO_MIN = 0.10
+
+
+def _verdict(
+    edge_ratio: float, n: int, *, beats_baseline: bool, stable: bool
+) -> str:
+    """v2 damga: oran (TF-adil) + taban çizgisini geçme + iki-yarı kararlılık.
+    INVERSE yalnız orana bakar (uyarıdır, terfi değil — sertleştirilmez)."""
     if n < 20:
         return "INSUFFICIENT"
-    if edge_pct >= 0.15:
+    if edge_ratio >= _EDGE_RATIO_MIN and beats_baseline and stable:
         return "EDGE"
-    if edge_pct <= -0.15:
+    if edge_ratio <= -_EDGE_RATIO_MIN:
         return "INVERSE"
     return "FLAT"
+
+
+def _mean(arr: list[float]) -> float:
+    return sum(arr) / len(arr) if arr else 0.0
 
 
 def analyze(symbols: list[str] | None = None, timeframes=_TIMEFRAMES) -> dict:
@@ -97,6 +120,9 @@ def analyze(symbols: list[str] | None = None, timeframes=_TIMEFRAMES) -> dict:
         H = _HORIZON.get(tf, 6)
         acc: dict[str, list[float]] = {}   # sig -> aligned forward returns (%)
         hits: dict[str, list[int]] = {}
+        # v2: kronolojik iki-yarı edge'leri (kararlılık) — sig -> [yarıA, yarıB]
+        halves: dict[str, tuple[list[float], list[float]]] = {}
+        all_fwd: list[float] = []          # taban çizgisi + tipik hareket için
         n_points = 0
         used_syms = 0
         for sym in syms:
@@ -105,7 +131,9 @@ def analyze(symbols: list[str] | None = None, timeframes=_TIMEFRAMES) -> dict:
                 continue
             used_syms += 1
             closes_all = [b.close for b in bars]
-            for i in range(_MIN_WARMUP, len(bars) - H):
+            mid = (_MIN_WARMUP + len(bars) - H) // 2  # sembolün kronolojik ortası
+            # v2: adım = H → bindirmesiz örnekler (gerçek bağımsız n)
+            for i in range(_MIN_WARMUP, len(bars) - H, H):
                 base = closes_all[i]
                 if not base:
                     continue
@@ -135,38 +163,62 @@ def analyze(symbols: list[str] | None = None, timeframes=_TIMEFRAMES) -> dict:
                     continue
                 n_points += 1
                 fwd = (closes_all[i + H] - base) / base * 100.0  # yüzde ileri getiri
+                all_fwd.append(fwd)
                 for sig, lean in leans.items():
                     if lean == 0:
                         continue
                     aligned = fwd if lean > 0 else -fwd
                     acc.setdefault(sig, []).append(aligned)
                     hits.setdefault(sig, []).append(1 if aligned > 0 else 0)
+                    ha, hb = halves.setdefault(sig, ([], []))
+                    (ha if i < mid else hb).append(aligned)
+        # v2 TF-seviyesi referanslar: tipik |hareket| (adil kıyas paydası) ve
+        # "hep yukarı de" taban getirisi (rejim karışması kontrolü).
+        typical_move = _mean([abs(f) for f in all_fwd])
+        baseline_edge = _mean(all_fwd)
         signals = {}
         for sig, arr in acc.items():
             n = len(arr)
-            edge = sum(arr) / n if n else 0.0
+            edge = _mean(arr)
             hr = sum(hits[sig]) / n if n else 0.0
+            ratio = edge / typical_move if typical_move > 0 else 0.0
+            ha, hb = halves.get(sig, ([], []))
+            edge_a, edge_b = _mean(ha), _mean(hb)
+            # Kararlılık: iki yarıda da örnek var ve edge aynı işaretli.
+            stable = bool(ha and hb and edge_a * edge_b > 0)
             signals[sig] = {
                 "n": n,
                 "edge_pct": round(edge, 4),
                 "hit_rate": round(hr, 4),
-                "verdict": _verdict(edge, n),
+                "edge_ratio": round(ratio, 4),
+                "edge_first_half": round(edge_a, 4),
+                "edge_second_half": round(edge_b, 4),
+                "stable": stable,
+                "beats_baseline": bool(edge > abs(baseline_edge)),
+                "verdict": _verdict(
+                    ratio, n,
+                    beats_baseline=edge > abs(baseline_edge),
+                    stable=stable,
+                ),
             }
         per_tf[tf] = {
             "horizon_bars": H,
             "symbols_used": used_syms,
             "points": n_points,
+            "typical_move_pct": round(typical_move, 4),
+            "baseline_edge_pct": round(baseline_edge, 4),
             "signals": signals,
         }
     return {
         "generated_at": datetime.now(UTC).isoformat(),
-        "engine": "subsignal_scorecard_v1",
+        "engine": "subsignal_scorecard_v2",
         "universe_n": len(syms),
         "per_timeframe": per_tf,
         "note": (
-            "İZOLE salt-gözlem: momentum alt-sinyalleri (trend/rsi/macd) + "
-            "market_structure (HH/HL+BOS/CHoCH) TF başına ileri-getiri ayrışımı. "
-            "edge_pct>0=öngörü, <0=ters. Canlı skora/karara dokunmaz."
+            "İZOLE salt-gözlem (v2 sert cetvel): bindirmesiz örnekleme + "
+            "TF-adil edge_ratio + taban-çizgisi kontrolü + iki-yarı kararlılık. "
+            "EDGE damgası = oran≥0.10 VE tabanı geçer VE iki yarıda tutarlı. "
+            "Canlı skora/karara dokunmaz."
         ),
     }
 

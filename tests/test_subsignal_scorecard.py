@@ -85,9 +85,52 @@ def test_analyze_structure_no_crash(monkeypatch):
     """analyze() bar yoksa bile saglam yapida doner (izole, patlamaz)."""
     monkeypatch.setattr(ss, "get_bars", lambda sym, tf: [])
     rep = ss.analyze(symbols=["BTCUSD"], timeframes=("1d",))
-    assert rep["engine"] == "subsignal_scorecard_v1"
+    assert rep["engine"] == "subsignal_scorecard_v2"
     assert "1d" in rep["per_timeframe"]
     assert rep["per_timeframe"]["1d"]["points"] == 0
+
+
+def test_v2_sampling_non_overlapping(monkeypatch):
+    """v2 cetvel duzeltmesi 1: adim = ufuk -> ardisik ileri-getiriler ayni
+    hareketi PAYLASMAZ (sisik n biter). Nokta sayisi stride'li beklentiyle esit."""
+    n_bars = 400
+    closes = [100 + i * 0.1 for i in range(n_bars)]
+    bars = [_FakeBar(c) for c in closes]
+    monkeypatch.setattr(ss, "get_bars", lambda sym, tf: bars)
+    rep = ss.analyze(symbols=["X"], timeframes=("1d",))
+    h = ss._HORIZON["1d"]
+    expected = len(range(ss._MIN_WARMUP, n_bars - h, h))
+    assert rep["per_timeframe"]["1d"]["points"] == expected
+    # v1 (adim=1) olsaydi ~H kati nokta olurdu — geriye kacis yok.
+    assert expected < (n_bars - h - ss._MIN_WARMUP)
+
+
+def test_v2_baseline_and_typical_move_fields(monkeypatch):
+    """v2 duzeltme 2+3: TF seviyesinde tipik |hareket| ve hep-yukari taban
+    cizgisi raporlanir; sinyal seviyesinde oran/kararlilik/taban alanlari var."""
+    closes = [100 + i * 0.1 for i in range(400)]
+    bars = [_FakeBar(c) for c in closes]
+    monkeypatch.setattr(ss, "get_bars", lambda sym, tf: bars)
+    rep = ss.analyze(symbols=["X"], timeframes=("1d",))
+    tf = rep["per_timeframe"]["1d"]
+    assert tf["typical_move_pct"] > 0
+    # duz yukari seri -> taban cizgisi pozitif (boga donemi kontrolu somut)
+    assert tf["baseline_edge_pct"] > 0
+    for row in tf["signals"].values():
+        assert {"edge_ratio", "stable", "beats_baseline",
+                "edge_first_half", "edge_second_half"} <= set(row)
+
+
+def test_v2_verdict_rules():
+    """v2 damga: EDGE = oran esigi + tabani gecme + iki-yari kararlilik.
+    Her kosul tek basina dusunce damga duser (FLAT); ters oran = INVERSE."""
+    v = ss._verdict
+    assert v(0.5, 10, beats_baseline=True, stable=True) == "INSUFFICIENT"
+    assert v(0.5, 50, beats_baseline=True, stable=True) == "EDGE"
+    assert v(0.5, 50, beats_baseline=False, stable=True) == "FLAT"   # boga hediyesi
+    assert v(0.5, 50, beats_baseline=True, stable=False) == "FLAT"   # tek-yari ezberi
+    assert v(0.05, 50, beats_baseline=True, stable=True) == "FLAT"   # oran zayif
+    assert v(-0.5, 50, beats_baseline=False, stable=False) == "INVERSE"
 
 
 def test_run_disabled_by_default(monkeypatch):
