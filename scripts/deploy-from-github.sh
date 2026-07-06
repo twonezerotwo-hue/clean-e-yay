@@ -97,6 +97,11 @@ ensure_env TF_TRUST_PER_BUCKET 1
 # SALT-GOZLEM: canli skora/karara/paper'a ASLA yazmaz; bar arsivi buyudukce
 # pencere kendiliginden uzar. Rollback = flag kapat. Lokal .env'de de =1.
 ensure_env SUBSIGNAL_SCORECARD_ENABLED 1
+# D6 tf_scoring_v2 golge (2026-07-06, owner "10/10" hedefi): learning worker her
+# cycle v2 katmanli yon skorunu (karne kanit-cap agirligiyla) canli barlarda
+# uretir → izole artifact. SALT-GOZLEM: canli skora/karara/paper'a ASLA yazmaz
+# (D7 golge yarisin girdisi). Rollback = flag kapat. Lokal .env'de de =1.
+ensure_env TF_SCORING_V2_SHADOW 1
 
 echo "deploy: restart services"
 sudo systemctl restart eyay-supervisor.service
