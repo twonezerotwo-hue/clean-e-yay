@@ -124,6 +124,41 @@ def test_collect_leans_empty_bars():
     assert v2.collect_leans("1d", []) == {}
 
 
+# ── R2: rejim-anahtarlı birincil kural ───────────────────────────────────────
+
+def test_regime_directed_up_only_1d_speaks():
+    """UP havada mikrofon 1d'de — 4h skoru ne olursa olsun okunmaz."""
+    assert v2.regime_directed({"1d": 0.8, "4h": -0.9}, "UP") == 0.8
+
+
+def test_regime_directed_down_only_4h_speaks():
+    """DOWN havada mikrofon 4h'de — 1d okunmaz."""
+    assert v2.regime_directed({"1d": 0.8, "4h": -0.6}, "DOWN") == -0.6
+
+
+def test_regime_directed_no_proxy_when_speaker_silent():
+    """Konuşma hakkı olan TF kanıtsızsa diğeri VEKÂLET ALAMAZ (backtest böyle
+    ölçüldü; kanıtsız vekâlet = ölçülmemiş tasarım)."""
+    assert v2.regime_directed({"4h": 0.9}, "UP") is None      # 1d yok → None
+    assert v2.regime_directed({"1d": 0.9}, "DOWN") is None    # 4h yok → None
+
+
+def test_regime_directed_unknown_regime_is_none():
+    assert v2.regime_directed({"1d": 0.8, "4h": 0.5}, None) is None
+    assert v2.regime_directed({"1d": 0.8}, "SIDEWAYS") is None
+
+
+def test_signal_weights_edge_only_mode_excludes_candidates():
+    """R2: include_candidates=False → adaylar (FLAT+kararlı+taban) dışarıda,
+    yalnız EDGE konuşur (adaylar kenarı seyreltiyordu — walk-forward kanıtı)."""
+    sc = _scorecard({"1d": {
+        "trend": _row("EDGE", 0.30),
+        "rsi": _row("FLAT", 0.50),  # aday
+    }})
+    assert v2.signal_weights(sc, "1d", include_candidates=False) == {"trend": 0.30}
+    assert "rsi" in v2.signal_weights(sc, "1d")  # default: aday hâlâ girer (legacy)
+
+
 # ── Gölge üretici (flag-gated, izole) ────────────────────────────────────────
 
 def test_shadow_disabled_by_default(monkeypatch):
@@ -141,13 +176,14 @@ def test_shadow_analyze_no_evidence_is_honest(monkeypatch, tmp_path):
         "packages.data.providers.ohlcv.get_bars", lambda s, tf: _bars(260)
     )
     rep = shadow.analyze(symbols=["BTCUSD"])
-    assert rep["engine"] == "tf_scoring_v2_shadow"
+    assert rep["engine"].startswith("tf_scoring_v2_shadow")  # sürüm-dayanıklı
     assert rep["per_symbol"]["BTCUSD"]["status"] == "no_evidence"
     assert rep["per_symbol"]["BTCUSD"]["direction"] is None
 
 
 def test_shadow_analyze_with_evidence_produces_direction(monkeypatch):
-    """Kanıtlı karne (1d trend EDGE) + yukarı seri → v2 pozitif yön üretir."""
+    """Kanıtlı karne (1d trend EDGE) + yukarı seri → hava UP → 1d konuşur →
+    pozitif yön. Çift-varyant: kontrol (legacy harman) da kayıtta."""
     monkeypatch.setenv(shadow.FLAG, "1")
     monkeypatch.setattr(shadow, "_load_scorecard", lambda: _scorecard({
         "1d": {"trend": _row("EDGE", 0.30)},
@@ -159,6 +195,34 @@ def test_shadow_analyze_with_evidence_produces_direction(monkeypatch):
     rep = shadow.analyze(symbols=["BTCUSD"])
     row = rep["per_symbol"]["BTCUSD"]
     assert row["status"] == "OK"
+    assert row["regime"]["regime"] == "UP"  # yukarı seri → hava UP
     assert row["direction"] is not None and row["bias"] == "BULLISH"
-    assert "1d" in row["tf_scores"]  # DIRECTION TF skoru var
+    # UP → mikrofon 1d'de: birincil yön 1d skoruna eşit (4h karışmaz)
+    assert row["direction"] == row["tf_scores"]["1d"]
+    assert row["direction_blend_legacy"] is not None  # kontrol grubu kayıtta
     assert "trend" in row["drivers"]["1d"]  # şeffaflık: hangi sinyal sürdü
+
+
+def test_shadow_down_regime_speaker_is_4h(monkeypatch):
+    """Düşen seri → hava DOWN → mikrofon 4h'de; 1d kanıtı olsa da okunmaz."""
+    monkeypatch.setenv(shadow.FLAG, "1")
+    monkeypatch.setattr(shadow, "_load_scorecard", lambda: _scorecard({
+        "1d": {"trend": _row("EDGE", 0.30)},
+        "4h": {"structure": _row("EDGE", 0.25)},
+    }))
+    # Düşen dalgalı seri (zaman ileri, fiyat aşağı) → hava DOWN + yapı pivotları
+    base = datetime(2026, 1, 1, tzinfo=UTC)
+    down_bars = []
+    for i in range(260):
+        px = 220 - i * 0.4 + 2.0 * math.sin(i / 4.0)
+        down_bars.append(OHLCVBar(symbol="X", timeframe="1d", ts=base + timedelta(days=i),
+                                  open=px, high=px * 1.01, low=px * 0.99, close=px,
+                                  volume=1.0))
+    monkeypatch.setattr(
+        "packages.data.providers.ohlcv.get_bars", lambda s, tf: down_bars
+    )
+    rep = shadow.analyze(symbols=["BTCUSD"])
+    row = rep["per_symbol"]["BTCUSD"]
+    assert row["regime"]["regime"] == "DOWN"
+    if row["status"] == "OK":  # 4h yapı okuma üretebildiyse
+        assert row["direction"] == row["tf_scores"]["4h"]

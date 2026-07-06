@@ -82,12 +82,19 @@ def collect_leans(timeframe: str, bars: list) -> dict[str, float]:
     return leans
 
 
-def signal_weights(scorecard: dict, timeframe: str) -> dict[str, float]:
+def signal_weights(
+    scorecard: dict, timeframe: str, *, include_candidates: bool = True
+) -> dict[str, float]:
     """Bir TF için {sinyal: ağırlık} — KANIT-CAP kuralıyla karneden türetilir.
 
     EDGE → edge_ratio (kanıtlı, tam); aday (FLAT + kararlı + tabanı geçen +
     pozitif oran) → min(edge_ratio, CANDIDATE_CAP); INVERSE/INSUFFICIENT/negatif
-    → 0. Karne yoksa/eksikse boş dict (dürüst: kanıt yoksa ağırlık yok)."""
+    → 0. Karne yoksa/eksikse boş dict (dürüst: kanıt yoksa ağırlık yok).
+
+    R2 — `include_candidates=False`: yalnız EDGE-damgalılar. Walk-forward kanıtı
+    (2026-07-06): adayları yön hesabına katmak kenarı SEYRELTİYOR (harman +0.27
+    < yalnız-kanıtlı +0.32). Yeni kural: YÖN yalnız kanıtlılardan; adaylar
+    gözlemde kalır (karne onları ölçmeye devam eder, EDGE kazanan yükselir)."""
     per_tf = (scorecard.get("per_timeframe") or {}).get(timeframe) or {}
     signals = per_tf.get("signals") or {}
     out: dict[str, float] = {}
@@ -97,7 +104,8 @@ def signal_weights(scorecard: dict, timeframe: str) -> dict[str, float]:
         if verdict == "EDGE":
             out[name] = ratio                      # kanıtlı → tam
         elif (
-            verdict == "FLAT"
+            include_candidates
+            and verdict == "FLAT"
             and ratio > 0.0
             and row.get("stable")
             and row.get("beats_baseline")
@@ -133,10 +141,12 @@ def conviction(weights: dict[str, float]) -> float:
 
 
 def blended_direction(scores: dict[str, float], convictions: dict[str, float]) -> float | None:
-    """DIRECTION TF skorlarını KANIT gücüyle harmanla (sabit 0.55/0.45 değil).
+    """[LEGACY — yalnız A/B kıyası] DIRECTION TF skorlarının kanıt-ağırlıklı harmanı.
 
-    blend = Σ(score_tf × conviction_tf) / Σ(conviction_tf). Hiçbir DIRECTION TF
-    kanıt üretmediyse None (dürüst: yön yok). Bir TF kanıtlıysa o baskın çıkar."""
+    Walk-forward kanıtı (2026-07-06): yumuşak harman kenarı SEYRELTİYOR (+0.27,
+    taban altı); birincil kural artık `regime_directed`. Bu fonksiyon gölge
+    artifact'ında `direction_blend_legacy` olarak kaydedilir → D7 yarışında iki
+    tasarım gerçek veriyle kıyaslanır (ölü kod değil, kontrol grubu)."""
     num = 0.0
     den = 0.0
     for tf in DIRECTION_TFS:
@@ -151,6 +161,26 @@ def blended_direction(scores: dict[str, float], convictions: dict[str, float]) -
     return max(-1.0, min(1.0, num / den))
 
 
+# Rejim → konuşma hakkı olan DIRECTION TF'i (backtest comp_A tasarımı).
+_REGIME_SPEAKER = {"UP": "1d", "DOWN": "4h"}
+
+
+def regime_directed(tf_scores: dict[str, float], regime: str | None) -> float | None:
+    """R2 BİRİNCİL KURAL — rejim-anahtarlı yön: mikrofonu tek doğru TF'e ver.
+
+    Backtest kanıtı (494 pencere): UP→1d trend (+0.65%), DOWN→4h yapı (DOWN'da
+    tek pozitif); anahtarlı kompozit +0.53%/%59 isabet, iki-yarı kararlı, 6/9
+    sembol pozitif — yumuşak harman (+0.27) ve al-tut (+0.29) net geçildi.
+
+    Kural: UP → yalnız 1d konuşur; DOWN → yalnız 4h konuşur. Konuşma hakkı olan
+    TF kanıt üretememişse None — DİĞER TF VEKÂLET ALAMAZ (backtest böyle ölçüldü;
+    vekâlet ayrı bir tasarım olurdu, kanıtsız eklenmez). Rejim bilinmiyorsa None."""
+    speaker = _REGIME_SPEAKER.get(regime or "")
+    if speaker is None:
+        return None
+    return tf_scores.get(speaker)
+
+
 __all__ = [
     "CANDIDATE_CAP",
     "DIRECTION_TFS",
@@ -159,5 +189,6 @@ __all__ = [
     "collect_leans",
     "conviction",
     "direction_score",
+    "regime_directed",
     "signal_weights",
 ]
