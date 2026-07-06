@@ -145,8 +145,8 @@ def test_run_if_due_skips_fresh_artifact(tmp_path, monkeypatch):
     import json
     from datetime import UTC, datetime
     art = tmp_path / "sc.json"
-    art.write_text(json.dumps({"generated_at": datetime.now(UTC).isoformat()}),
-                   encoding="utf-8")
+    art.write_text(json.dumps({"generated_at": datetime.now(UTC).isoformat(),
+                               "engine": ss._ENGINE}), encoding="utf-8")
     monkeypatch.setenv(ss.FLAG, "1")
     monkeypatch.setattr(ss, "_ART", str(art))
     monkeypatch.setattr(ss, "analyze", lambda *a, **k: (_ for _ in ()).throw(
@@ -156,11 +156,13 @@ def test_run_if_due_skips_fresh_artifact(tmp_path, monkeypatch):
 
 
 def test_endpoint_no_artifact_returns_no_data(tmp_path, monkeypatch):
-    """GET /learning/subsignal-scorecard: artifact yoksa NO_DATA + enabled=False
-    (flag conftest'te silinir) — sahte veri uydurulmaz."""
+    """GET /learning/subsignal-scorecard: artifact yoksa NO_DATA + enabled=False.
+    Dikkat: apps.api.main import'u .env'i os.environ'a yükler (bilinen sızıntı
+    sınıfı) — flag import SONRASI silinir ki test dev-.env'inden bağımsız olsun."""
     from fastapi.testclient import TestClient
 
     from apps.api.main import app
+    monkeypatch.delenv(ss.FLAG, raising=False)
     monkeypatch.setattr(ss, "_ART", str(tmp_path / "yok.json"))
     r = TestClient(app).get("/api/v1/learning/subsignal-scorecard")
     assert r.status_code == 200
@@ -185,6 +187,24 @@ def test_endpoint_serves_artifact(tmp_path, monkeypatch):
     assert body["status"] == "OK"
     assert body["engine"] == "subsignal_scorecard_v2"
     assert "4h" in body["per_timeframe"]
+
+
+def test_run_if_due_regenerates_old_engine_artifact(tmp_path, monkeypatch):
+    """Cetvel sürümü değişince (v1 artifact) TAZE olsa bile yeniden ölçülür —
+    canlıda yakalanan hata: dünkü v1 kaydı v2 ölçümünü bir hafta bloke ediyordu."""
+    import json
+    from datetime import UTC, datetime
+    art = tmp_path / "sc.json"
+    art.write_text(json.dumps({"generated_at": datetime.now(UTC).isoformat(),
+                               "engine": "subsignal_scorecard_v1"}), encoding="utf-8")
+    monkeypatch.setenv(ss.FLAG, "1")
+    monkeypatch.setattr(ss, "_ART", str(art))
+    monkeypatch.setattr(ss, "analyze", lambda *a, **k: {
+        "generated_at": datetime.now(UTC).isoformat(), "engine": ss._ENGINE,
+        "per_timeframe": {"4h": {}}})
+    out = ss.run_if_due()
+    assert out["status"] == "OK"
+    assert json.loads(art.read_text(encoding="utf-8"))["engine"] == ss._ENGINE
 
 
 def test_run_if_due_remeasures_stale_artifact(tmp_path, monkeypatch):

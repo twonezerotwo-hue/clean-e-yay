@@ -58,6 +58,9 @@ _ENV_TRUE = frozenset({"1", "true", "yes", "on"})
 # her cycle koşmak bütçeyi yer; arşiv de günde bir bardan hızlı büyümez).
 _INTERVAL_ENV = "SUBSIGNAL_SCORECARD_INTERVAL_SEC"
 _DEFAULT_INTERVAL_SEC = 7 * 24 * 3600
+# Cetvel sürümü: artifact bu sürümle üretilmediyse "taze" sayılmaz — cetvel
+# değişince (v1→v2 gibi) eski ölçüm interval'i beklemeden yeniden üretilir.
+_ENGINE = "subsignal_scorecard_v2"
 _TIMEFRAMES = ("15m", "1h", "4h", "1d")
 # TF başına ileri-getiri ufku (kaç bar): kısa TF daha çok bar, uzun TF az.
 _HORIZON = {"15m": 8, "1h": 8, "4h": 6, "1d": 5}
@@ -218,7 +221,7 @@ def analyze(symbols: list[str] | None = None, timeframes=_TIMEFRAMES) -> dict:
         }
     return {
         "generated_at": datetime.now(UTC).isoformat(),
-        "engine": "subsignal_scorecard_v2",
+        "engine": _ENGINE,
         "universe_n": len(syms),
         "per_timeframe": per_tf,
         "note": (
@@ -262,7 +265,9 @@ def run_if_due() -> dict:
             data = json.loads(path.read_text(encoding="utf-8"))
             gen = datetime.fromisoformat(str(data.get("generated_at")))
             age = (datetime.now(UTC) - gen).total_seconds()
-            if 0 <= age < _interval_sec():
+            # Eski-cetvel artifact'ı (engine farklı) taze sayılmaz: v1 kaydı
+            # v2 ölçümünü bir hafta bloke etmesin (canlıda yakalanan hata).
+            if data.get("engine") == _ENGINE and 0 <= age < _interval_sec():
                 return {"status": "SKIP_FRESH", "age_sec": int(age)}
     except (OSError, json.JSONDecodeError, ValueError, TypeError):
         pass  # okunamayan durum → yeniden ölçüm en dürüst yol

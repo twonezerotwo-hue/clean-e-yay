@@ -34,20 +34,23 @@ const TF_ORDER = ["15m", "1h", "4h", "1d"];
 
 function SignalChip({ name, row }: { name: string; row: SubsignalRow }) {
   const v = VERDICT[row.verdict] ?? VERDICT.INSUFFICIENT;
+  // Eski (v1) artifact'ta v2 alanları olmayabilir — panel çökmez, 0 gösterir;
+  // worker bir sonraki koşuda v2 ile yeniden üretir (engine kontrolü).
+  const ratio = row.edge_ratio ?? 0;
   return (
     <div
       className="flex items-center justify-between gap-2 rounded border border-white/10 bg-black/20 px-2 py-1"
-      title={`n=${row.n} · edge %${row.edge_pct} · oran ${row.edge_ratio} · isabet %${Math.round(
-        row.hit_rate * 100,
-      )} · yarılar ${row.edge_first_half}/${row.edge_second_half} · ${
+      title={`n=${row.n} · edge %${row.edge_pct} · oran ${ratio} · isabet %${Math.round(
+        (row.hit_rate ?? 0) * 100,
+      )} · yarılar ${row.edge_first_half ?? "—"}/${row.edge_second_half ?? "—"} · ${
         row.stable ? "kararlı" : "kararsız"
       } · taban ${row.beats_baseline ? "geçildi" : "geçilemedi"}`}
     >
       <span className="truncate text-[11px] text-white/70">{SIGNAL_TR[name] ?? name}</span>
       <span className="flex items-center gap-1.5">
         <span className="font-mono text-[10px] tabular-nums text-white/45">
-          {row.edge_ratio > 0 ? "+" : ""}
-          {row.edge_ratio.toFixed(2)}
+          {ratio > 0 ? "+" : ""}
+          {ratio.toFixed(2)}
         </span>
         <span className={`rounded px-1 py-0.5 text-[9px] font-bold uppercase tracking-wide ${v.chip}`}>
           {v.label}
@@ -97,7 +100,7 @@ export function SubsignalScorecardPanel() {
           {TF_ORDER.filter((tf) => perTf[tf]).map((tf) => {
             const block = perTf[tf];
             const rows = Object.entries(block.signals).sort(
-              (a, b) => b[1].edge_ratio - a[1].edge_ratio,
+              (a, b) => (b[1].edge_ratio ?? 0) - (a[1].edge_ratio ?? 0),
             );
             return (
               <div key={tf} className="rounded border border-white/10 bg-white/[0.02] p-2">
