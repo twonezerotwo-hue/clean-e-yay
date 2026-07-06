@@ -52,7 +52,10 @@ consensus:
   # her hücrede `quantum_v2_observe:v1=..:v2=..:used=..` satırında yan yana.
   # NOT (2026-07-06 owner kararı): kanıtsız aktive edildi (backtest/karne edge'i
   # YOK; karne v1'i NEUTRAL rejimde TERS ölçmüştü). Geri-alma = bu flag false.
-  quantum_v2: false
+  # AKTİF (2026-07-06, owner gözü-açık kararı): quantum oyu artık sembol-başı
+  # para-akış skorundan. quantum_v2_observe satırı v1↔v2 farkını izler; risk yarış/
+  # karne ile canlı ölçülmeye devam eder.
+  quantum_v2: true
 
 # M1 — haber sentiment sınıflandırıcı sürümü. false (DEFAULT) → v1 birebir
 # (tam-kelime eşleşme; "Bitcoin rebounds…" gibi çekimli başlıklar neutral kalır).
