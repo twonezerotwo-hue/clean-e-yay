@@ -42,7 +42,9 @@ consensus:
   # yan yana. KANIT: backtest 494 pencere +0.53%/%59 (taban +0.29 geçildi),
   # 163 gerçek işlemde kazanma↑ + ters işlem elendi. RiskGate/boyut/manuel kuyruk
   # DEĞİŞMEZ; geri-alma = bu flag false (tek satır). v1 kodu paraşüt olarak YERİNDE.
-  touche_v2: false
+  # AKTİF (2026-07-06, owner terfi kararı): teknik yön oyu artık yeni beyinden.
+  # v1 gözlem satırında yan yana kalır; kanıtsız/bayat hücrede otomatik v1'e düşer.
+  touche_v2: true
 
 # M1 — haber sentiment sınıflandırıcı sürümü. false (DEFAULT) → v1 birebir
 # (tam-kelime eşleşme; "Bitcoin rebounds…" gibi çekimli başlıklar neutral kalır).
