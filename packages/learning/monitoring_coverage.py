@@ -98,7 +98,7 @@ COVERAGE: dict[str, dict] = {
         "reason": "weight_rollback'in min-outcome eşiği — aç/kapa aktivasyonu değil, "
                   "rollback mekanizmasının ta kendisinin parametresi.",
     },
-    # --- SHADOW_EXEMPT: canlı karara dokunmaz (3) ---
+    # --- SHADOW_EXEMPT: canlı karara dokunmaz (4) ---
     "DISCOVERY_SCAN_ENABLED": {
         "mechanism": SHADOW_EXEMPT, "monitor": None,
         "reason": "Keşif tarayıcı GÖLGEDE koşar (K serisi); işlem açmaz, canlı karar "
@@ -113,6 +113,11 @@ COVERAGE: dict[str, dict] = {
         "mechanism": SHADOW_EXEMPT, "monitor": None,
         "reason": "Kaynak seçici salt-gözlem (I3); yalnız damgalı kanıt gösterir, "
                   "canlı karara/hücreye dokunmaz.",
+    },
+    "BAR_HISTORY_ENABLED": {
+        "mechanism": SHADOW_EXEMPT, "monitor": None,
+        "reason": "Bar arşivi salt-veri biriktirme (kanıt-büyütme); izole JSONL'e "
+                  "yazar, canlı bar akışını/kararı DEĞİŞTİRMEZ (asla raise etmez).",
     },
 }
 

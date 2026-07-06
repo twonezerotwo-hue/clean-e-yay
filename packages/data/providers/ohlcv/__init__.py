@@ -22,7 +22,14 @@ import os
 import threading
 from datetime import UTC, datetime
 
-from packages.data.providers.ohlcv import cache, coingecko, fixtures, resample, yfinance
+from packages.data.providers.ohlcv import (
+    cache,
+    coingecko,
+    fixtures,
+    history,
+    resample,
+    yfinance,
+)
 from packages.data.types import TIMEFRAMES, OHLCVBar, Timeframe
 
 # İndikatör penceresi (EMA200) + pay; cache/payload boyutunu sınırlar.
@@ -135,8 +142,14 @@ def get_bars(symbol: str, timeframe: str = "1d") -> list[OHLCVBar]:
         return fixtures.get_bars(symbol, tf)
     if tf == "4h":
         base = get_bars(symbol, "1h")
-        return resample.resample(base, "4h")[-_MAX_BARS["4h"]:]
-    if tf == "1w" and symbol in coingecko.SUPPORTED:
+        bars = resample.resample(base, "4h")[-_MAX_BARS["4h"]:]
+    elif tf == "1w" and symbol in coingecko.SUPPORTED:
         base = get_bars(symbol, "1d")
-        return resample.resample(base, "1w")[-_MAX_BARS["1w"]:]
-    return _native_bars(symbol, tf)
+        bars = resample.resample(base, "1w")[-_MAX_BARS["1w"]:]
+    else:
+        bars = _native_bars(symbol, tf)
+    # Bar arşivi (BAR_HISTORY_ENABLED, default OFF → no-op): kapanmış barları
+    # kalıcı biriktirir ki karne pencereleri _MAX_BARS tavanını aşabilsin.
+    # Asla raise etmez; fixture yolu yukarıda zaten ayrıldı (arşive giremez).
+    history.append_new(symbol, tf, bars)
+    return bars

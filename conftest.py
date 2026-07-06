@@ -87,6 +87,10 @@ def _package1_flags_off_by_default(monkeypatch: pytest.MonkeyPatch) -> None:
     # I3 (2026-07-05) — kaynak seçici shadow-dahil flag'i testlerde default OFF
     # (salt-canlı baseline); flag'i test eden testler kendi setenv'iyle açar.
     monkeypatch.delenv("LEARNING_INCLUDE_SHADOW", raising=False)
+    # Bar arşivi (2026-07-06) — testlerde default OFF (get_bars/karne bayt-aynı
+    # baseline); flag'i test eden testler kendi setenv + BAR_HISTORY_DIR ile açar.
+    monkeypatch.delenv("BAR_HISTORY_ENABLED", raising=False)
+    monkeypatch.delenv("BAR_HISTORY_DIR", raising=False)
 
 
 @pytest.fixture(autouse=True, scope="session")

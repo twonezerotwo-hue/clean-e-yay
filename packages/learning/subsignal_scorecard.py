@@ -35,7 +35,7 @@ import os
 from datetime import UTC, datetime
 from pathlib import Path
 
-from packages.data.providers.ohlcv import get_bars
+from packages.data.providers.ohlcv import get_bars, history
 from packages.data.providers.rotation.engine import ROTATION_SYMBOLS
 from packages.data.providers.technical import indicators
 from packages.data.providers.technical.timeframe import (
@@ -126,7 +126,10 @@ def analyze(symbols: list[str] | None = None, timeframes=_TIMEFRAMES) -> dict:
         n_points = 0
         used_syms = 0
         for sym in syms:
-            bars = get_bars(sym, tf) or []
+            # Arşiv + canlı birleşik pencere (BAR_HISTORY_ENABLED OFF iken arşiv
+            # boş döner → yalnız canlı barlar, v2 ile bayt-aynı). Arşiv büyüdükçe
+            # ölçüm penceresi _MAX_BARS tavanını aşar — kanıt haftayla büyür.
+            bars = history.merged(history.load(sym, tf), get_bars(sym, tf) or [])
             if len(bars) < _MIN_WARMUP + H + 1:
                 continue
             used_syms += 1
