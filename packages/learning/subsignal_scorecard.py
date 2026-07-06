@@ -33,7 +33,7 @@ from packages.data.providers.technical.timeframe import (
     _clamp,
     _ema_stack,
 )
-from packages.signals import market_structure, rsi_extreme, vwap_fade
+from packages.signals import bollinger_fade, market_structure, rsi_extreme, vwap_fade
 
 FLAG = "SUBSIGNAL_SCORECARD_ENABLED"
 _ENV_TRUE = frozenset({"1", "true", "yes", "on"})
@@ -117,6 +117,10 @@ def analyze(symbols: list[str] | None = None, timeframes=_TIMEFRAMES) -> dict:
                 vf = vwap_fade.lean(bars[: i + 1], timeframe=tf)
                 if vf is not None:
                     leans["vwap_fade"] = vf
+                # Bollinger band-fade: banda değme mean-reversion (her TF ölçülür)
+                bf = bollinger_fade.lean(closes_all[: i + 1])
+                if bf is not None:
+                    leans["bollinger_fade"] = bf
                 if not leans:
                     continue
                 n_points += 1
