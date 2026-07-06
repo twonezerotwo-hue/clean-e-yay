@@ -609,6 +609,27 @@ def run_once() -> dict:
         tf_scoring_v2_shadow_status = f"ERROR:{type(exc).__name__}"
         errors.append(f"tf_scoring_v2_shadow:{type(exc).__name__}")
 
+    # R5 — tf_scoring_v2 YARIŞ DEFTERİ (gölgeyle AYNI kapı: TF_SCORING_V2_SHADOW).
+    # Gölge yönünü fiyat damgasıyla deftere yazar, ufuk dolan barları gerçekleşen
+    # ileri-getiriyle çözer, yeni beyni eskiye/tabana karşı puanlar. Kriter tutarsa
+    # governor'a OWNER ONAY paketi sunar — terfi OTOMATİK DEĞİL (KIRMIZI ÇİZGİ).
+    # SALT-GÖZLEM: canlı skora/karara/paper'a yazmaz.
+    tf_scoring_race_status = "DISABLED"
+    try:
+        from packages.learning import tf_scoring_race
+        if tf_scoring_shadow.enabled():
+            r5 = tf_scoring_race.run()
+            tf_scoring_race_status = str(r5.get("status", "UNKNOWN"))
+            if tf_scoring_race_status == "OK":
+                log.info(
+                    "tf_scoring_race: appended=%s ledger_rows=%s resolved=%s race=%s",
+                    r5.get("appended"), r5.get("ledger_rows"),
+                    r5.get("resolved"), r5.get("race_status"),
+                )
+    except Exception as exc:  # defensive — worker patlamamalı
+        tf_scoring_race_status = f"ERROR:{type(exc).__name__}"
+        errors.append(f"tf_scoring_race:{type(exc).__name__}")
+
     if errors:
         status = "COMPLETED_WITH_ERRORS"
     elif outcomes_seen == 0:
@@ -655,6 +676,7 @@ def run_once() -> dict:
         "challenger_promotion_status": challenger_promotion_status,  # B-4 terfi kriteri (DISABLED=flag OFF)
         "subsignal_scorecard_status": subsignal_scorecard_status,  # D5 sinyal karnesi (DISABLED=flag OFF)
         "tf_scoring_v2_shadow_status": tf_scoring_v2_shadow_status,  # D6 v2 gölge skoru (DISABLED=flag OFF)
+        "tf_scoring_race_status": tf_scoring_race_status,  # R5 yarış defteri (DISABLED=flag OFF)
         "duration_ms": duration_ms,        # CP1 — perf görünürlüğü
         "over_budget": over_budget,        # CP1 — bütçe aşımı bayrağı
         "errors": errors,

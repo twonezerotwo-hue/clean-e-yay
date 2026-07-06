@@ -34,6 +34,7 @@ from packages.learning import (
     promotion_criteria,
     source_selector,
     subsignal_scorecard,
+    tf_scoring_race,
     tf_scoring_shadow,
     tf_target_rollback,
     tf_target_store,
@@ -384,6 +385,23 @@ def get_tf_scoring_shadow() -> dict:
     out: dict = {"enabled": tf_scoring_shadow.enabled()}
     try:
         path = tf_scoring_shadow.artifact_path()
+        if not path.exists():
+            return {**out, "status": "NO_DATA"}
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {**out, "status": "NO_DATA"}
+    return {**out, "status": "OK", **data}
+
+
+@router.get("/learning/tf-scoring-race")
+def get_tf_scoring_race() -> dict:
+    """R5 — tf_scoring_v2 gölge YARIŞ raporu (read-only). Gölge yönlerini
+    gerçekleşen ileri-getiriyle puanlayan defterin raporu: yeni beyin vs eski
+    harman vs taban (buy-hold) isabet/getiri + terfi kriteri (READY→owner paketi).
+    Rapor yoksa/bozuksa status=NO_DATA. Canlı karara dokunmaz — KIRMIZI ÇİZGİ."""
+    out: dict = {"enabled": tf_scoring_shadow.enabled()}
+    try:
+        path = tf_scoring_race.report_path()
         if not path.exists():
             return {**out, "status": "NO_DATA"}
         data = json.loads(path.read_text(encoding="utf-8"))

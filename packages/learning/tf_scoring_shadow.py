@@ -69,11 +69,16 @@ def analyze(symbols: list[str] | None = None) -> dict:
             tf_scores_legacy: dict[str, float] = {}   # adaylar dahil (kontrol)
             convictions: dict[str, float] = {}
             drivers: dict[str, dict] = {}
+            bar_marks: dict[str, dict] = {}           # R5 defteri için fiyat damgası
             regime_info: dict | None = None
             for tf in v2.DIRECTION_TFS:
                 bars = history.merged(history.load(sym, tf), get_bars(sym, tf) or [])
                 if len(bars) < _MIN_BARS:
                     continue
+                # R5 (yarış defteri): konuşan TF'in son KAPANMIŞ barının ts+close'u —
+                # gölge yönü hangi fiyatta üretildi. Additive; yön hesabını etkilemez.
+                last = bars[-1]
+                bar_marks[tf] = {"ts": last.ts.isoformat(), "close": round(last.close, 6)}
                 leans = v2.collect_leans(tf, bars)
                 # Birincil: yalnız kanıtlılar konuşur
                 w_edge = v2.signal_weights(scorecard, tf, include_candidates=False)
@@ -107,6 +112,7 @@ def analyze(symbols: list[str] | None = None) -> dict:
                 "tf_scores": tf_scores,
                 "tf_scores_legacy": tf_scores_legacy,
                 "drivers": drivers,
+                "bar_marks": bar_marks,  # R5 defteri: konuşan TF fiyat/ts damgası
                 "status": "OK" if primary is not None else "no_evidence",
             }
         except Exception as exc:  # defensive — bir sembol diğerlerini düşürmesin

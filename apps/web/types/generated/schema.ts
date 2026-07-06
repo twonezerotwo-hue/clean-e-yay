@@ -858,6 +858,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/learning/tf-scoring-race": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** R5 — tf_scoring_v2 gölge yarış raporu (yeni beyin vs eski harman vs taban, read-only) */
+        get: operations["getLearningTfScoringRace"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/learning/rebalance/proposal": {
         parameters: {
             query?: never;
@@ -4891,6 +4908,28 @@ export interface operations {
         requestBody?: never;
         responses: {
             /** @description OK (artifact yoksa status=NO_DATA) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+    };
+    getLearningTfScoringRace: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK (rapor yoksa status=NO_DATA) */
             200: {
                 headers: {
                     [name: string]: unknown;

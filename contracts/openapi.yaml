@@ -716,6 +716,19 @@ paths:
                 type: object
                 additionalProperties: true
 
+  /api/v1/learning/tf-scoring-race:
+    get:
+      operationId: getLearningTfScoringRace
+      summary: R5 — tf_scoring_v2 gölge yarış raporu (yeni beyin vs eski harman vs taban, read-only)
+      responses:
+        "200":
+          description: OK (rapor yoksa status=NO_DATA)
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+
   /api/v1/learning/rebalance/proposal:
     get:
       operationId: getLearningRebalanceProposal

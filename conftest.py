@@ -133,3 +133,7 @@ def _isolate_runtime_stores(tmp_path_factory: pytest.TempPathFactory) -> None:
     os.environ["DISCOVERY_SCAN_PATH"] = str(runtime / "discovery_scan.json")
     # K-2 (2026-07-04) — keşif gölge kanıt defteri suite'ten izole.
     os.environ["DISCOVERY_SHADOW_PATH"] = str(runtime / "discovery_shadow.jsonl")
+    # R5 (2026-07-06) — tf_scoring_v2 yarış defteri + raporu suite'ten izole
+    # (worker/entegrasyon testleri gerçek data/runtime'a yazmasın).
+    os.environ["TF_SCORING_RACE_LEDGER"] = str(runtime / "tf_scoring_race.jsonl")
+    os.environ["TF_SCORING_RACE_REPORT"] = str(runtime / "tf_scoring_race_report.json")

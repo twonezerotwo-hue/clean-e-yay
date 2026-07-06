@@ -102,3 +102,45 @@ export interface TfScoringShadowView {
   per_symbol?: Record<string, TfScoringShadowSymbol>;
   note?: string;
 }
+
+// R5 — yarış defteri: bir tasarımın (yeni beyin / kontrol / taban) puanı.
+export interface TfScoringRaceDesign {
+  decisive: number;
+  hits: number;
+  hit_rate?: number | null;
+  avg_return_pct?: number | null;
+}
+
+// R5 — terfi kapıları (rail count/wilson/beats-baseline; her biri pass taşır).
+export interface TfScoringRaceChecks {
+  resolved_decisive?: { value: number; required: number; pass: boolean };
+  ci_disjoint?: {
+    new_brain_hit_rate?: number | null;
+    wilson_low?: number;
+    wilson_high?: number;
+    pass: boolean;
+  };
+  beats_baseline?: {
+    new_avg_return_pct?: number | null;
+    baseline_avg_return_pct?: number | null;
+    pass: boolean;
+  };
+}
+
+// R5 — gölge yarış raporu (GET /learning/tf-scoring-race). Frontend HESAP YAPMAZ.
+export interface TfScoringRaceView {
+  status: string; // zarf: OK | NO_DATA
+  enabled: boolean;
+  race_status?: string; // terfi: READY | NOT_READY
+  generated_at?: string;
+  engine?: string;
+  ledger_rows?: number;
+  resolved?: number;
+  designs?: Record<string, TfScoringRaceDesign>; // new_brain | legacy | baseline
+  per_regime?: Record<string, Record<string, TfScoringRaceDesign>>;
+  beats_baseline?: boolean | null;
+  beats_legacy?: boolean | null;
+  checks?: TfScoringRaceChecks;
+  config?: { min_resolved: number; neutral_band_pct: number };
+  note?: string;
+}

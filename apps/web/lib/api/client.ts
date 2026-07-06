@@ -64,6 +64,7 @@ import type {
 import type {
   EvidenceBusView,
   SubsignalScorecardView,
+  TfScoringRaceView,
   TfScoringShadowView,
 } from "@/types/uncontracted";
 
@@ -630,6 +631,8 @@ export const api = {
     fetchJSON<SubsignalScorecardView>("/api/v1/learning/subsignal-scorecard"),
   tfScoringShadow: () =>
     fetchJSON<TfScoringShadowView>("/api/v1/learning/tf-scoring-shadow"),
+  tfScoringRace: () =>
+    fetchJSON<TfScoringRaceView>("/api/v1/learning/tf-scoring-race"),
   thresholdAutotune: () =>
     fetchJSON<ThresholdAutotuneView>("/api/v1/learning/threshold-autotune"),
   thresholdAb: (

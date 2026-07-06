@@ -124,6 +124,16 @@ promotion_criteria:
   min_matched_decisions: 200
   min_resolved_disagreements: 30
 
+# R5 — tf_scoring_v2 gölge YARIŞ defteri: gölge yönlerini gerçekleşen ileri-getiriyle
+# puanlar (yeni beyin vs eski harman vs taban buy-hold). Terfi kapısı: kararlı
+# çözülmüş yeni-beyin çağrısı ≥ min_resolved + isabetin %95 Wilson alt sınırı > 0.5
+# + yeni beyin tabanı geçer. Tutarsa governor'a OWNER ONAY paketi (KIRMIZI ÇİZGİ:
+# yön motoru terfisi otomatik değil). neutral_band_pct altı hareket kararsız sayılır
+# (düz piyasada yön çağrısı notlanamaz → elenir).
+tf_scoring_race:
+  min_resolved: 30
+  neutral_band_pct: 0.5
+
 # M4 — sentinel v2: tek-gösterge VIX yerine çok-girdili stres kompoziti (0-100,
 # yüksek = sakin / risk iştahı). enabled false (DEFAULT) → v1 birebir (yalnız
 # VIX katmanı; CRISIS'te 0.45 ağırlığı tek sayı taşır — 2026-07-02 denetimi bunu

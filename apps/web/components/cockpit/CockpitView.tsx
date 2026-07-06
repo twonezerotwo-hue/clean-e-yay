@@ -49,6 +49,7 @@ import { DatasetHealthPanel } from "@/components/panels/DatasetHealthPanel";
 import { EdgeReportPanel } from "@/components/panels/EdgeReportPanel";
 import { SubsignalScorecardPanel } from "@/components/panels/SubsignalScorecardPanel";
 import { TfScoringShadowPanel } from "@/components/panels/TfScoringShadowPanel";
+import { TfScoringRacePanel } from "@/components/panels/TfScoringRacePanel";
 import { EntryExitQualityPanel } from "@/components/panels/EntryExitQualityPanel";
 import { ExitForensicsPanel } from "@/components/panels/ExitForensicsPanel";
 import { DiscoveryPanel } from "@/components/panels/DiscoveryPanel";
@@ -1397,6 +1398,9 @@ export function CockpitView() {
               </LearnStep>
               <LearnStep step="15" label="Yeni beyin (gölge) — rejim-anahtarlı v2 yönü, izler karar vermez" wide>
                 <TfScoringShadowPanel />
+              </LearnStep>
+              <LearnStep step="16" label="Yarış raporu — yeni beyin eskiyi/tabanı geçiyor mu, terfi owner onayıyla" wide>
+                <TfScoringRacePanel />
               </LearnStep>
             </div>
           </Layer2DetailGroup>

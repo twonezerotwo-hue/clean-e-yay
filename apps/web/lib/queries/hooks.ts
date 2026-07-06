@@ -398,6 +398,17 @@ export const useTfScoringShadow = () => {
   });
 };
 
+// R5 — gölge yarış raporu her learning-cycle (~5 dk) tazelenir.
+export const useTfScoringRace = () => {
+  const policy = usePanelQueryPolicy(5 * 60_000);
+  return useQuery({
+    queryKey: qk.tfScoringRace,
+    queryFn: api.tfScoringRace,
+    staleTime: 60_000,
+    ...policy,
+  });
+};
+
 export const useThresholdAutotune = () => {
   const policy = usePanelQueryPolicy(5 * 60_000);
   return useQuery({
