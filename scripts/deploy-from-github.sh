@@ -81,6 +81,12 @@ ensure_env BACKTEST_CHALLENGER_ENABLED 1
 # damgali backtest/shadow kanitiyla beslensin (canli_n=0-2 rejimler artik kor degil).
 # Gercek live_n KIRLENMEZ, yon/emre TEMAS ETMEZ, rollback=flag kapat. Lokal .env=1 (senkron).
 ensure_env LEARNING_INCLUDE_SHADOW 1
+# Bar arsivi aktivasyonu (2026-07-06, owner hedefi "kanit 10/10"): kapanmis barlar
+# kalici JSONL arsivine biriksin (data/runtime/bar_history) -> sinyal karnesi
+# penceresi _MAX_BARS tavanini asar, 15m/1h kaniti haftayla buyur. Salt-veri:
+# karar/skor/paper'a SIFIR temas, asla raise etmez; rollback = flag kapat.
+# Lokal .env'de de =1 (owner kurali: lokal+AWS senkron).
+ensure_env BAR_HISTORY_ENABLED 1
 
 echo "deploy: restart services"
 sudo systemctl restart eyay-supervisor.service
