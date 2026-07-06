@@ -471,7 +471,7 @@ strategy_shaping:
 # [1.0, 4.0]: yalnız gevşetir, trailing'i asla düz halden sıkılaştırmaz. Bilinmeyen
 # TF → nötr (1.0). Geri-alma = enabled: false (kod değişikliği gerekmez).
 trailing_tf_aware:
-  enabled: false
+  enabled: true
   tf_profile:
     #      mesafe        devreye-girme
     15m: { distance_mult: 1.0, activate_mult: 1.0 }   # kısa TF: düz trailing zaten uygun
