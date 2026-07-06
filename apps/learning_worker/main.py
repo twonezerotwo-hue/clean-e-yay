@@ -571,6 +571,25 @@ def run_once() -> dict:
         challenger_promotion_status = f"ERROR:{type(exc).__name__}"
         errors.append(f"challenger_promotion:{type(exc).__name__}")
 
+    # D5 — sinyal karnesi (SUBSIGNAL_SCORECARD_ENABLED, default OFF → tam no-op).
+    # INTERVAL-kapılı (haftalık; durum = artifact yaşı): 8 sinyal × 4 TF ileri-
+    # getiri karnesi (v2 sert cetvel) yeniden ölçülür — bar arşivi büyüdükçe
+    # pencere kendiliğinden uzar. SALT-GÖZLEM: canlı skora/karara/paper'a yazmaz.
+    # Import lazy — flag kapalıyken sinyal/vwap bağımlılıkları hiç yüklenmez.
+    subsignal_scorecard_status = "DISABLED"
+    try:
+        from packages.learning import subsignal_scorecard
+        if subsignal_scorecard.enabled():
+            sc_rep = subsignal_scorecard.run_if_due()
+            subsignal_scorecard_status = str(sc_rep.get("status", "UNKNOWN"))
+            if subsignal_scorecard_status == "OK":
+                log.info(
+                    "subsignal_scorecard: timeframes=%s", sc_rep.get("timeframes")
+                )
+    except Exception as exc:  # defensive — worker patlamamalı
+        subsignal_scorecard_status = f"ERROR:{type(exc).__name__}"
+        errors.append(f"subsignal_scorecard:{type(exc).__name__}")
+
     if errors:
         status = "COMPLETED_WITH_ERRORS"
     elif outcomes_seen == 0:
@@ -615,6 +634,7 @@ def run_once() -> dict:
         "backtest_challenger_status": backtest_challenger_status,  # B-2 üretim (DISABLED=flag OFF)
         "challenger_train_status": challenger_train_status,  # B-3 ağırlık+quantum karne (DISABLED=flag OFF)
         "challenger_promotion_status": challenger_promotion_status,  # B-4 terfi kriteri (DISABLED=flag OFF)
+        "subsignal_scorecard_status": subsignal_scorecard_status,  # D5 sinyal karnesi (DISABLED=flag OFF)
         "duration_ms": duration_ms,        # CP1 — perf görünürlüğü
         "over_budget": over_budget,        # CP1 — bütçe aşımı bayrağı
         "errors": errors,

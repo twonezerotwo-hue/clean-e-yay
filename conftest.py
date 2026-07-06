@@ -94,6 +94,10 @@ def _package1_flags_off_by_default(monkeypatch: pytest.MonkeyPatch) -> None:
     # D4 (2026-07-06) — per-TF trust kapısı testlerde default OFF (resolve_live_
     # tf_weights bayt-aynı baseline); flag'i test eden testler kendisi açar.
     monkeypatch.delenv("TF_TRUST_PER_BUCKET", raising=False)
+    # D5 (2026-07-06) — sinyal karnesi worker-adımı testlerde default OFF
+    # (learning koşusu bayt-eşdeğer); flag'i test eden testler kendisi açar.
+    monkeypatch.delenv("SUBSIGNAL_SCORECARD_ENABLED", raising=False)
+    monkeypatch.delenv("SUBSIGNAL_SCORECARD_INTERVAL_SEC", raising=False)
 
 
 @pytest.fixture(autouse=True, scope="session")

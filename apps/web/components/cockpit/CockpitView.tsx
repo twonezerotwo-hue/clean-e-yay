@@ -47,6 +47,7 @@ import { MissedOpportunitiesPanel } from "@/components/panels/MissedOpportunitie
 import { BookAuditPanel } from "@/components/panels/BookAuditPanel";
 import { DatasetHealthPanel } from "@/components/panels/DatasetHealthPanel";
 import { EdgeReportPanel } from "@/components/panels/EdgeReportPanel";
+import { SubsignalScorecardPanel } from "@/components/panels/SubsignalScorecardPanel";
 import { EntryExitQualityPanel } from "@/components/panels/EntryExitQualityPanel";
 import { ExitForensicsPanel } from "@/components/panels/ExitForensicsPanel";
 import { DiscoveryPanel } from "@/components/panels/DiscoveryPanel";
@@ -1389,6 +1390,9 @@ export function CockpitView() {
               </LearnStep>
               <LearnStep step="13" label="Öğrenme Beyni — tüm kanıt tek ekranda (özet)" wide>
                 <LearningBrainPanel />
+              </LearnStep>
+              <LearnStep step="14" label="Sinyal karnesi — hangi sinyal hangi zaman diliminde kanıtlı" wide>
+                <SubsignalScorecardPanel />
               </LearnStep>
             </div>
           </Layer2DetailGroup>

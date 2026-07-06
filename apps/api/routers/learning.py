@@ -33,6 +33,7 @@ from packages.learning import (
     partial_tp_shadow,
     promotion_criteria,
     source_selector,
+    subsignal_scorecard,
     tf_target_rollback,
     tf_target_store,
     tf_target_trainer,
@@ -354,6 +355,23 @@ def get_discovery() -> dict:
     çözümleri). Dürüstlük satırı her zaman döner: hiçbiri gerçek işlem değil.
     Flag DISCOVERY_SCAN_ENABLED kapalıysa enabled=false + boş tablo."""
     return discovery_scanner.viewmodel()
+
+
+@router.get("/learning/subsignal-scorecard")
+def get_subsignal_scorecard() -> dict:
+    """D5 — Sinyal karnesi (v2 sert cetvel, read-only). Worker'ın haftalık
+    ürettiği izole artifact'ı sunar: sinyal × TF ileri-getiri ayrışımı
+    (edge_ratio / taban-çizgisi / iki-yarı kararlılık / verdict). Artifact
+    yoksa/bozuksa status=NO_DATA — sahte veri uydurulmaz. Canlı karara dokunmaz."""
+    out: dict = {"enabled": subsignal_scorecard.enabled()}
+    try:
+        path = subsignal_scorecard.artifact_path()
+        if not path.exists():
+            return {**out, "status": "NO_DATA"}
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {**out, "status": "NO_DATA"}
+    return {**out, "status": "OK", **data}
 
 
 @router.post("/learning/tf-targets/approve")

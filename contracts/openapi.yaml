@@ -690,6 +690,19 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/DiscoveryView" }
 
+  /api/v1/learning/subsignal-scorecard:
+    get:
+      operationId: getLearningSubsignalScorecard
+      summary: D5 — Sinyal karnesi (sinyal × TF ileri-getiri, v2 sert cetvel, read-only)
+      responses:
+        "200":
+          description: OK (artifact yoksa status=NO_DATA)
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+
   /api/v1/learning/rebalance/proposal:
     get:
       operationId: getLearningRebalanceProposal

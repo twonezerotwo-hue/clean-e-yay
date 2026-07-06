@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "codegen": "openapi-typescript ../../contracts/openapi.yaml -o lib/api/schema.ts"
+    "codegen": "openapi-typescript ../../contracts/openapi.yaml -o types/generated/schema.ts"
   },
   "dependencies": {
     "@react-three/drei": "^9.108.0",

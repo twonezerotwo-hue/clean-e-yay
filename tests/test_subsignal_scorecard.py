@@ -133,7 +133,71 @@ def test_v2_verdict_rules():
     assert v(-0.5, 50, beats_baseline=False, stable=False) == "INVERSE"
 
 
-def test_run_disabled_by_default(monkeypatch):
-    """Flag yoksa run() no-op (DEFAULT OFF)."""
+def test_run_if_due_disabled_by_default(monkeypatch):
+    """Flag yoksa run_if_due() no-op (DEFAULT OFF) — learning koşusu bayt-eşdeğer."""
     monkeypatch.delenv(ss.FLAG, raising=False)
-    assert ss.run() == {"status": "DISABLED"}
+    assert ss.run_if_due() == {"status": "DISABLED"}
+
+
+def test_run_if_due_skips_fresh_artifact(tmp_path, monkeypatch):
+    """D5 interval kapısı: taze artifact varken yeniden ÖLÇMEZ (SKIP_FRESH) —
+    haftalık koşum sözü; analyze çağrılmadığını sahte-analyze ile kanıtla."""
+    import json
+    from datetime import UTC, datetime
+    art = tmp_path / "sc.json"
+    art.write_text(json.dumps({"generated_at": datetime.now(UTC).isoformat()}),
+                   encoding="utf-8")
+    monkeypatch.setenv(ss.FLAG, "1")
+    monkeypatch.setattr(ss, "_ART", str(art))
+    monkeypatch.setattr(ss, "analyze", lambda *a, **k: (_ for _ in ()).throw(
+        AssertionError("taze artifact varken analyze çağrılmamalı")))
+    out = ss.run_if_due()
+    assert out["status"] == "SKIP_FRESH" and out["age_sec"] >= 0
+
+
+def test_endpoint_no_artifact_returns_no_data(tmp_path, monkeypatch):
+    """GET /learning/subsignal-scorecard: artifact yoksa NO_DATA + enabled=False
+    (flag conftest'te silinir) — sahte veri uydurulmaz."""
+    from fastapi.testclient import TestClient
+
+    from apps.api.main import app
+    monkeypatch.setattr(ss, "_ART", str(tmp_path / "yok.json"))
+    r = TestClient(app).get("/api/v1/learning/subsignal-scorecard")
+    assert r.status_code == 200
+    body = r.json()
+    assert body["status"] == "NO_DATA" and body["enabled"] is False
+
+
+def test_endpoint_serves_artifact(tmp_path, monkeypatch):
+    """Artifact varsa içerik aynen sunulur (status=OK + per_timeframe)."""
+    import json
+
+    from fastapi.testclient import TestClient
+
+    from apps.api.main import app
+    art = tmp_path / "sc.json"
+    art.write_text(json.dumps({"generated_at": "2026-07-06T00:00:00+00:00",
+                               "engine": "subsignal_scorecard_v2",
+                               "per_timeframe": {"4h": {"signals": {}}}}),
+                   encoding="utf-8")
+    monkeypatch.setattr(ss, "_ART", str(art))
+    body = TestClient(app).get("/api/v1/learning/subsignal-scorecard").json()
+    assert body["status"] == "OK"
+    assert body["engine"] == "subsignal_scorecard_v2"
+    assert "4h" in body["per_timeframe"]
+
+
+def test_run_if_due_remeasures_stale_artifact(tmp_path, monkeypatch):
+    """Bayat (interval'i aşmış) artifact → yeniden ölçüm + atomik yazım."""
+    import json
+    from datetime import UTC, datetime, timedelta
+    art = tmp_path / "sc.json"
+    old = datetime.now(UTC) - timedelta(days=8)
+    art.write_text(json.dumps({"generated_at": old.isoformat()}), encoding="utf-8")
+    monkeypatch.setenv(ss.FLAG, "1")
+    monkeypatch.setattr(ss, "_ART", str(art))
+    monkeypatch.setattr(ss, "analyze", lambda *a, **k: {
+        "generated_at": datetime.now(UTC).isoformat(), "per_timeframe": {"1d": {}}})
+    out = ss.run_if_due()
+    assert out == {"status": "OK", "timeframes": ["1d"]}
+    assert json.loads(art.read_text(encoding="utf-8"))["per_timeframe"] == {"1d": {}}

@@ -54,6 +54,10 @@ from packages.signals import (
 
 FLAG = "SUBSIGNAL_SCORECARD_ENABLED"
 _ENV_TRUE = frozenset({"1", "true", "yes", "on"})
+# D5 — worker koşum aralığı (sn): karne haftalık yeniden ölçülür (koşu ~26sn,
+# her cycle koşmak bütçeyi yer; arşiv de günde bir bardan hızlı büyümez).
+_INTERVAL_ENV = "SUBSIGNAL_SCORECARD_INTERVAL_SEC"
+_DEFAULT_INTERVAL_SEC = 7 * 24 * 3600
 _TIMEFRAMES = ("15m", "1h", "4h", "1d")
 # TF başına ileri-getiri ufku (kaç bar): kısa TF daha çok bar, uzun TF az.
 _HORIZON = {"15m": 8, "1h": 8, "4h": 6, "1d": 5}
@@ -226,21 +230,45 @@ def analyze(symbols: list[str] | None = None, timeframes=_TIMEFRAMES) -> dict:
     }
 
 
+def artifact_path() -> Path:
+    """İzole karne artifact'ının yolu (API bunu sunar; exit_forensics deseni)."""
+    return Path(_ART)
+
+
 def _write(payload: dict) -> None:
-    path = Path(_ART)
+    path = artifact_path()
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_suffix(".json.tmp")
     tmp.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
     tmp.replace(path)
 
 
-def run() -> dict:
-    """Worker-adımı: flag AÇIKSA analiz + artifact yaz; KAPALIYSA no-op."""
+def _interval_sec() -> int:
+    try:
+        return int(os.environ.get(_INTERVAL_ENV, str(_DEFAULT_INTERVAL_SEC)))
+    except ValueError:
+        return _DEFAULT_INTERVAL_SEC
+
+
+def run_if_due() -> dict:
+    """D5 worker-adımı: flag AÇIK + artifact bayatsa yeniden ölç; tazeyken SKIP.
+    Durum = artifact'ın kendisi (generated_at) — ayrı tetik dosyası yok.
+    Bozuk/eksik artifact → dürüstçe yeniden üretilir. KAPALIYKEN tam no-op."""
     if not enabled():
         return {"status": "DISABLED"}
+    try:
+        path = artifact_path()
+        if path.exists():
+            data = json.loads(path.read_text(encoding="utf-8"))
+            gen = datetime.fromisoformat(str(data.get("generated_at")))
+            age = (datetime.now(UTC) - gen).total_seconds()
+            if 0 <= age < _interval_sec():
+                return {"status": "SKIP_FRESH", "age_sec": int(age)}
+    except (OSError, json.JSONDecodeError, ValueError, TypeError):
+        pass  # okunamayan durum → yeniden ölçüm en dürüst yol
     rep = analyze()
     _write(rep)
     return {"status": "OK", "timeframes": list(rep["per_timeframe"])}
 
 
-__all__ = ["FLAG", "analyze", "enabled", "run", "sub_leans"]
+__all__ = ["FLAG", "analyze", "artifact_path", "enabled", "run_if_due", "sub_leans"]

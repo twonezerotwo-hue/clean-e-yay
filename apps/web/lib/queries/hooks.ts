@@ -376,6 +376,17 @@ export const useEdgeReport = () => {
   });
 };
 
+// D5 — sinyal karnesi haftalık üretilir; panel seyrek tazeler (10 dk).
+export const useSubsignalScorecard = () => {
+  const policy = usePanelQueryPolicy(10 * 60_000);
+  return useQuery({
+    queryKey: qk.subsignalScorecard,
+    queryFn: api.subsignalScorecard,
+    staleTime: 5 * 60_000,
+    ...policy,
+  });
+};
+
 export const useThresholdAutotune = () => {
   const policy = usePanelQueryPolicy(5 * 60_000);
   return useQuery({

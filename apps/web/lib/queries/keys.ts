@@ -42,6 +42,7 @@ export const qk = {
   bookAudit: ["learning", "book-audit"] as const,
   datasetHealth: ["learning", "dataset-health"] as const,
   edgeReport: ["learning", "edge-report"] as const,
+  subsignalScorecard: ["learning", "subsignal-scorecard"] as const,
   thresholdAutotune: ["learning", "threshold-autotune"] as const,
   thresholdAb: (paramPath: string, values: string, symbol: string, timeframe: string) =>
     ["learning", "threshold-ab", paramPath, values, symbol, timeframe] as const,

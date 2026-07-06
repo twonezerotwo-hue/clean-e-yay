@@ -44,3 +44,37 @@ export interface EvidenceBusView {
   records: EvidenceRecord[];
   note: string;
 }
+
+// D5 — Sinyal karnesi satırı (subsignal_scorecard v2, sinyal × TF).
+export interface SubsignalRow {
+  n: number;
+  edge_pct: number;
+  hit_rate: number;
+  edge_ratio: number;
+  edge_first_half: number;
+  edge_second_half: number;
+  stable: boolean;
+  beats_baseline: boolean;
+  verdict: string; // EDGE | FLAT | INVERSE | INSUFFICIENT
+}
+
+// D5 — TF bloğu (tipik hareket + taban çizgisi + sinyaller).
+export interface SubsignalTf {
+  horizon_bars: number;
+  symbols_used: number;
+  points: number;
+  typical_move_pct: number;
+  baseline_edge_pct: number;
+  signals: Record<string, SubsignalRow>;
+}
+
+// D5 — Sinyal karnesi görünümü (GET /learning/subsignal-scorecard).
+export interface SubsignalScorecardView {
+  status: string; // OK | NO_DATA
+  enabled: boolean;
+  generated_at?: string;
+  engine?: string;
+  universe_n?: number;
+  per_timeframe?: Record<string, SubsignalTf>;
+  note?: string;
+}

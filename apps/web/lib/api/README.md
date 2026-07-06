@@ -6,4 +6,6 @@ Tüm tipler ve client `contracts/openapi.yaml`'dan üretilir.
 pnpm codegen
 ```
 
-Bu komut `lib/api/schema.ts` dosyasını yenler. Manuel olarak düzenleme.
+Bu komut `types/generated/schema.ts` dosyasını yeniler (izlenen üretilmiş dosya
+oradadır; eski `lib/api/schema.ts` yolu yanlıştı — kullanılmayan kopya üretiyordu).
+Manuel olarak düzenleme.
