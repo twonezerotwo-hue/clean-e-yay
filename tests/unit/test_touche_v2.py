@@ -17,6 +17,7 @@ from packages.consensus import engine as ce
 from packages.data.registry.loader import threshold_override
 
 _FLAG_ON = {"consensus": {"touche_v2": True}}
+_FLAG_OFF = {"consensus": {"touche_v2": False}}
 
 
 def _write_artifact(path, per_symbol: dict, *, age_sec: float = 0.0) -> None:
@@ -92,10 +93,12 @@ def _regime():
 
 
 def test_flag_off_live_touche_is_v1_with_observe_line(artifact):
+    # Flag AKTİF default (canlı config touche_v2=true) → test flag'i explicit KAPATIR.
     artifact({"BTCUSD": {"direction": 0.4}})       # v2 = 70
-    res = ce.build("BTCUSD", _snap(60.0), _regime(), "4h")
+    with threshold_override(_FLAG_OFF):
+        res = ce.build("BTCUSD", _snap(60.0), _regime(), "4h")
     touche = next(m for m in res.modules if m.name == "touche")
-    assert touche.score == pytest.approx(60.0)     # v1 CANLI (bayt-aynı)
+    assert touche.score == pytest.approx(60.0)     # v1 (flag kapalı → eski davranış)
     assert any(w == "touche_v2_observe:v1=60.0:v2=70.0:used=v1" for w in res.warnings)
 
 
