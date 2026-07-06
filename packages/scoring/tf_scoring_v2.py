@@ -33,6 +33,7 @@ from packages.signals import (
     bollinger_fade,
     candle_rejection,
     market_structure,
+    regime_gate,
     rsi_extreme,
     vwap_fade,
 )
@@ -75,6 +76,9 @@ def collect_leans(timeframe: str, bars: list) -> dict[str, float]:
     cr = candle_rejection.lean(bars)
     if cr is not None:
         leans["candle_rejection"] = cr
+    rg = regime_gate.lean(closes)
+    if rg is not None:
+        leans["regime_gate"] = rg
     return leans
 
 

@@ -48,6 +48,7 @@ from packages.signals import (
     bollinger_fade,
     candle_rejection,
     market_structure,
+    regime_gate,
     rsi_extreme,
     vwap_fade,
 )
@@ -59,8 +60,9 @@ _ENV_TRUE = frozenset({"1", "true", "yes", "on"})
 _INTERVAL_ENV = "SUBSIGNAL_SCORECARD_INTERVAL_SEC"
 _DEFAULT_INTERVAL_SEC = 7 * 24 * 3600
 # Cetvel sürümü: artifact bu sürümle üretilmediyse "taze" sayılmaz — cetvel
-# değişince (v1→v2 gibi) eski ölçüm interval'i beklemeden yeniden üretilir.
-_ENGINE = "subsignal_scorecard_v2"
+# VEYA sinyal kümesi değişince eski ölçüm interval'i beklemeden yeniden üretilir.
+# v2_1 (R1): regime_gate sinyali eklendi (rejim-anahtarlı v2'nin hava ölçeri).
+_ENGINE = "subsignal_scorecard_v2_1"
 _TIMEFRAMES = ("15m", "1h", "4h", "1d")
 # TF başına ileri-getiri ufku (kaç bar): kısa TF daha çok bar, uzun TF az.
 _HORIZON = {"15m": 8, "1h": 8, "4h": 6, "1d": 5}
@@ -169,6 +171,11 @@ def analyze(symbols: list[str] | None = None, timeframes=_TIMEFRAMES) -> dict:
                 cr = candle_rejection.lean(bars[: i + 1])
                 if cr is not None:
                     leans["candle_rejection"] = cr
+                # Regime gate (R1): 60-bar hava yönü — rejim-anahtarlı v2'nin
+                # anahtarı da diğerleriyle aynı sert cetvelden geçer.
+                rg = regime_gate.lean(closes_all[: i + 1])
+                if rg is not None:
+                    leans["regime_gate"] = rg
                 if not leans:
                     continue
                 n_points += 1

@@ -28,6 +28,7 @@ const SIGNAL_TR: Record<string, string> = {
   vwap_fade: "VWAP sapması",
   bollinger_fade: "Bollinger dokunuşu",
   candle_rejection: "Mum formasyonu",
+  regime_gate: "Piyasa havası (60g yön)",
 };
 
 const TF_ORDER = ["15m", "1h", "4h", "1d"];

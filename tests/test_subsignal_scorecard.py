@@ -85,7 +85,7 @@ def test_analyze_structure_no_crash(monkeypatch):
     """analyze() bar yoksa bile saglam yapida doner (izole, patlamaz)."""
     monkeypatch.setattr(ss, "get_bars", lambda sym, tf: [])
     rep = ss.analyze(symbols=["BTCUSD"], timeframes=("1d",))
-    assert rep["engine"] == "subsignal_scorecard_v2"
+    assert rep["engine"] == ss._ENGINE  # sürüm-artışına dayanıklı
     assert "1d" in rep["per_timeframe"]
     assert rep["per_timeframe"]["1d"]["points"] == 0
 
