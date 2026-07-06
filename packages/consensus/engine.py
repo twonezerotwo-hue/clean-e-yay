@@ -17,6 +17,7 @@ ağırlık otomatik yeniden dağıtılır.
 """
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 
@@ -230,6 +231,49 @@ def _touche_base(
     return t.score, warnings
 
 
+# R-serisi terfi — teknik oyun v2'si: tf_scoring_v2 rejim-anahtarlı yönü.
+# Gölge artifact bu yaştan eskiyse (öğrenme worker'ı durmuşsa) v1'e düşülür.
+_TOUCHE_V2_MAX_AGE_SEC = 3 * 3600
+
+
+def _touche_v2_enabled() -> bool:
+    """`consensus.touche_v2` owner-flag'i (default KAPALI = v1 birebir).
+
+    Açıkken teknik yön oyu tf_scoring_v2 REJİM-ANAHTARLI yönünden gelir (R-serisi:
+    yükselişte 1d, düşüşte 4h konuşur; yalnız kanıtlı sinyaller). Gölge artifact'tan
+    okunur (öğrenme worker'ı her cycle üretir). Aktivasyon ayrı tarihli owner kararı;
+    açılana kadar v2 skoru her hücrede `touche_v2_observe` satırıyla SALT-GÖZLEM."""
+    try:
+        return bool(load_thresholds().get("consensus", {}).get("touche_v2", False))
+    except (OSError, KeyError, ValueError, TypeError):
+        return False
+
+
+def _touche_v2(symbol: str) -> float | None:
+    """tf_scoring_v2 rejim-anahtarlı yön → 0-100 teknik skor (50=nötr, +1→100).
+
+    Gölge artifact'tan (data/runtime/tf_scoring_v2_shadow.json) okur — kanıt yoksa,
+    artifact bayat/bozuksa None → çağıran v1 touche'a düşer (dürüst: uydurma yön yok,
+    öğrenme durursa canlı tick bağımsız kalır). Salt-okur; lazy import (yük-zamanı
+    decision→learning bağı yok)."""
+    try:
+        from packages.learning import tf_scoring_shadow
+        path = tf_scoring_shadow.artifact_path()
+        if not path.exists():
+            return None
+        data = json.loads(path.read_text(encoding="utf-8"))
+        gen = datetime.fromisoformat(str(data.get("generated_at")))
+        if (datetime.now(UTC) - gen).total_seconds() > _TOUCHE_V2_MAX_AGE_SEC:
+            return None  # öğrenme worker'ı durmuş → v1'e düş
+        row = (data.get("per_symbol") or {}).get(symbol) or {}
+        d = row.get("direction")
+        if d is None:
+            return None  # rejim/kanıt yok → v1
+        return max(0.0, min(100.0, 50.0 + float(d) * 50.0))
+    except (OSError, ValueError, TypeError, KeyError):
+        return None
+
+
 def _fundamental(regime: RegimeOutput) -> float | None:
     # likidite + crypto + rotation layer'larının ortalaması
     layers = [layer for layer in regime.layers if layer.name != "Risk İştahı"]
@@ -424,7 +468,20 @@ def build(
     # T2 — timeframe yalnızca teknik (touche) modülünü farklılaştırır;
     # makro/haber/rotasyon katmanları asset-level kalır. Default "1d" ile
     # mevcut asset-level davranış birebir korunur.
-    touche_score, tf_warnings = _touche(symbol, snap, timeframe)
+    # R-serisi — touche_v2 (tf_scoring_v2 rejim-anahtarlı yön): flag açıkken v2
+    # canlı teknik oy, kapalıyken v1 (bayt-aynı). İki varyant her zaman warning
+    # satırında yan yana (owner aktivasyon kanıtını buradan izler). v2 kanıtsız/
+    # bayatsa None → v1 kullanılır (dürüst düşüş). RiskGate/boyut/manuel kuyruk
+    # DEĞİŞMEZ — yalnız teknik yön oyu değişir.
+    touche_v1, tf_warnings = _touche(symbol, snap, timeframe)
+    touche_v2 = _touche_v2(symbol)
+    use_v2 = _touche_v2_enabled() and touche_v2 is not None
+    touche_score = touche_v2 if use_v2 else touche_v1
+    if touche_v2 is not None:
+        tf_warnings.append(
+            "touche_v2_observe:"
+            f"v1={touche_v1:.1f}:v2={touche_v2:.1f}:used={'v2' if use_v2 else 'v1'}"
+        )
     raw = {
         "touche": touche_score,
         "news": _news(snap, symbol),

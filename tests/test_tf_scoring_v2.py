@@ -133,7 +133,7 @@ def test_endpoint_no_artifact_returns_no_data(tmp_path, monkeypatch):
 
     from apps.api.main import app
     monkeypatch.delenv(shadow.FLAG, raising=False)
-    monkeypatch.setattr(shadow, "_ART", str(tmp_path / "yok.json"))
+    monkeypatch.setenv("TF_SCORING_V2_SHADOW_PATH", str(tmp_path / "yok.json"))
     body = TestClient(app).get("/api/v1/learning/tf-scoring-shadow").json()
     assert body["status"] == "NO_DATA" and body["enabled"] is False
 
@@ -154,7 +154,7 @@ def test_endpoint_serves_artifact(tmp_path, monkeypatch):
                                   "regime": {"regime": "DOWN", "er": 0.23},
                                   "direction_blend_legacy": -0.65}},
     }), encoding="utf-8")
-    monkeypatch.setattr(shadow, "_ART", str(art))
+    monkeypatch.setenv("TF_SCORING_V2_SHADOW_PATH", str(art))
     body = TestClient(app).get("/api/v1/learning/tf-scoring-shadow").json()
     assert body["status"] == "OK"
     assert body["per_symbol"]["BTCUSD"]["regime"]["regime"] == "DOWN"

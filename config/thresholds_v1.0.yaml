@@ -34,6 +34,15 @@ consensus:
   # AKTİF (2026-07-02, owner kararı — Paket 1 girdi-düzeltmeleri; v1 kodu
   # geri-dönüş paraşütü olarak YERİNDE, silme owner onayına bağlı).
   fundamental_v2: true
+  # R-serisi — touche v2 (tf_scoring_v2 REJİM-ANAHTARLI teknik yön oyu). false
+  # (DEFAULT) → v1 birebir: teknik oy eski touche momentum harmanından gelir.
+  # true → v2: yükselişte 1d trend / düşüşte 4h yapı konuşur, yalnız KANITLI
+  # sinyaller yön verir (gölge artifact'tan; kanıtsız/bayatsa v1'e düşer). İki
+  # varyant her hücrede `touche_v2_observe:v1=..:v2=..:used=..` warning satırında
+  # yan yana. KANIT: backtest 494 pencere +0.53%/%59 (taban +0.29 geçildi),
+  # 163 gerçek işlemde kazanma↑ + ters işlem elendi. RiskGate/boyut/manuel kuyruk
+  # DEĞİŞMEZ; geri-alma = bu flag false (tek satır). v1 kodu paraşüt olarak YERİNDE.
+  touche_v2: false
 
 # M1 — haber sentiment sınıflandırıcı sürümü. false (DEFAULT) → v1 birebir
 # (tam-kelime eşleşme; "Bitcoin rebounds…" gibi çekimli başlıklar neutral kalır).

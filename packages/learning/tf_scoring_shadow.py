@@ -31,7 +31,7 @@ def enabled() -> bool:
 
 
 def artifact_path() -> Path:
-    return Path(_ART)
+    return Path(os.environ.get("TF_SCORING_V2_SHADOW_PATH", _ART))
 
 
 def _load_scorecard() -> dict:
