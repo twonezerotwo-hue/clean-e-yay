@@ -92,6 +92,11 @@ ensure_env BAR_HISTORY_ENABLED 1
 # akar (edge_proven), kanitsiz TF notr. SERTLESTIRME — yeni davranis ACMAZ,
 # mevcut kapiyi kisar; bugun kapi kapaliyken davranis degismez. Lokal .env=1.
 ensure_env TF_TRUST_PER_BUCKET 1
+# D5 sinyal karnesi (2026-07-06, owner "10/10" hedefi): learning worker haftada
+# bir 8 sinyal x 4 TF karnesini (v2 sert cetvel) uretir; pano step-14 izler.
+# SALT-GOZLEM: canli skora/karara/paper'a ASLA yazmaz; bar arsivi buyudukce
+# pencere kendiliginden uzar. Rollback = flag kapat. Lokal .env'de de =1.
+ensure_env SUBSIGNAL_SCORECARD_ENABLED 1
 
 echo "deploy: restart services"
 sudo systemctl restart eyay-supervisor.service
