@@ -703,6 +703,19 @@ paths:
                 type: object
                 additionalProperties: true
 
+  /api/v1/learning/tf-scoring-shadow:
+    get:
+      operationId: getLearningTfScoringShadow
+      summary: R4 — tf_scoring_v2 gölge yönleri (rejim-anahtarlı + kontrol harmanı, read-only)
+      responses:
+        "200":
+          description: OK (artifact yoksa status=NO_DATA)
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+
   /api/v1/learning/rebalance/proposal:
     get:
       operationId: getLearningRebalanceProposal

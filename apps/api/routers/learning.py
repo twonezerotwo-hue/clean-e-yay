@@ -34,6 +34,7 @@ from packages.learning import (
     promotion_criteria,
     source_selector,
     subsignal_scorecard,
+    tf_scoring_shadow,
     tf_target_rollback,
     tf_target_store,
     tf_target_trainer,
@@ -366,6 +367,23 @@ def get_subsignal_scorecard() -> dict:
     out: dict = {"enabled": subsignal_scorecard.enabled()}
     try:
         path = subsignal_scorecard.artifact_path()
+        if not path.exists():
+            return {**out, "status": "NO_DATA"}
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {**out, "status": "NO_DATA"}
+    return {**out, "status": "OK", **data}
+
+
+@router.get("/learning/tf-scoring-shadow")
+def get_tf_scoring_shadow() -> dict:
+    """R4 — tf_scoring_v2 gölge görünümü (read-only). Worker'ın her cycle
+    ürettiği izole artifact'ı sunar: sembol başına hava (UP/DOWN + verimlilik),
+    BİRİNCİL rejim-anahtarlı yön, KONTROL eski-harman yönü, sürücü sinyaller.
+    Artifact yoksa/bozuksa status=NO_DATA. Canlı karara dokunmaz."""
+    out: dict = {"enabled": tf_scoring_shadow.enabled()}
+    try:
+        path = tf_scoring_shadow.artifact_path()
         if not path.exists():
             return {**out, "status": "NO_DATA"}
         data = json.loads(path.read_text(encoding="utf-8"))

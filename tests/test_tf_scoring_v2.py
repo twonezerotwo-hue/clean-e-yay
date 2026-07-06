@@ -124,6 +124,43 @@ def test_collect_leans_empty_bars():
     assert v2.collect_leans("1d", []) == {}
 
 
+# ── R4: API endpoint (artifact-servis, D5 deseni) ────────────────────────────
+
+def test_endpoint_no_artifact_returns_no_data(tmp_path, monkeypatch):
+    """GET /learning/tf-scoring-shadow: artifact yoksa NO_DATA (uydurma yok).
+    apps.api.main import'u .env yükler → flag import SONRASI silinir."""
+    from fastapi.testclient import TestClient
+
+    from apps.api.main import app
+    monkeypatch.delenv(shadow.FLAG, raising=False)
+    monkeypatch.setattr(shadow, "_ART", str(tmp_path / "yok.json"))
+    body = TestClient(app).get("/api/v1/learning/tf-scoring-shadow").json()
+    assert body["status"] == "NO_DATA" and body["enabled"] is False
+
+
+def test_endpoint_serves_artifact(tmp_path, monkeypatch):
+    """Artifact varsa içerik aynen sunulur (çift-varyant alanlar dahil)."""
+    import json
+
+    from fastapi.testclient import TestClient
+
+    from apps.api.main import app
+    art = tmp_path / "sh.json"
+    art.write_text(json.dumps({
+        "generated_at": "2026-07-06T00:00:00+00:00",
+        "engine": "tf_scoring_v2_shadow_r2",
+        "per_symbol": {"BTCUSD": {"status": "OK", "direction": -0.7,
+                                  "bias": "BEARISH",
+                                  "regime": {"regime": "DOWN", "er": 0.23},
+                                  "direction_blend_legacy": -0.65}},
+    }), encoding="utf-8")
+    monkeypatch.setattr(shadow, "_ART", str(art))
+    body = TestClient(app).get("/api/v1/learning/tf-scoring-shadow").json()
+    assert body["status"] == "OK"
+    assert body["per_symbol"]["BTCUSD"]["regime"]["regime"] == "DOWN"
+    assert body["per_symbol"]["BTCUSD"]["direction_blend_legacy"] == -0.65
+
+
 # ── R2: rejim-anahtarlı birincil kural ───────────────────────────────────────
 
 def test_regime_directed_up_only_1d_speaks():

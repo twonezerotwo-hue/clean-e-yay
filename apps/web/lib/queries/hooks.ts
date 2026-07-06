@@ -387,6 +387,17 @@ export const useSubsignalScorecard = () => {
   });
 };
 
+// R4 — v2 gölge her learning-cycle (~5 dk) tazelenir.
+export const useTfScoringShadow = () => {
+  const policy = usePanelQueryPolicy(5 * 60_000);
+  return useQuery({
+    queryKey: qk.tfScoringShadow,
+    queryFn: api.tfScoringShadow,
+    staleTime: 60_000,
+    ...policy,
+  });
+};
+
 export const useThresholdAutotune = () => {
   const policy = usePanelQueryPolicy(5 * 60_000);
   return useQuery({

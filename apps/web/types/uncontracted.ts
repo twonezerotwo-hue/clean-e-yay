@@ -78,3 +78,27 @@ export interface SubsignalScorecardView {
   per_timeframe?: Record<string, SubsignalTf>;
   note?: string;
 }
+
+// R4 — v2 gölge: sembol başına rejim-anahtarlı yön (tf_scoring_shadow artifact).
+export interface TfScoringShadowSymbol {
+  status: string; // OK | no_evidence | ERROR:*
+  direction?: number | null;
+  bias?: string; // BULLISH | BEARISH | NEUTRAL | NONE
+  regime?: { regime: string; er: number } | null;
+  direction_blend_legacy?: number | null;
+  tf_scores?: Record<string, number>;
+  tf_scores_legacy?: Record<string, number>;
+  drivers?: Record<string, Record<string, { lean: number; weight: number }>>;
+}
+
+// R4 — v2 gölge görünümü (GET /learning/tf-scoring-shadow).
+export interface TfScoringShadowView {
+  status: string; // OK | NO_DATA
+  enabled: boolean;
+  generated_at?: string;
+  engine?: string;
+  scorecard_engine?: string | null;
+  symbols_scored?: number;
+  per_symbol?: Record<string, TfScoringShadowSymbol>;
+  note?: string;
+}

@@ -61,7 +61,11 @@ import type {
   MarketSessionsTradeUniverseResponse,
 } from "@/types/generated/api";
 // Sözleşmesiz (observe-only) öğrenme görünümleri — codegen'e girmedi (I serisi).
-import type { EvidenceBusView, SubsignalScorecardView } from "@/types/uncontracted";
+import type {
+  EvidenceBusView,
+  SubsignalScorecardView,
+  TfScoringShadowView,
+} from "@/types/uncontracted";
 
 // NEXT_PUBLIC_API_BASE_URL tercih edilen; NEXT_PUBLIC_API_BASE geriye dönük
 // uyumluluk için fallback olarak okunur. Boş bırakılırsa same-origin
@@ -624,6 +628,8 @@ export const api = {
     fetchJSON<EdgeReportView>("/api/v1/learning/edge-report"),
   subsignalScorecard: () =>
     fetchJSON<SubsignalScorecardView>("/api/v1/learning/subsignal-scorecard"),
+  tfScoringShadow: () =>
+    fetchJSON<TfScoringShadowView>("/api/v1/learning/tf-scoring-shadow"),
   thresholdAutotune: () =>
     fetchJSON<ThresholdAutotuneView>("/api/v1/learning/threshold-autotune"),
   thresholdAb: (

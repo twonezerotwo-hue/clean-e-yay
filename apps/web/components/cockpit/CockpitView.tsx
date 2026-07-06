@@ -48,6 +48,7 @@ import { BookAuditPanel } from "@/components/panels/BookAuditPanel";
 import { DatasetHealthPanel } from "@/components/panels/DatasetHealthPanel";
 import { EdgeReportPanel } from "@/components/panels/EdgeReportPanel";
 import { SubsignalScorecardPanel } from "@/components/panels/SubsignalScorecardPanel";
+import { TfScoringShadowPanel } from "@/components/panels/TfScoringShadowPanel";
 import { EntryExitQualityPanel } from "@/components/panels/EntryExitQualityPanel";
 import { ExitForensicsPanel } from "@/components/panels/ExitForensicsPanel";
 import { DiscoveryPanel } from "@/components/panels/DiscoveryPanel";
@@ -1393,6 +1394,9 @@ export function CockpitView() {
               </LearnStep>
               <LearnStep step="14" label="Sinyal karnesi — hangi sinyal hangi zaman diliminde kanıtlı" wide>
                 <SubsignalScorecardPanel />
+              </LearnStep>
+              <LearnStep step="15" label="Yeni beyin (gölge) — rejim-anahtarlı v2 yönü, izler karar vermez" wide>
+                <TfScoringShadowPanel />
               </LearnStep>
             </div>
           </Layer2DetailGroup>

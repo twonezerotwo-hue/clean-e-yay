@@ -841,6 +841,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/learning/tf-scoring-shadow": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** R4 — tf_scoring_v2 gölge yönleri (rejim-anahtarlı + kontrol harmanı, read-only) */
+        get: operations["getLearningTfScoringShadow"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/learning/rebalance/proposal": {
         parameters: {
             query?: never;
@@ -4843,6 +4860,28 @@ export interface operations {
         };
     };
     getLearningSubsignalScorecard: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK (artifact yoksa status=NO_DATA) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+    };
+    getLearningTfScoringShadow: {
         parameters: {
             query?: never;
             header?: never;
