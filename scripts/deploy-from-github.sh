@@ -87,6 +87,11 @@ ensure_env LEARNING_INCLUDE_SHADOW 1
 # karar/skor/paper'a SIFIR temas, asla raise etmez; rollback = flag kapat.
 # Lokal .env'de de =1 (owner kurali: lokal+AWS senkron).
 ensure_env BAR_HISTORY_ENABLED 1
+# D4 per-TF trust kapisi (2026-07-06, owner "10/10" hedefi): canli tf_weights
+# kapisi acildiginda ogrenilmis agirlik yalniz kendi kanitini getirmis TF'lere
+# akar (edge_proven), kanitsiz TF notr. SERTLESTIRME — yeni davranis ACMAZ,
+# mevcut kapiyi kisar; bugun kapi kapaliyken davranis degismez. Lokal .env=1.
+ensure_env TF_TRUST_PER_BUCKET 1
 
 echo "deploy: restart services"
 sudo systemctl restart eyay-supervisor.service
