@@ -590,6 +590,25 @@ def run_once() -> dict:
         subsignal_scorecard_status = f"ERROR:{type(exc).__name__}"
         errors.append(f"subsignal_scorecard:{type(exc).__name__}")
 
+    # D6 — tf_scoring_v2 GÖLGE (TF_SCORING_V2_SHADOW, default OFF → tam no-op).
+    # Karne kanıtıyla (kanıt-cap ağırlık) katmanlı v2 yön skorunu CANLI barlar
+    # üstünde üretir → "v2 şu an ne derdi" izole artifact. SALT-GÖZLEM: canlı
+    # skora/karara/paper'a yazmaz (D7 yarışın girdisi). Lazy import — flag
+    # kapalıyken skorlama bağımlılıkları yüklenmez (bayt-eşdeğer koşu).
+    tf_scoring_v2_shadow_status = "DISABLED"
+    try:
+        from packages.learning import tf_scoring_shadow
+        if tf_scoring_shadow.enabled():
+            v2s = tf_scoring_shadow.run()
+            tf_scoring_v2_shadow_status = str(v2s.get("status", "UNKNOWN"))
+            if tf_scoring_v2_shadow_status == "OK":
+                log.info(
+                    "tf_scoring_v2_shadow: symbols_scored=%s", v2s.get("symbols_scored")
+                )
+    except Exception as exc:  # defensive — worker patlamamalı
+        tf_scoring_v2_shadow_status = f"ERROR:{type(exc).__name__}"
+        errors.append(f"tf_scoring_v2_shadow:{type(exc).__name__}")
+
     if errors:
         status = "COMPLETED_WITH_ERRORS"
     elif outcomes_seen == 0:
@@ -635,6 +654,7 @@ def run_once() -> dict:
         "challenger_train_status": challenger_train_status,  # B-3 ağırlık+quantum karne (DISABLED=flag OFF)
         "challenger_promotion_status": challenger_promotion_status,  # B-4 terfi kriteri (DISABLED=flag OFF)
         "subsignal_scorecard_status": subsignal_scorecard_status,  # D5 sinyal karnesi (DISABLED=flag OFF)
+        "tf_scoring_v2_shadow_status": tf_scoring_v2_shadow_status,  # D6 v2 gölge skoru (DISABLED=flag OFF)
         "duration_ms": duration_ms,        # CP1 — perf görünürlüğü
         "over_budget": over_budget,        # CP1 — bütçe aşımı bayrağı
         "errors": errors,

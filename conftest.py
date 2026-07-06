@@ -98,6 +98,9 @@ def _package1_flags_off_by_default(monkeypatch: pytest.MonkeyPatch) -> None:
     # (learning koşusu bayt-eşdeğer); flag'i test eden testler kendisi açar.
     monkeypatch.delenv("SUBSIGNAL_SCORECARD_ENABLED", raising=False)
     monkeypatch.delenv("SUBSIGNAL_SCORECARD_INTERVAL_SEC", raising=False)
+    # D6 (2026-07-06) — tf_scoring_v2 gölge worker-adımı testlerde default OFF
+    # (learning koşusu bayt-eşdeğer); flag'i test eden testler kendisi açar.
+    monkeypatch.delenv("TF_SCORING_V2_SHADOW", raising=False)
 
 
 @pytest.fixture(autouse=True, scope="session")

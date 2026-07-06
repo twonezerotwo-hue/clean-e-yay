@@ -104,7 +104,7 @@ COVERAGE: dict[str, dict] = {
         "reason": "weight_rollback'in min-outcome eşiği — aç/kapa aktivasyonu değil, "
                   "rollback mekanizmasının ta kendisinin parametresi.",
     },
-    # --- SHADOW_EXEMPT: canlı karara dokunmaz (5) ---
+    # --- SHADOW_EXEMPT: canlı karara dokunmaz (6) ---
     "DISCOVERY_SCAN_ENABLED": {
         "mechanism": SHADOW_EXEMPT, "monitor": None,
         "reason": "Keşif tarayıcı GÖLGEDE koşar (K serisi); işlem açmaz, canlı karar "
@@ -129,6 +129,12 @@ COVERAGE: dict[str, dict] = {
         "mechanism": SHADOW_EXEMPT, "monitor": None,
         "reason": "Sinyal karnesi (D5) salt-gözlem: haftalık sinyal×TF ileri-getiri "
                   "ölçümü, izole artifact; canlı skora/karara/paper'a ASLA yazmaz.",
+    },
+    "TF_SCORING_V2_SHADOW": {
+        "mechanism": SHADOW_EXEMPT, "monitor": None,
+        "reason": "tf_scoring_v2 (D6) gölge yön skoru: karne kanıtıyla katmanlı v2 "
+                  "yönü canlı barlarda üretir, izole artifact; canlı skora/karara/"
+                  "paper'a ASLA yazmaz (D7 yarış girdisi).",
     },
 }
 
