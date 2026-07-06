@@ -33,7 +33,13 @@ from packages.data.providers.technical.timeframe import (
     _clamp,
     _ema_stack,
 )
-from packages.signals import bollinger_fade, market_structure, rsi_extreme, vwap_fade
+from packages.signals import (
+    bollinger_fade,
+    candle_rejection,
+    market_structure,
+    rsi_extreme,
+    vwap_fade,
+)
 
 FLAG = "SUBSIGNAL_SCORECARD_ENABLED"
 _ENV_TRUE = frozenset({"1", "true", "yes", "on"})
@@ -121,6 +127,10 @@ def analyze(symbols: list[str] | None = None, timeframes=_TIMEFRAMES) -> dict:
                 bf = bollinger_fade.lean(closes_all[: i + 1])
                 if bf is not None:
                     leans["bollinger_fade"] = bf
+                # Candle-rejection: rejeksiyon mumu = giriş zamanlaması (kapalı dedektör reuse)
+                cr = candle_rejection.lean(bars[: i + 1])
+                if cr is not None:
+                    leans["candle_rejection"] = cr
                 if not leans:
                     continue
                 n_points += 1
