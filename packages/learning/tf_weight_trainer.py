@@ -26,6 +26,7 @@ falling back to PRIOR only when no contribution data matches the closed trades.
 """
 from __future__ import annotations
 
+import os
 from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime
 
@@ -41,6 +42,16 @@ _TF_KEY: dict[str, str] = {"15m": "m15", "1h": "h1", "4h": "h4", "1d": "d1", "1w
 # Default live-application strategy bucket. Symbol-specific resolution is a follow-up;
 # applying a single trusted bucket is the honest first step (no fake per-symbol pick).
 DEFAULT_LIVE_STRATEGY = "intraday"
+
+# D4 — per-TF trust kapısı (default OFF). Global kapı "herhangi bir TF kanıtlı →
+# BEŞ TF'in ağırlığı birden canlıya akar" diyordu (gevşek). Bu flag AÇIKKEN
+# öğrenilmiş ağırlık yalnız KENDİ kanıtını getirmiş TF'lere akar; kanıtsız TF
+# nötr (1.0) kalır — kapı-kapalı "eşit ağırlık" semantiğinin TF-bazlısı.
+FLAG_PER_BUCKET = "TF_TRUST_PER_BUCKET"
+
+
+def _per_bucket_enabled() -> bool:
+    return os.environ.get(FLAG_PER_BUCKET, "").strip().lower() in {"1", "true", "yes", "on"}
 
 
 @dataclass
@@ -101,7 +112,15 @@ def resolve_live_tf_weights(
         return None
     # Canonical-keyed dict (15m..1w) — what consensus + contribution expect.
     canonical = {"m15": "15m", "h1": "1h", "h4": "4h", "d1": "1d", "w1": "1w"}
-    return {canonical[k]: float(v) for k, v in bucket.items() if k in canonical}
+    out = {canonical[k]: float(v) for k, v in bucket.items() if k in canonical}
+    # D4 — flag AÇIKKEN per-TF sertleştirme: kanıtsız TF'ler nötr 1.0'a çekilir
+    # (öğrenilmiş ağırlık kanıt getirmeyen TF'e sızmaz). Eski rapor artifact'ında
+    # edge_proven_timeframes yoksa dürüst davranış: hiçbir TF kanıtlı sayılmaz.
+    # Flag KAPALI → bu blok hiç koşmaz, davranış bayt-aynı.
+    if _per_bucket_enabled():
+        proven = set(report.get("edge_proven_timeframes") or [])
+        out = {tf: (w if tf in proven else 1.0) for tf, w in out.items()}
+    return out
 
 
 def _renormalise(bucket: dict, prior_total: float) -> dict:

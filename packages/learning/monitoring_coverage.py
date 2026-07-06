@@ -81,7 +81,7 @@ COVERAGE: dict[str, dict] = {
         "monitor": "packages.learning.tf_target_rollback:check_rollback",
         "reason": "TF trailing çarpanı auto-apply; tf_target_store override'ı rollback'li.",
     },
-    # --- INPUT_HYGIENE: filtre/mod; zaten-izlenen mekanizmaya besler (2) ---
+    # --- INPUT_HYGIENE: filtre/mod; zaten-izlenen mekanizmaya besler (3) ---
     "TF_CALIBRATION_AUTO_ONLY": {
         "mechanism": INPUT_HYGIENE, "monitor": None,
         "reason": "tf_platt kalibrasyonunun girdi filtresi (yalnız auto kohort); "
@@ -91,6 +91,12 @@ COVERAGE: dict[str, dict] = {
         "mechanism": INPUT_HYGIENE, "monitor": None,
         "reason": "Ağırlık eğitimi skorlama MODU (winsorize profit-factor); ağırlık "
                   "auto-apply zaten weight_rollback outcome-rollback'ine bağlı.",
+    },
+    "TF_TRUST_PER_BUCKET": {
+        "mechanism": INPUT_HYGIENE, "monitor": None,
+        "reason": "Canlı tf_weights kapısının per-TF SERTLEŞTİRMESİ (D4): kanıtsız "
+                  "TF nötr kalır — mevcut trust-gate'i kısar, yeni canlı-dokunuş "
+                  "eklemez; tf_weights zaten kalibrasyon+owner zincirinde.",
     },
     # --- TUNING_PARAM: bir izleyicinin parametresi (1) ---
     "REBALANCE_ROLLBACK_MIN_OUTCOMES": {
