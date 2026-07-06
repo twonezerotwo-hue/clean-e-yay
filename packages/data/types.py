@@ -719,6 +719,9 @@ class RotationView(BaseModel):
     source: str = "unknown"
     verified: bool = False
     error: str | None = None
+    # quantum_v2 — sembol → 0-100 kesitsel göreceli-güç (para akışı) skoru.
+    # Boş = yeterli veri yok / eski kayıt; consensus o sembolde v1'e düşer.
+    per_symbol: dict[str, float] = Field(default_factory=dict)
 
 
 # --------------------------------------------------------------------------

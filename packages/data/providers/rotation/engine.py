@@ -13,6 +13,7 @@ PAPER_SAFE / NO_EXECUTION — yalnızca gözlem.
 """
 from __future__ import annotations
 
+import statistics as _st
 from dataclasses import dataclass, field
 
 # Rotasyon anahtarı → Clean OHLCV sembolü
@@ -108,11 +109,57 @@ class RotationResult:
     class_scores: list[ClassScore] = field(default_factory=list)
     evidence: list[str] = field(default_factory=list)
     error: str | None = None
+    # quantum_v2 — sembol (VALUE, örn "BTCUSD") → 0-100 kesitsel göreceli-güç
+    # skoru (para akışı: 60+ lider/giriş, 40− geride/çıkış). v1 tek makro tilt
+    # herkese aynı girerken bu sembol-başı ayrışır. Boş = yeterli veri yok.
+    per_symbol: dict[str, float] = field(default_factory=dict)
 
 
 # ---------------------------------------------------------------------------
 # Matematik (pure python)
 # ---------------------------------------------------------------------------
+
+# quantum_v2 — kesitsel göreceli-güç ufukları (bar) ve oynaklık penceresi.
+_RS_HORIZONS = (21, 63, 126)   # ~1a / 3a / 6a
+_RS_VOL_WINDOW = 20
+_RS_MIN_HISTORY = max(_RS_HORIZONS) + 1
+
+
+def _relative_strength(closes: dict[str, list[float]]) -> dict[str, float]:
+    """Sembol (VALUE) → 0-100 kesitsel göreceli-güç (para akışı) skoru.
+
+    Her varlığın çok-ufuklu (%1a/3a/6a) getirisi kendi OYNAKLIĞINA bölünür
+    (gümüşün %15'i ile tahvilin %1'i aynı kefeye konmaz — TF-adil), sonra 9
+    varlık arasında z-skorlanır (kesitsel). z>0 → akranlarına göre lider (para
+    giriyor), z<0 → geride (para çıkıyor). 50 nötr, +20/z. Yetersiz veri → atla
+    (uydurma yok); <3 kullanılabilir varlık → boş (hepsi v1'e düşer). Pure."""
+    raw: dict[str, float] = {}
+    for key, c in closes.items():
+        if len(c) < _RS_MIN_HISTORY:
+            continue
+        moms = [(c[-1] - c[-1 - n]) / c[-1 - n] * 100.0 for n in _RS_HORIZONS if c[-1 - n]]
+        rets = [
+            (c[i] - c[i - 1]) / c[i - 1]
+            for i in range(len(c) - _RS_VOL_WINDOW, len(c))
+            if i > 0 and c[i - 1]
+        ]
+        if len(moms) < len(_RS_HORIZONS) or len(rets) < 3:
+            continue
+        vol = _st.pstdev(rets) * 100.0
+        if vol <= 0:
+            continue
+        raw[key] = (sum(moms) / len(moms)) / vol
+    if len(raw) < 3:
+        return {}
+    vals = list(raw.values())
+    mu = _st.mean(vals)
+    sd = _st.pstdev(vals) or 1.0
+    out: dict[str, float] = {}
+    for key, rs in raw.items():
+        symbol = ROTATION_SYMBOLS.get(key, key)
+        out[symbol] = round(max(0.0, min(100.0, 50.0 + (rs - mu) / sd * 20.0)), 2)
+    return out
+
 
 def momentum_30d(series: list[float]) -> float:
     if len(series) < 31:
@@ -253,4 +300,5 @@ def compute(closes: dict[str, list[float]]) -> RotationResult:
         primary_flow=primary,
         class_scores=scored,
         evidence=evidence,
+        per_symbol=_relative_strength(closes),
     )

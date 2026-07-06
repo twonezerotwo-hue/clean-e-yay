@@ -104,4 +104,5 @@ def get_rotation() -> RotationView:
         status="OK",
         source=_SOURCE,
         verified=True,
+        per_symbol=result.per_symbol,
     )

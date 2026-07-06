@@ -456,6 +456,30 @@ def _quantum(snap: MarketSnapshot) -> float:
     return snap.rotation.score
 
 
+def _quantum_v2_enabled() -> bool:
+    """`consensus.quantum_v2` owner-flag'i (default KAPALI = v1 birebir).
+
+    Açıkken quantum oyu tek makro tilt yerine SEMBOL-BAŞI kesitsel göreceli-güç
+    (para akışı: lider/geride) skorundan gelir (rotation.per_symbol). Kanıtsız
+    (yeterli veri yok) sembolde v1'e düşer. Aktivasyon owner kararı; v2 skoru her
+    hücrede `quantum_v2_observe` satırıyla yan yana."""
+    try:
+        return bool(load_thresholds().get("consensus", {}).get("quantum_v2", False))
+    except (OSError, KeyError, ValueError, TypeError):
+        return False
+
+
+def _quantum_v2(snap: MarketSnapshot, symbol: str) -> float | None:
+    """Sembolün kesitsel göreceli-güç (para akışı) skoru (0-100) veya None.
+
+    rotation.per_symbol'dan okur (rotation motoru üretir); sembol yoksa/veri
+    yetersizse None → çağıran v1 makro tilte düşer (dürüst). getattr ile savunmacı
+    (eski kayıt/test snap'inde alan olmayabilir → v1)."""
+    per_symbol = getattr(snap.rotation, "per_symbol", None) or {}
+    val = per_symbol.get(symbol)
+    return float(val) if val is not None else None
+
+
 MODULE_ORDER = ["touche", "fundamental", "news", "sentinel", "quantum"]
 
 
@@ -523,8 +547,19 @@ def build(
         tf_warnings.append(f"sentinel_dropped:no_risk_appetite_layer:{symbol}:{timeframe}")
     # Rotasyon UNAVAILABLE ise quantum modülü düşer; ağırlığı _redistribute
     # ile diğer modüllere dağıtılır (mock skor karar zincirine girmez).
+    # quantum_v2 — sembol-başı kesitsel göreceli-güç (para akışı): flag açıkken v2
+    # canlı, kapalıyken v1 makro tilt (bayt-aynı). v2 kanıtsız (veri yetersiz)
+    # sembolde v1'e düşer. İki varyant her zaman gözlem satırında yan yana.
     if snap.rotation.status != "UNAVAILABLE":
-        raw["quantum"] = _quantum(snap)
+        quantum_v1 = _quantum(snap)
+        quantum_v2 = _quantum_v2(snap, symbol)
+        use_q2 = _quantum_v2_enabled() and quantum_v2 is not None
+        raw["quantum"] = quantum_v2 if use_q2 else quantum_v1
+        if quantum_v2 is not None:
+            tf_warnings.append(
+                "quantum_v2_observe:"
+                f"v1={quantum_v1:.1f}:v2={quantum_v2:.1f}:used={'v2' if use_q2 else 'v1'}"
+            )
     weights_cfg = load_active_weights()
     base = weights_cfg["regimes"].get(regime.label, weights_cfg["regimes"]["NEUTRAL"])
     available = set(raw.keys())

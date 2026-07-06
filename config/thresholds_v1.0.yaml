@@ -45,6 +45,14 @@ consensus:
   # AKTİF (2026-07-06, owner terfi kararı): teknik yön oyu artık yeni beyinden.
   # v1 gözlem satırında yan yana kalır; kanıtsız/bayat hücrede otomatik v1'e düşer.
   touche_v2: true
+  # quantum v2 — sembol-başı kesitsel GÖRECELİ-GÜÇ (para akışı) skoru. false
+  # (DEFAULT) → v1 birebir: tek makro risk-on tilt herkese aynı girer (ölü yük).
+  # true → v2: her sembol akranlarına göre lider/geride notu alır (oynaklık-adil,
+  # çok-ufuklu); kanıtsız (veri yetersiz) sembolde otomatik v1'e düşer. İki varyant
+  # her hücrede `quantum_v2_observe:v1=..:v2=..:used=..` satırında yan yana.
+  # NOT (2026-07-06 owner kararı): kanıtsız aktive edildi (backtest/karne edge'i
+  # YOK; karne v1'i NEUTRAL rejimde TERS ölçmüştü). Geri-alma = bu flag false.
+  quantum_v2: false
 
 # M1 — haber sentiment sınıflandırıcı sürümü. false (DEFAULT) → v1 birebir
 # (tam-kelime eşleşme; "Bitcoin rebounds…" gibi çekimli başlıklar neutral kalır).
