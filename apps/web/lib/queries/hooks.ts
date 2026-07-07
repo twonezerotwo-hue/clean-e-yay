@@ -467,6 +467,17 @@ export const useMetaGate = () => {
   });
 };
 
+// Faz-A (EV kapısı) — per-hücre payoff hazırlık yüzeyi learning-cycle'da tazelenir.
+export const usePayoffReadiness = () => {
+  const policy = usePanelQueryPolicy(5 * 60_000);
+  return useQuery({
+    queryKey: qk.payoffReadiness,
+    queryFn: api.payoffReadiness,
+    staleTime: 60_000,
+    ...policy,
+  });
+};
+
 // Faz-A (Kalibrasyon) — per-TF fit güven yüzeyi learning-cycle'da tazelenir.
 export const useCalibrationFit = () => {
   const policy = usePanelQueryPolicy(5 * 60_000);

@@ -55,6 +55,7 @@ import { ExitForensicsPanel } from "@/components/panels/ExitForensicsPanel";
 import { MetaGatePanel } from "@/components/panels/MetaGatePanel";
 import { NewsEventStudyPanel } from "@/components/panels/NewsEventStudyPanel";
 import { CalibrationFitPanel } from "@/components/panels/CalibrationFitPanel";
+import { PayoffReadinessPanel } from "@/components/panels/PayoffReadinessPanel";
 import { DiscoveryPanel } from "@/components/panels/DiscoveryPanel";
 import { BacktestChallengerPanel } from "@/components/panels/BacktestChallengerPanel";
 import { ThresholdAutotunePanel } from "@/components/panels/ThresholdAutotunePanel";
@@ -1413,6 +1414,9 @@ export function CockpitView() {
               </LearnStep>
               <LearnStep step="19" label="Kalibrasyon oturmuşluğu — hangi TF'in güven-ayarı yeterli örnekle oturdu" wide>
                 <CalibrationFitPanel />
+              </LearnStep>
+              <LearnStep step="20" label="Payoff EV hazırlığı — hangi hücre gerçekleşen-R kâr hesabına geçecek kadar örnek gördü" wide>
+                <PayoffReadinessPanel />
               </LearnStep>
             </div>
           </Layer2DetailGroup>

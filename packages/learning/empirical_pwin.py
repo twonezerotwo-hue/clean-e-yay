@@ -273,4 +273,55 @@ def lookup(timeframe: str, regime: str) -> EmpiricalPwin | None:
         return None
 
 
-__all__ = ["EmpiricalPwin", "build_table", "cfg", "enabled", "lookup", "write_table"]
+def payoff_readiness() -> dict:
+    """Faz-A (EV kapısı) — per-hücre payoff EV hazırlık yüzeyi (read-only).
+
+    EV kapısı payoff-ağırlıklı EV'ye ancak bir hücrede HER İKİ yönde de
+    gerçekleşen-R örneği ≥ min_r_samples olunca geçer (aksi: dürüst sabit-RR).
+    Bu yüzey her hücrenin (tf|rejim) win_r_n/loss_r_n'ini eşiğe karşı gösterir →
+    owner en dolu hücrenin eşiği geçişini izler ("10/10 = R-verisi birikince
+    payoff EV devreye girer"). Hiçbir çıktı karara dokunmaz; guard zaten canlı."""
+    data = _load_cached()
+    ev_cfg = load_thresholds().get("ev_gate") or {}
+    min_r = int(ev_cfg.get("min_r_samples", 8))
+    payoff_weighted = bool(ev_cfg.get("payoff_weighted", False))
+    cells = (data.get("cells") or {})
+
+    rows = []
+    for key, c in sorted(cells.items()):
+        wr = int(c.get("win_r_n") or 0)
+        lr = int(c.get("loss_r_n") or 0)
+        ready = wr >= min_r and lr >= min_r
+        rows.append({
+            "cell": key,
+            "win_r_n": wr,
+            "loss_r_n": lr,
+            "min_r_samples": min_r,
+            "payoff_ready": ready,
+            # eşiğe kalan (iki yönün en zayıfı) — 0 = hazır
+            "short_by": max(0, min_r - min(wr, lr)),
+        })
+    ready_cells = [r["cell"] for r in rows if r["payoff_ready"]]
+    not_ready = [r for r in rows if not r["payoff_ready"]]
+    closest = min(not_ready, key=lambda r: r["short_by"]) if not_ready else None
+    return {
+        "status": "OK" if rows else "NO_DATA",
+        "payoff_weighted": payoff_weighted,
+        "min_r_samples": min_r,
+        "cell_count": len(rows),
+        "ready_count": len(ready_cells),
+        "ready_cells": ready_cells,
+        "closest_cell": closest,   # eşiğe en yakın hazır-olmayan hücre (None = hepsi hazır)
+        "per_cell": rows,
+        "note": (
+            "payoff_ready hücrelerde EV gerçekleşen-R kullanır; kalanlar dürüstçe "
+            "sabit-RR'ye düşer (uydurma payoff yok). Eşik = her iki yönde ≥ min_r_samples"
+        ),
+        "shadow_only": True,
+    }
+
+
+__all__ = [
+    "EmpiricalPwin", "build_table", "cfg", "enabled", "lookup",
+    "payoff_readiness", "write_table",
+]

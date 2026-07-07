@@ -112,6 +112,30 @@ export interface MetaGateView {
   };
 }
 
+// Faz-A (EV kapısı) — per-hücre payoff EV R-örnek hazırlık satırı.
+export interface PayoffReadinessRow {
+  cell: string; // "tf|rejim"
+  win_r_n: number;
+  loss_r_n: number;
+  min_r_samples: number;
+  payoff_ready: boolean;
+  short_by: number; // eşiğe kalan (0 = hazır)
+}
+
+// Faz-A — payoff EV hazırlık görünümü (GET /learning/payoff-readiness). Salt-
+// gözlem: hangi hücre gerçekleşen-R payoff EV'sine geçecek kadar örnek gördü.
+export interface PayoffReadinessView {
+  status: string; // OK | NO_DATA
+  shadow_only: boolean;
+  payoff_weighted: boolean;
+  min_r_samples: number;
+  cell_count: number;
+  ready_count: number;
+  ready_cells: string[];
+  closest_cell: PayoffReadinessRow | null;
+  per_cell: PayoffReadinessRow[];
+}
+
 // Faz-A (Kalibrasyon) — per-TF Platt fit güven satırı.
 export interface CalibrationFitRow {
   timeframe: string;

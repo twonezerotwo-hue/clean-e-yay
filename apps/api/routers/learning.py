@@ -22,6 +22,7 @@ from packages.learning import (
     cohorts,
     dataset_health,
     edge_report,
+    empirical_pwin,
     entry_exit_quality,
     evidence_bus,
     exit_forensics,
@@ -114,6 +115,16 @@ def get_tf_weights() -> dict:
     changes the verified outcomes suggest. Informational — live weights are never
     moved here (owner approval, never auto-apply)."""
     return tf_weight_trainer.report_viewmodel()
+
+
+@router.get("/learning/payoff-readiness")
+def get_payoff_readiness() -> dict:
+    """Faz-A (EV kapısı) — per-hücre payoff EV hazırlık yüzeyi (read-only,
+    PAPER_SAFE). Her hücrenin (tf|rejim) gerçekleşen-R örneği (win_r_n/loss_r_n)
+    min_r_samples eşiğine karşı; payoff-ağırlıklı EV ancak iki yönde de eşik
+    dolunca devreye girer. "10/10 = R-verisi birikince payoff EV" görünürlüğü;
+    guard zaten canlı (yetersiz hücre dürüstçe sabit-RR'ye düşer)."""
+    return empirical_pwin.payoff_readiness()
 
 
 @router.get("/learning/calibration-fit")

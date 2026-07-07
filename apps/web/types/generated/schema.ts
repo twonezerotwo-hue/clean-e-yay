@@ -807,6 +807,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/learning/payoff-readiness": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Faz-A — Per-hücre payoff EV R-örnek hazırlık yüzeyi (read-only) */
+        get: operations["getLearningPayoffReadiness"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/learning/calibration-fit": {
         parameters: {
             query?: never;
@@ -4903,6 +4920,28 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ExitForensicsView"];
+                };
+            };
+        };
+    };
+    getLearningPayoffReadiness: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK (veri yoksa status=NO_DATA) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
                 };
             };
         };

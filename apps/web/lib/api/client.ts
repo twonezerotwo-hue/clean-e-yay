@@ -66,6 +66,7 @@ import type {
   EvidenceBusView,
   MetaGateView,
   NewsEventStudyView,
+  PayoffReadinessView,
   SubsignalScorecardView,
   TfScoringRaceView,
   TfScoringShadowView,
@@ -656,6 +657,8 @@ export const api = {
   metaGate: () => fetchJSON<MetaGateView>("/api/v1/learning/meta-gate"),
   calibrationFit: () =>
     fetchJSON<CalibrationFitView>("/api/v1/learning/calibration-fit"),
+  payoffReadiness: () =>
+    fetchJSON<PayoffReadinessView>("/api/v1/learning/payoff-readiness"),
   newsEventStudy: () =>
     fetchJSON<NewsEventStudyView>("/api/v1/learning/news-event-study"),
   discovery: () => fetchJSON<DiscoveryView>("/api/v1/learning/discovery"),
