@@ -536,13 +536,18 @@ regime_risk_brake:
 # TF → nötr (1.0). Geri-alma = enabled: false (kod değişikliği gerekmez).
 trailing_tf_aware:
   enabled: true
+  # REVİZE (2026-07-07, exit_backtest kanıtı): eski profil trail'i GEVŞETİYORDU
+  # (4h 2.0/2.5) → giveback'i ARTIRIYORDU. Backtest (4302 entry, 4 TF, iki
+  # bağımsız örneklem) trail mesafesini SIKMAK gerektiğini gösterdi (dar ~0.5R tek
+  # pozitif marjinal). Artık profil <1.0 = trail'i SIKAR + erken devreye (kârı
+  # geri vermeden kilitler). Guardrail [0.4, 4.0]. Geri-alma = flag false (düz).
   tf_profile:
     #      mesafe        devreye-girme
-    15m: { distance_mult: 1.0, activate_mult: 1.0 }   # kısa TF: düz trailing zaten uygun
-    1h:  { distance_mult: 1.4, activate_mult: 1.5 }
-    4h:  { distance_mult: 2.0, activate_mult: 2.5 }   # en kötü sızıntı → en çok gevşeyen
-    1d:  { distance_mult: 2.2, activate_mult: 2.5 }
-    1w:  { distance_mult: 2.5, activate_mult: 3.0 }
+    15m: { distance_mult: 1.0, activate_mult: 1.0 }   # kısa TF: düz trailing zaten iyi (backtest)
+    1h:  { distance_mult: 0.8, activate_mult: 1.0 }   # sık + erken
+    4h:  { distance_mult: 0.7, activate_mult: 1.0 }   # en kötü sızıntı → en çok SIKILAN
+    1d:  { distance_mult: 0.7, activate_mult: 1.0 }
+    1w:  { distance_mult: 0.7, activate_mult: 1.0 }
 
 # Açık kitap yapısal denetimi (packages/learning/book_audit.py). Canlı açık
 # pozisyon kitabını tarar; KAPANIŞ BEKLEMEDEN yapısal mantık hatalarını (aynı
