@@ -41,6 +41,7 @@ from packages.data.providers import rotation as rotation_provider
 from packages.data.providers.rotation.engine import ROTATION_SYMBOLS
 from packages.data.providers.rotation.engine import compute as rotation_compute
 from packages.data.providers.technical import compute_snapshot
+from packages.data.registry.loader import load_thresholds
 from packages.regime.classifier import classify
 
 _ENV_TRUE = {"1", "true", "yes", "on"}
@@ -259,19 +260,44 @@ def reconstruct_decision_at(
     )
 
 
+def _lookback_days() -> int:
+    """Y-3 — `backtest_challenger.lookback_days` (config; 0/yok = mevcut davranış).
+
+    Rejim-çeşitliliği darboğazı pencere kısalığıydı (365 günde DEFENSIVE 5 /
+    CRISIS 0 kayıt); makro+ETF serileri (yfinance) zaten 2 yıl taşır, sınır
+    yalnız BTC'nin CoinGecko 1d planıydı (ücretsiz katman 365 gün)."""
+    try:
+        return int((load_thresholds().get("backtest_challenger") or {}).get("lookback_days", 0))
+    except (OSError, KeyError, ValueError, TypeError):
+        return 0
+
+
 def _load_series():
     """Rotasyon+BTC OHLCV + makro serileri (1d).
 
     OHLCV cache'ten (DXY/VIX + rotasyon/BTC). US10Y/US02Y/CPI OHLCV'de YOK →
     FRED geçmişinden (B-2; `FRED_API_KEY` gerekir, yoksa boş → Likidite düşer,
     uydurma yok). FRED ağ çağrısı yapabilir (off-tick learning worker; tik'e sıfır
-    etki) — anahtarsızsa hiç denenmez."""
+    etki) — anahtarsızsa hiç denenmez.
+
+    Y-3: `lookback_days` router derinliğini (BTC coingecko=365) aşıyorsa BTC
+    serisi yfinance `BTC-USD` (2y) ile derinleştirilir — YALNIZ bu izole
+    challenger kanalı; canlı tick/karar OHLCV yönlendirmesi DEĞİŞMEZ."""
     from packages.data.providers.ohlcv import get_bars
     from packages.data.providers.price import fred
 
+    lookback = _lookback_days()
     bars_by_symbol: dict[str, list] = {}
     for sym in set(ROTATION_SYMBOLS.values()) | {"BTCUSD"}:
         bars_by_symbol[sym] = get_bars(sym, "1d") or []
+    if lookback > len(bars_by_symbol.get("BTCUSD") or []):
+        try:
+            from packages.data.providers.ohlcv import yfinance as _yf
+            deep = _yf.fetch_by_ticker("BTC-USD", "BTCUSD", "1d") or []
+            if len(deep) > len(bars_by_symbol.get("BTCUSD") or []):
+                bars_by_symbol["BTCUSD"] = deep[-lookback:]
+        except Exception:  # derin seri gelmezse mevcut (365g) seriyle sürer
+            pass
     macro_by_symbol: dict[str, list] = {}
     for sym in _MACRO_SYMBOLS:
         if sym in _FRED_SYMBOLS:

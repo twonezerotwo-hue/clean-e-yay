@@ -463,6 +463,15 @@ strategy_shaping:
     PULLBACK:           { stop: 0.9,  tp_rr: 1.0,  trail: 1.0,  size: 1.0 }   # trende dönüş, kontrollü
     SCALP:              { stop: 0.75, tp_rr: 0.8,  trail: 0.75, size: 0.7 }   # hızlı gir-çık, çok sıkı
 
+# Y-3 — Backtest-challenger geçmiş penceresi (İZOLE kanal ayar parametresi; canlı
+# karara dokunmaz, yalnız challenger artifact üretim derinliği). 365 günde rejim
+# çeşitliliği yetersizdi (DEFENSIVE 5 / CRISIS 0 kayıt — sentinel/quantum v2 ve
+# challenger karneleri için darboğaz). Makro+ETF serileri (yfinance) zaten 2 yıl;
+# BTC, CoinGecko 365-gün sınırını aşan istekte yfinance BTC-USD (2y) ile
+# derinleştirilir. 0 = eski davranış (365).
+backtest_challenger:
+  lookback_days: 730
+
 # Y-1 — Rejim risk freni (2026-07-07 modül karnesi: OFFENSIVE'da yön kararı her iki
 # sürümde de negatif; backtest −%75 + canlı kohort negatif). Kanıtı ÇİFT kaynaklı
 # (canlı AUTO kohort + backtest challenger, İKİSİ de negatif + min örnek) rejimde
