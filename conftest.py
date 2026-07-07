@@ -68,6 +68,9 @@ def _package1_flags_off_by_default(monkeypatch: pytest.MonkeyPatch) -> None:
     # Y-1 (2026-07-07) — regime_risk_brake kayıt fazında zaten false; ileride aktive
     # edilince suite baseline'da kalsın diye şimdiden pinlenir (testler explicit açar).
     pinned.setdefault("regime_risk_brake", {})["enabled"] = False
+    # Y-4 (2026-07-07) — threshold_ab.walk_forward AÇILDI; suite tek-pencere sweep
+    # baseline'ında kalır, wf davranış testleri threshold_override ile açar.
+    pinned.setdefault("threshold_ab", {})["walk_forward"] = False
     monkeypatch.setattr(loader, "_load_thresholds_base", lambda: pinned)
     # Denetim 2026-07-03 — çıkış-makinesi env flag'leri testlerde default OFF
     # (dev makinesinde .env yüklenmiş olabilir; testler baseline'ı varsayar).
