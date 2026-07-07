@@ -135,6 +135,11 @@ partial_tp:
   trigger_r: 1.0
   close_fraction: 0.5
   breakeven: true
+  # Faz-A (Çıkışlar): aktivasyon hazırlık kapısı (promotion_rail). Ham uplift
+  # gürültülü → Wilson-alt-sınır + min örnek. READY olunca governor owner-onay
+  # paketi (STRATEGY_ENABLE); aktivasyon yine owner (KIRMIZI ÇİZGİ, oto-flip yok).
+  promotion:
+    min_evaluable: 20   # bundan az değerlendirilebilir kapanış → NOT_READY
 
 # F5-2 — champion/challenger terfi kriteri (flag'siz gözlem — davranış değişmez).
 # Kriter: (1) shadow log'da ≥ min_matched_decisions eşleşmiş karar; (2) missed-
