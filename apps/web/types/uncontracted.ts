@@ -112,6 +112,28 @@ export interface MetaGateView {
   };
 }
 
+// Faz-A (Kalibrasyon) — per-TF Platt fit güven satırı.
+export interface CalibrationFitRow {
+  timeframe: string;
+  fit_status: string; // fitted | insufficient | identity
+  fit_samples: number;
+  fitted_at: string | null;
+  outcome_trust: string; // CALIBRATED | PRIOR
+  outcome_n: number;
+}
+
+// Faz-A — per-TF fit güven görünümü (GET /learning/calibration-fit). Salt-gözlem:
+// hangi TF'in kalibrasyonu güvenilir (fitted) vs örnek bekliyor (insufficient).
+export interface CalibrationFitView {
+  status: string; // OK | NO_DATA
+  shadow_only: boolean;
+  tf_platt_enabled: boolean;
+  min_trades_per_tf: number;
+  per_timeframe_fit: CalibrationFitRow[];
+  fitted_timeframes: string[];
+  any_fitted: boolean;
+}
+
 // Y-6 — haber olay-çalışması: kaynak×sentiment kovası ileri-getiri karnesi.
 export interface NewsEventBucket {
   n: number;

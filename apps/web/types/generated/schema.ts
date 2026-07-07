@@ -807,6 +807,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/learning/calibration-fit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Faz-A — Per-TF Platt fit güven yüzeyi (fitted/insufficient + örnek, read-only) */
+        get: operations["getLearningCalibrationFit"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/learning/meta-gate": {
         parameters: {
             query?: never;
@@ -4886,6 +4903,28 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ExitForensicsView"];
+                };
+            };
+        };
+    };
+    getLearningCalibrationFit: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK (veri yoksa status=NO_DATA) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
                 };
             };
         };

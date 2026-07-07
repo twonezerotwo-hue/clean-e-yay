@@ -54,6 +54,7 @@ import { EntryExitQualityPanel } from "@/components/panels/EntryExitQualityPanel
 import { ExitForensicsPanel } from "@/components/panels/ExitForensicsPanel";
 import { MetaGatePanel } from "@/components/panels/MetaGatePanel";
 import { NewsEventStudyPanel } from "@/components/panels/NewsEventStudyPanel";
+import { CalibrationFitPanel } from "@/components/panels/CalibrationFitPanel";
 import { DiscoveryPanel } from "@/components/panels/DiscoveryPanel";
 import { BacktestChallengerPanel } from "@/components/panels/BacktestChallengerPanel";
 import { ThresholdAutotunePanel } from "@/components/panels/ThresholdAutotunePanel";
@@ -1409,6 +1410,9 @@ export function CockpitView() {
               </LearnStep>
               <LearnStep step="18" label="Haberin edge'i (gölge) — haber sonrası fiyat yönü tutuyor mu, ölçer karar vermez" wide>
                 <NewsEventStudyPanel />
+              </LearnStep>
+              <LearnStep step="19" label="Kalibrasyon oturmuşluğu — hangi TF'in güven-ayarı yeterli örnekle oturdu" wide>
+                <CalibrationFitPanel />
               </LearnStep>
             </div>
           </Layer2DetailGroup>

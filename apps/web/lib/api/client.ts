@@ -62,6 +62,7 @@ import type {
 } from "@/types/generated/api";
 // Sözleşmesiz (observe-only) öğrenme görünümleri — codegen'e girmedi (I serisi).
 import type {
+  CalibrationFitView,
   EvidenceBusView,
   MetaGateView,
   NewsEventStudyView,
@@ -653,6 +654,8 @@ export const api = {
   exitForensics: () =>
     fetchJSON<ExitForensicsView>("/api/v1/learning/exit-forensics"),
   metaGate: () => fetchJSON<MetaGateView>("/api/v1/learning/meta-gate"),
+  calibrationFit: () =>
+    fetchJSON<CalibrationFitView>("/api/v1/learning/calibration-fit"),
   newsEventStudy: () =>
     fetchJSON<NewsEventStudyView>("/api/v1/learning/news-event-study"),
   discovery: () => fetchJSON<DiscoveryView>("/api/v1/learning/discovery"),

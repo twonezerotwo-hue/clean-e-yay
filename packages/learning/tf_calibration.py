@@ -129,3 +129,49 @@ def calibration_report(
         # B5 additive — hangi TF'ler kanıtlı pozitif kenara sahip (şeffaflık).
         "edge_proven_timeframes": edge_proven,
     }
+
+
+def fit_confidence_report(
+    outcomes: list[CanonicalOutcome] | None = None, *, state=None,
+    min_trades: int = MIN_TRADES_PER_TF,
+) -> dict:
+    """Faz-A (Kalibrasyon) — per-TF Platt fit GÜVEN yüzeyi (read-only).
+
+    "10/10 = TF başına yeterli örnekle fit doğrulanır" görünürlüğü: her TF'in
+    kalibrasyon fit durumu (calibration_store REUSE — fitted / insufficient /
+    identity + örnek sayısı) + o TF'in outcome-güveni (CALIBRATED/PRIOR) yan yana.
+    Owner buradan hangi TF'in kalibrasyonunun güvenilir olduğunu, hangisinin daha
+    örnek beklediğini görür. Guard zaten canlı: fit `insufficient` iken
+    predict_calibrated_tf global fit'e düşer (uydurma TF-fit uygulanmaz)."""
+    from packages.learning import calibration_store
+
+    outs = outcomes if outcomes is not None else outcomes_mod.outcomes_from_state(state)
+    cals = {c.timeframe: c for c in per_timeframe_calibration(outs, min_trades=min_trades)}
+    per_tf = calibration_store.load_per_timeframe()
+
+    rows = []
+    for tf in sorted(set(per_tf) | set(cals)):
+        p = per_tf.get(tf)
+        c = cals.get(tf)
+        rows.append({
+            "timeframe": tf,
+            "fit_status": p.status if p else "identity",  # fitted|insufficient|identity
+            "fit_samples": p.samples if p else 0,
+            "fitted_at": p.fitted_at if p else None,
+            "outcome_trust": c.trust if c else "PRIOR",   # CALIBRATED|PRIOR
+            "outcome_n": c.trades if c else 0,
+        })
+    fitted = [r["timeframe"] for r in rows if r["fit_status"] == "fitted"]
+    return {
+        "status": "OK" if rows else "NO_DATA",
+        "min_trades_per_tf": min_trades,
+        "tf_platt_enabled": calibration_store.tf_platt_enabled(),
+        "per_timeframe_fit": rows,
+        "fitted_timeframes": fitted,
+        "any_fitted": bool(fitted),
+        "note": (
+            "fit_status=fitted → TF kendi Platt kalibrasyonunu kullanır; "
+            "insufficient/identity → global fit'e düşer (guard canlı, uydurma yok)"
+        ),
+        "shadow_only": True,
+    }

@@ -37,6 +37,7 @@ from packages.learning import (
     regime_risk_brake,
     source_selector,
     subsignal_scorecard,
+    tf_calibration,
     tf_scoring_race,
     tf_scoring_shadow,
     tf_target_rollback,
@@ -113,6 +114,16 @@ def get_tf_weights() -> dict:
     changes the verified outcomes suggest. Informational — live weights are never
     moved here (owner approval, never auto-apply)."""
     return tf_weight_trainer.report_viewmodel()
+
+
+@router.get("/learning/calibration-fit")
+def get_calibration_fit() -> dict:
+    """Faz-A (Kalibrasyon) — per-TF Platt fit güven yüzeyi (read-only, PAPER_SAFE).
+    Her TF'in kalibrasyon fit durumu (fitted / insufficient / identity + örnek
+    sayısı) + outcome güveni (CALIBRATED/PRIOR) yan yana. "10/10 = TF başına
+    yeterli örnekle fit doğrulanır" görünürlüğü; guard zaten canlı (yetersiz TF-fit
+    global fit'e düşer). Hiçbir çıktı canlı ağırlığa/karara dokunmaz."""
+    return tf_calibration.fit_confidence_report()
 
 
 @router.get("/learning/mistakes")

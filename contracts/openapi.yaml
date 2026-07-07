@@ -679,6 +679,19 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/ExitForensicsView" }
 
+  /api/v1/learning/calibration-fit:
+    get:
+      operationId: getLearningCalibrationFit
+      summary: Faz-A — Per-TF Platt fit güven yüzeyi (fitted/insufficient + örnek, read-only)
+      responses:
+        "200":
+          description: OK (veri yoksa status=NO_DATA)
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+
   /api/v1/learning/meta-gate:
     get:
       operationId: getLearningMetaGate

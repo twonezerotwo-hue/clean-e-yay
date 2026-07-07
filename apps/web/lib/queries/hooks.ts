@@ -467,6 +467,17 @@ export const useMetaGate = () => {
   });
 };
 
+// Faz-A (Kalibrasyon) — per-TF fit güven yüzeyi learning-cycle'da tazelenir.
+export const useCalibrationFit = () => {
+  const policy = usePanelQueryPolicy(5 * 60_000);
+  return useQuery({
+    queryKey: qk.calibrationFit,
+    queryFn: api.calibrationFit,
+    staleTime: 60_000,
+    ...policy,
+  });
+};
+
 // Y-6 — haber olay-çalışması learning-cycle'da (~5 dk) tazelenir.
 export const useNewsEventStudy = () => {
   const policy = usePanelQueryPolicy(5 * 60_000);
