@@ -36,6 +36,13 @@ def test_expansion_feeds_present():
         "Gold Wire",
     } <= market_sources
     assert {"Guardian World", "France24"} <= geo_sources
+    # 2026-07-07 Faz-A (kat 4) ek doğrulanmış kanallar (canlı test edildi).
+    assert {
+        "The Defiant",
+        "U.Today",
+        "CryptoPotato",
+        "Seeking Alpha",
+    } <= market_sources
 
 
 def test_parse_feed_behavior_unchanged_by_expansion():

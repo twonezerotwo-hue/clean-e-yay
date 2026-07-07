@@ -75,6 +75,13 @@ MARKET_FEEDS: Final[tuple[dict[str, str], ...]] = (
         ),
         "source": "Gold Wire",
     },
+    # 2026-07-07 Faz-A (kat 4 Haberler) — ek doğrulanmış kanallar. HEPSİ ekleme
+    # günü repo'nun kendi fetch+parse'ıyla canlı test edildi, taze başlık döndürdü
+    # (DATA_POLICY: çalışmayan eklenmez). 3 kripto derinliği + 1 makro/piyasa.
+    {"url": "https://thedefiant.io/feed", "source": "The Defiant"},
+    {"url": "https://u.today/rss", "source": "U.Today"},
+    {"url": "https://cryptopotato.com/feed/", "source": "CryptoPotato"},
+    {"url": "https://seekingalpha.com/market_currents.xml", "source": "Seeking Alpha"},
 )
 
 GEO_FEEDS: Final[tuple[dict[str, str], ...]] = (
