@@ -79,6 +79,39 @@ export interface SubsignalScorecardView {
   note?: string;
 }
 
+// Y-5 — meta-label kapısı: dominant×TF kovası bariyer-kalite tarihçesi.
+export interface MetaGateBucket {
+  n: number;
+  good: number;
+  bad: number;
+  quality: Record<string, number>;
+  quality_score: number; // (good − bad) / n ∈ [−1, +1]
+}
+
+// Y-5 — gölge seçicilik: verdict başına gerçekleşen sonuç toplamı.
+export interface MetaGateVerdictStat {
+  n: number;
+  wins: number;
+  pnl: number;
+  win_rate: number | null;
+}
+
+// Y-5 — meta-label kapısı görünümü (GET /learning/meta-gate). SALT-GÖLGE:
+// hüküm karara/boyuta uygulanmaz; scorecard aktivasyonun tek meşru dayanağı.
+export interface MetaGateView {
+  status: string; // OK | NO_TABLE
+  shadow_only: boolean;
+  generated_at?: string | null;
+  buckets: Record<string, MetaGateBucket>;
+  config: { min_score: number; min_bucket_n: number };
+  scorecard: {
+    by_verdict: { TAKE: MetaGateVerdictStat; SKIP: MetaGateVerdictStat };
+    unmatched: number;
+    selective: boolean;
+    note?: string;
+  };
+}
+
 // R4 — v2 gölge: sembol başına rejim-anahtarlı yön (tf_scoring_shadow artifact).
 export interface TfScoringShadowSymbol {
   status: string; // OK | no_evidence | ERROR:*

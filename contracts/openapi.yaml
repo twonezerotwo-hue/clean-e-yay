@@ -679,6 +679,19 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/ExitForensicsView" }
 
+  /api/v1/learning/meta-gate:
+    get:
+      operationId: getLearningMetaGate
+      summary: Y-5 — Meta-label kapısı (GİR/GİRME gölge hükmü + seçicilik karnesi, SALT-GÖLGE, read-only)
+      responses:
+        "200":
+          description: OK (tablo yoksa status=NO_TABLE)
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+
   /api/v1/learning/discovery:
     get:
       operationId: getLearningDiscovery

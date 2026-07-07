@@ -34,7 +34,7 @@ from packages.data.providers import technical as tech_provider
 from packages.data.registry import guard_overrides
 from packages.data.registry.loader import load_thresholds
 from packages.data.types import TIMEFRAMES
-from packages.learning import empirical_pwin, mistake_memory, regime_risk_brake
+from packages.learning import empirical_pwin, meta_gate, mistake_memory, regime_risk_brake
 from packages.learning.calibration_store import (
     apply_inflation_guardrail,
     predict_calibrated_tf,
@@ -106,6 +106,10 @@ class TradeDecision:
     # bilgisi burada taşınır; `regime_risk_brake.enabled` iken boyut kısılır,
     # kapalıyken yalnız gözlem (applied=False). Boş = frenlenecek kanıt yok.
     regime_brake_report: dict = field(default_factory=dict)
+    # Y-5 — meta-label kapısı (SALT-GÖLGE): açılış adayına GİR/GİRME hükmü.
+    # Karara/boyuta ASLA uygulanmaz (uygulama flag'i yok; aktivasyon scorecard
+    # seçicilik kanıtı + owner kararıyla AYRI dilim). Boş = aday değil/hata.
+    meta_gate_report: dict = field(default_factory=dict)
 
 
 def _timeframe_policy(timeframe: str) -> dict:
@@ -858,6 +862,23 @@ def decide_for_symbol(
             size = max(0.0, round(size * brake_mult, 3))
             blocked_by.append("regime_risk_brake")
 
+    # ----- Y-5: meta-label kapısı — SALT-GÖLGE (mlfinlab meta-labeling): açılış
+    # adayına "GİR/GİRME" hükmü damgalanır + fingerprint'le gölge deftere yazılır
+    # (scorecard kapanışla birleştirir). Karar/boyut DEĞİŞMEZ; uygulama flag'i
+    # YOK — aktivasyon seçicilik kanıtı + owner kararıyla ayrı dilim. -----
+    meta_gate_report: dict = {}
+    if candidate in ("open_long", "open_short"):
+        try:
+            meta_gate_report = meta_gate.assess(
+                dominant_module=cons.dominant_module, timeframe=timeframe,
+                regime_label=regime.label, expected_value=expected_value,
+                p_win_empirical=p_win_empirical, mistake_action=verdict.action,
+                regime_braked=brake_evidence is not None,
+            )
+            meta_gate.record_shadow(fp, meta_gate_report)
+        except Exception:  # gölge hükmü kararı asla düşürmez
+            meta_gate_report = {}
+
     return TradeDecision(
         symbol=symbol,
         action=action,
@@ -910,6 +931,7 @@ def decide_for_symbol(
         p_win_empirical=p_win_empirical,
         expected_value_empirical=expected_value_empirical,
         regime_brake_report=regime_brake_report,
+        meta_gate_report=meta_gate_report,
     )
 
 
@@ -1193,6 +1215,9 @@ def matrix_view(
                 # fren bilgisi + applied bayrağı. Owner aktivasyon kararını buradan
                 # izler (flag OFF iken applied=False ile birikir). Boş = kanıt yok.
                 "regime_brake": dict(d.regime_brake_report),
+                # Y-5 gözlem — meta-label kapısının gölge hükmü (TAKE/SKIP + skor).
+                # Karara uygulanmaz; seçicilik kanıtı /learning/meta-gate scorecard.
+                "meta_gate": dict(d.meta_gate_report),
             }
         )
     return {

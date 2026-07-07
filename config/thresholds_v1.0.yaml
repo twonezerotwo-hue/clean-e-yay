@@ -463,6 +463,21 @@ strategy_shaping:
     PULLBACK:           { stop: 0.9,  tp_rr: 1.0,  trail: 1.0,  size: 1.0 }   # trende dönüş, kontrollü
     SCALP:              { stop: 0.75, tp_rr: 0.8,  trail: 0.75, size: 0.7 }   # hızlı gir-çık, çok sıkı
 
+# Y-5 — Meta-label kapısı (mlfinlab meta-labeling), SALT-GÖLGE: her açılış adayına
+# "GİR/GİRME" hükmü damgalanır (mevcut kanıtlardan: EV + ampirik p + mistake_memory
+# + Y-2 bariyer tarihçesi + Y-1 rejim freni), karar/boyut DEĞİŞMEZ. Uygulama flag'i
+# BİLEREK YOK (ölü flag yasağı): aktivasyon, /learning/meta-gate scorecard'ı
+# TAKE>SKIP seçicilik kanıtı gösterince AYRI dilim + owner kararı (kırmızı çizgi).
+meta_gate:
+  min_score: 0.0       # skor >= eşik → TAKE, altı → SKIP (gölge hüküm)
+  min_bucket_n: 8      # bariyer-tarihçe kovası bundan azsa o bileşen nötr
+  weights:             # bileşen ağırlıkları (kanıtsız bileşen zaten 0/nötr)
+    ev: 1.0
+    empirical: 1.0
+    mistake: 1.0
+    barrier_history: 1.0
+    regime_brake: 0.5
+
 # Y-4 — Walk-forward doğrulama (freqtrade deseni): threshold_ab.sweep adayı
 # EĞİTİM penceresinde (ilk split_ratio) seçer, DOĞRULAMA penceresinde (kalan)
 # baseline'ı geçmeden öneri ÜRETMEZ — tek pencerede parlayan aşırı-uyum adayı

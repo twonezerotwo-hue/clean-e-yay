@@ -144,6 +144,33 @@ def _regime_brake_records() -> list[EvidenceRecord]:
     return out
 
 
+def _meta_gate_records() -> list[EvidenceRecord]:
+    """Meta-label kapısı (Y-5, SALT-GÖLGE): dominant×TF kovası bariyer-kalite.
+
+    Kaynak damgası SHADOW — kapının hükmü karara/boyuta uygulanmaz (aktivasyon
+    ayrı dilim + owner). Yalnız min_bucket_n eşiğini geçen kovalar (kanıtsız kova
+    otobüsü şişirmez). statistic = quality_score ∈ [−1,+1]."""
+    from packages.learning import meta_gate
+
+    vm = meta_gate.viewmodel()
+    min_n = int((vm.get("config") or {}).get("min_bucket_n") or 0)
+    out: list[EvidenceRecord] = []
+    for key, b in (vm.get("buckets") or {}).items():
+        n = int(b.get("n") or 0)
+        if n < min_n:
+            continue
+        module, _, tf = str(key).partition("|")
+        out.append(EvidenceRecord(
+            topic="meta_gate", subject=key, source=SHADOW,
+            timeframe=tf or None, n_samples=n,
+            statistic=b.get("quality_score"),
+            verdict="GOOD" if float(b.get("quality_score") or 0.0) > 0 else "WEAK",
+            detail={"module": module, "good": b.get("good"), "bad": b.get("bad"),
+                    "quality": b.get("quality")},
+        ))
+    return out
+
+
 def _tf_calibration_records() -> list[EvidenceRecord]:
     """TF kalibrasyonu (CANLI): TF başına güven (CALIBRATED/PRIOR) + expectancy."""
     from packages.learning import tf_calibration
@@ -167,6 +194,7 @@ _SOURCES = (
     _discovery_records,
     _tf_calibration_records,
     _regime_brake_records,
+    _meta_gate_records,
 )
 
 

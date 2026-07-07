@@ -456,6 +456,17 @@ export const useExitForensics = () => {
   });
 };
 
+// Y-5 — meta-label kapısı tablosu learning-cycle'da (~5 dk) tazelenir.
+export const useMetaGate = () => {
+  const policy = usePanelQueryPolicy(5 * 60_000);
+  return useQuery({
+    queryKey: qk.metaGate,
+    queryFn: api.metaGate,
+    staleTime: 60_000,
+    ...policy,
+  });
+};
+
 export const useDiscovery = () => {
   const policy = usePanelQueryPolicy(5 * 60_000);
   return useQuery({

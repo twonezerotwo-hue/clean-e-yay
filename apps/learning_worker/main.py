@@ -590,6 +590,19 @@ def run_once() -> dict:
         regime_brake_status = f"ERROR:{type(exc).__name__}"
         errors.append(f"regime_risk_brake:{type(exc).__name__}")
 
+    # Y-5 — meta-label kapısı bariyer-tarihçe tablosu (SALT-GÖLGE; motor hükmü
+    # karara uygulamaz). Off-tick: AUTO kohort outcome'larından dominant×TF
+    # kovası kalite skoru (Y-2 barrier_label REUSE). Ucuz (state okur).
+    meta_gate_status = "ERROR"
+    try:
+        from packages.learning import meta_gate as _mg
+        mg = _mg.compute()
+        meta_gate_status = "OK"
+        log.info("meta_gate: buckets=%s", len(mg.get("buckets") or {}))
+    except Exception as exc:  # defensive — worker patlamamalı
+        meta_gate_status = f"ERROR:{type(exc).__name__}"
+        errors.append(f"meta_gate:{type(exc).__name__}")
+
     # D5 — sinyal karnesi (SUBSIGNAL_SCORECARD_ENABLED, default OFF → tam no-op).
     # INTERVAL-kapılı (haftalık; durum = artifact yaşı): 8 sinyal × 4 TF ileri-
     # getiri karnesi (v2 sert cetvel) yeniden ölçülür — bar arşivi büyüdükçe
@@ -694,6 +707,7 @@ def run_once() -> dict:
         "challenger_train_status": challenger_train_status,  # B-3 ağırlık+quantum karne (DISABLED=flag OFF)
         "challenger_promotion_status": challenger_promotion_status,  # B-4 terfi kriteri (DISABLED=flag OFF)
         "regime_brake_status": regime_brake_status,  # Y-1 rejim risk freni tablosu (gözlem; uygulama flag'le)
+        "meta_gate_status": meta_gate_status,  # Y-5 meta-label kapısı tablosu (SALT-GÖLGE)
         "subsignal_scorecard_status": subsignal_scorecard_status,  # D5 sinyal karnesi (DISABLED=flag OFF)
         "tf_scoring_v2_shadow_status": tf_scoring_v2_shadow_status,  # D6 v2 gölge skoru (DISABLED=flag OFF)
         "tf_scoring_race_status": tf_scoring_race_status,  # R5 yarış defteri (DISABLED=flag OFF)

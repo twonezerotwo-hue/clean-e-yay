@@ -27,6 +27,7 @@ from packages.learning import (
     exit_forensics,
     guard_safety,
     historical_edge,
+    meta_gate,
     missed_opportunity,
     mistake_memory,
     monitoring_coverage,
@@ -499,6 +500,16 @@ def get_regime_risk_brake() -> dict:
     KAPALIYKEN salt-gözlem (engine kararlarda applied=False raporu taşır).
     Owner aktivasyon kararını bu kanıttan verir; geri-alma = flag false."""
     return regime_risk_brake.viewmodel()
+
+
+@router.get("/learning/meta-gate")
+def get_meta_gate() -> dict:
+    """Y-5 — Meta-label kapısı (read-only, PAPER_SAFE, SALT-GÖLGE). Her açılış
+    adayına damgalanan GİR/GİRME hükmünün kaynak tablosu (dominant×TF bariyer-
+    kalite kovaları) + gölge seçicilik karnesi (TAKE kovası SKIP'ten iyi mi).
+    Hüküm karara/boyuta ASLA uygulanmaz — aktivasyon ayrı dilim + owner kararı
+    (kırmızı çizgi). `scorecard.selective` bile tek başına aktivasyon yapmaz."""
+    return meta_gate.viewmodel()
 
 
 @router.get("/learning/backtest-challenger")

@@ -63,6 +63,7 @@ import type {
 // Sözleşmesiz (observe-only) öğrenme görünümleri — codegen'e girmedi (I serisi).
 import type {
   EvidenceBusView,
+  MetaGateView,
   SubsignalScorecardView,
   TfScoringRaceView,
   TfScoringShadowView,
@@ -650,6 +651,7 @@ export const api = {
     fetchJSON<EntryExitQualityView>("/api/v1/learning/entry-exit-quality"),
   exitForensics: () =>
     fetchJSON<ExitForensicsView>("/api/v1/learning/exit-forensics"),
+  metaGate: () => fetchJSON<MetaGateView>("/api/v1/learning/meta-gate"),
   discovery: () => fetchJSON<DiscoveryView>("/api/v1/learning/discovery"),
   evidenceBus: () => fetchJSON<EvidenceBusView>("/api/v1/learning/evidence-bus"),
   backtestChallenger: () =>
