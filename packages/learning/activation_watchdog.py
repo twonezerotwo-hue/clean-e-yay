@@ -83,6 +83,10 @@ REGISTRY: dict[str, dict] = {
         "label": "Partial-TP + breakeven (F4-3)",
         "source": ("thresholds", ("partial_tp", "enabled")),
     },
+    "regime_risk_brake": {
+        "label": "Rejim risk freni — çift-negatif kanıtta boyut kıs (Y-1)",
+        "source": ("thresholds", ("regime_risk_brake", "enabled")),
+    },
     "weight_regime_filter": {
         "label": "Rejim-filtreli ağırlık eğitimi (F3-2)",
         "source": ("env", "WEIGHT_REGIME_FILTER"),

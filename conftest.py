@@ -65,6 +65,9 @@ def _package1_flags_off_by_default(monkeypatch: pytest.MonkeyPatch) -> None:
     # E-9 (2026-07-06) — trailing_tf_aware AÇILDI (çıkış otopsisi); suite düz-trailing
     # baseline'ında kalır, davranış testleri (test_trailing_tf_aware) override ile açar.
     pinned.setdefault("trailing_tf_aware", {})["enabled"] = False
+    # Y-1 (2026-07-07) — regime_risk_brake kayıt fazında zaten false; ileride aktive
+    # edilince suite baseline'da kalsın diye şimdiden pinlenir (testler explicit açar).
+    pinned.setdefault("regime_risk_brake", {})["enabled"] = False
     monkeypatch.setattr(loader, "_load_thresholds_base", lambda: pinned)
     # Denetim 2026-07-03 — çıkış-makinesi env flag'leri testlerde default OFF
     # (dev makinesinde .env yüklenmiş olabilir; testler baseline'ı varsayar).

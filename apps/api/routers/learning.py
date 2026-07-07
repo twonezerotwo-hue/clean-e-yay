@@ -32,6 +32,7 @@ from packages.learning import (
     monitoring_coverage,
     partial_tp_shadow,
     promotion_criteria,
+    regime_risk_brake,
     source_selector,
     subsignal_scorecard,
     tf_scoring_race,
@@ -489,6 +490,15 @@ def get_monitoring_coverage() -> dict:
     shadow-muaf) + WATCHDOG'ların REGISTRY'de kayıtlı olduğu. 'İzlemesiz canlı-
     dokunuş yok' değişmezi test_monitoring_coverage ile guard'lı."""
     return monitoring_coverage.coverage_summary()
+
+
+@router.get("/learning/regime-risk-brake")
+def get_regime_risk_brake() -> dict:
+    """Y-1 — Rejim risk freni (read-only, PAPER_SAFE). Rejim başına çift-kaynak
+    kanıt (canlı AUTO kohort + backtest challenger) ve fren hükmü; `enabled`
+    KAPALIYKEN salt-gözlem (engine kararlarda applied=False raporu taşır).
+    Owner aktivasyon kararını bu kanıttan verir; geri-alma = flag false."""
+    return regime_risk_brake.viewmodel()
 
 
 @router.get("/learning/backtest-challenger")

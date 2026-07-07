@@ -571,6 +571,25 @@ def run_once() -> dict:
         challenger_promotion_status = f"ERROR:{type(exc).__name__}"
         errors.append(f"challenger_promotion:{type(exc).__name__}")
 
+    # Y-1 — rejim risk freni tablosu (SALT-GÖZLEM üretim; uygulama engine'de
+    # `regime_risk_brake.enabled` flag'iyle, DEFAULT OFF). Kanıt çift kaynak:
+    # canlı AUTO kohort + backtest challenger (İKİSİ de negatif + min örnek →
+    # fren). Ucuz (state + jsonl okur). Artifact bayatlarsa (max_age_hours)
+    # fren sıcak yolda kendiliğinden düşer — öğrenme durursa tik bağımsız kalır.
+    regime_brake_status = "ERROR"
+    try:
+        from packages.learning import regime_risk_brake as _rrb
+        rb = _rrb.compute()
+        regime_brake_status = "OK"
+        if rb.get("braked_regimes"):
+            log.info(
+                "regime_risk_brake: braked=%s enabled=%s",
+                rb.get("braked_regimes"), rb.get("enabled"),
+            )
+    except Exception as exc:  # defensive — worker patlamamalı
+        regime_brake_status = f"ERROR:{type(exc).__name__}"
+        errors.append(f"regime_risk_brake:{type(exc).__name__}")
+
     # D5 — sinyal karnesi (SUBSIGNAL_SCORECARD_ENABLED, default OFF → tam no-op).
     # INTERVAL-kapılı (haftalık; durum = artifact yaşı): 8 sinyal × 4 TF ileri-
     # getiri karnesi (v2 sert cetvel) yeniden ölçülür — bar arşivi büyüdükçe
@@ -674,6 +693,7 @@ def run_once() -> dict:
         "backtest_challenger_status": backtest_challenger_status,  # B-2 üretim (DISABLED=flag OFF)
         "challenger_train_status": challenger_train_status,  # B-3 ağırlık+quantum karne (DISABLED=flag OFF)
         "challenger_promotion_status": challenger_promotion_status,  # B-4 terfi kriteri (DISABLED=flag OFF)
+        "regime_brake_status": regime_brake_status,  # Y-1 rejim risk freni tablosu (gözlem; uygulama flag'le)
         "subsignal_scorecard_status": subsignal_scorecard_status,  # D5 sinyal karnesi (DISABLED=flag OFF)
         "tf_scoring_v2_shadow_status": tf_scoring_v2_shadow_status,  # D6 v2 gölge skoru (DISABLED=flag OFF)
         "tf_scoring_race_status": tf_scoring_race_status,  # R5 yarış defteri (DISABLED=flag OFF)

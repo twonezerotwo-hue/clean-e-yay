@@ -117,6 +117,33 @@ def _discovery_records() -> list[EvidenceRecord]:
     return out
 
 
+def _regime_brake_records() -> list[EvidenceRecord]:
+    """Rejim risk freni (Y-1, çift kanıt): rejim başına fren hükmü.
+
+    Yalnız kanıtlı satırlar (iki kaynaktan en az biri örnek görmüş) — boş rejim
+    otobüsü şişirmez. Kaynak damgası LIVE: fren kararının bağlayıcı yarısı canlı
+    kohorttur (backtest yarısı detail'de yan yana)."""
+    from packages.learning import regime_risk_brake
+
+    vm = regime_risk_brake.viewmodel()
+    out: list[EvidenceRecord] = []
+    for reg, row in (vm.get("per_regime") or {}).items():
+        ev = row.get("evidence") or {}
+        live_n = int(((ev.get("live") or {}).get("n")) or 0)
+        bt_n = int(((ev.get("backtest") or {}).get("n")) or 0)
+        if not live_n and not bt_n:
+            continue
+        out.append(EvidenceRecord(
+            topic="regime_risk_brake", subject=f"size@{reg}", source=LIVE,
+            regime=reg, n_samples=live_n,
+            statistic=(ev.get("live") or {}).get("pnl_usd"),
+            verdict="BRAKED" if row.get("braked") else "NO_BRAKE",
+            detail={"mult": row.get("mult"), "enabled": vm.get("enabled"),
+                    "backtest": ev.get("backtest"), "live": ev.get("live")},
+        ))
+    return out
+
+
 def _tf_calibration_records() -> list[EvidenceRecord]:
     """TF kalibrasyonu (CANLI): TF başına güven (CALIBRATED/PRIOR) + expectancy."""
     from packages.learning import tf_calibration
@@ -139,6 +166,7 @@ _SOURCES = (
     _edge_records,
     _discovery_records,
     _tf_calibration_records,
+    _regime_brake_records,
 )
 
 

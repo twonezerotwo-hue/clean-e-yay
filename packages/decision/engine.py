@@ -34,7 +34,7 @@ from packages.data.providers import technical as tech_provider
 from packages.data.registry import guard_overrides
 from packages.data.registry.loader import load_thresholds
 from packages.data.types import TIMEFRAMES
-from packages.learning import empirical_pwin, mistake_memory
+from packages.learning import empirical_pwin, mistake_memory, regime_risk_brake
 from packages.learning.calibration_store import (
     apply_inflation_guardrail,
     predict_calibrated_tf,
@@ -102,6 +102,10 @@ class TradeDecision:
     # açıkken EV/Kelly bu p ile hesaplanır. None = yeterli ampirik kanıt yok.
     p_win_empirical: float | None = None
     expected_value_empirical: float | None = None
+    # Y-1 — rejim risk freni (shadow-first). Rejim kanıtı çift-negatifse fren
+    # bilgisi burada taşınır; `regime_risk_brake.enabled` iken boyut kısılır,
+    # kapalıyken yalnız gözlem (applied=False). Boş = frenlenecek kanıt yok.
+    regime_brake_report: dict = field(default_factory=dict)
 
 
 def _timeframe_policy(timeframe: str) -> dict:
@@ -841,6 +845,19 @@ def decide_for_symbol(
                 size = max(0.0, kelly_mult_cap)
                 blocked_by.append("kelly_cap")
 
+    # ----- Y-1: rejim risk freni — kanıtı çift-negatif (canlı AUTO kohort +
+    # backtest challenger) rejimde boyut kıs (YALNIZ küçültür). SHADOW her
+    # kararda: rapor flag'ten bağımsız taşınır (aktivasyon kanıtı flag'siz
+    # birikir); uygulama yalnız `regime_risk_brake.enabled` açıkken. -----
+    brake_mult, brake_evidence = regime_risk_brake.active_mult(regime.label)
+    regime_brake_report: dict = {}
+    if brake_evidence is not None:
+        brake_applied = regime_risk_brake.enabled()
+        regime_brake_report = {**brake_evidence, "applied": brake_applied}
+        if brake_applied and brake_mult < 1.0:
+            size = max(0.0, round(size * brake_mult, 3))
+            blocked_by.append("regime_risk_brake")
+
     return TradeDecision(
         symbol=symbol,
         action=action,
@@ -892,6 +909,7 @@ def decide_for_symbol(
         expected_value=round(expected_value, 4),
         p_win_empirical=p_win_empirical,
         expected_value_empirical=expected_value_empirical,
+        regime_brake_report=regime_brake_report,
     )
 
 
@@ -1171,6 +1189,10 @@ def matrix_view(
                 # empirical_pwin.enabled aktivasyon kararını verir.
                 "p_win_empirical": d.p_win_empirical,
                 "expected_value_empirical": d.expected_value_empirical,
+                # Y-1 gözlem — rejim risk freni (shadow-first): kanıt çift-negatifse
+                # fren bilgisi + applied bayrağı. Owner aktivasyon kararını buradan
+                # izler (flag OFF iken applied=False ile birikir). Boş = kanıt yok.
+                "regime_brake": dict(d.regime_brake_report),
             }
         )
     return {

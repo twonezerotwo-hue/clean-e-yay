@@ -463,6 +463,20 @@ strategy_shaping:
     PULLBACK:           { stop: 0.9,  tp_rr: 1.0,  trail: 1.0,  size: 1.0 }   # trende dönüş, kontrollü
     SCALP:              { stop: 0.75, tp_rr: 0.8,  trail: 0.75, size: 0.7 }   # hızlı gir-çık, çok sıkı
 
+# Y-1 — Rejim risk freni (2026-07-07 modül karnesi: OFFENSIVE'da yön kararı her iki
+# sürümde de negatif; backtest −%75 + canlı kohort negatif). Kanıtı ÇİFT kaynaklı
+# (canlı AUTO kohort + backtest challenger, İKİSİ de negatif + min örnek) rejimde
+# açılış boyutu brake_mult ile kısılır. YALNIZ küçültür (no-boost; guardrail
+# [floor, 1.0]). enabled:false → fren uygulanmaz, her kararda SHADOW raporu yine
+# taşınır (aktivasyon kanıtı flag'siz birikir). Geri-alma = false.
+regime_risk_brake:
+  enabled: false
+  min_live_n: 10       # canlı AUTO kohort rejim başına en az işlem
+  min_backtest_n: 30   # backtest challenger rejim başına en az yönlü karar
+  brake_mult: 0.6      # frenlenen rejimde boyut çarpanı
+  floor: 0.4           # fren asla bunun altına kısamaz (kapatma değil kısma)
+  max_age_hours: 48    # artifact bayatsa fren düşer (öğrenme durursa tik bağımsız)
+
 # TF-farkında trailing (çıkış otopsisi 2026-07-06: düz trailing higher-TF'de çok sıkı —
 # kârın %66-84'ü geri veriliyor, hareketin yalnız %16-34'ü yakalanıyor; en kötüsü 4h).
 # Açıkken trailing MESAFESİ (distance_mult) ve DEVREYE-GİRME eşiği (activate_mult)
