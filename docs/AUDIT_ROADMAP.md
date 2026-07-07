@@ -211,6 +211,37 @@ outcome örneği üretir). Hepsi izole/shadow/owner-kapılı — canlı sistem b
 
 **I serisi ne açar:** dağınık 40+ öğrenici tek nehir; shadow/backtest verisi gerektiğinde damgalı akar; her yeni öğrenici sıfır-tekrar omurgaya takılır. Owner kırmızı çizgileri (yön motoru + execution) sabit — I serisi onları basamak-2'de (öneri) tutar, asla otomatik terfi ettirmez.
 
+## Y serisi — 10/10 yükseltme: açık-kaynak teknikleri entegrasyonu (2026-07-07, owner onayı)
+
+> Kaynak: 2026-07-06/07 modül karnesi (v1↔v2 A/B backtest + canlı gölge + canlı
+> kohort) + açık-kaynak taraması (mlfinlab meta-labeling/triple-barrier, freqtrade
+> walk-forward, qlib kesitsel faktör). ANA BULGU: en büyük kaçak modül farkı değil,
+> OFFENSIVE rejimde yön kararı (backtest her iki sürümde ~−%75; canlı OFFENSIVE
+> kanıtı da negatif). Owner kuralları: (1) çalışan sistem bozulmaz, (2) ekleme tüm
+> sisteme entegre edilir (worker+API+panel — yarım kablo yok), (3) ölü kod yok.
+> Anayasa aynen: additive · flag-OFF=bayt-aynı · shadow-önce · rollback · off-tick.
+>
+> **KOD GEREKTİRMEYENLER (ölü-kod kuralı gereği yeni kod YAZILMAZ):** Adım-0'ın
+> challenger→governor onay rayı ZATEN CANLI (`challenger_promotion` B-4,
+> NOT_READY 139/200 eşleşme + 2/30 anlaşmazlık — kanıt penceresi akıyor);
+> Adım-3 FRED lokal .env'de ZATEN VAR (worker artifact'ı `fred_liquidity:true`;
+> 2026-07-06 A/B'deki "likidite yok" görüntüsü analiz script'inin .env
+> yüklememesindendi); Adım-6 touche yarış defteri otomatik doluyor (0/30).
+
+| # | İş (adım) | Kapsam (kod + kabul kriteri) | Durum | Risk |
+|---|---|---|---|---|
+| Y-1 | **OFFENSIVE risk freni** (Adım 0) | `regime_risk_brake`: kanıtı negatif rejimde açılış boyutuna çarpan ≤1.0 (YALNIZ küçültür — no-boost invariant; conviction/session/shaping çarpanlarıyla birleşir). Kanıt kaynağı çift: backtest-challenger rejim karnesi + canlı kohort rejim PnL; ikisi de negatifse fren. Config-flag `regime_risk_brake.enabled` DEFAULT OFF + her açılışta shadow satırı (fren değeri + kanıt, flag OFF'ken de). conftest OFF-pin + watchdog/monitoring-coverage sınıflaması | ⬜ | 🟡 flag-OFF |
+| Y-2 | **Triple-barrier etiket** (Adım 2) | `CanonicalOutcome.barrier_label` (additive): close_reason+mae/mfe'den TP_BARRIER/SL_BARRIER/TIME_BARRIER/TRAIL_BARRIER + "şanslı/hakiki" kalite işareti (mlfinlab üçlü-bariyer deseni; bariyerler bizde ZATEN CANLI — SL/TP/time-stop/trailing). Tüketici: dataset_health dağılım göstergesi (panel additive) — trainer tüketimi AYRI dilim (kanıt görünce) | ⬜ | 🟢 gözlem |
+| Y-3 | **Backtest 2 yıl** (Adım 4) | `backtest_recon._load_series` bar derinliği config'e (`backtest_challenger.lookback_days`, DEFAULT mevcut davranış=bayt-aynı); veri sağlayıcı derinlik sınırı ölçülür, DEFENSIVE/CRISIS kanıtı zenginleşir (bugün 5+0 kayıt — challenger/sentinel/quantum karneleri için darboğaz) | ⬜ | 🟢 |
+| Y-4 | **Walk-forward doğrulama** (Adım 5) | `threshold_ab.sweep`'e eğitim/doğrulama pencere ayrımı (freqtrade deseni): aday eşik eğitim penceresinde seçilir, DOĞRULAMA penceresinde teyit edilmeden öneri olmaz. Flag `threshold_ab.walk_forward` DEFAULT OFF=mevcut davranış | ⬜ | 🟢 |
+| Y-5 | **Meta-label kapısı** (Adım 1, EN BÜYÜK) | `packages/learning/meta_gate.py`: mevcut kanıt kaynaklarından (mistake_memory, empirical_pwin, entry_exit_quality, rejim, TF-trust) "GİR/GİRME" skoru. ÖNCE SHADOW: her açılış kararında kapının hükmü audit'e yazılır, karar DEĞİŞMEZ; endpoint+panel; ≥2 hafta gölge karnesi (kapının işlem seçiciliği ölçülür) → aktivasyon AYRI owner kararı (yön motoruna komşu — KIRMIZI ÇİZGİ protokolü) | ⬜ | 🟡 shadow-önce |
+| Y-6 | **News event-study** (Adım 7) | `packages/learning/news_event_study.py`: haber damgası sonrası N-bar getiri karnesi (sembol×kaynak×sentiment kovası); endpoint+panel; kanıt çıkmazsa dürüst sonuç "news ağırlığı kanıtsız" → challenger'a news görünürlüğü | ⬜ | 🟢 gözlem |
+
+**Sıra + gerekçe:** Y-1 önce (en büyük kaçağa en küçük güvenli fren) → Y-2/Y-3 (veri
+temeli — Y-5'in girdisi) → Y-4 (doğrulama disiplini) → Y-5 (meta-kapı, veri temeli
+hazırken) → Y-6. Her dilim: AYRI commit + OFF-bekçi testi + tam suite + roadmap
+güncelle + push (aktivasyonlar ayrı commit/deploy — watchdog arm kuralı).
+
 ## Devir notu (son güncelleme: 2026-07-03)
 
 Bu belge farklı bir asistan/oturum tarafından SIFIR bağlamla devralınabilir
