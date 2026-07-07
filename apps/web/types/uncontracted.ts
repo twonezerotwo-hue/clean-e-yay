@@ -112,6 +112,31 @@ export interface MetaGateView {
   };
 }
 
+// Y-6 — haber olay-çalışması: kaynak×sentiment kovası ileri-getiri karnesi.
+export interface NewsEventBucket {
+  n: number;
+  hits: number;
+  sum_dir_return: number;
+  avg_dir_return_pct: number; // yön-hizalı ortalama N-bar getiri (%)
+  hit_rate: number | null;
+  verdict: string; // PREDICTIVE | NO_EDGE | INSUFFICIENT
+}
+
+// Y-6 — haber olay-çalışması görünümü (GET /learning/news-event-study). SALT-
+// GÖZLEM: hiçbir çıktı karara/ağırlığa dokunmaz; kanıtsızsa global UNPROVEN.
+export interface NewsEventStudyView {
+  status: string; // OK | NO_TABLE
+  shadow_only: boolean;
+  generated_at?: string | null;
+  horizon_bars: number;
+  events_total: number;
+  matured: number;
+  pending: number;
+  buckets: Record<string, NewsEventBucket>;
+  global_verdict: string; // PREDICTIVE | UNPROVEN
+  config: { min_bucket_n: number };
+}
+
 // R4 — v2 gölge: sembol başına rejim-anahtarlı yön (tf_scoring_shadow artifact).
 export interface TfScoringShadowSymbol {
   status: string; // OK | no_evidence | ERROR:*

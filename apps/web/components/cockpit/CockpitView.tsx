@@ -53,6 +53,7 @@ import { TfScoringRacePanel } from "@/components/panels/TfScoringRacePanel";
 import { EntryExitQualityPanel } from "@/components/panels/EntryExitQualityPanel";
 import { ExitForensicsPanel } from "@/components/panels/ExitForensicsPanel";
 import { MetaGatePanel } from "@/components/panels/MetaGatePanel";
+import { NewsEventStudyPanel } from "@/components/panels/NewsEventStudyPanel";
 import { DiscoveryPanel } from "@/components/panels/DiscoveryPanel";
 import { BacktestChallengerPanel } from "@/components/panels/BacktestChallengerPanel";
 import { ThresholdAutotunePanel } from "@/components/panels/ThresholdAutotunePanel";
@@ -1405,6 +1406,9 @@ export function CockpitView() {
               </LearnStep>
               <LearnStep step="17" label="Meta-kapı (gölge) — GİR/GİRME ikinci görüşü, seçiciliği ölçer karar vermez" wide>
                 <MetaGatePanel />
+              </LearnStep>
+              <LearnStep step="18" label="Haberin edge'i (gölge) — haber sonrası fiyat yönü tutuyor mu, ölçer karar vermez" wide>
+                <NewsEventStudyPanel />
               </LearnStep>
             </div>
           </Layer2DetailGroup>

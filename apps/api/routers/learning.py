@@ -31,6 +31,7 @@ from packages.learning import (
     missed_opportunity,
     mistake_memory,
     monitoring_coverage,
+    news_event_study,
     partial_tp_shadow,
     promotion_criteria,
     regime_risk_brake,
@@ -510,6 +511,16 @@ def get_meta_gate() -> dict:
     Hüküm karara/boyuta ASLA uygulanmaz — aktivasyon ayrı dilim + owner kararı
     (kırmızı çizgi). `scorecard.selective` bile tek başına aktivasyon yapmaz."""
     return meta_gate.viewmodel()
+
+
+@router.get("/learning/news-event-study")
+def get_news_event_study() -> dict:
+    """Y-6 — Haber olay-çalışması (read-only, PAPER_SAFE, SALT-GÖZLEM). Haber
+    damgası sonrası N-bar ileri-getiri karnesi (kaynak × sentiment kovası):
+    "haberin edge'i var mı". Kanıt bar-arşivi gibi zamanla birikir; yetersizse
+    dürüst `global_verdict=UNPROVEN` ("news ağırlığı kanıtsız"). Hiçbir çıktı
+    karara/ağırlığa dokunmaz — news görünürlüğü challenger'a AYRI owner kararı."""
+    return news_event_study.viewmodel()
 
 
 @router.get("/learning/backtest-challenger")

@@ -171,6 +171,31 @@ def _meta_gate_records() -> list[EvidenceRecord]:
     return out
 
 
+def _news_event_study_records() -> list[EvidenceRecord]:
+    """Haber olay-çalışması (Y-6, SALT-GÖZLEM): kaynak×sentiment kovası edge.
+
+    Kaynak damgası SHADOW — haberin öngörüsü karara/ağırlığa uygulanmaz. Yalnız
+    olgunlaşmış örnek gören kovalar. statistic = yön-hizalı ortalama ileri-getiri
+    (%); verdict PREDICTIVE/NO_EDGE/INSUFFICIENT."""
+    from packages.learning import news_event_study
+
+    vm = news_event_study.viewmodel()
+    out: list[EvidenceRecord] = []
+    for key, b in (vm.get("buckets") or {}).items():
+        n = int(b.get("n") or 0)
+        if not n:
+            continue
+        source, _, sentiment = str(key).partition("|")
+        out.append(EvidenceRecord(
+            topic="news_event_study", subject=key, source=SHADOW,
+            n_samples=n, statistic=b.get("avg_dir_return_pct"),
+            verdict=b.get("verdict"),
+            detail={"news_source": source, "sentiment": sentiment,
+                    "hit_rate": b.get("hit_rate"), "horizon_bars": vm.get("horizon_bars")},
+        ))
+    return out
+
+
 def _tf_calibration_records() -> list[EvidenceRecord]:
     """TF kalibrasyonu (CANLI): TF başına güven (CALIBRATED/PRIOR) + expectancy."""
     from packages.learning import tf_calibration
@@ -195,6 +220,7 @@ _SOURCES = (
     _tf_calibration_records,
     _regime_brake_records,
     _meta_gate_records,
+    _news_event_study_records,
 )
 
 

@@ -478,6 +478,16 @@ meta_gate:
     barrier_history: 1.0
     regime_brake: 0.5
 
+# Y-6 — Haber olay-çalışması (event study), SALT-GÖZLEM: haber damgası sonrası
+# N-bar ileri-getiri (kaynak × sentiment kovası) → "haberin edge'i var mı".
+# Kanıt bar-arşivi gibi zamanla birikir; kanıtsızsa dürüst "UNPROVEN". Config-flag
+# BİLEREK YOK (ölü-flag yasağı) — sürekli gözlem; news görünürlüğü challenger'a
+# verilirse AYRI owner kararı (bu modül yalnız kanıt üretir).
+news_event_study:
+  horizon_bars: 5      # olaydan sonra kaç bar ileri bakılır (timeframe cinsinden)
+  timeframe: "1d"      # ileri-getiri ölçüm zaman dilimi
+  min_bucket_n: 8      # kova bundan azsa hüküm INSUFFICIENT (kanıtsız)
+
 # Y-4 — Walk-forward doğrulama (freqtrade deseni): threshold_ab.sweep adayı
 # EĞİTİM penceresinde (ilk split_ratio) seçer, DOĞRULAMA penceresinde (kalan)
 # baseline'ı geçmeden öneri ÜRETMEZ — tek pencerede parlayan aşırı-uyum adayı

@@ -692,6 +692,19 @@ paths:
                 type: object
                 additionalProperties: true
 
+  /api/v1/learning/news-event-study:
+    get:
+      operationId: getLearningNewsEventStudy
+      summary: Y-6 — Haber olay-çalışması (kaynak×sentiment ileri-getiri karnesi, SALT-GÖZLEM, read-only)
+      responses:
+        "200":
+          description: OK (tablo yoksa status=NO_TABLE)
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+
   /api/v1/learning/discovery:
     get:
       operationId: getLearningDiscovery

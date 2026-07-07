@@ -824,6 +824,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/learning/news-event-study": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Y-6 — Haber olay-çalışması (kaynak×sentiment ileri-getiri karnesi, SALT-GÖZLEM, read-only) */
+        get: operations["getLearningNewsEventStudy"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/learning/discovery": {
         parameters: {
             query?: never;
@@ -4874,6 +4891,28 @@ export interface operations {
         };
     };
     getLearningMetaGate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK (tablo yoksa status=NO_TABLE) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+    };
+    getLearningNewsEventStudy: {
         parameters: {
             query?: never;
             header?: never;

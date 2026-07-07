@@ -467,6 +467,17 @@ export const useMetaGate = () => {
   });
 };
 
+// Y-6 — haber olay-çalışması learning-cycle'da (~5 dk) tazelenir.
+export const useNewsEventStudy = () => {
+  const policy = usePanelQueryPolicy(5 * 60_000);
+  return useQuery({
+    queryKey: qk.newsEventStudy,
+    queryFn: api.newsEventStudy,
+    staleTime: 60_000,
+    ...policy,
+  });
+};
+
 export const useDiscovery = () => {
   const policy = usePanelQueryPolicy(5 * 60_000);
   return useQuery({
