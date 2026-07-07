@@ -463,6 +463,15 @@ strategy_shaping:
     PULLBACK:           { stop: 0.9,  tp_rr: 1.0,  trail: 1.0,  size: 1.0 }   # trende dönüş, kontrollü
     SCALP:              { stop: 0.75, tp_rr: 0.8,  trail: 0.75, size: 0.7 }   # hızlı gir-çık, çok sıkı
 
+# Y-4 — Walk-forward doğrulama (freqtrade deseni): threshold_ab.sweep adayı
+# EĞİTİM penceresinde (ilk split_ratio) seçer, DOĞRULAMA penceresinde (kalan)
+# baseline'ı geçmeden öneri ÜRETMEZ — tek pencerede parlayan aşırı-uyum adayı
+# kapıda ölür. false = tek-pencere (eski davranış, çıktı birebir). Tüketici
+# (threshold_trainer) yalnız `recommendation` okur → flag yalnızca SIKILAŞTIRIR.
+threshold_ab:
+  walk_forward: false
+  split_ratio: 0.7   # eğitim payı; [0.5, 0.9] klamplanır
+
 # Y-3 — Backtest-challenger geçmiş penceresi (İZOLE kanal ayar parametresi; canlı
 # karara dokunmaz, yalnız challenger artifact üretim derinliği). 365 günde rejim
 # çeşitliliği yetersizdi (DEFENSIVE 5 / CRISIS 0 kayıt — sentinel/quantum v2 ve
