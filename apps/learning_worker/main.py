@@ -649,6 +649,23 @@ def run_once() -> dict:
         exit_backtest_status = f"ERROR:{type(exc).__name__}"
         errors.append(f"exit_backtest:{type(exc).__name__}")
 
+    # 0-2 karnesi (SALT-ANALİZ, flag YOK — exit_backtest deseni). Owner'ın
+    # Elliott 0-2 yöntemi (fitil/kırılım işlemleri + dalga-1/3 değme filtresi)
+    # arşiv+canlı barlarda haftalık yeniden ölçülür; canlı karara dokunmaz.
+    zero_two_scorecard_status = "ERROR"
+    try:
+        from packages.learning import zero_two_scorecard as _zts
+        zt = _zts.run_if_due()
+        zero_two_scorecard_status = str(zt.get("status", "UNKNOWN"))
+        if zero_two_scorecard_status == "OK":
+            log.info(
+                "zero_two_scorecard: scanned=%s skipped_flat=%s",
+                zt.get("scanned"), zt.get("skipped_flat"),
+            )
+    except Exception as exc:  # defensive — worker patlamamalı
+        zero_two_scorecard_status = f"ERROR:{type(exc).__name__}"
+        errors.append(f"zero_two_scorecard:{type(exc).__name__}")
+
     # D5 — sinyal karnesi (SUBSIGNAL_SCORECARD_ENABLED, default OFF → tam no-op).
     # INTERVAL-kapılı (haftalık; durum = artifact yaşı): 8 sinyal × 4 TF ileri-
     # getiri karnesi (v2 sert cetvel) yeniden ölçülür — bar arşivi büyüdükçe
@@ -757,6 +774,7 @@ def run_once() -> dict:
         "meta_gate_status": meta_gate_status,  # Y-5 meta-label kapısı tablosu (SALT-GÖLGE)
         "news_study_status": news_study_status,  # Y-6 haber olay-çalışması karnesi (SALT-GÖZLEM)
         "exit_backtest_status": exit_backtest_status,  # Çıkış stop-verim backtest (interval-kapılı; SKIP_FRESH=taze)
+        "zero_two_scorecard_status": zero_two_scorecard_status,  # 0-2 karnesi (owner edge'i; interval-kapılı SALT-ANALİZ)
         "subsignal_scorecard_status": subsignal_scorecard_status,  # D5 sinyal karnesi (DISABLED=flag OFF)
         "tf_scoring_v2_shadow_status": tf_scoring_v2_shadow_status,  # D6 v2 gölge skoru (DISABLED=flag OFF)
         "tf_scoring_race_status": tf_scoring_race_status,  # R5 yarış defteri (DISABLED=flag OFF)
