@@ -2195,6 +2195,12 @@ export type DatasetHealthView = {
   };
   learners: DatasetHealthLearner[];
   all_ready: boolean;
+  // Y-2 additive — üçlü-bariyer etiket dağılımı (exit_forensics.barrier_label;
+  // eski API sürümüyle uyum için opsiyonel).
+  barrier_labels?: {
+    by_barrier: Record<string, number>;
+    by_quality: Record<string, number>;
+  };
 };
 
 export type EdgeStabilitySegment = {

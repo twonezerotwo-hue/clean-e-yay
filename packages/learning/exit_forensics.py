@@ -124,6 +124,57 @@ def _diagnose(o: CanonicalOutcome) -> dict:
     return d
 
 
+# Trailing kazananında bunun altı yakalama "kısmi" sayılır (capture = pnl/mfe).
+PARTIAL_CAPTURE_MAX = 0.5
+
+
+def barrier_label(o: CanonicalOutcome) -> dict:
+    """Y-2 — üçlü-bariyer etiketi (mlfinlab triple-barrier deseni; bariyerler bu
+    sistemde ZATEN CANLI: SL / TP / time-stop dikey bariyeri / trailing).
+
+    Tek outcome → {barrier, quality}. Mevcut teşhisin (_category + _diagnose)
+    İNCE sarmalayıcısı — yeni sınıflandırma mantığı YOK (tek kaynak, kopya yok;
+    sl_class/never_worked/capture eşikleri _diagnose'dan gelir). "Şanslı" ile
+    "hakiki" sonucu ayırır: TP=hakiki kazanç; time-stop artısı=şanslı (hedefe
+    gitmedi); roundtrip SL / düşük-capture trailing=korunamayan kâr. Tüketiciler:
+    dataset_health dağılımı (Y-2) + meta-label kapısı eğitim etiketi (Y-5)."""
+    cat = _category(o)
+    d = _diagnose(o)
+    pnl_pct = float(o.pnl_pct) if o.pnl_pct is not None else None
+    if cat == "tp":
+        return {"barrier": "TP", "quality": "clean_win"}
+    if cat == "trailing":
+        if pnl_pct is None:
+            return {"barrier": "TRAIL", "quality": "unknown"}
+        if pnl_pct > 0:
+            cap = d.get("capture")
+            quality = (
+                "partial_capture"
+                if cap is not None and cap < PARTIAL_CAPTURE_MAX
+                else "clean_win"
+            )
+            return {"barrier": "TRAIL", "quality": quality}
+        return {"barrier": "TRAIL", "quality": "roundtrip_loss"}
+    if cat == "sl":
+        sl_class = d.get("sl_class")
+        quality = {
+            "straight": "clean_loss",       # hiç işlemedi → giriş sorunu, temiz kayıp
+            "roundtrip": "roundtrip_loss",  # açık kâr korunamadı → çıkış hatası
+        }.get(sl_class, "gray")
+        return {"barrier": "SL", "quality": quality}
+    if cat == "time_stop":
+        if d.get("never_worked"):
+            return {"barrier": "TIME", "quality": "never_worked"}
+        if pnl_pct is None:
+            return {"barrier": "TIME", "quality": "unknown"}
+        # Dikey bariyer artısı "şanslı": hedefe/stopa gitmeden süre doldu.
+        quality = "lucky_win" if pnl_pct > 0 else "timeout_loss"
+        return {"barrier": "TIME", "quality": quality}
+    if cat == "manual":
+        return {"barrier": "MANUAL", "quality": "excluded"}
+    return {"barrier": "OTHER", "quality": "unknown"}
+
+
 def _empty_bucket() -> dict:
     return {
         "n": 0,

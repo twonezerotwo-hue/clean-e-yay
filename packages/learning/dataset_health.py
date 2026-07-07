@@ -36,6 +36,21 @@ def report(outcomes: list | None = None) -> dict:
     def _pct(n: int) -> float:
         return round(n / total, 3) if total else 0.0
 
+    # Y-2 — üçlü-bariyer etiket dağılımı (exit_forensics.barrier_label tek kaynak;
+    # burada yeniden sınıflandırma YOK). "Şanslı artı" (time-stop lucky_win) ile
+    # "hakiki kazanç" (TP clean_win) ve "korunamayan kâr" (roundtrip) ayrışır —
+    # Y-5 meta-label eğitim etiketinin veri hazırlığı buradan izlenir.
+    from packages.learning import exit_forensics  # lazy: dairesel import yok
+    by_barrier: dict[str, int] = {}
+    by_quality: dict[str, int] = {}
+    for o in outs:
+        try:
+            lbl = exit_forensics.barrier_label(o)
+        except Exception:  # tek bozuk kayıt dağılımı düşürmesin
+            continue
+        by_barrier[lbl["barrier"]] = by_barrier.get(lbl["barrier"], 0) + 1
+        by_quality[lbl["quality"]] = by_quality.get(lbl["quality"], 0) + 1
+
     # Öğrenici-başı hazırlık — eşikler trainer'ların kendi sabitlerinden (tek kaynak).
     learners = [
         {
@@ -63,4 +78,9 @@ def report(outcomes: list | None = None) -> dict:
         },
         "learners": learners,
         "all_ready": all(item["ready"] for item in learners),
+        # Y-2 additive — mevcut alanlar dokunulmadı; panel bu bloğu okur.
+        "barrier_labels": {
+            "by_barrier": dict(sorted(by_barrier.items())),
+            "by_quality": dict(sorted(by_quality.items())),
+        },
     }

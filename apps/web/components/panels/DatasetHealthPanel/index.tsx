@@ -15,6 +15,31 @@ const LEARNER_LABEL: Record<string, string> = {
   weights_metrics: "Ağırlık & metrik",
 };
 
+// Y-2 — üçlü-bariyer kalite etiketleri (exit_forensics.barrier_label; şanslı
+// artı ile hakiki kazanç ayrımı). Frontend hesap YAPMAZ, yalnız adlandırır.
+const QUALITY_LABEL: Record<string, string> = {
+  clean_win: "hakiki kazanç",
+  lucky_win: "şanslı artı",
+  partial_capture: "kısmi yakalama",
+  roundtrip_loss: "korunamayan kâr",
+  clean_loss: "temiz kayıp",
+  timeout_loss: "süre doldu −",
+  never_worked: "hiç işlemedi",
+  gray: "atıfsız",
+  excluded: "manuel",
+  unknown: "bilinmez",
+};
+
+const QUALITY_TONE: Record<string, string> = {
+  clean_win: "bg-signal-up/20 text-signal-up",
+  lucky_win: "bg-amber-400/20 text-amber-300",
+  partial_capture: "bg-amber-400/20 text-amber-300",
+  roundtrip_loss: "bg-signal-down/20 text-signal-down",
+  clean_loss: "bg-white/10 text-white/60",
+  timeout_loss: "bg-white/10 text-white/60",
+  never_worked: "bg-white/10 text-white/50",
+};
+
 function CoverageBar({ label, value }: { label: string; value: number }) {
   const pct = Math.round(value * 100);
   return (
@@ -90,6 +115,24 @@ export function DatasetHealthPanel() {
           <CoverageBar label="Güven damgalı" value={cov.confidence_pct} />
           <CoverageBar label="MAE/MFE'li" value={cov.excursion_pct} />
           <CoverageBar label="$ boyutlu (çıkış tahmini)" value={cov.size_usd_pct} />
+        </div>
+      ) : null}
+
+      {d?.barrier_labels && Object.keys(d.barrier_labels.by_quality).length ? (
+        <div className="mt-3">
+          <div className="mb-1 text-[10px] uppercase tracking-wide text-white/45">
+            Bariyer etiketi (kapanışın kalitesi)
+          </div>
+          <div className="flex flex-wrap gap-1">
+            {Object.entries(d.barrier_labels.by_quality).map(([q, n]) => (
+              <span
+                key={q}
+                className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${QUALITY_TONE[q] ?? "bg-white/10 text-white/50"}`}
+              >
+                {QUALITY_LABEL[q] ?? q} <span className="tabular-nums">{n}</span>
+              </span>
+            ))}
+          </div>
         </div>
       ) : null}
 
