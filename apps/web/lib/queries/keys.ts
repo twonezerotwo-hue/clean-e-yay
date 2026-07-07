@@ -53,6 +53,7 @@ export const qk = {
   metaGate: ["learning", "meta-gate"] as const,
   calibrationFit: ["learning", "calibration-fit"] as const,
   payoffReadiness: ["learning", "payoff-readiness"] as const,
+  exitBacktest: ["learning", "exit-backtest"] as const,
   newsEventStudy: ["learning", "news-event-study"] as const,
   discovery: ["learning", "discovery"] as const,
   evidenceBus: ["learning", "evidence-bus"] as const,

@@ -112,6 +112,47 @@ export interface MetaGateView {
   };
 }
 
+// Çıkış backtest — tek exit-config satırı (ızgara noktası).
+export interface ExitBacktestConfig {
+  sl_mult: number;
+  trail_act: number;
+  trail_dist: number;
+  ptp_trigger: number;
+  ptp_frac: number;
+  net_r: number;
+  avg_r: number;
+  median_r: number;
+  win_rate: number;
+  per_tf_avg_r: Record<string, number>;
+}
+
+// Çıkış backtest — TF başına en verimli config.
+export interface ExitBacktestTfBest {
+  sl_mult: number;
+  trail_act: number;
+  trail_dist: number;
+  ptp: string;
+  avg_r: number;
+}
+
+// Çıkış stop-verim backtest görünümü (GET /learning/exit-backtest). Salt-analiz:
+// en verimli sabit+trailing stop aralığı; canlı çıkışa dokunmaz.
+export interface ExitBacktestView {
+  status: string; // OK | NO_DATA
+  shadow_only: boolean;
+  generated_at?: string | null;
+  entry_count: number;
+  tf_counts: Record<string, number>;
+  best_configs: ExitBacktestConfig[];
+  marginal: {
+    sl_mult?: Record<string, number>;
+    trail_act?: Record<string, number>;
+    trail_dist?: Record<string, number>;
+    ptp?: Record<string, number>;
+  };
+  per_tf_best: Record<string, ExitBacktestTfBest>;
+}
+
 // Faz-A (EV kapısı) — per-hücre payoff EV R-örnek hazırlık satırı.
 export interface PayoffReadinessRow {
   cell: string; // "tf|rejim"

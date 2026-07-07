@@ -56,6 +56,7 @@ import { MetaGatePanel } from "@/components/panels/MetaGatePanel";
 import { NewsEventStudyPanel } from "@/components/panels/NewsEventStudyPanel";
 import { CalibrationFitPanel } from "@/components/panels/CalibrationFitPanel";
 import { PayoffReadinessPanel } from "@/components/panels/PayoffReadinessPanel";
+import { ExitBacktestPanel } from "@/components/panels/ExitBacktestPanel";
 import { DiscoveryPanel } from "@/components/panels/DiscoveryPanel";
 import { BacktestChallengerPanel } from "@/components/panels/BacktestChallengerPanel";
 import { ThresholdAutotunePanel } from "@/components/panels/ThresholdAutotunePanel";
@@ -1417,6 +1418,9 @@ export function CockpitView() {
               </LearnStep>
               <LearnStep step="20" label="Payoff EV hazırlığı — hangi hücre gerçekleşen-R kâr hesabına geçecek kadar örnek gördü" wide>
                 <PayoffReadinessPanel />
+              </LearnStep>
+              <LearnStep step="21" label="Çıkış verim backtest — en verimli sabit + trailing stop aralığı (gerçek fiyat geçmişi)" wide>
+                <ExitBacktestPanel />
               </LearnStep>
             </div>
           </Layer2DetailGroup>

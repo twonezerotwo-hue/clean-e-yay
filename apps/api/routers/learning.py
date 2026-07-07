@@ -25,6 +25,7 @@ from packages.learning import (
     empirical_pwin,
     entry_exit_quality,
     evidence_bus,
+    exit_backtest,
     exit_forensics,
     guard_safety,
     historical_edge,
@@ -115,6 +116,16 @@ def get_tf_weights() -> dict:
     changes the verified outcomes suggest. Informational — live weights are never
     moved here (owner approval, never auto-apply)."""
     return tf_weight_trainer.report_viewmodel()
+
+
+@router.get("/learning/exit-backtest")
+def get_exit_backtest() -> dict:
+    """Çıkış stop-verim backtest'i (read-only, PAPER_SAFE, SALT-ANALİZ). Gerçek
+    OHLCV geçmişinde sabit SL × trailing (aktivasyon/mesafe) × partial_tp ızgarası
+    → en verimli aralık + TF kırılımı. Canlı çıkış davranışına ASLA dokunmaz;
+    owner çıkış config'ini (trail mesafesi, SL katı) bu kanıtla gözden geçirir.
+    Ağır → haftalık interval-kapılı üretilir (SKIP_FRESH=taze artifact)."""
+    return exit_backtest.viewmodel()
 
 
 @router.get("/learning/payoff-readiness")

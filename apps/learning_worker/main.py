@@ -635,6 +635,20 @@ def run_once() -> dict:
         news_study_status = f"ERROR:{type(exc).__name__}"
         errors.append(f"news_event_study:{type(exc).__name__}")
 
+    # Çıkış stop-verim backtest'i (SALT-ANALİZ). AĞIR (binlerce entry × ızgara) →
+    # interval-kapılı (haftalık; durum = artifact yaşı). Sabit+trailing stop için
+    # en verimli aralığı gerçek OHLCV'den ölçer; canlı çıkışa dokunmaz.
+    exit_backtest_status = "ERROR"
+    try:
+        from packages.learning import exit_backtest as _eb
+        eb = _eb.run_if_due()
+        exit_backtest_status = str(eb.get("status", "UNKNOWN"))
+        if exit_backtest_status == "OK":
+            log.info("exit_backtest: %s entries taranıp güncellendi", eb.get("entries"))
+    except Exception as exc:  # defensive — worker patlamamalı
+        exit_backtest_status = f"ERROR:{type(exc).__name__}"
+        errors.append(f"exit_backtest:{type(exc).__name__}")
+
     # D5 — sinyal karnesi (SUBSIGNAL_SCORECARD_ENABLED, default OFF → tam no-op).
     # INTERVAL-kapılı (haftalık; durum = artifact yaşı): 8 sinyal × 4 TF ileri-
     # getiri karnesi (v2 sert cetvel) yeniden ölçülür — bar arşivi büyüdükçe
@@ -742,6 +756,7 @@ def run_once() -> dict:
         "regime_brake_status": regime_brake_status,  # Y-1 rejim risk freni tablosu (gözlem; uygulama flag'le)
         "meta_gate_status": meta_gate_status,  # Y-5 meta-label kapısı tablosu (SALT-GÖLGE)
         "news_study_status": news_study_status,  # Y-6 haber olay-çalışması karnesi (SALT-GÖZLEM)
+        "exit_backtest_status": exit_backtest_status,  # Çıkış stop-verim backtest (interval-kapılı; SKIP_FRESH=taze)
         "subsignal_scorecard_status": subsignal_scorecard_status,  # D5 sinyal karnesi (DISABLED=flag OFF)
         "tf_scoring_v2_shadow_status": tf_scoring_v2_shadow_status,  # D6 v2 gölge skoru (DISABLED=flag OFF)
         "tf_scoring_race_status": tf_scoring_race_status,  # R5 yarış defteri (DISABLED=flag OFF)

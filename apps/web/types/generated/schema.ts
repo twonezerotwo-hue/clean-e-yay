@@ -807,6 +807,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/learning/exit-backtest": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Çıkış stop-verim backtest'i — en verimli sabit+trailing stop aralığı (read-only) */
+        get: operations["getLearningExitBacktest"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/learning/payoff-readiness": {
         parameters: {
             query?: never;
@@ -4920,6 +4937,28 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ExitForensicsView"];
+                };
+            };
+        };
+    };
+    getLearningExitBacktest: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK (veri yoksa status=NO_DATA) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
                 };
             };
         };

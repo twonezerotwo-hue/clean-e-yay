@@ -679,6 +679,19 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/ExitForensicsView" }
 
+  /api/v1/learning/exit-backtest:
+    get:
+      operationId: getLearningExitBacktest
+      summary: Çıkış stop-verim backtest'i — en verimli sabit+trailing stop aralığı (read-only)
+      responses:
+        "200":
+          description: OK (veri yoksa status=NO_DATA)
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+
   /api/v1/learning/payoff-readiness:
     get:
       operationId: getLearningPayoffReadiness
