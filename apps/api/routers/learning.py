@@ -36,6 +36,7 @@ from packages.learning import (
     news_event_study,
     partial_tp_shadow,
     promotion_criteria,
+    reflection,
     regime_risk_brake,
     source_selector,
     subsignal_scorecard,
@@ -137,6 +138,15 @@ def get_zero_two_strategy() -> dict:
     ilk-işlem ve house-money'li PnL. Canlı skora/karara ASLA dokunmaz; kanıt biriktirir.
     Sayılar flat-veri + örtüşen işlemlerle şişebilir → güven için ileri-veri şart."""
     return zero_two_strategy.viewmodel()
+
+
+@router.get("/learning/reflection")
+def get_reflection() -> dict:
+    """Yansıma/hafıza döngüsü (read-only, PAPER_SAFE, SALT-GÖZLEM). Kapanan
+    işlemlerden çıkarılan dersler (çapraz-sembol + per-sembol) — "ne oldu, kaça,
+    hangi setup". Karar hattına BAĞLI DEĞİL (enjeksiyon ayrı owner adımı);
+    dersler yalnız gerçekleşen outcome alanlarından türer (uydurma yok)."""
+    return reflection.viewmodel()
 
 
 @router.get("/learning/payoff-readiness")

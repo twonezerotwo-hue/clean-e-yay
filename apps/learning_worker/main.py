@@ -666,6 +666,21 @@ def run_once() -> dict:
         zero_two_scorecard_status = f"ERROR:{type(exc).__name__}"
         errors.append(f"zero_two_scorecard:{type(exc).__name__}")
 
+    # Yansıma/hafıza döngüsü (SALT-GÖZLEM, flag YOK — ucuz). Kapanan işlemlerden
+    # ders çıkarıp izlenebilir digest yazar; karar hattına BAĞLI DEĞİL (enjeksiyon
+    # ayrı owner adımı). TradingAgents deseninden alınan hafıza döngüsünün üretici
+    # yarısı — mistake_memory'nin sayısal vetosuna DİK (anlatısal ders).
+    reflection_status = "ERROR"
+    try:
+        from packages.learning import reflection as _refl
+        rf = _refl.write_digest()
+        reflection_status = str(rf.get("status", "UNKNOWN"))
+        if reflection_status == "OK":
+            log.info("reflection: %s ders", rf.get("total_lessons"))
+    except Exception as exc:  # defensive — worker patlamamalı
+        reflection_status = f"ERROR:{type(exc).__name__}"
+        errors.append(f"reflection:{type(exc).__name__}")
+
     # 0-2 TAM-STRATEJİ karnesi (SALT-ANALİZ, flag YOK). Owner'ın nihai LONG akışı
     # (0.618 giriş + fib hedef + 0-2 trailing + house-money re-giriş) arşiv+canlı
     # barlarda haftalık ölçülür; canlı karara dokunmaz (kanıt biriktirir).
@@ -793,6 +808,7 @@ def run_once() -> dict:
         "exit_backtest_status": exit_backtest_status,  # Çıkış stop-verim backtest (interval-kapılı; SKIP_FRESH=taze)
         "zero_two_scorecard_status": zero_two_scorecard_status,  # 0-2 karnesi (owner edge'i; interval-kapılı SALT-ANALİZ)
         "zero_two_strategy_status": zero_two_strategy_status,  # 0-2 tam-strateji karnesi (0.618+fib+trailing+house-money; SALT-ANALİZ)
+        "reflection_status": reflection_status,  # Yansıma/hafıza döngüsü (kapanan işlem dersleri; SALT-GÖZLEM)
         "subsignal_scorecard_status": subsignal_scorecard_status,  # D5 sinyal karnesi (DISABLED=flag OFF)
         "tf_scoring_v2_shadow_status": tf_scoring_v2_shadow_status,  # D6 v2 gölge skoru (DISABLED=flag OFF)
         "tf_scoring_race_status": tf_scoring_race_status,  # R5 yarış defteri (DISABLED=flag OFF)
