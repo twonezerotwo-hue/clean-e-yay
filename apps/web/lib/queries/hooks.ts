@@ -478,6 +478,17 @@ export const useExitBacktest = () => {
   });
 };
 
+// 0-2 tam-strateji gölge karnesi haftalık üretilir; panel seyrek tazeler (10 dk).
+export const useZeroTwoStrategy = () => {
+  const policy = usePanelQueryPolicy(10 * 60_000);
+  return useQuery({
+    queryKey: qk.zeroTwoStrategy,
+    queryFn: api.zeroTwoStrategy,
+    staleTime: 5 * 60_000,
+    ...policy,
+  });
+};
+
 // Faz-A (EV kapısı) — per-hücre payoff hazırlık yüzeyi learning-cycle'da tazelenir.
 export const usePayoffReadiness = () => {
   const policy = usePanelQueryPolicy(5 * 60_000);

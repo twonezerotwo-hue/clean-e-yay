@@ -314,10 +314,65 @@ def run_if_due() -> dict:
     return {"status": "OK", "scanned": len(rep["scanned"]), "cells": len(rep["results"])}
 
 
+def _load() -> dict | None:
+    try:
+        p = _path()
+        if not p.exists():
+            return None
+        return json.loads(p.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError, ValueError):
+        return None
+
+
+def viewmodel() -> dict:
+    """GET /learning/zero-two-strategy — owner 0-2 tam-akış gölge karnesi (read-only).
+
+    Her hücreyi (TF|right|grup) düz bir satıra çevirir: işlem sayısı, isabet,
+    ilk-işlem PnL (R), house-money'li PnL (R), re-giriş sayısı. Panel HESAP YAPMAZ.
+    `real_wick` = gerçek fitilli (flat_note'ta değil) → en güvenilir hücre.
+    """
+    data = _load()
+    if not data:
+        return {"status": "NO_DATA", "generated_at": None, "cells": [], "flat_note": []}
+    flat = set(data.get("flat_note") or [])
+    results = data.get("results") or {}
+    cells = []
+    for key, r in results.items():
+        if not r.get("n"):
+            continue
+        parts = key.split("|")
+        tf = parts[0]
+        grp = parts[-1]
+        # Hisseler (diger) hep gerçek fitilli; kripto hücresi ancak o TF'de fitilsiz
+        # kripto sembolü varsa "flat" (flat_note yalnız kripto sembolleri içerir).
+        real_wick = grp != "kripto" or not any(fn.endswith(f"_{tf}") for fn in flat)
+        cells.append({
+            "label": key,
+            "tf": tf,
+            "n": r["n"],
+            "win_pct": r.get("ilk_win_pct", 0.0),
+            "ilk_total_r": r.get("ilk_total_r", 0.0),
+            "hm_total_r": r.get("hm_total_r", 0.0),
+            "reentry_n": r.get("reentry_n", 0),
+            "reentry_win": r.get("reentry_win", 0),
+            "real_wick": real_wick,
+        })
+    cells.sort(key=lambda c: (c["tf"], c["label"]))
+    return {
+        "status": "OK",
+        "generated_at": data.get("generated_at"),
+        "engine": data.get("engine"),
+        "cells": cells,
+        "flat_note": sorted(flat),
+        "shadow_only": True,
+    }
+
+
 __all__ = [
     "compute",
     "first_trade",
     "measure",
     "reentry_rr",
     "run_if_due",
+    "viewmodel",
 ]

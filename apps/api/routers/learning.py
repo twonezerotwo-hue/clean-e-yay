@@ -48,6 +48,7 @@ from packages.learning import (
     tf_weight_trainer,
     threshold_ab,
     threshold_trainer,
+    zero_two_strategy,
 )
 from packages.learning import outcomes as outcomes_mod
 from packages.learning.calibration import reliability_bins
@@ -126,6 +127,16 @@ def get_exit_backtest() -> dict:
     owner çıkış config'ini (trail mesafesi, SL katı) bu kanıtla gözden geçirir.
     Ağır → haftalık interval-kapılı üretilir (SKIP_FRESH=taze artifact)."""
     return exit_backtest.viewmodel()
+
+
+@router.get("/learning/zero-two-strategy")
+def get_zero_two_strategy() -> dict:
+    """0-2 tam-strateji gölge karnesi (read-only, PAPER_SAFE, SALT-ANALİZ). Owner'ın
+    nihai LONG akışı (0.618 giriş + fib hedef + 0-2 trailing + sabit-bahis house-money
+    re-giriş) arşiv+canlı barlarda ölçülür → TF×pivot hücrelerinde işlem sayısı, isabet,
+    ilk-işlem ve house-money'li PnL. Canlı skora/karara ASLA dokunmaz; kanıt biriktirir.
+    Sayılar flat-veri + örtüşen işlemlerle şişebilir → güven için ileri-veri şart."""
+    return zero_two_strategy.viewmodel()
 
 
 @router.get("/learning/payoff-readiness")

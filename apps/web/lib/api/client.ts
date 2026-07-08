@@ -68,6 +68,7 @@ import type {
   MetaGateView,
   NewsEventStudyView,
   PayoffReadinessView,
+  ZeroTwoStrategyView,
   SubsignalScorecardView,
   TfScoringRaceView,
   TfScoringShadowView,
@@ -662,6 +663,8 @@ export const api = {
     fetchJSON<PayoffReadinessView>("/api/v1/learning/payoff-readiness"),
   exitBacktest: () =>
     fetchJSON<ExitBacktestView>("/api/v1/learning/exit-backtest"),
+  zeroTwoStrategy: () =>
+    fetchJSON<ZeroTwoStrategyView>("/api/v1/learning/zero-two-strategy"),
   newsEventStudy: () =>
     fetchJSON<NewsEventStudyView>("/api/v1/learning/news-event-study"),
   discovery: () => fetchJSON<DiscoveryView>("/api/v1/learning/discovery"),

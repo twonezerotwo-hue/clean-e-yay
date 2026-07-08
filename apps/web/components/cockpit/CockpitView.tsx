@@ -57,6 +57,7 @@ import { NewsEventStudyPanel } from "@/components/panels/NewsEventStudyPanel";
 import { CalibrationFitPanel } from "@/components/panels/CalibrationFitPanel";
 import { PayoffReadinessPanel } from "@/components/panels/PayoffReadinessPanel";
 import { ExitBacktestPanel } from "@/components/panels/ExitBacktestPanel";
+import { ZeroTwoStrategyPanel } from "@/components/panels/ZeroTwoStrategyPanel";
 import { DiscoveryPanel } from "@/components/panels/DiscoveryPanel";
 import { BacktestChallengerPanel } from "@/components/panels/BacktestChallengerPanel";
 import { ThresholdAutotunePanel } from "@/components/panels/ThresholdAutotunePanel";
@@ -1421,6 +1422,9 @@ export function CockpitView() {
               </LearnStep>
               <LearnStep step="21" label="Çıkış verim backtest — en verimli sabit + trailing stop aralığı (gerçek fiyat geçmişi)" wide>
                 <ExitBacktestPanel />
+              </LearnStep>
+              <LearnStep step="22" label="0-2 strateji + house-money — owner nihai LONG akışının gölge karnesi (giriş + fib hedef + trailing + sabit-bahis re-giriş)" wide>
+                <ZeroTwoStrategyPanel />
               </LearnStep>
             </div>
           </Layer2DetailGroup>
