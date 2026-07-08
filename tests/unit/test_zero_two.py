@@ -180,12 +180,34 @@ def test_t1_wick_trade_break_direction():
     assert trades[0]["results"][1.0] >= 1.0  # 1R hedefi doldu
 
 
+def test_elliott_flags_on_t2_setup():
+    """Elliott teyit bayrakları: dalga1/dalga3 oranları + P2 fib uyumu.
+
+    Sentetik aşağı setup: dalga1 = 10 (110→100), dalga3 ucu 95.6 → |dalga3| =
+    9.4 < dalga1 → en-kısa-değil kuralı TUTMAZ; P2 geri çekilmesi %50 → fib
+    uyumlu (0.5'e sapma 0.014).
+    """
+    up = _up_setup_path()
+    down_path = [210 - p for p in up] + [101, 99, 97, 96, 97, 98]
+    bars = _walk(down_path)
+    s = next(x for x in zero_two.find_setups(bars) if x.direction == "down")
+    n = len(bars)
+    lv = _line_at(s, n)
+    bars.append(_bar(n, 99, lv + 1.0, 98.8, lv + 0.8))
+    ev = next(e for e in zero_two.analyze(bars) if e.setup == s)
+    assert ev.status == zero_two.STATUS_VALID
+    flags = zero_two_scorecard.elliott_flags(ev)
+    assert flags["dalga3_en_kisa_degil"] is False  # 9.4 < 10
+    assert flags["dalga3_uzatmali"] is False
+    assert flags["p2_fib_uyumlu"] is True  # retrace 0.5, sapma 0.014 ≤ 0.05
+
+
 def test_run_if_due_skip_fresh(tmp_path, monkeypatch):
     """Taze artifact varken yeniden ölçmez (interval kapısı)."""
     art = tmp_path / "zero_two_scorecard.json"
     monkeypatch.setenv("ZERO_TWO_SCORECARD_PATH", str(art))
     art.write_text(
-        f'{{"generated_at": "{datetime.now(UTC).isoformat()}", "engine": "zero_two_scorecard_v1"}}',
+        f'{{"generated_at": "{datetime.now(UTC).isoformat()}", "engine": "{zero_two_scorecard._ENGINE}"}}',
         encoding="utf-8",
     )
     out = zero_two_scorecard.run_if_due()

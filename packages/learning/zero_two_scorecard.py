@@ -32,7 +32,7 @@ from pathlib import Path
 
 from packages.elliott import zero_two
 
-_ENGINE = "zero_two_scorecard_v1"
+_ENGINE = "zero_two_scorecard_v2"  # v2: Elliott teyit kırılımı (owner istegi 2026-07-07)
 _INTERVAL_ENV = "ZERO_TWO_SCORECARD_INTERVAL_SEC"
 _DEFAULT_INTERVAL_SEC = 7 * 24 * 3600
 
@@ -102,6 +102,30 @@ def simulate_fib_target(bars: list, entry_idx: int, entry: float, stop: float, t
     last = bars[min(len(bars) - 1, entry_idx + HORIZON)].close
     r = ((last - entry) / r0) if long else ((entry - last) / r0)
     return {"r": r, "hit": "ufuk", "reward": reward}
+
+
+def elliott_flags(ev: zero_two.ZeroTwoEvent) -> dict[str, bool]:
+    """Setup'ın Elliott sayım kurallarıyla teyidi (0-2 çizgisi Elliott kuralı —
+    owner istegi: iki motor birleşsin). Dalga-2 P0 ihlali ve "dalga 3 P1'i
+    aşmalı" kuralları dedektörde ZATEN zorunlu; burada kalan üçü ölçülür:
+
+    - ``dalga3_en_kisa_degil``: |dalga3| ≥ |dalga1| (Elliott: 3 en kısa olamaz;
+      dalga 5 henüz yokken muhafazakâr vekil).
+    - ``dalga3_uzatmali``: |dalga3| ≥ 1.618 × |dalga1| (güçlü 3. dalga).
+    - ``p2_fib_uyumlu``: P2 geri çekilmesi klasik fib oranına ≤0.05 sapmayla
+      oturuyor (0.382/0.5/0.618/0.786).
+
+    Karne bu bayraklara göre kırılım verir → teyitli setup'ın daha iyi kazanıp
+    kazanmadığı KANITLA görülür; ağırlık/kapı kararı ondan sonra.
+    """
+    s = ev.setup
+    w1 = abs(s.p1.price - s.p0.price)
+    w3 = abs((ev.wave3_extreme if ev.wave3_extreme is not None else s.p2.price) - s.p2.price)
+    return {
+        "dalga3_en_kisa_degil": w3 >= w1,
+        "dalga3_uzatmali": w3 >= FIB_EXT * w1,
+        "p2_fib_uyumlu": s.fib_distance <= 0.05,
+    }
 
 
 def t1_trades(bars: list, ev: zero_two.ZeroTwoEvent) -> list[dict]:
@@ -216,6 +240,7 @@ def compute(now: datetime | None = None) -> dict:
                 t1_acc[tf][grp].extend(t1_trades(bars, ev))
                 t2 = t2_trade(bars, ev)
                 if t2:
+                    t2["flags"] = elliott_flags(ev)
                     t2_acc[tf][grp].append(t2)
 
     def _t1_summary(sims: list[dict]) -> dict:
@@ -234,7 +259,7 @@ def compute(now: datetime | None = None) -> dict:
         n = len(sims)
         if not n:
             return {"n": 0}
-        return {
+        out = {
             "n": n,
             "hedef_pct": round(sum(1 for s in sims if s["hit"] == "hedef") / n * 100, 1),
             "stop_pct": round(sum(1 for s in sims if s["hit"] == "stop") / n * 100, 1),
@@ -242,6 +267,19 @@ def compute(now: datetime | None = None) -> dict:
             "avg_r": round(statistics.mean(s["r"] for s in sims), 3),
             "medyan_hedef_r": round(statistics.median(s["reward"] for s in sims), 2),
         }
+        # Elliott teyit kırılımı: her bayrak için var/yok hücreleri (kanıt tabanı).
+        elliott: dict[str, dict] = {}
+        for flag in ("dalga3_en_kisa_degil", "dalga3_uzatmali", "p2_fib_uyumlu"):
+            cells = {}
+            for val, ad in ((True, "var"), (False, "yok")):
+                sub = [s["r"] for s in sims if (s.get("flags") or {}).get(flag) is val]
+                cells[ad] = {
+                    "n": len(sub),
+                    "avg_r": round(statistics.mean(sub), 3) if sub else None,
+                }
+            elliott[flag] = cells
+        out["elliott_teyit"] = elliott
+        return out
 
     return {
         "generated_at": now.isoformat(),
@@ -297,6 +335,7 @@ def run_if_due() -> dict:
 
 __all__ = [
     "compute",
+    "elliott_flags",
     "run_if_due",
     "simulate_fib_target",
     "simulate_fixed_r",
