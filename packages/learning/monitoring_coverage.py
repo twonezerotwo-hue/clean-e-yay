@@ -136,6 +136,12 @@ COVERAGE: dict[str, dict] = {
                   "yönü canlı barlarda üretir, izole artifact; canlı skora/karara/"
                   "paper'a ASLA yazmaz (D7 yarış girdisi).",
     },
+    "LEARNING_ADVISOR_APPLY": {
+        "mechanism": WATCHDOG, "monitor": "learning_advisor_apply",
+        "reason": "Karar-kanıt tüketicisi: tüm learning'lerin birleşik advice'ı canlı "
+                  "boyutu KISAR (no-boost). OFF (default)→gölge; ON'da watchdog "
+                  "OFF→ON baseline damgalar, post-enable çöküşte DEGRADED önerir.",
+    },
 }
 
 

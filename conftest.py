@@ -87,6 +87,9 @@ def _package1_flags_off_by_default(monkeypatch: pytest.MonkeyPatch) -> None:
     # koşuda tf_calibration testlerine sızıyordu (fingerprint'siz fikstürler
     # boş dönüyor). Flag'i test eden testler kendi monkeypatch.setenv'iyle açar.
     monkeypatch.delenv("TF_CALIBRATION_AUTO_ONLY", raising=False)
+    # Karar-kanıt tüketicisi (2026-07-09) — canlı-etki flag'i testlerde default OFF
+    # (advice yalnız gölge; boyut bayt-aynı). Flag'i test edenler kendi setenv'iyle açar.
+    monkeypatch.delenv("LEARNING_ADVISOR_APPLY", raising=False)
     # Chat model sırası (2026-07-03) — testler default Groq-önce sırayı varsayar;
     # dev .env'inde lokal-önce açık olabilir, sızdırma.
     monkeypatch.delenv("CHAT_LLM_LOCAL_FIRST", raising=False)

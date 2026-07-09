@@ -132,6 +132,13 @@ REGISTRY: dict[str, dict] = {
         "label": "Çıkış otopsisi — oransal nudge adımı (E-5)",
         "source": ("env", "EXIT_FORENSICS_NUDGE"),
     },
+    # Karar-kanıt tüketicisi (2026-07-09): tüm learning'lerin birleşik fikri
+    # canlı boyuta uygulanınca (yalnız KISAR) OFF→ON'da baseline damgalansın;
+    # post-enable expectancy düşerse DEGRADED önerisi.
+    "learning_advisor_apply": {
+        "label": "Karar-kanıt tüketicisi — birleşik advice canlı boyut kısması",
+        "source": ("env", "LEARNING_ADVISOR_APPLY"),
+    },
 }
 
 
