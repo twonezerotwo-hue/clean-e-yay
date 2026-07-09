@@ -89,3 +89,28 @@ def test_short_sequence_mirror():
 def test_stage_rank_ordered():
     assert smc.stage_rank(smc.STAGE_READY) > smc.stage_rank(smc.STAGE_BOS)
     assert smc.stage_rank(smc.STAGE_SWEPT) > smc.stage_rank(smc.STAGE_NONE)
+
+
+# ------------------------------ zamansal scan --------------------------------
+
+def test_scan_insufficient_empty():
+    assert smc.scan(_flat_bars(50), window=120) == []
+
+
+def test_scan_flat_no_setup():
+    """Düz/hareketsiz barlarda sweep/yapı yok → READY setup yok."""
+    bars = _flat_bars(200)
+    out = smc.scan(bars, window=120)
+    assert isinstance(out, list) and out == []
+
+
+def test_scan_returns_list_no_crash():
+    """Gerçekçi dalgalı seride patlamadan liste döner (state-machine güvenli)."""
+    bars = []
+    for i in range(200):
+        base = 100 + 10 * (0.5 - (i % 40) / 40.0)  # testere dalga
+        bars.append(_bar(i, base, base + 1.5, base - 1.5, base + 0.3))
+    out = smc.scan(bars, window=120)
+    assert isinstance(out, list)
+    for s in out:
+        assert s.direction in ("long", "short") and s.stop is not None

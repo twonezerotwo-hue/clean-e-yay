@@ -156,7 +156,94 @@ def stage_rank(stage: str) -> int:
     return _ORDER.get(stage, 0)
 
 
+# ------------------------------ ZAMANSAL sekans -------------------------------
+# Owner sekansı ZAMANSALDIR: sweep → (barlar sonra) CHoCH → BOS → retest. Snapshot
+# `detect` dördünü aynı barda arar → gerçekte hizalanmaz. `scan` barları yürür,
+# ilerlemeyi barlar arası HATIRLAR (state machine).
+
+_MAX_SETUP_BARS = 30   # sweep'ten sonra sekans bu kadar barda tamamlanmalı
+_SCAN_WINDOW = 120     # yapı/sweep bu kadar barlık pencerede okunur
+
+
+@dataclass(frozen=True)
+class ReadySetup:
+    bar_index: int
+    ts: str | None
+    direction: str
+    entry: float
+    stop: float
+    broken_level: float
+    sweep_index: int
+    choch_index: int | None
+    bos_index: int | None
+
+
+def scan(
+    bars: list[OHLCVBar], *, timeframe: str = "4h",
+    window: int = _SCAN_WINDOW, max_bars: int = _MAX_SETUP_BARS,
+) -> list[ReadySetup]:
+    """Barları yürü, owner sekansını ZAMANDA takip et → READY olan setuplar.
+
+    Beklemede bir setup varken: sweep başlatır (yön=X); ilerideki barlarda yön-X
+    CHoCH → BOS → retest gelirse READY. Çok bar geçerse (max_bars) beklemedeki
+    setup düşer. Saf/defansif; asla raise etmez."""
+    out: list[ReadySetup] = []
+    if len(bars) < window + 2:
+        return out
+    pending: dict | None = None
+
+    for i in range(window, len(bars) + 1):
+        rw = bars[i - window : i]
+        ms = market_structure.analyze(rw)
+        if ms is None:
+            continue
+        try:
+            sw = liquidity_sweep.analyze(rw, timeframe=timeframe)
+        except Exception:
+            sw = None
+        idx = i - 1  # penceredeki son barın global indeksi
+
+        if pending is not None and idx > pending["expiry"]:
+            pending = None  # süre doldu
+
+        if pending is None:
+            bias = getattr(sw, "bias", "unknown") if sw else "unknown"
+            if bias in ("REVERSAL_LONG", "REVERSAL_SHORT") and \
+               getattr(sw, "validity", "unavailable") != "unavailable":
+                pending = {
+                    "direction": "long" if bias == "REVERSAL_LONG" else "short",
+                    "stage": STAGE_SWEPT, "sweep_i": idx, "choch_i": None,
+                    "bos_i": None, "broken": None, "expiry": idx + max_bars,
+                }
+            continue
+
+        long = pending["direction"] == "long"
+        want = "bullish" if long else "bearish"
+        # aşamaları sırayla ilerlet (aynı barda birden çok ilerleyebilir)
+        if pending["stage"] == STAGE_SWEPT and ms.choch == want:
+            pending["stage"] = STAGE_CHOCH
+            pending["choch_i"] = idx
+        if pending["stage"] == STAGE_CHOCH and ms.bos == want:
+            pending["stage"] = STAGE_BOS
+            pending["bos_i"] = idx
+            pending["broken"] = ms.last_high if long else ms.last_low
+        if pending["stage"] == STAGE_BOS and pending["broken"] and \
+           _retest_ok(rw, pending["broken"], long=long):
+            cur = bars[idx]
+            out.append(ReadySetup(
+                bar_index=idx, ts=cur.ts.isoformat() if cur.ts else None,
+                direction=pending["direction"], entry=round(cur.close, 8),
+                stop=round(ms.last_low if long else ms.last_high, 8),
+                broken_level=round(pending["broken"], 8),
+                sweep_index=pending["sweep_i"], choch_index=pending["choch_i"],
+                bos_index=pending["bos_i"],
+            ))
+            pending = None  # tamamlandı, yeni sekans aranır
+    return out
+
+
 __all__ = [
     "STAGE_BOS", "STAGE_CHOCH", "STAGE_NONE", "STAGE_READY",
-    "STAGE_RETEST", "STAGE_SWEPT", "SetupSignal", "detect", "stage_rank",
+    "STAGE_RETEST", "STAGE_SWEPT", "ReadySetup", "SetupSignal",
+    "detect", "scan", "stage_rank",
 ]
