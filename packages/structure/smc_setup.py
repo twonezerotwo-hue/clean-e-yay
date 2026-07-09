@@ -24,6 +24,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 from packages.data.types import OHLCVBar
+from packages.elliott import engine as elliott_engine
 from packages.liquidity import sweep as liquidity_sweep
 from packages.signals import market_structure
 
@@ -163,6 +164,25 @@ def stage_rank(stage: str) -> int:
 
 _MAX_SETUP_BARS = 30   # sweep'ten sonra sekans bu kadar barda tamamlanmalı
 _SCAN_WINDOW = 120     # yapı/sweep bu kadar barlık pencerede okunur
+_CONTEXT_LOOKBACK = 100  # Elliott bağlam sınıflaması için pencere
+
+
+def classify_context(bars: list[OHLCVBar], *, timeframe: str = "4h",
+                     lookback: int = _CONTEXT_LOOKBACK) -> str:
+    """BAĞLAM: "bu ne — impuls mu, düzeltme mi?" (owner'ın büyük-resim edge'i).
+
+    Elliott motoru (impuls 12345 vs ABC düzeltme) sınıflar. Owner: düzeltmenin
+    içindeki setup "aşikar patlar" → atlanmalı. impulse | correction | unknown."""
+    try:
+        r = elliott_engine.analyze(bars[-lookback:], timeframe=timeframe)
+    except Exception:
+        return "unknown"
+    s = getattr(r, "primary_scenario", "")
+    if s == "IMPULSE_1_2_3_4_5":
+        return "impulse"
+    if s == "ABC_CORRECTION":
+        return "correction"
+    return "unknown"
 
 
 @dataclass(frozen=True)
@@ -176,17 +196,21 @@ class ReadySetup:
     sweep_index: int
     choch_index: int | None
     bos_index: int | None
+    context: str = "unknown"   # impulse | correction | unknown (Elliott bağlam kapısı)
 
 
 def scan(
     bars: list[OHLCVBar], *, timeframe: str = "4h",
     window: int = _SCAN_WINDOW, max_bars: int = _MAX_SETUP_BARS,
+    filter_corrections: bool = True,
 ) -> list[ReadySetup]:
     """Barları yürü, owner sekansını ZAMANDA takip et → READY olan setuplar.
 
     Beklemede bir setup varken: sweep başlatır (yön=X); ilerideki barlarda yön-X
     CHoCH → BOS → retest gelirse READY. Çok bar geçerse (max_bars) beklemedeki
-    setup düşer. Saf/defansif; asla raise etmez."""
+    setup düşer. BAĞLAM KAPISI: READY olunca "impuls mu düzeltme mi" (Elliott)
+    sorulur; `filter_corrections` iken düzeltme-içi setup ATLANIR (owner edge'i:
+    "ABC içinde girme, aşikar patlar"). Saf/defansif; asla raise etmez."""
     out: list[ReadySetup] = []
     if len(bars) < window + 2:
         return out
@@ -229,6 +253,11 @@ def scan(
             pending["broken"] = ms.last_high if long else ms.last_low
         if pending["stage"] == STAGE_BOS and pending["broken"] and \
            _retest_ok(rw, pending["broken"], long=long):
+            # BAĞLAM KAPISI: bu ne — impuls mu düzeltme mi? (owner büyük-resim edge'i)
+            ctx = classify_context(rw, timeframe=timeframe)
+            if filter_corrections and ctx == "correction":
+                pending = None  # ABC içinde → atla ("aşikar patlar")
+                continue
             cur = bars[idx]
             out.append(ReadySetup(
                 bar_index=idx, ts=cur.ts.isoformat() if cur.ts else None,
@@ -236,7 +265,7 @@ def scan(
                 stop=round(ms.last_low if long else ms.last_high, 8),
                 broken_level=round(pending["broken"], 8),
                 sweep_index=pending["sweep_i"], choch_index=pending["choch_i"],
-                bos_index=pending["bos_i"],
+                bos_index=pending["bos_i"], context=ctx,
             ))
             pending = None  # tamamlandı, yeni sekans aranır
     return out
@@ -245,5 +274,5 @@ def scan(
 __all__ = [
     "STAGE_BOS", "STAGE_CHOCH", "STAGE_NONE", "STAGE_READY",
     "STAGE_RETEST", "STAGE_SWEPT", "ReadySetup", "SetupSignal",
-    "detect", "scan", "stage_rank",
+    "classify_context", "detect", "scan", "stage_rank",
 ]

@@ -104,6 +104,26 @@ def test_scan_flat_no_setup():
     assert isinstance(out, list) and out == []
 
 
+def test_classify_context_insufficient_unknown():
+    """Yetersiz/düz veri → Elliott sayımı yok → bağlam 'unknown' (uydurma yok)."""
+    assert smc.classify_context(_flat_bars(30)) == "unknown"
+
+
+def test_scan_filter_corrections_param():
+    """filter_corrections parametresi kabul edilir (default True); patlamaz."""
+    bars = _flat_bars(200)
+    assert smc.scan(bars, filter_corrections=True) == []
+    assert smc.scan(bars, filter_corrections=False) == []
+
+
+def test_ready_setup_has_context_field():
+    """ReadySetup bağlam alanı taşır (impulse|correction|unknown)."""
+    rs = smc.ReadySetup(bar_index=10, ts=None, direction="long", entry=100.0,
+                        stop=95.0, broken_level=98.0, sweep_index=1,
+                        choch_index=3, bos_index=5)
+    assert rs.context == "unknown"  # default
+
+
 def test_scan_returns_list_no_crash():
     """Gerçekçi dalgalı seride patlamadan liste döner (state-machine güvenli)."""
     bars = []
