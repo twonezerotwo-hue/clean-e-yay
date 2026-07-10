@@ -586,6 +586,28 @@ book_audit:
     max_same_dir_legs: 1    # aynı sembol+yönde zaten ≥ bu kadar açık leg varsa yeni aday bloklanır (yığın 2'de başlar; stack_min_timeframes ile hizalı)
     max_symbol_pct: 0.05    # aynı sembol+yön açık exposure equity'nin bu oranını aşarsa blokla (G4 %30 cluster'ından çok daha sıkı)
 
+# Boyut katmanları (P1, 2026-07-10) — 5y çok-rejim backtest bulgusu. İKİSİ DE
+# YALNIZ KISITLAYICI (no-boost) + config-flag default FALSE (shadow-first: her
+# kararda sizing_layers_report gözlemlenir, boyut BAYT-AYNI; owner kanıtı panelden
+# izleyip açar). Karar zincirinde en son boyut katmanı; RiskGate/DQS/halt'ı bypass
+# ETMEZ. Yanlışsa false ile anında geri alınır (flag-rollback; tick_worker restart).
+sizing_layers:
+  # İnanç boyu: consensus sinyal gücüne (|score−50|) oransal boyut. Backtest: sinyal
+  # gücü dilimleri ileri-getiride kusursuz merdiven (zayıf −0.210 → güçlü +0.266);
+  # eşit-boya karşı edge ~2 kat. Eşiğe yakın sinyal min_factor, tam güçte 1.0.
+  conviction:
+    enabled: false
+    min_factor: 0.5       # eşiğe yakın (zayıf) sinyal için taban boyut çarpanı
+    full_strength: 25.0   # |score−50| bu değere ulaşınca tam boy (strong eşiği ~bu uzaklıkta)
+  # Oynaklık paritesi: boyut varlık oynaklığına ters orantılı (oynak varlığa az para).
+  # Backtest: 5y maksimum düşüş −293 → −171. ref_vol referans; üstü kısılır, altı 1.0
+  # (büyütme yok). realized_vol birimi snapshot'a bağlı → owner shadow raporundan
+  # dağılımı görüp ref_vol'ü kalibre eder, sonra açar (shadow-first'ün amacı).
+  vol_parity:
+    enabled: false
+    ref_vol: 0.03         # referans realized_vol; bunu aşan varlık boyutu kısılır
+    floor: 0.3            # en fazla bu orana kadar küçült (aşırı kısmayı engeller)
+
 # Price sanity guard — cross-pair contamination + absurd-price protection.
 # Phase 2 port from e-yay-codex paper_trading_service._is_price_sane.
 price_sanity:

@@ -34,7 +34,7 @@ from packages.data.providers import technical as tech_provider
 from packages.data.registry import guard_overrides
 from packages.data.registry.loader import load_thresholds
 from packages.data.types import TIMEFRAMES
-from packages.decision import learning_advisor
+from packages.decision import learning_advisor, sizing_layers
 from packages.learning import empirical_pwin, meta_gate, mistake_memory, regime_risk_brake
 from packages.learning.calibration_store import (
     apply_inflation_guardrail,
@@ -115,6 +115,10 @@ class TradeDecision:
     # (CONFIRM/CAUTION/AVOID + gerekçe). VARSAYILAN GÖLGE — boyutu değiştirmez;
     # canlı etki yalnız LEARNING_ADVISOR_APPLY=1 (owner). Boş = aday değil/hata.
     learning_advice: dict = field(default_factory=dict)
+    # Boyut katmanları (P1, 2026-07-10): inanç-boyu + oynaklık-paritesi. VARSAYILAN
+    # GÖLGE (her katman config-flag default false → applied_factor 1.0, boyut bayt-
+    # aynı); açık katman YALNIZ KISAR (no-boost). Boş = aday değil/hesaplanamadı.
+    sizing_layers_report: dict = field(default_factory=dict)
 
 
 def _timeframe_policy(timeframe: str) -> dict:
@@ -203,6 +207,13 @@ def _concentration_cfg() -> dict:
     if cfg.get("enabled") and guard_overrides.is_disabled("concentration"):
         return {**cfg, "enabled": False}
     return cfg
+
+
+def _sizing_layers_cfg() -> dict:
+    """Boyut katmanları (inanç-boyu + oynaklık-paritesi) config (monkeypatch-seam).
+    İki alt-katman ayrı `enabled` (default False → shadow, boyut bayt-aynı). Yalnız
+    KISAR (no-boost). Yoksa boş dict → evaluate güvenli 1.0 döner."""
+    return load_thresholds().get("sizing_layers") or {}
 
 
 def _concentration_report(
@@ -854,6 +865,27 @@ def decide_for_symbol(
                 size = max(0.0, kelly_mult_cap)
                 blocked_by.append("kelly_cap")
 
+    # ----- P1: boyut katmanları — inanç-boyu + oynaklık-paritesi (shadow-first,
+    # YALNIZ KISAR). Sinyal gücüne oransal + oynaklığa ters orantılı boyut; her
+    # katman config-flag default false → applied_factor 1.0 (boyut bayt-aynı,
+    # rapor her kararda hesaplanır). 5y çok-rejim backtest: inanç edge ~2 kat,
+    # vol-parite maxDD yarıya. RiskGate'i bypass etmez (zincirin en sonunda). -----
+    sl_cfg = _sizing_layers_cfg()
+    threshold_dist = (
+        float(th["bullish_min"]) - 50.0 if action == "open_long"
+        else 50.0 - float(th["bearish_max"])
+    )
+    realized_vol = getattr(vol_snap, "realized_vol", None) if vol_snap else None
+    sizing_layers_report = sizing_layers.evaluate(
+        score=cons.score, realized_vol=realized_vol, threshold_dist=threshold_dist,
+        conviction_cfg=sl_cfg.get("conviction") or {},
+        vol_parity_cfg=sl_cfg.get("vol_parity") or {},
+    )
+    sl_factor = float(sizing_layers_report["applied_factor"])
+    if sl_factor < 1.0 and size > 0.0:
+        size = max(0.0, round(size * sl_factor, 3))
+        blocked_by.append("sizing_layers")
+
     # ----- Y-1: rejim risk freni — kanıtı çift-negatif (canlı AUTO kohort +
     # backtest challenger) rejimde boyut kıs (YALNIZ küçültür). SHADOW her
     # kararda: rapor flag'ten bağımsız taşınır (aktivasyon kanıtı flag'siz
@@ -959,6 +991,7 @@ def decide_for_symbol(
         regime_brake_report=regime_brake_report,
         meta_gate_report=meta_gate_report,
         learning_advice=learning_advice,
+        sizing_layers_report=sizing_layers_report,
     )
 
 
