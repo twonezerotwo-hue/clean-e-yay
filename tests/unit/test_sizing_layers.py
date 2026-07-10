@@ -99,17 +99,45 @@ def test_vol_parity_invalid_is_one():
     assert sl.vol_parity_factor(None, ref_vol=0.03, floor=0.3) == 1.0
 
 
-def test_evaluate_shadow_both_off_is_byte_identical():
-    """İKİ flag de kapalı → applied_factor 1.0 (rapor dolu ama boyut bayt-aynı)."""
+def test_brake_below_threshold_reduces():
+    """Son-edge eşik altında (kötü dönem) → fren çarpanı (yarı boy)."""
+    assert sl.brake_factor(-0.2, threshold=0.0, factor=0.5) == 0.5
+
+
+def test_brake_above_threshold_full():
+    """Son-edge eşik üstünde (iyi dönem) → 1.0 (fren yok)."""
+    assert sl.brake_factor(0.3, threshold=0.0, factor=0.5) == 1.0
+
+
+def test_brake_no_evidence_full():
+    """Kanıt yok (None) → 1.0 (uydurma fren yok)."""
+    assert sl.brake_factor(None, threshold=0.0, factor=0.5) == 1.0
+
+
+def test_evaluate_shadow_all_off_is_byte_identical():
+    """TÜM flag kapalı → applied_factor 1.0 (rapor dolu ama boyut bayt-aynı)."""
     r = sl.evaluate(
         score=80.0, realized_vol=0.10, threshold_dist=15.0,
         conviction_cfg={"enabled": False}, vol_parity_cfg={"enabled": False},
+        recent_edge=-0.5, brake_cfg={"enabled": False},
     )
     assert r["applied_factor"] == 1.0
     assert r["conviction"]["enabled"] is False and r["vol_parity"]["enabled"] is False
+    assert r["brake"]["enabled"] is False
     # rapor faktörleri yine de hesaplanmış (shadow gözlem)
     assert r["conviction"]["factor"] == 1.0          # score 80 zaten tam güç
     assert r["vol_parity"]["factor"] < 1.0           # 0.10 > ref 0.03 → kısacaktı
+    assert r["brake"]["factor"] == 0.5               # recent_edge −0.5 < 0 → frenlerdi
+
+
+def test_evaluate_brake_only_applies():
+    """Yalnız fren açık + kötü son-edge → yalnız fren çarpanı."""
+    r = sl.evaluate(
+        score=80.0, realized_vol=0.10, threshold_dist=15.0,
+        conviction_cfg={"enabled": False}, vol_parity_cfg={"enabled": False},
+        recent_edge=-0.3, brake_cfg={"enabled": True, "threshold": 0.0, "factor": 0.5},
+    )
+    assert r["applied_factor"] == 0.5
 
 
 def test_evaluate_conviction_only_applies():
@@ -176,3 +204,39 @@ def test_engine_conviction_on_reduces_size(fresh_env, monkeypatch):
     assert d.sizing_layers_report["conviction"]["enabled"] is True
     assert "sizing_layers" in d.blocked_by
     assert d.size_multiplier > 0.0                    # kısar ama sıfırlamaz
+
+
+def test_engine_brake_reduces_size_in_bad_regime(fresh_env, monkeypatch):
+    """P3 fren: son-edge eksi + fren açık → boyut kısılır (yön korunur)."""
+    from packages.risk.engine import RiskDecision
+    dec, snap, regime = _force_pass(monkeypatch, score=85.0)
+    monkeypatch.setattr(dec, "_sizing_layers_cfg", lambda: {
+        "brake": {"enabled": True, "threshold": 0.0, "factor": 0.5}})
+    hold_risk = RiskDecision(action="HOLD", reason="ok", evidence=[])
+    d = dec.decide_for_symbol("BTCUSD", snap, regime, hold_risk,
+                              equity_usd=100_000, recent_edge=-0.4)
+    assert d.action == "open_long"
+    assert d.sizing_layers_report["brake"]["factor"] == 0.5
+    assert "sizing_layers" in d.blocked_by
+    assert d.size_multiplier > 0.0
+
+
+def test_recent_edge_averages_last_n(monkeypatch):
+    """_recent_edge: son N kapanan işlemin ort R'si; <10 örnek → None."""
+    from packages.decision import engine as dec
+
+    class _O:
+        def __init__(self, r): self.r_multiple = r
+    monkeypatch.setattr("packages.learning.outcomes.outcomes_from_state",
+                        lambda: [_O(1.0), _O(-1.0), _O(2.0)] * 5)  # 15 işlem, ort 0.667
+    assert dec._recent_edge(30) == pytest.approx(0.6667, rel=1e-3)
+
+
+def test_recent_edge_insufficient_none(monkeypatch):
+    from packages.decision import engine as dec
+
+    class _O:
+        def __init__(self, r): self.r_multiple = r
+    monkeypatch.setattr("packages.learning.outcomes.outcomes_from_state",
+                        lambda: [_O(1.0)] * 5)  # 5 < 10 → None
+    assert dec._recent_edge(30) is None

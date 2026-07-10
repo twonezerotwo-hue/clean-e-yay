@@ -226,6 +226,20 @@ def _correlation_veto_cfg() -> dict:
     return load_thresholds().get("correlation_veto") or {}
 
 
+def _recent_edge(lookback: int) -> float | None:
+    """P3 fren — son `lookback` kapanan işlemin ort R'si (sistemin güncel performansı).
+    <10 örnek → None (yetersiz kanıt, fren yok — uydurma yok). Saf/defansif."""
+    try:
+        from packages.learning import outcomes as om
+        outs = om.outcomes_from_state()
+    except Exception:
+        return None
+    rs = [float(o.r_multiple) for o in outs[-lookback:] if o.r_multiple is not None]
+    if len(rs) < 10:
+        return None
+    return sum(rs) / len(rs)
+
+
 def _veto_universe() -> list[str]:
     """Korelasyon vetosunun akraba havuzu = sistemin rotasyon sembol evreni."""
     from packages.data.providers.rotation.engine import ROTATION_SYMBOLS
@@ -312,6 +326,7 @@ def decide_for_symbol(
     equity_usd: float = 0.0,
     corr_entries: list | None = None,
     timeframe: str = "1d",
+    recent_edge: float | None = None,
 ) -> TradeDecision:
     th = load_thresholds()["consensus"]
     cons = build_consensus(symbol, snap, regime, timeframe)
@@ -934,6 +949,7 @@ def decide_for_symbol(
         score=cons.score, realized_vol=realized_vol, threshold_dist=threshold_dist,
         conviction_cfg=sl_cfg.get("conviction") or {},
         vol_parity_cfg=sl_cfg.get("vol_parity") or {},
+        recent_edge=recent_edge, brake_cfg=sl_cfg.get("brake") or {},
     )
     sl_factor = float(sizing_layers_report["applied_factor"])
     if sl_factor < 1.0 and size > 0.0:
@@ -1064,6 +1080,9 @@ def decide_all(
     )
     # Tek pass mistake özeti — tüm semboller için aynı snapshot.
     mems = mistake_memory.summary()
+    # P3 fren — sistemin güncel edge'i (tüm kararlar için tek pass; state okuma tekrarı yok).
+    _brake_lb = int(((load_thresholds().get("sizing_layers") or {}).get("brake") or {}).get("lookback", 30))
+    recent_edge = _recent_edge(_brake_lb)
     positions = open_positions or []
     # Korelasyon matrisi tek pass (aday + açık pozisyon sembolleri).
     corr_entries = correlation.matrix(
@@ -1079,6 +1098,7 @@ def decide_all(
             open_positions=positions,
             equity_usd=paper_state_input.equity_usd,
             corr_entries=corr_entries,
+            recent_edge=recent_edge,
         )
         for s in symbols
     ]

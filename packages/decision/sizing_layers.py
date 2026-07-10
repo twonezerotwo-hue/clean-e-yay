@@ -42,6 +42,16 @@ def conviction_factor(
     return _clamp(min_factor + (1.0 - min_factor) * ratio, min_factor, 1.0)
 
 
+def brake_factor(recent_edge: float | None, *, threshold: float, factor: float) -> float:
+    """'Bugün oynama' freni — sistemin son dönem GERÇEKLEŞEN edge'i (ort R) eşiğin
+    altındaysa boyut çarpanı `factor` (<1.0), değilse 1.0. Backtest: kötü dönemde
+    yarı-boy maksimum düşüşü küçültür (−293→−213). Kanıt yok (None) → 1.0 (fren yok,
+    uydurma yok). Yalnız KISAR — factor asla >1.0 varsayılmaz (config disiplini)."""
+    if recent_edge is None:
+        return 1.0
+    return factor if recent_edge < threshold else 1.0
+
+
 def vol_parity_factor(realized_vol: float, *, ref_vol: float, floor: float) -> float:
     """Oynaklığa ters orantılı boyut faktörü ∈ [floor, 1.0].
 
@@ -56,13 +66,16 @@ def vol_parity_factor(realized_vol: float, *, ref_vol: float, floor: float) -> f
 def evaluate(
     *, score: float, realized_vol: float | None, threshold_dist: float,
     conviction_cfg: dict, vol_parity_cfg: dict,
+    recent_edge: float | None = None, brake_cfg: dict | None = None,
 ) -> dict:
-    """İki katmanı da hesapla → rapor (faktörler + uygulanan birleşik çarpan).
+    """Katmanları hesapla → rapor (faktörler + uygulanan birleşik çarpan).
 
     Her katman config-flag'iyle bağımsız; kapalı olan faktör 1.0 (etkisiz). `applied`
-    = kapalıyken 1.0 (shadow: rapor dolu, boyut değişmez). Saf/defansif — raise etmez."""
+    = hepsi kapalıyken 1.0 (shadow: rapor dolu, boyut değişmez). Saf/defansif — raise etmez."""
+    brake_cfg = brake_cfg or {}
     conv_on = bool(conviction_cfg.get("enabled", False))
     vp_on = bool(vol_parity_cfg.get("enabled", False))
+    brake_on = bool(brake_cfg.get("enabled", False))
 
     conv_f = conviction_factor(
         score,
@@ -75,19 +88,28 @@ def evaluate(
         ref_vol=float(vol_parity_cfg.get("ref_vol", 0.03)),
         floor=float(vol_parity_cfg.get("floor", 0.3)),
     )
+    brake_f = brake_factor(
+        recent_edge,
+        threshold=float(brake_cfg.get("threshold", 0.0)),
+        factor=float(brake_cfg.get("factor", 0.5)),
+    )
     applied = 1.0
     if conv_on:
         applied *= conv_f
     if vp_on:
         applied *= vp_f
+    if brake_on:
+        applied *= brake_f
     applied = _clamp(applied, 0.0, 1.0)   # no-boost güvencesi
     return {
         "conviction": {"enabled": conv_on, "factor": round(conv_f, 4),
                        "strength": round(abs(score - _NEUTRAL_SCORE), 2)},
         "vol_parity": {"enabled": vp_on, "factor": round(vp_f, 4),
                        "realized_vol": realized_vol},
+        "brake": {"enabled": brake_on, "factor": round(brake_f, 4),
+                  "recent_edge": recent_edge},
         "applied_factor": round(applied, 4),
     }
 
 
-__all__ = ["conviction_factor", "evaluate", "vol_parity_factor"]
+__all__ = ["brake_factor", "conviction_factor", "evaluate", "vol_parity_factor"]
