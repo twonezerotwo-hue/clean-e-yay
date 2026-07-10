@@ -79,6 +79,7 @@ def _package1_flags_off_by_default(monkeypatch: pytest.MonkeyPatch) -> None:
     pinned.setdefault("sizing_layers", {}).setdefault("conviction", {})["enabled"] = False
     pinned.setdefault("sizing_layers", {}).setdefault("vol_parity", {})["enabled"] = False
     pinned.setdefault("sizing_layers", {}).setdefault("brake", {})["enabled"] = False  # P3 fren
+    pinned.setdefault("quantum_dampen", {})["enabled"] = False  # P3 quantum boyut-kısma
     # P2 (2026-07-10) — kapanış-bazlı stop + yapısal stop yerleşimi. Unit testler
     # fitil-tetikli + ATR-yerleşimli SL baseline'ı varsayar → test-default KAPAT;
     # davranış testleri kendi monkeypatch'iyle açar.

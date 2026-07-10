@@ -636,6 +636,17 @@ correlation_veto:
   min_abs_rho: 0.5        # akraba yalnız |korelasyon| bu eşiği aşarsa dikkate alınır
   corr_window_days: 90    # korelasyon penceresi (o anki ilişki; kayan korelasyon)
 
+# P3 parça-2 — quantum boyut-kısma (2026-07-10). Quantum INVERSE (ölçüm −0.141) +
+# backtest (katkı≥8 → 21 işlem −$749; düşükken +$144). Quantum consensus katkısı
+# contrib_threshold'u aşarsa o işlemde boyut × factor. Yön DEĞİŞMEZ (consensus
+# ağırlığına/auto-weight trainer'a dokunmaz — kaynak kısma trainer'la çelişirdi).
+# Kanıt İNCE (n=21) → owner gölgede izleyip açar. enabled default FALSE (boyut
+# bayt-aynı). YALNIZ KISAR (no-boost). Yanlışsa false ile geri.
+quantum_dampen:
+  enabled: false
+  contrib_threshold: 8.0   # quantum consensus katkısı bunu aşarsa boyut kısılır
+  factor: 0.5              # kısma çarpanı (yarı boy)
+
 # P2 — KAPANIŞ-BAZLI STOP (2026-07-10). Mevcut stop tick/FİTİL ile tetikleniyordu
 # (execution_sim.triggered_exit: price<=sl) → stop-avına yem (SL_HIT %64, canlı
 # −$4525; 63 stoplanan işlemin %45'i stop sonrası lehe döndü). 5y Binance 4h backtest:

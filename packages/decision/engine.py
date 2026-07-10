@@ -123,6 +123,10 @@ class TradeDecision:
     # ilişkiyi çürütüyorsa engel. VARSAYILAN GÖLGE (correlation_veto.enabled=false →
     # rapor dolu, karar değişmez); açıkken YALNIZ ENGELLER. Boş = güçlü akraba yok.
     correlation_veto_report: dict = field(default_factory=dict)
+    # P3 parça-2 — quantum boyut-kısma (2026-07-10): quantum katkısı yüksekken (INVERSE
+    # kanıtı) o işlemde boyut kısılır. VARSAYILAN GÖLGE (quantum_dampen.enabled=false →
+    # rapor dolu, boyut bayt-aynı); açıkken YALNIZ KISAR. Boş = quantum katkısı yok.
+    quantum_dampen_report: dict = field(default_factory=dict)
 
 
 def _timeframe_policy(timeframe: str) -> dict:
@@ -224,6 +228,12 @@ def _correlation_veto_cfg() -> dict:
     """D — dinamik korelasyon vetosu config (monkeypatch-seam). enabled default False
     (shadow-first: rapor her kararda hesaplanır, davranış değişmez). Yalnız ENGELLER."""
     return load_thresholds().get("correlation_veto") or {}
+
+
+def _quantum_dampen_cfg() -> dict:
+    """P3 parça-2 — quantum boyut-kısma config (monkeypatch-seam). enabled default
+    False (shadow: rapor her kararda, boyut bayt-aynı). Yalnız KISAR (no-boost)."""
+    return load_thresholds().get("quantum_dampen") or {}
 
 
 def _recent_edge(lookback: int) -> float | None:
@@ -956,6 +966,25 @@ def decide_for_symbol(
         size = max(0.0, round(size * sl_factor, 3))
         blocked_by.append("sizing_layers")
 
+    # ----- P3 parça-2: quantum boyut-kısma (shadow-first, YALNIZ KISAR). Quantum
+    # katkısı eşiği aşarsa (INVERSE kanıtı: yüksek sesle konuşunca kaybediyor) o
+    # işlemde boyut × factor. Yön DEĞİŞMEZ (kaynak ağırlığa/trainer'a dokunmaz).
+    # enabled default false → rapor gözlem, boyut bayt-aynı. -----
+    quantum_dampen_report: dict = {}
+    qd_cfg = _quantum_dampen_cfg()
+    q_contrib = next((m.contribution for m in cons.modules if m.name == "quantum"), None)
+    if q_contrib is not None:
+        qd_on = bool(qd_cfg.get("enabled", False))
+        qd_threshold = float(qd_cfg.get("contrib_threshold", 8.0))
+        dampened = q_contrib >= qd_threshold
+        quantum_dampen_report = {
+            "active": qd_on, "quantum_contribution": round(float(q_contrib), 3),
+            "threshold": qd_threshold, "dampened": bool(dampened),
+        }
+        if qd_on and dampened and size > 0.0:
+            size = max(0.0, round(size * float(qd_cfg.get("factor", 0.5)), 3))
+            blocked_by.append("quantum_dampen")
+
     # ----- Y-1: rejim risk freni — kanıtı çift-negatif (canlı AUTO kohort +
     # backtest challenger) rejimde boyut kıs (YALNIZ küçültür). SHADOW her
     # kararda: rapor flag'ten bağımsız taşınır (aktivasyon kanıtı flag'siz
@@ -1063,6 +1092,7 @@ def decide_for_symbol(
         learning_advice=learning_advice,
         sizing_layers_report=sizing_layers_report,
         correlation_veto_report=correlation_veto_report,
+        quantum_dampen_report=quantum_dampen_report,
     )
 
 
