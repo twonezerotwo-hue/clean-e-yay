@@ -14,6 +14,17 @@
 # aksan, uzun tire vb. yasak). PowerShell 5.1 BOM'suz dosyayi ANSI okur;
 # UTF-8 coklu-byte karakterler parser'i bozup script'i sessizce oldurur.
 $ErrorActionPreference = "SilentlyContinue"
+
+# SINGLE-INSTANCE guard (2026-07-11 fix): iki keeper ayni anda calisirsa her ikisi
+# de start-dashboard'i tetikler; ikisi Free-Port ile birbirinin yeni baslattigi
+# API/web/worker'ini oldurur -> servis HIC kalici kalkmaz (canli teshis: keeper OK
+# diyor ama python/node = 0). VBS'in cift tetiklenmesi ya da eski keeper kalintisi
+# bunu yaratabilir. Baska bir keep-alive zaten calisiyorsa bu kopya hemen cikar.
+$me = $PID
+$other = Get-CimInstance Win32_Process -Filter "name='powershell.exe'" -ErrorAction SilentlyContinue |
+    Where-Object { $_.CommandLine -like '*keep-alive*' -and $_.ProcessId -ne $me }
+if ($other) { exit }
+
 $root = "C:\Users\twone\Desktop\Clean E-yAy"
 $script = Join-Path $root "scripts\start-dashboard.ps1"
 $logs = Join-Path $root "logs"
