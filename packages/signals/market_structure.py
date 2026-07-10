@@ -35,11 +35,6 @@ class MarketStructure:
     streak: int         # ardışık aynı-yön swing sayısı (trend olgunluğu)
     legs: int           # temizlenmiş zigzag'daki swing sayısı
     detail: str
-    # SMC setup/retest için: en son swing seviyeleri (kırılan seviye buradan
-    # türetilir — BOS/CHoCH hangi seviyeyi kırdıysa retest ona bakar). Legacy/
-    # doğrudan construct edenler için default 0.0 (uydurma değil, "bilinmiyor").
-    last_high: float = 0.0
-    last_low: float = 0.0
 
 
 def _pivots(bars: list[OHLCVBar], left: int, right: int) -> list[tuple[int, float, str]]:
@@ -160,7 +155,6 @@ def analyze(bars: list[OHLCVBar], *, left: int = 2, right: int = 2) -> MarketStr
     return MarketStructure(
         trend=trend, lean=round(lean, 4), bos=bos, choch=choch,
         streak=streak, legs=len(seq), detail=detail,
-        last_high=round(last_high, 8), last_low=round(last_low, 8),
     )
 
 
