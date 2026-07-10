@@ -130,6 +130,12 @@ COVERAGE: dict[str, dict] = {
         "reason": "Sinyal karnesi (D5) salt-gözlem: haftalık sinyal×TF ileri-getiri "
                   "ölçümü, izole artifact; canlı skora/karara/paper'a ASLA yazmaz.",
     },
+    "DIRECTION_REWEIGHT_SHADOW": {
+        "mechanism": SHADOW_EXEMPT, "monitor": None,
+        "reason": "Yön yeniden-ağırlık gölgesi salt-gözlem: owner'ın yapı-ağırlıklı "
+                  "yön skorunu touche çorbasına karşı ileri-getiriyle yarıştırır, izole "
+                  "artifact; touche ağırlıkları owner onayı olmadan DEĞİŞMEZ.",
+    },
     "TF_SCORING_V2_SHADOW": {
         "mechanism": SHADOW_EXEMPT, "monitor": None,
         "reason": "tf_scoring_v2 (D6) gölge yön skoru: karne kanıtıyla katmanlı v2 "
