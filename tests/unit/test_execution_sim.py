@@ -17,6 +17,49 @@ import pytest
 from packages.paper import execution_sim
 
 
+# ---------- P2: kapanış-bazlı SL (sl_trigger_price) ----------
+
+def test_sl_trigger_price_none_is_byte_identical() -> None:
+    """sl_trigger_price yok → mevcut fitil davranışı BAYT-AYNI (tick delince SL)."""
+    # long, tick fiyatı 94 stop 95'i deldi → SL_HIT (fitil)
+    assert execution_sim.triggered_exit("long", 95.0, 110.0, 94.0) == "SL_HIT"
+    assert execution_sim.triggered_exit("short", 105.0, 90.0, 106.0) == "SL_HIT"
+
+
+def test_close_based_sl_survives_wick() -> None:
+    """Kapanış-bazlı: tick (fitil) stop'u delse bile bar KAPANIŞI delmedikçe SL YOK."""
+    # long: tick 94 stop 95'in altında AMA bar kapanışı 96 (stop üstü) → SL YOK
+    assert execution_sim.triggered_exit(
+        "long", 95.0, 110.0, 94.0, sl_trigger_price=96.0) is None
+    # short: tick 106 stop 105 üstünde AMA kapanış 104 → SL YOK
+    assert execution_sim.triggered_exit(
+        "short", 105.0, 90.0, 106.0, sl_trigger_price=104.0) is None
+
+
+def test_close_based_sl_fires_on_close_breach() -> None:
+    """Kapanış-bazlı: bar KAPANIŞI stop'u geçerse SL_HIT (fitil delmese bile)."""
+    assert execution_sim.triggered_exit(
+        "long", 95.0, 110.0, 97.0, sl_trigger_price=94.0) == "SL_HIT"
+
+
+def test_close_based_tp_still_uses_tick() -> None:
+    """TP her zaman tick `price` ile (owner kuralı: kapanış YALNIZ stop için)."""
+    # tick 111 TP 110'u geçti → TP_HIT (kapanış-bazlı SL parametresi TP'yi etkilemez)
+    assert execution_sim.triggered_exit(
+        "long", 95.0, 110.0, 111.0, sl_trigger_price=100.0) == "TP_HIT"
+
+
+def test_close_based_sl_fill_at_trigger_not_tick() -> None:
+    """Kapanış-bazlı SL dolumu tetik(kapanış) fiyatından — tick değil (muhafazakâr)."""
+    fill = execution_sim.simulate_exit_fill(
+        side="long", entry_price=100.0, sl=95.0, tp=110.0, size_usd=1000.0,
+        price=90.0, sl_trigger_price=94.0,
+    )
+    assert fill is not None and fill.reason == "SL_HIT"
+    assert fill.fill_price == 94.0                     # kapanış (94), tick (90) değil
+    assert fill.pnl_usd == execution_sim.realized_pnl("long", 100.0, 94.0, 1000.0)
+
+
 # ---------- mark-to-market + realized P&L ----------
 
 def test_unrealized_pnl_long_and_short() -> None:

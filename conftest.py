@@ -78,6 +78,9 @@ def _package1_flags_off_by_default(monkeypatch: pytest.MonkeyPatch) -> None:
     pinned.setdefault("correlation_veto", {})["enabled"] = False
     pinned.setdefault("sizing_layers", {}).setdefault("conviction", {})["enabled"] = False
     pinned.setdefault("sizing_layers", {}).setdefault("vol_parity", {})["enabled"] = False
+    # P2 (2026-07-10) — kapanış-bazlı stop. Unit testler fitil-tetikli SL baseline'ı
+    # varsayar → test-default KAPAT; davranış testleri kendi monkeypatch'iyle açar.
+    pinned.setdefault("exit_close_based_stop", {})["enabled"] = False
     monkeypatch.setattr(loader, "_load_thresholds_base", lambda: pinned)
     # Denetim 2026-07-03 — çıkış-makinesi env flag'leri testlerde default OFF
     # (dev makinesinde .env yüklenmiş olabilir; testler baseline'ı varsayar).

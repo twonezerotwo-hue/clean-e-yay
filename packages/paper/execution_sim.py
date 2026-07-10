@@ -49,12 +49,20 @@ def realized_pnl(
 
 
 def triggered_exit(
-    side: str, sl: float | None, tp: float | None, price: float
+    side: str, sl: float | None, tp: float | None, price: float,
+    *, sl_trigger_price: float | None = None,
 ) -> str | None:
     """Which protective level `price` fills, if any — SL checked before TP
-    (preserves lifecycle ordering). Returns SL_HIT / TP_HIT / None. Pure."""
+    (preserves lifecycle ordering). Returns SL_HIT / TP_HIT / None. Pure.
+
+    `sl_trigger_price` (P2, opsiyonel): verilirse SL kontrolü tick `price` yerine
+    BU fiyatla yapılır — kapanış-bazlı stop için pozisyonun TF-bar KAPANIŞI geçilir.
+    5y backtest: fitil-tetikli stop yerine kapanış-tetikli stop-avını bağışıklıyor
+    (toplam R +93→+596). None (default) → mevcut fitil davranışı BAYT-AYNI. TP her
+    zaman tick `price` ile (kâr al fitille; owner kuralı yalnız STOP için kapanış)."""
+    sl_check = sl_trigger_price if sl_trigger_price is not None else price
     if sl is not None and (
-        (side == "long" and price <= sl) or (side == "short" and price >= sl)
+        (side == "long" and sl_check <= sl) or (side == "short" and sl_check >= sl)
     ):
         return SL_HIT
     if tp is not None and (
@@ -82,16 +90,26 @@ def simulate_exit_fill(
     tp: float | None,
     size_usd: float,
     price: float,
+    sl_trigger_price: float | None = None,
 ) -> Fill | None:
     """If `price` triggers SL/TP, return the simulated Fill (filled at the observed
-    price); else None. Pure — no side effects, no state, no orders."""
-    reason = triggered_exit(side, sl, tp, price)
+    price); else None. Pure — no side effects, no state, no orders.
+
+    `sl_trigger_price` (P2, opsiyonel): kapanış-bazlı stop — SL tetikleme bu fiyatla
+    (bar kapanışı) kontrol edilir; None → mevcut fitil davranışı bayt-aynı. SL tetikte
+    fill, muhafazakâr biçimde stop seviyesinin ötesindeki tetik fiyatından olur (gerçek
+    kapanış dolgusu; tick `price` genelde daha lehte olurdu → uydurma kazanç yok)."""
+    reason = triggered_exit(side, sl, tp, price, sl_trigger_price=sl_trigger_price)
     if reason is None:
         return None
+    # Kapanış-bazlı SL dolumu: fill = tetik (kapanış) fiyatı, tick değil (muhafazakâr).
+    fill_price = (
+        sl_trigger_price if (reason == SL_HIT and sl_trigger_price is not None) else price
+    )
     return Fill(
         reason=reason,
-        fill_price=price,
-        pnl_usd=realized_pnl(side, entry_price, price, size_usd),
+        fill_price=fill_price,
+        pnl_usd=realized_pnl(side, entry_price, fill_price, size_usd),
     )
 
 

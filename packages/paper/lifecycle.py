@@ -46,6 +46,39 @@ def _max_pos_usd() -> float:
     return float(load_thresholds()["paper_trading"]["max_position_usd"])
 
 
+# P2 — kapanış-bazlı stop yardımcıları.
+_TF_SECONDS = {"15m": 900, "1h": 3600, "4h": 14400, "1d": 86400, "1w": 604800}
+
+
+def _close_based_stop_enabled() -> bool:
+    """P2 flag'i (default False → SL tetikleme fitil, bayt-aynı). monkeypatch-seam."""
+    return bool((load_thresholds().get("exit_close_based_stop") or {}).get("enabled", False))
+
+
+def _last_closed_close(symbol: str, timeframe: str, now: datetime) -> float | None:
+    """Pozisyon TF'inin son KAPANMIŞ barının kapanışı (kapanış-bazlı SL tetiği).
+
+    Forming (henüz kapanmamış) bar ATLANIR — yoksa kapanış-bazlı avantaj kaybolur
+    (forming close ≈ tick). ohlcv 1d/TF disk cache okur (ağ yok). Cache yok/yetersiz/
+    bilinmeyen TF → None (çağıran fitil davranışına düşer; uydurma yok). Saf/defansif."""
+    tf_sn = _TF_SECONDS.get(timeframe)
+    if tf_sn is None:
+        return None
+    try:
+        from packages.data.providers.ohlcv import cache as ohlcv_cache
+        cached = ohlcv_cache.load(symbol, timeframe)  # type: ignore[arg-type]
+    except Exception:
+        return None
+    if not cached or not cached.bars:
+        return None
+    now_ts = now.timestamp()
+    for b in reversed(cached.bars):
+        ts = b.ts if b.ts.tzinfo else b.ts.replace(tzinfo=UTC)
+        if ts.timestamp() + tf_sn <= now_ts:  # bar kapanmış (açılış + TF süresi geçti)
+            return float(b.close) if b.close and b.close > 0 else None
+    return None
+
+
 def _new_id(symbol: str, opened_at: str) -> str:
     return hashlib.sha1(f"{symbol}|{opened_at}".encode()).hexdigest()[:10]
 
@@ -689,10 +722,18 @@ def tick(
             continue
         pos.current_price = price
         _update_excursions(pos, price)
+        # P2 — kapanış-bazlı SL: flag açıkken SL tetiği tick yerine son KAPANMIŞ
+        # bar kapanışı (fitil-avı bağışık). Kapanış yoksa None → fitil davranışı
+        # (güvenli fallback). Flag kapalıyken sl_trig=None → tetikleme bayt-aynı.
+        # TP her zaman tick `price` ile (kâr al fitille; owner kuralı yalnız STOP).
+        sl_trig = (
+            _last_closed_close(pos.symbol, pos.timeframe, now)
+            if _close_based_stop_enabled() else None
+        )
         # SL/TP kontrol — formalized fill simulation (fill at observed tick price).
         fill = execution_sim.simulate_exit_fill(
             side=pos.side, entry_price=pos.entry_price, sl=pos.sl, tp=pos.tp,
-            size_usd=pos.size_usd, price=price,
+            size_usd=pos.size_usd, price=price, sl_trigger_price=sl_trig,
         )
         if fill is not None:
             closed.append(

@@ -626,6 +626,16 @@ correlation_veto:
   min_abs_rho: 0.5        # akraba yalnız |korelasyon| bu eşiği aşarsa dikkate alınır
   corr_window_days: 90    # korelasyon penceresi (o anki ilişki; kayan korelasyon)
 
+# P2 — KAPANIŞ-BAZLI STOP (2026-07-10). Mevcut stop tick/FİTİL ile tetikleniyordu
+# (execution_sim.triggered_exit: price<=sl) → stop-avına yem (SL_HIT %64, canlı
+# −$4525; 63 stoplanan işlemin %45'i stop sonrası lehe döndü). 5y Binance 4h backtest:
+# stop'u FİTİL yerine son KAPANMIŞ bar KAPANIŞI tetiklerse toplam R +93→+596 (6 kat),
+# max düşüş −100→−62. TP fitil kalır (kâr al; owner kuralı yalnız STOP için kapanış).
+# enabled default FALSE (gölge-önce: kapalıyken SL tetikleme BAYT-AYNI fitil). Owner
+# backtest kanıtıyla açar; yanlışsa false ile anında geri (tick_worker restart).
+exit_close_based_stop:
+  enabled: false
+
 # Price sanity guard — cross-pair contamination + absurd-price protection.
 # Phase 2 port from e-yay-codex paper_trading_service._is_price_sane.
 price_sanity:
