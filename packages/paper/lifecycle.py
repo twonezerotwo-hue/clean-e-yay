@@ -20,6 +20,7 @@ from packages.paper.guards import price_sanity, state_anomaly
 from packages.paper.state import PaperState, Position, Trade, utc_iso
 from packages.risk.trade_economics import (
     compute_fixed_targets,
+    compute_structural_targets,
     compute_tf_targets,
     tf_targets_enabled,
     tf_trail_mult,
@@ -53,6 +54,25 @@ _TF_SECONDS = {"15m": 900, "1h": 3600, "4h": 14400, "1d": 86400, "1w": 604800}
 def _close_based_stop_enabled() -> bool:
     """P2 flag'i (default False → SL tetikleme fitil, bayt-aynı). monkeypatch-seam."""
     return bool((load_thresholds().get("exit_close_based_stop") or {}).get("enabled", False))
+
+
+def _structural_stop_cfg() -> dict:
+    """P2 parça-2 — yapısal stop yerleşimi config (default enabled False → SL yeri
+    mevcut ATR motoruyla, bayt-aynı). monkeypatch-seam."""
+    return load_thresholds().get("exit_structural_stop") or {}
+
+
+def _recent_bars_for_stop(symbol: str, timeframe: str, count: int = 15) -> list:
+    """Yapısal stop için son barlar (ohlcv disk cache, ağ yok). Yoksa boş liste
+    → çağıran ATR motoruna düşer (uydurma seviye yok). Saf/defansif."""
+    try:
+        from packages.data.providers.ohlcv import cache as ohlcv_cache
+        cached = ohlcv_cache.load(symbol, timeframe)  # type: ignore[arg-type]
+    except Exception:
+        return []
+    if not cached or not cached.bars:
+        return []
+    return list(cached.bars)[-count:]
 
 
 def _last_closed_close(symbol: str, timeframe: str, now: datetime) -> float | None:
@@ -132,15 +152,35 @@ def open_position(
     # false ise mevcut compute_fixed_targets (sembol-bazlı sabit-% + tier). Geri
     # dönüş tek flag ile — bozulma yok. shadow.evaluate_symbol her iki motoru
     # her tick yan yana hesaplar, yani aktivasyon öncesi tam gözlem var.
-    if tf_targets_enabled():
-        targets = compute_tf_targets(
-            symbol, side, entry_price, timeframe=timeframe, atr=atr,
-            predicted_confidence=predicted_confidence, manual=manual,
-        )
-    else:
-        targets = compute_fixed_targets(
-            symbol, side, entry_price, predicted_confidence=predicted_confidence, manual=manual,
-        )
+    # P2 parça-2 — YAPISAL stop yerleşimi (flag default OFF → aşağıdaki ATR motoru,
+    # bayt-aynı). Açıkken sl = son N-bar dip/tepe (owner "son dip altı"); yapı
+    # geçersiz/bar yok → ATR motoruna düşer (uydurma seviye yok).
+    targets = None
+    sscfg = _structural_stop_cfg()
+    if sscfg.get("enabled", False):
+        _bars = _recent_bars_for_stop(symbol, timeframe)
+        if _bars:
+            _st = compute_structural_targets(
+                symbol, side, entry_price,
+                highs=[float(b.high) for b in _bars],
+                lows=[float(b.low) for b in _bars],
+                timeframe=timeframe, atr=atr,
+                predicted_confidence=predicted_confidence, manual=manual,
+                lookback=int(sscfg.get("lookback", 10)),
+                buffer_pct=float(sscfg.get("buffer_pct", 0.001)),
+            )
+            if _st.sl_basis != "invalid":
+                targets = _st
+    if targets is None:
+        if tf_targets_enabled():
+            targets = compute_tf_targets(
+                symbol, side, entry_price, timeframe=timeframe, atr=atr,
+                predicted_confidence=predicted_confidence, manual=manual,
+            )
+        else:
+            targets = compute_fixed_targets(
+                symbol, side, entry_price, predicted_confidence=predicted_confidence, manual=manual,
+            )
     sl, tp = targets.sl, targets.tp
     if size_usd_override is not None:
         # Owner manuel emir: tam dolar tutarı (kademe/sizing baypas).

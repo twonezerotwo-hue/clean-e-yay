@@ -524,6 +524,73 @@ def compute_tf_targets(
     )
 
 
+def compute_structural_targets(
+    symbol: str,
+    side: str,
+    entry: float,
+    *,
+    highs: list[float],
+    lows: list[float],
+    timeframe: str,
+    atr: float | None = None,
+    predicted_confidence: float | None = None,
+    manual: bool = False,
+    lookback: int = 10,
+    buffer_pct: float = 0.001,
+) -> AdaptiveTargets:
+    """P2 parça-2 — YAPISAL stop yerleşimi: sl = son `lookback` barın dip/tepesi
+    (owner'ın "0 noktası/son dip altı"), buffer_pct kadar ötede (owner "%0.1 altına").
+    tp = entry ± rr × yapısal_R (mevcut TF rr çerçevesi). ATR yerine YAPI stop mesafesini
+    belirler → gürültü-stop yerine anlam. floor/cap güvenlik bandı (aşırı uzak/yakın stop
+    korunur). Yetersiz bar/geçersiz yapı → `sl_basis="invalid"` (uydurma yok; çağıran
+    ATR motoruna düşer). `compute_tf_targets` ile AYNI AdaptiveTargets şekli (shadow bedava).
+    """
+    from packages.paper import conviction
+
+    if entry <= 0 or side not in {"long", "short"}:
+        return AdaptiveTargets(
+            sl=0.0, tp=0.0, rr=0.0, sl_basis="invalid", tp_basis="invalid",
+            rr_floor_met=False, sl_distance=0.0, notes=["entry veya side geçersiz"],
+        )
+    ref = lows[-lookback:] if side == "long" else highs[-lookback:]
+    if len(ref) < 2:
+        return AdaptiveTargets(
+            sl=0.0, tp=0.0, rr=0.0, sl_basis="invalid", tp_basis="invalid",
+            rr_floor_met=False, sl_distance=0.0, notes=["yapısal seviye için yetersiz bar"],
+        )
+    tier = conviction.tier_for(None) if manual else conviction.tier_for(predicted_confidence)
+    params = _tf_params(timeframe)
+    rr, floor, cap = params["rr"], params["sl_pct_floor"], params["sl_pct_cap"]
+
+    struct = min(ref) if side == "long" else max(ref)
+    sl_level = struct * (1 - buffer_pct) if side == "long" else struct * (1 + buffer_pct)
+    sl_distance_raw = (entry - sl_level) if side == "long" else (sl_level - entry)
+    if sl_distance_raw <= 0:  # yapı yanlış tarafta (entry dip/tepenin ötesinde) → geçersiz
+        return AdaptiveTargets(
+            sl=0.0, tp=0.0, rr=0.0, sl_basis="invalid", tp_basis="invalid",
+            rr_floor_met=False, sl_distance=0.0,
+            notes=["yapısal seviye entry'nin yanlış tarafında"],
+        )
+    # floor/cap: aşırı yakın (gürültü) veya aşırı uzak (risk) yapısal stop'u kıstır.
+    sl_pct = max(floor, min(cap, sl_distance_raw / entry))
+    sl_distance = entry * sl_pct
+    tp_distance = sl_distance * rr
+    sl = entry - sl_distance if side == "long" else entry + sl_distance
+    tp = entry + tp_distance if side == "long" else entry - tp_distance
+    notes = [f"tf={timeframe} tier={tier.name} rr={rr} yapısal={struct:.6g} (son{lookback})"]
+    raw_pct = sl_distance_raw / entry
+    if raw_pct < floor:
+        notes.append(f"clamped_to_floor({floor})")
+    elif raw_pct > cap:
+        notes.append(f"clamped_to_cap({cap})")
+    return AdaptiveTargets(
+        sl=round(sl, 4), tp=round(tp, 4), rr=round(rr, 4),
+        sl_basis="structural", tp_basis="structural_rr",
+        rr_floor_met=rr >= load_economics_config().min_rr,
+        sl_distance=round(sl_distance, 4), notes=notes,
+    )
+
+
 def tf_size_cap(timeframe: str) -> float:
     """`timeframe_risk.risk_multiplier`'dan TF size tavanı (≤1.0; yalnız küçültür).
 

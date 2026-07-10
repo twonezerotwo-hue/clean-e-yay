@@ -636,6 +636,18 @@ correlation_veto:
 exit_close_based_stop:
   enabled: false
 
+# P2 parça-2 — YAPISAL stop yerleşimi (2026-07-10). Açılışta stop = son `lookback`
+# barın dip/tepesi (owner "0 noktası/son dip altı"), `buffer_pct` kadar ötede (owner
+# "%0.1 altına"); hedef mevcut TF rr çerçevesinde yapısal R'ye göre. ATR-gürültü stop
+# yerine YAPI. 5y backtest: kapanış-bazlı + yapısal birlikte en iyi (R/DD 30.75, maxDD
+# −25 = diğerlerinin çeyreği). floor/cap güvenlik bandı korunur. enabled default FALSE
+# (gölge-önce: kapalıyken SL yeri ATR motoruyla bayt-aynı). Bar yok/yapı geçersiz →
+# ATR motoruna düşer. Owner backtest kanıtıyla açar; yanlışsa false ile geri.
+exit_structural_stop:
+  enabled: false
+  lookback: 10          # stop için son kaç barın dip/tepesine bakılır
+  buffer_pct: 0.001     # yapısal seviyenin bu oran kadar ötesine stop (owner %0.1)
+
 # Price sanity guard — cross-pair contamination + absurd-price protection.
 # Phase 2 port from e-yay-codex paper_trading_service._is_price_sane.
 price_sanity:
