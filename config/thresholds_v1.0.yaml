@@ -608,6 +608,19 @@ sizing_layers:
     ref_vol: 0.03         # referans realized_vol; bunu aşan varlık boyutu kısılır
     floor: 0.3            # en fazla bu orana kadar küçült (aşırı kısmayı engeller)
 
+# D — dinamik korelasyon vetosu (P1, 2026-07-10). Owner içgörüsü + 5y çok-rejim
+# backtest: aday sinyalin AKRABASI (o anki güçlü korelasyonlu varlık) KENDİ sinyaliyle
+# ilişkiyi çürütüyorsa işlem AÇILMAZ. Backtest: edge +0.171→+0.235, elenen işlemler
+# −0.511 (çöp eliyor), 5/5 yıl. Akraba OTOMATİK seçilir (owner kararı): o anki en
+# güçlü korelasyonlu sembol (bakım yok, kayan korelasyona dayanıklı). YALNIZ ENGELLER
+# (veto → size 0), boyut artırmaz, RiskGate bypass etmez. Ağ yok (1d disk cache).
+# enabled default FALSE (shadow-first: her kararda correlation_veto_report gözlemlenir,
+# davranış değişmez; owner kanıt birikince açar). Yanlışsa false ile geri alınır.
+correlation_veto:
+  enabled: false
+  min_abs_rho: 0.5        # akraba yalnız |korelasyon| bu eşiği aşarsa dikkate alınır
+  corr_window_days: 90    # korelasyon penceresi (o anki ilişki; kayan korelasyon)
+
 # Price sanity guard — cross-pair contamination + absurd-price protection.
 # Phase 2 port from e-yay-codex paper_trading_service._is_price_sane.
 price_sanity:

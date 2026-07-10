@@ -34,7 +34,7 @@ from packages.data.providers import technical as tech_provider
 from packages.data.registry import guard_overrides
 from packages.data.registry.loader import load_thresholds
 from packages.data.types import TIMEFRAMES
-from packages.decision import learning_advisor, sizing_layers
+from packages.decision import correlation_veto, learning_advisor, sizing_layers
 from packages.learning import empirical_pwin, meta_gate, mistake_memory, regime_risk_brake
 from packages.learning.calibration_store import (
     apply_inflation_guardrail,
@@ -119,6 +119,10 @@ class TradeDecision:
     # GÖLGE (her katman config-flag default false → applied_factor 1.0, boyut bayt-
     # aynı); açık katman YALNIZ KISAR (no-boost). Boş = aday değil/hesaplanamadı.
     sizing_layers_report: dict = field(default_factory=dict)
+    # D — dinamik korelasyon vetosu (P1, 2026-07-10): aday sinyalin en güçlü akrabası
+    # ilişkiyi çürütüyorsa engel. VARSAYILAN GÖLGE (correlation_veto.enabled=false →
+    # rapor dolu, karar değişmez); açıkken YALNIZ ENGELLER. Boş = güçlü akraba yok.
+    correlation_veto_report: dict = field(default_factory=dict)
 
 
 def _timeframe_policy(timeframe: str) -> dict:
@@ -214,6 +218,18 @@ def _sizing_layers_cfg() -> dict:
     İki alt-katman ayrı `enabled` (default False → shadow, boyut bayt-aynı). Yalnız
     KISAR (no-boost). Yoksa boş dict → evaluate güvenli 1.0 döner."""
     return load_thresholds().get("sizing_layers") or {}
+
+
+def _correlation_veto_cfg() -> dict:
+    """D — dinamik korelasyon vetosu config (monkeypatch-seam). enabled default False
+    (shadow-first: rapor her kararda hesaplanır, davranış değişmez). Yalnız ENGELLER."""
+    return load_thresholds().get("correlation_veto") or {}
+
+
+def _veto_universe() -> list[str]:
+    """Korelasyon vetosunun akraba havuzu = sistemin rotasyon sembol evreni."""
+    from packages.data.providers.rotation.engine import ROTATION_SYMBOLS
+    return sorted(set(ROTATION_SYMBOLS.values()))
 
 
 def _concentration_report(
@@ -865,6 +881,44 @@ def decide_for_symbol(
                 size = max(0.0, kelly_mult_cap)
                 blocked_by.append("kelly_cap")
 
+    # ----- D: dinamik korelasyon vetosu (shadow-first, YALNIZ ENGELLER) — aday
+    # sinyalin EN GÜÇLÜ akrabası (o anki |rho| en yüksek) KENDİ sinyaliyle ilişkiyi
+    # çürütüyorsa işlem AÇILMAZ. 5y backtest: elenen işlemler −0.511 (çöp), 5/5 yıl.
+    # Akraba otomatik (owner kararı); ağ yok (1d cache). enabled default false →
+    # rapor gözlem, karar değişmez. Boyuttan ÖNCE ("girer miyim" → "ne kadar"). -----
+    correlation_veto_report: dict = {}
+    try:
+        correlation_veto_report = correlation_veto.assess(
+            symbol, cand_side, _veto_universe(), _correlation_veto_cfg(),
+        )
+    except Exception:  # gölge/veto fikri kararı asla düşürmez
+        correlation_veto_report = {}
+    if correlation_veto_report.get("active") and correlation_veto_report.get("vetoed"):
+        return TradeDecision(
+            symbol=symbol,
+            action="hold",
+            confidence=round(cal_conf, 3),
+            size_multiplier=0.0,
+            consensus=cons,
+            risk=risk,
+            reason=f"correlation_veto: {correlation_veto_report.get('reason', '')}",
+            raw_confidence=round(raw_conf, 4),
+            confidence_source=conf_source,
+            fingerprint=fp,
+            mistake_verdict=_verdict_to_dict(verdict),
+            cluster_report=cluster_dict,
+            self_conflict_report=self_conflict_report,
+            concentration_report=concentration_report,
+            derivatives_report=derivatives_dict,
+            volatility_report=volatility_dict,
+            catalyst_report=catalyst_dict,
+            options_report=options_dict,
+            timeframe=timeframe,
+            candidate_action=candidate,
+            blocked_by=[*blocked_by, "correlation_veto"],
+            correlation_veto_report=correlation_veto_report,
+        )
+
     # ----- P1: boyut katmanları — inanç-boyu + oynaklık-paritesi (shadow-first,
     # YALNIZ KISAR). Sinyal gücüne oransal + oynaklığa ters orantılı boyut; her
     # katman config-flag default false → applied_factor 1.0 (boyut bayt-aynı,
@@ -992,6 +1046,7 @@ def decide_for_symbol(
         meta_gate_report=meta_gate_report,
         learning_advice=learning_advice,
         sizing_layers_report=sizing_layers_report,
+        correlation_veto_report=correlation_veto_report,
     )
 
 
