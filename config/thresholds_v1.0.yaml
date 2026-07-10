@@ -596,7 +596,7 @@ sizing_layers:
   # gücü dilimleri ileri-getiride kusursuz merdiven (zayıf −0.210 → güçlü +0.266);
   # eşit-boya karşı edge ~2 kat. Eşiğe yakın sinyal min_factor, tam güçte 1.0.
   conviction:
-    enabled: false
+    enabled: true         # 2026-07-10 CANLI (owner kararı): sinyal gücüne oransal boyut (yalnız kısar)
     min_factor: 0.5       # eşiğe yakın (zayıf) sinyal için taban boyut çarpanı
     full_strength: 25.0   # |score−50| bu değere ulaşınca tam boy (strong eşiği ~bu uzaklıkta)
   # Oynaklık paritesi: boyut varlık oynaklığına ters orantılı (oynak varlığa az para).
@@ -617,7 +617,7 @@ sizing_layers:
 # enabled default FALSE (shadow-first: her kararda correlation_veto_report gözlemlenir,
 # davranış değişmez; owner kanıt birikince açar). Yanlışsa false ile geri alınır.
 correlation_veto:
-  enabled: false
+  enabled: true           # 2026-07-10 CANLI (owner kararı): akraba çelişkisinde işlem açma (yalnız engeller)
   min_abs_rho: 0.5        # akraba yalnız |korelasyon| bu eşiği aşarsa dikkate alınır
   corr_window_days: 90    # korelasyon penceresi (o anki ilişki; kayan korelasyon)
 
