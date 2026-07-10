@@ -717,25 +717,6 @@ def run_once() -> dict:
         subsignal_scorecard_status = f"ERROR:{type(exc).__name__}"
         errors.append(f"subsignal_scorecard:{type(exc).__name__}")
 
-    # Yön yeniden-ağırlık GÖLGESİ (DIRECTION_REWEIGHT_SHADOW, default OFF → no-op).
-    # Owner'ın yapı-ağırlıklı yön skorunu (RSI rol-kısıtlı, ADX rejim kapısı) touche
-    # çorbasına karşı AYNI barlarda ileri-getiriyle yarıştırır (paired, bindirmesiz).
-    # SALT-GÖZLEM: canlı skora/karara/paper'a yazmaz; touche ağırlıkları owner onayı
-    # olmadan değişmez. Lazy import — flag kapalıyken bağımlılıklar hiç yüklenmez.
-    direction_reweight_shadow_status = "DISABLED"
-    try:
-        from packages.learning import direction_reweight_shadow
-        if direction_reweight_shadow.enabled():
-            dr = direction_reweight_shadow.run_if_due()
-            direction_reweight_shadow_status = str(dr.get("status", "UNKNOWN"))
-            if direction_reweight_shadow_status == "OK":
-                log.info(
-                    "direction_reweight_shadow: timeframes=%s", dr.get("timeframes")
-                )
-    except Exception as exc:  # defensive — worker patlamamalı
-        direction_reweight_shadow_status = f"ERROR:{type(exc).__name__}"
-        errors.append(f"direction_reweight_shadow:{type(exc).__name__}")
-
     # D6 — tf_scoring_v2 GÖLGE (TF_SCORING_V2_SHADOW, default OFF → tam no-op).
     # Karne kanıtıyla (kanıt-cap ağırlık) katmanlı v2 yön skorunu CANLI barlar
     # üstünde üretir → "v2 şu an ne derdi" izole artifact. SALT-GÖZLEM: canlı
@@ -829,7 +810,6 @@ def run_once() -> dict:
         "zero_two_strategy_status": zero_two_strategy_status,  # 0-2 tam-strateji karnesi (0.618+fib+trailing+house-money; SALT-ANALİZ)
         "reflection_status": reflection_status,  # Yansıma/hafıza döngüsü (kapanan işlem dersleri; SALT-GÖZLEM)
         "subsignal_scorecard_status": subsignal_scorecard_status,  # D5 sinyal karnesi (DISABLED=flag OFF)
-        "direction_reweight_shadow_status": direction_reweight_shadow_status,  # yön yeniden-ağırlık gölgesi (DISABLED=flag OFF)
         "tf_scoring_v2_shadow_status": tf_scoring_v2_shadow_status,  # D6 v2 gölge skoru (DISABLED=flag OFF)
         "tf_scoring_race_status": tf_scoring_race_status,  # R5 yarış defteri (DISABLED=flag OFF)
         "duration_ms": duration_ms,        # CP1 — perf görünürlüğü
