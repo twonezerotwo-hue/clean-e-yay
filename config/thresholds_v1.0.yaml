@@ -604,8 +604,13 @@ sizing_layers:
   # (büyütme yok). realized_vol birimi snapshot'a bağlı → owner shadow raporundan
   # dağılımı görüp ref_vol'ü kalibre eder, sonra açar (shadow-first'ün amacı).
   vol_parity:
-    enabled: false
-    ref_vol: 0.03         # referans realized_vol; bunu aşan varlık boyutu kısılır
+    enabled: true         # 2026-07-10 CANLI (owner kararı) — KALİBRE EDİLDİ
+    # ref_vol = YILLIK realized_vol referansı (engine annualize eder, ondalık).
+    # Canlı dağılım (9 sembol × 4 TF): medyan 0.16, aralık 0.04–0.65. medyan varlık
+    # x1.0 referans; üstü kısılır (BTC/gümüş/brent ~x0.3–0.5), sakinler (tahvil/DXY/
+    # SP500-kısa) x1.0. NOT: eski default 0.03 YANLIŞ ölçekti (ATR%/gün) → her şeyi
+    # floor'a indirirdi; realized_vol yıllık olduğu için 0.16 doğru.
+    ref_vol: 0.16
     floor: 0.3            # en fazla bu orana kadar küçült (aşırı kısmayı engeller)
 
 # D — dinamik korelasyon vetosu (P1, 2026-07-10). Owner içgörüsü + 5y çok-rejim
