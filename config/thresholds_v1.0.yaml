@@ -655,7 +655,7 @@ quantum_dampen:
 # enabled default FALSE (gölge-önce: kapalıyken SL tetikleme BAYT-AYNI fitil). Owner
 # backtest kanıtıyla açar; yanlışsa false ile anında geri (tick_worker restart).
 exit_close_based_stop:
-  enabled: false
+  enabled: true           # 2026-07-11 CANLI (owner kararı): stop fitille değil bar KAPANIŞIYLA tetiklenir (stop-avı bağışık)
 
 # P2 parça-2 — YAPISAL stop yerleşimi (2026-07-10). Açılışta stop = son `lookback`
 # barın dip/tepesi (owner "0 noktası/son dip altı"), `buffer_pct` kadar ötede (owner
@@ -665,7 +665,7 @@ exit_close_based_stop:
 # (gölge-önce: kapalıyken SL yeri ATR motoruyla bayt-aynı). Bar yok/yapı geçersiz →
 # ATR motoruna düşer. Owner backtest kanıtıyla açar; yanlışsa false ile geri.
 exit_structural_stop:
-  enabled: false
+  enabled: true         # 2026-07-11 CANLI (owner kararı): açılışta stop = son dip/tepe (yapısal)
   lookback: 10          # stop için son kaç barın dip/tepesine bakılır
   buffer_pct: 0.001     # yapısal seviyenin bu oran kadar ötesine stop (owner %0.1)
 
