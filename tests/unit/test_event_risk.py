@@ -14,7 +14,6 @@ from __future__ import annotations
 import urllib.request
 from datetime import timedelta
 
-import pytest
 
 from packages.data.types import Catalyst, utcnow
 from packages.risk import event_risk

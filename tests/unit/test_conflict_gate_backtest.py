@@ -8,7 +8,6 @@ from __future__ import annotations
 
 import json
 
-import pytest
 
 from packages.decision import conflict_gate_backtest
 from packages.learning.outcomes import CanonicalOutcome

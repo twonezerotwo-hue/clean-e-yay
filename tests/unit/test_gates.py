@@ -60,6 +60,33 @@ def test_conflict_gate_blocks_after_session_allows(monkeypatch):
     assert result.route == "block"
 
 
+def test_no_trade_conflict_uses_timeframe_profile_to_block_live_entry(monkeypatch):
+    monkeypatch.setattr(gates.session_gate, "evaluate_open", lambda *a, **k: _FakeSessionGate(route="open"))
+    cfg = conflict_gate.ConflictGateConfig(
+        enabled=True,
+        profile_modes={"INTRADAY": "HARD"},
+    )
+    result = gates.apply_gates(
+        _decision(timeframe="1h"), side="long", now=datetime.now(UTC), regime="trend",
+        gate_cfg=cfg,
+        conflict_by_symbol={"BTCUSD": {"setup_type": "NO_TRADE", "conflict_final_action": conflict_resolver.NO_TRADE}},
+    )
+    assert result.route == "block"
+
+
+def test_missing_conflict_precompute_stays_fail_open(monkeypatch):
+    monkeypatch.setattr(gates.session_gate, "evaluate_open", lambda *a, **k: _FakeSessionGate(route="open"))
+    cfg = conflict_gate.ConflictGateConfig(
+        enabled=True,
+        profile_modes={"INTRADAY": "HARD"},
+    )
+    result = gates.apply_gates(
+        _decision(timeframe="1h"), side="long", now=datetime.now(UTC), regime="trend",
+        gate_cfg=cfg, conflict_by_symbol={},
+    )
+    assert (result.route, result.effective_multiplier) == ("open", 1.0)
+
+
 def test_conflict_gate_hard_manual_routes_manual_ready(monkeypatch):
     monkeypatch.setattr(gates.session_gate, "evaluate_open", lambda *a, **k: _FakeSessionGate(route="open"))
     result = gates.apply_gates(

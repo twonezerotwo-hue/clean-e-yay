@@ -14,7 +14,7 @@ from packages.data.providers.technical import timeframe as tf
 from packages.data.types import OHLCVBar
 
 
-def _bar(i: int, o: float, h: float, l: float, c: float) -> OHLCVBar:  # noqa: E741 — test kısaltması, dosya deseni test_volume_validation ile aynı
+def _bar(i: int, o: float, h: float, l: float, c: float) -> OHLCVBar:
     return OHLCVBar(
         symbol="TEST", timeframe="1d",
         ts=datetime(2024, 1, 1, tzinfo=UTC) + timedelta(days=i),

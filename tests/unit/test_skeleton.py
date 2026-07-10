@@ -3,13 +3,13 @@ from __future__ import annotations
 
 
 def test_packages_importable() -> None:
-    import packages.agent  # noqa: F401
-    import packages.consensus  # noqa: F401
-    import packages.data  # noqa: F401
-    import packages.decision  # noqa: F401
-    import packages.learning  # noqa: F401
-    import packages.paper  # noqa: F401
-    import packages.regime  # noqa: F401
+    import packages.agent
+    import packages.consensus
+    import packages.data
+    import packages.decision
+    import packages.learning
+    import packages.paper
+    import packages.regime
     import packages.risk  # noqa: F401
 
 

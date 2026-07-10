@@ -35,6 +35,21 @@ class GateDecision:
 _BLOCK = GateDecision(route="block", effective_multiplier=0.0)
 
 
+def _profile_for_conflict(setup_type: str, timeframe: str | None) -> str | None:
+    """Resolve the profile used to filter an already-proposed live entry.
+
+    A pure setup classifier returns no profile for NO_TRADE. At this gate, though,
+    the old engine has already proposed an entry, so a NO_TRADE resolver verdict
+    must still be able to apply the timeframe's HARD/SOFT policy. Missing conflict
+    precompute remains fail-open because this helper is only called for a non-empty
+    conflict result.
+    """
+    profile = profile_selector.select_profile(setup_type, timeframe)
+    if profile is not None or setup_type != "NO_TRADE":
+        return profile
+    return profile_selector.select_profile("TREND_LONG", timeframe)
+
+
 def apply_gates(
     d: Any,
     *,
@@ -54,7 +69,11 @@ def apply_gates(
         return _BLOCK
 
     cr_result = conflict_by_symbol.get(d.symbol) or {}
-    cr_profile = profile_selector.select_profile(cr_result.get("setup_type") or "NO_TRADE", d.timeframe)
+    cr_profile = (
+        _profile_for_conflict(cr_result.get("setup_type") or "NO_TRADE", d.timeframe)
+        if cr_result and cr_result.get("conflict_final_action") is not None
+        else None
+    )
     cgate = conflict_gate.evaluate(
         trade_profile=cr_profile,
         conflict_final_action=cr_result.get("conflict_final_action"),

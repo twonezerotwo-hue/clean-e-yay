@@ -106,7 +106,7 @@ def test_zero_size_skips():
 
 def test_size_clamped_to_one():
     st = _state()
-    q = _activate(st, [_view(size=2.5)], evaluate_fn=_eval_returning(conflict_resolver.CANDIDATE_OPEN))
+    _activate(st, [_view(size=2.5)], evaluate_fn=_eval_returning(conflict_resolver.CANDIDATE_OPEN))
     assert st.manual_ready[0].size_multiplier == 1.0
 
 

@@ -6,7 +6,6 @@ Mutlak guardrail clamp her zaman zorlanır.
 """
 from __future__ import annotations
 
-import os
 
 import pytest
 

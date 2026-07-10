@@ -155,7 +155,7 @@ def test_trainer_skips_single_module_no_diversity(tmp_path, monkeypatch) -> None
 
 
 def test_endpoints_propose_approve_flow(tmp_path, monkeypatch) -> None:
-    ps, rs, ld = _fresh_env(tmp_path, monkeypatch)
+    ps, _rs, ld = _fresh_env(tmp_path, monkeypatch)
     _seed_diverse_trades(ps)
 
     # Yeni modül + manifest path environment kullandığımız için apps.api
@@ -193,7 +193,7 @@ def test_endpoints_propose_approve_flow(tmp_path, monkeypatch) -> None:
 
 
 def test_endpoints_reject_clears_pending(tmp_path, monkeypatch) -> None:
-    ps, rs, ld = _fresh_env(tmp_path, monkeypatch)
+    ps, _rs, ld = _fresh_env(tmp_path, monkeypatch)
     _seed_diverse_trades(ps)
 
     from apps.api import main as api_main
@@ -229,7 +229,7 @@ def test_active_weights_falls_back_to_baseline_without_manifest(
 
 
 def test_consensus_uses_active_weights(tmp_path, monkeypatch) -> None:
-    ps, rs, ld = _fresh_env(tmp_path, monkeypatch)
+    ps, _rs, ld = _fresh_env(tmp_path, monkeypatch)
     _seed_diverse_trades(ps)
 
     from apps.api import main as api_main

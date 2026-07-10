@@ -172,3 +172,8 @@ def _isolate_runtime_stores(tmp_path_factory: pytest.TempPathFactory) -> None:
     # OKUR; suite gerçek data/runtime/tf_scoring_v2_shadow.json'ı görmesin (yoksa
     # touche_v2_observe satırı consensus testlerine sızardı). Yol yoksa v2=None → v1.
     os.environ["TF_SCORING_V2_SHADOW_PATH"] = str(runtime / "tf_scoring_v2_shadow.json")
+    # Karar-kanıt tüketicisi (2026-07-09) — learning_advisor her açılış adayında
+    # reflection digest'ini OKUR; suite gerçek data/runtime/reflection_digest.json'ı
+    # görmesin (canlıda biriken sembol hafızası "kanıt yok" varsayan advisor/engine
+    # testlerine sızıyordu). Reflection okuyan testler kendi REFLECTION_PATH'ini kurar.
+    os.environ["REFLECTION_PATH"] = str(runtime / "reflection_digest.json")

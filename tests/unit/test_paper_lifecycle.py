@@ -636,7 +636,6 @@ def test_open_position_uses_fixed_when_tf_targets_disabled(monkeypatch):
 
 def test_open_position_uses_tf_targets_when_enabled(monkeypatch):
     """timeframe_targets.enabled=true + ATR → compute_tf_targets devreye girer."""
-    import packages.risk.trade_economics as te
     import packages.paper.lifecycle as lc
     from packages.paper.state import PaperState
     monkeypatch.setattr(lc, "tf_targets_enabled", lambda: True)

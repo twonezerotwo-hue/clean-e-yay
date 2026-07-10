@@ -54,7 +54,7 @@ def test_paper_lifecycle(tmp_path, monkeypatch) -> None:
     import importlib
     from packages.paper import state as st
     importlib.reload(st)
-    from packages.paper.lifecycle import close_position, open_position, tick
+    from packages.paper.lifecycle import open_position, tick
 
     s = st.load()
     pos = open_position(

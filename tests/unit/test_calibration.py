@@ -259,7 +259,7 @@ def test_decision_carries_calibration_source(fresh_env) -> None:
 
 
 def test_calibration_endpoint_returns_state(fresh_env) -> None:
-    ps, cs = fresh_env
+    ps, _cs = fresh_env
     _seed_with_confidence(ps, n_high_win=6, n_low_loss=6)
     from packages.learning import calibration_trainer as ct
     ct.train()
