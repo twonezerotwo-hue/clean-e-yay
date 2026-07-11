@@ -15,7 +15,7 @@ from datetime import UTC, datetime, timedelta
 
 from packages.data.registry.loader import load_thresholds
 from packages.learning import decision_log
-from packages.paper import audit, conviction, execution_sim, sizing
+from packages.paper import audit, conviction, execution_sim, reentry_guard, sizing
 from packages.paper.guards import price_sanity, state_anomaly
 from packages.paper.state import PaperState, Position, Trade, utc_iso
 from packages.risk.trade_economics import (
@@ -333,12 +333,19 @@ def attempt_open(
     open_session_evidence: str | None = None,
     atr: float | None = None,
     module_contributions: dict[str, float] | None = None,
+    apply_reentry_guard: bool = False,
 ) -> tuple[Position | None, dict]:
     """P1 — tek açılış giriş noktası: denetim → blocked/opened + audit.
 
     Fiyat yok/≤0 → OPEN_BLOCKED(no_price) (fake fiyat YOK). Duplicate (scale_in
     değilse) → OPEN_BLOCKED. Aksi halde `open_position`. tick_worker ve paper
     router AYNI yoldan açar (drift yok). Döner: (Position|None, decision).
+
+    `apply_reentry_guard` (2026-07-11): YALNIZ tik-worker otomatik sinyal açılışı
+    True verir → kapanış sonrası aynı yöne bayat-sinyal tekrar-girişi engellenir
+    (bkz. reentry_guard). Owner manuel açılış / manual_ready onayı default False
+    (guard uygulanmaz — owner override). Flag KAPALIYKEN rapor gözlem, açılış
+    bayt-aynı (shadow-first).
     """
     audit.record(
         "OPEN_ATTEMPT", symbol=symbol, timeframe=timeframe, side=side,
@@ -388,6 +395,29 @@ def attempt_open(
             reason=decision["reason"], snapshot_id=snapshot_id, duplicate=True,
         )
         return None, decision
+    # Tekrar-giriş kilidi (2026-07-11) — YALNIZ otomatik sinyal açılışına. Kapanış
+    # sonrası (owner MANUAL / kârlı otomatik) aynı yöne bayat-sinyal geri-girişi:
+    # taze bar geçene VE sinyal değişene kadar engellenir. Flag KAPALIYKEN rapor
+    # decision'a taşınır ama AÇILIŞ ENGELLENMEZ (shadow-first). Saf; raise etmez.
+    if apply_reentry_guard:
+        try:
+            rg = reentry_guard.assess(
+                state, symbol=symbol, side=side, timeframe=timeframe,
+                fingerprint=fingerprint, now=datetime.now(UTC),
+                cfg=load_thresholds().get("reentry_guard") or {},
+            )
+        except Exception:  # gölge/uygulama guard'ı kararı asla düşürmez
+            rg = {}
+        if rg:
+            decision["reentry_guard"] = rg
+            if rg.get("active") and rg.get("locked"):
+                audit.record(
+                    "OPEN_BLOCKED", symbol=symbol, timeframe=timeframe, side=side,
+                    reason=rg.get("reason") or "reentry_locked", snapshot_id=snapshot_id,
+                )
+                decision["allowed"] = False
+                decision["reason"] = rg.get("reason") or "reentry_locked"
+                return None, decision
     pos = open_position(
         state, symbol=symbol, side=side, entry_price=entry_price,
         size_multiplier=size_multiplier, fingerprint=fingerprint,

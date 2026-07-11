@@ -669,6 +669,21 @@ exit_structural_stop:
   lookback: 10          # stop için son kaç barın dip/tepesine bakılır
   buffer_pct: 0.001     # yapısal seviyenin bu oran kadar ötesine stop (owner %0.1)
 
+# TEKRAR-GİRİŞ KİLİDİ (2026-07-11, owner problemi). Sinyal fire→aç→kârda kapat
+# (owner MANUAL veya sistem TP)→30 sn sonra AYNI sinyal hâlâ geçerli→açılış kapısı
+# 'açık pozisyon yok' deyip aynı işlemi geri açıyordu (kapanış kararı hiç okunmuyordu).
+# Kilit KURAN kapanış: close_reason=MANUAL VEYA normal-CLOSED + pnl>0 (owner kararı:
+# "manuel + kârlı otomatik"). FORCE_CLOSED (kill/risk) + zararlı stop KURMAZ. Kilit
+# AÇILIR ancak İKİSİ birden olunca (owner kararı): (a) taze bar (≥1 TF-barı geçti) VE
+# (b) sinyal değişti (aday fingerprint ≠ kilidi kuran işlemin fingerprint'i). Ters yön
+# hiç kilitlenmez (doğal flip serbest). YALNIZ otomatik sinyal açılışına; owner manuel
+# açılış + manual_ready onayı muaf. YALNIZ ENGELLER (no-boost). state.recent_trades'ten
+# türetilir (yeni dosya yok). enabled default FALSE (shadow-first: kapalıyken decision'a
+# reentry_guard raporu taşınır, açılış BAYT-AYNI). Owner kanıtı görüp açar; yanlışsa
+# false ile geri (tick_worker restart).
+reentry_guard:
+  enabled: false
+
 # Price sanity guard — cross-pair contamination + absurd-price protection.
 # Phase 2 port from e-yay-codex paper_trading_service._is_price_sane.
 price_sanity:

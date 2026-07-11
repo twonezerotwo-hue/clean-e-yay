@@ -312,7 +312,7 @@ async def run_once() -> None:
             tech = tech_by_tf.get(d.timeframe)
             if tech is not None and tech.atr is not None and tech.atr > 0:
                 tf_atr = float(tech.atr)
-            pos, _decision = attempt_open(
+            pos, open_decision = attempt_open(
                 ps,
                 symbol=d.symbol,
                 side=side,
@@ -332,6 +332,10 @@ async def run_once() -> None:
                 module_contributions={
                     m.name: m.contribution for m in d.consensus.modules
                 },
+                # Tekrar-giriş kilidi YALNIZ otomatik sinyal açılışına (owner manuel
+                # açılış / manual_ready onayı muaf). Flag KAPALIYKEN gözlem, açılış
+                # bayt-aynı (shadow-first).
+                apply_reentry_guard=True,
                 **routed.session_attribution,
             )
             if pos is not None:
@@ -345,6 +349,16 @@ async def run_once() -> None:
                 # (karar/sizing değişmez; best-effort, tick'i düşürmez).
                 calibration_audit.record_open(
                     d, pos, regime=getattr(_regime, "label", None)
+                )
+            # Tekrar-giriş kilidi kanıtı (shadow VEYA canlı): guard kilit hesapladıysa
+            # logla — owner kapalıyken frekansı görüp açar (shadow-first kanıt yolu).
+            rg = (open_decision or {}).get("reentry_guard")
+            if rg and rg.get("locked"):
+                log.info(
+                    "reentry_guard %s: %s %s %s (armed_by=%s, %s) — %s",
+                    "BLOK" if rg.get("active") else "gölge",
+                    d.symbol, d.timeframe, side, rg.get("armed_by"),
+                    rg.get("reason"), "açılış engellendi" if rg.get("active") else "açılışa izin (flag kapalı)",
                 )
 
         paper_state.save(ps)

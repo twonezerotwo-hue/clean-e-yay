@@ -85,6 +85,10 @@ def _package1_flags_off_by_default(monkeypatch: pytest.MonkeyPatch) -> None:
     # davranış testleri kendi monkeypatch'iyle açar.
     pinned.setdefault("exit_close_based_stop", {})["enabled"] = False
     pinned.setdefault("exit_structural_stop", {})["enabled"] = False
+    # Tekrar-giriş kilidi (2026-07-11) — otomatik sinyal açılışı baseline'ı (guard
+    # KAPALI → açılış bayt-aynı) varsayar → test-default KAPAT; davranış testleri
+    # (test_reentry_guard) kendi monkeypatch'iyle açar.
+    pinned.setdefault("reentry_guard", {})["enabled"] = False
     monkeypatch.setattr(loader, "_load_thresholds_base", lambda: pinned)
     # Denetim 2026-07-03 — çıkış-makinesi env flag'leri testlerde default OFF
     # (dev makinesinde .env yüklenmiş olabilir; testler baseline'ı varsayar).
