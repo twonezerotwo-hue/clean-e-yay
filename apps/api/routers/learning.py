@@ -50,6 +50,7 @@ from packages.learning import (
     threshold_ab,
     threshold_trainer,
     zero_two_strategy,
+    zone_plan_shadow,
 )
 from packages.learning import outcomes as outcomes_mod
 from packages.learning.calibration import reliability_bins
@@ -138,6 +139,16 @@ def get_zero_two_strategy() -> dict:
     ilk-işlem ve house-money'li PnL. Canlı skora/karara ASLA dokunmaz; kanıt biriktirir.
     Sayılar flat-veri + örtüşen işlemlerle şişebilir → güven için ileri-veri şart."""
     return zero_two_strategy.viewmodel()
+
+
+@router.get("/learning/zone-plan")
+def get_zone_plan() -> dict:
+    """Bölge-planı gölge karnesi (read-only, PAPER_SAFE, SALT-ANALİZ). Owner'ın
+    el-çizimi kesişim bölgeleri (config/zone_plans.yaml — sistem bölge ÜRETMEZ)
+    üzerinde dallı işlem planı gölge-yürütülür: parçalı çekirdek girişi, break-even
+    kuralı, derin-katman ortalama düşürme + retest TP, kalıcı geri-alımda yüksek
+    bakiye + %3 stop, LOG-fib çıkış merdiveni. Canlı karara ASLA dokunmaz."""
+    return zone_plan_shadow.viewmodel()
 
 
 @router.get("/learning/reflection")

@@ -1,0 +1,20 @@
+# Owner'ın el-çizimi bölge haritaları — SİSTEM BÖLGE ÜRETMEZ, owner çizer
+# (touche dersi: owner'ın gözü formüle sığmıyor; mekanikleşen yalnız uygulama
+# disiplini). zone_plan_shadow bu planları SALT-GÖLGE yürütür; canlı karara,
+# paper'a, ağırlığa ASLA dokunmaz. Öğretim kaynağı: 2026-07-11 BTCUSD haftalık
+# seansı (Elliott ④/C kesişim kümesi + dallı işlem planı).
+version: 1
+plans:
+  - id: btc_dalga4_2026
+    symbol: BTCUSD
+    timeframe: 1d            # haftalık plan, günlük barla izlenir
+    top: 126230.09           # ③ tepesi — çıkış-fib'inin üst çapası
+    core: [50100, 52000]     # çekirdek: yeşil×kırmızı×turkuaz kesişimi + 1,414 (51.855)
+    deep: 44203.72           # sarı 0,5 LOG fib — ortalama-düşürme katmanı (Dal 2a)
+    entry_parts: 3           # çekirdekte parçalı giriş sayısı
+    deep_add_mult: 1.0       # derin ekleme boyutu (ilk pozisyona oran) — owner ayarlayabilir
+    reclaim_size_mult: 2.0   # "yüksek bakiye" çarpanı (Dal 2b) — owner ayarlayabilir
+    reclaim_stop_pct: 0.03   # geri-alım stopu: desteğin %3 altı (owner kuralı)
+    kalici_closes: 5         # "kalıcı" ≈ 5 günlük kapanış (~1 hafta) — owner ayarlayabilir
+    valid_from: "2026-07-11"
+    note: "4. dalga / C bölgesi (Eyl-Eki 2026 beklentisi); 5. dalga hedefi beyaz çizgi ~120-125k"

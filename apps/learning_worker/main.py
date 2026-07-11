@@ -698,6 +698,23 @@ def run_once() -> dict:
         zero_two_strategy_status = f"ERROR:{type(exc).__name__}"
         errors.append(f"zero_two_strategy:{type(exc).__name__}")
 
+    # Bölge-planı gölge yürütücüsü (SALT-ANALİZ, flag YOK — zero_two_strategy
+    # deseni). Owner'ın el-çizimi kesişim bölgeleri (config/zone_plans.yaml) +
+    # dallı işlem planı (parçalı giriş / BE / derin-ortalama / reclaim + LOG-fib
+    # çıkış merdiveni) günlük barlarda gölge-yürütülür; canlı karara dokunmaz.
+    # Plan dosyası boşsa NO_PLANS (tam no-op).
+    zone_plan_status = "ERROR"
+    try:
+        from packages.learning import zone_plan_shadow as _zps
+        zp = _zps.run_if_due()
+        zone_plan_status = str(zp.get("status", "UNKNOWN"))
+        if zone_plan_status == "OK":
+            log.info("zone_plan_shadow: plans=%s states=%s",
+                     zp.get("plans"), zp.get("states"))
+    except Exception as exc:  # defensive — worker patlamamalı
+        zone_plan_status = f"ERROR:{type(exc).__name__}"
+        errors.append(f"zone_plan_shadow:{type(exc).__name__}")
+
     # D5 — sinyal karnesi (SUBSIGNAL_SCORECARD_ENABLED, default OFF → tam no-op).
     # INTERVAL-kapılı (haftalık; durum = artifact yaşı): 8 sinyal × 4 TF ileri-
     # getiri karnesi (v2 sert cetvel) yeniden ölçülür — bar arşivi büyüdükçe
@@ -808,6 +825,7 @@ def run_once() -> dict:
         "exit_backtest_status": exit_backtest_status,  # Çıkış stop-verim backtest (interval-kapılı; SKIP_FRESH=taze)
         "zero_two_scorecard_status": zero_two_scorecard_status,  # 0-2 karnesi (owner edge'i; interval-kapılı SALT-ANALİZ)
         "zero_two_strategy_status": zero_two_strategy_status,  # 0-2 tam-strateji karnesi (0.618+fib+trailing+house-money; SALT-ANALİZ)
+        "zone_plan_status": zone_plan_status,  # Bölge-planı gölge yürütücüsü (owner çizer, makine disiplini uygular; NO_PLANS=dosya boş)
         "reflection_status": reflection_status,  # Yansıma/hafıza döngüsü (kapanan işlem dersleri; SALT-GÖZLEM)
         "subsignal_scorecard_status": subsignal_scorecard_status,  # D5 sinyal karnesi (DISABLED=flag OFF)
         "tf_scoring_v2_shadow_status": tf_scoring_v2_shadow_status,  # D6 v2 gölge skoru (DISABLED=flag OFF)
