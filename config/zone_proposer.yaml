@@ -1,0 +1,20 @@
+# Aday bölge önericisi — owner'ın kesişim yöntemini mekanik geometriyle serer.
+# SALT-ANALİZ (flag YOK; zone_plan_shadow deseni). Makine bölge SEÇMEZ, ADAY
+# önerir; owner süzer, kabul edileni config/zone_plans.yaml'a taşır (otomatik
+# aktarım YOK — touche dersi: owner'ın gözü formüle sığmıyor). Canlıya dokunmaz.
+version: 1
+
+pivot_span: 6            # haftalık fraktal yarıçapı (±6 hafta = majör uç)
+min_weekly_bars: 30      # altı INSUFFICIENT (makro yöntem derin tarih ister)
+horizon_bars: 26         # trend çizgilerini ~6 ay ileri projekte et (fiyat×zaman)
+cluster_tol_pct: 2.5     # bu log-% içindeki seviyeler TEK bölge sayılır
+min_confluence: 2        # en az 2 bağımsız araç aynı bölgede (owner "oy birliği")
+max_zones: 5             # asset başına raporlanan en güçlü bölge sayısı
+
+# Owner'ın fib kümeleri (LOG ölçek — grafikteki basılı değerlerle birebir).
+retr_levels: [0.236, 0.382, 0.5, 0.618, 0.786]   # makro geri çekilme
+ext_levels: [1.236, 1.414, 1.618]                # son inen bacağın uzantısı
+
+# Rotasyon çekirdeği + yükselen ETF'ler + keşif kısa listesi otomatik girer.
+# Owner buraya sabit sembol ekleyebilir (ör. custom asset ticker'ı).
+extra_symbols: []

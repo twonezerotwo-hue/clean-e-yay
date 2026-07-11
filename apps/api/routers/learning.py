@@ -51,6 +51,7 @@ from packages.learning import (
     threshold_trainer,
     zero_two_strategy,
     zone_plan_shadow,
+    zone_proposer,
 )
 from packages.learning import outcomes as outcomes_mod
 from packages.learning.calibration import reliability_bins
@@ -149,6 +150,16 @@ def get_zone_plan() -> dict:
     kuralı, derin-katman ortalama düşürme + retest TP, kalıcı geri-alımda yüksek
     bakiye + %3 stop, LOG-fib çıkış merdiveni. Canlı karara ASLA dokunmaz."""
     return zone_plan_shadow.viewmodel()
+
+
+@router.get("/learning/zone-proposer")
+def get_zone_proposer() -> dict:
+    """Aday bölge önerileri (read-only, PAPER_SAFE, SALT-ANALİZ). Owner'ın kesişim
+    yöntemi makro evrende (rotasyon çekirdeği + yükselen ETF + keşif kısa listesi)
+    mekanik geometriyle serilir: haftalık pivot → LOG-uzay trend çizgisi → log-fib
+    kümesi → çizgi kesişimi → confluence skoru. Makine bölge SEÇMEZ, ADAY önerir;
+    owner süzer, kabul edileni zone_plans.yaml'a taşır. Canlı karara ASLA dokunmaz."""
+    return zone_proposer.viewmodel()
 
 
 @router.get("/learning/reflection")
