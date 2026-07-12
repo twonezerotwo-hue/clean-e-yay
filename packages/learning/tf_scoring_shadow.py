@@ -56,13 +56,19 @@ def analyze(symbols: list[str] | None = None) -> dict:
 
     Salt-hesap; hiçbir yan etki yok."""
     from packages.data.providers.ohlcv import get_bars, history
+    from packages.data.providers.rotation import engine as rotation_engine
     from packages.data.providers.rotation.engine import ROTATION_SYMBOLS
     from packages.scoring import tf_scoring_v2 as v2
+    from packages.scoring import tf_scoring_v3 as v3
     from packages.signals import regime_gate
 
     scorecard = _load_scorecard()
     syms = symbols or sorted(set(ROTATION_SYMBOLS.values()) | {"BTCUSD"})
     per_symbol: dict[str, dict] = {}
+    # v3 makro-onayı: zaten çekilen 1d kapanışlarını rotasyon anahtarıyla
+    # biriktir (ek ağ çağrısı YOK) → döngü sonunda TEK rotasyon skoru.
+    closes_1d: dict[str, list[float]] = {}
+    _sym_to_key = {val: key for key, val in ROTATION_SYMBOLS.items()}
     for sym in syms:
         try:
             tf_scores: dict[str, float] = {}          # EDGE-only (birincil yol)
@@ -98,9 +104,13 @@ def analyze(symbols: list[str] | None = None) -> dict:
                     convictions[tf] = round(v2.conviction(w_all), 4)
                 # Hava: 1d kapanışlarından (backtest tasarımıyla aynı)
                 if tf == "1d":
-                    rg = regime_gate.assess([b.close for b in bars])
+                    closes = [b.close for b in bars]
+                    rg = regime_gate.assess(closes)
                     if rg is not None:
                         regime_info = {"regime": rg.regime, "er": rg.er}
+                    key = _sym_to_key.get(sym)
+                    if key is not None:
+                        closes_1d[key] = closes  # v3 makro girdisi (reuse)
             regime = (regime_info or {}).get("regime")
             primary = v2.regime_directed(tf_scores, regime)
             legacy = v2.blended_direction(tf_scores_legacy, convictions)
@@ -117,6 +127,29 @@ def analyze(symbols: list[str] | None = None) -> dict:
             }
         except Exception as exc:  # defensive — bir sembol diğerlerini düşürmesin
             per_symbol[sym] = {"status": f"ERROR:{type(exc).__name__}"}
+
+    # ---- v3 (2026-07-12): v2 çekirdeği + makro-onay + bayat-karne kapısı ----
+    # Makro hava TEK skorla (rotasyon risk-on) hesaplanır ve her sembole aynı
+    # onay/kısma uygulanır; girdi = yukarıda zaten çekilen 1d kapanışlar.
+    rotation_score: float | None = None
+    try:
+        rot = rotation_engine.compute(closes_1d)
+        if rot.available:
+            rotation_score = rot.score
+    except Exception:
+        rotation_score = None  # makro hesaplanamadı → v3 makro-katmanı nötr
+    for row in per_symbol.values():
+        if "tf_scores" not in row:
+            continue
+        try:
+            d3 = v3.score(
+                row["tf_scores"], (row.get("regime") or {}).get("regime"),
+                rotation_score=rotation_score, scorecard=scorecard,
+            )
+            row["direction_v3"] = None if d3 is None else round(d3, 4)
+        except Exception:
+            row["direction_v3"] = None
+
     scored = sum(1 for v in per_symbol.values() if v.get("status") == "OK")
     return {
         "generated_at": datetime.now(UTC).isoformat(),
@@ -124,10 +157,12 @@ def analyze(symbols: list[str] | None = None) -> dict:
         "scorecard_engine": scorecard.get("engine"),
         "scorecard_generated_at": scorecard.get("generated_at"),
         "symbols_scored": scored,
+        "rotation_score": rotation_score,  # v3 makro girdisi (şeffaflık)
         "per_symbol": per_symbol,
         "note": (
             "İZOLE gölge (R2): BİRİNCİL yön = rejim-anahtarlı (UP→1d, DOWN→4h; "
             "yalnız EDGE-kanıtlılar konuşur). KONTROL = eski yumuşak harman. "
+            "v3 = çekirdek + makro-onay + bayat-karne kapısı (2026-07-12). "
             "Canlı skora/karara/paper'a DOKUNMAZ (D7 yarış girdisi)."
         ),
     }

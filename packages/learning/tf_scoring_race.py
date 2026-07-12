@@ -156,6 +156,9 @@ def append_ledger(artifact: dict | None = None) -> int:
             "price_at": mark.get("close"),
             "new_dir": r.get("direction"),
             "legacy_dir": r.get("direction_blend_legacy"),
+            # v3 (2026-07-12): çekirdek + makro-onay + bayat-karne kapısı —
+            # dördüncü tasarım olarak yarışır (eski satırlarda alan yok → atlanır).
+            "v3_dir": r.get("direction_v3"),
         })
     if rows:
         _write_ledger(rows)
@@ -217,9 +220,11 @@ def _blank_design() -> dict:
 
 
 def _score(rows: list[dict], band: float) -> dict:
-    """Çözülebilen satırları üç tasarım için puanla. `band` altı hareket kararsız
-    (elenir — düz piyasada yön çağrısı notlanamaz)."""
-    designs = {"new_brain": _blank_design(), "legacy": _blank_design(), "baseline": _blank_design()}
+    """Çözülebilen satırları dört tasarım için puanla. `band` altı hareket kararsız
+    (elenir — düz piyasada yön çağrısı notlanamaz). v3 (2026-07-12) eski
+    satırlarda alan taşımaz → o satırları atlar (dürüst sayım)."""
+    _names = ("new_brain", "legacy", "baseline", "v3")
+    designs = {n: _blank_design() for n in _names}
     per_regime: dict[str, dict] = {}
     resolved = 0
     for row in rows:
@@ -233,11 +238,10 @@ def _score(rows: list[dict], band: float) -> dict:
             "new_brain": _sign(row.get("new_dir")),
             "legacy": _sign(row.get("legacy_dir")),
             "baseline": 1,  # buy-hold: her zaman yukarı
+            "v3": _sign(row.get("v3_dir")),
         }
         reg = row.get("regime") or "?"
-        rbucket = per_regime.setdefault(reg, {
-            "new_brain": _blank_design(), "legacy": _blank_design(), "baseline": _blank_design(),
-        })
+        rbucket = per_regime.setdefault(reg, {n: _blank_design() for n in _names})
         for name, call in calls.items():
             if call == 0:
                 continue  # yön yok (ör. eski-harman None) → o tasarım bu satırı atlar
