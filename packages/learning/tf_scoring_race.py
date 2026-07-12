@@ -1,24 +1,22 @@
-"""R5 — tf_scoring_v2 GÖLGE YARIŞ DEFTERİ (İZOLE, salt-gözlem).
+"""tf_scoring DOĞRULAMA KARNESİ (İZOLE, salt-gözlem).
 
-D6/R4 gölge üreticisi her cycle "yeni beyin" (rejim-anahtarlı v2) yönünü ÜRETİR
-ama o yönün DOĞRU çıkıp çıkmadığını kimse tutmuyordu. Bu modül o eksik halkayı
-kapatır: her yeni konuşan-bar kapanışında gölge yönünü fiyat damgasıyla DEFTERE
-yazar, ufuk dolunca barı gerçekleşen ileri-getiriyle ÇÖZER ve ÜÇ tasarımı yan
-yana puanlar:
+Owner kararı (2026-07-12): tf_scoring_v4 CANLI teknik oy oldu (kanıt backtest-
+only — kural #3'e gözü-açık istisna). Bu modül o kararın canlı sınavını tutar:
+her yeni konuşan-bar kapanışında v4 + backup yönünü fiyat damgasıyla DEFTERE
+yazar, ufuk dolunca gerçekleşen ileri-getiriyle ÇÖZER ve üç satırı puanlar:
 
-    yeni beyin (regime_directed)   — rejim-anahtarlı v2 yönü (BİRİNCİL)
-    kontrol   (blend_legacy)       — eski yumuşak harman (A/B kontrol grubu)
-    taban     (buy-hold)           — "hep yukarı de" (boğa yanlılığı kontrolü)
+    v4       (owner formülü)          — CANLI teknik oy (sınanan)
+    backup   (touche_backup, v2 motor) — yedek; v4'ün yerinden ettiği motor
+    baseline (buy-hold)               — "hep yukarı de" (boğa yanlılığı kontrolü)
 
-Rapor "yeni beyin eskiyi/tabanı geçiyor mu"yu SAYIYA bağlar. Kriter tutarsa
-`promotion_rail` ile OWNER ONAY PAKETİ sunulur — terfi OTOMATİK DEĞİL (KIRMIZI
-ÇİZGİ: yön motoru terfisi owner onayı ŞART; onay bile canlı yönü değiştirmez).
+Karne verdict'i owner'ın geri-alma kararına girdi: v4 yeterli örneklemde
+backup/tabanın GERİSİNE düşerse `consensus.touche_v4: false` (tek satır) ile
+zemine dönülür. Burada OTOMATİK hiçbir şey yok — rapor yazar, karar owner'ın.
 
-Sözleşme (mevcut gölge/terfi desenleri):
-- Flag `TF_SCORING_V2_SHADOW` (gölgeyle AYNI kapı — gölge yoksa yarış yoktur);
-  yeni env-flag YOK (flag-sync yükü yok). Eşikler `tf_scoring_race` YAML bloğunda.
-- Defter append-only JSONL; çözüm STATELESS: rapor her koşuda son N satırı arşive
-  karşı yeniden çözer (mutasyon yok → replay-dostu, davranış-nötr).
+Sözleşme:
+- Flag `TF_SCORING_V2_SHADOW` (üreticiyle AYNI kapı — üretici yoksa karne yok).
+- Defter append-only JSONL; çözüm STATELESS: rapor her koşuda son N satırı
+  arşive karşı yeniden çözer (mutasyon yok → replay-dostu, davranış-nötr).
 - Karneyle AYNI birleşik pencere (arşiv + canlı) + AYNI ufuk → tutarlı ölçüm.
 - ASLA raise etmez; canlı skora/karara/paper'a SIFIR dokunuş.
 
@@ -37,18 +35,18 @@ from packages.learning import tf_scoring_shadow
 
 _LEDGER = "data/runtime/tf_scoring_race.jsonl"
 _REPORT = "data/runtime/tf_scoring_race_report.json"
-_ENGINE = "tf_scoring_race_v1"
+_ENGINE = "tf_scoring_race_v2"
 
 # Konuşan TF → ileri-getiri ufku (bar). subsignal_scorecard._HORIZON ile AYNI
-# değerler (aynı ölçüm bilimi); regime_directed yalnız 1d/4h konuşur.
+# değerler (aynı ölçüm bilimi); konuşmacı yalnız 1d/4h olur.
 _HORIZON = {"1d": 5, "4h": 6}
-# Rejim → konuşan TF (v2 regime_directed ile aynı eşleme).
+# Rejim → konuşan TF (v2.regime_directed ile aynı eşleme).
 _SPEAKER = {"UP": "1d", "DOWN": "4h"}
 # Çözümde okunacak azami satır (defter büyüse de bellek/pencere sınırlı).
 _MAX_READ = 5000
 
 _DEFAULTS = {
-    "min_resolved": 30,       # kararlı çözülmüş yeni-beyin çağrısı (terfi kapısı)
+    "min_resolved": 30,       # kararlı çözülmüş v4 çağrısı (verdict eşiği)
     "neutral_band_pct": 0.5,  # |ileri-getiri| bu bandın altındaysa "kararsız" (elenir)
 }
 
@@ -122,13 +120,13 @@ def read_ledger(limit: int = _MAX_READ) -> list[dict]:
 
 
 def append_ledger(artifact: dict | None = None) -> int:
-    """Gölge artifact'ından her sembolün konuşan-bar çağrısını deftere ekle.
+    """Üretici artifact'ından her sembolün konuşan-bar çağrısını deftere ekle.
 
     (symbol, speaker_tf, bar_ts) bazında DEDUPE: aynı bar için ikinci kez yazmaz
     (5-dk cycle'lar aynı barı tekrar tekrar üretir). Yalnız yeni kapanan bar →
     yeni satır. best-effort; asla raise etmez. Eklenen satır sayısını döner."""
     if artifact is None:
-        artifact = _load_shadow_artifact()
+        artifact = _load_producer_artifact()
     per_symbol = (artifact or {}).get("per_symbol") or {}
     if not per_symbol:
         return 0
@@ -136,12 +134,16 @@ def append_ledger(artifact: dict | None = None) -> int:
     seen = {(r.get("symbol"), r.get("speaker_tf"), r.get("bar_ts")) for r in recent}
     rows: list[dict] = []
     for sym, r in per_symbol.items():
-        if r.get("status") != "OK" or r.get("direction") is None:
+        if r.get("status") != "OK":
             continue
+        v4_dir = r.get("direction_v4")
+        backup_dir = r.get("direction_backup")
+        if v4_dir is None and backup_dir is None:
+            continue  # iki motor da yön üretemedi → yazacak bir şey yok
         regime = ((r.get("regime") or {}).get("regime")) if r.get("regime") else None
-        speaker = _SPEAKER.get(regime or "")
+        speaker = r.get("speaker_tf") or _SPEAKER.get(regime or "")
         mark = (r.get("bar_marks") or {}).get(speaker or "")
-        if speaker is None or not mark or mark.get("close") in (None, 0):
+        if not speaker or not mark or mark.get("close") in (None, 0):
             continue
         key = (sym, speaker, mark.get("ts"))
         if key in seen:
@@ -154,14 +156,8 @@ def append_ledger(artifact: dict | None = None) -> int:
             "regime": regime,
             "bar_ts": mark.get("ts"),
             "price_at": mark.get("close"),
-            "new_dir": r.get("direction"),
-            "legacy_dir": r.get("direction_blend_legacy"),
-            # v3 (2026-07-12): çekirdek + makro-onay + bayat-karne kapısı —
-            # dördüncü tasarım olarak yarışır (eski satırlarda alan yok → atlanır).
-            "v3_dir": r.get("direction_v3"),
-            # v4 (2026-07-12): owner birleşik formülü (elliott+trend+bölge+
-            # kapılı-uyumsuzluk; backtest-doğrulanmış ağırlıklar) — beşinci tasarım.
-            "v4_dir": r.get("direction_v4"),
+            "v4_dir": v4_dir,          # CANLI motor (owner formülü)
+            "backup_dir": backup_dir,  # yedek motor (EDGE-kanıtlı karne yolu)
         })
     if rows:
         _write_ledger(rows)
@@ -179,7 +175,7 @@ def _write_ledger(rows: list[dict]) -> None:
         pass  # gözlem ASLA cycle'ı kesmez
 
 
-def _load_shadow_artifact() -> dict:
+def _load_producer_artifact() -> dict:
     try:
         path = tf_scoring_shadow.artifact_path()
         if path.exists():
@@ -223,10 +219,10 @@ def _blank_design() -> dict:
 
 
 def _score(rows: list[dict], band: float) -> dict:
-    """Çözülebilen satırları dört tasarım için puanla. `band` altı hareket kararsız
-    (elenir — düz piyasada yön çağrısı notlanamaz). v3 (2026-07-12) eski
-    satırlarda alan taşımaz → o satırları atlar (dürüst sayım)."""
-    _names = ("new_brain", "legacy", "baseline", "v3", "v4")
+    """Çözülebilen satırları üç tasarım için puanla. `band` altı hareket kararsız
+    (elenir — düz piyasada yön çağrısı notlanamaz). Bir motor o satırda yön
+    üretmemişse (dir None → sign 0) o satırı atlar (dürüst sayım)."""
+    _names = ("v4", "backup", "baseline")
     designs = {n: _blank_design() for n in _names}
     per_regime: dict[str, dict] = {}
     resolved = 0
@@ -238,17 +234,15 @@ def _score(rows: list[dict], band: float) -> dict:
         if abs(fwd) < band:
             continue  # kararsız — hiçbir tasarım notlanmaz
         calls = {
-            "new_brain": _sign(row.get("new_dir")),
-            "legacy": _sign(row.get("legacy_dir")),
-            "baseline": 1,  # buy-hold: her zaman yukarı
-            "v3": _sign(row.get("v3_dir")),
             "v4": _sign(row.get("v4_dir")),
+            "backup": _sign(row.get("backup_dir")),
+            "baseline": 1,  # buy-hold: her zaman yukarı
         }
         reg = row.get("regime") or "?"
         rbucket = per_regime.setdefault(reg, {n: _blank_design() for n in _names})
         for name, call in calls.items():
             if call == 0:
-                continue  # yön yok (ör. eski-harman None) → o tasarım bu satırı atlar
+                continue  # yön yok → o motor bu satırı atlar
             aligned = fwd if call > 0 else -fwd
             for tgt in (designs[name], rbucket[name]):
                 tgt["decisive"] += 1
@@ -275,45 +269,51 @@ def _summ(d: dict) -> dict:
 
 
 def evaluate() -> dict:
-    """Yarış raporu (pure-ish; defter + arşiv okur). Owner paketi girdisi."""
+    """Doğrulama raporu (pure-ish; defter + arşiv okur). Owner geri-alma girdisi.
+
+    `race_status`: COLLECTING (örneklem eşik altı) | V4_AHEAD (v4 yedeği VE
+    tabanı geçiyor) | V4_BEHIND (en az birinin gerisinde — owner touche_v4=false
+    ile geri almayı değerlendirir). Otomatik aksiyon YOK."""
     c = cfg()
     rows = read_ledger()
     scored = _score(rows, c["neutral_band_pct"])
     designs = scored["designs"]
-    new_d, leg_d, base_d = designs["new_brain"], designs["legacy"], designs["baseline"]
+    v4_d, bak_d, base_d = designs["v4"], designs["backup"], designs["baseline"]
 
-    beats_baseline = _beats(new_d["avg_return_pct"], base_d["avg_return_pct"])
-    beats_legacy = _beats(new_d["avg_return_pct"], leg_d["avg_return_pct"])
+    beats_backup = _beats(v4_d["avg_return_pct"], bak_d["avg_return_pct"])
+    beats_baseline = _beats(v4_d["avg_return_pct"], base_d["avg_return_pct"])
+
+    if v4_d["decisive"] < c["min_resolved"]:
+        race_status = "COLLECTING"
+    elif beats_baseline is not False and beats_backup is not False:
+        race_status = "V4_AHEAD"
+    else:
+        race_status = "V4_BEHIND"
 
     checks = {
-        "resolved_decisive": rail.count_check(new_d["decisive"], c["min_resolved"]),
+        "resolved_decisive": rail.count_check(v4_d["decisive"], c["min_resolved"]),
         "ci_disjoint": rail.wilson_check(
-            new_d["hits"], new_d["decisive"], rate_key="new_brain_hit_rate"
+            v4_d["hits"], v4_d["decisive"], rate_key="v4_hit_rate"
         ),
-        "beats_baseline": {
-            "new_avg_return_pct": new_d["avg_return_pct"],
-            "baseline_avg_return_pct": base_d["avg_return_pct"],
-            "required": "new_avg > baseline_avg",
-            "pass": bool(beats_baseline),
-        },
     }
     return {
         "generated_at": datetime.now(UTC).isoformat(),
         "engine": _ENGINE,
-        # Terfi statüsü: READY/NOT_READY. Anahtar `race_status` (endpoint zarfının
-        # OK/NO_DATA `status`'uyla çakışmasın — worker-meta *_status deseni).
-        "race_status": rail.status_of(checks),
+        # Anahtar `race_status` (endpoint zarfının OK/NO_DATA `status`'uyla
+        # çakışmasın — worker-meta *_status deseni).
+        "race_status": race_status,
         "ledger_rows": len(rows),
         "resolved": scored["resolved"],
         "designs": designs,
         "per_regime": scored["per_regime"],
+        "beats_backup": beats_backup,
         "beats_baseline": beats_baseline,
-        "beats_legacy": beats_legacy,
         "checks": checks,
         "config": c,
         "note": (
-            "READY = owner onay paketi (governor önerisi) üretilir; yön motoru "
-            "terfisi OTOMATİK DEĞİL — KIRMIZI ÇİZGİ (onay bile canlı yönü değiştirmez)."
+            "v4 CANLI teknik oy (2026-07-12 owner kararı, kanıt backtest-only). "
+            "Bu karne canlı sınav: V4_BEHIND görülürse geri-alma owner kararı — "
+            "consensus.touche_v4=false (tek satır). Otomatik aksiyon YOK."
         ),
     }
 
@@ -336,31 +336,14 @@ def _write_report(payload: dict) -> None:
 
 
 def run() -> dict:
-    """learning_worker adımı (gölgeyle AYNI kapı): defteri güncelle → çöz+raporla →
-    yaz; READY ise governor defterine owner-onay paketi sun (submit dedupe'lu).
-    Gölge flag'i KAPALIYKEN tam no-op."""
+    """learning_worker adımı (üreticiyle AYNI kapı): defteri güncelle → çöz +
+    raporla → yaz. Üretici flag'i KAPALIYKEN tam no-op. Rapor yazar, karar
+    vermez (geri-alma owner'ın tek-satır flag'i)."""
     if not tf_scoring_shadow.enabled():
         return {"status": "DISABLED"}
     appended = append_ledger()
     report = evaluate()
     _write_report(report)
-    if report["race_status"] == "READY":
-        ci = report["checks"]["ci_disjoint"]
-        submitted = rail.submit_enable(
-            title="Yeni beyin (rejim-anahtarlı v2 yön) yarış kriterini karşıladı",
-            summary=(
-                f"Kararlı çözülmüş çağrı ≥ eşik + yeni-beyin isabeti {ci['new_brain_hit_rate']} "
-                f"(%95 alt sınır {ci['wilson_low']} > 0.5) + tabanı geçti "
-                f"(yeni {report['designs']['new_brain']['avg_return_pct']}% > "
-                f"taban {report['designs']['baseline']['avg_return_pct']}%). "
-                "Terfi OTOMATİK DEĞİL — owner inceleyip ayrı işle yürütür (KIRMIZI ÇİZGİ)."
-            ),
-            evidence={k: v for k, v in report.items() if k != "note"},
-            requested_change={"promote_tf_scoring_v2_direction": True},
-            rollback_plan="Paket reddedilir/silinir; canlı yön motoru değişmemiştir.",
-            source="tf_scoring_race",
-        )
-        report["proposal_id"] = (submitted or {}).get("proposal_id")
     return {
         "status": "OK",
         "appended": appended,

@@ -315,19 +315,18 @@ export interface NewsEventStudyView {
   config: { min_bucket_n: number };
 }
 
-// R4 — v2 gölge: sembol başına rejim-anahtarlı yön (tf_scoring_shadow artifact).
+// Teknik oy üreticisi: sembol başına konuşan TF'te v4 (CANLI) + backup (yedek) yönü.
 export interface TfScoringShadowSymbol {
   status: string; // OK | no_evidence | ERROR:*
-  direction?: number | null;
+  direction_v4?: number | null; // owner formülü (−1..+1) — CANLI teknik oy
+  direction_backup?: number | null; // touche_backup (EDGE-kanıtlı karne yolu, yedek)
   bias?: string; // BULLISH | BEARISH | NEUTRAL | NONE
   regime?: { regime: string; er: number } | null;
-  direction_blend_legacy?: number | null;
-  tf_scores?: Record<string, number>;
-  tf_scores_legacy?: Record<string, number>;
-  drivers?: Record<string, Record<string, { lean: number; weight: number }>>;
+  speaker_tf?: string | null; // UP→1d, DOWN→4h
+  tf_scores_v4?: Record<string, number>;
 }
 
-// R4 — v2 gölge görünümü (GET /learning/tf-scoring-shadow).
+// Üretici görünümü (GET /learning/tf-scoring-shadow).
 export interface TfScoringShadowView {
   status: string; // OK | NO_DATA
   enabled: boolean;
@@ -339,7 +338,7 @@ export interface TfScoringShadowView {
   note?: string;
 }
 
-// R5 — yarış defteri: bir tasarımın (yeni beyin / kontrol / taban) puanı.
+// Doğrulama karnesi: bir motorun (v4 / backup / taban) puanı.
 export interface TfScoringRaceDesign {
   decisive: number;
   hits: number;
@@ -347,35 +346,30 @@ export interface TfScoringRaceDesign {
   avg_return_pct?: number | null;
 }
 
-// R5 — terfi kapıları (rail count/wilson/beats-baseline; her biri pass taşır).
+// Karne istatistik kapıları (sayım + Wilson; bilgi amaçlı — otomatik aksiyon yok).
 export interface TfScoringRaceChecks {
   resolved_decisive?: { value: number; required: number; pass: boolean };
   ci_disjoint?: {
-    new_brain_hit_rate?: number | null;
+    v4_hit_rate?: number | null;
     wilson_low?: number;
     wilson_high?: number;
     pass: boolean;
   };
-  beats_baseline?: {
-    new_avg_return_pct?: number | null;
-    baseline_avg_return_pct?: number | null;
-    pass: boolean;
-  };
 }
 
-// R5 — gölge yarış raporu (GET /learning/tf-scoring-race). Frontend HESAP YAPMAZ.
+// Doğrulama karnesi raporu (GET /learning/tf-scoring-race). Frontend HESAP YAPMAZ.
 export interface TfScoringRaceView {
   status: string; // zarf: OK | NO_DATA
   enabled: boolean;
-  race_status?: string; // terfi: READY | NOT_READY
+  race_status?: string; // COLLECTING | V4_AHEAD | V4_BEHIND (geri-alma owner kararı)
   generated_at?: string;
   engine?: string;
   ledger_rows?: number;
   resolved?: number;
-  designs?: Record<string, TfScoringRaceDesign>; // new_brain | legacy | baseline
+  designs?: Record<string, TfScoringRaceDesign>; // v4 | backup | baseline
   per_regime?: Record<string, Record<string, TfScoringRaceDesign>>;
+  beats_backup?: boolean | null;
   beats_baseline?: boolean | null;
-  beats_legacy?: boolean | null;
   checks?: TfScoringRaceChecks;
   config?: { min_resolved: number; neutral_band_pct: number };
   note?: string;

@@ -231,47 +231,55 @@ def _touche_base(
     return t.score, warnings
 
 
-# R-serisi terfi — teknik oyun v2'si: tf_scoring_v2 rejim-anahtarlı yönü.
-# Gölge artifact bu yaştan eskiyse (öğrenme worker'ı durmuşsa) v1'e düşülür.
-_TOUCHE_V2_MAX_AGE_SEC = 3 * 3600
+# Teknik oy kaynağı (2026-07-12 owner kararı): tf_scoring_v4 owner formülü
+# BİRİNCİL, touche_backup (v2 rejim-anahtarlı motor) YEDEK. Artifact bu yaştan
+# eskiyse (öğrenme worker'ı durmuşsa) zemin teknik motora düşülür.
+_TOUCHE_SHADOW_MAX_AGE_SEC = 3 * 3600
 
 
-def _touche_v2_enabled() -> bool:
-    """`consensus.touche_v2` owner-flag'i (default KAPALI = v1 birebir).
+def _touche_v4_enabled() -> bool:
+    """`consensus.touche_v4` owner-flag'i (default KAPALI = zemin motor birebir).
 
-    Açıkken teknik yön oyu tf_scoring_v2 REJİM-ANAHTARLI yönünden gelir (R-serisi:
-    yükselişte 1d, düşüşte 4h konuşur; yalnız kanıtlı sinyaller). Gölge artifact'tan
-    okunur (öğrenme worker'ı her cycle üretir). Aktivasyon ayrı tarihli owner kararı;
-    açılana kadar v2 skoru her hücrede `touche_v2_observe` satırıyla SALT-GÖZLEM."""
+    Açıkken teknik yön oyu kademelidir: tf_scoring_v4 (owner birleşik formülü)
+    BİRİNCİL; v4 çekimserse touche_backup (v2 rejim-anahtarlı motor) konuşur;
+    ikisi de yoksa zemin teknik motor. Geri-alma = bu flag false (tek satır)."""
     try:
-        return bool(load_thresholds().get("consensus", {}).get("touche_v2", False))
+        return bool(load_thresholds().get("consensus", {}).get("touche_v4", False))
     except (OSError, KeyError, ValueError, TypeError):
         return False
 
 
-def _touche_v2(symbol: str) -> float | None:
-    """tf_scoring_v2 rejim-anahtarlı yön → 0-100 teknik skor (50=nötr, +1→100).
+def _dir_to_score(d) -> float | None:
+    """Yön (−1..+1) → 0-100 teknik skor (50=nötr). None geçer."""
+    if d is None:
+        return None
+    try:
+        return max(0.0, min(100.0, 50.0 + float(d) * 50.0))
+    except (TypeError, ValueError):
+        return None
 
-    Gölge artifact'tan (data/runtime/tf_scoring_v2_shadow.json) okur — kanıt yoksa,
-    artifact bayat/bozuksa None → çağıran v1 touche'a düşer (dürüst: uydurma yön yok,
-    öğrenme durursa canlı tick bağımsız kalır). Salt-okur; lazy import (yük-zamanı
+
+def _touche_shadow(symbol: str) -> tuple[float | None, float | None]:
+    """Üretici artifact'ından (v4, backup) teknik skor çifti → 0-100.
+
+    v4 = tf_scoring_v4 owner formülü (BİRİNCİL); backup = touche_backup
+    (EDGE-kanıtlı karne yolu, YEDEK). Artifact yok/bayat/bozuk → (None, None):
+    çağıran zemin motora düşer (dürüst: uydurma yön yok, öğrenme worker'ı
+    durursa canlı tick bağımsız kalır). Salt-okur; lazy import (yük-zamanı
     decision→learning bağı yok)."""
     try:
         from packages.learning import tf_scoring_shadow
         path = tf_scoring_shadow.artifact_path()
         if not path.exists():
-            return None
+            return None, None
         data = json.loads(path.read_text(encoding="utf-8"))
         gen = datetime.fromisoformat(str(data.get("generated_at")))
-        if (datetime.now(UTC) - gen).total_seconds() > _TOUCHE_V2_MAX_AGE_SEC:
-            return None  # öğrenme worker'ı durmuş → v1'e düş
+        if (datetime.now(UTC) - gen).total_seconds() > _TOUCHE_SHADOW_MAX_AGE_SEC:
+            return None, None  # öğrenme worker'ı durmuş → zemine düş
         row = (data.get("per_symbol") or {}).get(symbol) or {}
-        d = row.get("direction")
-        if d is None:
-            return None  # rejim/kanıt yok → v1
-        return max(0.0, min(100.0, 50.0 + float(d) * 50.0))
+        return _dir_to_score(row.get("direction_v4")), _dir_to_score(row.get("direction_backup"))
     except (OSError, ValueError, TypeError, KeyError):
-        return None
+        return None, None
 
 
 def _fundamental(regime: RegimeOutput) -> float | None:
@@ -492,19 +500,24 @@ def build(
     # T2 — timeframe yalnızca teknik (touche) modülünü farklılaştırır;
     # makro/haber/rotasyon katmanları asset-level kalır. Default "1d" ile
     # mevcut asset-level davranış birebir korunur.
-    # R-serisi — touche_v2 (tf_scoring_v2 rejim-anahtarlı yön): flag açıkken v2
-    # canlı teknik oy, kapalıyken v1 (bayt-aynı). İki varyant her zaman warning
-    # satırında yan yana (owner aktivasyon kanıtını buradan izler). v2 kanıtsız/
-    # bayatsa None → v1 kullanılır (dürüst düşüş). RiskGate/boyut/manuel kuyruk
-    # DEĞİŞMEZ — yalnız teknik yön oyu değişir.
-    touche_v1, tf_warnings = _touche(symbol, snap, timeframe)
-    touche_v2 = _touche_v2(symbol)
-    use_v2 = _touche_v2_enabled() and touche_v2 is not None
-    touche_score = touche_v2 if use_v2 else touche_v1
-    if touche_v2 is not None:
+    # Teknik oy kademesi (2026-07-12 owner kararı): v4 owner formülü BİRİNCİL,
+    # touche_backup (v2 rejim-anahtarlı motor) YEDEK, zemin teknik motor en dip
+    # paraşüt. Varyantlar her zaman gözlem satırında yan yana (owner kanıtı
+    # buradan izler). RiskGate/boyut/manuel kuyruk DEĞİŞMEZ — yalnız yön oyu.
+    touche_base, tf_warnings = _touche(symbol, snap, timeframe)
+    sh_v4, sh_backup = _touche_shadow(symbol)
+    if _touche_v4_enabled() and sh_v4 is not None:
+        touche_score, touche_used = sh_v4, "v4"
+    elif _touche_v4_enabled() and sh_backup is not None:
+        touche_score, touche_used = sh_backup, "backup"
+    else:
+        touche_score, touche_used = touche_base, "base"
+    if sh_v4 is not None or sh_backup is not None:
         tf_warnings.append(
-            "touche_v2_observe:"
-            f"v1={touche_v1:.1f}:v2={touche_v2:.1f}:used={'v2' if use_v2 else 'v1'}"
+            "touche_observe:"
+            f"base={touche_base:.1f}:"
+            f"backup={'none' if sh_backup is None else f'{sh_backup:.1f}'}:"
+            f"v4={'none' if sh_v4 is None else f'{sh_v4:.1f}'}:used={touche_used}"
         )
     raw = {
         "touche": touche_score,

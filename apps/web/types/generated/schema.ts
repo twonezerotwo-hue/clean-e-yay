@@ -933,7 +933,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** R4 — tf_scoring_v2 gölge yönleri (rejim-anahtarlı + kontrol harmanı, read-only) */
+        /** Teknik oy kaynağı — v4 owner formülü (CANLI) + yedek motor yönleri (read-only) */
         get: operations["getLearningTfScoringShadow"];
         put?: never;
         post?: never;
@@ -950,7 +950,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** R5 — tf_scoring_v2 gölge yarış raporu (yeni beyin vs eski harman vs taban, read-only) */
+        /** v4 doğrulama karnesi — canlı oy vs yedek vs taban (read-only, aksiyon yok) */
         get: operations["getLearningTfScoringRace"];
         put?: never;
         post?: never;

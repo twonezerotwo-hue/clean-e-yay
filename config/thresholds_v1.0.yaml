@@ -34,17 +34,20 @@ consensus:
   # AKTİF (2026-07-02, owner kararı — Paket 1 girdi-düzeltmeleri; v1 kodu
   # geri-dönüş paraşütü olarak YERİNDE, silme owner onayına bağlı).
   fundamental_v2: true
-  # R-serisi — touche v2 (tf_scoring_v2 REJİM-ANAHTARLI teknik yön oyu). false
-  # (DEFAULT) → v1 birebir: teknik oy eski touche momentum harmanından gelir.
-  # true → v2: yükselişte 1d trend / düşüşte 4h yapı konuşur, yalnız KANITLI
-  # sinyaller yön verir (gölge artifact'tan; kanıtsız/bayatsa v1'e düşer). İki
-  # varyant her hücrede `touche_v2_observe:v1=..:v2=..:used=..` warning satırında
-  # yan yana. KANIT: backtest 494 pencere +0.53%/%59 (taban +0.29 geçildi),
-  # 163 gerçek işlemde kazanma↑ + ters işlem elendi. RiskGate/boyut/manuel kuyruk
-  # DEĞİŞMEZ; geri-alma = bu flag false (tek satır). v1 kodu paraşüt olarak YERİNDE.
-  # AKTİF (2026-07-06, owner terfi kararı): teknik yön oyu artık yeni beyinden.
-  # v1 gözlem satırında yan yana kalır; kanıtsız/bayat hücrede otomatik v1'e düşer.
-  touche_v2: true
+  # Teknik yön oyu KADEMESİ (2026-07-12 owner kararı, sürüm çorbası bitirildi).
+  # false (DEFAULT) → zemin teknik motor birebir (snapshot'tan, her zaman skor).
+  # true → kademeli: tf_scoring_v4 (owner birleşik formülü: elliott+trend+bölge+
+  # kapılı-uyumsuzluk) BİRİNCİL; v4 çekimserse touche_backup (rejim-anahtarlı,
+  # yalnız EDGE-kanıtlı sinyaller — 2026-07-06→12 arası canlı motordu, backtest
+  # 494 pencere +0.53%/%59) konuşur; ikisi de yoksa zemin motor. Üretici artifact
+  # 3 saatten bayatsa otomatik zemine düşer (öğrenme worker'ı ölse tick bağımsız).
+  # Her hücrede `touche_observe:base=..:backup=..:v4=..:used=..` satırı kanıt.
+  # NOT (owner gözü-açık kararı): v4 kanıtı backtest-only (4h kapılı-uyumsuzluk
+  # 17 satır, tek piyasa fazı) — kural #3'e bilinçli istisna; doğrulama karnesi
+  # (tf_scoring_race) canlı ölçmeye devam eder. RiskGate/boyut/manuel kuyruk
+  # DEĞİŞMEZ; geri-alma = bu flag false (tek satır).
+  # AKTİF (2026-07-12, owner kararı): teknik yön oyu artık v4 owner formülünden.
+  touche_v4: true
   # quantum v2 — sembol-başı kesitsel GÖRECELİ-GÜÇ (para akışı) skoru. false
   # (DEFAULT) → v1 birebir: tek makro risk-on tilt herkese aynı girer (ölü yük).
   # true → v2: her sembol akranlarına göre lider/geride notu alır (oynaklık-adil,
@@ -151,12 +154,12 @@ promotion_criteria:
   min_matched_decisions: 200
   min_resolved_disagreements: 30
 
-# R5 — tf_scoring_v2 gölge YARIŞ defteri: gölge yönlerini gerçekleşen ileri-getiriyle
-# puanlar (yeni beyin vs eski harman vs taban buy-hold). Terfi kapısı: kararlı
-# çözülmüş yeni-beyin çağrısı ≥ min_resolved + isabetin %95 Wilson alt sınırı > 0.5
-# + yeni beyin tabanı geçer. Tutarsa governor'a OWNER ONAY paketi (KIRMIZI ÇİZGİ:
-# yön motoru terfisi otomatik değil). neutral_band_pct altı hareket kararsız sayılır
-# (düz piyasada yön çağrısı notlanamaz → elenir).
+# R5 — tf_scoring gölge YARIŞ defteri: gölge yönlerini gerçekleşen ileri-getiriyle
+# puanlar (v4 owner formülü vs canlı v1 motoru vs taban buy-hold). Terfi kapısı:
+# kararlı çözülmüş v4 çağrısı ≥ min_resolved + isabetin %95 Wilson alt sınırı > 0.5
+# + v4 hem canlı v1'i hem tabanı geçer. Tutarsa governor'a OWNER ONAY paketi (KIRMIZI
+# ÇİZGİ: yön motoru terfisi otomatik değil). neutral_band_pct altı hareket kararsız
+# sayılır (düz piyasada yön çağrısı notlanamaz → elenir).
 tf_scoring_race:
   min_resolved: 30
   neutral_band_pct: 0.5

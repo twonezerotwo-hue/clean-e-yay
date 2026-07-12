@@ -131,10 +131,12 @@ COVERAGE: dict[str, dict] = {
                   "ölçümü, izole artifact; canlı skora/karara/paper'a ASLA yazmaz.",
     },
     "TF_SCORING_V2_SHADOW": {
-        "mechanism": SHADOW_EXEMPT, "monitor": None,
-        "reason": "tf_scoring_v2 (D6) gölge yön skoru: karne kanıtıyla katmanlı v2 "
-                  "yönü canlı barlarda üretir, izole artifact; canlı skora/karara/"
-                  "paper'a ASLA yazmaz (D7 yarış girdisi).",
+        "mechanism": INPUT_HYGIENE, "monitor": None,
+        "reason": "tf_scoring üreticisi (v4+backup yön artifact'ı; flag adı tarihsel): "
+                  "CANLI touche bu artifact'ı okur ama canlı tüketim AYRI YAML "
+                  "flag'iyle kapılı (consensus.touche_v4; geri-alma tek satır). "
+                  "Üretim durursa 3 saatte zemin motora KADEMELİ düşüş; v4 "
+                  "performansı tf_scoring_race karnesiyle canlı ölçülür.",
     },
     "LEARNING_ADVISOR_APPLY": {
         "mechanism": WATCHDOG, "monitor": "learning_advisor_apply",

@@ -6,17 +6,23 @@ import { LoadingState } from "@/components/shell/LoadingState";
 import { useTfScoringRace } from "@/lib/queries/hooks";
 import type { TfScoringRaceDesign, TfScoringRaceView } from "@/types/uncontracted";
 
-// R5 — "Yarış raporu" paneli. Gölge yönlerini (yeni beyin) gerçekleşen ileri-getiriyle
-// puanlar ve eski harman (kontrol) + taban (buy-hold) ile yan yana kıyaslar. Kriter
-// tutarsa owner onay paketi çıkar — terfi OTOMATİK DEĞİL (KIRMIZI ÇİZGİ).
-// Frontend HESAP YAPMAZ; canlı karara dokunmaz.
+// Doğrulama karnesi (2026-07-12 owner kararı): v4 CANLI teknik oy — kanıtı
+// backtest-only olduğu için her yön çağrısı gerçekleşen ileri-getiriyle
+// puanlanır ve yedek motor + taban (al-tut) ile yan yana kıyaslanır.
+// V4_BEHIND görülürse geri-alma owner kararı (touche_v4=false, tek satır).
+// Frontend HESAP YAPMAZ; otomatik aksiyon YOK.
 
 const DESIGN_LABEL: Record<string, string> = {
-  new_brain: "Yeni beyin",
-  legacy: "Eski harman",
+  v4: "v4 (CANLI oy)",
+  backup: "Yedek motor",
   baseline: "Taban (al-tut)",
-  v3: "v3 (makro-kararlılık)",
-  v4: "v4 (owner formülü)",
+};
+const DESIGN_ORDER = ["v4", "backup", "baseline"];
+
+const VERDICT: Record<string, { label: string; cls: string }> = {
+  COLLECTING: { label: "kanıt biriktiriyor", cls: "bg-white/5 text-white/40" },
+  V4_AHEAD: { label: "v4 önde", cls: "bg-signal-up/20 text-signal-up" },
+  V4_BEHIND: { label: "v4 GERİDE — geri-alma?", cls: "bg-signal-down/20 text-signal-down" },
 };
 
 function fmtPct(v?: number | null): string {
@@ -35,13 +41,11 @@ function DesignRow({ name, d, best }: { name: string; d: TfScoringRaceDesign; be
         best ? "border-signal-up/40 bg-signal-up/10" : "border-white/10 bg-black/20"
       }`}
     >
-      <span className="w-24 truncate text-[11px] text-white/80">
+      <span className="w-28 truncate text-[11px] text-white/80">
         {DESIGN_LABEL[name] ?? name}
-        {name === "new_brain" ? <span className="ml-1 text-signal-up/70">★</span> : null}
+        {name === "v4" ? <span className="ml-1 text-signal-up/70">★</span> : null}
       </span>
-      <span className="text-[10px] uppercase tracking-wide text-white/40">
-        n={d.decisive}
-      </span>
+      <span className="text-[10px] uppercase tracking-wide text-white/40">n={d.decisive}</span>
       <span className="flex items-center gap-2">
         <span className="font-mono text-[10px] tabular-nums text-white/55">
           isabet {fmtRate(d.hit_rate)}
@@ -68,7 +72,7 @@ export function TfScoringRacePanel() {
   if (isLoading) {
     return (
       <PanelFrame id="tf_scoring_race">
-        <PanelHeader title="Yarış Raporu" />
+        <PanelHeader title="v4 Doğrulama Karnesi" />
         <LoadingState />
       </PanelFrame>
     );
@@ -77,64 +81,61 @@ export function TfScoringRacePanel() {
   const d: TfScoringRaceView | undefined = data;
   const designs = d?.designs ?? {};
   const hasData = d?.status === "OK" && (d?.resolved ?? 0) > 0;
-  const ready = d?.checks
-    ? Boolean(
-        d.checks.resolved_decisive?.pass &&
-          d.checks.ci_disjoint?.pass &&
-          d.checks.beats_baseline?.pass,
-      )
-    : false;
-  const newAvg = designs.new_brain?.avg_return_pct ?? null;
+  const verdict = VERDICT[d?.race_status ?? "COLLECTING"] ?? VERDICT.COLLECTING;
+  const v4Avg = designs.v4?.avg_return_pct ?? null;
   const bestName =
     Object.entries(designs).reduce<[string, number]>(
       (best, [k, v]) => ((v.avg_return_pct ?? -Infinity) > best[1] ? [k, v.avg_return_pct ?? -Infinity] : best),
       ["", -Infinity],
     )[0];
 
+  const flag = (v?: boolean | null) => (v == null ? "?" : v ? "geçiyor" : "GEÇEMİYOR");
+
   return (
     <PanelFrame id="tf_scoring_race">
       <PanelHeader
-        title="Yarış Raporu"
-        subtitle="Yeni beyin eskiyi/tabanı geçiyor mu — puanlar, terfi ETMEZ"
+        title="v4 Doğrulama Karnesi"
+        subtitle="canlı oy sınavda — puanlar, karar owner'ın"
         actions={
           <span
-            className={`rounded px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide ${
-              ready ? "bg-amber-400/20 text-amber-200" : "bg-white/5 text-white/40"
-            }`}
+            className={`rounded px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide ${verdict.cls}`}
           >
-            {ready ? "owner paketi hazır" : "kanıt biriktiriyor"}
+            {verdict.label}
           </span>
         }
       />
       <p className="mb-2 rounded border border-white/10 bg-white/[0.02] px-2 py-1 text-[11px] leading-5 text-white/55">
-        Gölgenin her yön çağrısı fiyatla deftere yazılır; ufuk dolunca gerçekleşen hareketle
-        puanlanır. <strong className="text-white/75">Yeni beyin</strong> eski harmanı ve
-        {" "}<strong className="text-white/75">al-tut tabanını</strong> geçerse owner&apos;a onay
-        paketi çıkar — terfi otomatik <strong className="text-white/75">değildir</strong>.
+        <strong className="text-white/75">v4 artık canlı teknik oy</strong> ama kanıtı backtest
+        kaynaklı; her yön çağrısı fiyatla deftere yazılır, ufuk dolunca gerçekleşen hareketle
+        puanlanır. v4 yeterli örneklemde <strong className="text-white/75">yedeğin veya tabanın
+        gerisine düşerse</strong> geri-alma tek satır: <code>touche_v4: false</code>.
       </p>
 
       {hasData ? (
         <>
           <div className="mb-2 flex items-center justify-between gap-2 text-[10px] uppercase tracking-wide text-white/40">
-            <span>çözülen çağrı: {d?.resolved}</span>
-            <span>defter: {d?.ledger_rows} satır</span>
+            <span>çözülen: {d?.resolved}</span>
             <span>
-              taban:{" "}
+              yedeği:{" "}
+              <span className={d?.beats_backup ? "text-signal-up" : "text-white/45"}>{flag(d?.beats_backup)}</span>
+            </span>
+            <span>
+              tabanı:{" "}
               <span className={d?.beats_baseline ? "text-signal-up" : "text-white/45"}>
-                {d?.beats_baseline == null ? "?" : d?.beats_baseline ? "geçti" : "geçemedi"}
+                {flag(d?.beats_baseline)}
               </span>
             </span>
           </div>
           <div className="flex flex-col gap-1">
-            {["new_brain", "v4", "v3", "legacy", "baseline"].map((name) =>
+            {DESIGN_ORDER.map((name) =>
               designs[name] ? (
                 <DesignRow key={name} name={name} d={designs[name]} best={name === bestName} />
               ) : null,
             )}
           </div>
           <p className="mt-2 text-[10px] leading-4 text-white/35">
-            Yeni beyin ortalama yön-getirisi {fmtPct(newAvg)} · isabetin şans olmadığı Wilson
-            {" "}%95 alt sınırıyla, tabanı geçiş ortalama getiriyle sınanır.
+            v4 ortalama yön-getirisi {fmtPct(v4Avg)} · isabetin şans olmadığı Wilson %95 alt
+            sınırıyla izlenir · otomatik aksiyon yok, karar owner&apos;ın.
           </p>
         </>
       ) : (

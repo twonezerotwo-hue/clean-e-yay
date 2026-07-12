@@ -175,9 +175,10 @@ def _isolate_runtime_stores(tmp_path_factory: pytest.TempPathFactory) -> None:
     # (worker/entegrasyon testleri gerçek data/runtime'a yazmasın).
     os.environ["TF_SCORING_RACE_LEDGER"] = str(runtime / "tf_scoring_race.jsonl")
     os.environ["TF_SCORING_RACE_REPORT"] = str(runtime / "tf_scoring_race_report.json")
-    # touche_v2 terfi (2026-07-06) — canlı consensus `_touche_v2` gölge artifact'ı
-    # OKUR; suite gerçek data/runtime/tf_scoring_v2_shadow.json'ı görmesin (yoksa
-    # touche_v2_observe satırı consensus testlerine sızardı). Yol yoksa v2=None → v1.
+    # touche kademesi (2026-07-12) — canlı consensus `_touche_shadow` üretici
+    # artifact'ını OKUR; suite gerçek data/runtime/tf_scoring_v2_shadow.json'ı
+    # görmesin (yoksa touche_observe satırı consensus testlerine sızardı).
+    # Yol yoksa (None, None) → zemin motor.
     os.environ["TF_SCORING_V2_SHADOW_PATH"] = str(runtime / "tf_scoring_v2_shadow.json")
     # Karar-kanıt tüketicisi (2026-07-09) — learning_advisor her açılış adayında
     # reflection digest'ini OKUR; suite gerçek data/runtime/reflection_digest.json'ı

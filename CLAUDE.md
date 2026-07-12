@@ -54,9 +54,17 @@ LLM yalnız anlatır. `PAPER_ONLY` / `NO_EXECUTION` kodda yapısal olarak zorlan
 - **Denetim yol haritası 2026-07 BİTTİ** (PR #49–#53 merge). Aktif: Paket 1, tf_platt,
   TF_CALIBRATION_AUTO_ONLY, TF_TARGET_AUTO_ONLY (watchdog ARM), E-9 trailing_tf_aware.
   `EDGE_GATE=0` KALIR (owner kararı).
-- **Sinyal defteri** (`packages/signals`): 8 sinyal; yalnız 4h-structure ve 1d-trend hakiki edge.
-  Bar arşivi + D4 per-TF trust kapısı AKTİF. Sıra: D5 karne otomasyonu → D6 tf_scoring_v2 gölge →
-  D7 yarış+terfi (owner onayı).
+- **Teknik oy = tf_scoring_v4 CANLI (2026-07-12 owner kararı, sürüm çorbası bitirildi).**
+  Kademe: `consensus.touche_v4=true` → v4 owner formülü BİRİNCİL; v4 çekimserse
+  **touche_backup** (tf_scoring_v2 rejim-anahtarlı, yalnız EDGE-kanıtlı — 06-12 Tem arası canlı
+  motordu) konuşur; ikisi de yoksa zemin teknik motor (snapshot). Üretici
+  `tf_scoring_shadow.py` (env-flag `TF_SCORING_V2_SHADOW` tarihsel ad) artifact'ı 3 saatten
+  bayatsa otomatik zemine düşülür. Her hücrede `touche_observe:base=..:backup=..:v4=..:used=..`.
+  Geri-alma tek satır: `touche_v4: false`. NOT: v4 kanıtı backtest-only (kural #3'e owner'ın
+  gözü-açık istisnası) → `tf_scoring_race` DOĞRULAMA KARNESİ canlı ölçer (v4 vs backup vs
+  al-tut; COLLECTING/V4_AHEAD/V4_BEHIND — otomatik aksiyon YOK, karar owner'ın). v3 + eski
+  yarış/terfi tasarımları söküldü. Sinyal defteri (`packages/signals`, 8 sinyal) + bar arşivi +
+  D4 per-TF trust + karne otomasyonu AKTİF (backup'ın ağırlık kaynağı).
 - **Öğrenme katmanı** (I serisi) CANLI; LEARNING_INCLUDE_SHADOW aktif. learning_advisor GÖLGE
   (`LEARNING_ADVISOR_APPLY` default OFF). Sıra: context.py'ye bağlama + Şerit A.
 - **Conflict gate:** POSITION HARD_MANUAL; INTRADAY/TACTICAL HARD; SCALP/SWING OFF.

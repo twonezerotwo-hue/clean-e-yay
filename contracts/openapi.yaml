@@ -771,7 +771,7 @@ paths:
   /api/v1/learning/tf-scoring-shadow:
     get:
       operationId: getLearningTfScoringShadow
-      summary: R4 — tf_scoring_v2 gölge yönleri (rejim-anahtarlı + kontrol harmanı, read-only)
+      summary: Teknik oy kaynağı — v4 owner formülü (CANLI) + yedek motor yönleri (read-only)
       responses:
         "200":
           description: OK (artifact yoksa status=NO_DATA)
@@ -784,7 +784,7 @@ paths:
   /api/v1/learning/tf-scoring-race:
     get:
       operationId: getLearningTfScoringRace
-      summary: R5 — tf_scoring_v2 gölge yarış raporu (yeni beyin vs eski harman vs taban, read-only)
+      summary: v4 doğrulama karnesi — canlı oy vs yedek vs taban (read-only, aksiyon yok)
       responses:
         "200":
           description: OK (rapor yoksa status=NO_DATA)
