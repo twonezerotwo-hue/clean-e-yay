@@ -69,6 +69,7 @@ import type {
   NewsEventStudyView,
   PayoffReadinessView,
   ZeroTwoStrategyView,
+  ZoneProposerView,
   SubsignalScorecardView,
   TfScoringRaceView,
   TfScoringShadowView,
@@ -665,6 +666,19 @@ export const api = {
     fetchJSON<ExitBacktestView>("/api/v1/learning/exit-backtest"),
   zeroTwoStrategy: () =>
     fetchJSON<ZeroTwoStrategyView>("/api/v1/learning/zero-two-strategy"),
+  zoneProposer: () =>
+    fetchJSON<ZoneProposerView>("/api/v1/learning/zone-proposer"),
+  zoneProposerVerdict: (body: {
+    symbol: string;
+    low: number;
+    high: number;
+    action: "iptal" | "onay";
+    note?: string;
+  }) =>
+    fetchJSON<{ status: string; verdict: string }>(
+      "/api/v1/learning/zone-proposer/verdict",
+      { method: "POST", body: JSON.stringify(body) },
+    ),
   newsEventStudy: () =>
     fetchJSON<NewsEventStudyView>("/api/v1/learning/news-event-study"),
   discovery: () => fetchJSON<DiscoveryView>("/api/v1/learning/discovery"),

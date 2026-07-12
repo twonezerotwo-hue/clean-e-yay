@@ -268,6 +268,23 @@ def compute_adaptive_targets(
     )
 
 
+def _zone_adjust(
+    symbol: str, side: str, entry: float, sl: float, tp: float, *, manual: bool
+) -> tuple[float, float, list[str]]:
+    """Onaylı bölge etkisi (owner kararı 2026-07-12; `zone_influence.enabled`
+    thresholds YAML, DEFAULT FALSE → dönen notlar boş, çağıran HİÇBİR değere
+    dokunmaz = bayt-aynı). Owner manuel işlemi MUAF. Asla raise etmez."""
+    if manual:
+        return sl, tp, []
+    try:
+        from packages.risk import zone_influence
+        if not zone_influence.enabled():
+            return sl, tp, []
+        return zone_influence.adjust_targets(symbol, side, entry, sl, tp)
+    except Exception:
+        return sl, tp, []
+
+
 # ── Fixed-% targets — what `packages.paper.lifecycle.open_position` ACTUALLY
 # uses for automatic execution (single source of truth; lifecycle.py calls this
 # instead of inlining the formula, so shadow comparisons below are guaranteed
@@ -298,6 +315,11 @@ def compute_fixed_targets(
         )
     sl = entry * (1 - sl_pct) if side == "long" else entry * (1 + sl_pct)
     tp = entry * (1 + tp_pct) if side == "long" else entry * (1 - tp_pct)
+    notes = [f"tier={tier.name} sl_pct={sl_pct:.4f} tp_rr={th['tp_rr_ratio']}"]
+    z_sl, z_tp, z_notes = _zone_adjust(symbol, side, entry, sl, tp, manual=manual)
+    if z_notes:  # yalnız etki varken dokun — flag OFF = bayt-aynı
+        sl, tp = z_sl, z_tp
+        notes.extend(z_notes)
     sl_distance = abs(entry - sl)
     rr = abs(tp - entry) / sl_distance if sl_distance > 0 else 0.0
     return AdaptiveTargets(
@@ -308,7 +330,7 @@ def compute_fixed_targets(
         tp_basis="fixed_rr",
         rr_floor_met=True,  # tasarımca sabit RR — floor kavramı yok
         sl_distance=round(sl_distance, 4),
-        notes=[f"tier={tier.name} sl_pct={sl_pct:.4f} tp_rr={th['tp_rr_ratio']}"],
+        notes=notes,
     )
 
 
@@ -511,6 +533,13 @@ def compute_tf_targets(
     notes = [f"tf={timeframe} tier={tier.name} rr={rr}", basis_note]
     if clamp_note:
         notes.append(clamp_note)
+
+    z_sl, z_tp, z_notes = _zone_adjust(symbol, side, entry, sl, tp, manual=manual)
+    if z_notes:  # yalnız etki varken dokun — flag OFF = bayt-aynı
+        sl, tp = z_sl, z_tp
+        notes.extend(z_notes)
+        sl_distance = abs(entry - sl)
+        rr = abs(tp - entry) / sl_distance if sl_distance > 0 else 0.0
 
     return AdaptiveTargets(
         sl=round(sl, 4),

@@ -9,6 +9,7 @@ from dataclasses import asdict
 
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import HTMLResponse, Response
+from pydantic import BaseModel
 
 from packages.data.registry.loader import load_thresholds
 from packages.decision import conflict_gate, conflict_gate_backtest
@@ -162,6 +163,33 @@ def get_zone_proposer() -> dict:
     kümesi → çizgi kesişimi → confluence skoru. Makine bölge SEÇMEZ, ADAY önerir;
     owner süzer, kabul edileni zone_plans.yaml'a taşır. Canlı karara ASLA dokunmaz."""
     return zone_proposer.viewmodel()
+
+
+class ZoneVerdictRequest(BaseModel):
+    """Owner'ın bölge kararı: iptal | onay (varsayılan durum zaten onaylı)."""
+    symbol: str
+    low: float
+    high: float
+    action: str  # "iptal" | "onay"
+    note: str = ""
+
+
+@router.post("/learning/zone-proposer/verdict")
+def post_zone_verdict(req: ZoneVerdictRequest) -> dict:
+    """Owner bölge kararı (PAPER_SAFE — işlem açmaz/kapamaz). Öneri bölgeleri
+    owner İPTAL EDENE KADAR onaylıdır; iptal edilen bölge zone_influence'a
+    girmez (flag açık olsa bile). Karar tarihçesi kalibrasyon verisidir."""
+    from packages.learning import zone_approval
+
+    try:
+        rec = zone_approval.record(req.symbol, req.low, req.high, req.action, req.note)
+    except ValueError as exc:
+        raise HTTPException(422, str(exc)) from exc
+    return {
+        "status": "OK",
+        "recorded": rec,
+        "verdict": zone_approval.verdict_for(req.symbol, req.low, req.high),
+    }
 
 
 @router.get("/learning/zone-proposer/review", response_class=HTMLResponse)

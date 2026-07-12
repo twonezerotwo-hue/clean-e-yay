@@ -489,6 +489,18 @@ export const useZeroTwoStrategy = () => {
   });
 };
 
+// Aday bölge önericisi günlük üretilir; panel seyrek tazeler (10 dk).
+// Onay/iptal butonları POST sonrası bu sorguyu invalidate eder.
+export const useZoneProposer = () => {
+  const policy = usePanelQueryPolicy(10 * 60_000);
+  return useQuery({
+    queryKey: qk.zoneProposer,
+    queryFn: api.zoneProposer,
+    staleTime: 5 * 60_000,
+    ...policy,
+  });
+};
+
 // Faz-A (EV kapısı) — per-hücre payoff hazırlık yüzeyi learning-cycle'da tazelenir.
 export const usePayoffReadiness = () => {
   const policy = usePanelQueryPolicy(5 * 60_000);

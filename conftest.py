@@ -89,6 +89,9 @@ def _package1_flags_off_by_default(monkeypatch: pytest.MonkeyPatch) -> None:
     # KAPALI → açılış bayt-aynı) varsayar → test-default KAPAT; davranış testleri
     # (test_reentry_guard) kendi monkeypatch'iyle açar.
     pinned.setdefault("reentry_guard", {})["enabled"] = False
+    # Bölge etkisi (2026-07-12) — SL/TP bayt-aynı baseline varsayılır → test-default
+    # KAPAT; davranış testleri (test_zone_influence) kendi monkeypatch'iyle açar.
+    pinned.setdefault("zone_influence", {})["enabled"] = False
     monkeypatch.setattr(loader, "_load_thresholds_base", lambda: pinned)
     # Denetim 2026-07-03 — çıkış-makinesi env flag'leri testlerde default OFF
     # (dev makinesinde .env yüklenmiş olabilir; testler baseline'ı varsayar).
@@ -181,3 +184,7 @@ def _isolate_runtime_stores(tmp_path_factory: pytest.TempPathFactory) -> None:
     # görmesin (canlıda biriken sembol hafızası "kanıt yok" varsayan advisor/engine
     # testlerine sızıyordu). Reflection okuyan testler kendi REFLECTION_PATH'ini kurar.
     os.environ["REFLECTION_PATH"] = str(runtime / "reflection_digest.json")
+    # Bölge onay defteri (2026-07-12) — zone_proposer viewmodel + review sayfası
+    # verdict okur; suite gerçek data/runtime/zone_verdicts.json'ı görmesin
+    # (owner'ın canlı iptal kararları test assert'lerine sızardı).
+    os.environ["ZONE_VERDICTS_PATH"] = str(runtime / "zone_verdicts.json")

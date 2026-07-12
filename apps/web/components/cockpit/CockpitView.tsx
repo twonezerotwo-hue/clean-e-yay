@@ -58,6 +58,7 @@ import { CalibrationFitPanel } from "@/components/panels/CalibrationFitPanel";
 import { PayoffReadinessPanel } from "@/components/panels/PayoffReadinessPanel";
 import { ExitBacktestPanel } from "@/components/panels/ExitBacktestPanel";
 import { ZeroTwoStrategyPanel } from "@/components/panels/ZeroTwoStrategyPanel";
+import { ZoneProposerPanel } from "@/components/panels/ZoneProposerPanel";
 import { DiscoveryPanel } from "@/components/panels/DiscoveryPanel";
 import { BacktestChallengerPanel } from "@/components/panels/BacktestChallengerPanel";
 import { ThresholdAutotunePanel } from "@/components/panels/ThresholdAutotunePanel";
@@ -1425,6 +1426,9 @@ export function CockpitView() {
               </LearnStep>
               <LearnStep step="22" label="0-2 strateji + house-money — owner nihai LONG akışının gölge karnesi (giriş + fib hedef + trailing + sabit-bahis re-giriş)" wide>
                 <ZeroTwoStrategyPanel />
+              </LearnStep>
+              <LearnStep step="23" label="Bölge önerileri — owner kesişim yöntemi her asset'te: işaretli grafik + iptal edilmedikçe onaylı (onaylılar flag açıkken SL/TP yerleşimini etkiler)" wide>
+                <ZoneProposerPanel />
               </LearnStep>
             </div>
           </Layer2DetailGroup>

@@ -233,9 +233,21 @@ def chart_svg(symbol: str) -> str | None:
 
 
 _HONESTY = (
-    "Makine ADAY önerir, bölge SEÇMEZ; hiçbir öneriyle işlem açılmadı. "
-    "Kontrol et: doğru bulduğunu söyle → zone_plans.yaml'a taşınır ve gölge "
-    "yürütücü izler; yanlışsa reddet → kalibrasyon verisi olur."
+    "Makine ADAY önerir, bölge SEÇMEZ. Owner kararı: bölgeler sen İPTAL EDENE "
+    "KADAR onaylı sayılır. İptal edilen bölge canlı SL/TP yerleşimine girmez; "
+    "onaylılar zone_influence flag'i AÇIKKEN hesaba katılır (default KAPALI — "
+    "5y kanıt + owner onayı olmadan canlıya etki yok). Her karar kalibrasyon "
+    "verisi olarak birikir."
+)
+
+# Buton JS'i — same-origin POST; başarıda sayfayı tazeler. Saf/inline, bağımlılık yok.
+_VERDICT_JS = (
+    "<script>async function zv(sym,low,high,action){"
+    "const r=await fetch('/api/v1/learning/zone-proposer/verdict',{method:'POST',"
+    "headers:{'content-type':'application/json'},"
+    "body:JSON.stringify({symbol:sym,low:low,high:high,action:action})});"
+    "if(r.ok){location.reload();}else{alert('Kaydedilemedi: '+r.status);}}"
+    "</script>"
 )
 
 
@@ -254,12 +266,21 @@ def review_html() -> str:
         "sans-serif;margin:16px}}h1{font-size:20px}h2{font-size:16px;"
         "margin:24px 0 6px}table{border-collapse:collapse;font-size:13px;"
         "margin:6px 0 14px}td,th{border:1px solid #2a2e39;padding:4px 10px}"
-        f".honesty{{color:{_FIB_RETR};font-size:13px;max-width:960px}}</style>"
+        f".honesty{{color:{_FIB_RETR};font-size:13px;max-width:960px}}"
+        "button{cursor:pointer;border:1px solid #555;border-radius:3px;"
+        "padding:2px 8px;font-size:12px;background:#2a2e39;color:#d1d4dc}"
+        f"button.iptal{{border-color:{_DOWN};color:{_DOWN}}}"
+        f"button.onay{{border-color:{_UP};color:{_UP}}}"
+        f".b-onayli{{color:{_UP};font-weight:bold}}"
+        f".b-iptal{{color:{_DOWN};font-weight:bold}}</style>"
+        f"{_VERDICT_JS}"
         "</head><body><h1>Aday bölge incelemesi — makine önerir, owner süzer</h1>"
         f"<p class='honesty'>{html.escape(_HONESTY)}</p>"
     )
     if not art:
         return head + "<p>Henüz artifact yok — learning worker koşunca oluşur.</p></body></html>"
+
+    from packages.learning import zone_approval
 
     parts = [head, f"<p>Üretim: {html.escape(str(art.get('generated_at')))}</p>"]
     assets = [a for a in (art.get("assets") or []) if a.get("zones")]
@@ -271,16 +292,28 @@ def review_html() -> str:
             continue
         parts.append(f"<h2>{html.escape(sym)}</h2>")
         parts.append(svg)
-        rows = "".join(
-            f"<tr><td>{z['confluence']}</td><td>{_fmt(z['low'])}–{_fmt(z['high'])}</td>"
-            f"<td>{html.escape(', '.join(z['sources']))}</td>"
-            f"<td>%{z['dist_pct']} {html.escape(z['side'])}</td>"
-            f"<td>{html.escape(str(z.get('at') or '—'))}</td></tr>"
-            for z in a["zones"]
-        )
+        rows = []
+        for z in a["zones"]:
+            verdict = zone_approval.verdict_for(sym, z["low"], z["high"])
+            badge = ("<span class='b-onayli'>ONAYLI</span>" if verdict == "onayli"
+                     else "<span class='b-iptal'>İPTAL</span>")
+            if verdict == "onayli":
+                btn = (f"<button class='iptal' onclick=\"zv('{sym}',{z['low']},"
+                       f"{z['high']},'iptal')\">İptal et</button>")
+            else:
+                btn = (f"<button class='onay' onclick=\"zv('{sym}',{z['low']},"
+                       f"{z['high']},'onay')\">Tekrar onayla</button>")
+            rows.append(
+                f"<tr><td>{z['confluence']}</td><td>{_fmt(z['low'])}–{_fmt(z['high'])}</td>"
+                f"<td>{html.escape(', '.join(z['sources']))}</td>"
+                f"<td>%{z['dist_pct']} {html.escape(z['side'])}</td>"
+                f"<td>{html.escape(str(z.get('at') or '—'))}</td>"
+                f"<td>{badge}</td><td>{btn}</td></tr>"
+            )
         parts.append(
             "<table><tr><th>araç</th><th>bölge</th><th>kaynaklar</th>"
-            f"<th>uzaklık</th><th>tarih</th></tr>{rows}</table>"
+            f"<th>uzaklık</th><th>tarih</th><th>durum</th><th></th></tr>"
+            f"{''.join(rows)}</table>"
         )
     parts.append("</body></html>")
     return "".join(parts)

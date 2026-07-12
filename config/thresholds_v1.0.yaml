@@ -684,6 +684,19 @@ exit_structural_stop:
 reentry_guard:
   enabled: false
 
+# Onaylı bölge etkisi (owner kararı 2026-07-12): zone_proposer'ın owner iptal
+# etmedikçe ONAYLI sayılan bölgeleri SL/TP YERLEŞİMİNİ etkiler — TP onaylı
+# bölgenin önünde alınır, bölge içine denk gelen SL bölgenin arkasına taşınır
+# (yön/skor DEĞİŞMEZ; owner manuel işlemi MUAF). enabled DEFAULT FALSE
+# (kırmızı-çizgi disiplini: kapalıyken SL/TP BAYT-AYNI; canlıya açma yolu =
+# 5y çok-rejim kanıt + owner'ın bu flag'i açması; YAML git ile iki ortama
+# taşınır, lokalde worker restart gerekir). Bölge iptal/onayı: dashboard
+# katman-2 paneli veya POST /learning/zone-proposer/verdict.
+zone_influence:
+  enabled: false
+  pad_pct: 0.005       # SL'i bölge arkasına taşırken kenar payı (%0.5)
+  min_rr_after: 0.8    # TP bölge önüne çekilince RR bunun altına düşecekse dokunma
+
 # Price sanity guard — cross-pair contamination + absurd-price protection.
 # Phase 2 port from e-yay-codex paper_trading_service._is_price_sane.
 price_sanity:

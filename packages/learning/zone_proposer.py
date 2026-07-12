@@ -440,8 +440,10 @@ def viewmodel() -> dict:
     """GET /learning/zone-proposer — aday bölge önerileri (read-only, hesap YAPMAZ).
 
     Her asset için en güçlü confluence bölgeleri: fiyat bandı, kaç bağımsız araç
-    kesişiyor, hangi araçlar, fiyata uzaklık, (varsa) yaklaşık tarih. Owner buradan
-    seçip zone_plans.yaml'a taşır (OTOMATİK aktarım YOK — süzgeç owner)."""
+    kesişiyor, hangi araçlar, fiyata uzaklık, (varsa) yaklaşık tarih + owner onay
+    durumu (`verdict`: owner iptal etmedikçe 'onayli' — zone_approval defteri)."""
+    from packages.learning import zone_approval
+
     data = _load()
     if not data:
         return {"status": "NO_DATA", "generated_at": None, "assets": []}
@@ -449,12 +451,17 @@ def viewmodel() -> dict:
     for a in data.get("assets") or []:
         if not a.get("zones"):
             continue
+        sym = str(a.get("symbol"))
+        zones = [
+            {**z, "verdict": zone_approval.verdict_for(sym, z["low"], z["high"])}
+            for z in a["zones"]
+        ]
         rows.append({
-            "symbol": a.get("symbol"),
+            "symbol": sym,
             "price_now": a.get("price_now"),
             "weekly_bars": a.get("weekly_bars"),
-            "top_confluence": a["zones"][0]["confluence"],
-            "zones": a["zones"],
+            "top_confluence": zones[0]["confluence"],
+            "zones": zones,
         })
     return {
         "status": "OK",

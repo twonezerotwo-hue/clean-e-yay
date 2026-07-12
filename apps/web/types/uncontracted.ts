@@ -177,6 +177,39 @@ export interface ZeroTwoStrategyView {
   flat_note: string[];
 }
 
+// Aday bölge önericisi — tek confluence bölgesi (owner kesişim yöntemi, mekanik geometri).
+export interface ZoneProposerZone {
+  low: number;
+  high: number;
+  mid: number;
+  confluence: number; // kaç BAĞIMSIZ araç bu bölgede kesişiyor
+  sources: string[];
+  dist_pct: number; // fiyata uzaklık (%)
+  side: string; // "altında" | "üstünde"
+  at?: string | null; // çizgi-kesişim tarihi (varsa)
+  verdict: string; // "onayli" (owner iptal etmedikçe) | "iptal"
+}
+
+// Aday bölge önericisi — asset satırı (GET /learning/zone-proposer).
+export interface ZoneProposerAsset {
+  symbol: string;
+  price_now?: number | null;
+  weekly_bars?: number;
+  top_confluence: number;
+  zones: ZoneProposerZone[];
+}
+
+// Aday bölge önericisi görünümü. Makine ADAY önerir, bölge SEÇMEZ; owner iptal
+// edene kadar onaylı. Canlı SL/TP etkisi zone_influence flag'ine bağlı (default OFF).
+export interface ZoneProposerView {
+  status: string; // OK | NO_DATA
+  shadow_only?: boolean;
+  generated_at?: string | null;
+  engine?: string;
+  honesty?: string;
+  assets: ZoneProposerAsset[];
+}
+
 // Faz-A (EV kapısı) — per-hücre payoff EV R-örnek hazırlık satırı.
 export interface PayoffReadinessRow {
   cell: string; // "tf|rejim"
