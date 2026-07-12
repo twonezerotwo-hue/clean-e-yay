@@ -72,9 +72,9 @@ def _snap(rot_score=50.0, per_symbol=None, status="OK"):
     )
 
 
-def _regime():
+def _regime(label: str = "NEUTRAL"):
     from packages.regime.classifier import RegimeLayer, RegimeOutput
-    return RegimeOutput(label="NEUTRAL", layers=[
+    return RegimeOutput(label=label, layers=[
         RegimeLayer(name="Likidite", score=55.0, direction="neutral", evidence=[]),
         RegimeLayer(name="Risk İştahı", score=60.0, direction="neutral", evidence=[])])
 
@@ -112,3 +112,57 @@ def test_rotation_unavailable_drops_quantum(monkeypatch):
     with threshold_override(_FLAG_ON):
         res = ce.build("BTCUSD", snap, _regime(), "1d")
     assert not any(m.name == "quantum" for m in res.modules)  # modül düştü
+
+
+# ── rejim-kapısı (2026-07-13, gölge-önce) ────────────────────────────────────
+# Kanıt: challenger karnesi — quantum OFFENSIVE'da pozitif, NEUTRAL'da TERS.
+
+_GATE_OFF = {"consensus": {"quantum_v2": True, "quantum_regime_gate": False}}
+_GATE_ON = {"consensus": {"quantum_v2": True, "quantum_regime_gate": True}}
+
+
+def test_gate_off_is_byte_identical_with_observe(monkeypatch):
+    """Kapı KAPALI (default): quantum oyu aynen sayılır; izinsiz rejimde
+    yalnız kanıt satırı (applied=no) yazılır — karar davranışı bayt-aynı."""
+    snap = _snap(rot_score=59.2, per_symbol={"BTCUSD": 28.0})
+    with threshold_override(_GATE_OFF):
+        res = ce.build("BTCUSD", snap, _regime("NEUTRAL"), "1d")
+    assert _quantum(res) == pytest.approx(28.0)   # oy hâlâ sayılıyor
+    assert any(
+        w == "quantum_gate_observe:regime=NEUTRAL:score=28.0:applied=no"
+        for w in res.warnings
+    )
+
+
+def test_gate_on_neutral_drops_quantum(monkeypatch):
+    """Kapı AÇIK + NEUTRAL (izinsiz): modül düşer, ağırlık diğerlerine dağılır."""
+    snap = _snap(rot_score=59.2, per_symbol={"BTCUSD": 28.0})
+    with threshold_override(_GATE_ON):
+        res = ce.build("BTCUSD", snap, _regime("NEUTRAL"), "1d")
+    assert not any(m.name == "quantum" for m in res.modules)  # oy YOK
+    assert any(
+        w == "quantum_gate_observe:regime=NEUTRAL:score=28.0:applied=yes"
+        for w in res.warnings
+    )
+    assert any(w.startswith("quantum_dropped:regime_gate:NEUTRAL") for w in res.warnings)
+    # Ağırlık kayba uğramaz — kalan modüllere redistribute edilir (Σ≈1).
+    assert sum(m.weight for m in res.modules) == pytest.approx(1.0, abs=1e-3)
+
+
+def test_gate_on_offensive_quantum_speaks(monkeypatch):
+    """Kapı AÇIK + OFFENSIVE (izinli): quantum normal konuşur, kapı satırı yok."""
+    snap = _snap(rot_score=59.2, per_symbol={"BTCUSD": 72.0})
+    with threshold_override(_GATE_ON):
+        res = ce.build("BTCUSD", snap, _regime("OFFENSIVE"), "1d")
+    assert _quantum(res) == pytest.approx(72.0)
+    assert not any(w.startswith("quantum_gate_observe") for w in res.warnings)
+    assert not any(w.startswith("quantum_dropped:regime_gate") for w in res.warnings)
+
+
+def test_gate_on_rotation_unavailable_no_gate_line(monkeypatch):
+    """Rotasyon UNAVAILABLE: quantum zaten yok — kapı satırı da yazılmaz."""
+    snap = _snap(status="UNAVAILABLE", per_symbol={"BTCUSD": 28.0})
+    with threshold_override(_GATE_ON):
+        res = ce.build("BTCUSD", snap, _regime("NEUTRAL"), "1d")
+    assert not any(m.name == "quantum" for m in res.modules)
+    assert not any(w.startswith("quantum_gate_observe") for w in res.warnings)

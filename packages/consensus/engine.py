@@ -488,6 +488,34 @@ def _quantum_v2(snap: MarketSnapshot, symbol: str) -> float | None:
     return float(val) if val is not None else None
 
 
+def _quantum_regime_gate_enabled() -> bool:
+    """`consensus.quantum_regime_gate` owner-flag'i (default KAPALI = bayt-aynı).
+
+    Kanıt (challenger karnesi, CANLI ölçüm): quantum OFFENSIVE'da pozitif
+    ayrışıyor (sep +0.0142), NEUTRAL'da TERS (sep −0.0106) — göreceli-momentum
+    yatay piyasada "yükselene al" = tepeden almak. Açıkken quantum oyu yalnız
+    izinli rejimlerde sayılır; diğerlerinde modül DÜŞER (ağırlığı _redistribute
+    ile dağılır — nötr-50 uydurulmaz). Geri-alma = false (tek satır)."""
+    try:
+        return bool(load_thresholds().get("consensus", {}).get("quantum_regime_gate", False))
+    except (OSError, KeyError, ValueError, TypeError):
+        return False
+
+
+_QUANTUM_GATE_DEFAULT_REGIMES = ("OFFENSIVE",)
+
+
+def _quantum_gate_allowed_regimes() -> set[str]:
+    """Kapı açıkken quantum'un konuşabildiği rejimler (config; default yalnız
+    OFFENSIVE — kanıtın pozitif olduğu tek rejim)."""
+    try:
+        raw = load_thresholds().get("consensus", {}).get("quantum_gate_allowed_regimes")
+        vals = [str(x).strip().upper() for x in (raw or _QUANTUM_GATE_DEFAULT_REGIMES)]
+        return {v for v in vals if v}
+    except (OSError, KeyError, ValueError, TypeError):
+        return set(_QUANTUM_GATE_DEFAULT_REGIMES)
+
+
 MODULE_ORDER = ["touche", "fundamental", "news", "sentinel", "quantum"]
 
 
@@ -567,12 +595,30 @@ def build(
         quantum_v1 = _quantum(snap)
         quantum_v2 = _quantum_v2(snap, symbol)
         use_q2 = _quantum_v2_enabled() and quantum_v2 is not None
-        raw["quantum"] = quantum_v2 if use_q2 else quantum_v1
-        if quantum_v2 is not None:
+        q_score = quantum_v2 if use_q2 else quantum_v1
+        # Rejim-kapısı (2026-07-13, gölge-önce): göreceli-momentum yalnız trendli
+        # havada konuşur (kanıt: challenger karnesi — NEUTRAL'da TERS). İzinsiz
+        # rejimde gözlem satırı HER ZAMAN yazılır (kanıt birikir); kapı yalnız
+        # flag açıkken uygulanır (kapalıyken karar davranışı bayt-aynı).
+        gate_allowed = regime.label in _quantum_gate_allowed_regimes()
+        gate_applied = _quantum_regime_gate_enabled() and not gate_allowed
+        if not gate_allowed:
             tf_warnings.append(
-                "quantum_v2_observe:"
-                f"v1={quantum_v1:.1f}:v2={quantum_v2:.1f}:used={'v2' if use_q2 else 'v1'}"
+                "quantum_gate_observe:"
+                f"regime={regime.label}:score={q_score:.1f}:"
+                f"applied={'yes' if gate_applied else 'no'}"
             )
+        if gate_applied:
+            # Modül düşer → ağırlığı _redistribute ile diğerlerine dağılır
+            # (rotation UNAVAILABLE ile aynı desen; nötr-50 uydurulmaz).
+            tf_warnings.append(f"quantum_dropped:regime_gate:{regime.label}:{symbol}")
+        else:
+            raw["quantum"] = q_score
+            if quantum_v2 is not None:
+                tf_warnings.append(
+                    "quantum_v2_observe:"
+                    f"v1={quantum_v1:.1f}:v2={quantum_v2:.1f}:used={'v2' if use_q2 else 'v1'}"
+                )
     weights_cfg = load_active_weights()
     base = weights_cfg["regimes"].get(regime.label, weights_cfg["regimes"]["NEUTRAL"])
     available = set(raw.keys())

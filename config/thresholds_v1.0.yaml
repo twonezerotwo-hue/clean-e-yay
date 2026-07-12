@@ -59,6 +59,17 @@ consensus:
   # para-akış skorundan. quantum_v2_observe satırı v1↔v2 farkını izler; risk yarış/
   # karne ile canlı ölçülmeye devam eder.
   quantum_v2: true
+  # quantum REJİM-KAPISI (2026-07-13, gölge-önce kuruldu). Kanıt: challenger
+  # karnesi CANLI ölçümü — quantum OFFENSIVE'da pozitif ayrışıyor (sep +0.0142),
+  # NEUTRAL'da TERS (sep −0.0106): göreceli-momentum yatay piyasada "yükselene
+  # al" = tepeden almak. false (DEFAULT) → karar davranışı bayt-aynı; izinsiz
+  # rejimde her hücrede `quantum_gate_observe:regime=..:score=..:applied=no`
+  # kanıt satırı birikir. true → quantum oyu yalnız izinli rejimlerde sayılır;
+  # diğerlerinde modül DÜŞER, ağırlığı _redistribute ile diğer modüllere dağılır
+  # (nötr-50 uydurulmaz; rotation-UNAVAILABLE ile aynı desen). Geri-alma = false
+  # (tek satır). Aktivasyon AYRI owner kararı.
+  quantum_regime_gate: false
+  quantum_gate_allowed_regimes: ["OFFENSIVE"]
 
 # M1 — haber sentiment sınıflandırıcı sürümü. false (DEFAULT) → v1 birebir
 # (tam-kelime eşleşme; "Bitcoin rebounds…" gibi çekimli başlıklar neutral kalır).
