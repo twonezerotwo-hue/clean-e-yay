@@ -193,12 +193,29 @@ def analyze_bars(bars: list, cfg: dict) -> dict:
         return (t0 + i * _WEEK).date().isoformat()
 
     pool: list[dict] = []
+    # Çizilebilir geometri — grafik katmanı (zone_chart) bunu AYNEN çizer;
+    # owner öneriyi gerçek grafik üstünde görüp onaylar/reddeder.
+    draw: dict = {
+        "horizon": horizon,
+        "lines": [],
+        "cross": None,
+        "fib_retr": None,
+        "fib_ext": None,
+        "pivots": [
+            {"i": p.index, "price": round(p.price, 6), "kind": p.kind}
+            for p in pivots
+        ],
+    }
     support = _best_line(bars, pivots, "support", tol)
     resistance = _best_line(bars, pivots, "resistance", tol)
 
     for line, name in ((support, "support_line"), (resistance, "resistance_line")):
         if line is None:
             continue
+        draw["lines"].append({
+            "kind": name, "slope": line.slope,
+            "intercept": line.intercept, "touches": line.touches,
+        })
         for i, tag in ((last_i, "şimdi"), (last_i + horizon, f"+{horizon}h")):
             pool.append({
                 "price": line_price_at(line.slope, line.intercept, i),
@@ -212,6 +229,8 @@ def analyze_bars(bars: list, cfg: dict) -> dict:
         if x is not None:
             xi, xp = x
             if last_i - n <= xi <= last_i + horizon * 3 and xp > 0:
+                draw["cross"] = {"i": round(xi, 1), "price": round(xp, 6),
+                                 "date": _date(xi)}
                 pool.append({
                     "price": xp, "source": "line_cross",
                     "detail": f"destek×direnç ({_date(xi)})", "at": _date(xi),
@@ -221,7 +240,13 @@ def analyze_bars(bars: list, cfg: dict) -> dict:
     hi = max(highs, key=lambda p: p.price)
     lo = min(lows, key=lambda p: p.price)
     if hi.price > lo.price:
-        for lv in cfg.get("retr_levels", [0.236, 0.382, 0.5, 0.618, 0.786]):
+        retr_levels = cfg.get("retr_levels", [0.236, 0.382, 0.5, 0.618, 0.786])
+        draw["fib_retr"] = {
+            "low": round(lo.price, 6), "high": round(hi.price, 6),
+            "levels": {str(lv): round(log_fib(lo.price, hi.price, float(lv)), 6)
+                       for lv in retr_levels},
+        }
+        for lv in retr_levels:
             pool.append({
                 "price": log_fib(lo.price, hi.price, float(lv)),
                 "source": "fib_retr", "detail": f"{lv} (makro {lo.price:.0f}-{hi.price:.0f})",
@@ -234,7 +259,13 @@ def analyze_bars(bars: list, cfg: dict) -> dict:
     if lows_after:
         leg_lo = min(lows_after, key=lambda p: p.price)
         if last_high.price > leg_lo.price:
-            for lv in cfg.get("ext_levels", [1.236, 1.414, 1.618]):
+            ext_levels = cfg.get("ext_levels", [1.236, 1.414, 1.618])
+            draw["fib_ext"] = {
+                "from": round(last_high.price, 6), "to": round(leg_lo.price, 6),
+                "levels": {str(lv): round(log_fib(last_high.price, leg_lo.price, float(lv)), 6)
+                           for lv in ext_levels},
+            }
+            for lv in ext_levels:
                 pool.append({
                     "price": log_fib(last_high.price, leg_lo.price, float(lv)),
                     "source": "fib_ext",
@@ -271,6 +302,7 @@ def analyze_bars(bars: list, cfg: dict) -> dict:
         "support_touches": support.touches if support else 0,
         "resistance_touches": resistance.touches if resistance else 0,
         "zones": zones[:max_zones],
+        "draw": draw,
     }
 
 
@@ -370,14 +402,21 @@ def _write(report: dict) -> None:
 
 
 def run_if_due() -> dict:
-    """learning_worker adımı (interval-kapılı, günlük). Flag YOK (salt-analiz)."""
+    """learning_worker adımı (interval-kapılı, günlük). Flag YOK (salt-analiz).
+
+    Kendini-onarma: hiçbir asset'i OK olmayan artifact (ör. sağlayıcı limiti /
+    ağ kesintisi anına denk gelen koşu) TAZE SAYILMAZ — bir sonraki koşu yeniden
+    dener; bozuk koşu 24 saat kilitleyemez."""
     try:
         p = _path()
         if p.exists():
             data = json.loads(p.read_text(encoding="utf-8"))
             gen = datetime.fromisoformat(str(data.get("generated_at")))
             age = (datetime.now(UTC) - gen).total_seconds()
-            if data.get("engine") == _ENGINE and 0 <= age < _interval_sec():
+            usable = any(
+                a.get("status") == "OK" for a in (data.get("assets") or [])
+            )
+            if data.get("engine") == _ENGINE and usable and 0 <= age < _interval_sec():
                 return {"status": "SKIP_FRESH", "age_sec": int(age)}
     except (OSError, json.JSONDecodeError, ValueError, TypeError):
         pass

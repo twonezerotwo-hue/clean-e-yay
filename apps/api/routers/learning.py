@@ -7,7 +7,8 @@ import json
 import os
 from dataclasses import asdict
 
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException
+from fastapi.responses import HTMLResponse, Response
 
 from packages.data.registry.loader import load_thresholds
 from packages.decision import conflict_gate, conflict_gate_backtest
@@ -50,6 +51,7 @@ from packages.learning import (
     threshold_ab,
     threshold_trainer,
     zero_two_strategy,
+    zone_chart,
     zone_plan_shadow,
     zone_proposer,
 )
@@ -160,6 +162,24 @@ def get_zone_proposer() -> dict:
     kümesi → çizgi kesişimi → confluence skoru. Makine bölge SEÇMEZ, ADAY önerir;
     owner süzer, kabul edileni zone_plans.yaml'a taşır. Canlı karara ASLA dokunmaz."""
     return zone_proposer.viewmodel()
+
+
+@router.get("/learning/zone-proposer/review", response_class=HTMLResponse)
+def get_zone_proposer_review() -> HTMLResponse:
+    """Aday bölge GÖRSEL incelemesi (read-only, PAPER_SAFE). Tüm evrenin gerçek
+    haftalık grafikleri üzerine makinenin çizdikleri işaretlenir (trend çizgileri,
+    fibler, kesişim, bölge bantları; owner planı varsa turkuaz bindirme) — owner
+    gözüyle kontrol edip onay/ret verir. Hesap yapmaz; karar owner'da."""
+    return HTMLResponse(zone_chart.review_html())
+
+
+@router.get("/learning/zone-proposer/chart/{symbol}")
+def get_zone_proposer_chart(symbol: str) -> Response:
+    """Tek asset'in işaretli SVG grafiği (read-only, PAPER_SAFE). Veri yoksa 404."""
+    svg = zone_chart.chart_svg(symbol.upper())
+    if svg is None:
+        raise HTTPException(404, f"{symbol}: haftalık bar verisi yok")
+    return Response(content=svg, media_type="image/svg+xml")
 
 
 @router.get("/learning/reflection")

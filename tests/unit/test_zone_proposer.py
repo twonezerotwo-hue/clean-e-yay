@@ -152,3 +152,27 @@ def test_run_if_due_and_viewmodel_roundtrip(tmp_path, monkeypatch):
 
     # ikinci koşu taze artifact → SKIP_FRESH (yeniden hesaplanmaz)
     assert zp.run_if_due()["status"] == "SKIP_FRESH"
+
+
+def test_run_if_due_self_heals_no_data_artifact(tmp_path, monkeypatch):
+    """Hiçbir asset'i OK olmayan artifact (sağlayıcı kesintisi koşusu) taze
+    sayılmaz — sonraki koşu yeniden dener (24 saat kilitleme yok)."""
+    import json
+    from datetime import UTC, datetime
+
+    out = tmp_path / "zone_proposer.json"
+    out.write_text(json.dumps({
+        "generated_at": datetime.now(UTC).isoformat(),
+        "engine": "zone_proposer_v1",
+        "assets": [{"symbol": "BTCUSD", "status": "NO_DATA", "zones": []}],
+    }), encoding="utf-8")
+    monkeypatch.setenv("ZONE_PROPOSER_PATH", str(out))
+    monkeypatch.setattr(zp, "_universe", lambda cfg: ["TEST"])
+    monkeypatch.setattr(zp, "_weekly_bars", lambda sym: _rising_support_series())
+    monkeypatch.setattr(zp, "_cfg", lambda: {
+        "pivot_span": 3, "min_weekly_bars": 20, "horizon_bars": 12,
+        "cluster_tol_pct": 3.0, "min_confluence": 2, "max_zones": 5})
+
+    r = zp.run_if_due()          # bozuk artifact'a rağmen yeniden hesaplar
+    assert r["status"] == "OK"
+    assert r["with_zones"] == 1
