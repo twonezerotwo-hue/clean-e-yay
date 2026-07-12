@@ -220,14 +220,18 @@ def _write(report: dict) -> None:
 
 
 def run_if_due() -> dict:
-    """learning_worker adımı (interval-kapılı, günlük). Flag YOK (salt-analiz)."""
+    """learning_worker adımı (interval-kapılı, günlük). Flag YOK (salt-analiz).
+
+    Kendini-onarma: INSUFFICIENT artifact taze sayılmaz (ör. servis-restart
+    anına denk gelen boş okuma) — hesap ucuz, sonraki döngü yeniden dener."""
     try:
         p = _path()
         if p.exists():
             data = json.loads(p.read_text(encoding="utf-8"))
             gen = datetime.fromisoformat(str(data.get("generated_at")))
             age = (datetime.now(UTC) - gen).total_seconds()
-            if data.get("engine") == _ENGINE and 0 <= age < _interval_sec():
+            if (data.get("engine") == _ENGINE and data.get("status") == "OK"
+                    and 0 <= age < _interval_sec()):
                 return {"status": "SKIP_FRESH", "age_sec": int(age)}
     except (OSError, json.JSONDecodeError, ValueError, TypeError):
         pass

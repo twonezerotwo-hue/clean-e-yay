@@ -67,6 +67,22 @@ def test_what_if_derives_filters_from_data():
     assert combo["win_pct"] > base["win_pct"]
 
 
+def test_run_if_due_self_heals_insufficient(tmp_path, monkeypatch):
+    """INSUFFICIENT artifact (restart anı boş okuması) taze sayılmaz —
+    sonraki koşu yeniden hesaplar (canlı bulgu 2026-07-12: n=0 kilidi)."""
+    import json as _json
+    out = tmp_path / "c.json"
+    out.write_text(_json.dumps({
+        "generated_at": "2099-01-01T00:00:00+00:00",
+        "engine": "council_scorecard_v1", "status": "INSUFFICIENT", "n": 0}),
+        encoding="utf-8")
+    monkeypatch.setenv("COUNCIL_SCORECARD_PATH", str(out))
+    monkeypatch.setattr(cs, "compute", lambda now=None, outcomes=None: {
+        "generated_at": "2026-07-12T00:00:00+00:00",
+        "engine": "council_scorecard_v1", "status": "OK", "n": 80})
+    assert cs.run_if_due()["status"] == "OK"   # kilitlenmedi, yeniden hesapladı
+
+
 def test_run_if_due_roundtrip(tmp_path, monkeypatch):
     monkeypatch.setenv("COUNCIL_SCORECARD_PATH", str(tmp_path / "c.json"))
     monkeypatch.setattr(
