@@ -59,6 +59,12 @@ if (-not (Test-Path $runtime)) {
   Write-Host "[bootstrap] data/runtime/ olusturuldu"
 }
 
+# ---- 4b. git hooks (F1: pre-push ruff guard, CI-red -> AWS drift onler) ------
+if (Test-Path (Join-Path $Root ".git")) {
+  git -C $Root config core.hooksPath .githooks
+  Write-Host "[bootstrap] git hooks aktif (.githooks; pre-push ruff guard)"
+}
+
 # ---- 5. Smoke: import + tek tick + pytest (hizli) ---------------------------
 $env:PYTHONPATH = $Root
 Write-Host "[bootstrap] import smoke..."

@@ -61,6 +61,13 @@ echo "[bootstrap] backend bağımlılıkları kuruluyor (pyproject)..."
 # ---- 4. data/runtime --------------------------------------------------------
 mkdir -p "$ROOT/data/runtime"
 
+# ---- 4b. git hooks (F1: pre-push ruff guard — CI-red → AWS drift önler) ------
+if [ -d "$ROOT/.git" ]; then
+  git -C "$ROOT" config core.hooksPath .githooks
+  chmod +x "$ROOT/.githooks/pre-push" 2>/dev/null || true
+  echo "[bootstrap] git hooks aktif (.githooks; pre-push ruff guard)"
+fi
+
 # ---- 5. Smoke: import + bir tick + bir learning -----------------------------
 export PYTHONPATH="$ROOT"
 echo "[bootstrap] import smoke..."

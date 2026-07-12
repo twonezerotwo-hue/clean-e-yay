@@ -41,6 +41,10 @@ LLM yalnız anlatır. `PAPER_ONLY` / `NO_EXECUTION` kodda yapısal olarak zorlan
 - AWS: main'e merge = GitHub Actions self-hosted runner ile otomatik canlı deploy (worker'lar restart
   edilir). EC2'ye SSH YOK; kutuda komut koşturmak gerekirse pull_request tetiklemeli draft PR
   workflow'u kullanılır (workflow_dispatch branch'e 404 verir).
+- **Deploy EC2 CI'ya bağlı: CI kırmızıysa deploy SESSİZCE skip → AWS drift (push "başarılı" görünür).**
+  Push öncesi `.githooks/pre-push` (ruff guard, `git config core.hooksPath .githooks` ile aktif —
+  bootstrap yapar) CI-red'in en yaygın sebebini yakalar. Push SONRASI `scripts/deploy-status.sh`
+  remote HEAD gerçekten AWS'e gitti mi doğrular (senkron değilse sebebiyle uyarır). F1, 2026-07-12.
 - Lokal ↔ AWS runtime state AYRI (`data/runtime/` gitignored) — state git ile taşınmaz.
 - LLM: lokalde `LLM_MODE=ollama` + qwen2.5:7b (Ollama kuruluysa); AWS'te remote fallback.
   Anahtar/Ollama yoksa sistem deterministik fallback ile sorunsuz çalışır.

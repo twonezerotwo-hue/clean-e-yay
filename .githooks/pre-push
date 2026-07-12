@@ -1,0 +1,37 @@
+#!/usr/bin/env bash
+# pre-push — CI'ın ruff adımını lokalde push ÖNCESİ koştur (F1, 2026-07-12).
+#
+# Neden: tek bir ruff hatası CI'ı KIRAR → Deploy EC2 sessizce skip → AWS drift
+# (2026-07-12 canlı olay: council_scorecard import sırası (I001) 5 commit / ~14
+# saat AWS'i geride tuttu). Bu hook o sınıfı push ÖNCESİ yakalar; CI'da görmeden.
+# CI ile BİREBİR aynı komut/yollar (ci.yml step: ruff check packages apps/...).
+#
+# Kurulum: git config core.hooksPath .githooks  (bootstrap otomatik yapar).
+# Bilinçli bypass (nadiren): git push --no-verify
+set -u
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+
+# venv python'u bul (Windows .venv/Scripts, Linux .venv/bin), yoksa sistem.
+PY=""
+for c in "$ROOT/.venv/Scripts/python.exe" "$ROOT/.venv/bin/python"; do
+  if [ -x "$c" ]; then PY="$c"; break; fi
+done
+if [ -z "$PY" ]; then
+  if command -v python3 >/dev/null 2>&1; then PY="python3"
+  elif command -v python >/dev/null 2>&1; then PY="python"; fi
+fi
+if [ -z "$PY" ]; then
+  echo "[pre-push] python bulunamadı — ruff kontrolü atlandı (push devam)."
+  exit 0
+fi
+
+echo "[pre-push] ruff check (CI yolları)..."
+if ! "$PY" -m ruff check packages apps/api apps/tick_worker apps/learning_worker; then
+  echo ""
+  echo "❌ ruff HATASI — bu commit'te CI KIRMIZI olur ve Deploy EC2 AWS'e GİTMEZ."
+  echo "   Düzelt: $PY -m ruff check --fix packages apps/api apps/tick_worker apps/learning_worker"
+  echo "   Bilinçliyse bypass: git push --no-verify"
+  exit 1
+fi
+echo "[pre-push] ruff temiz — push devam."
+exit 0
