@@ -159,6 +159,9 @@ def append_ledger(artifact: dict | None = None) -> int:
             # v3 (2026-07-12): çekirdek + makro-onay + bayat-karne kapısı —
             # dördüncü tasarım olarak yarışır (eski satırlarda alan yok → atlanır).
             "v3_dir": r.get("direction_v3"),
+            # v4 (2026-07-12): owner birleşik formülü (elliott+trend+bölge+
+            # kapılı-uyumsuzluk; backtest-doğrulanmış ağırlıklar) — beşinci tasarım.
+            "v4_dir": r.get("direction_v4"),
         })
     if rows:
         _write_ledger(rows)
@@ -223,7 +226,7 @@ def _score(rows: list[dict], band: float) -> dict:
     """Çözülebilen satırları dört tasarım için puanla. `band` altı hareket kararsız
     (elenir — düz piyasada yön çağrısı notlanamaz). v3 (2026-07-12) eski
     satırlarda alan taşımaz → o satırları atlar (dürüst sayım)."""
-    _names = ("new_brain", "legacy", "baseline", "v3")
+    _names = ("new_brain", "legacy", "baseline", "v3", "v4")
     designs = {n: _blank_design() for n in _names}
     per_regime: dict[str, dict] = {}
     resolved = 0
@@ -239,6 +242,7 @@ def _score(rows: list[dict], band: float) -> dict:
             "legacy": _sign(row.get("legacy_dir")),
             "baseline": 1,  # buy-hold: her zaman yukarı
             "v3": _sign(row.get("v3_dir")),
+            "v4": _sign(row.get("v4_dir")),
         }
         reg = row.get("regime") or "?"
         rbucket = per_regime.setdefault(reg, {n: _blank_design() for n in _names})

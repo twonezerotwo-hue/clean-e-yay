@@ -60,9 +60,19 @@ def analyze(symbols: list[str] | None = None) -> dict:
     from packages.data.providers.rotation.engine import ROTATION_SYMBOLS
     from packages.scoring import tf_scoring_v2 as v2
     from packages.scoring import tf_scoring_v3 as v3
+    from packages.scoring import tf_scoring_v4 as v4
     from packages.signals import regime_gate
 
     scorecard = _load_scorecard()
+    # v4 bölge merceği: zone_proposer artifact'ı REUSE (yeniden hesap yok —
+    # "katmanlar birbirinden haberdar"). Artifact yoksa bölge/uyumsuzluk lean=0.
+    zones_by_symbol: dict[str, list] = {}
+    try:
+        from packages.learning import zone_proposer
+        for a in (zone_proposer._load() or {}).get("assets") or []:
+            zones_by_symbol[str(a.get("symbol"))] = list(a.get("zones") or [])
+    except Exception:
+        zones_by_symbol = {}
     syms = symbols or sorted(set(ROTATION_SYMBOLS.values()) | {"BTCUSD"})
     per_symbol: dict[str, dict] = {}
     # v3 makro-onayı: zaten çekilen 1d kapanışlarını rotasyon anahtarıyla
@@ -73,6 +83,7 @@ def analyze(symbols: list[str] | None = None) -> dict:
         try:
             tf_scores: dict[str, float] = {}          # EDGE-only (birincil yol)
             tf_scores_legacy: dict[str, float] = {}   # adaylar dahil (kontrol)
+            tf_scores_v4: dict[str, float] = {}       # v4 owner-formülü (aday)
             convictions: dict[str, float] = {}
             drivers: dict[str, dict] = {}
             bar_marks: dict[str, dict] = {}           # R5 defteri için fiyat damgası
@@ -102,6 +113,11 @@ def analyze(symbols: list[str] | None = None) -> dict:
                 if s_all is not None:
                     tf_scores_legacy[tf] = round(s_all, 4)
                     convictions[tf] = round(v2.conviction(w_all), 4)
+                # v4 owner-formülü: leans REUSE + bölge (artifact) + kapılı-uyum
+                s_v4 = v4.tf_direction(tf, v4.compute_leans(
+                    tf, bars, zones_by_symbol.get(sym, []), leans))
+                if s_v4 is not None:
+                    tf_scores_v4[tf] = round(s_v4, 4)
                 # Hava: 1d kapanışlarından (backtest tasarımıyla aynı)
                 if tf == "1d":
                     closes = [b.close for b in bars]
@@ -114,11 +130,14 @@ def analyze(symbols: list[str] | None = None) -> dict:
             regime = (regime_info or {}).get("regime")
             primary = v2.regime_directed(tf_scores, regime)
             legacy = v2.blended_direction(tf_scores_legacy, convictions)
+            d4 = v4.direction(tf_scores_v4, regime)
             per_symbol[sym] = {
                 "direction": None if primary is None else round(primary, 4),
                 "bias": _bias_label(primary),
                 "regime": regime_info,
                 "direction_blend_legacy": None if legacy is None else round(legacy, 4),
+                "direction_v4": None if d4 is None else round(d4, 4),
+                "tf_scores_v4": tf_scores_v4,
                 "tf_scores": tf_scores,
                 "tf_scores_legacy": tf_scores_legacy,
                 "drivers": drivers,

@@ -15,6 +15,8 @@ const DESIGN_LABEL: Record<string, string> = {
   new_brain: "Yeni beyin",
   legacy: "Eski harman",
   baseline: "Taban (al-tut)",
+  v3: "v3 (makro-kararlılık)",
+  v4: "v4 (owner formülü)",
 };
 
 function fmtPct(v?: number | null): string {
@@ -124,7 +126,7 @@ export function TfScoringRacePanel() {
             </span>
           </div>
           <div className="flex flex-col gap-1">
-            {["new_brain", "legacy", "baseline"].map((name) =>
+            {["new_brain", "v4", "v3", "legacy", "baseline"].map((name) =>
               designs[name] ? (
                 <DesignRow key={name} name={name} d={designs[name]} best={name === bestName} />
               ) : null,
