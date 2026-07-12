@@ -37,7 +37,6 @@ from packages.learning import (
     mistake_memory,
     monitoring_coverage,
     news_event_study,
-    partial_tp_shadow,
     promotion_criteria,
     reflection,
     regime_risk_brake,
@@ -107,13 +106,6 @@ def get_activation_watchdog() -> dict:
     """F5-3 — owner-flag aktivasyon izleyicisi (read-only, yalnız-öneri).
     Hangi flag açık, izleme ilerlemesi, CONFIRMED/DEGRADED geçmişi."""
     return activation_watchdog.report()
-
-
-@router.get("/learning/partial-tp-shadow")
-def get_partial_tp_shadow() -> dict:
-    """F4-3 — partial-TP shadow-vs-actual özeti (read-only). Owner
-    `partial_tp.enabled` aktivasyon kararını bu kanıtla verir."""
-    return partial_tp_shadow.summary()
 
 
 @router.get("/learning/tf-weights")

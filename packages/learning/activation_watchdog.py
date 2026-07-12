@@ -79,10 +79,6 @@ REGISTRY: dict[str, dict] = {
         "label": "Ampirik EV/Kelly p(win) (F4-2)",
         "source": ("thresholds", ("empirical_pwin", "enabled")),
     },
-    "partial_tp": {
-        "label": "Partial-TP + breakeven (F4-3)",
-        "source": ("thresholds", ("partial_tp", "enabled")),
-    },
     "regime_risk_brake": {
         "label": "Rejim risk freni — çift-negatif kanıtta boyut kıs (Y-1)",
         "source": ("thresholds", ("regime_risk_brake", "enabled")),

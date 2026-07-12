@@ -411,23 +411,6 @@ def run_once() -> dict:
         promotion_status = "UNKNOWN"
         errors.append(f"promotion_criteria:{type(exc).__name__}")
 
-    # Faz-A (Çıkışlar) — partial-TP aktivasyon hazırlığı (promotion_rail Wilson
-    # kapısı). READY olunca governor'a OWNER ONAY PAKETİ (partial_tp.enabled).
-    # Aktivasyon otomatik DEĞİL (KIRMIZI ÇİZGİ) — kanıtsızsa NOT_READY.
-    partial_tp_promotion_status = "UNKNOWN"
-    try:
-        from packages.learning import partial_tp_shadow
-        ptp = partial_tp_shadow.run()
-        partial_tp_promotion_status = ptp.get("status", "UNKNOWN")
-        if partial_tp_promotion_status == "READY":
-            log.info(
-                "partial_tp READY — owner paketi sunuldu (proposal_id=%s)",
-                ptp.get("proposal_id"),
-            )
-    except Exception as exc:  # defensive — worker patlamamalı
-        partial_tp_promotion_status = "UNKNOWN"
-        errors.append(f"partial_tp_promotion:{type(exc).__name__}")
-
     # F5-3 — aktivasyon watchdog'u: owner-flag OFF→ON geçişlerini izler,
     # post-enable expectancy düşerse DEGRADED önerir (YALNIZ-ÖNERİ — hiçbir
     # flag'i oto-kapatmaz; yön guard'larının oto-kapatlı kasası yukarıda).
@@ -850,7 +833,6 @@ def run_once() -> dict:
         "backtest_challenger_status": backtest_challenger_status,  # B-2 üretim (DISABLED=flag OFF)
         "challenger_train_status": challenger_train_status,  # B-3 ağırlık+quantum karne (DISABLED=flag OFF)
         "challenger_promotion_status": challenger_promotion_status,  # B-4 terfi kriteri (DISABLED=flag OFF)
-        "partial_tp_promotion_status": partial_tp_promotion_status,  # Faz-A çıkış terfi hazırlığı (NOT_READY=kanıt bekliyor)
         "regime_brake_status": regime_brake_status,  # Y-1 rejim risk freni tablosu (gözlem; uygulama flag'le)
         "meta_gate_status": meta_gate_status,  # Y-5 meta-label kapısı tablosu (SALT-GÖLGE)
         "news_study_status": news_study_status,  # Y-6 haber olay-çalışması karnesi (SALT-GÖZLEM)

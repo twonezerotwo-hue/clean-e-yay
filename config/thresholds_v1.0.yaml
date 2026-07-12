@@ -124,25 +124,11 @@ empirical_pwin:
   min_samples: 20
   blend_counterfactual: false
 
-# F4-3 — Partial-TP + breakeven stop. enabled=false (DEFAULT) → davranış
-# bayt-aynı; her pozisyonda SHADOW gözlemi yine işler: kâr ilk kez
-# trigger_r×|entry−SL|'e değince damgalanır, sonrasında fiyat girişe dönerse
-# breakeven senaryosu işaretlenir; TAM kapanışta hipotetik strateji PnL'i
-# Trade.ptp_shadow_pnl_usd'ye yazılır. Owner GET /learning/partial-tp-shadow
-# özetindeki shadow-vs-actual farkını izleyip bu flag'i tarihli kararla açar.
-# true → tetikte close_fraction kadar kısmi kapat (PARTIAL_TP_EXIT) +
-# breakeven=true ise kalan yarının SL'i girişe çekilir (yalnız SIKILAŞTIRIR).
-# Not: eski ölü `paper_trading.partial_tp1_pct` anahtarı bu bölümle değiştirildi.
-partial_tp:
-  enabled: false
-  trigger_r: 1.0
-  close_fraction: 0.5
-  breakeven: true
-  # Faz-A (Çıkışlar): aktivasyon hazırlık kapısı (promotion_rail). Ham uplift
-  # gürültülü → Wilson-alt-sınır + min örnek. READY olunca governor owner-onay
-  # paketi (STRATEGY_ENABLE); aktivasyon yine owner (KIRMIZI ÇİZGİ, oto-flip yok).
-  promotion:
-    min_evaluable: 20   # bundan az değerlendirilebilir kapanış → NOT_READY
+# F4-3 partial_tp KALDIRILDI (2026-07-12, owner kararı): exit_backtest (4302
+# giriş, iki bağımsız örneklem) hipotezi ÇÜRÜTTÜ — partial_tp zararlı, asıl
+# ilaç trail-sıkma (E-9 canlı). Shadow makinesi + promotion kapısı + endpoint +
+# panel söküldü; çürütme kanıtı exit_backtest ızgara ekseninde KALIR. TEKRAR
+# EKLEME — kanıt negatif.
 
 # F5-2 — champion/challenger terfi kriteri (flag'siz gözlem — davranış değişmez).
 # Kriter: (1) shadow log'da ≥ min_matched_decisions eşleşmiş karar; (2) missed-
