@@ -15,6 +15,15 @@ max_zones: 5             # asset başına raporlanan en güçlü bölge sayısı
 retr_levels: [0.236, 0.382, 0.5, 0.618, 0.786]   # makro geri çekilme
 ext_levels: [1.236, 1.414, 1.618]                # son inen bacağın uzantısı
 
-# Rotasyon çekirdeği + yükselen ETF'ler + keşif kısa listesi otomatik girer.
+# Rotasyon çekirdeği + KEŞİF EVRENİ otomatik girer (owner kararı 2026-07-12):
+# tarayıcının kripto kısa listesi (cg_id ile — statik haritada olmayan
+# alt-coin'ler dahil) + yükselen sektör ETF'leri + canlı sinyal sembolleri.
+discovery_candidates: true
+discovery_max: 10        # keşiften eklenen aday üst sınırı (API bütçesi)
+# Yeni güçlü bölge uyarısı: önceki koşuda olmayan, confluence bu eşik ve üstü
+# bölge bulununca dashboard bildirimi düşer (ilk koşu sessiz — bildirim seli yok).
+notify_min_confluence: 4
+notify_max_per_run: 5    # koşu başına en çok bu kadar bildirim (sel önlemi)
+
 # Owner buraya sabit sembol ekleyebilir (ör. custom asset ticker'ı).
 extra_symbols: []

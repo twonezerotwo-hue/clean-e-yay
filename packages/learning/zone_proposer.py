@@ -329,37 +329,72 @@ def _interval_sec() -> int:
         return _DEFAULT_INTERVAL_SEC
 
 
-def _universe(cfg: dict) -> list[str]:
-    """Derin-tarihli makro evren: rotasyon çekirdeği + yükselen ETF'ler +
-    keşif kısa listesi (yalnız get_bars ile ucuz erişilenler) + owner ekleri."""
+def _universe(cfg: dict) -> list[dict]:
+    """Taranacak adaylar [{symbol, cg_id?}] — makro çekirdek + KEŞİF EVRENİ.
+
+    Owner kararı (2026-07-12): keşif tarayıcısının bulduğu adaylar da taranır —
+    "analiz sabit, varlık değişken" ilkesi bu katmana da uygulanır. Kaynaklar:
+    (1) rotasyon çekirdeği (derin tarih), (2) owner ekleri, (3) keşif artifact'ı:
+    yükselen sektör ETF'leri + KRİPTO KISA LİSTESİ (cg_id ile — artık statik
+    haritada olmayan alt-coin'ler de girer) + canlı sinyal sembolleri (ETF'ler
+    get_bars ile; kripto ancak cg_id biliniyorsa). Keşif kaynaklı aday sayısı
+    `discovery_max` ile sınırlı (API bütçesi: tarayıcı aynı 1d barları zaten
+    çekiyor — TTL cache çoğu çağrıyı bedavaya getirir)."""
     from packages.data.providers.rotation.engine import ROTATION_SYMBOLS
 
-    syms: list[str] = list(dict.fromkeys(ROTATION_SYMBOLS.values()))
-    syms.extend(str(s) for s in (cfg.get("extra_symbols") or []))
-    try:
-        from packages.discovery import scanner as _sc
-        art = _sc._load_artifact()
-        for c in (art.get("rising_sectors") or []):
-            if c.get("symbol"):
-                syms.append(str(c["symbol"]))
-        # keşif kripto kısa listesi: yalnız standart harita/custom'da olanlar
-        # (get_bars ucuz döner; alt-coin'e kör tam-tarih çekmeyiz).
-        from packages.data.providers.ohlcv import coingecko as _cg
-        known = set(_cg._SYMBOL_MAP)
-        for c in ((art.get("crypto_universe") or {}).get("candidates") or []):
-            if str(c.get("symbol")) in known:
-                syms.append(str(c["symbol"]))
-    except Exception:
-        pass
-    return list(dict.fromkeys(syms))
+    cands: list[dict] = [{"symbol": s} for s in dict.fromkeys(ROTATION_SYMBOLS.values())]
+    cands.extend({"symbol": str(s)} for s in (cfg.get("extra_symbols") or []))
+    if cfg.get("discovery_candidates", True):
+        try:
+            from packages.discovery import scanner as _sc
+            art = _sc._load_artifact()
+            disc: list[dict] = []
+            cg_map: dict[str, str] = {}
+            for c in ((art.get("crypto_universe") or {}).get("candidates") or []):
+                sym, cg = str(c.get("symbol") or ""), str(c.get("cg_id") or "")
+                if sym and cg:
+                    cg_map[sym] = cg
+                    disc.append({"symbol": sym, "cg_id": cg})
+            for c in (art.get("rising_sectors") or []):
+                if c.get("symbol"):
+                    disc.append({"symbol": str(c["symbol"])})
+            # Canlı sinyal sembolleri (results'tan): ETF'ler get_bars ile ucuz;
+            # kripto ancak kısa-liste cg_id'si biliniyorsa (kör çağrı yok).
+            results = art.get("results") or {}
+            for sym in (art.get("signal_symbols") or []):
+                kind = str((results.get(sym) or {}).get("kind") or "")
+                if kind == "sector_etf":
+                    disc.append({"symbol": str(sym)})
+                elif sym in cg_map:
+                    disc.append({"symbol": str(sym), "cg_id": cg_map[sym]})
+            max_disc = int(cfg.get("discovery_max", 10))
+            seen = {c["symbol"] for c in cands}
+            added = 0
+            for c in disc:
+                if c["symbol"] in seen or added >= max_disc:
+                    continue
+                seen.add(c["symbol"])
+                cands.append(c)
+                added += 1
+        except Exception:
+            pass
+    return cands
 
 
-def _weekly_bars(symbol: str) -> list:
-    """1d barları arşiv+canlı birleştir → haftalığa resample."""
+def _weekly_bars(symbol: str, cg_id: str | None = None) -> list:
+    """1d barları arşiv+canlı birleştir → haftalığa resample.
+
+    `cg_id` verilirse (keşif kripto adayı — statik haritada yok) 1d barlar
+    CoinGecko fetch_by_ticker ile gelir (TTL-throttle'lı; tarayıcıyla aynı yol)."""
     from packages.data.providers.ohlcv import get_bars, history, resample
 
     try:
-        daily = history.merged(history.load(symbol, "1d"), get_bars(symbol, "1d") or [])
+        if cg_id:
+            from packages.data.providers.ohlcv import coingecko as _cg
+            live = _cg.fetch_by_ticker(cg_id, symbol, "1d") or []
+        else:
+            live = get_bars(symbol, "1d") or []
+        daily = history.merged(history.load(symbol, "1d"), live)
     except Exception:
         return []
     daily = [b for b in daily if getattr(b, "verified", True)]
@@ -373,8 +408,9 @@ def compute(now: datetime | None = None) -> dict:
     now = now or datetime.now(UTC)
     cfg = _cfg()
     assets = []
-    for symbol in _universe(cfg):
-        bars = _weekly_bars(symbol)
+    for cand in _universe(cfg):
+        symbol = cand["symbol"]
+        bars = _weekly_bars(symbol, cand.get("cg_id"))
         res = analyze_bars(bars, cfg) if bars else {"status": "NO_DATA", "zones": []}
         assets.append({"symbol": symbol, **res})
     assets.sort(key=lambda a: (
@@ -401,16 +437,73 @@ def _write(report: dict) -> None:
     tmp.replace(p)
 
 
+def _zones_overlap(a: dict, b: dict, tol: float = 0.01) -> bool:
+    return not (a["high"] * (1 + tol) < b["low"] or b["high"] * (1 + tol) < a["low"])
+
+
+def _notify_new_zones(prev: dict | None, rep: dict, cfg: dict) -> int:
+    """Owner uyarısı: YENİ güçlü kesişim bölgesi → dashboard bildirimi.
+
+    Yalnız önceki artifact'ta OLMAYAN (örtüşmeyen) ve confluence ≥
+    `notify_min_confluence` bölgeler için; ilk koşu (prev yok) sessizdir —
+    deploy sonrası bildirim seli olmaz. Asla raise etmez; bildirim hatası
+    taramayı durduramaz."""
+    if not prev:
+        return 0
+    try:
+        from packages.notifications import Notification, append_many, make_id
+
+        min_conf = int(cfg.get("notify_min_confluence", 4))
+        prev_zones: dict[str, list[dict]] = {
+            str(a.get("symbol")): list(a.get("zones") or [])
+            for a in (prev.get("assets") or [])
+        }
+        max_per_run = int(cfg.get("notify_max_per_run", 5))
+        notes: list = []
+        for a in rep.get("assets") or []:
+            sym = str(a.get("symbol"))
+            for z in a.get("zones") or []:
+                if len(notes) >= max_per_run:
+                    break
+                if z["confluence"] < min_conf:
+                    continue
+                if any(_zones_overlap(z, pz) for pz in prev_zones.get(sym, [])):
+                    continue
+                title = f"{sym}: yeni kesişim bölgesi ★{z['confluence']}"
+                body = (
+                    f"{z['low']:.2f}–{z['high']:.2f} bandında {z['confluence']} "
+                    f"bağımsız araç kesişiyor ({', '.join(z['sources'])}); fiyata "
+                    f"uzaklık %{z['dist_pct']} ({z['side']}). İptal edilmedikçe "
+                    "onaylı — panelden incele (katman 2, Bölge Önerileri)."
+                )
+                notes.append(Notification(
+                    id=make_id("zone_candidate"),
+                    ts=datetime.now(UTC).isoformat(),
+                    type="zone_candidate",
+                    priority="medium",
+                    title=title,
+                    body_short=title,
+                    body_long=body,
+                ))
+        if notes:
+            append_many(notes)
+        return len(notes)
+    except Exception:
+        return 0
+
+
 def run_if_due() -> dict:
     """learning_worker adımı (interval-kapılı, günlük). Flag YOK (salt-analiz).
 
     Kendini-onarma: hiçbir asset'i OK olmayan artifact (ör. sağlayıcı limiti /
     ağ kesintisi anına denk gelen koşu) TAZE SAYILMAZ — bir sonraki koşu yeniden
-    dener; bozuk koşu 24 saat kilitleyemez."""
+    dener; bozuk koşu 24 saat kilitleyemez. Yeni güçlü bölge → owner bildirimi."""
+    prev: dict | None = None
     try:
         p = _path()
         if p.exists():
             data = json.loads(p.read_text(encoding="utf-8"))
+            prev = data
             gen = datetime.fromisoformat(str(data.get("generated_at")))
             age = (datetime.now(UTC) - gen).total_seconds()
             usable = any(
@@ -422,8 +515,10 @@ def run_if_due() -> dict:
         pass
     rep = compute()
     _write(rep)
+    notified = _notify_new_zones(prev, rep, _cfg())
     with_zones = sum(1 for a in rep["assets"] if a.get("zones"))
-    return {"status": "OK", "assets": len(rep["assets"]), "with_zones": with_zones}
+    return {"status": "OK", "assets": len(rep["assets"]),
+            "with_zones": with_zones, "notified": notified}
 
 
 def _load() -> dict | None:

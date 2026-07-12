@@ -98,8 +98,8 @@ def test_review_html_from_artifact(tmp_path, monkeypatch):
     gelir; artifact yoksa yönlendirme notu."""
     out = tmp_path / "zone_proposer.json"
     monkeypatch.setenv("ZONE_PROPOSER_PATH", str(out))
-    monkeypatch.setattr(zp, "_universe", lambda cfg: ["TEST"])
-    monkeypatch.setattr(zp, "_weekly_bars", lambda sym: _series())
+    monkeypatch.setattr(zp, "_universe", lambda cfg: [{"symbol": "TEST"}])
+    monkeypatch.setattr(zp, "_weekly_bars", lambda sym, cg_id=None: _series())
     monkeypatch.setattr(zp, "_cfg", lambda: dict(_CFG))
     assert zp.run_if_due()["status"] == "OK"
 
@@ -113,5 +113,5 @@ def test_review_html_from_artifact(tmp_path, monkeypatch):
 
 
 def test_chart_svg_no_data_returns_none(monkeypatch):
-    monkeypatch.setattr(zp, "_weekly_bars", lambda sym: [])
+    monkeypatch.setattr(zp, "_weekly_bars", lambda sym, cg_id=None: [])
     assert zc.chart_svg("YOKBOYLE") is None

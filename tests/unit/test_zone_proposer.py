@@ -133,8 +133,9 @@ def test_run_if_due_and_viewmodel_roundtrip(tmp_path, monkeypatch):
     out = tmp_path / "zone_proposer.json"
     monkeypatch.setenv("ZONE_PROPOSER_PATH", str(out))
     # Evreni tek sahte sembole indir; onun haftalık barları sentetik confluence serisi.
-    monkeypatch.setattr(zp, "_universe", lambda cfg: ["TEST"])
-    monkeypatch.setattr(zp, "_weekly_bars", lambda sym: _rising_support_series())
+    monkeypatch.setattr(zp, "_universe", lambda cfg: [{"symbol": "TEST"}])
+    monkeypatch.setattr(zp, "_weekly_bars",
+                        lambda sym, cg_id=None: _rising_support_series())
     monkeypatch.setattr(zp, "_cfg", lambda: {
         "pivot_span": 3, "min_weekly_bars": 20, "horizon_bars": 12,
         "cluster_tol_pct": 3.0, "min_confluence": 2, "max_zones": 5})
@@ -167,8 +168,9 @@ def test_run_if_due_self_heals_no_data_artifact(tmp_path, monkeypatch):
         "assets": [{"symbol": "BTCUSD", "status": "NO_DATA", "zones": []}],
     }), encoding="utf-8")
     monkeypatch.setenv("ZONE_PROPOSER_PATH", str(out))
-    monkeypatch.setattr(zp, "_universe", lambda cfg: ["TEST"])
-    monkeypatch.setattr(zp, "_weekly_bars", lambda sym: _rising_support_series())
+    monkeypatch.setattr(zp, "_universe", lambda cfg: [{"symbol": "TEST"}])
+    monkeypatch.setattr(zp, "_weekly_bars",
+                        lambda sym, cg_id=None: _rising_support_series())
     monkeypatch.setattr(zp, "_cfg", lambda: {
         "pivot_span": 3, "min_weekly_bars": 20, "horizon_bars": 12,
         "cluster_tol_pct": 3.0, "min_confluence": 2, "max_zones": 5})
@@ -176,3 +178,62 @@ def test_run_if_due_self_heals_no_data_artifact(tmp_path, monkeypatch):
     r = zp.run_if_due()          # bozuk artifact'a rağmen yeniden hesaplar
     assert r["status"] == "OK"
     assert r["with_zones"] == 1
+
+
+def test_universe_includes_discovery_candidates(monkeypatch):
+    """Keşif evreni (owner kararı 2026-07-12): kripto kısa listesi cg_id ile,
+    yükselen ETF'ler ve canlı sinyal sembolleri (ETF / cg_id'li kripto) girer;
+    discovery_max sınırı ve çift-kayıt eleme çalışır."""
+    art = {
+        "crypto_universe": {"candidates": [
+            {"symbol": "ZECUSD", "cg_id": "zcash"},
+            {"symbol": "WBTUSD", "cg_id": "whitebit"},
+        ]},
+        "rising_sectors": [{"symbol": "XLK"}],
+        "results": {
+            "XLV": {"kind": "sector_etf"},
+            "ZECUSD": {"kind": "crypto"},       # cg_map'te var → girer
+            "HYPEUSD": {"kind": "crypto"},      # cg_id bilinmiyor → giremez
+        },
+        "signal_symbols": ["XLV", "ZECUSD", "HYPEUSD"],
+    }
+    from packages.discovery import scanner as _sc
+    monkeypatch.setattr(_sc, "_load_artifact", lambda: art)
+
+    cands = zp._universe({"discovery_candidates": True, "discovery_max": 10})
+    by_sym = {c["symbol"]: c for c in cands}
+    assert "BTCUSD" in by_sym                       # rotasyon çekirdeği durur
+    assert by_sym["ZECUSD"]["cg_id"] == "zcash"     # kısa liste cg_id ile
+    assert "XLK" in by_sym and "XLV" in by_sym      # yükselen + sinyal ETF
+    assert "HYPEUSD" not in by_sym                  # kör kripto çağrısı yok
+    assert len(cands) == len(by_sym)                # çift kayıt yok
+
+    # discovery_max=1 → keşiften yalnız 1 aday eklenir
+    few = zp._universe({"discovery_candidates": True, "discovery_max": 1})
+    core_n = len(zp._universe({"discovery_candidates": False}))
+    assert len(few) == core_n + 1
+
+
+def test_notify_new_strong_zone(tmp_path, monkeypatch):
+    """Yeni ★4+ bölge → bildirim; örtüşen eski bölge / zayıf bölge / ilk koşu
+    (prev yok) → sessiz."""
+    import packages.notifications as notif
+    monkeypatch.setattr(notif, "NOTIFICATIONS_PATH", tmp_path / "notif.jsonl")
+
+    prev = {"assets": [{"symbol": "TLT", "zones": [
+        {"low": 80.0, "high": 82.0, "confluence": 5}]}]}
+    rep = {"assets": [
+        {"symbol": "TLT", "zones": [
+            {"low": 80.5, "high": 82.5, "confluence": 5, "sources": ["a"],
+             "dist_pct": -2.0, "side": "altında"},          # eskiyle örtüşür → yok
+            {"low": 90.0, "high": 91.0, "confluence": 4, "sources": ["a", "b"],
+             "dist_pct": 5.0, "side": "üstünde"},           # YENİ ★4 → bildirim
+            {"low": 95.0, "high": 96.0, "confluence": 2, "sources": ["a"],
+             "dist_pct": 8.0, "side": "üstünde"},           # zayıf → yok
+        ]},
+    ]}
+    assert zp._notify_new_zones(None, rep, {}) == 0          # ilk koşu sessiz
+    n = zp._notify_new_zones(prev, rep, {"notify_min_confluence": 4})
+    assert n == 1
+    recent = notif.list_recent(10)
+    assert any(r.type == "zone_candidate" and "TLT" in r.title for r in recent)
