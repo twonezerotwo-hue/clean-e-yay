@@ -131,6 +131,15 @@ def _best_line(bars: list, pivots: list[Pivot], kind: str, tol: float) -> Line |
     return best
 
 
+def _rnd(v: float) -> float:
+    """Fiyat yuvarlama: 6 anlamlı basamak. Sabit 4 ondalık, mikro-fiyatlı
+    asset'lerde (HTX ≈ $0.000002 gibi) fiyatı 0.0'a eziyordu — bölge 0-0
+    görünüyor, iptal edilemiyordu (low>0 doğrulaması)."""
+    if v == 0:
+        return 0.0
+    return round(v, max(4, 5 - math.floor(math.log10(abs(v)))))
+
+
 def cluster_levels(levels: list[dict], tol: float) -> list[dict]:
     """Log-fiyat yakınlığındaki seviyeleri bölgelere kümele; her bölgeyi
     confluence (FARKLI kaynak-türü sayısı) ile skorla. `tol` = oransal band."""
@@ -148,16 +157,18 @@ def cluster_levels(levels: list[dict], tol: float) -> list[dict]:
     out: list[dict] = []
     for members in zones:
         prices = [m["price"] for m in members]
+        if min(prices) <= 0:
+            continue  # savunma: sıfır/negatif seviye bölge olamaz
         sources = {m["source"] for m in members}
         times = [m["at"] for m in members if m.get("at")]
         out.append({
-            "low": round(min(prices), 4),
-            "high": round(max(prices), 4),
-            "mid": round(sum(prices) / len(prices), 4),
+            "low": _rnd(min(prices)),
+            "high": _rnd(max(prices)),
+            "mid": _rnd(sum(prices) / len(prices)),
             "confluence": len(sources),
             "sources": sorted(sources),
             "members": [
-                {"price": round(m["price"], 4), "source": m["source"],
+                {"price": _rnd(m["price"]), "source": m["source"],
                  "detail": m.get("detail", "")}
                 for m in sorted(members, key=lambda x: x["price"])
             ],
@@ -297,7 +308,7 @@ def analyze_bars(bars: list, cfg: dict) -> dict:
     return {
         "status": "OK",
         "weekly_bars": len(bars),
-        "price_now": round(price_now, 4),
+        "price_now": _rnd(price_now),
         "pivots": {"highs": len(highs), "lows": len(lows)},
         "support_touches": support.touches if support else 0,
         "resistance_touches": resistance.touches if resistance else 0,

@@ -60,6 +60,19 @@ def test_find_pivots_detects_extremes():
     assert 8 in lows
 
 
+def test_cluster_levels_micro_price_not_rounded_to_zero():
+    """Mikro-fiyatlı asset (HTX ≈ $0.000002): bölge kenarları 0.0'a EZİLMEZ
+    (canlı bulgu 2026-07-12: 0.0-0.0 bölge iptal bile edilemiyordu)."""
+    levels = [
+        {"price": 1.8e-06, "source": "fib_retr", "at": None},
+        {"price": 1.82e-06, "source": "support_line", "at": None},
+    ]
+    zones = zp.cluster_levels(levels, tol=0.03)
+    assert len(zones) == 1
+    assert zones[0]["low"] > 0
+    assert zones[0]["low"] == pytest.approx(1.8e-06, rel=0.01)
+
+
 def test_cluster_levels_scores_distinct_sources():
     """Aynı bölgedeki farklı kaynaklar confluence'ı artırır; aynı kaynak tekrarı
     saymaz; uzak seviye ayrı bölge."""
