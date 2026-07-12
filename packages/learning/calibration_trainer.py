@@ -33,7 +33,8 @@ def _samples_from_state() -> list[tuple[str, float, bool]]:
     anında aldığı girdiyle aynı dağılım. predicted_confidence fit'e GİRMEZ.
     F4-1: timeframe per-TF fit için taşınır; global fit tüm örnekleri kullanır."""
     out: list[tuple[str, float, bool]] = []
-    for o in outcomes_mod.outcomes_from_state():
+    # Veri hijyeni (2026-07-12): legacy (regime=UNKNOWN) kayıtlar fit'e girmez.
+    for o in outcomes_mod.learning_grade(outcomes_mod.outcomes_from_state()):
         if not o.data_verified or o.raw_confidence is None:
             continue
         out.append((str(o.timeframe or "1d"), float(o.raw_confidence), bool(o.pnl > 0)))

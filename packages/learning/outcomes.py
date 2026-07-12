@@ -277,6 +277,27 @@ def outcome_to_dict(o: CanonicalOutcome) -> dict:
 
 
 # --------------------------------------------------------------------------
+# Veri hijyeni (owner kararı 2026-07-12) — öğrenme-sınıfı süzgeç.
+# --------------------------------------------------------------------------
+
+LEGACY_REGIMES = frozenset({"UNKNOWN"})
+
+
+def learning_grade(outcomes: list[CanonicalOutcome]) -> list[CanonicalOutcome]:
+    """Fingerprint'i çözülemeyen legacy kayıtları (regime=UNKNOWN) öğrenmeden
+    karantinala. Ölçüldü (2026-07-12, 203 işlem): 13 legacy işlem ortalama
+    -2.04R ile fit/ağırlık/kapı hesaplarını zehirliyordu. Bu süzgeç YALNIZ
+    öğrenen tüketicilerde (kalibrasyon/ağırlık/kapı/fren/karne fit'leri)
+    kullanılır; rapor-ops sayaçları (dataset_health, briefing, heartbeat)
+    outcomes_from_state'in TAM listesini görmeye devam eder — veri silinmez,
+    yalnız öğrenmeye girmez."""
+    # getattr-savunmacı: regime alanı olmayan (test-fake / harici) nesneler
+    # süzülmez — yalnız GERÇEK legacy (regime=UNKNOWN) karantinaya girer.
+    return [o for o in outcomes
+            if getattr(o, "regime", None) not in LEGACY_REGIMES]
+
+
+# --------------------------------------------------------------------------
 # Timeframe-aware aggregation — 15m outcome'u 1d bucket'ını ETKİLEMEZ.
 # --------------------------------------------------------------------------
 

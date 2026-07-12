@@ -231,7 +231,8 @@ def _gather_attributed_pnl() -> dict[str, dict[str, float]]:
         from packages.learning import outcomes as outcomes_mod
         from packages.learning import tf_contribution
 
-        outs = outcomes_mod.outcomes_from_state()
+        # Veri hijyeni (2026-07-12): legacy kayıtlar ağırlık öğrenmesine girmez.
+        outs = outcomes_mod.learning_grade(outcomes_mod.outcomes_from_state())
         closed = [
             {
                 "snapshot_id": o.snapshot_id,

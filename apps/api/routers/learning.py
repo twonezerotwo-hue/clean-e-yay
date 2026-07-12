@@ -16,6 +16,7 @@ from packages.decision import conflict_gate, conflict_gate_backtest
 from packages.discovery import scanner as discovery_scanner
 from packages.learning import (
     activation_watchdog,
+    council_scorecard,
     book_audit,
     calibration_audit,
     calibration_store,
@@ -153,6 +154,17 @@ def get_zone_plan() -> dict:
     kuralı, derin-katman ortalama düşürme + retest TP, kalıcı geri-alımda yüksek
     bakiye + %3 stop, LOG-fib çıkış merdiveni. Canlı karara ASLA dokunmaz."""
     return zone_plan_shadow.viewmodel()
+
+
+@router.get("/learning/council")
+def get_council() -> dict:
+    """Konsey karnesi (read-only, PAPER_SAFE, SALT-ANALİZ). Katmanlar-arası
+    kombinasyon analizi: hangi modülün sesi gerçek ayırıcı (güçlü-vs-zayıf
+    yayılım), hangi ikili birlikte çalışıyor, rejim/güven kırılımları ve
+    veriden-türetilen sanki-filtreler ("şu kapı olsaydı ne olurdu"). Filtreler
+    her koşuda YENİDEN keşfedilir — sabit kural gömülmez. IN-SAMPLE kanıttır;
+    karara bağlanacak filtre önce gölge + ileri-veri ister."""
+    return council_scorecard.viewmodel()
 
 
 @router.get("/learning/zone-proposer")

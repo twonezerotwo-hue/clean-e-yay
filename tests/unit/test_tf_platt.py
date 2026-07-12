@@ -41,6 +41,7 @@ def _seed(ps, timeframe: str, n_high_win: int, n_low_loss: int) -> None:
             entry_price=100.0, exit_price=101.0, pnl_usd=80.0,
             opened_at="2026-07-01T00:00:00+00:00", closed_at="2026-07-01T01:00:00+00:00",
             close_reason="TP_HIT", data_verified=True, timeframe=timeframe,
+            fingerprint=f"BTCUSD|v2|{timeframe}|NEUTRAL|bullish|S55|C|touche",
             predicted_confidence=0.8, raw_confidence=0.8, confidence_source="identity",
         ))
     for j in range(n_low_loss):
@@ -49,6 +50,7 @@ def _seed(ps, timeframe: str, n_high_win: int, n_low_loss: int) -> None:
             entry_price=100.0, exit_price=99.0, pnl_usd=-60.0,
             opened_at="2026-07-01T00:00:00+00:00", closed_at="2026-07-01T01:00:00+00:00",
             close_reason="SL_HIT", data_verified=True, timeframe=timeframe,
+            fingerprint=f"BTCUSD|v2|{timeframe}|NEUTRAL|bullish|S55|C|touche",
             predicted_confidence=0.2, raw_confidence=0.2, confidence_source="identity",
         ))
     ps.save(state)

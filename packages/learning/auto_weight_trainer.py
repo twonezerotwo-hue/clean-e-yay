@@ -150,7 +150,9 @@ def latest_outcome_regime(outcomes=None) -> str | None:
     eğiteceği rejim — verisi en son değişen rejim budur; saat değil veri
     sürüyor: deterministik/replay-güvenli)."""
     if outcomes is None:
-        outcomes = outcomes_mod.outcomes_from_state(paper_state.load())
+        # Veri hijyeni (2026-07-12): legacy kayıtlar eşik öğrenmesine girmez.
+        outcomes = outcomes_mod.learning_grade(
+            outcomes_mod.outcomes_from_state(paper_state.load()))
     latest = None
     for o in outcomes:
         if not getattr(o, "data_verified", False) or not o.closed_at:
@@ -291,7 +293,8 @@ def train(regime: str = "NEUTRAL") -> RebalanceProposal | dict:
     # Durable kaynak: recent_trades (volatile pencere) + decision_log (kalıcı).
     # Eskiden yalnızca recent_trades okunuyordu → paper_state bozulması/200-
     # pencere taşması öğrenme veri setini kısıtlıyordu.
-    outcomes = outcomes_mod.outcomes_from_state(s)
+    # Veri hijyeni (2026-07-12): legacy kayıtlar eşik öğrenmesine girmez.
+    outcomes = outcomes_mod.learning_grade(outcomes_mod.outcomes_from_state(s))
 
     # F3-2 — rejim filtresi: flag açıkken yalnız hedef rejimin outcome'ları.
     # Bilinmeyen rejim etiketi weights'e sahte satır açmasın → NEUTRAL'a düş.

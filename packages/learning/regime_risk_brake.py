@@ -92,7 +92,8 @@ def compute(outcomes=None, challenger_records=None, now: datetime | None = None)
 
     if outcomes is None:
         from packages.learning import outcomes as outcomes_mod
-        outcomes = outcomes_mod.outcomes_from_state()
+        # Veri hijyeni (2026-07-12): legacy kayıtlar fren tablosuna girmez.
+        outcomes = outcomes_mod.learning_grade(outcomes_mod.outcomes_from_state())
     if challenger_records is None:
         from packages.learning import backtest_recon
         challenger_records = backtest_recon.read_challenger()

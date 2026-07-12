@@ -180,7 +180,11 @@ def write_table(state=None) -> dict:
         cf = missed_opportunity.resolutions()
     except Exception:
         cf = []  # counterfactual kanalı best-effort — tabloyu düşürmez
-    payload = build_table(outcomes_mod.outcomes_from_state(state), counterfactuals=cf)
+    # Veri hijyeni (2026-07-12): legacy kayıtlar p_win tablosunu zehirlemesin.
+    payload = build_table(
+        outcomes_mod.learning_grade(outcomes_mod.outcomes_from_state(state)),
+        counterfactuals=cf,
+    )
     p = _path()
     with _LOCK:
         p.parent.mkdir(parents=True, exist_ok=True)

@@ -489,6 +489,17 @@ export const useZeroTwoStrategy = () => {
   });
 };
 
+// Konsey karnesi günlük üretilir; panel seyrek tazeler (10 dk).
+export const useCouncil = () => {
+  const policy = usePanelQueryPolicy(10 * 60_000);
+  return useQuery({
+    queryKey: qk.council,
+    queryFn: api.council,
+    staleTime: 5 * 60_000,
+    ...policy,
+  });
+};
+
 // Aday bölge önericisi günlük üretilir; panel seyrek tazeler (10 dk).
 // Onay/iptal butonları POST sonrası bu sorguyu invalidate eder.
 export const useZoneProposer = () => {

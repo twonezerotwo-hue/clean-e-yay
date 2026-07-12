@@ -177,6 +177,40 @@ export interface ZeroTwoStrategyView {
   flat_note: string[];
 }
 
+// Konsey karnesi — istatistik hücresi (n + isabet + R + PnL).
+export interface CouncilStats {
+  n: number;
+  win_pct: number | null;
+  avg_r: number | null;
+  total_r: number | null;
+  total_pnl: number;
+}
+
+// Konsey karnesi — modül yayılımı satırı (güçlü-vs-zayıf isabet farkı).
+export interface CouncilSpread {
+  module: string;
+  median: number;
+  strong: CouncilStats;
+  weak: CouncilStats;
+  win_spread: number;
+}
+
+// Konsey karnesi görünümü (GET /learning/council). Katmanlar-arası kombinasyon
+// analizi; sanki-filtreler veriden türetilir. IN-SAMPLE kanıt — kapı değildir.
+export interface CouncilView {
+  status: string; // OK | INSUFFICIENT | NO_DATA
+  shadow_only?: boolean;
+  generated_at?: string | null;
+  n: number;
+  min_rows?: number;
+  baseline?: CouncilStats;
+  module_spreads?: CouncilSpread[];
+  pairs?: ({ pair: string } & CouncilStats)[];
+  regimes?: ({ regime: string } & CouncilStats)[];
+  conf_bands?: ({ band: string } & CouncilStats)[];
+  what_if?: ({ filter: string; kept_pct: number } & CouncilStats)[];
+}
+
 // Aday bölge önericisi — tek confluence bölgesi (owner kesişim yöntemi, mekanik geometri).
 export interface ZoneProposerZone {
   low: number;

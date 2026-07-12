@@ -330,7 +330,8 @@ def train(
     """Trainer ana giriş. Yeterli veri yoksa açıklayıcı dict döner."""
     tfs = timeframes or ["15m", "1h", "4h", "1d"]
     s = paper_state.load()
-    rows = outcomes_mod.outcomes_from_state(s)
+    # Veri hijyeni (2026-07-12): legacy kayıtlar geometri öğrenmesine girmez.
+    rows = outcomes_mod.learning_grade(outcomes_mod.outcomes_from_state(s))
     # Dilim 4 (TF_TARGET_AUTO_ONLY, default OFF): flag ON → yalnız AUTO kohort
     # (fingerprint + verified) — owner_manual verified kayıtlar geometri
     # öğrenmesine sızmaz. OFF → mevcut data_verified filtresi bayt-aynı.

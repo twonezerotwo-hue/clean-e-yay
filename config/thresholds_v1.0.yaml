@@ -519,8 +519,12 @@ backtest_challenger:
 # açılış boyutu brake_mult ile kısılır. YALNIZ küçültür (no-boost; guardrail
 # [floor, 1.0]). enabled:false → fren uygulanmaz, her kararda SHADOW raporu yine
 # taşınır (aktivasyon kanıtı flag'siz birikir). Geri-alma = false.
+# 2026-07-12 owner onayı + konsey kanıtı (203 canlı işlem: OFFENSIVE topR -8.7,
+# kaybın ~%75'i) ile AÇILDI. Çift-kanıt kuralı korunur: şu an backtest bacağı
+# OFFENSIVE'i pozitif gördüğü için fren PUSUDA (mult=1.0, bayt-etkisiz); iki
+# kanıt da negatife dönerse otomatik kısar. Geri-alma = false.
 regime_risk_brake:
-  enabled: false
+  enabled: true
   min_live_n: 10       # canlı AUTO kohort rejim başına en az işlem
   min_backtest_n: 30   # backtest challenger rejim başına en az yönlü karar
   brake_mult: 0.6      # frenlenen rejimde boyut çarpanı

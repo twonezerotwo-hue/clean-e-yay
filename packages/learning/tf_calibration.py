@@ -108,7 +108,8 @@ def calibration_report(
     `tf_weights_trusted` is True only when at least one timeframe is CALIBRATED —
     until then the PRIOR weights stand (spec §8 discipline).
     """
-    outs = outcomes if outcomes is not None else outcomes_mod.outcomes_from_state(state)
+    outs = (outcomes if outcomes is not None
+            else outcomes_mod.learning_grade(outcomes_mod.outcomes_from_state(state)))
     cals = per_timeframe_calibration(outs, min_trades=min_trades)
     calibrated = [c.timeframe for c in cals if c.trust == "CALIBRATED"]
     # B5 — canlı tf_weights kapısı (resolve_live_tf_weights → consensus) yalnız
@@ -145,7 +146,8 @@ def fit_confidence_report(
     predict_calibrated_tf global fit'e düşer (uydurma TF-fit uygulanmaz)."""
     from packages.learning import calibration_store
 
-    outs = outcomes if outcomes is not None else outcomes_mod.outcomes_from_state(state)
+    outs = (outcomes if outcomes is not None
+            else outcomes_mod.learning_grade(outcomes_mod.outcomes_from_state(state)))
     cals = {c.timeframe: c for c in per_timeframe_calibration(outs, min_trades=min_trades)}
     per_tf = calibration_store.load_per_timeframe()
 

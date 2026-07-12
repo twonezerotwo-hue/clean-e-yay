@@ -87,7 +87,8 @@ def report() -> dict:
     from packages.learning import missed_opportunity
     from packages.learning import outcomes as outcomes_mod
 
-    outs = outcomes_mod.outcomes_from_state()
+    # Veri hijyeni (2026-07-12): legacy kayıtlar edge kanıtına girmez.
+    outs = outcomes_mod.learning_grade(outcomes_mod.outcomes_from_state())
     pnls_raw = [o.pnl for o in outs]
     # CP4-fix #2: stabilite verdict'i WINSORIZE edilmiş seride ölçülür → tek dev işlem
     # fold expectancy işaretini çevirip sahte STABLE üretemez.

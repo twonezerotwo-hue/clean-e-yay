@@ -165,7 +165,7 @@ def test_fit_uses_raw_confidence_not_predicted(fresh_env) -> None:
                 entry_price=100.0, exit_price=101.0, pnl_usd=50.0,
                 opened_at="2026-06-11T00:00:00+00:00",
                 closed_at="2026-06-11T01:00:00+00:00",
-                close_reason="TP_HIT", fingerprint="fp", data_verified=True,
+                close_reason="TP_HIT", fingerprint="BTCUSD|v2|1d|NEUTRAL|bullish|S55|C|touche", data_verified=True,
                 predicted_confidence=0.1,  # şişkin/ters damga — fit'e girmemeli
                 raw_confidence=0.8, confidence_source="fitted",
             )
@@ -177,7 +177,7 @@ def test_fit_uses_raw_confidence_not_predicted(fresh_env) -> None:
                 entry_price=100.0, exit_price=99.0, pnl_usd=-50.0,
                 opened_at="2026-06-11T00:00:00+00:00",
                 closed_at="2026-06-11T01:00:00+00:00",
-                close_reason="SL_HIT", fingerprint="fp", data_verified=True,
+                close_reason="SL_HIT", fingerprint="BTCUSD|v2|1d|NEUTRAL|bullish|S55|C|touche", data_verified=True,
                 predicted_confidence=0.9,  # şişkin/ters damga — fit'e girmemeli
                 raw_confidence=0.2, confidence_source="fitted",
             )
@@ -189,7 +189,7 @@ def test_fit_uses_raw_confidence_not_predicted(fresh_env) -> None:
             entry_price=100.0, exit_price=101.0, pnl_usd=10.0,
             opened_at="2026-06-11T00:00:00+00:00",
             closed_at="2026-06-11T01:00:00+00:00",
-            close_reason="TP_HIT", fingerprint="fp", data_verified=True,
+            close_reason="TP_HIT", fingerprint="BTCUSD|v2|1d|NEUTRAL|bullish|S55|C|touche", data_verified=True,
             predicted_confidence=0.7, raw_confidence=None,
         )
     )

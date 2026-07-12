@@ -73,7 +73,8 @@ def compute(outcomes=None, now: datetime | None = None) -> dict:
     now = now or datetime.now(UTC)
     if outcomes is None:
         from packages.learning import outcomes as outcomes_mod
-        outcomes = outcomes_mod.outcomes_from_state()
+        # Veri hijyeni (2026-07-12): legacy kayıtlar kapı kovalarına girmez.
+        outcomes = outcomes_mod.learning_grade(outcomes_mod.outcomes_from_state())
     from packages.learning import cohorts, exit_forensics
 
     buckets: dict[str, dict] = {}
@@ -235,7 +236,8 @@ def scorecard(outcomes=None) -> dict:
     — dürüst sayım, tabloyu şişirmez)."""
     if outcomes is None:
         from packages.learning import outcomes as outcomes_mod
-        outcomes = outcomes_mod.outcomes_from_state()
+        # Veri hijyeni (2026-07-12): legacy kayıtlar kapı karnesine girmez.
+        outcomes = outcomes_mod.learning_grade(outcomes_mod.outcomes_from_state())
     from packages.learning import cohorts
 
     shadow = _read_shadow()

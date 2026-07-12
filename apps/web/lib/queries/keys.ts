@@ -56,6 +56,7 @@ export const qk = {
   exitBacktest: ["learning", "exit-backtest"] as const,
   zeroTwoStrategy: ["learning", "zero-two-strategy"] as const,
   zoneProposer: ["learning", "zone-proposer"] as const,
+  council: ["learning", "council"] as const,
   newsEventStudy: ["learning", "news-event-study"] as const,
   discovery: ["learning", "discovery"] as const,
   evidenceBus: ["learning", "evidence-bus"] as const,
