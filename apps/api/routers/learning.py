@@ -16,13 +16,13 @@ from packages.decision import conflict_gate, conflict_gate_backtest
 from packages.discovery import scanner as discovery_scanner
 from packages.learning import (
     activation_watchdog,
-    council_scorecard,
     book_audit,
     calibration_audit,
     calibration_store,
     calibration_trainer,
     challenger_trainer,
     cohorts,
+    council_scorecard,
     dataset_health,
     edge_report,
     empirical_pwin,
