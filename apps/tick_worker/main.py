@@ -59,10 +59,10 @@ def _utc_iso() -> str:
 
 
 # S1-4 — OPSİYONEL sağlayıcılar: bazı ağlardan kalıcı erişilemeyen yan
-# kaynaklar (GDELT bloklu, Deribit bölgesel engelli). Bunların arızası tek
-# başına worker'ı DEGRADED yapmaz (alarm yorgunluğu gerçek arızayı maskeler);
-# sebep yine degraded_reasons'ta listelenir, provider_status'ta görünür kalır.
-OPTIONAL_PROVIDERS = frozenset({"gdelt", "options_deribit"})
+# kaynaklar (Deribit bölgesel engelli). Bunların arızası tek başına worker'ı
+# DEGRADED yapmaz (alarm yorgunluğu gerçek arızayı maskeler); sebep yine
+# degraded_reasons'ta listelenir, provider_status'ta görünür kalır.
+OPTIONAL_PROVIDERS = frozenset({"options_deribit"})
 
 
 def _degraded_providers(snap) -> tuple[list[str], list[str]]:
@@ -465,7 +465,7 @@ async def run_once() -> None:
             log.exception("snapshot store record failed (tick devam ediyor)")
 
         # DEGRADED: veri/sağlayıcı bozuk ya da aktif halt var (yine de cycle tamam).
-        # S1-4: opsiyonel sağlayıcı arızası (gdelt/options) tek başına DEGRADED
+        # S1-4: opsiyonel sağlayıcı arızası (options_deribit) tek başına DEGRADED
         # YAPMAZ; sebepler degraded_reasons'ta her durumda görünür.
         crit_providers, opt_providers = _degraded_providers(snap)
         reasons: list[str] = []

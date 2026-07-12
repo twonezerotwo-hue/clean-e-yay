@@ -1,7 +1,5 @@
 """S serisi (2026-07-04) — hız + acil düzeltme regresyon testleri.
 
-S1-1: GDELT başarısızlık cooldown'u (kalıcı-arızalı uç her refresh'te 8s
-      timeout yemesin; veri uydurulmaz, status dürüst degraded kalır).
 S1-2: shadow log tail-read + rotasyon (221MB tam-dosya okuma bitti; rotasyon
       sınırında bile aynı kayıt kümesi döner — davranış-nötr).
 S1-3: agent_pipeline TF-sonuç memosu (tick başına çifte ağır hesap tek sefer;
@@ -19,61 +17,6 @@ from types import SimpleNamespace
 
 from packages.decision import agent_pipeline, shadow
 from packages.risk.engine import RiskInput, evaluate
-
-# ── S1-1: GDELT cooldown ─────────────────────────────────────────────────────
-
-def _failing_fetch(query):  # pragma: no cover - trivial
-    raise TimeoutError("handshake timed out")
-
-
-def test_gdelt_cooldown_skips_network_after_failure(monkeypatch):
-    from packages.data.providers.news import gdelt
-
-    gdelt.reset_cooldown()
-    monkeypatch.setenv("GDELT_COOLDOWN_SEC", "900")
-    calls = {"n": 0}
-
-    def counting_fail(query):
-        calls["n"] += 1
-        raise TimeoutError("handshake timed out")
-
-    heads, err = gdelt.fetch_headlines(fetch_fn=counting_fail)
-    assert heads == [] and "GDELT" in err
-    assert calls["n"] == 1
-    # Cooldown içindeki ikinci çağrı ağa ÇIKMAZ (fetch_fn çağrılmaz).
-    heads2, err2 = gdelt.fetch_headlines(fetch_fn=counting_fail)
-    assert heads2 == [] and "cooldown" in err2
-    assert calls["n"] == 1
-    gdelt.reset_cooldown()
-
-
-def test_gdelt_cooldown_zero_disables(monkeypatch):
-    from packages.data.providers.news import gdelt
-
-    gdelt.reset_cooldown()
-    monkeypatch.setenv("GDELT_COOLDOWN_SEC", "0")
-    calls = {"n": 0}
-
-    def counting_fail(query):
-        calls["n"] += 1
-        raise TimeoutError("x")
-
-    gdelt.fetch_headlines(fetch_fn=counting_fail)
-    gdelt.fetch_headlines(fetch_fn=counting_fail)
-    assert calls["n"] == 2  # cooldown kapalı → eski davranış birebir
-    gdelt.reset_cooldown()
-
-
-def test_gdelt_success_clears_cooldown(monkeypatch):
-    from packages.data.providers.news import gdelt
-
-    gdelt.reset_cooldown()
-    monkeypatch.setenv("GDELT_COOLDOWN_SEC", "900")
-    gdelt.fetch_headlines(fetch_fn=_failing_fetch)
-    gdelt.reset_cooldown()  # pencere manuel sıfırlanınca yeniden dener
-    heads, err = gdelt.fetch_headlines(fetch_fn=lambda q: json.dumps({"articles": []}))
-    assert err is None and heads == []
-
 
 # ── S1-2: shadow tail-read + rotasyon ────────────────────────────────────────
 
@@ -159,7 +102,6 @@ def test_degraded_providers_optional_vs_critical():
 
     snap = SimpleNamespace(
         provider_status={
-            "gdelt": {"status": "degraded"},
             "options_deribit": {"status": "degraded"},
             "coingecko": {"status": "ok"},
             "fred": {"status": "down"},
@@ -167,7 +109,7 @@ def test_degraded_providers_optional_vs_critical():
     )
     critical, optional = _degraded_providers(snap)
     assert critical == ["fred"]
-    assert optional == ["gdelt", "options_deribit"]
+    assert optional == ["options_deribit"]
 
 
 # ── S2-1: RiskEngine MTM drawdown ────────────────────────────────────────────
