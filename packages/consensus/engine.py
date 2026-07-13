@@ -366,6 +366,56 @@ def _fundamental_v3_enabled() -> bool:
         return False
 
 
+# v4 memoize: DXY/US10Y bar arşivi dosya-imzası (boyut+mtime) değişmedikçe tick
+# içi 20+ hücre tek hesabı paylaşır (sıcak yol; zaman-bağımsız → test-flake yok).
+_FUND_V4_MEMO: dict = {"key": None, "val": None}
+
+
+def _fundamental_v4() -> float | None:
+    """Fundamental v4 (GÖLGE) — DEĞİŞİM-bazlı makro likidite (ADAY B, 5y tezgâh).
+
+    2026-07-13 Basamak-4: mevcut Likidite formülü mutlak seviyeye çapalıydı (5y'da
+    1118/1118 gün ≥55 — hiç bearish olamıyor). v4 DXY + 10y faizin çoklu-ufuk
+    vol-norm momentumundan gelir (yükseliyorsa sıkılaşma = risk-off). Üretici
+    `flow.liquidity_momentum_score` (tek kaynak; macro_backtest ADAY B birebir).
+    Seri bar arşivinden (asset-level); arşiv yok/kapalı/yetersiz → None → kademe
+    v3/v2/v1'e düşer (dürüst degrade). Salt-okur; lazy import."""
+    try:
+        from packages.data.providers.ohlcv import history
+
+        def _sig(sym: str):
+            try:
+                st = history._path(sym, "1d").stat()
+                return (st.st_size, int(st.st_mtime))
+            except OSError:
+                return None
+
+        key = (history.enabled(), _sig("DXY"), _sig("US10Y"))
+        if _FUND_V4_MEMO["key"] == key:
+            return _FUND_V4_MEMO["val"]
+        from packages.data.providers.rotation import flow
+
+        dxy = [b.close for b in history.load("DXY", "1d")]
+        us10y = [b.close for b in history.load("US10Y", "1d")]
+        val = flow.liquidity_momentum_score(dxy, us10y)
+        _FUND_V4_MEMO["key"], _FUND_V4_MEMO["val"] = key, val
+        return val
+    except (OSError, ValueError, TypeError, AttributeError):
+        return None
+
+
+def _fundamental_v4_enabled() -> bool:
+    """`consensus.fundamental_v4` owner-flag'i (default KAPALI = v3/v2/v1 birebir).
+
+    Açılana kadar v4 skoru her hücrede `fundamental_v4_observe` warning satırıyla
+    SALT-GÖZLEM (owner v4↔mevcut ayrışmasını izler); aktivasyon ayrı owner kararı.
+    Kanıt: macro_backtest ADAY B — merkez düzeldi + tüm hedeflerde genel pozitif."""
+    try:
+        return bool(load_thresholds().get("consensus", {}).get("fundamental_v4", False))
+    except (OSError, KeyError, ValueError, TypeError):
+        return False
+
+
 def _fundamental_v2_enabled() -> bool:
     """`consensus.fundamental_v2` owner-flag'i (default KAPALI = v1 birebir).
 
@@ -743,12 +793,18 @@ def build(
     fund_v1 = _fundamental(regime)
     fund_v2 = _fundamental_v2(regime)
     fund_v3 = _fundamental_v3(regime)
-    # Kademe: v3 (rotasyonsuz saf makro, GÖLGE) > v2 > v1 — hangisi açıksa o
-    # canlı; v3 kapalıyken davranış v2/v1 seçimiyle bayt-aynı.
-    if _fundamental_v3_enabled():
-        fundamental = fund_v3
+    fund_v4 = _fundamental_v4()
+    # Kademe: v4 (değişim-bazlı makro, GÖLGE — 5y tezgâh ADAY B) > v3 > v2 > v1.
+    # Hangisi açıksa o canlı; v4 açık ama üretemiyorsa (arşiv yok) alt kademeye
+    # düşer. Tüm flag'ler kapalıyken davranış v2/v1 seçimiyle bayt-aynı.
+    if _fundamental_v4_enabled() and fund_v4 is not None:
+        fundamental, fund_used = fund_v4, "v4"
+    elif _fundamental_v3_enabled():
+        fundamental, fund_used = fund_v3, "v3"
+    elif _fundamental_v2_enabled():
+        fundamental, fund_used = fund_v2, "v2"
     else:
-        fundamental = fund_v2 if _fundamental_v2_enabled() else fund_v1
+        fundamental, fund_used = fund_v1, "v1"
     if fund_v1 is not None or fund_v2 is not None:
         tf_warnings.append(
             "fundamental_v2_observe:"
@@ -759,7 +815,13 @@ def build(
         tf_warnings.append(
             "fundamental_v3_observe:"
             f"v3={'none' if fund_v3 is None else f'{fund_v3:.1f}'}:"
-            f"used={'v3' if _fundamental_v3_enabled() else ('v2' if _fundamental_v2_enabled() else 'v1')}"
+            f"used={fund_used}"
+        )
+    if fund_v4 is not None:
+        tf_warnings.append(
+            "fundamental_v4_observe:"
+            f"v4={fund_v4:.1f}:"
+            f"v3={'none' if fund_v3 is None else f'{fund_v3:.1f}'}:used={fund_used}"
         )
     if fundamental is not None:
         raw["fundamental"] = fundamental

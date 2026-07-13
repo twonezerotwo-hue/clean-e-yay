@@ -113,12 +113,9 @@ def cand_z(dxy: list[float], us10y: list[float]) -> float | None:
 
 def cand_mom(dxy: list[float], us10y: list[float]) -> float | None:
     """ADAY B — değişim-bazlı: DXY ve faiz vol-norm momentumu (yükseliyorsa
-    sıkılaşıyor → risk-off). flow.vol_norm_momentum REUSE (çoklu-ufuk 1a/3a/6a)."""
-    md = flow.vol_norm_momentum(dxy)
-    mr = flow.vol_norm_momentum(us10y)
-    if md is None or mr is None:
-        return None
-    return max(0.0, min(100.0, 50.0 + 12.5 * (-md - mr) / 2.0))
+    sıkılaşıyor → risk-off). Canlı üretici `flow.liquidity_momentum_score`'a
+    DELEGE eder (tek kaynak — canlı v4 = backtest'te ölçülen B birebir)."""
+    return flow.liquidity_momentum_score(dxy, us10y)
 
 
 def cand_credit(

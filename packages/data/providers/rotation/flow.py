@@ -41,6 +41,9 @@ DEFAULT_WEIGHTS: dict[str, float] = {
     "XAG": 0.0, "OIL": 0.0,                        # iki-yuzlu → backtest yerlestirir
 }
 DEFAULT_SCALE = 8.0
+# Makro likidite momentum skoru band olcegi (macro_backtest ADAY B'de dogrulandi;
+# clamp+/-3 ile skor bandi ~[12,88], merkez 50). Elle degil — backtest secti.
+LIQUIDITY_MOM_SCALE = 12.5
 
 
 def vol_norm_momentum(closes: list[float]) -> float | None:
@@ -97,6 +100,27 @@ def credit_signal(hyg_closes: list[float], lqd_closes: list[float]) -> float | N
     return vol_norm_momentum(ratio)
 
 
+def liquidity_momentum_score(
+    dxy_closes: list[float], us10y_closes: list[float]
+) -> float | None:
+    """Makro likidite skoru — DEGISIM-bazli (0-100, yuksek = risk-on/gevseme).
+
+    Mevcut Likidite formulu mutlak seviyeye capaliydi (5y'da 1118/1118 gun >=55 —
+    hic bearish olamiyordu; dis denetim "asiri iyimser merkez" bulgusu). Bu
+    surum DXY ve 10y faizin coklu-ufuk (1a/3a/6a) vol-norm momentumundan gelir:
+    ikisi de YUKSELIYORSA para sikilasiyor = risk-off (skor<50). Merkez yapisal
+    olarak 50. 5y tezgah (macro_backtest ADAY B): tum hedeflerde genel pozitif,
+    SPY 4/5 yil tutarli. Yetersiz veri (her iki eksen de gerekli) -> None.
+
+    Esit-agirlik eksen (katsayi UYDURMA yok); flow.vol_norm_momentum REUSE.
+    `scale` backtest'te dogrulanan band (12.5); iki eksen ortalamasina biner."""
+    md = vol_norm_momentum(dxy_closes)
+    mr = vol_norm_momentum(us10y_closes)
+    if md is None or mr is None:
+        return None
+    return max(0.0, min(100.0, 50.0 + LIQUIDITY_MOM_SCALE * (-md - mr) / 2.0))
+
+
 def flow_score(
     signals: dict[str, float],
     weights: dict[str, float] | None = None,
@@ -147,6 +171,7 @@ __all__ = [
     "build_signals",
     "credit_signal",
     "flow_score",
+    "liquidity_momentum_score",
     "vol_norm_momentum",
     "volume_confirm",
 ]

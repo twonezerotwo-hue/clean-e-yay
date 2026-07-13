@@ -88,7 +88,23 @@ consensus:
   # true → fundamental = saf makro (yalnız Likidite; rotasyon oyu YALNIZ
   # quantum'da kalır). Aktivasyon owner kararı + kural #3 (5y çok-rejim
   # backtest ŞART). Geri-alma = false (tek satır).
+  # NOT (2026-07-13): 5y makro backtest v3'ü ÇÜRÜTTÜ (yalnız-Likidite BTC'ye
+  # TERS gösterge) — v3 açılmaz; yerine v4 (aşağıda) revize formül olarak geldi.
   fundamental_v3: false
+  # fundamental v4 (2026-07-13, gölge-önce; Basamak-4 formül revizyonu). Mevcut
+  # Likidite formülü mutlak seviyeye çapalıydı → 5y'da 1118/1118 gün ≥55 (hiç
+  # bearish olamıyor; dış denetim "aşırı iyimser merkez" bulgusu ampirik
+  # doğrulandı). v4 DXY + 10y faizin ÇOKLU-UFUK vol-norm momentumundan gelir
+  # (yükseliş = sıkılaşma = risk-off); merkez yapısal 50. Üretici tek kaynak
+  # `flow.liquidity_momentum_score` = macro_backtest ADAY B birebir (5y tezgâh:
+  # merkez düzeldi, TÜM hedeflerde genel pozitif, SPY 4/5 yıl tutarlı; kredi
+  # ekseni C bu pencerede iyileştirmedi → elendi). Skor bar ARŞİVİNDEN (asset-
+  # level; BAR_HISTORY_ENABLED gerekir); arşiv yok/yetersiz → alt kademeye düşer.
+  # false (DEFAULT) → v3/v2/v1 seçimi birebir; her hücrede `fundamental_v4_observe:
+  # v4=..:v3=..:used=..` SALT-GÖZLEM. true → kademe TEPESİ (v4>v3>v2>v1).
+  # DÜRÜST NOT: BTC'de 5/5 yıl DEĞİL (makro tilt; SPY/GLD güçlü) — ağırlık
+  # kararında hatırla. Aktivasyon ayrı owner kararı. Geri-alma = false (tek satır).
+  fundamental_v4: false
   # dominant modül seçimi (2026-07-13, gölge-önce kuruldu). Dış denetim bulgusu:
   # legacy dominant `max(score×weight)` bearish modülü HİÇBİR ZAMAN dominant
   # seçemez (skor 5×0.50=2.5 < skor 70×0.20=14) — mistake-memory fingerprint'i
@@ -121,6 +137,14 @@ consensus:
   # news karar hakkı kazandı mı?) ya da bu flag açılmalı; İKİSİ BİRDEN DEĞİL.
   # Geri-alma = false (tek satır).
   enforce_decision_usage: false
+  # news ABSTAIN (2026-07-13, gölge-önce kuruldu). Dış denetim bulgusu: "haber
+  # yok" ile "boğa/ayı dengede" aynı şey değil — kanıtsız news modülü 50 (nötr)
+  # OY kullanıp consensus'u yapay etkiliyordu (ağırlığı skoru 50'ye çeker).
+  # false (DEFAULT) → bayt-aynı; boş-kanıt hücrelerinde `news_abstain_observe:
+  # reason=..:applied=no` satırı birikir. true → ilgili başlık yoksa news OY
+  # KULLANMAZ (modül düşer + redistribute; kapsama dürüstçe azalır — M10
+  # min_module_coverage ile bileşik çalışır). Geri-alma = false (tek satır).
+  news_abstain: false
 
 # M1 — haber sentiment sınıflandırıcı sürümü. false (DEFAULT) → v1 birebir
 # (tam-kelime eşleşme; "Bitcoin rebounds…" gibi çekimli başlıklar neutral kalır).
@@ -145,6 +169,15 @@ regime:
   # AKTİF (2026-07-02, owner kararı — Paket 1; canlı kanıt: FRED'siz ortamda
   # sahte Likidite 96.6 → konsensüs ~4.2p şişme. v1 davranışı flag'le geri gelir).
   drop_unavailable_layers: true
+  # Rejim hysteresis (2026-07-13, gölge-önce kuruldu). Dış denetim P1 bulgusu:
+  # sınıflandırıcı stateless — skor 64.9→65.1→64.8 salınımı NEUTRAL↔OFFENSIVE
+  # flip'i üretir; rejim etiketi modül ağırlıklarını seçtiği için her flip karar
+  # davranışını oynatır. 0.0 (DEFAULT) → bayt-aynı (durum dosyasına dokunulmaz).
+  # >0 (öneri 3.0) → etiket değişimi ancak sınır (65/50/35) BAND kadar aşılınca
+  # kabul; önceki etiket data/runtime/regime_state.json'da (gitignored; backtest/
+  # replay stateful=False ile dokunmaz). Ani çöküşte çok-basamak sıçrama
+  # (örn. OFFENSIVE→CRISIS) GECİKTİRİLMEZ. Geri-alma = 0.0 (tek satır).
+  hysteresis_band: 0.0
 
 # F4-1 — TF-bazlı Platt kalibrasyonu. false (DEFAULT) → global tek fit birebir
 # (bayt-aynı). true → karar anında o TF'in KENDİ fit'i kullanılır (kaynak
