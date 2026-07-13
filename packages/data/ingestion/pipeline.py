@@ -24,6 +24,7 @@ from packages.data.providers import volatility as vol_provider
 from packages.data.providers.news import catalyst as catalyst_engine
 from packages.data.quality.dqs import QualityReport
 from packages.data.quality.dqs import compute as compute_dqs
+from packages.data.quality.dqs import extended_metrics as dqs_extended_metrics
 from packages.data.registry import assets as _asset_registry
 from packages.data.types import (
     TIMEFRAMES,
@@ -150,7 +151,18 @@ def build_snapshot(symbols: list[str] | None = None) -> MarketSnapshot:
         opt_syms, realized_vol_by_symbol=realized_1d, now=now
     )
     quality = compute_dqs(prices, syms)
+    # 2026-07-13 — DQS genişletme (GÖZLEM-YALNIZ: score/status'a girmez; DQS'in
+    # fiyat-dışı kör noktası her snapshot'ta görünür olsun).
+    quality.extended = dqs_extended_metrics(
+        technicals_by_tf=technicals_by_tf, headlines=headlines,
+        rotation=rotation, now=now,
+    )
     warnings = list(quality.notes)
+    warnings.append(
+        "dqs_extended:" + ":".join(
+            f"{k}={'na' if v is None else v}" for k, v in sorted(quality.extended.items())
+        )
+    )
     degraded_tfs = [
         f"{s}:{tf}"
         for s, by_tf in technicals_by_tf.items()

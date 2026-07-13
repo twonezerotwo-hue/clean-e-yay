@@ -389,7 +389,32 @@ def _news_symbol_filter_enabled() -> bool:
         return False
 
 
-def _news(snap: MarketSnapshot, symbol: str | None = None) -> float:
+def _news_abstain_enabled() -> bool:
+    """`consensus.news_abstain` owner-flag'i (default KAPALI = bayt-aynı).
+
+    2026-07-13 dış denetim bulgusu: "haber yok" ile "boğa/ayı dengede" aynı şey
+    değildir — kanıtsız modülün 50 (nötr) OY'u consensus'u yapay etkiler (ağırlığı
+    skoru 50'ye çeker). Açıkken ilgili başlık yoksa news modülü OY KULLANMAZ
+    (None → düşer, ağırlığı _redistribute; kapsama da dürüstçe azalır — M10 ile
+    bileşik). Kapalıyken her boş-kanıt hücresinde `news_abstain_observe` satırı
+    birikir. Geri-alma = false (tek satır)."""
+    try:
+        return bool(load_thresholds().get("consensus", {}).get("news_abstain", False))
+    except (OSError, KeyError, ValueError, TypeError):
+        return False
+
+
+def _news_evidence_gap(snap: MarketSnapshot, symbol: str | None) -> str | None:
+    """News modülünün kanıt boşluğu: ilgili başlık yoksa sebep etiketi, varsa None."""
+    if symbol is not None and _news_symbol_filter_enabled():
+        has = any(h.verified and symbol in h.asset_impact for h in snap.headlines)
+        return None if has else "no_relevant_headlines"
+    if any(h.sentiment for h in snap.headlines):
+        return None
+    return "no_headlines"
+
+
+def _news(snap: MarketSnapshot, symbol: str | None = None) -> float | None:
     """Haber modülü skoru (0-100, 50 = nötr).
 
     Sembol-ilişkili mod (news_symbol_filter açık + symbol verilmiş): yalnız
@@ -408,7 +433,8 @@ def _news(snap: MarketSnapshot, symbol: str | None = None) -> float:
             if h.verified and symbol in h.asset_impact
         ]
         if not vals:
-            return 50.0
+            # news_abstain açıkken kanıtsız modül OY KULLANMAZ (None → düşer).
+            return None if _news_abstain_enabled() else 50.0
         return 50.0 + (sum(vals) / len(vals)) * 25.0
     tally = {"bullish": 0, "bearish": 0, "neutral": 0}
     for h in snap.headlines:
@@ -416,7 +442,7 @@ def _news(snap: MarketSnapshot, symbol: str | None = None) -> float:
             tally[h.sentiment] += 1
     total = sum(tally.values())
     if not total:
-        return 50.0
+        return None if _news_abstain_enabled() else 50.0
     return 50.0 + (tally["bullish"] - tally["bearish"]) / total * 25.0
 
 
@@ -696,10 +722,18 @@ def build(
             f"backup={'none' if sh_backup is None else f'{sh_backup:.1f}'}:"
             f"v4={'none' if sh_v4 is None else f'{sh_v4:.1f}'}:used={touche_used}"
         )
-    raw = {
-        "touche": touche_score,
-        "news": _news(snap, symbol),
-    }
+    raw = {"touche": touche_score}
+    # news ABSTAIN (2026-07-13, gölge-önce): kanıt boşluğu HER ZAMAN gözlem
+    # satırı yazar; flag açıkken kanıtsız news oy kullanmaz (düşer, redistribute).
+    news_score = _news(snap, symbol)
+    news_gap = _news_evidence_gap(snap, symbol)
+    if news_gap:
+        tf_warnings.append(
+            f"news_abstain_observe:reason={news_gap}:"
+            f"applied={'yes' if news_score is None else 'no'}"
+        )
+    if news_score is not None:
+        raw["news"] = news_score
     # F2-3 — fundamental/sentinel katman verisi yoksa (drop_unavailable_layers
     # açıkken) modül düşer; ağırlığı redistribute edilir (quantum deseniyle aynı).
     # Flag kapalıyken katmanlar hep dolu → bu iki modül her zaman girer (bayt-aynı).

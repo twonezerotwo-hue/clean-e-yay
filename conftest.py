@@ -189,3 +189,6 @@ def _isolate_runtime_stores(tmp_path_factory: pytest.TempPathFactory) -> None:
     # verdict okur; suite gerçek data/runtime/zone_verdicts.json'ı görmesin
     # (owner'ın canlı iptal kararları test assert'lerine sızardı).
     os.environ["ZONE_VERDICTS_PATH"] = str(runtime / "zone_verdicts.json")
+    # Rejim hysteresis durumu (2026-07-13) — band>0 testleri canlı
+    # data/runtime/regime_state.json'a yazmasın/okumasın (suite izolasyonu).
+    os.environ["REGIME_STATE_PATH"] = str(runtime / "regime_state.json")

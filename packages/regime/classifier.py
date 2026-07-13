@@ -33,6 +33,74 @@ class RegimeOutput:
     layers: list[RegimeLayer]
     # F2-3 — veri yetersizliğinden düşen katman adları (flag kapalıyken hep boş).
     dropped: list[str] = field(default_factory=list)
+    # Hysteresis (2026-07-13) — band>0 iken ham (eşik-anlık) etiket; band=0'da None.
+    raw_label: RegimeLabel | None = None
+    # Hysteresis ham etiketi geri tuttu mu (sınır-üstü zıplama engellendi).
+    stabilized: bool = False
+
+
+# ── Rejim hysteresis (2026-07-13, dış denetim P1: stateless 65/50/35 eşikleri
+# sınır yakınında 64.9→65.1→64.8 gibi sık rejim değişimi üretiyor; rejim etiketi
+# modül ağırlıklarını seçtiği için her flip karar davranışını oynatır). Band>0
+# iken etiket değişimi ancak sınırı BAND kadar aşınca kabul edilir; önceki
+# etiket süreçler arası küçük runtime dosyasında tutulur (state git'e girmez).
+_ORDER = ("CRISIS", "DEFENSIVE", "NEUTRAL", "OFFENSIVE")
+_UPPER_BOUND = {"CRISIS": 35.0, "DEFENSIVE": 50.0, "NEUTRAL": 65.0}
+_LOWER_BOUND = {"OFFENSIVE": 65.0, "NEUTRAL": 50.0, "DEFENSIVE": 35.0}
+
+
+def _hysteresis_band() -> float:
+    """`regime.hysteresis_band` (default 0.0 = KAPALI = bayt-aynı davranış)."""
+    try:
+        from packages.data.registry.loader import load_thresholds
+
+        v = (load_thresholds().get("regime") or {}).get("hysteresis_band", 0.0)
+        return float(v or 0.0)
+    except Exception:
+        return 0.0
+
+
+def _state_path():
+    import os
+    from pathlib import Path
+
+    return Path(
+        os.environ.get("REGIME_STATE_PATH", "data/runtime/regime_state.json")
+    )
+
+
+def _read_prev_label() -> str | None:
+    try:
+        import json
+
+        prev = json.loads(_state_path().read_text(encoding="utf-8")).get("label")
+        return prev if prev in _ORDER else None
+    except (OSError, ValueError, TypeError, AttributeError):
+        return None
+
+
+def _write_label(label: str) -> None:
+    try:
+        import json
+
+        p = _state_path()
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_text(json.dumps({"label": label}), encoding="utf-8")
+    except (OSError, ValueError, TypeError):
+        pass  # state yazılamazsa hysteresis bir sonraki tick'te ham etikete düşer
+
+
+def _stabilize(prev: str | None, raw: str, avg: float, band: float) -> str:
+    """Önceki etiketten ayrılmak için sınırın BAND kadar ötesine geçmek gerekir.
+
+    Yukarı geçiş: prev'in üst sınırı + band aşılmalı. Aşağı geçiş: alt sınırı
+    − band altına inilmeli. Geçiş kabul edilirse HAM etiket alınır (çok-basamak
+    sıçrama — örn. ani çöküşte OFFENSIVE→CRISIS — geciktirilmez)."""
+    if prev is None or raw == prev:
+        return raw
+    if _ORDER.index(raw) > _ORDER.index(prev):
+        return raw if avg >= _UPPER_BOUND[prev] + band else prev
+    return raw if avg < _LOWER_BOUND[prev] - band else prev
 
 
 def _drop_unavailable_enabled() -> bool:
@@ -140,7 +208,9 @@ def _rotation_layer(snap: MarketSnapshot, drop_missing: bool) -> RegimeLayer | N
     )
 
 
-def classify(snap: MarketSnapshot) -> RegimeOutput:
+def classify(snap: MarketSnapshot, *, stateful: bool = True) -> RegimeOutput:
+    """Rejim etiketi. `stateful=False` → hysteresis durum dosyasına DOKUNMAZ
+    (backtest/replay çağrıları canlı rejim hafızasını kirletmesin)."""
     drop = _drop_unavailable_enabled()
     names = ("Likidite", "Risk İştahı", "Kripto Momentum", "Sermaye Rotasyonu")
     candidates = (
@@ -167,4 +237,14 @@ def classify(snap: MarketSnapshot) -> RegimeOutput:
         label = "DEFENSIVE"
     else:
         label = "CRISIS"
+    # Hysteresis (band=0.0 DEFAULT → bu blok atlanır, davranış bayt-aynı).
+    band = _hysteresis_band()
+    if band > 0.0 and stateful:
+        raw = label
+        stable = _stabilize(_read_prev_label(), raw, avg, band)
+        _write_label(stable)
+        return RegimeOutput(
+            label=stable, layers=layers, dropped=dropped,
+            raw_label=raw, stabilized=(stable != raw),
+        )
     return RegimeOutput(label=label, layers=layers, dropped=dropped)

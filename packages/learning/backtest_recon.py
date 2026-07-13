@@ -194,7 +194,8 @@ def _snap_at(
         headlines=[],            # news geçmişe kurulamaz → _news 50 (nötr, damgalı)
         rotation=rot_shim,
     )
-    regime = classify(snap)
+    # stateful=False — geçmiş replay canlı rejim-hysteresis hafızasını KİRLETMEZ.
+    regime = classify(snap, stateful=False)
     return snap, regime, as_of, None
 
 

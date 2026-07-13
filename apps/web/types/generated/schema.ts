@@ -1980,7 +1980,7 @@ export interface components {
             id: string;
             ts: string;
             /** @enum {string} */
-            type: "ticket_created" | "ticket_expiring" | "ticket_expired" | "ticket_blocked" | "recheck_exit_recommend" | "recheck_reduce" | "risk_gate_changed" | "risk_kill_switch" | "catalyst_imminent" | "dqs_dropped" | "position_near_sl" | "position_near_tp";
+            type: "ticket_created" | "ticket_expiring" | "ticket_expired" | "ticket_blocked" | "recheck_exit_recommend" | "recheck_reduce" | "risk_gate_changed" | "risk_kill_switch" | "catalyst_imminent" | "dqs_dropped" | "position_near_sl" | "position_near_tp" | "zone_candidate";
             /** @enum {string} */
             priority: "critical" | "high" | "medium" | "low";
             title: string;

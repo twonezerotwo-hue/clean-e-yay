@@ -471,6 +471,7 @@ export type NotificationType =
   | "ticket_expiring"
   | "ticket_expired"
   | "ticket_blocked"
+  | "zone_candidate"
   | "recheck_exit_recommend"
   | "recheck_reduce"
   | "risk_gate_changed"

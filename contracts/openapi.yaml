@@ -2019,6 +2019,10 @@ components:
             - dqs_dropped
             - position_near_sl
             - position_near_tp
+            # 2026-07-13 drift-fix: zone_proposer (2026-07-12) bu tipi üretiyor
+            # ama enum güncellenmemişti — lokal worker restart'ında kontrat
+            # testi yakaladı (makine ADAY bölge önerisi bildirimi).
+            - zone_candidate
         priority:
           type: string
           enum: [critical, high, medium, low]
