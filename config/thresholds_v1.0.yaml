@@ -70,6 +70,35 @@ consensus:
   # (tek satır). Aktivasyon AYRI owner kararı.
   quantum_regime_gate: false
   quantum_gate_allowed_regimes: ["OFFENSIVE"]
+  # touche TF-KAPISI (2026-07-13, gölge-önce kuruldu). Dış denetim P0 bulgusu:
+  # v4 artifact'ı sembol başına TEK yön taşır (konuşmacı TF: UP→1d, DOWN→4h)
+  # ama consensus bu yönü 15m/1h/4h/1d hücrelerinin DÖRDÜNE de kopyalıyordu —
+  # aynı bayat sinyalden çoklu pozisyon riski. false (DEFAULT) → karar davranışı
+  # bayt-aynı; konuşmacı-dışı hücrede `touche_tf_gate_observe:speaker=..:cell=..:
+  # applied=no` kanıt satırı birikir. true → v4/backup oyu yalnız kendi konuşmacı
+  # TF hücresinde sayılır; diğer hücreler TF-duyarlı zemin motora düşer (uydurma
+  # yön yok). Geri-alma = false (tek satır). Aktivasyon AYRI owner kararı.
+  touche_speaker_tf_only: false
+  # fundamental v3 (2026-07-13, gölge-önce kuruldu). Dış denetim P0 bulgusu:
+  # v2 Kripto Momentum'u çıkarırken Sermaye Rotasyonu'nu içeride bırakmıştı;
+  # aynı rotasyon skoru quantum modülünde VE rejim sınıflandırıcısında da
+  # sayılıyor (üçlü sayım — rotasyonun gerçek karar etkisi görünen quantum
+  # ağırlığının ~2 katı). false (DEFAULT) → v2/v1 seçimi birebir; v3 skoru her
+  # hücrede `fundamental_v3_observe:v3=..:used=..` satırıyla SALT-GÖZLEM.
+  # true → fundamental = saf makro (yalnız Likidite; rotasyon oyu YALNIZ
+  # quantum'da kalır). Aktivasyon owner kararı + kural #3 (5y çok-rejim
+  # backtest ŞART). Geri-alma = false (tek satır).
+  fundamental_v3: false
+  # dominant modül seçimi (2026-07-13, gölge-önce kuruldu). Dış denetim bulgusu:
+  # legacy dominant `max(score×weight)` bearish modülü HİÇBİR ZAMAN dominant
+  # seçemez (skor 5×0.50=2.5 < skor 70×0.20=14) — mistake-memory fingerprint'i
+  # başarısız işlemin dersini yanlış modüle yazar. false (DEFAULT) → legacy
+  # birebir; iki hesap ayrışınca `dominant_observe:legacy=..:directional=..`
+  # kanıt satırı birikir. true → dominant nötr-50 merkezli yön katkısıyla
+  # seçilir: max(|score−50|×weight). NOT: açılınca fingerprint dağılımı değişir
+  # (öğrenme atıfları düzelir ama eski kayıtlarla karışmasın diye aktivasyon
+  # tarihi not edilmeli). Geri-alma = false (tek satır).
+  dominant_directional: false
 
 # M1 — haber sentiment sınıflandırıcı sürümü. false (DEFAULT) → v1 birebir
 # (tam-kelime eşleşme; "Bitcoin rebounds…" gibi çekimli başlıklar neutral kalır).

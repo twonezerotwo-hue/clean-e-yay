@@ -249,6 +249,20 @@ def _touche_v4_enabled() -> bool:
         return False
 
 
+def _touche_speaker_tf_only_enabled() -> bool:
+    """`consensus.touche_speaker_tf_only` owner-flag'i (default KAPALI = bayt-aynı).
+
+    2026-07-13 dış denetim P0 bulgusu: v4 artifact'ı sembol başına TEK yön taşır
+    (konuşmacı TF: UP→1d, DOWN→4h) ama consensus bu yönü DÖRT timeframe hücresine
+    de kopyalıyordu — aynı sinyalden çoklu pozisyon riski. Açıkken v4/backup oyu
+    yalnız artifact'ın kendi konuşmacı TF hücresinde sayılır; diğer hücreler
+    TF-duyarlı zemin motora düşer (uydurma yön yok). Geri-alma = false."""
+    try:
+        return bool(load_thresholds().get("consensus", {}).get("touche_speaker_tf_only", False))
+    except (OSError, KeyError, ValueError, TypeError):
+        return False
+
+
 def _dir_to_score(d) -> float | None:
     """Yön (−1..+1) → 0-100 teknik skor (50=nötr). None geçer."""
     if d is None:
@@ -259,27 +273,39 @@ def _dir_to_score(d) -> float | None:
         return None
 
 
-def _touche_shadow(symbol: str) -> tuple[float | None, float | None]:
-    """Üretici artifact'ından (v4, backup) teknik skor çifti → 0-100.
+def _touche_shadow_row(symbol: str) -> tuple[float | None, float | None, str | None]:
+    """Üretici artifact'ından (v4, backup, speaker_tf) üçlüsü → 0-100 + TF etiketi.
 
     v4 = tf_scoring_v4 owner formülü (BİRİNCİL); backup = touche_backup
-    (EDGE-kanıtlı karne yolu, YEDEK). Artifact yok/bayat/bozuk → (None, None):
-    çağıran zemin motora düşer (dürüst: uydurma yön yok, öğrenme worker'ı
-    durursa canlı tick bağımsız kalır). Salt-okur; lazy import (yük-zamanı
-    decision→learning bağı yok)."""
+    (EDGE-kanıtlı karne yolu, YEDEK); speaker_tf = üreticinin yönü hangi
+    timeframe için hesapladığı (rejim konuşmacısı). Artifact yok/bayat/bozuk →
+    (None, None, None): çağıran zemin motora düşer (dürüst: uydurma yön yok,
+    öğrenme worker'ı durursa canlı tick bağımsız kalır). Salt-okur; lazy import
+    (yük-zamanı decision→learning bağı yok)."""
     try:
         from packages.learning import tf_scoring_shadow
         path = tf_scoring_shadow.artifact_path()
         if not path.exists():
-            return None, None
+            return None, None, None
         data = json.loads(path.read_text(encoding="utf-8"))
         gen = datetime.fromisoformat(str(data.get("generated_at")))
         if (datetime.now(UTC) - gen).total_seconds() > _TOUCHE_SHADOW_MAX_AGE_SEC:
-            return None, None  # öğrenme worker'ı durmuş → zemine düş
+            return None, None, None  # öğrenme worker'ı durmuş → zemine düş
         row = (data.get("per_symbol") or {}).get(symbol) or {}
-        return _dir_to_score(row.get("direction_v4")), _dir_to_score(row.get("direction_backup"))
+        speaker = row.get("speaker_tf")
+        return (
+            _dir_to_score(row.get("direction_v4")),
+            _dir_to_score(row.get("direction_backup")),
+            str(speaker) if speaker else None,
+        )
     except (OSError, ValueError, TypeError, KeyError):
-        return None, None
+        return None, None, None
+
+
+def _touche_shadow(symbol: str) -> tuple[float | None, float | None]:
+    """Geriye-uyum sarmalayıcı: (v4, backup) çifti — speaker_tf'siz eski imza."""
+    v4, backup, _ = _touche_shadow_row(symbol)
+    return v4, backup
 
 
 def _fundamental(regime: RegimeOutput) -> float | None:
@@ -305,6 +331,35 @@ def _fundamental_v2(regime: RegimeOutput) -> float | None:
     if not layers:
         return None
     return sum(layer.score for layer in layers) / len(layers)
+
+
+def _fundamental_v3(regime: RegimeOutput) -> float | None:
+    """Fundamental v3 (GÖLGE) — Sermaye Rotasyonu da HARİÇ (saf makro = Likidite).
+
+    2026-07-13 dış denetim P0 bulgusu: v2 Kripto Momentum'u çıkarırken Rotasyonu
+    içeride bırakmıştı; aynı rotasyon skoru quantum modülünde ve rejim
+    sınıflandırıcısında da sayılıyor (üçlü sayım — quantum'un gerçek etkisi
+    görünen ağırlığının ~2 katı). v3 fundamental'i rotasyondan arındırır;
+    rotasyon oyu YALNIZ quantum'da kalır. Katman kalmazsa None → modül düşer
+    (redistribute). Aktivasyon owner kararı + kural #3 (5y çok-rejim backtest)."""
+    layers = [
+        layer for layer in regime.layers
+        if layer.name not in ("Risk İştahı", "Kripto Momentum", "Sermaye Rotasyonu")
+    ]
+    if not layers:
+        return None
+    return sum(layer.score for layer in layers) / len(layers)
+
+
+def _fundamental_v3_enabled() -> bool:
+    """`consensus.fundamental_v3` owner-flag'i (default KAPALI = v2/v1 birebir).
+
+    Açılana kadar v3 skoru her hücrede `fundamental_v3_observe` warning
+    satırıyla SALT-GÖZLEM olarak izlenir; aktivasyon ayrı tarihli owner kararı."""
+    try:
+        return bool(load_thresholds().get("consensus", {}).get("fundamental_v3", False))
+    except (OSError, KeyError, ValueError, TypeError):
+        return False
 
 
 def _fundamental_v2_enabled() -> bool:
@@ -516,6 +571,21 @@ def _quantum_gate_allowed_regimes() -> set[str]:
         return set(_QUANTUM_GATE_DEFAULT_REGIMES)
 
 
+def _dominant_directional_enabled() -> bool:
+    """`consensus.dominant_directional` owner-flag'i (default KAPALI = bayt-aynı).
+
+    2026-07-13 dış denetim bulgusu: legacy dominant `max(score×weight)` bearish
+    modülü HİÇBİR ZAMAN dominant seçemez (skor 5 × ağırlık 0.5 = 2.5, skor 70 ×
+    ağırlık 0.2 = 14 kazanır) — mistake-memory fingerprint'i dersi yanlış modüle
+    yazar. Açıkken dominant nötr-50 merkezli yön katkısıyla seçilir:
+    `max(|score−50| × weight)`. İki hesap her hücrede `dominant_observe`
+    satırıyla yan yana (flag'siz gözlem). Geri-alma = false (tek satır)."""
+    try:
+        return bool(load_thresholds().get("consensus", {}).get("dominant_directional", False))
+    except (OSError, KeyError, ValueError, TypeError):
+        return False
+
+
 MODULE_ORDER = ["touche", "fundamental", "news", "sentinel", "quantum"]
 
 
@@ -533,7 +603,24 @@ def build(
     # paraşüt. Varyantlar her zaman gözlem satırında yan yana (owner kanıtı
     # buradan izler). RiskGate/boyut/manuel kuyruk DEĞİŞMEZ — yalnız yön oyu.
     touche_base, tf_warnings = _touche(symbol, snap, timeframe)
-    sh_v4, sh_backup = _touche_shadow(symbol)
+    sh_v4, sh_backup, speaker_tf = _touche_shadow_row(symbol)
+    # TF-kapısı (2026-07-13, gölge-önce): artifact sembol başına TEK yön taşır
+    # (konuşmacı TF). Kapı açıkken bu yön yalnız kendi TF hücresinde sayılır;
+    # diğer hücreler TF-duyarlı zemin motora düşer. Gözlem satırı HER ZAMAN
+    # yazılır (kanıt birikir); kapalıyken karar davranışı bayt-aynı.
+    if (
+        speaker_tf
+        and speaker_tf != timeframe
+        and (sh_v4 is not None or sh_backup is not None)
+    ):
+        tf_gate_applied = _touche_speaker_tf_only_enabled()
+        tf_warnings.append(
+            "touche_tf_gate_observe:"
+            f"speaker={speaker_tf}:cell={timeframe}:"
+            f"applied={'yes' if tf_gate_applied else 'no'}"
+        )
+        if tf_gate_applied:
+            sh_v4, sh_backup = None, None  # kopya yön yok → zemin motor konuşur
     if _touche_v4_enabled() and sh_v4 is not None:
         touche_score, touche_used = sh_v4, "v4"
     elif _touche_v4_enabled() and sh_backup is not None:
@@ -559,12 +646,24 @@ def build(
     # warning satırında yan yana — owner aktivasyon kanıtını buradan izler.
     fund_v1 = _fundamental(regime)
     fund_v2 = _fundamental_v2(regime)
-    fundamental = fund_v2 if _fundamental_v2_enabled() else fund_v1
+    fund_v3 = _fundamental_v3(regime)
+    # Kademe: v3 (rotasyonsuz saf makro, GÖLGE) > v2 > v1 — hangisi açıksa o
+    # canlı; v3 kapalıyken davranış v2/v1 seçimiyle bayt-aynı.
+    if _fundamental_v3_enabled():
+        fundamental = fund_v3
+    else:
+        fundamental = fund_v2 if _fundamental_v2_enabled() else fund_v1
     if fund_v1 is not None or fund_v2 is not None:
         tf_warnings.append(
             "fundamental_v2_observe:"
             f"v1={'none' if fund_v1 is None else f'{fund_v1:.1f}'}:"
             f"v2={'none' if fund_v2 is None else f'{fund_v2:.1f}'}"
+        )
+    if fund_v3 is not None or fund_v2 is not None:
+        tf_warnings.append(
+            "fundamental_v3_observe:"
+            f"v3={'none' if fund_v3 is None else f'{fund_v3:.1f}'}:"
+            f"used={'v3' if _fundamental_v3_enabled() else ('v2' if _fundamental_v2_enabled() else 'v1')}"
         )
     if fundamental is not None:
         raw["fundamental"] = fundamental
@@ -633,7 +732,20 @@ def build(
         c = s * wt
         weighted += c
         modules.append(ModuleScore(name=name, score=round(s, 2), weight=round(wt, 4), contribution=round(c, 3)))
-    dominant = max(modules, key=lambda m: m.contribution).name if modules else ""
+    dominant_legacy = max(modules, key=lambda m: m.contribution).name if modules else ""
+    # Yön-katkılı dominant (nötr-50 merkezli): |skor−50|×ağırlık — bearish modül
+    # de dominant olabilir (legacy `score×weight` bunu yapısal olarak engelliyordu).
+    dominant_dir = (
+        max(modules, key=lambda m: abs((m.score - 50.0) * m.weight)).name
+        if modules else ""
+    )
+    if dominant_dir and dominant_dir != dominant_legacy:
+        # İki hesap ayrıştığında kanıt satırı (flag'siz gözlem; owner aktivasyon
+        # kararını buradan izler). Aynıysa satır yazılmaz (gürültü yok).
+        tf_warnings.append(
+            f"dominant_observe:legacy={dominant_legacy}:directional={dominant_dir}"
+        )
+    dominant = dominant_dir if _dominant_directional_enabled() else dominant_legacy
     final = max(0.0, min(100.0, weighted))
     # Yön etiketi trade aksiyon eşikleriyle aynı banttan (tek kaynak) okunur.
     cons_th = load_thresholds().get("consensus", {})
