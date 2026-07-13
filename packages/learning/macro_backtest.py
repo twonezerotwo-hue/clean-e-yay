@@ -85,6 +85,85 @@ def _liquidity_score(dxy: float, us10y: float) -> float:
     return max(0.0, min(100.0, 100.0 - (dxy - 100.0) * 2.0 - (us10y - 4.0) * 5.0))
 
 
+def _zscore(series: list[float], window: int = 252, min_n: int = 60) -> float | None:
+    """Son değerin, son `window` değere göre z-skoru (rolling merkezleme)."""
+    tail = [v for v in series[-window:] if v == v]  # NaN süz
+    if len(tail) < min_n:
+        return None
+    sd = _st.pstdev(tail)
+    if sd <= 0:
+        return None
+    return (tail[-1] - _st.mean(tail)) / sd
+
+
+# ── Fundamental formül ADAYLARI (Basamak-4 revizyonu, 2026-07-13) ────────────
+# Mevcut Likidite formülünün ampirik kusuru: mutlak seviyeye çapalı ve eğimleri
+# zayıf → 5 yılda 1118/1118 gün ≥55 (hiç bearish olamıyor). Adaylar merkezi
+# yapısal olarak düzeltir; katsayı UYDURMA yok (eşit-ağırlık eksenler), seçim
+# 5y tezgâh kanıtıyla owner'ın. Hepsi 0-100, 50=nötr; veri yetersiz → None.
+
+def cand_z(dxy: list[float], us10y: list[float]) -> float | None:
+    """ADAY A — seviye yerine 1y z-skor: DXY ve faiz kendi son-yıl dağılımına
+    göre yüksekse likidite sıkı (skor<50). Merkez yapısal olarak 50."""
+    zd, zr = _zscore(dxy), _zscore(us10y)
+    if zd is None or zr is None:
+        return None
+    return max(0.0, min(100.0, 50.0 - 20.0 * zd - 20.0 * zr))
+
+
+def cand_mom(dxy: list[float], us10y: list[float]) -> float | None:
+    """ADAY B — değişim-bazlı: DXY ve faiz vol-norm momentumu (yükseliyorsa
+    sıkılaşıyor → risk-off). flow.vol_norm_momentum REUSE (çoklu-ufuk 1a/3a/6a)."""
+    md = flow.vol_norm_momentum(dxy)
+    mr = flow.vol_norm_momentum(us10y)
+    if md is None or mr is None:
+        return None
+    return max(0.0, min(100.0, 50.0 + 12.5 * (-md - mr) / 2.0))
+
+
+def cand_credit(
+    dxy: list[float], us10y: list[float],
+    hyg: list[float] | None, lqd: list[float] | None,
+) -> float | None:
+    """ADAY C — B + kredi ekseni: HYG/LQD oran momentumu (kredi risk-iştahı;
+    denetimin 'boşta duran güçlü girdi' dediği eksen). Üç eksen eşit ağırlık."""
+    md = flow.vol_norm_momentum(dxy)
+    mr = flow.vol_norm_momentum(us10y)
+    if md is None or mr is None:
+        return None
+    axes = [-md, -mr]
+    if hyg and lqd:
+        mc = flow.credit_signal(hyg, lqd)
+        if mc is not None:
+            axes.append(mc)
+    return max(0.0, min(100.0, 50.0 + 12.5 * sum(axes) / len(axes)))
+
+
+CANDIDATE_KEYS = ("cand_z", "cand_mom", "cand_credit")
+
+
+def fundamental_candidates(prefix: dict[str, list[float]]) -> dict[str, float | None]:
+    dxy, us10y = prefix.get("DXY") or [], prefix.get("US10Y") or []
+    return {
+        "cand_z": cand_z(dxy, us10y),
+        "cand_mom": cand_mom(dxy, us10y),
+        "cand_credit": cand_credit(dxy, us10y, prefix.get("HYG"), prefix.get("LQD")),
+    }
+
+
+def score_distribution(rows: list[dict], key: str) -> dict:
+    """Skor dağılımı — merkez düzeldi mi kanıtı: gün yüzdesi ≥55 / ≤45 / ara."""
+    vals = [r[key] for r in rows if r.get(key) is not None]
+    if not vals:
+        return {"n": 0}
+    n = len(vals)
+    return {
+        "n": n, "mean": round(_st.mean(vals), 1),
+        "pct_hi55": round(100.0 * sum(1 for v in vals if v >= 55) / n, 1),
+        "pct_lo45": round(100.0 * sum(1 for v in vals if v <= 45) / n, 1),
+    }
+
+
 def _regime_label(avg: float) -> str:
     for thr, name in _REGIME_THRESHOLDS:
         if avg >= thr:
@@ -133,12 +212,14 @@ def walk(
                 fwd[key] = (s[i + horizon] - s[i]) / s[i] * 100.0
         if not all(k in fwd for k in _RISK_TARGETS):
             continue
+        cands = fundamental_candidates(prefix_c)
         rows.append({
             "date": dates[i],
             "signals": signals,
             "flow_score": round(fscore, 2),
             "fund_v2": round(fund_v2, 2),
             "fund_v3": round(fund_v3, 2),
+            **{k: (None if v is None else round(v, 2)) for k, v in cands.items()},
             "regime": regime,
             "fwd": {k: round(v, 3) for k, v in fwd.items()},
             "fwd_risk": round(sum(fwd[k] for k in _RISK_TARGETS) / len(_RISK_TARGETS), 3),
@@ -318,6 +399,28 @@ def analyze(rows: list[dict], horizon: int) -> dict:
             }
             for t in _FUND_TARGETS
         },
+        "fundamental_candidates": {
+            key: {
+                "distribution": score_distribution(rows, key),
+                "targets": {
+                    t: {
+                        "tercile": separation_tercile(rows, key, t),
+                        "per_year": {
+                            y: (separation_tercile(
+                                [r for r in rows if r["date"].startswith(y)], key, t,
+                            ) or {}).get("sep")
+                            for y in sorted({r["date"][:4] for r in rows})
+                        },
+                    }
+                    for t in _FUND_TARGETS
+                },
+            }
+            for key in CANDIDATE_KEYS
+        },
+        "fund_current_distribution": {
+            "fund_v2": score_distribution(rows, "fund_v2"),
+            "fund_v3": score_distribution(rows, "fund_v3"),
+        },
         "regime_distribution": {
             reg: sum(1 for r in rows if r["regime"] == reg)
             for reg in ("OFFENSIVE", "NEUTRAL", "DEFENSIVE", "CRISIS")
@@ -390,6 +493,13 @@ def main() -> int:
     for t, blk in r["fundamental_v2_vs_v3"].items():
         print(f"  hedef {t}: v2 {_fmt_sep(blk['v2']['tercile'])}")
         print(f"  {'':8}  v3 {_fmt_sep(blk['v3']['tercile'])}")
+    print("\n-- FORMUL ADAYLARI (A=z-skor, B=momentum, C=B+kredi ekseni) --")
+    print(f"  mevcut dagilim: v2={r['fund_current_distribution']['fund_v2']} v3={r['fund_current_distribution']['fund_v3']}")
+    for key, blk in r["fundamental_candidates"].items():
+        print(f"  {key}: dagilim={blk['distribution']}")
+        for t, tb in blk["targets"].items():
+            yrs = " ".join(f"{y}:{s if s is not None else 'na'}" for y, s in tb["per_year"].items())
+            print(f"    {t:4} genel {_fmt_sep(tb['tercile'])}  | yil-yil: {yrs}")
     print(f"\nArtifact: {artifact_path()}")
     print("NOT: rejim PROXY'dir; sonuclar M8/flow aktivasyon KANITI icindir, otomatik aksiyon yok.")
     return 0

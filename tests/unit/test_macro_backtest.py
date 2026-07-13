@@ -125,6 +125,58 @@ def test_walk_forward_trains_only_on_past():
         assert blk.get("verdict") == "INSUFFICIENT" or "learned" in blk
 
 
+# ── Fundamental formül adayları (Basamak-4 revizyonu) ────────────────────────
+
+def _noisy(base, drift, n=300):
+    return [base + drift * i + (1.5 if i % 2 else -1.5) for i in range(n)]
+
+
+def test_zscore_direction():
+    assert mb._zscore(_noisy(100.0, 0.2)) > 0      # son değer kendi yılına göre yüksek
+    assert mb._zscore(_noisy(100.0, -0.2)) < 0
+    assert mb._zscore([100.0] * 300) is None       # sıfır varyans → None (uydurma yok)
+    assert mb._zscore([1.0] * 10) is None          # yetersiz pencere
+
+
+def test_cand_z_tightening_is_bearish():
+    # DXY ve faiz kendi yıllık dağılımının tepesinde → likidite sıkı → skor < 50
+    s = mb.cand_z(_noisy(100.0, 0.05), _noisy(4.0, 0.005))
+    assert s is not None and s < 50.0
+    # Gevşeme → skor > 50
+    s2 = mb.cand_z(_noisy(115.0, -0.05), _noisy(5.5, -0.005))
+    assert s2 is not None and s2 > 50.0
+
+
+def test_cand_mom_direction_and_center():
+    up = mb.cand_mom(_noisy(100.0, 0.1, 200), _noisy(4.0, 0.01, 200))
+    down = mb.cand_mom(_noisy(120.0, -0.1, 200), _noisy(6.0, -0.01, 200))
+    assert up is not None and up < 50.0            # sıkılaşma → risk-off
+    assert down is not None and down > 50.0        # gevşeme → risk-on
+    assert mb.cand_mom([100.0] * 50, [4.0] * 50) is None  # yetersiz → None
+
+
+def test_cand_credit_uses_credit_axis_when_available():
+    dxy, rate = _noisy(100.0, 0.0, 200), _noisy(4.0, 0.0, 200)
+    hyg_up, lqd_flat = _noisy(80.0, 0.1, 200), _noisy(110.0, 0.0, 200)
+    with_credit = mb.cand_credit(dxy, rate, hyg_up, lqd_flat)
+    without = mb.cand_credit(dxy, rate, None, None)
+    assert with_credit is not None and without is not None
+    assert with_credit > without                   # kredi risk-on ekseni skoru yükseltir
+
+
+def test_score_distribution_math():
+    rows = [{"s": 60.0}] * 3 + [{"s": 40.0}] * 1
+    d = mb.score_distribution(rows, "s")
+    assert d["n"] == 4 and d["pct_hi55"] == 75.0 and d["pct_lo45"] == 25.0
+
+
+def test_fundamental_candidates_keys():
+    prefix = {"DXY": _noisy(100.0, 0.05), "US10Y": _noisy(4.0, 0.005)}
+    c = mb.fundamental_candidates(prefix)
+    assert set(c) == set(mb.CANDIDATE_KEYS)
+    assert c["cand_z"] is not None and c["cand_credit"] is not None  # kredi verisiz de yaşar
+
+
 def test_run_writes_artifact(tmp_path, monkeypatch):
     """run() uçtan uca: arşiv yerine sentetik seri, artifact tmp'e yazılır."""
     monkeypatch.setenv("MACRO_BACKTEST_PATH", str(tmp_path / "macro_backtest.json"))
