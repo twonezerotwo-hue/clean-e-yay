@@ -22,7 +22,11 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 
 from packages.data.ingestion.pipeline import MarketSnapshot
-from packages.data.registry.loader import load_active_weights, load_thresholds
+from packages.data.registry.loader import (
+    load_active_weights,
+    load_source_registry,
+    load_thresholds,
+)
 from packages.regime.classifier import RegimeOutput
 
 
@@ -571,6 +575,64 @@ def _quantum_gate_allowed_regimes() -> set[str]:
         return set(_QUANTUM_GATE_DEFAULT_REGIMES)
 
 
+# Kaynak kind → consensus modülü eşlemesi (source_registry `decision_usage`
+# uygulaması). Fiyat/makro kaynakları (verified_required) touche/fundamental/
+# sentinel'i besler — kısıt yalnız rotation→quantum ve news*→news kaynaklarında.
+_KIND_TO_MODULE = {"rotation": "quantum", "news": "news", "news_geo": "news"}
+_RESTRICTED_USAGES = ("analytics_only", "simulation_only")
+
+
+def _enforce_decision_usage_enabled() -> bool:
+    """`consensus.enforce_decision_usage` owner-flag'i (default KAPALI = bayt-aynı).
+
+    2026-07-13 dış denetim P1 bulgusu: source_registry haber kaynaklarını
+    `analytics_only`, rotasyon kaynaklarını `simulation_only` etiketler ama
+    consensus bu politikayı UYGULAMIYORDU — etiket fiilen dokümantasyondu.
+    Açıkken kısıtlı-kaynaklı modüller (news, quantum) yön kararına GİRMEZ
+    (modül düşer, ağırlığı _redistribute; nötr-50 uydurulmaz). Kapalıyken her
+    hücrede `decision_usage_observe` kanıt satırı birikir. Geri-alma = false."""
+    try:
+        return bool(load_thresholds().get("consensus", {}).get("enforce_decision_usage", False))
+    except (OSError, KeyError, ValueError, TypeError):
+        return False
+
+
+def _restricted_modules() -> dict[str, str]:
+    """source_registry'den kısıtlı consensus modülleri: {modül: en-kısıtlı etiket}.
+
+    verified_required = tam karar hakkı; analytics_only/simulation_only karar
+    zincirinde kısıtlı. Modülü besleyen kaynaklardan herhangi biri kısıtlıysa
+    modül o etiketi taşır (analytics_only > simulation_only muhafazakârlığı).
+    Registry okunamazsa boş dict (kısıt uygulanmaz — mevcut davranış)."""
+    try:
+        out: dict[str, str] = {}
+        for src in load_source_registry().get("sources") or []:
+            mod = _KIND_TO_MODULE.get(str(src.get("kind", "")))
+            usage = str(src.get("decision_usage", ""))
+            if mod and usage in _RESTRICTED_USAGES and out.get(mod) != "analytics_only":
+                out[mod] = usage
+        return out
+    except (OSError, ValueError, TypeError, KeyError, AttributeError):
+        return {}
+
+
+def _min_module_coverage() -> float:
+    """`consensus.min_module_coverage` (default 0.0 = KAPALI = bayt-aynı).
+
+    2026-07-13 dış denetim P1 bulgusu: modül düşünce `_redistribute` ağırlığını
+    kalanlara TAM dağıtıyor — veri azaldıkça kalan kanıtlar güçleniyor (ters
+    davranış; CRISIS'te sentinel düşerse ~%53 ağırlık diğerlerine şişer).
+    0'dan büyükse: mevcut modüllerin TABAN ağırlık toplamı (kapsama) bu eşiğin
+    altına düşerse yön nötre zorlanır (işlem açılmaz; skor/modüller raporda
+    aynen kalır — yalnız yön kararı kısıtlanır). Kapsama her eksik-modüllü
+    hücrede `coverage_observe` satırıyla flag'siz izlenir. Geri-alma = 0.0."""
+    try:
+        v = load_thresholds().get("consensus", {}).get("min_module_coverage", 0.0)
+        return float(v or 0.0)
+    except (OSError, KeyError, ValueError, TypeError):
+        return 0.0
+
+
 def _dominant_directional_enabled() -> bool:
     """`consensus.dominant_directional` owner-flag'i (default KAPALI = bayt-aynı).
 
@@ -718,9 +780,37 @@ def build(
                     "quantum_v2_observe:"
                     f"v1={quantum_v1:.1f}:v2={quantum_v2:.1f}:used={'v2' if use_q2 else 'v1'}"
                 )
+    # Kaynak-politikası (2026-07-13, gölge-önce): source_registry'de kısıtlı
+    # etiketli (analytics_only/simulation_only) kaynakların beslediği modüller.
+    # Gözlem satırı HER ZAMAN (kanıt birikir); düşürme yalnız flag açıkken.
+    restricted = {m: u for m, u in _restricted_modules().items() if m in raw}
+    if restricted:
+        usage_applied = _enforce_decision_usage_enabled()
+        tf_warnings.append(
+            "decision_usage_observe:"
+            + ":".join(f"{m}={u}" for m, u in sorted(restricted.items()))
+            + f":applied={'yes' if usage_applied else 'no'}"
+        )
+        if usage_applied:
+            for m, u in sorted(restricted.items()):
+                raw.pop(m, None)
+                tf_warnings.append(f"decision_usage_dropped:{m}:{u}")
     weights_cfg = load_active_weights()
     base = weights_cfg["regimes"].get(regime.label, weights_cfg["regimes"]["NEUTRAL"])
     available = set(raw.keys())
+    # Kapsama (2026-07-13, gölge-önce): _redistribute eksik modülün ağırlığını
+    # kalanlara TAM dağıtır — kapsama bunun dürüstlük sayacı: mevcut modüllerin
+    # TABAN ağırlık toplamı. Eksik modül varken her hücrede gözlem satırı;
+    # eşik (min_module_coverage>0) altında yön nötre zorlanır (aşağıda).
+    base_total = sum(float(v) for v in base.values()) or 1.0
+    coverage = sum(float(base.get(k, 0.0)) for k in available) / base_total
+    min_cov = _min_module_coverage()
+    coverage_forced_neutral = bool(min_cov > 0.0 and coverage < min_cov)
+    if coverage < 1.0 - 1e-9:
+        tf_warnings.append(
+            f"coverage_observe:cov={coverage:.2f}:min={min_cov:.2f}:"
+            f"applied={'yes' if coverage_forced_neutral else 'no'}"
+        )
     w = _redistribute(base, available)
     modules = []
     weighted = 0.0
@@ -765,10 +855,17 @@ def build(
         confluence = below >= 3
     else:
         confluence = False
+    direction = _direction(final, bullish_min, bearish_max)
+    if coverage_forced_neutral and direction != "neutral":
+        # Kapsama eşiği altı: kanıt tabanı incelmiş — yön kararı verilmez
+        # (skor/modüller raporda aynen kalır; yalnız işlem-açıcı yön kısıtlanır).
+        tf_warnings.append(f"coverage_gate:forced_neutral:was={direction}")
+        direction = "neutral"
+        confluence = False
     return ConsensusResult(
         symbol=symbol,
         score=round(final, 1),
-        direction=_direction(final, bullish_min, bearish_max),
+        direction=direction,
         modules=modules,
         confluence_aligned=confluence,
         dominant_module=dominant,

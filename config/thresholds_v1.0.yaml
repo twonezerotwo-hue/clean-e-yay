@@ -99,6 +99,28 @@ consensus:
   # (öğrenme atıfları düzelir ama eski kayıtlarla karışmasın diye aktivasyon
   # tarihi not edilmeli). Geri-alma = false (tek satır).
   dominant_directional: false
+  # Kapsama tabanı (2026-07-13, gölge-önce kuruldu). Dış denetim P1 bulgusu:
+  # modül düşünce _redistribute ağırlığını kalanlara TAM dağıtıyor — veri
+  # azaldıkça kalan kanıtlar GÜÇLENİYOR (ters davranış; örn. CRISIS'te sentinel
+  # verisi kaybolursa ~%53 ağırlık diğerlerine şişer). 0.0 (DEFAULT) → karar
+  # davranışı bayt-aynı; eksik-modüllü her hücrede `coverage_observe:cov=..:
+  # min=..:applied=no` kanıt satırı birikir. >0 → mevcut modüllerin TABAN
+  # ağırlık toplamı (kapsama) eşiğin altındaysa yön NÖTRE zorlanır (işlem
+  # açılmaz; skor raporda aynen). Örn. 0.60: modüllerin %40+ ağırlığı verisiz
+  # kaldıysa o hücreden işlem çıkmaz. Geri-alma = 0.0 (tek satır).
+  min_module_coverage: 0.0
+  # Kaynak-politikası uygulaması (2026-07-13, gölge-önce kuruldu). Dış denetim
+  # P1 bulgusu: source_registry haber kaynaklarını `analytics_only`, rotasyon
+  # kaynaklarını `simulation_only` etiketler ama consensus bu politikayı
+  # UYGULAMIYORDU — etiket fiilen dokümantasyondu. false (DEFAULT) → davranış
+  # bayt-aynı; her hücrede `decision_usage_observe:news=..:quantum=..:applied=no`
+  # kanıt satırı birikir. true → kısıtlı-kaynaklı modüller (news, quantum) yön
+  # kararına GİRMEZ (modül düşer, redistribute; nötr-50 uydurulmaz). DİKKAT:
+  # açmak 5-modül konsensüsü fiilen 3 modüle indirir (touche/fundamental/
+  # sentinel) — ya registry etiketleri güncellenmeli (owner kararı: rotation/
+  # news karar hakkı kazandı mı?) ya da bu flag açılmalı; İKİSİ BİRDEN DEĞİL.
+  # Geri-alma = false (tek satır).
+  enforce_decision_usage: false
 
 # M1 — haber sentiment sınıflandırıcı sürümü. false (DEFAULT) → v1 birebir
 # (tam-kelime eşleşme; "Bitcoin rebounds…" gibi çekimli başlıklar neutral kalır).
