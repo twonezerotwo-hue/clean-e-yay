@@ -135,6 +135,49 @@ REGISTRY: dict[str, dict] = {
         "label": "Karar-kanıt tüketicisi — birleşik advice canlı boyut kısması",
         "source": ("env", "LEARNING_ADVISOR_APPLY"),
     },
+    # Dış denetim dalgası (2026-07-13, M7-M18) — bugün kurulan YAML gölge flag'leri
+    # açılınca OFF→ON'da baseline damgalansın (E-6 dersi: kayıt ile aktivasyon
+    # AYRI deploy — bu kayıt flag'ler OFF iken gider, aktivasyon sonraki deploy).
+    "consensus_dominant_directional": {
+        "label": "Dominant modül yön-katkısı (M9)",
+        "source": ("thresholds", ("consensus", "dominant_directional")),
+    },
+    "consensus_quantum_regime_gate": {
+        "label": "Quantum rejim-kapısı — NEUTRAL'da düşür (challenger kanıtı)",
+        "source": ("thresholds", ("consensus", "quantum_regime_gate")),
+    },
+    "regime_hysteresis_band": {
+        "label": "Rejim hysteresis — sınır flip'ini engelle (M12)",
+        "source": ("thresholds", ("regime", "hysteresis_band")),
+    },
+    "consensus_touche_speaker_tf_only": {
+        "label": "Touche TF-kapısı — kopya yön kesme (M7)",
+        "source": ("thresholds", ("consensus", "touche_speaker_tf_only")),
+    },
+    "consensus_min_module_coverage": {
+        "label": "Modül kapsama tabanı — az veride NO_TRADE (M10)",
+        "source": ("thresholds", ("consensus", "min_module_coverage")),
+    },
+    "consensus_news_abstain": {
+        "label": "News çekimserliği — kanıtsız news düşür (M13)",
+        "source": ("thresholds", ("consensus", "news_abstain")),
+    },
+    "consensus_enforce_decision_usage": {
+        "label": "Kaynak-politikası uygulaması — kısıtlı modül düşür (M11)",
+        "source": ("thresholds", ("consensus", "enforce_decision_usage")),
+    },
+    "consensus_fundamental_v3": {
+        "label": "Fundamental v3 — rotasyonsuz (M8; backtest ÇÜRÜTTÜ)",
+        "source": ("thresholds", ("consensus", "fundamental_v3")),
+    },
+    "consensus_fundamental_v4": {
+        "label": "Fundamental v4 — momentum-Likidite (M16)",
+        "source": ("thresholds", ("consensus", "fundamental_v4")),
+    },
+    "regime_liquidity_momentum": {
+        "label": "Rejim momentum-Likidite — CRISIS-maskesi düzeltme (M18)",
+        "source": ("thresholds", ("regime", "liquidity_momentum")),
+    },
 }
 
 
@@ -190,7 +233,13 @@ def _flag_enabled(key: str) -> bool:
             if not isinstance(node, dict):
                 return False
             node = node.get(part)
-        return bool(node) if isinstance(node, bool) else False
+        # bool flag: doğrudan. Sayısal flag (min_module_coverage/hysteresis_band):
+        # >0 = açık (0.0 = KAPALI). bool, int'in alt-sınıfı → önce bool kontrol şart.
+        if isinstance(node, bool):
+            return node
+        if isinstance(node, (int, float)):
+            return node > 0
+        return False
     except (OSError, KeyError, ValueError, TypeError):
         return False
 

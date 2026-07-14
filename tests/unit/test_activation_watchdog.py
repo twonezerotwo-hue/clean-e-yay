@@ -28,6 +28,25 @@ def wd_env(tmp_path, monkeypatch):
     return tmp_path
 
 
+def test_numeric_flag_enabled_reading() -> None:
+    """Sayısal flag (min_module_coverage/hysteresis_band): 0=KAPALI, >0=AÇIK."""
+    with threshold_override({"consensus": {"min_module_coverage": 0.0}}):
+        assert aw._flag_enabled("consensus_min_module_coverage") is False
+    with threshold_override({"consensus": {"min_module_coverage": 0.6}}):
+        assert aw._flag_enabled("consensus_min_module_coverage") is True
+    with threshold_override({"regime": {"hysteresis_band": 3.0}}):
+        assert aw._flag_enabled("regime_hysteresis_band") is True
+
+
+def test_denetim_flags_registered() -> None:
+    """M7-M18 gölge flag'leri REGISTRY'de (aktivasyon izleme altyapısı hazır)."""
+    for key in (
+        "consensus_dominant_directional", "consensus_quantum_regime_gate",
+        "regime_hysteresis_band", "consensus_fundamental_v4", "regime_liquidity_momentum",
+    ):
+        assert key in aw.REGISTRY
+
+
 def test_first_sight_already_on_not_monitored(wd_env) -> None:
     with threshold_override(_FLAG_ON):
         out = aw.sync()
