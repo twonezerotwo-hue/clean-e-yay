@@ -380,6 +380,43 @@ def per_regime(rows: list[dict], score_key: str, target: str) -> dict[str, dict]
 
 # ── Rapor + artifact ─────────────────────────────────────────────────────────
 
+def weights_evidence(rows: list[dict]) -> dict:
+    """Elle rejim ağırlıklarını backtest edge'iyle kıyasla (denetim: "ağırlıklar
+    hiç backtest edilmemiş"). Ölçülebilen 2 modül: fundamental (v4/cand_mom
+    momentum-Likidite) ve quantum (flow_score, rotasyon-vekili). Her rejimde
+    o modülün tercile-separation'ı (edge işareti) yanında baseline ağırlığı.
+
+    DÜRÜST SINIR: touche/news/sentinel geçmiş modül skoru YOK (RSS/teknik
+    geçmişe kurulamaz) → onların ağırlık kanıtı CANLI signal_quality
+    scorecard'ından (203-işlem analizi; fundamental tek ayırıcı bulunmuştu)."""
+    try:
+        from packages.data.registry.loader import load_active_weights
+
+        regimes = (load_active_weights().get("regimes") or {})
+    except (OSError, KeyError, ValueError, TypeError):
+        regimes = {}
+    # Modül → backtest proxy skor anahtarı (BTC ileri getirisine karşı).
+    proxy = {"fundamental": "cand_mom", "quantum": "flow_score"}
+    out: dict[str, dict] = {}
+    for reg in ("OFFENSIVE", "NEUTRAL", "DEFENSIVE", "CRISIS"):
+        sub = [r for r in rows if r["regime"] == reg]
+        w = regimes.get(reg, {})
+        cells: dict[str, dict] = {}
+        for mod, key in proxy.items():
+            sep = separation_tercile(sub, key, "BTC")
+            cells[mod] = {
+                "weight": w.get(mod),
+                "edge_sep": sep.get("sep"),
+                "edge_verdict": sep.get("verdict"),
+                "n": len(sub),
+            }
+        out[reg] = {
+            "measured": cells,
+            "unmeasured": {m: w.get(m) for m in ("touche", "news", "sentinel")},
+        }
+    return out
+
+
 def artifact_path() -> Path:
     return Path(os.environ.get("MACRO_BACKTEST_PATH", "data/runtime/macro_backtest.json"))
 
@@ -454,6 +491,7 @@ def analyze(rows: list[dict], horizon: int) -> dict:
             reg: sum(1 for r in rows if r["regime_mom"] == reg)
             for reg in ("OFFENSIVE", "NEUTRAL", "DEFENSIVE", "CRISIS")
         },
+        "weights_evidence": weights_evidence(rows),
     }
     return result
 
@@ -531,6 +569,12 @@ def main() -> int:
         for t, tb in blk["targets"].items():
             yrs = " ".join(f"{y}:{s if s is not None else 'na'}" for y, s in tb["per_year"].items())
             print(f"    {t:4} genel {_fmt_sep(tb['tercile'])}  | yil-yil: {yrs}")
+    print("\n-- AGIRLIK KANITI (elle rejim agirligi vs backtest edge) --")
+    for reg, blk in r["weights_evidence"].items():
+        print(f"  {reg}:")
+        for mod, c in blk["measured"].items():
+            print(f"    {mod:12} agirlik={c['weight']} edge={c['edge_sep']} ({c['edge_verdict']}, n={c['n']})")
+        print(f"    olculemez (canli scorecard): {blk['unmeasured']}")
     print(f"\nArtifact: {artifact_path()}")
     print("NOT: rejim PROXY'dir; sonuclar M8/flow aktivasyon KANITI icindir, otomatik aksiyon yok.")
     return 0

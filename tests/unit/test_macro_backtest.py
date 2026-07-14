@@ -206,6 +206,22 @@ def _rising_seq(n, start=100.0, step=0.3):
     return [start + step * i for i in range(n)]
 
 
+def test_weights_evidence_structure():
+    rows = (
+        [{"regime": "NEUTRAL", "cand_mom": 60.0, "flow_score": 60.0,
+          "fwd": {"BTC": 2.0}, "date": "2024-01-01"}] * 20
+        + [{"regime": "NEUTRAL", "cand_mom": 40.0, "flow_score": 40.0,
+            "fwd": {"BTC": -1.0}, "date": "2024-01-02"}] * 20
+    )
+    ev = mb.weights_evidence(rows)
+    assert set(ev) == {"OFFENSIVE", "NEUTRAL", "DEFENSIVE", "CRISIS"}
+    neu = ev["NEUTRAL"]["measured"]
+    assert "fundamental" in neu and "quantum" in neu
+    assert neu["fundamental"]["edge_verdict"] == "POSITIVE"  # yüksek skor → yüksek getiri
+    # touche/news/sentinel ölçülemez (geçmiş skor yok) → unmeasured
+    assert set(ev["NEUTRAL"]["unmeasured"]) == {"touche", "news", "sentinel"}
+
+
 def test_run_writes_artifact(tmp_path, monkeypatch):
     """run() uçtan uca: arşiv yerine sentetik seri, artifact tmp'e yazılır."""
     monkeypatch.setenv("MACRO_BACKTEST_PATH", str(tmp_path / "macro_backtest.json"))
