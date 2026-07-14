@@ -120,10 +120,17 @@ def cand_z(dxy: list[float], us10y: list[float]) -> float | None:
 
 
 def cand_mom(dxy: list[float], us10y: list[float]) -> float | None:
-    """ADAY B — değişim-bazlı: DXY ve faiz vol-norm momentumu (yükseliyorsa
-    sıkılaşıyor → risk-off). Canlı üretici `flow.liquidity_momentum_score`'a
-    DELEGE eder (tek kaynak — canlı v4 = backtest'te ölçülen B birebir)."""
-    return flow.liquidity_momentum_score(dxy, us10y)
+    """ADAY B — v4.0 clamp'li formül, KIYAS REFERANSI OLARAK DONDURULDU.
+
+    Canlı üretici artık v4.1 (yüzdelik = cand_mom_pct/flow tek kaynak); bu aday
+    eski formülün donmuş kopyası — tezgâhta v4.0↔v4.1 kıyası yaşasın diye.
+    Clamp analizi (2026-07-13): ±3 kirpik günlerin %62-66'sında bağlanıyor,
+    skor %41 gün İKİLİ (12.5/87.5) — revizyonun gerekçesi."""
+    md = flow.vol_norm_momentum(dxy)
+    mr = flow.vol_norm_momentum(us10y)
+    if md is None or mr is None:
+        return None
+    return max(0.0, min(100.0, 50.0 + 12.5 * (-md - mr) / 2.0))
 
 
 def cand_credit(
@@ -144,7 +151,16 @@ def cand_credit(
     return max(0.0, min(100.0, 50.0 + 12.5 * sum(axes) / len(axes)))
 
 
-CANDIDATE_KEYS = ("cand_z", "cand_mom", "cand_credit")
+def mom_pct_series(
+    dxy: list[float], us10y: list[float], window: int = 252, min_n: int = 60
+) -> list[float | None]:
+    """ADAY D = CANLI v4.1 — yüzdelik-normalize momentum (clamp-analizi
+    düzeltmesi, 2026-07-13). `flow.liquidity_momentum_pct_series`'e DELEGE
+    (tek kaynak: tezgâhta ölçülen = canlıda çalışan, drift imkânsız)."""
+    return flow.liquidity_momentum_pct_series(dxy, us10y, window=window, min_n=min_n)
+
+
+CANDIDATE_KEYS = ("cand_z", "cand_mom", "cand_credit", "cand_mom_pct")
 
 
 def fundamental_candidates(prefix: dict[str, list[float]]) -> dict[str, float | None]:
@@ -189,6 +205,10 @@ def walk(
     Her satır bir gündür; skorlar yalnız ≤t verisinden (dilimleme prefix'le),
     `fwd_*` alanları t→t+H getirisi (son H gün satır üretmez)."""
     n = len(dates)
+    # ADAY D ön-hesap: yüzdelik-normalize momentum serisi (her i yalnız ≤i
+    # penceresi kullanır — look-ahead yok; döngü içinde O(n·252) tekrar hesap
+    # yerine tek geçiş).
+    pct_series = mom_pct_series(closes.get("DXY") or [], closes.get("US10Y") or [])
     rows: list[dict] = []
     for i in range(WARMUP, n - horizon):
         prefix_c = {k: v[: i + 1] for k, v in closes.items()}
@@ -217,6 +237,7 @@ def walk(
         # Rejim proxy artık canlı 4-katmanı yansıtır: Likidite + Rotasyon(flow) +
         # Kripto + Risk İştahı (hangi bacak varsa). VIX'li dönemde CRISIS görünür.
         cands = fundamental_candidates(prefix_c)
+        cands["cand_mom_pct"] = pct_series[i] if i < len(pct_series) else None
         layer_vals = [v for v in (liq, fscore, crypto, appetite) if v is not None]
         regime = _regime_label(sum(layer_vals) / len(layer_vals))
         # ALTERNATİF rejim: Likidite katmanı yerine momentum-Likidite (v4/ADAY B).

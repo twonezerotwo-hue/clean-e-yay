@@ -41,14 +41,16 @@ DEFAULT_WEIGHTS: dict[str, float] = {
     "XAG": 0.0, "OIL": 0.0,                        # iki-yuzlu → backtest yerlestirir
 }
 DEFAULT_SCALE = 8.0
-# Makro likidite momentum skoru band olcegi (macro_backtest ADAY B'de dogrulandi;
-# clamp+/-3 ile skor bandi ~[12,88], merkez 50). Elle degil — backtest secti.
-LIQUIDITY_MOM_SCALE = 12.5
 
 
-def vol_norm_momentum(closes: list[float]) -> float | None:
+def vol_norm_momentum(
+    closes: list[float], clamp: float | None = _SIGNAL_CLAMP
+) -> float | None:
     """Coklu-ufuk (%1a/3a/6a) getiri ortalamasi / realized-vol (oynaklik-adil).
-    Yetersiz veri → None. `_SIGNAL_CLAMP`'e yumusak kirpik."""
+    Yetersiz veri → None. Default `_SIGNAL_CLAMP` kirpigi; `clamp=None` → HAM
+    deger (makro serilerde ölçek teşhisi/yüzdelik-normalizasyon için —
+    2026-07-13 clamp analizi: DXY/US10Y ham degerleri ±10-25 gezerken ±3
+    kirpigi gunlerin %62-66'sinda bagliyordu)."""
     if len(closes) < _MIN_HISTORY:
         return None
     moms = [(closes[-1] - closes[-1 - n]) / closes[-1 - n] * 100.0
@@ -61,7 +63,9 @@ def vol_norm_momentum(closes: list[float]) -> float | None:
     if vol <= 0:
         return None
     raw = (sum(moms) / len(moms)) / vol
-    return max(-_SIGNAL_CLAMP, min(_SIGNAL_CLAMP, raw))
+    if clamp is None:
+        return raw
+    return max(-clamp, min(clamp, raw))
 
 
 def volume_confirm(volumes: list[float] | None) -> float:
@@ -100,25 +104,70 @@ def credit_signal(hyg_closes: list[float], lqd_closes: list[float]) -> float | N
     return vol_norm_momentum(ratio)
 
 
+# v4.1 yuzdelik-normalizasyon pencere tanimlari (katsayi degil; rank kendini
+# kalibre eder — uydurma yok).
+LIQUIDITY_PCT_WINDOW = 252   # ~1 yil islem gunu
+LIQUIDITY_PCT_MIN = 60       # rank icin asgari gecerli eksen degeri
+
+
+def liquidity_momentum_pct_series(
+    dxy_closes: list[float],
+    us10y_closes: list[float],
+    window: int = LIQUIDITY_PCT_WINDOW,
+    min_n: int = LIQUIDITY_PCT_MIN,
+) -> list[float | None]:
+    """Gun-hizali v4.1 skor serisi (0-100). Gun i YALNIZ <=i verisi kullanir.
+
+    Eksen = HAM (kirpilmamis) DXY+10y-faiz vol-norm momentum ortalamasi; skor =
+    100 x (1 - eksenin son-1-yil icindeki yuzdelik sirasi). Sikilasma momentumu
+    kendi yilinin tepesindeyse skor tabana iner ama ASLA yapismaz (cozunurluk
+    tam). Yetersiz veri -> None."""
+    n = min(len(dxy_closes), len(us10y_closes))
+    axis: list[float | None] = []
+    for i in range(n):
+        md = vol_norm_momentum(dxy_closes[: i + 1], clamp=None)
+        mr = vol_norm_momentum(us10y_closes[: i + 1], clamp=None)
+        axis.append(None if (md is None or mr is None) else (md + mr) / 2.0)
+    out: list[float | None] = []
+    for i in range(n):
+        cur = axis[i]
+        if cur is None:
+            out.append(None)
+            continue
+        win = [v for v in axis[max(0, i - window + 1): i + 1] if v is not None]
+        if len(win) < min_n:
+            out.append(None)
+            continue
+        less = sum(1 for v in win if v < cur)
+        eq = sum(1 for v in win if v == cur)
+        pct = (less + 0.5 * eq) / len(win)
+        out.append(round(100.0 * (1.0 - pct), 2))
+    return out
+
+
 def liquidity_momentum_score(
     dxy_closes: list[float], us10y_closes: list[float]
 ) -> float | None:
-    """Makro likidite skoru — DEGISIM-bazli (0-100, yuksek = risk-on/gevseme).
+    """Makro likidite skoru v4.1 — YUZDELIK-normalize DEGISIM (0-100, yuksek =
+    risk-on/gevseme). TEK KAYNAK: consensus fundamental_v4 + rejim Likidite
+    katmani + macro_backtest cand_mom_pct hepsi burayi okur.
 
-    Mevcut Likidite formulu mutlak seviyeye capaliydi (5y'da 1118/1118 gun >=55 —
-    hic bearish olamiyordu; dis denetim "asiri iyimser merkez" bulgusu). Bu
-    surum DXY ve 10y faizin coklu-ufuk (1a/3a/6a) vol-norm momentumundan gelir:
-    ikisi de YUKSELIYORSA para sikilasiyor = risk-off (skor<50). Merkez yapisal
-    olarak 50. 5y tezgah (macro_backtest ADAY B): tum hedeflerde genel pozitif,
-    SPY 4/5 yil tutarli. Yetersiz veri (her iki eksen de gerekli) -> None.
-
-    Esit-agirlik eksen (katsayi UYDURMA yok); flow.vol_norm_momentum REUSE.
-    `scale` backtest'te dogrulanan band (12.5); iki eksen ortalamasina biner."""
-    md = vol_norm_momentum(dxy_closes)
-    mr = vol_norm_momentum(us10y_closes)
-    if md is None or mr is None:
-        return None
-    return max(0.0, min(100.0, 50.0 + LIQUIDITY_MOM_SCALE * (-md - mr) / 2.0))
+    v4.0 (sabit +-3 clamp) 2026-07-13 clamp analiziyle revize edildi: DXY/US10Y
+    ham momentumu +-10-25 gezerken clamp gunlerin %62-66'sinda bagliyordu; skor
+    gunlerin %41'inde IKILIYDI (12.5/87.5 yapisik — canli 12.5 sabitti). v4.1
+    ham ekseni kendi son-1-yil dagiliminin yuzdelik sirasina cevirir: kendini
+    kalibre eder, doygunluk imkansiz, katsayi uydurma yok. 5y tezgah (H10/H20):
+    BTC +3.6/+5.8pp, GLD +1.1/+2.0pp (v4.0'dan iyi), SPY esdeger; merkez ~51.
+    SEMANTIK NOTU: sikilasmayi SON 1 YILA GORE olcer (ivme/uc-deger); sabit
+    rejim ortasinda ~50'ye doner — mutlak yon degil degisimin gucu. Yetersiz
+    veri (eksen 127 + rank 60 gun) -> None."""
+    n = min(len(dxy_closes), len(us10y_closes))
+    tail = LIQUIDITY_PCT_WINDOW + _MIN_HISTORY
+    series = liquidity_momentum_pct_series(
+        dxy_closes[-tail:] if n > tail else dxy_closes,
+        us10y_closes[-tail:] if n > tail else us10y_closes,
+    )
+    return series[-1] if series else None
 
 
 def flow_score(
@@ -171,6 +220,7 @@ __all__ = [
     "build_signals",
     "credit_signal",
     "flow_score",
+    "liquidity_momentum_pct_series",
     "liquidity_momentum_score",
     "vol_norm_momentum",
     "volume_confirm",

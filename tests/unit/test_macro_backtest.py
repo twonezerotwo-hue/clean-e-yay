@@ -173,8 +173,31 @@ def test_score_distribution_math():
 def test_fundamental_candidates_keys():
     prefix = {"DXY": _noisy(100.0, 0.05), "US10Y": _noisy(4.0, 0.005)}
     c = mb.fundamental_candidates(prefix)
-    assert set(c) == set(mb.CANDIDATE_KEYS)
+    # cand_mom_pct walk() içinde ön-hesapla enjekte edilir (tam seri ister);
+    # prefix-bazlı üretici ilk üç adayı döndürür.
+    assert set(c) == set(mb.CANDIDATE_KEYS) - {"cand_mom_pct"}
     assert c["cand_z"] is not None and c["cand_credit"] is not None  # kredi verisiz de yaşar
+
+
+def test_mom_pct_series_no_lookahead_and_range():
+    import math
+    # Deterministik ama ÇEŞİTLİ seri (salt-düzenli desen ham ekseni 2 değere
+    # indirir — gerçek piyasada olmaz; sin-karışımı rank çözünürlüğünü test eder).
+    dxy = [100.0 + 3.0 * math.sin(i / 17.0) + 0.02 * i + math.sin(i * 0.71) for i in range(400)]
+    us10 = [4.0 + 0.4 * math.sin(i / 23.0) + 0.001 * i + 0.1 * math.sin(i * 0.53) for i in range(400)]
+    full = mb.mom_pct_series(dxy, us10)
+    cut = mb.mom_pct_series(dxy[:-30], us10[:-30])
+    # Gelecek barlar kesilince kesişen günlerin değeri DEĞİŞMEZ (look-ahead yok)
+    assert full[: len(cut)] == cut
+    vals = [v for v in full if v is not None]
+    assert vals and all(0.0 <= v <= 100.0 for v in vals)
+    # Yüzdelik-rank çözünürlüğü: skorlar tabana/tavana yapışmaz, band dolu
+    assert len({round(v) for v in vals}) > 10
+
+
+def test_mom_pct_insufficient_is_none():
+    out = mb.mom_pct_series(_noisy(100.0, 0.1, 100), _noisy(4.0, 0.01, 100))
+    assert all(v is None for v in out)  # min_n=60 pencere dolmadan üretmez
 
 
 def test_appetite_score_matches_live_formula():

@@ -40,8 +40,13 @@ def macro_archive(tmp_path, monkeypatch):
     return _write
 
 
-def _rising(n=160, start=100.0, step=0.4):
-    return [start + step * i for i in range(n)]
+# v4.1 yüzdelik semantiği: rejim-değişimli seri (önce sakin, sonra sert
+# hareket) — sıkılaşma İVMESİ kendi yılının tepesinde olsun (saf-monoton seri
+# rank ortasında kalır; sakin faz gürültülü, vol=0 ekseni None yapar).
+def _tighten(n=300, base=100.0, step=0.5, burst=60):
+    """Uzun sakin + SON 60 gün sert yükseliş (ivme pencerenin tepesinde)."""
+    calm = [base + (0.2 if i % 2 else -0.2) for i in range(n - burst)]
+    return calm + [calm[-1] + step * i for i in range(burst)]
 
 
 def _snap(dxy=104.0, us10=4.3):
@@ -55,8 +60,8 @@ def _liq(snap):
 
 def test_flag_off_is_level_formula(macro_archive):
     """Default KAPALI: seviye formülü birebir (bayt-aynı), arşiv okunmaz."""
-    macro_archive("DXY", _rising())
-    macro_archive("US10Y", _rising())
+    macro_archive("DXY", _tighten())
+    macro_archive("US10Y", _tighten(base=4.0, step=0.02))
     layer = _liq(_snap(dxy=104.0, us10=4.3))
     # Seviye: 100 - (104-100)*2 - (4.3-4)*5 = 100-8-1.5 = 90.5
     assert layer.score == pytest.approx(90.5)
@@ -65,9 +70,9 @@ def test_flag_off_is_level_formula(macro_archive):
 
 def test_flag_on_uses_momentum(macro_archive):
     from packages.data.providers.rotation import flow
-    macro_archive("DXY", _rising())     # DXY yükseliyor → sıkılaşma
-    macro_archive("US10Y", _rising())
-    expected = flow.liquidity_momentum_score(_rising(), _rising())
+    macro_archive("DXY", _tighten())     # DXY yükseliyor → sıkılaşma
+    macro_archive("US10Y", _tighten(base=4.0, step=0.02))
+    expected = flow.liquidity_momentum_score(_tighten(), _tighten(base=4.0, step=0.02))
     with threshold_override({"consensus": {"fundamental_v4": True}}):
         layer = _liq(_snap(dxy=104.0, us10=4.3))
     assert layer.score == pytest.approx(round(expected, 1))
@@ -88,8 +93,8 @@ def test_flag_on_no_archive_falls_back_to_level(monkeypatch, tmp_path):
 def test_crisis_visible_with_momentum(macro_archive):
     """Bütünsel: DXY+faiz güçlü yükseliş + VIX kriz + varlıklar çöküş →
     momentum-Likidite ile rejim CRISIS/DEFENSIVE olabilir (seviye ile OFFENSIVE)."""
-    macro_archive("DXY", _rising(step=0.6))
-    macro_archive("US10Y", _rising(step=0.02, start=4.0))
+    macro_archive("DXY", _tighten(step=0.6))
+    macro_archive("US10Y", _tighten(base=4.0, step=0.02))
     snap = SimpleNamespace(
         prices=[
             SimpleNamespace(symbol="DXY", price=118.0),
