@@ -131,20 +131,21 @@ def _price(snap: MarketSnapshot, symbol: str) -> float | None:
 
 
 def _liquidity_momentum_enabled() -> bool:
-    """`regime.liquidity_momentum` owner-flag'i (default KAPALI = seviye birebir).
+    """Momentum-Likidite TEK anahtarı = `consensus.fundamental_v4` (M19 birleştirme).
 
-    2026-07-13 Basamak-4 bulgusu: mevcut seviye-Likidite formülü 5y'da
-    1118/1118 gün ≥55'e sıkışıp rejim ortalamasını şişiriyor → CRISIS
-    maskeleniyor (VIX 45'te bile kriz görünmüyor). Backtest KANITI (macro_backtest
-    regime_distribution_mom): momentum-Likidite ile CRISIS 2→232 gün, aşırı
-    iyimser OFFENSIVE 677→481. Açıkken Likidite katmanı skoru DXY+10y faiz
-    momentumundan (M16 v4 = flow.liquidity_momentum_score, tek kaynak); arşiv
-    yok/yetersiz → seviye formülüne düşer (dürüst degrade). Geri-alma = false."""
+    2026-07-13 Basamak-4: momentum-Likidite formülü İKİ tüketiciye giriyor —
+    consensus fundamental modülü (M16) VE rejim classifier Likidite katmanı
+    (M18). İkisi de aynı `flow.liquidity_momentum_score`'u kullanıyor; owner
+    "tek düğme" istedi → ayrı `regime.liquidity_momentum` KALDIRILDI, her ikisi
+    de `consensus.fundamental_v4` ile açılır (tek kavram, tek flag). Açıkken
+    Likidite katmanı skoru momentumdan; arşiv yok/yetersiz → seviye formülüne
+    düşer (dürüst degrade). Backtest KANITI: CRISIS 2→232, OFFENSIVE 677→481.
+    Geri-alma = consensus.fundamental_v4: false (tek satır, iki tüketici birden)."""
     try:
         from packages.data.registry.loader import load_thresholds
 
         return bool(
-            (load_thresholds().get("regime") or {}).get("liquidity_momentum", False)
+            (load_thresholds().get("consensus") or {}).get("fundamental_v4", False)
         )
     except Exception:
         return False

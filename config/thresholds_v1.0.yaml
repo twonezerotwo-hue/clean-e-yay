@@ -109,6 +109,12 @@ consensus:
   # v4=..:v3=..:used=..` SALT-GÖZLEM. true → kademe TEPESİ (v4>v3>v2>v1).
   # DÜRÜST NOT: BTC'de 5/5 yıl DEĞİL (makro tilt; SPY/GLD güçlü) — ağırlık
   # kararında hatırla. Aktivasyon ayrı owner kararı. Geri-alma = false (tek satır).
+  # BİRLEŞTİRME (2026-07-13, owner "tek-flag"): bu flag artık momentum-Likidite'nin
+  # TEK anahtarı — açıkken HEM consensus fundamental modülü (M16) HEM rejim
+  # classifier Likidite katmanı (M18) momentum formülünü kullanır. Ayrı
+  # `regime.liquidity_momentum` KALDIRILDI. DİKKAT: açılınca İKİ tüketici birden
+  # değişir (fundamental modülü + rejim dağılımı CRISIS'e kayar) — bileşik etki,
+  # aktivasyon izleme ŞART.
   fundamental_v4: false
   # dominant modül seçimi (2026-07-13, gölge-önce kuruldu). Dış denetim bulgusu:
   # legacy dominant `max(score×weight)` bearish modülü HİÇBİR ZAMAN dominant
@@ -202,6 +208,9 @@ regime:
   # yönde: gereksiz ağırlık-oynamasını azaltır, yeni risk eklemez). Ani çöküşte
   # çok-basamak sıçrama geciktirilmez. activation_watchdog izliyor.
   hysteresis_band: 3.0
+  # NOT: momentum-Likidite (M18) artık ayrı flag DEĞİL — consensus.fundamental_v4
+  # TEK anahtarı kontrol eder (owner "tek-flag birleştirme"). Eski
+  # `regime.liquidity_momentum` kaldırıldı.
 
 # F4-1 — TF-bazlı Platt kalibrasyonu. false (DEFAULT) → global tek fit birebir
 # (bayt-aynı). true → karar anında o TF'in KENDİ fit'i kullanılır (kaynak

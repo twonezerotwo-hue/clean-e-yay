@@ -42,7 +42,7 @@ def test_denetim_flags_registered() -> None:
     """M7-M18 gölge flag'leri REGISTRY'de (aktivasyon izleme altyapısı hazır)."""
     for key in (
         "consensus_dominant_directional", "consensus_quantum_regime_gate",
-        "regime_hysteresis_band", "consensus_fundamental_v4", "regime_liquidity_momentum",
+        "regime_hysteresis_band", "consensus_fundamental_v4",
     ):
         assert key in aw.REGISTRY
 

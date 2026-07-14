@@ -171,12 +171,10 @@ REGISTRY: dict[str, dict] = {
         "source": ("thresholds", ("consensus", "fundamental_v3")),
     },
     "consensus_fundamental_v4": {
-        "label": "Fundamental v4 — momentum-Likidite (M16)",
+        # M19 birleştirme: momentum-Likidite'nin TEK anahtarı — hem consensus
+        # fundamental modülü (M16) hem rejim classifier Likidite katmanı (M18).
+        "label": "Momentum-Likidite (M16+M18 tek flag) — fundamental + rejim",
         "source": ("thresholds", ("consensus", "fundamental_v4")),
-    },
-    "regime_liquidity_momentum": {
-        "label": "Rejim momentum-Likidite — CRISIS-maskesi düzeltme (M18)",
-        "source": ("thresholds", ("regime", "liquidity_momentum")),
     },
 }
 

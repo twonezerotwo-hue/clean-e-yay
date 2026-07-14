@@ -1,8 +1,10 @@
-"""regime.liquidity_momentum gölge flag (Basamak-4 CRISIS-maskesi düzeltmesi).
+"""Momentum-Likidite rejim katmanı (Basamak-4 CRISIS-maskesi düzeltmesi).
 
 Kök neden: seviye-Likidite formülü 5y'da ≥55'e sıkışıp rejim ortalamasını
 şişiriyor → CRISIS maskeleniyor. Flag açıkken Likidite katmanı DEĞİŞİM-bazlı
 (momentum, M16 v4) → seviye şişmesi kırılır. Default KAPALI = bayt-aynı.
+NOT (M19 birleştirme): tek anahtar artık `consensus.fundamental_v4` (eski
+ayrı `regime.liquidity_momentum` kaldırıldı — fundamental + rejim tek düğme).
 """
 from __future__ import annotations
 
@@ -66,7 +68,7 @@ def test_flag_on_uses_momentum(macro_archive):
     macro_archive("DXY", _rising())     # DXY yükseliyor → sıkılaşma
     macro_archive("US10Y", _rising())
     expected = flow.liquidity_momentum_score(_rising(), _rising())
-    with threshold_override({"regime": {"liquidity_momentum": True}}):
+    with threshold_override({"consensus": {"fundamental_v4": True}}):
         layer = _liq(_snap(dxy=104.0, us10=4.3))
     assert layer.score == pytest.approx(round(expected, 1))
     assert layer.score < 50.0  # sıkılaşma → düşük (seviye 90.5 olurdu — şişme kırıldı)
@@ -78,7 +80,7 @@ def test_flag_on_no_archive_falls_back_to_level(monkeypatch, tmp_path):
     monkeypatch.setenv("BAR_HISTORY_ENABLED", "1")
     monkeypatch.setenv("BAR_HISTORY_DIR", str(tmp_path))  # boş
     rc._LIQ_MOM_MEMO["key"] = None
-    with threshold_override({"regime": {"liquidity_momentum": True}}):
+    with threshold_override({"consensus": {"fundamental_v4": True}}):
         layer = _liq(_snap(dxy=104.0, us10=4.3))
     assert layer.score == pytest.approx(90.5)  # seviye formülü (v4 üretemedi)
 
@@ -98,9 +100,9 @@ def test_crisis_visible_with_momentum(macro_archive):
         technicals={"BTCUSD": SimpleNamespace(score=10.0, rsi=20.0, ema_stack="bearish")},
         rotation=SimpleNamespace(score=15.0, direction="risk_off", evidence=[], status="OK"),
     )
-    with threshold_override({"regime": {"liquidity_momentum": True, "drop_unavailable_layers": True}}):
+    with threshold_override({"consensus": {"fundamental_v4": True}, "regime": {"drop_unavailable_layers": True}}):
         out_mom = rc.classify(snap, stateful=False)
-    with threshold_override({"regime": {"liquidity_momentum": False, "drop_unavailable_layers": True}}):
+    with threshold_override({"consensus": {"fundamental_v4": False}, "regime": {"drop_unavailable_layers": True}}):
         out_lvl = rc.classify(snap, stateful=False)
     order = ["CRISIS", "DEFENSIVE", "NEUTRAL", "OFFENSIVE"]
     # Momentum varyantı en az seviye kadar (veya daha) karamsar rejim üretir.
