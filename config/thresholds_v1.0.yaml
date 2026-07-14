@@ -68,7 +68,12 @@ consensus:
   # diğerlerinde modül DÜŞER, ağırlığı _redistribute ile diğer modüllere dağılır
   # (nötr-50 uydurulmaz; rotation-UNAVAILABLE ile aynı desen). Geri-alma = false
   # (tek satır). Aktivasyon AYRI owner kararı.
-  quantum_regime_gate: false
+  # AKTİF (2026-07-13, owner "hepsini bitir" — Basamak-4 #2): CANLI challenger
+  # karnesi kanıtı (quantum NEUTRAL'da TERS, sep −0.0106; OFFENSIVE'da +0.0142)
+  # — forward-ölçülmüş, backtest-only değil. İzinli rejim yalnız OFFENSIVE;
+  # NEUTRAL/DEFENSIVE/CRISIS'te quantum modülü düşer (ağırlığı redistribute).
+  # activation_watchdog izliyor.
+  quantum_regime_gate: true
   quantum_gate_allowed_regimes: ["OFFENSIVE"]
   # touche TF-KAPISI (2026-07-13, gölge-önce kuruldu). Dış denetim P0 bulgusu:
   # v4 artifact'ı sembol başına TEK yön taşır (konuşmacı TF: UP→1d, DOWN→4h)
@@ -114,7 +119,10 @@ consensus:
   # seçilir: max(|score−50|×weight). NOT: açılınca fingerprint dağılımı değişir
   # (öğrenme atıfları düzelir ama eski kayıtlarla karışmasın diye aktivasyon
   # tarihi not edilmeli). Geri-alma = false (tek satır).
-  dominant_directional: false
+  # AKTİF (2026-07-13, owner "hepsini bitir" — Basamak-4 #2): en güvenli
+  # aktivasyon (öğrenme fingerprint'i düzeltir, İŞLEM AÇMAZ; yön/boyut değişmez).
+  # activation_watchdog izliyor (0907460 kaydı OFF damgaladı → bu OFF→ON arm eder).
+  dominant_directional: true
   # Kapsama tabanı (2026-07-13, gölge-önce kuruldu). Dış denetim P1 bulgusu:
   # modül düşünce _redistribute ağırlığını kalanlara TAM dağıtıyor — veri
   # azaldıkça kalan kanıtlar GÜÇLENİYOR (ters davranış; örn. CRISIS'te sentinel
@@ -189,7 +197,11 @@ regime:
   # kabul; önceki etiket data/runtime/regime_state.json'da (gitignored; backtest/
   # replay stateful=False ile dokunmaz). Ani çöküşte çok-basamak sıçrama
   # (örn. OFFENSIVE→CRISIS) GECİKTİRİLMEZ. Geri-alma = 0.0 (tek satır).
-  hysteresis_band: 0.0
+  # AKTİF (2026-07-13, owner "hepsini bitir" — Basamak-4 #2): 3.0 bandı.
+  # Stabilize edici (sınır salınımında rejim flip'ini engeller — davranış-nötr
+  # yönde: gereksiz ağırlık-oynamasını azaltır, yeni risk eklemez). Ani çöküşte
+  # çok-basamak sıçrama geciktirilmez. activation_watchdog izliyor.
+  hysteresis_band: 3.0
 
 # F4-1 — TF-bazlı Platt kalibrasyonu. false (DEFAULT) → global tek fit birebir
 # (bayt-aynı). true → karar anında o TF'in KENDİ fit'i kullanılır (kaynak

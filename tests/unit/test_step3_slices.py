@@ -58,10 +58,12 @@ def _snap_regime(dxy=104.0, us10=4.3):
 
 
 def test_classify_band_zero_is_stateless(tmp_path, monkeypatch):
-    """Band=0 (default): durum dosyası OKUNMAZ/YAZILMAZ, raw_label None."""
+    """Band=0: durum dosyası OKUNMAZ/YAZILMAZ, raw_label None. (Config'te
+    hysteresis_band artık CANLI 3.0 → bu test band=0'ı explicit override eder.)"""
     p = tmp_path / "regime_state.json"
     monkeypatch.setenv("REGIME_STATE_PATH", str(p))
-    out = rc.classify(_snap_regime())
+    with threshold_override({"regime": {"hysteresis_band": 0.0}}):
+        out = rc.classify(_snap_regime())
     assert out.raw_label is None and out.stabilized is False
     assert not p.exists()  # bayt-aynı: state dosyasına dokunulmadı
 

@@ -105,7 +105,9 @@ def test_consensus_drops_fundamental_and_sentinel_when_layerless(monkeypatch) ->
     from packages.consensus import engine as ce
     from packages.regime.classifier import RegimeOutput
 
-    regime = RegimeOutput(label="NEUTRAL", layers=[], dropped=["Likidite", "Risk İştahı"])
+    # OFFENSIVE: quantum_regime_gate CANLI NEUTRAL'da quantum'u düşürür; bu test
+    # quantum'un KALDIĞINI bekler → quantum'un konuştuğu izinli rejimde kur.
+    regime = RegimeOutput(label="OFFENSIVE", layers=[], dropped=["Likidite", "Risk İştahı"])
     snap = _snap(rotation_status="OK", rotation_score=42.0)
     snap.technicals_by_tf = None
     snap.headlines = []

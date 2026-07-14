@@ -37,7 +37,10 @@ def _snap(direction_score: float = 60.0, rotation_status: str = "OK"):
     )
 
 
-def _regime(label="NEUTRAL"):
+# OFFENSIVE default: quantum_regime_gate CANLI (2026-07-13) ve NEUTRAL'da
+# quantum'u düşürür; bu testler quantum'u 5. modül olarak sayar → quantum'un
+# konuştuğu (izinli) rejimde kurulur. Coverage/usage mantığı rejim-agnostik.
+def _regime(label="OFFENSIVE"):
     return RegimeOutput(
         label=label,
         layers=[

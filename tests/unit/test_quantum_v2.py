@@ -83,10 +83,12 @@ def _quantum(res):
     return next(m.score for m in res.modules if m.name == "quantum")
 
 
+# v1/v2 testleri quantum DEĞERİNİ ölçer → quantum'un konuştuğu rejimde
+# (OFFENSIVE; quantum_regime_gate CANLI ve NEUTRAL'da quantum'u düşürür).
 def test_flag_off_quantum_is_v1(monkeypatch):
     snap = _snap(rot_score=59.2, per_symbol={"BTCUSD": 28.0})
     with threshold_override(_FLAG_OFF):
-        res = ce.build("BTCUSD", snap, _regime(), "1d")
+        res = ce.build("BTCUSD", snap, _regime("OFFENSIVE"), "1d")
     assert _quantum(res) == pytest.approx(59.2)   # v1 makro tilt (bayt-aynı)
     assert any(w == "quantum_v2_observe:v1=59.2:v2=28.0:used=v1" for w in res.warnings)
 
@@ -94,7 +96,7 @@ def test_flag_off_quantum_is_v1(monkeypatch):
 def test_flag_on_quantum_is_v2(monkeypatch):
     snap = _snap(rot_score=59.2, per_symbol={"BTCUSD": 28.0})
     with threshold_override(_FLAG_ON):
-        res = ce.build("BTCUSD", snap, _regime(), "1d")
+        res = ce.build("BTCUSD", snap, _regime("OFFENSIVE"), "1d")
     assert _quantum(res) == pytest.approx(28.0)   # v2 sembol-başı
     assert any(w == "quantum_v2_observe:v1=59.2:v2=28.0:used=v2" for w in res.warnings)
 
@@ -102,7 +104,7 @@ def test_flag_on_quantum_is_v2(monkeypatch):
 def test_flag_on_no_per_symbol_falls_back(monkeypatch):
     snap = _snap(rot_score=59.2, per_symbol={})   # bu sembol için v2 yok
     with threshold_override(_FLAG_ON):
-        res = ce.build("BTCUSD", snap, _regime(), "1d")
+        res = ce.build("BTCUSD", snap, _regime("OFFENSIVE"), "1d")
     assert _quantum(res) == pytest.approx(59.2)   # v1'e düştü
     assert not any(w.startswith("quantum_v2_observe") for w in res.warnings)
 
@@ -110,7 +112,7 @@ def test_flag_on_no_per_symbol_falls_back(monkeypatch):
 def test_rotation_unavailable_drops_quantum(monkeypatch):
     snap = _snap(status="UNAVAILABLE", per_symbol={"BTCUSD": 28.0})
     with threshold_override(_FLAG_ON):
-        res = ce.build("BTCUSD", snap, _regime(), "1d")
+        res = ce.build("BTCUSD", snap, _regime("OFFENSIVE"), "1d")
     assert not any(m.name == "quantum" for m in res.modules)  # modül düştü
 
 
