@@ -177,6 +177,35 @@ def test_fundamental_candidates_keys():
     assert c["cand_z"] is not None and c["cand_credit"] is not None  # kredi verisiz de yaşar
 
 
+def test_appetite_score_matches_live_formula():
+    # Canlı _appetite_layer ile birebir: düşük VIX = yüksek iştah.
+    assert mb._appetite_score(12.0) == 100.0
+    assert mb._appetite_score(20.0) == 68.0
+    assert mb._appetite_score(37.0) == 0.0   # yüksek VIX → 0 (kriz)
+
+
+def test_walk_uses_vix_appetite_layer_for_crisis():
+    """VIX yüksek + diğer katmanlar düşük → CRISIS proxy'de görünebilir."""
+    d = _dates(200)
+    down = [200.0 - 0.5 * i for i in range(200)]   # BTC/SPY çöküyor
+    closes = {
+        "SPY": _series(d, down), "BTC": _series(d, down), "GLD": _series(d, down),
+        "XAG": _series(d, down), "TLT": _series(d, down), "DXY": _series(d, _rising_seq(200)),
+        "OIL": _series(d, down), "HYG": _series(d, down), "LQD": _series(d, [100.0] * 200),
+        "US10Y": _series(d, _rising_seq(200, 4.0, 0.02)),
+        "VIX": _series(d, [45.0] * 200),   # kriz seviyesi VIX
+    }
+    dates, aligned, vols = mb.align_daily(closes)
+    rows = mb.walk(aligned, vols, dates, horizon=5)
+    assert rows
+    # VIX katmanı ortalamayı aşağı çeker → en az bir DEFENSIVE/CRISIS gün
+    assert any(r["regime"] in ("DEFENSIVE", "CRISIS") for r in rows)
+
+
+def _rising_seq(n, start=100.0, step=0.3):
+    return [start + step * i for i in range(n)]
+
+
 def test_run_writes_artifact(tmp_path, monkeypatch):
     """run() uçtan uca: arşiv yerine sentetik seri, artifact tmp'e yazılır."""
     monkeypatch.setenv("MACRO_BACKTEST_PATH", str(tmp_path / "macro_backtest.json"))

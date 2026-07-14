@@ -85,6 +85,14 @@ def _liquidity_score(dxy: float, us10y: float) -> float:
     return max(0.0, min(100.0, 100.0 - (dxy - 100.0) * 2.0 - (us10y - 4.0) * 5.0))
 
 
+def _appetite_score(vix: float) -> float:
+    """Canlı classifier'ın Risk İştahı formülü (VIX → 0-100; düşük VIX = iştah).
+
+    2026-07-13: VIX 5y backfill edildi → rejim proxy artık 4-katman (CRISIS
+    ayrımı görünür). Formül canlı `_appetite_layer` ile BİREBİR (tek kaynak)."""
+    return max(0.0, min(100.0, 100.0 - (vix - 12.0) * 4.0))
+
+
 def _zscore(series: list[float], window: int = 252, min_n: int = 60) -> float | None:
     """Son değerin, son `window` değere göre z-skoru (rolling merkezleme)."""
     tail = [v for v in series[-window:] if v == v]  # NaN süz
@@ -198,7 +206,17 @@ def walk(
         # Kripto momentum proxy: BTC akış sinyali → 0-100 (canlı katmanın vekili).
         btc_sig = signals.get("BTC")
         crypto = None if btc_sig is None else max(0.0, min(100.0, 50.0 + 50.0 / 3.0 * btc_sig))
-        layer_vals = [v for v in (liq, fscore, crypto) if v is not None]
+        # Risk İştahı katmanı (2026-07-13, VIX 5y backfill): canlı rejimin 4.
+        # bacağı — CRISIS ayrımının asıl kaynağı. VIX yoksa (eski arşiv) atlanır.
+        vix_s = closes.get("VIX")
+        appetite = (
+            _appetite_score(vix_s[i])
+            if vix_s and i < len(vix_s) and vix_s[i] == vix_s[i]
+            else None
+        )
+        # Rejim proxy artık canlı 4-katmanı yansıtır: Likidite + Rotasyon(flow) +
+        # Kripto + Risk İştahı (hangi bacak varsa). VIX'li dönemde CRISIS görünür.
+        layer_vals = [v for v in (liq, fscore, crypto, appetite) if v is not None]
         regime = _regime_label(sum(layer_vals) / len(layer_vals))
         fund_v2 = (liq + fscore) / 2.0
         fund_v3 = liq
@@ -431,6 +449,7 @@ def load_archive_series() -> tuple[dict, dict]:
     from packages.data.providers.ohlcv import history
     keys = dict(ROTATION_SYMBOLS)
     keys["US10Y"] = "US10Y"
+    keys["VIX"] = "VIX"  # Risk İştahı katmanı (rejim proxy 4. bacağı)
     closes: dict[str, list[tuple[str, float]]] = {}
     volumes: dict[str, list[tuple[str, float]]] = {}
     for key, symbol in keys.items():

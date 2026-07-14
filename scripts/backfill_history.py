@@ -26,6 +26,7 @@ BACKFILL_TICKERS: dict[str, str] = {
     "BRENT": "BZ=F",
     "DXY": "DX-Y.NYB",
     "SP500": "^GSPC",
+    "VIX": "^VIX",   # Risk İştahı katmanı — rejim proxy'sinin 4. bacağı (CRISIS ayrımı)
     "TLT": "TLT",
     "HYG": "HYG",
     "LQD": "LQD",
