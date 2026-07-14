@@ -139,6 +139,19 @@ def run_once() -> dict:
         outcomes_seen = 0
         errors.append(f"outcomes:{type(exc).__name__}")
 
+    # Makro arşiv derinlik bekçisi (2026-07-13): fundamental_v4/rejim-momentum
+    # 379+ gün DXY/US10Y ister; data/runtime git'e girmediği için her ortam
+    # kendi arşivini kendisi doldurur (lokal↔AWS senkron, kural 6). Derinse
+    # no-op; sığsa tek-seferlik 5y backfill (süreç-memo + 6h retry guard).
+    macro_backfill_status: dict = {}
+    try:
+        from packages.learning import macro_backfill
+        macro_backfill_status = macro_backfill.ensure_depth()
+        if macro_backfill_status.get("status") not in ("DEEP", "DISABLED"):
+            log.info("macro_backfill: %s", macro_backfill_status)
+    except Exception as exc:  # defensive
+        errors.append(f"macro_backfill:{type(exc).__name__}")
+
     # Özet (boş state'te de güvenli — total=0).
     try:
         summary = build_summary()
@@ -818,6 +831,7 @@ def run_once() -> dict:
         "guard_safety_status": guard_safety_status,  # CP3
         "promotion_status": promotion_status,        # F5-2 (READY/NOT_READY)
         "activation_watchdog_status": activation_watchdog_status,  # F5-3
+        "macro_backfill_status": macro_backfill_status,  # 2026-07-13 arşiv bekçisi
 
         "calibration_status": calibration_status,
         "tf_calibration_status": tf_calibration_status,
