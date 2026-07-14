@@ -130,6 +130,57 @@ def _price(snap: MarketSnapshot, symbol: str) -> float | None:
     return None
 
 
+def _liquidity_momentum_enabled() -> bool:
+    """`regime.liquidity_momentum` owner-flag'i (default KAPALI = seviye birebir).
+
+    2026-07-13 Basamak-4 bulgusu: mevcut seviye-Likidite formülü 5y'da
+    1118/1118 gün ≥55'e sıkışıp rejim ortalamasını şişiriyor → CRISIS
+    maskeleniyor (VIX 45'te bile kriz görünmüyor). Backtest KANITI (macro_backtest
+    regime_distribution_mom): momentum-Likidite ile CRISIS 2→232 gün, aşırı
+    iyimser OFFENSIVE 677→481. Açıkken Likidite katmanı skoru DXY+10y faiz
+    momentumundan (M16 v4 = flow.liquidity_momentum_score, tek kaynak); arşiv
+    yok/yetersiz → seviye formülüne düşer (dürüst degrade). Geri-alma = false."""
+    try:
+        from packages.data.registry.loader import load_thresholds
+
+        return bool(
+            (load_thresholds().get("regime") or {}).get("liquidity_momentum", False)
+        )
+    except Exception:
+        return False
+
+
+_LIQ_MOM_MEMO: dict = {"key": None, "val": None}
+
+
+def _archive_liquidity_momentum() -> float | None:
+    """Bar arşivinden DXY+US10Y momentum-Likidite skoru (0-100). Üretici tek
+    kaynak `flow.liquidity_momentum_score` (M16 v4 ile birebir). Dosya-imza
+    memoize (sıcak yol; zaman-bağımsız). Arşiv kapalı/yok/yetersiz → None."""
+    try:
+        from packages.data.providers.ohlcv import history
+
+        def _sig(sym: str):
+            try:
+                st = history._path(sym, "1d").stat()
+                return (st.st_size, int(st.st_mtime))
+            except OSError:
+                return None
+
+        key = (history.enabled(), _sig("DXY"), _sig("US10Y"))
+        if _LIQ_MOM_MEMO["key"] == key:
+            return _LIQ_MOM_MEMO["val"]
+        from packages.data.providers.rotation import flow
+
+        dxy = [b.close for b in history.load("DXY", "1d")]
+        us10y = [b.close for b in history.load("US10Y", "1d")]
+        val = flow.liquidity_momentum_score(dxy, us10y)
+        _LIQ_MOM_MEMO["key"], _LIQ_MOM_MEMO["val"] = key, val
+        return val
+    except (OSError, ValueError, TypeError, AttributeError):
+        return None
+
+
 def _liquidity_layer(snap: MarketSnapshot, drop_missing: bool) -> RegimeLayer | None:
     dxy_p = _price(snap, "DXY")
     us10_p = _price(snap, "US10Y")
@@ -137,6 +188,17 @@ def _liquidity_layer(snap: MarketSnapshot, drop_missing: bool) -> RegimeLayer | 
     cpi = _price(snap, "CPI") or 0.0
     if drop_missing and (dxy_p is None or us10_p is None):
         return None  # F2-3: çekirdek girdi yok — sahte default'la skor üretme
+    # Momentum-Likidite (gölge flag): açıksa Likidite skoru DEĞİŞİM-bazlı gelir
+    # (seviye şişmesini kırar → CRISIS görünür). Arşiv yoksa seviye formülüne düş.
+    if _liquidity_momentum_enabled():
+        mom = _archive_liquidity_momentum()
+        if mom is not None:
+            return RegimeLayer(
+                name="Likidite",
+                score=round(mom, 1),
+                direction=_direction(mom),
+                evidence=[f"DXY+faiz momentum (v4) {mom:.1f}"],
+            )
     dxy = dxy_p if dxy_p is not None else 104.0
     us10y = us10_p if us10_p is not None else 4.3
     us02y = us02_p if us02_p is not None else 4.3

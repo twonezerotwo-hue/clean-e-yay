@@ -216,8 +216,16 @@ def walk(
         )
         # Rejim proxy artık canlı 4-katmanı yansıtır: Likidite + Rotasyon(flow) +
         # Kripto + Risk İştahı (hangi bacak varsa). VIX'li dönemde CRISIS görünür.
+        cands = fundamental_candidates(prefix_c)
         layer_vals = [v for v in (liq, fscore, crypto, appetite) if v is not None]
         regime = _regime_label(sum(layer_vals) / len(layer_vals))
+        # ALTERNATİF rejim: Likidite katmanı yerine momentum-Likidite (v4/ADAY B).
+        # Mevcut seviye-Likidite 5y'da ≥55'e sıkışıp ortalamayı şişiriyor → CRISIS
+        # maskeleniyor. Bu varyant "Likidite momentum olsaydı rejim ne olurdu"yu
+        # ölçer (canlı rejim gölge-flag kanıtı; regime classifier'a bağlanmadan).
+        liq_mom = cands.get("cand_mom")
+        lv_mom = [v for v in (liq_mom, fscore, crypto, appetite) if v is not None]
+        regime_mom = _regime_label(sum(lv_mom) / len(lv_mom)) if lv_mom else regime
         fund_v2 = (liq + fscore) / 2.0
         fund_v3 = liq
         fwd: dict[str, float] = {}
@@ -227,7 +235,6 @@ def walk(
                 fwd[key] = (s[i + horizon] - s[i]) / s[i] * 100.0
         if not all(k in fwd for k in _RISK_TARGETS):
             continue
-        cands = fundamental_candidates(prefix_c)
         rows.append({
             "date": dates[i],
             "signals": signals,
@@ -236,6 +243,7 @@ def walk(
             "fund_v3": round(fund_v3, 2),
             **{k: (None if v is None else round(v, 2)) for k, v in cands.items()},
             "regime": regime,
+            "regime_mom": regime_mom,
             "fwd": {k: round(v, 3) for k, v in fwd.items()},
             "fwd_risk": round(sum(fwd[k] for k in _RISK_TARGETS) / len(_RISK_TARGETS), 3),
         })
@@ -440,6 +448,12 @@ def analyze(rows: list[dict], horizon: int) -> dict:
             reg: sum(1 for r in rows if r["regime"] == reg)
             for reg in ("OFFENSIVE", "NEUTRAL", "DEFENSIVE", "CRISIS")
         },
+        # Momentum-Likidite ile rejim dağılımı (CRISIS-maskesi düzeltme kanıtı):
+        # seviye-Likidite vs momentum-Likidite yan yana — CRISIS görünür mü?
+        "regime_distribution_mom": {
+            reg: sum(1 for r in rows if r["regime_mom"] == reg)
+            for reg in ("OFFENSIVE", "NEUTRAL", "DEFENSIVE", "CRISIS")
+        },
     }
     return result
 
@@ -486,7 +500,8 @@ def main() -> int:
     r = run(args.horizon)
     p = r["params"]
     print(f"MAKRO BACKTEST - {p['date_from']} -> {p['date_to']} ({p['rows']} gun, H={p['horizon_days']}g)")
-    print(f"Rejim dagilimi (PROXY): {r['regime_distribution']}")
+    print(f"Rejim dagilimi (seviye-Likidite): {r['regime_distribution']}")
+    print(f"Rejim dagilimi (momentum-Likidite): {r['regime_distribution_mom']}")
     print("\n-- capital_flow sinyal IC'leri (ileri risk-getirisi korelasyonu) --")
     for k, v in r["signal_ic"].items():
         print(f"  {k:7} ic={v.get('ic')}  n={v.get('n')}  "
