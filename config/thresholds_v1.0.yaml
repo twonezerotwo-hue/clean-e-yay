@@ -83,7 +83,9 @@ consensus:
   # applied=no` kanıt satırı birikir. true → v4/backup oyu yalnız kendi konuşmacı
   # TF hücresinde sayılır; diğer hücreler TF-duyarlı zemin motora düşer (uydurma
   # yön yok). Geri-alma = false (tek satır). Aktivasyon AYRI owner kararı.
-  touche_speaker_tf_only: false
+  # AKTİF (2026-07-13, owner "aktivasyona devam"): canlı kanıt 16 hücre kopya
+  # yön taşıyordu (4 sembol × 4 konuşmacı-dışı TF) — dış denetim P0 #1 kapandı.
+  touche_speaker_tf_only: true
   # fundamental v3 (2026-07-13, gölge-önce kuruldu). Dış denetim P0 bulgusu:
   # v2 Kripto Momentum'u çıkarırken Sermaye Rotasyonu'nu içeride bırakmıştı;
   # aynı rotasyon skoru quantum modülünde VE rejim sınıflandırıcısında da
@@ -115,7 +117,12 @@ consensus:
   # `regime.liquidity_momentum` KALDIRILDI. DİKKAT: açılınca İKİ tüketici birden
   # değişir (fundamental modülü + rejim dağılımı CRISIS'e kayar) — bileşik etki,
   # aktivasyon izleme ŞART.
-  fundamental_v4: false
+  # AKTİF (2026-07-13, owner "aktivasyona devam"): v4.1 yüzdelik formül — 5y
+  # kanıt (BTC +3.6/+5.8pp, merkez dengeli) + çözünürlük tam (canlı 2.98).
+  # İKİ tüketici birden: fundamental modülü + rejim Likidite katmanı (CRISIS
+  # maskesi açılır). Arşiv bekçisi (M23) her ortamda veri tabanını doldurur;
+  # arşiv dolana dek v4 dürüstçe v2'ye düşer. activation_watchdog izliyor.
+  fundamental_v4: true
   # dominant modül seçimi (2026-07-13, gölge-önce kuruldu). Dış denetim bulgusu:
   # legacy dominant `max(score×weight)` bearish modülü HİÇBİR ZAMAN dominant
   # seçemez (skor 5×0.50=2.5 < skor 70×0.20=14) — mistake-memory fingerprint'i
@@ -138,7 +145,10 @@ consensus:
   # ağırlık toplamı (kapsama) eşiğin altındaysa yön NÖTRE zorlanır (işlem
   # açılmaz; skor raporda aynen). Örn. 0.60: modüllerin %40+ ağırlığı verisiz
   # kaldıysa o hücreden işlem çıkmaz. Geri-alma = 0.0 (tek satır).
-  min_module_coverage: 0.0
+  # AKTİF (2026-07-13, owner "aktivasyona devam"): 0.60 — news_abstain açılınca
+  # kapsama gerçekten düşebilir; modüllerin %40+ ağırlığı verisiz kalan hücre
+  # işlem AÇMAZ (skor raporda aynen; yalnız yön nötre zorlanır).
+  min_module_coverage: 0.60
   # Kaynak-politikası uygulaması (2026-07-13, gölge-önce kuruldu). Dış denetim
   # P1 bulgusu: source_registry haber kaynaklarını `analytics_only`, rotasyon
   # kaynaklarını `simulation_only` etiketler ama consensus bu politikayı
@@ -158,7 +168,9 @@ consensus:
   # reason=..:applied=no` satırı birikir. true → ilgili başlık yoksa news OY
   # KULLANMAZ (modül düşer + redistribute; kapsama dürüstçe azalır — M10
   # min_module_coverage ile bileşik çalışır). Geri-alma = false (tek satır).
-  news_abstain: false
+  # AKTİF (2026-07-13, owner "aktivasyona devam"): canlı kanıt 40/55 hücre
+  # kanıtsızken 50-nötr oy kullanıyordu — sahte-nötr gürültüsü kapandı.
+  news_abstain: true
 
 # M1 — haber sentiment sınıflandırıcı sürümü. false (DEFAULT) → v1 birebir
 # (tam-kelime eşleşme; "Bitcoin rebounds…" gibi çekimli başlıklar neutral kalır).
@@ -335,7 +347,9 @@ dqs:
 # o (symbol, tf) için AÇILIŞ bloklanır — "eski veriyle trade açma" kuralı.
 # Yalnızca decide_for_symbol açılış yolunu etkiler; dampening/dashboard değişmez.
 data_policy:
-  block_stale_ohlcv_for_trade: false
+  # AKTİF (2026-07-13, owner "aktivasyona devam"): bayat karar-TF'i yeni
+  # pozisyonu DOĞRUDAN engeller (dış denetim P1; eskiden yalnız yumuşatılıyordu).
+  block_stale_ohlcv_for_trade: true
 
 # Calibration inflation guardrail — Platt kalibrasyonunun ZAYIF ham sinyali
 # aşırı güvene şişirmesini sınırlar (örn. raw 0.11 → fitted 0.55 → STRONG kademe →

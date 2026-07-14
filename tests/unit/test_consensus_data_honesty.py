@@ -56,10 +56,17 @@ def _no_artifact(tmp_path, monkeypatch):
     monkeypatch.setenv("TF_SCORING_V2_SHADOW_PATH", str(tmp_path / "yok.json"))
 
 
+# 2026-07-13 aktivasyonları: news_abstain + min_module_coverage artık CANLI.
+# Bu dosya M10/M11 semantiğini İZOLE test eder → ilgisiz canlı flag'ler pinlenir
+# (testler config-default'a bağımlı kalmasın).
+_PIN = {"consensus": {"news_abstain": False, "min_module_coverage": 0.0}}
+
+
 # ── 1. min_module_coverage ───────────────────────────────────────────────────
 
 def test_full_coverage_no_observe_line():
-    res = ce.build("BTCUSD", _snap(80.0), _regime(), "4h")
+    with threshold_override(_PIN):
+        res = ce.build("BTCUSD", _snap(80.0), _regime(), "4h")
     assert len(res.modules) == 5
     assert not any(w.startswith("coverage_observe") for w in res.warnings)
 
@@ -67,7 +74,8 @@ def test_full_coverage_no_observe_line():
 def test_missing_module_writes_observe_flag_off():
     """Rotasyon UNAVAILABLE → quantum düşer → kapsama <1 gözlemi (applied=no);
     davranış değişmez (default 0.0 = bayt-aynı)."""
-    res = ce.build("BTCUSD", _snap(80.0, rotation_status="UNAVAILABLE"), _regime(), "4h")
+    with threshold_override(_PIN):
+        res = ce.build("BTCUSD", _snap(80.0, rotation_status="UNAVAILABLE"), _regime(), "4h")
     assert not any(m.name == "quantum" for m in res.modules)
     line = next(w for w in res.warnings if w.startswith("coverage_observe"))
     assert ":applied=no" in line and ":min=0.00:" in line
@@ -77,9 +85,10 @@ def test_missing_module_writes_observe_flag_off():
 def test_coverage_gate_forces_neutral():
     """Eşik 0.95 + quantum eksik → kapsama eşiğin altında → yön nötre zorlanır;
     skor raporda aynen kalır (yalnız işlem-açıcı yön kısıtlanır)."""
-    with threshold_override({"consensus": {"min_module_coverage": 0.95}}):
+    with threshold_override({"consensus": {"min_module_coverage": 0.95, "news_abstain": False}}):
         gated = ce.build("BTCUSD", _snap(80.0, rotation_status="UNAVAILABLE"), _regime(), "4h")
-    free = ce.build("BTCUSD", _snap(80.0, rotation_status="UNAVAILABLE"), _regime(), "4h")
+    with threshold_override(_PIN):  # aynı koşullar, tek fark eşik
+        free = ce.build("BTCUSD", _snap(80.0, rotation_status="UNAVAILABLE"), _regime(), "4h")
     assert free.direction == "bullish"
     assert gated.direction == "neutral"
     assert gated.confluence_aligned is False
@@ -90,7 +99,7 @@ def test_coverage_gate_forces_neutral():
 
 def test_coverage_gate_inactive_when_full():
     """Eşik açık ama tüm modüller mevcut (kapsama 1.0) → kapı dokunmaz."""
-    with threshold_override({"consensus": {"min_module_coverage": 0.95}}):
+    with threshold_override({"consensus": {"min_module_coverage": 0.95, "news_abstain": False}}):
         res = ce.build("BTCUSD", _snap(80.0), _regime(), "4h")
     assert res.direction == "bullish"
     assert not any(w.startswith("coverage_gate") for w in res.warnings)
@@ -107,7 +116,9 @@ def test_restricted_modules_from_registry():
 
 
 def test_usage_flag_off_observe_only():
-    res = ce.build("BTCUSD", _snap(80.0), _regime(), "4h")
+    with threshold_override({"consensus": {"news_abstain": False, "min_module_coverage": 0.0,
+                                           "enforce_decision_usage": False}}):
+        res = ce.build("BTCUSD", _snap(80.0), _regime(), "4h")
     line = next(w for w in res.warnings if w.startswith("decision_usage_observe"))
     assert "news=analytics_only" in line and "quantum=simulation_only" in line
     assert line.endswith(":applied=no")
@@ -116,7 +127,7 @@ def test_usage_flag_off_observe_only():
 
 
 def test_usage_flag_on_drops_restricted_modules():
-    with threshold_override({"consensus": {"enforce_decision_usage": True}}):
+    with threshold_override({"consensus": {"enforce_decision_usage": True, "news_abstain": False}}):
         res = ce.build("BTCUSD", _snap(80.0), _regime(), "4h")
     names = {m.name for m in res.modules}
     assert names == {"touche", "fundamental", "sentinel"}
@@ -141,6 +152,7 @@ def test_registry_unreadable_is_safe(monkeypatch):
     """Registry okunamazsa kısıt uygulanmaz (boş dict) — motor çalışmaya devam."""
     monkeypatch.setattr(ce, "load_source_registry", lambda: (_ for _ in ()).throw(OSError()))
     assert ce._restricted_modules() == {}
-    res = ce.build("BTCUSD", _snap(80.0), _regime(), "4h")
+    with threshold_override(_PIN):
+        res = ce.build("BTCUSD", _snap(80.0), _regime(), "4h")
     assert len(res.modules) == 5
     assert not any(w.startswith("decision_usage_observe") for w in res.warnings)

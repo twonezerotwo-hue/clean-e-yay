@@ -59,10 +59,12 @@ def _liq(snap):
 
 
 def test_flag_off_is_level_formula(macro_archive):
-    """Default KAPALI: seviye formülü birebir (bayt-aynı), arşiv okunmaz."""
+    """Flag KAPALIYKEN seviye formülü birebir (arşiv okunmaz). Flag artık
+    CANLI (2026-07-13) → kapalı-davranış testi explicit kapatır."""
     macro_archive("DXY", _tighten())
     macro_archive("US10Y", _tighten(base=4.0, step=0.02))
-    layer = _liq(_snap(dxy=104.0, us10=4.3))
+    with threshold_override({"consensus": {"fundamental_v4": False}}):
+        layer = _liq(_snap(dxy=104.0, us10=4.3))
     # Seviye: 100 - (104-100)*2 - (4.3-4)*5 = 100-8-1.5 = 90.5
     assert layer.score == pytest.approx(90.5)
     assert "momentum" not in " ".join(layer.evidence)

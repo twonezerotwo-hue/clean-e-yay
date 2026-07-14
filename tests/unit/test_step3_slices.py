@@ -118,7 +118,9 @@ def _no_artifact(tmp_path, monkeypatch):
 
 
 def test_news_abstain_off_neutral_vote_with_observe():
-    res = ce.build("BTCUSD", _snap_cons(), _regime_cons(), "4h")
+    # Flag artık CANLI (2026-07-13) → kapalı-davranış testi explicit kapatır.
+    with threshold_override({"consensus": {"news_abstain": False}}):
+        res = ce.build("BTCUSD", _snap_cons(), _regime_cons(), "4h")
     news = next(m for m in res.modules if m.name == "news")
     assert news.score == pytest.approx(50.0)  # bayt-aynı: nötr oy sürüyor
     assert any(

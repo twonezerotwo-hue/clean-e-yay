@@ -111,7 +111,9 @@ def test_consensus_drops_fundamental_and_sentinel_when_layerless(monkeypatch) ->
     snap = _snap(rotation_status="OK", rotation_score=42.0)
     snap.technicals_by_tf = None
     snap.headlines = []
-    res = ce.build("BTCUSD", snap, regime, "1d")
+    from packages.data.registry.loader import threshold_override
+    with threshold_override({"consensus": {"news_abstain": False}}):  # test haberi kuramaz
+        res = ce.build("BTCUSD", snap, regime, "1d")
     names = {m.name for m in res.modules}
     assert "fundamental" not in names
     assert "sentinel" not in names
@@ -130,7 +132,9 @@ def test_consensus_unchanged_when_layers_present() -> None:
     snap = _snap(rotation_status="OK", rotation_score=42.0)
     snap.technicals_by_tf = None
     snap.headlines = []
-    res = ce.build("BTCUSD", snap, regime, "1d")
+    from packages.data.registry.loader import threshold_override
+    with threshold_override({"consensus": {"news_abstain": False}}):  # test haberi kuramaz
+        res = ce.build("BTCUSD", snap, regime, "1d")
     assert {m.name for m in res.modules} == {
         "touche", "fundamental", "news", "sentinel", "quantum"
     }
