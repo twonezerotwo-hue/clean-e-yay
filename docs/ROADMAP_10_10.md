@@ -157,8 +157,13 @@ quantum kapılı — `config/source_registry_v1.0.yaml` etiketleri gerçeği yan
       thresholds_sha, manifest_sha}; açılışta Trade'e damgalanır (open_config_
       provenance), kapanışta decision_log.opening_signal.config_provenance'a yazılır.
       Legacy geriye-uyumlu (None). 2000 test.
+- [x] 2026-07-15: zone artifact yaş kontrolü (denetim bulgusu: v4 bölge
+      artifact'ını yaş-kontrolsüz okuyordu) — `zone_proposer.load_fresh(max_age)`
+      + `fresh_zones_by_symbol()`; 2 günden eski bölge KARAR/SKOR beslemez
+      (tf_scoring_shadow + risk.zone_influence bağlandı). Görüntü yolu (_load)
+      yaş-kontrolsüz kalır (stale gösterip uyarabilsin). 2005 test.
 - [ ] FAZ 1 kalan (additive): CPI→likidite bağla VEYA çıkar · catalyst event-study→
-      news güven çarpanı VEYA emekli · zone artifact yaş kontrolü
+      news güven çarpanı VEYA emekli
 - [ ] Faz 1 SİL listesi
 - [ ] (sonrası yukarıdaki fazlar)
 

@@ -542,6 +542,39 @@ def _load() -> dict | None:
         return None
 
 
+# Karar/skor yolu için tazelik tavanı: bölge önerileri günlük üretilir; 2 günden
+# eski bölge KARARı beslememeli (denetim bulgusu: v4 zone artifact'ını yaş
+# kontrolsüz okuyordu — taze touche artifact'ı bayat bölge verisini taze
+# gösterebiliyordu). Görüntü tüketicileri (viewmodel/chart) `_load`'u kullanmaya
+# devam eder; karar/skor tüketicileri `load_fresh`.
+_ZONE_MAX_AGE_SEC = 2 * 86400
+
+
+def load_fresh(max_age_sec: int = _ZONE_MAX_AGE_SEC) -> dict | None:
+    """Artifact YALNIZ `generated_at` `max_age_sec` içindeyse döner; bayat/yok/
+    bozuk → None (çağıran boş bölge = lean 0 kullanır, uydurma yok)."""
+    data = _load()
+    if not data:
+        return None
+    try:
+        gen = datetime.fromisoformat(str(data.get("generated_at")))
+        age = (datetime.now(UTC) - gen).total_seconds()
+    except (ValueError, TypeError):
+        return None
+    return data if 0 <= age < max_age_sec else None
+
+
+def fresh_zones_by_symbol(max_age_sec: int = _ZONE_MAX_AGE_SEC) -> dict[str, list]:
+    """Taze artifact'tan {sembol: [bölge,...]}; bayat/yok → {} (tümü boş)."""
+    data = load_fresh(max_age_sec)
+    if not data:
+        return {}
+    return {
+        str(a.get("symbol")): list(a.get("zones") or [])
+        for a in (data.get("assets") or [])
+    }
+
+
 def viewmodel() -> dict:
     """GET /learning/zone-proposer — aday bölge önerileri (read-only, hesap YAPMAZ).
 

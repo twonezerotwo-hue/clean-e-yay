@@ -45,7 +45,8 @@ def approved_zones(symbol: str) -> list[dict]:
     try:
         from packages.learning import zone_approval, zone_proposer
 
-        art = zone_proposer._load() or {}
+        # Yaş-kapılı: bayat bölge SL/TP yerleşimini etkilememeli (denetim bulgusu).
+        art = zone_proposer.load_fresh() or {}
         for a in art.get("assets") or []:
             if str(a.get("symbol")) != str(symbol).upper():
                 continue

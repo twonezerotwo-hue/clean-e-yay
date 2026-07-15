@@ -149,7 +149,8 @@ def test_cancelled_zone_not_in_approved(tmp_path, monkeypatch):
         {"low": 89.53, "high": 91.72, "confluence": 2},
     ]}]}
     from packages.learning import zone_proposer
-    monkeypatch.setattr(zone_proposer, "_load", lambda: art)
+    # zone_influence artık yaş-kapılı load_fresh okur (2026-07-15 tazelik fix).
+    monkeypatch.setattr(zone_proposer, "load_fresh", lambda *a, **k: art)
     zone_approval.record("TLT", 80.97, 82.83, "iptal")
     zs = zone_influence.approved_zones("TLT")
     assert [z["low"] for z in zs] == [89.53]

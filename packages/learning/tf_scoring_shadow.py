@@ -67,11 +67,11 @@ def analyze(symbols: list[str] | None = None) -> dict:
     scorecard = _load_scorecard()
     # v4 bölge merceği: zone_proposer artifact'ı REUSE (yeniden hesap yok —
     # "katmanlar birbirinden haberdar"). Artifact yoksa bölge/uyumsuzluk lean=0.
-    zones_by_symbol: dict[str, list] = {}
+    # Yaş-kapılı: 2 günden eski bölge artifact'ı skor beslemez (denetim bulgusu —
+    # bayat bölge taze görünmesin). Bayat/yok → boş → zone_lean 0 (uydurma yok).
     try:
         from packages.learning import zone_proposer
-        for a in (zone_proposer._load() or {}).get("assets") or []:
-            zones_by_symbol[str(a.get("symbol"))] = list(a.get("zones") or [])
+        zones_by_symbol = zone_proposer.fresh_zones_by_symbol()
     except Exception:
         zones_by_symbol = {}
 
