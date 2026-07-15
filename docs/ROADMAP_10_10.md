@@ -172,9 +172,20 @@ quantum kapılı — `config/source_registry_v1.0.yaml` etiketleri gerçeği yan
         bulgusu YÖN-edge içindi; olay-catalyst'i yön değil RİSK gate'i beslemeli
         (CPI açıklamasına trade açmaz, gate'lersin) — zaten doğru. Ek iş YOK.
       **FAZ 1 KAPANDI.** DERS: "yarım-inşa" sanılan iki kalem aslında doğru-sınırlı.
-- [ ] FAZ 2: veri omurgası — US02Y(FRED) eğri ekseni + MOVE endeksi (sentinel
-      kripto-dışı stres) + CPI-skorlama (FRED backfill sonrası tezgâh) + DQS
-      çok-eksen GATE + kapalı-piyasa/stale ayrımı + shadow.affect_decision erken aç
+- [x] 2026-07-15: FAZ-2 başladı — MOVE endeksi 5y backfill + tezgâh ölçümü.
+      ^MOVE yfinance'te var (VIX gibi 2y→5y), FRED US02Y lokalde 0 bar (anahtar
+      yok → US02Y FAZ-2'de AWS/FRED-anahtar ile). MOVE bekçiye eklendi (AWS
+      kendi doldurur). TEZGÂH DOĞRU TESTİ: MOVE stres sinyali (yön DEĞİL) →
+      "stres↔ileri-oynaklık" ölçüldü: **corr +0.11 POZİTİF** (MOVE stresi ileri
+      vol'ü öngörür = risk-gate DEĞERLİ); return-separation karışık (BTC−/GLD+ =
+      yanlış enstrüman, teyit). SONUÇ: MOVE → sentinel RİSK/veto girdisi haklı
+      (FAZ-3 sentinel-veto işiyle; yüzdelik-normalizasyon + flag ile). 2009 test.
+      NOT: _move_calm merkezi çarpık (mean 92) — canlı bağlamadan önce v4.1 gibi
+      rank-normalize edilecek. Canlı sentinel'e HENÜZ bağlı DEĞİL (salt-tezgâh).
+- [ ] FAZ 2 kalan: US02Y(FRED anahtar) eğri ekseni + CPI-skorlama (FRED backfill)
+      + DQS çok-eksen GATE (M14 observe→eşik, YENİ VERİ GEREKMEZ) + kapalı-piyasa/
+      stale ayrımı + shadow.affect_decision erken aç. Sonra FAZ-3 sentinel-veto
+      (MOVE bağlama burada).
 - [ ] Faz 1 SİL listesi
 - [ ] (sonrası yukarıdaki fazlar)
 

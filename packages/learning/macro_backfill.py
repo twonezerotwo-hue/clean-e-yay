@@ -31,6 +31,7 @@ BACKFILL_TICKERS: dict[str, str] = {
     "DXY": "DX-Y.NYB",
     "SP500": "^GSPC",
     "VIX": "^VIX",
+    "MOVE": "^MOVE",   # tahvil-piyasası oynaklığı — sentinel kripto-DIŞI stres bacağı
     "TLT": "TLT",
     "HYG": "HYG",
     "LQD": "LQD",

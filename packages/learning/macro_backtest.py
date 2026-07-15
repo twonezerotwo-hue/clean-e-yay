@@ -93,6 +93,16 @@ def _appetite_score(vix: float) -> float:
     return max(0.0, min(100.0, 100.0 - (vix - 12.0) * 4.0))
 
 
+def _move_calm(move: float) -> float:
+    """MOVE (tahvil oynaklığı) → 0-100 sakinlik (yüksek MOVE = stres = düşük).
+
+    FAZ-2 sentinel kripto-DIŞI stres bacağı adayı: sentinel kripto-dışı varlıkta
+    (SP500/altın) türev+opsiyon girdisi yok → VIX'e çöküyordu. MOVE tahvil-piyasası
+    stresini yakalar. 5y aralık ~52-183, medyan ~101. Merkez ~medyan; ±0.5/puan
+    eğim (VIX deseni). SALT-TEZGÂH ölçümü (canlı sentinel'e bağlı DEĞİL)."""
+    return max(0.0, min(100.0, 100.0 - (move - 101.0) * 0.7))
+
+
 def _zscore(series: list[float], window: int = 252, min_n: int = 60) -> float | None:
     """Son değerin, son `window` değere göre z-skoru (rolling merkezleme)."""
     tail = [v for v in series[-window:] if v == v]  # NaN süz
@@ -234,6 +244,14 @@ def walk(
             if vix_s and i < len(vix_s) and vix_s[i] == vix_s[i]
             else None
         )
+        # MOVE (tahvil oynaklığı) sakinlik skoru — FAZ-2 kripto-dışı stres adayı;
+        # SALT-TEZGÂH ölçümü (canlı sentinel'e bağlı değil).
+        move_s = closes.get("MOVE")
+        move_calm = (
+            _move_calm(move_s[i])
+            if move_s and i < len(move_s) and move_s[i] == move_s[i]
+            else None
+        )
         # Rejim proxy artık canlı 4-katmanı yansıtır: Likidite + Rotasyon(flow) +
         # Kripto + Risk İştahı (hangi bacak varsa). VIX'li dönemde CRISIS görünür.
         cands = fundamental_candidates(prefix_c)
@@ -256,6 +274,19 @@ def walk(
                 fwd[key] = (s[i + horizon] - s[i]) / s[i] * 100.0
         if not all(k in fwd for k in _RISK_TARGETS):
             continue
+        # İleri realized-vol (stres sinyalinin DOĞRU testi: MOVE yüksek stres →
+        # yüksek ileri oynaklık öngörür mü? Boyut-kısma gerekçesi bu). BTC risk
+        # sepeti günlük getirilerinin i→i+H std'si (%).
+        btc_s = closes.get("BTC")
+        fwd_vol = None
+        if btc_s and i + horizon < len(btc_s):
+            rets = [
+                (btc_s[j] - btc_s[j - 1]) / btc_s[j - 1]
+                for j in range(i + 1, i + horizon + 1)
+                if btc_s[j - 1] and btc_s[j] == btc_s[j] and btc_s[j - 1] == btc_s[j - 1]
+            ]
+            if len(rets) >= 3:
+                fwd_vol = _st.pstdev(rets) * 100.0
         rows.append({
             "date": dates[i],
             "signals": signals,
@@ -263,6 +294,8 @@ def walk(
             "fund_v2": round(fund_v2, 2),
             "fund_v3": round(fund_v3, 2),
             **{k: (None if v is None else round(v, 2)) for k, v in cands.items()},
+            "move_calm": None if move_calm is None else round(move_calm, 2),
+            "fwd_vol": None if fwd_vol is None else round(fwd_vol, 4),
             "regime": regime,
             "regime_mom": regime_mom,
             "fwd": {k: round(v, 3) for k, v in fwd.items()},
@@ -401,6 +434,28 @@ def per_regime(rows: list[dict], score_key: str, target: str) -> dict[str, dict]
 
 # ── Rapor + artifact ─────────────────────────────────────────────────────────
 
+def _move_stress_edge(rows: list[dict]) -> dict:
+    """MOVE stres bacağı DOĞRU testi (FAZ-2): stres sinyalinin rolü yön değil
+    RİSK — "MOVE-stres yüksekken ileri OYNAKLIK yüksek mi?" Öyleyse boyut-kısma
+    (sentinel veto) gerekçelidir. İki metrik:
+    (1) stress_vs_fwdvol: MOVE-stres (=100−calm) ile ileri realized-vol korelasyonu
+        (POZİTİF = stres oynaklığı öngörür = risk-gate DEĞERLİ).
+    (2) return_terciles: return-separation (YANLIŞ enstrüman referansı — stres
+        sinyali yön öngörmez; buradaki karışıklık bunu gösterir)."""
+    stress = [(100.0 - r["move_calm"], r["fwd_vol"]) for r in rows
+              if r.get("move_calm") is not None and r.get("fwd_vol") is not None]
+    stress_vs_vol = _corr([s for s, _ in stress], [v for _, v in stress]) if len(stress) >= 20 else None
+    return {
+        "distribution": score_distribution(rows, "move_calm"),
+        "stress_vs_fwdvol_corr": None if stress_vs_vol is None else round(stress_vs_vol, 4),
+        "stress_vs_fwdvol_n": len(stress),
+        "return_terciles": {
+            t: separation_tercile(rows, "move_calm", t) for t in _FUND_TARGETS
+        },
+        "note": "stress_vs_fwdvol POZİTİF → MOVE risk-gate olarak değerli (yön DEĞİL)",
+    }
+
+
 def weights_evidence(rows: list[dict]) -> dict:
     """Elle rejim ağırlıklarını backtest edge'iyle kıyasla (denetim: "ağırlıklar
     hiç backtest edilmemiş"). Ölçülebilen 2 modül: fundamental (v4/cand_mom
@@ -513,6 +568,10 @@ def analyze(rows: list[dict], horizon: int) -> dict:
             for reg in ("OFFENSIVE", "NEUTRAL", "DEFENSIVE", "CRISIS")
         },
         "weights_evidence": weights_evidence(rows),
+        # FAZ-2 MOVE stres bacağı kanıtı: MOVE-sakinlik yüksekken ileri getiri
+        # daha mı iyi? (yüksek MOVE = stres = düşük sakinlik = risk-off beklenir.)
+        # Rejim başına da — kripto-DIŞI hedeflerde (SPY/GLD) VIX'e ek bilgi mi?
+        "move_stress_edge": _move_stress_edge(rows),
     }
     return result
 
@@ -523,6 +582,7 @@ def load_archive_series() -> tuple[dict, dict]:
     keys = dict(ROTATION_SYMBOLS)
     keys["US10Y"] = "US10Y"
     keys["VIX"] = "VIX"  # Risk İştahı katmanı (rejim proxy 4. bacağı)
+    keys["MOVE"] = "MOVE"  # FAZ-2 sentinel kripto-dışı stres adayı (tezgâh ölçümü)
     closes: dict[str, list[tuple[str, float]]] = {}
     volumes: dict[str, list[tuple[str, float]]] = {}
     for key, symbol in keys.items():
