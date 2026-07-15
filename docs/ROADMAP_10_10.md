@@ -132,8 +132,17 @@ quantum kapılı — `config/source_registry_v1.0.yaml` etiketleri gerçeği yan
 - [x] 2026-07-15: Devir dosyası yazıldı. touche_v4 alarmı tespit. Dalga-1 başlıyor.
 - [x] 2026-07-15: **touche_v4:false** (race V4_BEHIND) + **reentry_guard:true**
       (owner #1 problem) CANLI. 2000 test yeşil. Commit sırada.
-- [ ] Dalga-1 kalan 5 flag: htf_alignment (teyit — zaten açık olabilir),
-      korelasyon-veto D, sizing_layers.brake, strategy_shaping, quantum_dampen
+- [x] 2026-07-15: Dalga-1 TAMAMLANDI (teyit + düzeltmelerle):
+      - `htf_alignment` ZATEN CANLI (2026-07-04) — teyit edildi
+      - `correlation_veto` (D) ZATEN CANLI (2026-07-10) — teyit edildi
+      - `sizing_layers.brake` AÇILDI (yalnız kısar, ≥10 örnek kendini-korur)
+      - **RECLASSIFY → Dalga-2 (körlemesine açılmadı, gerekçeli):**
+        · `strategy_shaping`: profil trail:1.25 (gevşek) exit_backtest "trail SIK"
+          bulgusuyla ÇELİŞİR → önce UZLAŞTIRMA (E-9 ile tutarlı profil), sonra aç
+        · `quantum_dampen`: kanıt ince (n=21) + artık quantum_regime_gate'le üst
+          üste biner (quantum çoğu NEUTRAL hücrede zaten düşüyor) → ayrı izleme
+- [ ] FAZ 1: SİL listesi (fundamental_v3, ölü regime.liquidity_momentum anahtarı,
+      gates.py, price/mock.py, threshold_trainer kararı) + CPI/catalyst + zone-yaş + SHA
 - [ ] Faz 1 SİL listesi
 - [ ] (sonrası yukarıdaki fazlar)
 

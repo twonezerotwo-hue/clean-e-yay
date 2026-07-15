@@ -748,7 +748,11 @@ sizing_layers:
   # getiriden az çalar. <10 örnek → fren yok (yetersiz kanıt). YALNIZ KISAR.
   # enabled default FALSE (shadow-önce). Owner kanıt birikince açar.
   brake:
-    enabled: false
+    # AKTİF (2026-07-15, owner "başla" — DALGA-1): son 30 işlemin gerçekleşen
+    # edge'i (ort R) < 0 ise boyut ×0.5 (kötü dönemde yarı-boy). Backtest: maks
+    # düşüş −293→−213, getiriden az çalar. <10 örnek → fren YOK (kendini-korur;
+    # sahte kanıtla frenlemez). YALNIZ KISAR. Geri-alma = false.
+    enabled: true
     threshold: 0.0        # son-edge (ort R) bu değerin altındaysa fren devreye girer
     factor: 0.5           # fren çarpanı (yarı boy)
     lookback: 30          # son kaç kapanan işlemin edge'i ölçülür
