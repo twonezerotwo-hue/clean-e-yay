@@ -80,6 +80,10 @@ class Position:
     # Signal attribution (additive): karar izi açılışta damgalanır.
     open_dqs: float | None = None           # açılış anındaki DQS
     open_risk_action: str | None = None     # açılış anındaki RiskGate kararı (izinli)
+    # Config köken damgası (additive): açılış anındaki weights/thresholds SHA
+    # (yeniden-üretilebilirlik — denetim bulgusu). {weights_version, weights_sha,
+    # thresholds_sha, manifest_sha}. Legacy/None kayıtlar geriye-uyumlu.
+    open_config_provenance: dict | None = None
     # Market-session attribution (additive): açılış anındaki seans bağlamı.
     open_session_action: str | None = None              # allow/caution/manual_ready/block
     open_session_phase: str | None = None               # primary market session phase
@@ -137,6 +141,7 @@ class Trade:
     # Signal attribution (additive): pozisyondan miras alınan karar izi.
     open_dqs: float | None = None
     open_risk_action: str | None = None
+    open_config_provenance: dict | None = None  # pozisyondan miras (config köken)
     # Market-session attribution (additive): pozisyondan miras alınır.
     open_session_action: str | None = None
     open_session_phase: str | None = None

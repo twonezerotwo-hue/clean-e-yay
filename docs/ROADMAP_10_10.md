@@ -152,9 +152,13 @@ quantum kapılı — `config/source_registry_v1.0.yaml` etiketleri gerçeği yan
       · ölü `regime.liquidity_momentum` config anahtarı SÖKÜLDÜ (okuyucu M21'de
         consensus.fundamental_v4'e taşınmıştı). 1996 test yeşil.
       DERS: orphan-scan regex güvenilmez; her silme "grep apply_X çağrısı" ile teyit.
+- [x] 2026-07-15: decision-log config SHA damgası (yeniden-üretilebilirlik denetim
+      bulgusu) — `loader.config_provenance()` {weights_version, weights_sha,
+      thresholds_sha, manifest_sha}; açılışta Trade'e damgalanır (open_config_
+      provenance), kapanışta decision_log.opening_signal.config_provenance'a yazılır.
+      Legacy geriye-uyumlu (None). 2000 test.
 - [ ] FAZ 1 kalan (additive): CPI→likidite bağla VEYA çıkar · catalyst event-study→
-      news güven çarpanı VEYA emekli · zone artifact yaş kontrolü · decision-log
-      config/ağırlık SHA damgası
+      news güven çarpanı VEYA emekli · zone artifact yaş kontrolü
 - [ ] Faz 1 SİL listesi
 - [ ] (sonrası yukarıdaki fazlar)
 

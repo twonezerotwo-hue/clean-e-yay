@@ -13,7 +13,7 @@ from __future__ import annotations
 import hashlib
 from datetime import UTC, datetime, timedelta
 
-from packages.data.registry.loader import load_thresholds
+from packages.data.registry.loader import config_provenance, load_thresholds
 from packages.learning import decision_log
 from packages.paper import audit, conviction, execution_sim, reentry_guard, sizing
 from packages.paper.guards import price_sanity, state_anomaly
@@ -34,6 +34,14 @@ _FORCE_AUDIT_ACTION = {
     "KILL_SWITCH_EXIT": "KILL_SWITCH_EXIT",
     "RISK_REDUCE_EXIT": "RISK_REDUCE_EXIT",
 }
+
+
+def _open_config_provenance() -> dict | None:
+    """Açılış anındaki config köken damgası; hata → None (kararı düşürmez)."""
+    try:
+        return config_provenance()
+    except Exception:
+        return None
 
 
 def _timeframe_time_stop_hours(timeframe: str) -> int:
@@ -231,6 +239,9 @@ def open_position(
         scale_in=bool(scale_in),
         open_dqs=open_dqs,
         open_risk_action=open_risk_action,
+        # Config köken damgası — açılış anındaki weights/thresholds SHA (denetim:
+        # yeniden-üretilebilirlik). Hata → None (kararı asla düşürmez).
+        open_config_provenance=_open_config_provenance(),
         open_session_action=open_session_action,
         open_session_phase=open_session_phase,
         open_session_reason=open_session_reason,
@@ -490,6 +501,7 @@ def close_position(
         snapshot_id=pos.snapshot_id,
         open_dqs=pos.open_dqs,
         open_risk_action=pos.open_risk_action,
+        open_config_provenance=getattr(pos, "open_config_provenance", None),
         open_session_action=pos.open_session_action,
         open_session_phase=pos.open_session_phase,
         open_session_reason=pos.open_session_reason,

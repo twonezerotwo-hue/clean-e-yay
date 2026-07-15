@@ -75,6 +75,9 @@ def entry_for(trade: Trade) -> dict:
             # F1-3 — consensus modül katkı vektörü (modül → score×weight);
             # manuel/legacy açılışlar None. Attribution raporunun ham verisi.
             "module_contributions": getattr(trade, "open_module_contributions", None),
+            # Config köken damgası (yeniden-üretilebilirlik): açılış anındaki
+            # weights/thresholds/manifest SHA + weights sürümü. Legacy → None.
+            "config_provenance": getattr(trade, "open_config_provenance", None),
         },
         # Market-session context at open (if available; getattr keeps legacy trades
         # backward-compatible — missing context stays null, never invented).

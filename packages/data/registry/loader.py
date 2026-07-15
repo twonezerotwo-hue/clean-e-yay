@@ -155,3 +155,27 @@ def load_active_weights() -> dict:
 def active_weights_version() -> str:
     cfg = load_active_weights()
     return str(cfg.get("version", "unknown"))
+
+
+def _file_sha(path: Path) -> str | None:
+    """Dosyanın SHA-256'sı (ilk 12 hex — kısa ama çakışmasız yeter). Yok → None."""
+    try:
+        import hashlib
+
+        return hashlib.sha256(path.read_bytes()).hexdigest()[:12]
+    except OSError:
+        return None
+
+
+def config_provenance() -> dict:
+    """Karar anındaki config köken damgası (denetim: "canlı ağırlıklar hangi
+    dosyadan? git commit'inden yeniden-üretilemiyor"). Aktif weights sürümü +
+    weights YAML + thresholds YAML + manifest SHA-256'ları. Karar log'una
+    açılış anında basılır → her kayıt hangi config'le üretildiğini taşır.
+    Salt-okur; hata → alanlar None (uydurma yok)."""
+    return {
+        "weights_version": active_weights_version(),
+        "weights_sha": _file_sha(_active_weights_yaml()),
+        "thresholds_sha": _file_sha(CONFIG_DIR / "thresholds_v1.0.yaml"),
+        "manifest_sha": _file_sha(weights_manifest_path()),
+    }
