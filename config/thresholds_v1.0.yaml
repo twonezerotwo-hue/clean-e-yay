@@ -46,8 +46,12 @@ consensus:
   # 17 satır, tek piyasa fazı) — kural #3'e bilinçli istisna; doğrulama karnesi
   # (tf_scoring_race) canlı ölçmeye devam eder. RiskGate/boyut/manuel kuyruk
   # DEĞİŞMEZ; geri-alma = bu flag false (tek satır).
-  # AKTİF (2026-07-12, owner kararı): teknik yön oyu artık v4 owner formülünden.
-  touche_v4: true
+  # GERİ ALINDI (2026-07-15, owner "başla" + race kanıtı): tf_scoring_race
+  # karnesi V4_BEHIND ölçtü — v4 decisive 18 hücrede hit %16.7 / avg −1.41%,
+  # zemin motor 95 hücrede %52.6 / +0.59% (beats_backup=false). Kural "V4_BEHIND
+  # → owner geri alır". Teknik oy ZEMİN motora döndü; v4 gölgede yarışmaya devam
+  # eder (tf_scoring_race COLLECTING). Karne V4_AHEAD derse tekrar açılır.
+  touche_v4: false
   # quantum v2 — sembol-başı kesitsel GÖRECELİ-GÜÇ (para akışı) skoru. false
   # (DEFAULT) → v1 birebir: tek makro risk-on tilt herkese aynı girer (ölü yük).
   # true → v2: her sembol akranlarına göre lider/geride notu alır (oynaklık-adil,
@@ -817,7 +821,12 @@ exit_structural_stop:
 # reentry_guard raporu taşınır, açılış BAYT-AYNI). Owner kanıtı görüp açar; yanlışsa
 # false ile geri (tick_worker restart).
 reentry_guard:
-  enabled: false
+  # AKTİF (2026-07-15, owner "başla" — DALGA-1): owner'ın 1 numaralı problemi
+  # (kârda kapat→30sn'de aynı bayat sinyalle geri-gir). 4 gündür shadow kanıt
+  # topladı. YALNIZ tick-worker otomatik açılışını, YALNIZ kilitliyken (taze bar
+  # YOK VEYA sinyal AYNI) bloklar; owner manuel açılış / manual_ready onayı MUAF.
+  # Yalnız-BLOKLAR (işlem açtırmaz). Geri-alma = false (tick_worker restart).
+  enabled: true
 
 # Onaylı bölge etkisi (owner kararı 2026-07-12): zone_proposer'ın owner iptal
 # etmedikçe ONAYLI sayılan bölgeleri SL/TP YERLEŞİMİNİ etkiler — TP onaylı

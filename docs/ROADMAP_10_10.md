@@ -130,8 +130,10 @@ quantum kapılı — `config/source_registry_v1.0.yaml` etiketleri gerçeği yan
 ## 5. İLERLEME KAYDI (her dilim burada güncellenir — devir için)
 
 - [x] 2026-07-15: Devir dosyası yazıldı. touche_v4 alarmı tespit. Dalga-1 başlıyor.
-- [ ] touche_v4:false + reentry_guard aç (İLK)
-- [ ] Dalga-1 kalan 5 flag
+- [x] 2026-07-15: **touche_v4:false** (race V4_BEHIND) + **reentry_guard:true**
+      (owner #1 problem) CANLI. 2000 test yeşil. Commit sırada.
+- [ ] Dalga-1 kalan 5 flag: htf_alignment (teyit — zaten açık olabilir),
+      korelasyon-veto D, sizing_layers.brake, strategy_shaping, quantum_dampen
 - [ ] Faz 1 SİL listesi
 - [ ] (sonrası yukarıdaki fazlar)
 
