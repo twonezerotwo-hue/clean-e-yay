@@ -162,8 +162,19 @@ quantum kapılı — `config/source_registry_v1.0.yaml` etiketleri gerçeği yan
       + `fresh_zones_by_symbol()`; 2 günden eski bölge KARAR/SKOR beslemez
       (tf_scoring_shadow + risk.zone_influence bağlandı). Görüntü yolu (_load)
       yaş-kontrolsüz kalır (stale gösterip uyarabilsin). 2005 test.
-- [ ] FAZ 1 kalan (additive): CPI→likidite bağla VEYA çıkar · catalyst event-study→
-      news güven çarpanı VEYA emekli
+- [x] 2026-07-15: FAZ 1 SON KALEM — **çerçeve düzeltildi (ikisi de ölü DEĞİL):**
+      · **CPI**: arşivi YOK (yalnız canlı FRED) → 5y tezgâhta ölçülemez; skorlama
+        FAZ-2 işi (FRED backfill gerekir). Evidence'ta gösteriliyordu (şeffaflık)
+        ama "kullanılıyor" yanılsaması yaratıyordu (denetim) → etiket "(gösterim;
+        skora girmez)" ile dürüstleştirildi. SİLİNMEDİ (gösterim legit).
+      · **catalyst**: SİLİNMEDİ — CANLI ve DOĞRU rolde: catalyst_risk.assess
+        işlemleri BLOKLUYOR (engine:796) + event_risk kapısı. "Edge beslemiyor"
+        bulgusu YÖN-edge içindi; olay-catalyst'i yön değil RİSK gate'i beslemeli
+        (CPI açıklamasına trade açmaz, gate'lersin) — zaten doğru. Ek iş YOK.
+      **FAZ 1 KAPANDI.** DERS: "yarım-inşa" sanılan iki kalem aslında doğru-sınırlı.
+- [ ] FAZ 2: veri omurgası — US02Y(FRED) eğri ekseni + MOVE endeksi (sentinel
+      kripto-dışı stres) + CPI-skorlama (FRED backfill sonrası tezgâh) + DQS
+      çok-eksen GATE + kapalı-piyasa/stale ayrımı + shadow.affect_decision erken aç
 - [ ] Faz 1 SİL listesi
 - [ ] (sonrası yukarıdaki fazlar)
 

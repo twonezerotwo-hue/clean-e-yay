@@ -217,7 +217,10 @@ def _liquidity_layer(snap: MarketSnapshot, drop_missing: bool) -> RegimeLayer | 
         evidence.append(f"2s10s {curve:+.2f}%")
     score = max(0.0, min(100.0, score))
     if cpi:
-        evidence.append(f"CPI {cpi:.1f}")
+        # DÜRÜSTLÜK (denetim bulgusu): CPI Likidite SKORUNA girmez — yalnız
+        # gösterim (skora katmak FRED-arşiv + 5y tezgâh ister, FAZ-2 işi).
+        # Etiket "gösterim" ile "CPI kullanılıyor" yanılsamasını kapatır.
+        evidence.append(f"CPI {cpi:.1f} (gösterim; skora girmez)")
     return RegimeLayer(
         name="Likidite",
         score=round(score, 1),
