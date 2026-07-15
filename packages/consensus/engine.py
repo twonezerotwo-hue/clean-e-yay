@@ -337,33 +337,10 @@ def _fundamental_v2(regime: RegimeOutput) -> float | None:
     return sum(layer.score for layer in layers) / len(layers)
 
 
-def _fundamental_v3(regime: RegimeOutput) -> float | None:
-    """Fundamental v3 (GÖLGE) — Sermaye Rotasyonu da HARİÇ (saf makro = Likidite).
-
-    2026-07-13 dış denetim P0 bulgusu: v2 Kripto Momentum'u çıkarırken Rotasyonu
-    içeride bırakmıştı; aynı rotasyon skoru quantum modülünde ve rejim
-    sınıflandırıcısında da sayılıyor (üçlü sayım — quantum'un gerçek etkisi
-    görünen ağırlığının ~2 katı). v3 fundamental'i rotasyondan arındırır;
-    rotasyon oyu YALNIZ quantum'da kalır. Katman kalmazsa None → modül düşer
-    (redistribute). Aktivasyon owner kararı + kural #3 (5y çok-rejim backtest)."""
-    layers = [
-        layer for layer in regime.layers
-        if layer.name not in ("Risk İştahı", "Kripto Momentum", "Sermaye Rotasyonu")
-    ]
-    if not layers:
-        return None
-    return sum(layer.score for layer in layers) / len(layers)
-
-
-def _fundamental_v3_enabled() -> bool:
-    """`consensus.fundamental_v3` owner-flag'i (default KAPALI = v2/v1 birebir).
-
-    Açılana kadar v3 skoru her hücrede `fundamental_v3_observe` warning
-    satırıyla SALT-GÖZLEM olarak izlenir; aktivasyon ayrı tarihli owner kararı."""
-    try:
-        return bool(load_thresholds().get("consensus", {}).get("fundamental_v3", False))
-    except (OSError, KeyError, ValueError, TypeError):
-        return False
+# NOT: fundamental_v3 (rotasyonsuz saf-Likidite) 2026-07-15'te SÖKÜLDÜ — 5y
+# tezgâh ÇÜRÜTTÜ (BTC için TERS gösterge, M15 hükmü). Yerine v4.1 momentum
+# formülü geldi (rotasyon çifte-sayımını o da çözer, üstelik pozitif edge'le).
+# Tezgâh kıyas kaydı macro_backtest.fund_v3'te documented reference olarak kalır.
 
 
 # v4 memoize: DXY/US10Y bar arşivi dosya-imzası (boyut+mtime) değişmedikçe tick
@@ -792,15 +769,13 @@ def build(
     # warning satırında yan yana — owner aktivasyon kanıtını buradan izler.
     fund_v1 = _fundamental(regime)
     fund_v2 = _fundamental_v2(regime)
-    fund_v3 = _fundamental_v3(regime)
     fund_v4 = _fundamental_v4()
-    # Kademe: v4 (değişim-bazlı makro, GÖLGE — 5y tezgâh ADAY B) > v3 > v2 > v1.
+    # Kademe: v4 (değişim-bazlı makro v4.1 — 5y tezgâh ADAY B) > v2 > v1.
     # Hangisi açıksa o canlı; v4 açık ama üretemiyorsa (arşiv yok) alt kademeye
     # düşer. Tüm flag'ler kapalıyken davranış v2/v1 seçimiyle bayt-aynı.
+    # (v3 rotasyonsuz-Likidite 2026-07-15 SÖKÜLDÜ — 5y tezgâh çürüttü.)
     if _fundamental_v4_enabled() and fund_v4 is not None:
         fundamental, fund_used = fund_v4, "v4"
-    elif _fundamental_v3_enabled():
-        fundamental, fund_used = fund_v3, "v3"
     elif _fundamental_v2_enabled():
         fundamental, fund_used = fund_v2, "v2"
     else:
@@ -811,17 +786,11 @@ def build(
             f"v1={'none' if fund_v1 is None else f'{fund_v1:.1f}'}:"
             f"v2={'none' if fund_v2 is None else f'{fund_v2:.1f}'}"
         )
-    if fund_v3 is not None or fund_v2 is not None:
-        tf_warnings.append(
-            "fundamental_v3_observe:"
-            f"v3={'none' if fund_v3 is None else f'{fund_v3:.1f}'}:"
-            f"used={fund_used}"
-        )
     if fund_v4 is not None:
         tf_warnings.append(
             "fundamental_v4_observe:"
             f"v4={fund_v4:.1f}:"
-            f"v3={'none' if fund_v3 is None else f'{fund_v3:.1f}'}:used={fund_used}"
+            f"v2={'none' if fund_v2 is None else f'{fund_v2:.1f}'}:used={fund_used}"
         )
     if fundamental is not None:
         raw["fundamental"] = fundamental

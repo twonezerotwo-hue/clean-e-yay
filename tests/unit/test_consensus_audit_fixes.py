@@ -2,8 +2,8 @@
 
 1. `touche_speaker_tf_only` — v4 artifact'ının tek yönü konuşmacı-dışı TF
    hücrelerine KOPYALANMAZ (açıkken); kapalıyken bayt-aynı + gözlem satırı.
-2. `fundamental_v3` — Sermaye Rotasyonu fundamental'den çıkar (üçlü sayım
-   fix'i); kapalıyken v2/v1 seçimi birebir + `fundamental_v3_observe` gözlem.
+2. (fundamental_v3 testleri 2026-07-15'te kaldırıldı — v3 canlı yoldan söküldü,
+   5y tezgâh çürüttü; kıyas kaydı macro_backtest'te kaldı.)
 3. `dominant_directional` — dominant modül nötr-50 merkezli |skor−50|×ağırlık
    ile seçilir (bearish modül de dominant olabilir); kapalıyken legacy birebir
    + ayrışınca `dominant_observe` gözlem satırı.
@@ -115,40 +115,9 @@ def test_touche_shadow_row_reads_speaker(artifact):
     assert ce._touche_shadow("BTCUSD") == (v4, bak)
 
 
-# ── 2. fundamental_v3 ────────────────────────────────────────────────────────
-
-_MACRO_LAYERS = [
-    RegimeLayer(name="Likidite", score=40.0, direction="neutral", evidence=[]),
-    RegimeLayer(name="Sermaye Rotasyonu", score=80.0, direction="risk_on", evidence=[]),
-    RegimeLayer(name="Risk İştahı", score=60.0, direction="neutral", evidence=[]),
-]
-
-
-def test_fundamental_v3_excludes_rotation():
-    assert ce._fundamental_v3(_regime(_MACRO_LAYERS)) == pytest.approx(40.0)  # yalnız Likidite
-    assert ce._fundamental_v2(_regime(_MACRO_LAYERS)) == pytest.approx(60.0)  # Likidite+Rotasyon
-
-
-def test_fundamental_v3_no_macro_layers_is_none():
-    only_rotation = [
-        RegimeLayer(name="Sermaye Rotasyonu", score=80.0, direction="risk_on", evidence=[]),
-        RegimeLayer(name="Risk İştahı", score=60.0, direction="neutral", evidence=[]),
-    ]
-    assert ce._fundamental_v3(_regime(only_rotation)) is None
-
-
-def test_fundamental_v3_off_is_v2_with_observe(artifact):
-    with threshold_override({"consensus": {"fundamental_v2": True, "fundamental_v3": False}}):
-        res = ce.build("BTCUSD", _snap(60.0), _regime(_MACRO_LAYERS), "4h")
-    assert _module(res, "fundamental").score == pytest.approx(60.0)  # v2 canlı (bayt-aynı)
-    assert "fundamental_v3_observe:v3=40.0:used=v2" in res.warnings
-
-
-def test_fundamental_v3_on_uses_pure_macro(artifact):
-    with threshold_override({"consensus": {"fundamental_v2": True, "fundamental_v3": True}}):
-        res = ce.build("BTCUSD", _snap(60.0), _regime(_MACRO_LAYERS), "4h")
-    assert _module(res, "fundamental").score == pytest.approx(40.0)  # rotasyonsuz
-    assert "fundamental_v3_observe:v3=40.0:used=v3" in res.warnings
+# NOT: fundamental_v3 testleri 2026-07-15'te KALDIRILDI — v3 canlı yoldan
+# söküldü (5y tezgâh çürüttü, M15). Kıyas kaydı macro_backtest'te (fund_v3
+# analiz-referansı) test_macro_backtest kapsamında kalır.
 
 
 # ── 3. dominant_directional ──────────────────────────────────────────────────

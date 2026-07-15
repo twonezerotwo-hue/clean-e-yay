@@ -90,18 +90,9 @@ consensus:
   # AKTİF (2026-07-13, owner "aktivasyona devam"): canlı kanıt 16 hücre kopya
   # yön taşıyordu (4 sembol × 4 konuşmacı-dışı TF) — dış denetim P0 #1 kapandı.
   touche_speaker_tf_only: true
-  # fundamental v3 (2026-07-13, gölge-önce kuruldu). Dış denetim P0 bulgusu:
-  # v2 Kripto Momentum'u çıkarırken Sermaye Rotasyonu'nu içeride bırakmıştı;
-  # aynı rotasyon skoru quantum modülünde VE rejim sınıflandırıcısında da
-  # sayılıyor (üçlü sayım — rotasyonun gerçek karar etkisi görünen quantum
-  # ağırlığının ~2 katı). false (DEFAULT) → v2/v1 seçimi birebir; v3 skoru her
-  # hücrede `fundamental_v3_observe:v3=..:used=..` satırıyla SALT-GÖZLEM.
-  # true → fundamental = saf makro (yalnız Likidite; rotasyon oyu YALNIZ
-  # quantum'da kalır). Aktivasyon owner kararı + kural #3 (5y çok-rejim
-  # backtest ŞART). Geri-alma = false (tek satır).
-  # NOT (2026-07-13): 5y makro backtest v3'ü ÇÜRÜTTÜ (yalnız-Likidite BTC'ye
-  # TERS gösterge) — v3 açılmaz; yerine v4 (aşağıda) revize formül olarak geldi.
-  fundamental_v3: false
+  # NOT: fundamental_v3 (rotasyonsuz saf-Likidite) 2026-07-15'te SÖKÜLDÜ — 5y
+  # makro backtest ÇÜRÜTTÜ (yalnız-Likidite BTC'ye TERS gösterge, M15 hükmü).
+  # Rotasyon çifte-sayımını v4.1 momentum formülü çözer (pozitif edge'le).
   # fundamental v4 (2026-07-13, gölge-önce; Basamak-4 formül revizyonu). Mevcut
   # Likidite formülü mutlak seviyeye çapalıydı → 5y'da 1118/1118 gün ≥55 (hiç
   # bearish olamıyor; dış denetim "aşırı iyimser merkez" bulgusu ampirik
@@ -199,18 +190,10 @@ regime:
   # AKTİF (2026-07-02, owner kararı — Paket 1; canlı kanıt: FRED'siz ortamda
   # sahte Likidite 96.6 → konsensüs ~4.2p şişme. v1 davranışı flag'le geri gelir).
   drop_unavailable_layers: true
-  # Momentum-Likidite (2026-07-13, gölge-önce; Basamak-4). Mevcut seviye-Likidite
-  # formülü 5y'da 1118/1118 gün ≥55'e sıkışıp rejim ortalamasını şişiriyor →
-  # CRISIS maskeleniyor (VIX 45'te bile kriz görünmüyor). false (DEFAULT) →
-  # seviye formülü birebir (bayt-aynı). true → Likidite katmanı skoru DXY+10y
-  # faiz DEĞİŞİM momentumundan (M16 v4 = flow.liquidity_momentum_score, TEK
-  # kaynak; bar arşivinden, arşiv yok/yetersiz → seviye formülüne düşer).
-  # BACKTEST KANITI (macro_backtest regime_distribution_mom, 5y): CRISIS 2→232
-  # gün, aşırı iyimser OFFENSIVE 677→481, flow rejim-separation keskinleşir.
-  # DİKKAT: rejim etiketi modül ağırlıklarını SEÇER — bu flag açılınca rejim
-  # dağılımı ciddi değişir (CRISIS ağırlıkları çok daha sık); aktivasyon owner
-  # kararı + izleme ŞART. Geri-alma = false (tek satır).
-  liquidity_momentum: false
+  # NOT: momentum-Likidite artık AYRI flag DEĞİL (M21 birleştirme) — TEK anahtar
+  # `consensus.fundamental_v4` hem fundamental modülünü hem rejim Likidite
+  # katmanını kontrol eder. Eski ölü `regime.liquidity_momentum` anahtarı
+  # 2026-07-15'te SÖKÜLDÜ (okuyucu consensus.fundamental_v4'e taşınmıştı).
   # Rejim hysteresis (2026-07-13, gölge-önce kuruldu). Dış denetim P1 bulgusu:
   # sınıflandırıcı stateless — skor 64.9→65.1→64.8 salınımı NEUTRAL↔OFFENSIVE
   # flip'i üretir; rejim etiketi modül ağırlıklarını seçtiği için her flip karar

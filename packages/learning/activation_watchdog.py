@@ -166,10 +166,8 @@ REGISTRY: dict[str, dict] = {
         "label": "Kaynak-politikası uygulaması — kısıtlı modül düşür (M11)",
         "source": ("thresholds", ("consensus", "enforce_decision_usage")),
     },
-    "consensus_fundamental_v3": {
-        "label": "Fundamental v3 — rotasyonsuz (M8; backtest ÇÜRÜTTÜ)",
-        "source": ("thresholds", ("consensus", "fundamental_v3")),
-    },
+    # NOT: consensus_fundamental_v3 kaydı 2026-07-15'te SÖKÜLDÜ (v3 canlı yoldan
+    # kaldırıldı — 5y tezgâh çürüttü; flag artık yok).
     "consensus_fundamental_v4": {
         # M19 birleştirme: momentum-Likidite'nin TEK anahtarı — hem consensus
         # fundamental modülü (M16) hem rejim classifier Likidite katmanı (M18).

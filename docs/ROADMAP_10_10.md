@@ -141,8 +141,20 @@ quantum kapılı — `config/source_registry_v1.0.yaml` etiketleri gerçeği yan
           bulgusuyla ÇELİŞİR → önce UZLAŞTIRMA (E-9 ile tutarlı profil), sonra aç
         · `quantum_dampen`: kanıt ince (n=21) + artık quantum_regime_gate'le üst
           üste biner (quantum çoğu NEUTRAL hücrede zaten düşüyor) → ayrı izleme
-- [ ] FAZ 1: SİL listesi (fundamental_v3, ölü regime.liquidity_momentum anahtarı,
-      gates.py, price/mock.py, threshold_trainer kararı) + CPI/catalyst + zone-yaş + SHA
+- [x] 2026-07-15: FAZ 1 SİL turu — **KRİTİK DÜZELTME: orphan taraması 3 YANLIŞ
+      POZİTİF verdi** (bundled import'ları regex kaçırdı). gates.py CANLI
+      (tick_worker:290 apply_gates), price/mock.py CANLI (price provider), 
+      threshold_trainer.py CANLI (learning_worker:388 train() + THRESHOLD_AUTOTUNE=1
+      aktif!) — ÜÇÜ DE SİLİNMEDİ. Gerçek silme 2 kaleme indi:
+      · `consensus.fundamental_v3` SÖKÜLDÜ (engine _fundamental_v3/_v3_enabled +
+        merdiven + observe + config flag + watchdog REGISTRY + 4 test; 5y tezgâh
+        çürüttü). macro_backtest fund_v3 analiz-referansı olarak KALDI.
+      · ölü `regime.liquidity_momentum` config anahtarı SÖKÜLDÜ (okuyucu M21'de
+        consensus.fundamental_v4'e taşınmıştı). 1996 test yeşil.
+      DERS: orphan-scan regex güvenilmez; her silme "grep apply_X çağrısı" ile teyit.
+- [ ] FAZ 1 kalan (additive): CPI→likidite bağla VEYA çıkar · catalyst event-study→
+      news güven çarpanı VEYA emekli · zone artifact yaş kontrolü · decision-log
+      config/ağırlık SHA damgası
 - [ ] Faz 1 SİL listesi
 - [ ] (sonrası yukarıdaki fazlar)
 
