@@ -415,6 +415,32 @@ def decide_for_symbol(
         )
         _age = tech_provider.staleness_age_sec(_t) if _t is not None else None
         if _age is not None:
+            # FAZ-2 (2026-07-16) kapalı-piyasa/stale AYRIMI: piyasası kapalı
+            # sembolde taze bar OLAMAZ (hafta sonu/tatil) — bu veri hatası değil.
+            # Blok SÜRER (bayat fiyatla açılış yine yapılmaz) ama etiket
+            # dürüstleşir: izleme/karne bunu stale-veri alarmı saymaz
+            # (pazartesi 16-blok bulgusunun kökü). Guard pipeline'dakiyle aynı;
+            # kripto (continuous) her zaman açık, eşlenmemiş sembol muaf değil.
+            _closed = False
+            try:
+                from datetime import UTC as _UTC
+                from datetime import datetime as _dt
+
+                from packages import market_sessions as _ms
+
+                _ctx = _ms.asset_context(symbol, _dt.now(_UTC))
+                _closed = bool(_ctx.relevant_markets) and not _ctx.any_relevant_market_open
+            except Exception:
+                _closed = False
+            if _closed:
+                _reason = (
+                    f"DATA_POLICY: piyasa kapalı ({timeframe}, {int(_age)}s) — "
+                    "yeni bar yok (veri hatası değil); bayat fiyatla açılış yine yapılmaz"
+                )
+                _tag = f"market_closed:{timeframe}:{int(_age)}s"
+            else:
+                _reason = f"DATA_POLICY: stale OHLCV ({timeframe}, {int(_age)}s) — eski veriyle açılmaz"
+                _tag = f"stale_ohlcv:{timeframe}:{int(_age)}s"
             return TradeDecision(
                 symbol=symbol,
                 action="blocked",
@@ -422,13 +448,13 @@ def decide_for_symbol(
                 size_multiplier=0.0,
                 consensus=cons,
                 risk=risk,
-                reason=f"DATA_POLICY: stale OHLCV ({timeframe}, {int(_age)}s) — eski veriyle açılmaz",
+                reason=_reason,
                 raw_confidence=round(raw_conf, 4),
                 confidence_source=conf_source,
                 fingerprint=fp,
                 timeframe=timeframe,
                 candidate_action=candidate,
-                blocked_by=[f"stale_ohlcv:{timeframe}:{int(_age)}s"],
+                blocked_by=[_tag],
             )
 
     # ----- Consensus eşikleri -----

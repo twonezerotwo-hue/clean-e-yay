@@ -135,3 +135,69 @@ def test_flag_on_fresh_does_not_block(fresh_env, monkeypatch) -> None:
 
     d = dec.decide_for_symbol("BTCUSD", snap, regime, hold_risk, timeframe="1d")
     assert "stale_ohlcv" not in " ".join(d.blocked_by)
+
+
+# ----------------- FAZ-2 kapalı-piyasa/stale ayrımı -----------------
+
+class _FakeCtx:
+    """asset_context vekilinden dönen minimal bağlam."""
+
+    def __init__(self, *, markets: bool, any_open: bool):
+        self.relevant_markets = [object()] if markets else []
+        self.any_relevant_market_open = any_open
+
+
+def test_closed_market_blocks_with_honest_label(fresh_env, monkeypatch) -> None:
+    """Piyasa kapalı + bayat bar → blok SÜRER ama etiket market_closed
+    (stale-veri alarmı DEĞİL — pazartesi 16-blok bulgusunun kökü)."""
+    from packages import market_sessions
+    from packages.risk.engine import RiskDecision
+
+    old = datetime.now(UTC) - timedelta(days=10)
+    dec, snap, regime = _setup(monkeypatch, ts=old, flag=True)
+    monkeypatch.setattr(
+        market_sessions, "asset_context",
+        lambda *a, **k: _FakeCtx(markets=True, any_open=False),
+    )
+    hold_risk = RiskDecision(action="HOLD", reason="ok", evidence=[])
+
+    d = dec.decide_for_symbol("BTCUSD", snap, regime, hold_risk, timeframe="1d")
+    assert d.action == "blocked"                       # davranış AYNI: açılış yok
+    assert any(b.startswith("market_closed:") for b in d.blocked_by)
+    assert not any(b.startswith("stale_ohlcv:") for b in d.blocked_by)
+    assert "piyasa kapalı" in d.reason
+
+
+def test_open_market_keeps_stale_label(fresh_env, monkeypatch) -> None:
+    """Piyasa AÇIKken bayat bar = GERÇEK veri hatası → stale_ohlcv etiketi kalır."""
+    from packages import market_sessions
+    from packages.risk.engine import RiskDecision
+
+    old = datetime.now(UTC) - timedelta(days=10)
+    dec, snap, regime = _setup(monkeypatch, ts=old, flag=True)
+    monkeypatch.setattr(
+        market_sessions, "asset_context",
+        lambda *a, **k: _FakeCtx(markets=True, any_open=True),
+    )
+    hold_risk = RiskDecision(action="HOLD", reason="ok", evidence=[])
+
+    d = dec.decide_for_symbol("BTCUSD", snap, regime, hold_risk, timeframe="1d")
+    assert d.action == "blocked"
+    assert any(b.startswith("stale_ohlcv:") for b in d.blocked_by)
+
+
+def test_unmapped_asset_keeps_stale_label(fresh_env, monkeypatch) -> None:
+    """Piyasa eşlemesi olmayan sembol kapalı SAYILMAZ (guard pipeline'la aynı)."""
+    from packages import market_sessions
+    from packages.risk.engine import RiskDecision
+
+    old = datetime.now(UTC) - timedelta(days=10)
+    dec, snap, regime = _setup(monkeypatch, ts=old, flag=True)
+    monkeypatch.setattr(
+        market_sessions, "asset_context",
+        lambda *a, **k: _FakeCtx(markets=False, any_open=False),
+    )
+    hold_risk = RiskDecision(action="HOLD", reason="ok", evidence=[])
+
+    d = dec.decide_for_symbol("BTCUSD", snap, regime, hold_risk, timeframe="1d")
+    assert any(b.startswith("stale_ohlcv:") for b in d.blocked_by)

@@ -213,8 +213,17 @@ quantum kapılı — `config/source_registry_v1.0.yaml` etiketleri gerçeği yan
       kazayla tetiklenemez), BLOCKED'a dokunmaz, yükseltmez. Flag:
       `data_policy.dqs_extended_gate.enabled` (watchdog kaydı E-6 deseniyle
       OFF'ken deploy; aktivasyon AYRI deploy). Geri-alma tek satır. 2024 test.
-- [ ] FAZ 2 kalan: dqs_extended_gate AKTİVASYONU (kayıt-deploy'u senkron olunca
-      `enabled: true` ayrı commit) + kapalı-piyasa/stale ayrımı +
+- [x] 2026-07-16: FAZ-2 — kapalı-piyasa/stale AYRIMI (FAZ-0 pazartesi 16-blok
+      bulgusunun kökü). Stale-blok kararında market_sessions.asset_context
+      sorulur: piyasası kapalı sembolde (hafta sonu/tatil) blok SÜRER (bayat
+      fiyatla açılış yine yapılmaz — davranış aynı) ama etiket dürüstleşir:
+      `market_closed:` (reason "veri hatası değil"). Piyasa AÇIKken bayat bar
+      = GERÇEK veri hatası → `stale_ohlcv:` kalır. Kripto (continuous) hep
+      açık; eşlenmemiş sembol kapalı SAYILMAZ (pipeline guard'ıyla aynı).
+      Etiket-düzeltmesi sınıfı (FAZ-1 CPI etiketi gibi) → flag'siz. +3 test,
+      2027 yeşil.
+- [ ] FAZ 2 kalan: dqs_extended_gate AKTİVASYONU (kayıt her iki ortamda
+      watchdog'a OFF olarak görünsün, SONRA `enabled: true` ayrı commit — E-6) +
       shadow.affect_decision erken aç. Sonra FAZ-3 sentinel-veto
       (MOVE + curve_d63 bağlama burada değerlendirilir).
 - [ ] (sonrası yukarıdaki fazlar)
