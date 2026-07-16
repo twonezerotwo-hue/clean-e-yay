@@ -153,6 +153,39 @@ def extended_metrics(
     return out
 
 
+_GATE_AXES = ("technical_bars", "news_diversity", "rotation_coverage", "artifact_freshness")
+
+
+def apply_extended_gate(report: QualityReport, cfg: dict | None) -> QualityReport:
+    """M14 observe→eşik (FAZ-2, 2026-07-16): genişletilmiş eksen eşiğin altında
+    ise snapshot status OK→DEGRADED (provenance "karar live sayılmaz" etiketi).
+
+    Sınırlar (bilinçli):
+    - SKORA DOKUNMAZ — skor<55 risk-engine KILL_SWITCH zinciri bu kapıdan
+      kazayla tetiklenemez; kapının tek yetkisi dürüstlük etiketi.
+    - Yalnız KÖTÜLEŞTİRİR: OK→DEGRADED. BLOCKED zaten en kötü (dokunulmaz),
+      DEGRADED'i yükseltmez. Not satırı her ihlalde eklenir (görünürlük).
+    - Eşiği 0 olan eksen kapıdan MUAF (yalnız-gözlem sürer); değeri None olan
+      eksen o snapshot'ta ölçülemedi demektir, ihlal SAYILMAZ (uydurma yok).
+    - `enabled: false` → rapor bayt-aynı (gölge-önce kuralı)."""
+    if not cfg or not cfg.get("enabled", False) or not report.extended:
+        return report
+    breaches: list[str] = []
+    for axis in _GATE_AXES:
+        try:
+            floor_ = float(cfg.get(f"{axis}_min", 0.0) or 0.0)
+        except (TypeError, ValueError):
+            floor_ = 0.0
+        val = report.extended.get(axis)
+        if floor_ > 0 and val is not None and float(val) < floor_:
+            breaches.append(f"{axis}={val}<{floor_:g}")
+    if breaches:
+        report.notes.append("dqs_extended_gate: " + ", ".join(breaches))
+        if report.status == "OK":
+            report.status = "DEGRADED"
+    return report
+
+
 def compute(quotes: list[PriceQuote], expected: list[str]) -> QualityReport:
     fr = _freshness(quotes)
     co = _completeness(quotes, expected)

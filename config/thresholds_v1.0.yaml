@@ -337,6 +337,20 @@ data_policy:
   # AKTİF (2026-07-13, owner "aktivasyona devam"): bayat karar-TF'i yeni
   # pozisyonu DOĞRUDAN engeller (dış denetim P1; eskiden yalnız yumuşatılıyordu).
   block_stale_ohlcv_for_trade: true
+  # FAZ-2 (2026-07-16) — DQS çok-eksen GATE (M14 observe→eşik). Genişletilmiş
+  # eksen eşiğin altındaysa snapshot status OK→DEGRADED (provenance "karar live
+  # sayılmaz"); SKORA DOKUNMAZ (skor<55 KILL_SWITCH zinciri kazayla tetiklenmez).
+  # Eşikler 500-snapshot canlı gözlem dağılımından (2026-07-16): technical_bars
+  # yapısal 58-76 bandında → eşik 40 yalnız GERÇEK çöküşte tetikler;
+  # artifact_freshness normal 97+ (bir kez 0 = ölü learning worker görüldü) →
+  # eşik 30; news_diversity/rotation_coverage hep 100 → 0 (o eksenler kapıdan
+  # MUAF, yalnız-gözlem sürer). Geri-alma: enabled: false (tek satır).
+  dqs_extended_gate:
+    enabled: false
+    technical_bars_min: 40.0
+    artifact_freshness_min: 30.0
+    news_diversity_min: 0.0
+    rotation_coverage_min: 0.0
 
 # Calibration inflation guardrail — Platt kalibrasyonunun ZAYIF ham sinyali
 # aşırı güvene şişirmesini sınırlar (örn. raw 0.11 → fitted 0.55 → STRONG kademe →

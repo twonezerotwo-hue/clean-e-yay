@@ -174,6 +174,12 @@ REGISTRY: dict[str, dict] = {
         "label": "Momentum-Likidite (M16+M18 tek flag) — fundamental + rejim",
         "source": ("thresholds", ("consensus", "fundamental_v4")),
     },
+    # FAZ-2 (2026-07-16) — kayıt flag OFF'ken gider (E-6 deseni: OFF→ON
+    # geçişinde arm; kayıt + aktivasyon AYRI deploy olmalı).
+    "data_policy_dqs_extended_gate": {
+        "label": "DQS çok-eksen kapısı — genişletilmiş eksen çöküşünde DEGRADED (M14→eşik)",
+        "source": ("thresholds", ("data_policy", "dqs_extended_gate", "enabled")),
+    },
 }
 
 

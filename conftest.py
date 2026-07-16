@@ -92,6 +92,9 @@ def _package1_flags_off_by_default(monkeypatch: pytest.MonkeyPatch) -> None:
     # Bölge etkisi (2026-07-12) — SL/TP bayt-aynı baseline varsayılır → test-default
     # KAPAT; davranış testleri (test_zone_influence) kendi monkeypatch'iyle açar.
     pinned.setdefault("zone_influence", {})["enabled"] = False
+    # DQS çok-eksen kapısı (FAZ-2, 2026-07-16) — snapshot status bayt-aynı
+    # baseline; davranış testleri (test_dqs_extended_gate) kendi cfg'siyle açar.
+    pinned.setdefault("data_policy", {}).setdefault("dqs_extended_gate", {})["enabled"] = False
     monkeypatch.setattr(loader, "_load_thresholds_base", lambda: pinned)
     # Denetim 2026-07-03 — çıkış-makinesi env flag'leri testlerde default OFF
     # (dev makinesinde .env yüklenmiş olabilir; testler baseline'ı varsayar).

@@ -203,9 +203,20 @@ quantum kapılı — `config/source_registry_v1.0.yaml` etiketleri gerçeği yan
       conftest'e FRED_API_KEY delenv (dev anahtarı teste ağ sızdırmasın).
       2017 test yeşil. Canlıya bağlanan bir şey YOK (salt bekçi + tezgâh).
 - [x] Faz 1 SİL listesi (2026-07-15 kapandı — yukarıdaki FAZ 1 kayıtlarına bak)
-- [ ] FAZ 2 kalan: DQS çok-eksen GATE (M14 observe→eşik, YENİ VERİ GEREKMEZ) +
-      kapalı-piyasa/stale ayrımı + shadow.affect_decision erken aç. Sonra FAZ-3
-      sentinel-veto (MOVE + curve_d63 bağlama burada değerlendirilir).
+- [x] 2026-07-16: FAZ-2 — DQS çok-eksen GATE kuruldu (M14 observe→eşik).
+      Eşikler 500-snapshot CANLI gözlem dağılımından türetildi:
+      technical_bars yapısal 58-76 bandı → eşik 40 (yalnız GERÇEK çöküş);
+      artifact_freshness normal 97+, bir kez 0 görüldü (ölü worker) → eşik 30;
+      news_diversity/rotation_coverage hep 100 → eşik 0 (MUAF, gözlem sürer).
+      Kapının TEK yetkisi dürüstlük etiketi: OK→DEGRADED (provenance "karar
+      live sayılmaz") + not satırı; SKORA DOKUNMAZ (skor<55 KILL_SWITCH zinciri
+      kazayla tetiklenemez), BLOCKED'a dokunmaz, yükseltmez. Flag:
+      `data_policy.dqs_extended_gate.enabled` (watchdog kaydı E-6 deseniyle
+      OFF'ken deploy; aktivasyon AYRI deploy). Geri-alma tek satır. 2024 test.
+- [ ] FAZ 2 kalan: dqs_extended_gate AKTİVASYONU (kayıt-deploy'u senkron olunca
+      `enabled: true` ayrı commit) + kapalı-piyasa/stale ayrımı +
+      shadow.affect_decision erken aç. Sonra FAZ-3 sentinel-veto
+      (MOVE + curve_d63 bağlama burada değerlendirilir).
 - [ ] (sonrası yukarıdaki fazlar)
 
 > Yeni asistan: bir dilim bitince bu listeyi işaretle + `docs/AUDIT_ROADMAP.md`'ye

@@ -23,6 +23,7 @@ from packages.data.providers import technical as tech_provider
 from packages.data.providers import volatility as vol_provider
 from packages.data.providers.news import catalyst as catalyst_engine
 from packages.data.quality.dqs import QualityReport
+from packages.data.quality.dqs import apply_extended_gate as dqs_apply_extended_gate
 from packages.data.quality.dqs import compute as compute_dqs
 from packages.data.quality.dqs import extended_metrics as dqs_extended_metrics
 from packages.data.registry import assets as _asset_registry
@@ -157,6 +158,17 @@ def build_snapshot(symbols: list[str] | None = None) -> MarketSnapshot:
         technicals_by_tf=technicals_by_tf, headlines=headlines,
         rotation=rotation, now=now,
     )
+    # FAZ-2 (2026-07-16) — M14 observe→eşik: flag açıksa eksen çöküşü status'u
+    # OK→DEGRADED indirir (skora dokunmaz). Kapalıyken bayt-aynı. Not satırı
+    # quality.notes'a düşer → aşağıdaki warnings kopyasıyla snapshot'a taşınır.
+    try:
+        from packages.data.registry.loader import load_thresholds as _load_thr
+
+        dqs_apply_extended_gate(
+            quality, (_load_thr().get("data_policy") or {}).get("dqs_extended_gate")
+        )
+    except (OSError, KeyError, ValueError, TypeError):
+        pass  # config okunamazsa kapı yok sayılır (gözlem sürer; uydurma yok)
     warnings = list(quality.notes)
     warnings.append(
         "dqs_extended:" + ":".join(
