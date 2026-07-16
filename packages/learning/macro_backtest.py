@@ -24,7 +24,7 @@ from __future__ import annotations
 import json
 import os
 import statistics as _st
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 from packages.data.providers.rotation import flow
@@ -91,6 +91,36 @@ def _appetite_score(vix: float) -> float:
     2026-07-13: VIX 5y backfill edildi → rejim proxy artık 4-katman (CRISIS
     ayrımı görünür). Formül canlı `_appetite_layer` ile BİREBİR (tek kaynak)."""
     return max(0.0, min(100.0, 100.0 - (vix - 12.0) * 4.0))
+
+
+# ── FAZ-2 eğri + enflasyon eksenleri (SALT-TEZGÂH; canlıya bağlı DEĞİL) ──────
+# CPI aylık ve ~2 hafta gecikmeli yayınlanır → gözlem tarihi look-ahead olur.
+# load_archive_series CPI tarihlerini bu kadar İLERİ kaydırır: değer ancak
+# yayın gününden sonra "biliniyor" sayılır (kural #3 dürüstlüğü).
+_CPI_PUB_LAG_DAYS = 45
+
+def curve_at(us10y: list[float], us02y: list[float], i: int) -> float | None:
+    """2s10s eğri spread'i (US10Y−US02Y, i günü). İki GERÇEK getiri ister;
+    biri NaN/eksikse None (yarısı uydurma eğri hesaplanmaz — canlı kuralın aynısı)."""
+    if not us10y or not us02y or i >= len(us10y) or i >= len(us02y):
+        return None
+    a, b = us10y[i], us02y[i]
+    if a != a or b != b:  # NaN
+        return None
+    return a - b
+
+
+def infl_yoy_at(cpi: list[float], i: int, lookback: int = 252) -> float | None:
+    """CPI endeksinden yıllık enflasyon (%): (cpi[i]/cpi[i-252]−1)·100.
+
+    CPI aylık seri ffill'le günlüğe yayılmıştır; 252 işlem günü ≈ 12 ay.
+    Veri eksik/NaN/≤0 → None."""
+    if not cpi or i >= len(cpi) or i - lookback < 0:
+        return None
+    now, ago = cpi[i], cpi[i - lookback]
+    if now != now or ago != ago or ago <= 0:
+        return None
+    return (now / ago - 1.0) * 100.0
 
 
 def _move_calm(move: float) -> float:
@@ -252,6 +282,16 @@ def walk(
             if move_s and i < len(move_s) and move_s[i] == move_s[i]
             else None
         )
+        # FAZ-2 eğri + enflasyon eksenleri (US02Y/CPI FRED bekçisi doldurur;
+        # arşiv yoksa alanlar None kalır — ölçüm o ortamda sessizce atlanır).
+        us02_s = closes.get("US02Y")
+        curve = curve_at(us10_s or [], us02_s or [], i)
+        curve_prev = curve_at(us10_s or [], us02_s or [], i - 63) if i >= 63 else None
+        curve_d63 = (curve - curve_prev) if curve is not None and curve_prev is not None else None
+        cpi_s = closes.get("CPI")
+        infl = infl_yoy_at(cpi_s or [], i)
+        infl_prev = infl_yoy_at(cpi_s or [], i - 63) if i >= 63 else None
+        infl_accel = (infl - infl_prev) if infl is not None and infl_prev is not None else None
         # Rejim proxy artık canlı 4-katmanı yansıtır: Likidite + Rotasyon(flow) +
         # Kripto + Risk İştahı (hangi bacak varsa). VIX'li dönemde CRISIS görünür.
         cands = fundamental_candidates(prefix_c)
@@ -295,6 +335,10 @@ def walk(
             "fund_v3": round(fund_v3, 2),
             **{k: (None if v is None else round(v, 2)) for k, v in cands.items()},
             "move_calm": None if move_calm is None else round(move_calm, 2),
+            "curve": None if curve is None else round(curve, 3),
+            "curve_d63": None if curve_d63 is None else round(curve_d63, 3),
+            "infl_yoy": None if infl is None else round(infl, 3),
+            "infl_accel": None if infl_accel is None else round(infl_accel, 3),
             "fwd_vol": None if fwd_vol is None else round(fwd_vol, 4),
             "regime": regime,
             "regime_mom": regime_mom,
@@ -456,6 +500,30 @@ def _move_stress_edge(rows: list[dict]) -> dict:
     }
 
 
+def axis_edge(rows: list[dict], key: str) -> dict:
+    """Genel eksen kanıtı (FAZ-2 eğri/enflasyon): dağılım + ileri-getiri ve
+    ileri-oynaklık korelasyonu + hedef başına tercile-separation. Eksenin
+    ROLÜNE karar veren owner'dır — yön mü (return-sep) risk mi (fwd_vol-corr)."""
+    vals = [r[key] for r in rows if r.get(key) is not None]
+    risk_pts = [(r[key], r["fwd_risk"]) for r in rows if r.get(key) is not None]
+    vol_pts = [
+        (r[key], r["fwd_vol"])
+        for r in rows
+        if r.get(key) is not None and r.get("fwd_vol") is not None
+    ]
+    vs_risk = _corr([x for x, _ in risk_pts], [y for _, y in risk_pts])
+    vs_vol = _corr([x for x, _ in vol_pts], [y for _, y in vol_pts])
+    return {
+        "n": len(vals),
+        "mean": None if not vals else round(_st.mean(vals), 3),
+        "min": None if not vals else round(min(vals), 3),
+        "max": None if not vals else round(max(vals), 3),
+        "vs_fwd_risk_corr": None if vs_risk is None else round(vs_risk, 4),
+        "vs_fwd_vol_corr": None if vs_vol is None else round(vs_vol, 4),
+        "return_terciles": {t: separation_tercile(rows, key, t) for t in _FUND_TARGETS},
+    }
+
+
 def weights_evidence(rows: list[dict]) -> dict:
     """Elle rejim ağırlıklarını backtest edge'iyle kıyasla (denetim: "ağırlıklar
     hiç backtest edilmemiş"). Ölçülebilen 2 modül: fundamental (v4/cand_mom
@@ -572,6 +640,15 @@ def analyze(rows: list[dict], horizon: int) -> dict:
         # daha mı iyi? (yüksek MOVE = stres = düşük sakinlik = risk-off beklenir.)
         # Rejim başına da — kripto-DIŞI hedeflerde (SPY/GLD) VIX'e ek bilgi mi?
         "move_stress_edge": _move_stress_edge(rows),
+        # FAZ-2 eğri + enflasyon eksenleri (US02Y/CPI FRED). curve = 2s10s
+        # spread (negatif = ters eğri = sıkılaşma/resesyon sinyali beklenir);
+        # curve_d63 = çeyreklik dikleşme/yatıklaşma momentumu; infl_yoy =
+        # yıllık enflasyon; infl_accel = enflasyon ivmesi (çeyreklik değişim).
+        # CPI serisi 45g yayın gecikmesiyle kaydırıldı — look-ahead yok.
+        "curve_cpi_axes": {
+            k: axis_edge(rows, k)
+            for k in ("curve", "curve_d63", "infl_yoy", "infl_accel")
+        },
     }
     return result
 
@@ -583,12 +660,24 @@ def load_archive_series() -> tuple[dict, dict]:
     keys["US10Y"] = "US10Y"
     keys["VIX"] = "VIX"  # Risk İştahı katmanı (rejim proxy 4. bacağı)
     keys["MOVE"] = "MOVE"  # FAZ-2 sentinel kripto-dışı stres adayı (tezgâh ölçümü)
+    keys["US02Y"] = "US02Y"  # FAZ-2 eğri ekseni (FRED bekçisi doldurur)
+    keys["CPI"] = "CPI"      # FAZ-2 enflasyon ekseni (AYLIK; yayın gecikmesi aşağıda)
     closes: dict[str, list[tuple[str, float]]] = {}
     volumes: dict[str, list[tuple[str, float]]] = {}
     for key, symbol in keys.items():
         bars = history.load(symbol, "1d")
         closes[key] = [(b.ts.date().isoformat(), float(b.close)) for b in bars]
         volumes[key] = [(b.ts.date().isoformat(), float(b.volume or 0.0)) for b in bars]
+    # CPI gözlem tarihi ay BAŞIdır ama değer ~2 hafta sonra yayınlanır → tarih
+    # ileri kaydırılmazsa tezgâh yayınlanmamış CPI'yi "biliyor" olur (look-ahead).
+    closes["CPI"] = [
+        (
+            (datetime.strptime(d, "%Y-%m-%d").replace(tzinfo=UTC)
+             + timedelta(days=_CPI_PUB_LAG_DAYS)).date().isoformat(),
+            v,
+        )
+        for d, v in closes["CPI"]
+    ]
     return closes, volumes
 
 
@@ -656,6 +745,12 @@ def main() -> int:
         for mod, c in blk["measured"].items():
             print(f"    {mod:12} agirlik={c['weight']} edge={c['edge_sep']} ({c['edge_verdict']}, n={c['n']})")
         print(f"    olculemez (canli scorecard): {blk['unmeasured']}")
+    print("\n-- FAZ-2 EGRI + ENFLASYON eksenleri (US02Y/CPI FRED; CPI 45g yayin gecikmeli) --")
+    for k, blk in r["curve_cpi_axes"].items():
+        print(f"  {k}: n={blk['n']} mean={blk['mean']} aralik=[{blk['min']},{blk['max']}] "
+              f"fwd_risk_corr={blk['vs_fwd_risk_corr']} fwd_vol_corr={blk['vs_fwd_vol_corr']}")
+        for t, s in blk["return_terciles"].items():
+            print(f"    {t:4} tercile {_fmt_sep(s)}")
     print(f"\nArtifact: {artifact_path()}")
     print("NOT: rejim PROXY'dir; sonuclar M8/flow aktivasyon KANITI icindir, otomatik aksiyon yok.")
     return 0

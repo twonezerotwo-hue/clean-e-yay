@@ -182,11 +182,30 @@ quantum kapılı — `config/source_registry_v1.0.yaml` etiketleri gerçeği yan
       (FAZ-3 sentinel-veto işiyle; yüzdelik-normalizasyon + flag ile). 2009 test.
       NOT: _move_calm merkezi çarpık (mean 92) — canlı bağlamadan önce v4.1 gibi
       rank-normalize edilecek. Canlı sentinel'e HENÜZ bağlı DEĞİL (salt-tezgâh).
-- [ ] FAZ 2 kalan: US02Y(FRED anahtar) eğri ekseni + CPI-skorlama (FRED backfill)
-      + DQS çok-eksen GATE (M14 observe→eşik, YENİ VERİ GEREKMEZ) + kapalı-piyasa/
-      stale ayrımı + shadow.affect_decision erken aç. Sonra FAZ-3 sentinel-veto
-      (MOVE bağlama burada).
-- [ ] Faz 1 SİL listesi
+- [x] 2026-07-16: FAZ-2 — US02Y+CPI FRED 5y backfill + eğri/enflasyon tezgâh ölçümü.
+      FRED_API_KEY lokalde MEVCUT çıktı (üstteki "anahtar yok" notu eskimişti) →
+      bekçiye FRED kaynağı eklendi (`macro_backfill.FRED_BACKFILL_MIN_BARS`:
+      US02Y=400 günlük / CPI=48 AYLIK eşik; anahtar yoksa `fred: NO_KEY` notuyla
+      dürüst atlama — AWS anahtarı .env-senkron, kendi doldurur). Lokal arşiv:
+      US02Y 1278 bar (5.1y) + CPI 60 gözlem (5y). Tezgâh: CPI 45g yayın
+      gecikmesiyle kaydırılır (look-ahead yok); 4 eksen ölçüldü (H=10g):
+      · curve (2s10s SEVİYE): yön sinyali DEĞİL (BTC −2.4pp) — canlı ters-eğri
+        cezasının risk tarafında kalması doğru, teyit.
+      · **curve_d63 (çeyreklik dikleşme momentumu): EN İYİ ADAY** — BTC +3.1pp /
+        SPY +1.1pp / GLD +1.5pp, fwd_risk_corr +0.20; yıl-yıl SPY 4/5, BTC 3/5
+        (2026 kısmi yılı NEGATİF) → FAZ-4 kanıtlı-ağırlık işinde v4 Likidite
+        momentumuna 3. eksen ADAYI (gölge + flag ile; kesin kanıt DEĞİL).
+      · infl_yoy (SEVİYE): zayıf ters (−0.05 corr) — **CPI seviye-skorlaması
+        ÇÜRÜK, skora girmez** (FAZ-1 "gösterim" etiketi doğru karar çıktı).
+      · infl_accel (ivme): BTC 4/5 yıl ters-tutarlı (ivme↑→getiri↓) ama 2023
+        aykırısı büyük (+9.3pp) → tek başına eksen OLMAZ; olsa olsa rejim
+        sıkılaşma yardımcı işareti (FAZ-3/4 ek kanıt isterse).
+      conftest'e FRED_API_KEY delenv (dev anahtarı teste ağ sızdırmasın).
+      2017 test yeşil. Canlıya bağlanan bir şey YOK (salt bekçi + tezgâh).
+- [x] Faz 1 SİL listesi (2026-07-15 kapandı — yukarıdaki FAZ 1 kayıtlarına bak)
+- [ ] FAZ 2 kalan: DQS çok-eksen GATE (M14 observe→eşik, YENİ VERİ GEREKMEZ) +
+      kapalı-piyasa/stale ayrımı + shadow.affect_decision erken aç. Sonra FAZ-3
+      sentinel-veto (MOVE + curve_d63 bağlama burada değerlendirilir).
 - [ ] (sonrası yukarıdaki fazlar)
 
 > Yeni asistan: bir dilim bitince bu listeyi işaretle + `docs/AUDIT_ROADMAP.md`'ye

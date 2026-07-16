@@ -129,6 +129,11 @@ def _package1_flags_off_by_default(monkeypatch: pytest.MonkeyPatch) -> None:
     # baseline); flag'i test eden testler kendi setenv + BAR_HISTORY_DIR ile açar.
     monkeypatch.delenv("BAR_HISTORY_ENABLED", raising=False)
     monkeypatch.delenv("BAR_HISTORY_DIR", raising=False)
+    # FAZ-2 (2026-07-16) — FRED backfill bekçisi FRED_API_KEY varlığına bakar;
+    # dev .env'inde anahtar dolu → testlerde bırakılırsa macro_backfill FRED
+    # sembollerini tarayıp ağa çıkmaya çalışır. Baseline = anahtarsız (FRED
+    # sembolleri atlanır); FRED yolunu test edenler kendi setenv'iyle açar.
+    monkeypatch.delenv("FRED_API_KEY", raising=False)
     # D4 (2026-07-06) — per-TF trust kapısı testlerde default OFF (resolve_live_
     # tf_weights bayt-aynı baseline); flag'i test eden testler kendisi açar.
     monkeypatch.delenv("TF_TRUST_PER_BUCKET", raising=False)
