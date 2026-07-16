@@ -222,10 +222,27 @@ quantum kapılı — `config/source_registry_v1.0.yaml` etiketleri gerçeği yan
       açık; eşlenmemiş sembol kapalı SAYILMAZ (pipeline guard'ıyla aynı).
       Etiket-düzeltmesi sınıfı (FAZ-1 CPI etiketi gibi) → flag'siz. +3 test,
       2027 yeşil.
-- [ ] FAZ 2 kalan: dqs_extended_gate AKTİVASYONU (kayıt her iki ortamda
-      watchdog'a OFF olarak görünsün, SONRA `enabled: true` ayrı commit — E-6) +
-      shadow.affect_decision erken aç. Sonra FAZ-3 sentinel-veto
-      (MOVE + curve_d63 bağlama burada değerlendirilir).
+- [x] 2026-07-16: FAZ-2 AKTİVASYONLARI (E-6 ön-koşulu doğrulandı: M26 kayıt
+      deploy'u sonrası watchdog iki ortamda flag'i OFF gördü — lokal
+      last_seen=False teyit, AWS 5dk döngüyle kaydetti):
+      · `data_policy.dqs_extended_gate.enabled: true` — eksen çöküşünde
+        OK→DEGRADED (mevcut canlı değerler sağlıklı: technical_bars 58-76,
+        artifact_freshness 97+ → normal işleyişte gate SUSAR; yalnız gerçek
+        çöküşte konuşur). Geri-alma: enabled: false.
+      · `shadow.affect_decision: true` — ERKEN AÇILIŞ (Dalga-2 kararı): yeni
+        zincir girişleri YALNIZ manual_ready kuyruğuna (oto-açılış YOK; onayda
+        RiskGate yeniden koşar; size ≤1.0 clamp; manual_ready_only DEĞİŞMEDİ).
+        Amaç: CP5 decide_matrix-emekliliği forward kanıtı bugünden biriksin.
+        Geri-alma: affect_decision: false.
+      test_committed_config testi Phase-B gerçeğine güncellendi (manual_ready_
+      only garantisi + mimari bekçi korunuyor). 2027 test yeşil.
+      **FAZ 2 KAPANDI** (US02Y/CPI omurga + DQS gate + kapalı-piyasa ayrımı +
+      erken açılış; US02Y eğri CANLI bağlaması ve MOVE+curve_d63 sentinel-veto
+      FAZ-3'ün işi).
+- [ ] FAZ 3: SKOR SÖZLEŞMESİ v2 + sentinel-veto taşınması (MOVE + curve_d63
+      bağlama burada değerlendirilir) + confluence v2 + news güven çarpanı +
+      advisor bağla→aç + WRF/MM_V2 yeniden-ölçüm. (En büyük faz, 2-3 oturum;
+      kabul: 5y tezgâh replay + 2 hafta canlı gölge yan yana.)
 - [ ] (sonrası yukarıdaki fazlar)
 
 > Yeni asistan: bir dilim bitince bu listeyi işaretle + `docs/AUDIT_ROADMAP.md`'ye

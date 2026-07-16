@@ -345,8 +345,10 @@ data_policy:
   # artifact_freshness normal 97+ (bir kez 0 = ölü learning worker görüldü) →
   # eşik 30; news_diversity/rotation_coverage hep 100 → 0 (o eksenler kapıdan
   # MUAF, yalnız-gözlem sürer). Geri-alma: enabled: false (tek satır).
+  # AKTİF (2026-07-16 FAZ-2; kayıt-deploy'u M26'da AYRI gitti — E-6 deseni,
+  # watchdog OFF→ON geçişini gördü). Geri-alma: enabled: false.
   dqs_extended_gate:
-    enabled: false
+    enabled: true
     technical_bars_min: 40.0
     artifact_freshness_min: 30.0
     news_diversity_min: 0.0
@@ -1133,7 +1135,12 @@ trade_economics:
 #   manual_ready_only: when activated, shadow entries ONLY queue to manual_ready (never attempt_open)
 shadow:
   enabled: true
-  affect_decision: false
+  # AKTİF (2026-07-16 FAZ-2 "erken açılış", ROADMAP_10_10 Dalga-2 kararı):
+  # yeni zincirin girişleri YALNIZ manual_ready kuyruğuna düşer (oto-açılış
+  # YOK; onay anında RiskGate yeniden koşar; size ≤1.0 clamp). Amaç: CP5
+  # (decide_matrix emekliliği) forward kanıtını bugünden biriktirmek.
+  # Geri-alma: affect_decision: false (tek satır).
+  affect_decision: true
   manual_ready_only: true
 
 # Faz 7 — Conflict Resolver'ın kontrollü aktivasyonu (spec v2.3 §28).

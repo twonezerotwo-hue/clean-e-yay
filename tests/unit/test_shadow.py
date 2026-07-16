@@ -54,12 +54,16 @@ def test_default_config_is_disabled_observe_only():
     assert cfg.manual_ready_only is True
 
 
-def test_committed_config_is_observe_only():
-    # The shipped config block enables observation but NOT decision influence.
+def test_committed_config_phase_b_manual_ready_only():
+    # 2026-07-16 FAZ-2 "erken açılış" (ROADMAP_10_10 Dalga-2): sevk edilen config
+    # Phase B — affect_decision açık AMA manual_ready_only DEĞİŞMEZ garanti:
+    # girişler yalnız owner-onay kuyruğuna düşer (oto-açılış yolu yok; mimari
+    # bekçi test_shadow_activation_only_queues_manual_ready kaynak-metinde doğrular).
     cfg = shadow.load_config()
     assert cfg.enabled is True
-    assert cfg.affect_decision is False
-    assert shadow.affects_paper(cfg) is False
+    assert cfg.affect_decision is True
+    assert cfg.manual_ready_only is True
+    assert shadow.affects_paper(cfg) is True
 
 
 # ── observation never touches paper ───────────────────────────────────────────
