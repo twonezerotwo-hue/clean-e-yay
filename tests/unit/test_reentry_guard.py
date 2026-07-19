@@ -8,8 +8,13 @@ from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
 
+import pytest
+
 from packages.paper import reentry_guard
 from packages.paper.state import PaperState, Trade
+
+# Dilim-0 — attempt_open OHLCV referans kapısından geçer (conftest seed).
+pytestmark = pytest.mark.usefixtures("seed_ohlcv_reference")
 
 _FP_A = "BTCUSD|v2|4h|OFFENSIVE|long|S65|C|sentinel"
 _FP_B = "BTCUSD|v2|4h|OFFENSIVE|long|S80|C|momentum"  # farklı bucket+module

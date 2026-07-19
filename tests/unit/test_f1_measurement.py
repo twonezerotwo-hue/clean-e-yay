@@ -14,6 +14,9 @@ from pathlib import Path
 
 import pytest
 
+# Dilim-0 — attempt_open OHLCV referans kapısından geçer (conftest seed).
+pytestmark = pytest.mark.usefixtures("seed_ohlcv_reference")
+
 
 @pytest.fixture
 def env(tmp_path, monkeypatch):

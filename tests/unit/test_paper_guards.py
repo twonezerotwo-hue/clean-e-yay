@@ -14,6 +14,9 @@ import pytest
 from packages.data.guards import price_sanity
 from packages.paper.guards import state_anomaly
 
+# Dilim-0 — attempt_open OHLCV referans kapısından geçer (conftest seed).
+pytestmark = pytest.mark.usefixtures("seed_ohlcv_reference")
+
 # ---------- price sanity (unit) ----------
 
 def test_absolute_bounds_reject_and_accept() -> None:

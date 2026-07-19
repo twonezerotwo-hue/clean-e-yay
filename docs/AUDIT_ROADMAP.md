@@ -242,6 +242,27 @@ temeli — Y-5'in girdisi) → Y-4 (doğrulama disiplini) → Y-5 (meta-kapı, v
 hazırken) → Y-6. Her dilim: AYRI commit + OFF-bekçi testi + tam suite + roadmap
 güncelle + push (aktivasyonlar ayrı commit/deploy — watchdog arm kuralı).
 
+## T serisi — 2026-07 dış denetim TAMİR hattı (2026-07-19, owner talimatı)
+
+Owner talimatı (2026-07-19): **"random ilerleme yok — önem sırasına göre tamir; yeni
+özellik eklenmez, her dilim ya kod siler ya bozuk davranışı düzeltir."** Kaynak:
+17 Temmuz dış denetimi (10 doğrulanmış bulgu; doğrulama bu repo dışında bağımsız
+kod okuması + tam test koşusuyla yapıldı). Onaylı plan sırası sabittir; dilim
+bitmeden (tam suite yeşil + owner'a düz-dille kanıt raporu) sıradakine geçilmez.
+
+| # | İş | Denetim ref | Durum | Risk |
+|---|---|---|---|---|
+| T0 | **Zemin: test tabanını yeşile çevir.** Suite'in gerçek `data/runtime/ohlcv` cache'ini görmesi makineden makineye sonuç değiştiriyordu → `conftest._isolate_runtime_stores`'a `OHLCV_CACHE_DIR` izolasyonu. 12 kırmızı testin kök nedeni: açılış fiyat-referans kapısı (`no_ohlcv_reference`→`price_insane`) test ortamında referans bulamıyor → `seed_ohlcv_reference` fixture'ı (BTCUSD@60k, ETHUSD@4k tek 15m bar; kapı mock'lanmaz) + 6 paper-akış dosyasına `pytestmark`. Assert'ler DEĞİŞMEDİ | P0-6 (12 test regresyonu) | ✅ (2026-07-19) tam suite **2027 geçti / 0 kırmızı** (önce 2014/12); ruff repo toplamı 31'de sabit (yeni hata yok). Davranış değişikliği YOK — yalnız test altyapısı | 🟢 |
+| T1 | **Yan kapıyı sök:** `POST /paper-trading/tick` içindeki kopya karar motoru kaldırılır (conflict-gate'siz + reentry-guard'sız paralel yol). Önce API-motorunda yaşayan ticket/recheck/bildirim üretimi worker `run_once()` pass'ine taşınır (bunlar prod'da fiilen ölüydü: prod tick'i worker atar, ticket listesi hep boş) → `data/runtime/tickets.json`; sonra endpoint + client metodu + contract silinir + codegen | P0-2, P0-3 (API satırı) | ⬜ | 🟡 |
+| T2 | **Kapıya kilit:** `API_AUTH_TOKEN` env set ise yazma istekleri Bearer ister (env yoksa bayt-aynı); worker-proxy'ye parola + HttpOnly çerez; secrets git dışı (GitHub Secrets + wrangler secret) | P0-4 (auth yok) | ⬜ | 🟡 |
+| T3 | **Defter kilidi:** `packages/paper/state.py` süreçler-arası kilit + `transaction()` (load→modify→save tek kilit) + additive `revision`; çakışmada `STATE_CONFLICT` audit + retry | P0-1 (lost update) | ⬜ | 🟡 |
+| T4 | **Tek kapı kontrolleri:** reentry guard tüm OTOMATİK açılış yollarında (owner manuel MUAF); `trigger_pending_orders` dolum anında taze halt/anomali/duplicate kontrolü | P1-5, P1-7 | ⬜ | 🟡 |
+| T5 | **Fırtına kuralı tamiri:** DEFENSIVE/CRISIS→manual_ready rotası `gates.apply_gates`'e, YAML flag `gates.regime_manual_ready` DEFAULT OFF = izleme ("onaya düşerdi" audit satırı); `market_sessions`'daki hiç okunmayan `regime` girdisi temizlenir. Aktivasyon ayrı owner kararı | P0-3 | ⬜ | 🟡 |
+
+**Sonraki tur (sırası sabit, bu hatta değil):** masraf muhasebesi (net PnL + öğrenme
+etiketi) → worker→ekran anons taşınımı → sinyal kimliği (`signal_instance_id`) →
+tek karne (PolicySnapshot; ayrı mimari plan + owner onayı).
+
 ## Devir notu (son güncelleme: 2026-07-03)
 
 Bu belge farklı bir asistan/oturum tarafından SIFIR bağlamla devralınabilir

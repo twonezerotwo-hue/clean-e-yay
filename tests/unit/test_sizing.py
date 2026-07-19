@@ -17,6 +17,9 @@ from packages.paper import state as paper_state
 from packages.risk.engine import RiskInput
 from packages.risk.engine import evaluate as evaluate_risk
 
+# Dilim-0 — approve→attempt_open yolu OHLCV referans kapısından geçer (conftest seed).
+pytestmark = pytest.mark.usefixtures("seed_ohlcv_reference")
+
 
 @pytest.fixture
 def st(tmp_path, monkeypatch):

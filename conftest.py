@@ -200,3 +200,38 @@ def _isolate_runtime_stores(tmp_path_factory: pytest.TempPathFactory) -> None:
     # Rejim hysteresis durumu (2026-07-13) — band>0 testleri canlı
     # data/runtime/regime_state.json'a yazmasın/okumasın (suite izolasyonu).
     os.environ["REGIME_STATE_PATH"] = str(runtime / "regime_state.json")
+    # Dilim-0 (2026-07 dış denetim) — açılış fiyat-referans kapısı
+    # (price_sane_with_ohlcv_reason) sembolün kendi OHLCV cache'ini okur; suite
+    # gerçek data/runtime/ohlcv'yi görmesin. Dev makinesindeki canlı cache test
+    # sonucunu makineden makineye değiştiriyordu; temiz makinede dizin zaten boş
+    # olduğundan davranış birebir aynı kalır.
+    os.environ["OHLCV_CACHE_DIR"] = str(runtime / "ohlcv")
+
+
+@pytest.fixture
+def seed_ohlcv_reference() -> None:
+    """Dilim-0 — attempt_open/approve akışını süren paper testleri için OHLCV seed'i.
+
+    Açılış kapısı cache'siz sembolü `no_ohlcv_reference` ile reddeder (canlıda doğru
+    davranış). Paper-akış testleri BTCUSD@60000 / ETHUSD@4000 açar; bu fixture izole
+    cache'e o fiyatlarla tek 15m bar yazar — kapı mock'lanmaz, gerçek koduyla çalışır.
+    Dosya bazında `pytestmark = pytest.mark.usefixtures("seed_ohlcv_reference")` açar.
+    """
+    from datetime import UTC, datetime
+
+    from packages.data.providers.ohlcv import cache as ohlcv_cache
+    from packages.data.types import OHLCVBar
+
+    now = datetime.now(UTC)
+    for symbol, close in (("BTCUSD", 60_000.0), ("ETHUSD", 4_000.0)):
+        ohlcv_cache.save(
+            symbol,
+            "15m",
+            [
+                OHLCVBar(
+                    symbol=symbol, timeframe="15m", ts=now, open=close,
+                    high=close, low=close, close=close,
+                    source="test-seed", verified=False,
+                )
+            ],
+        )

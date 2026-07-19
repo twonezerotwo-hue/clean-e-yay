@@ -15,6 +15,9 @@ from packages.paper import manual_queue
 from packages.paper import state as paper_state
 from packages.paper.state import ManualReady, RejectedSignal
 
+# Dilim-0 — approve→attempt_open yolu OHLCV referans kapısından geçer (conftest seed).
+pytestmark = pytest.mark.usefixtures("seed_ohlcv_reference")
+
 
 @pytest.fixture
 def st(tmp_path, monkeypatch):
