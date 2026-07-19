@@ -59,9 +59,10 @@ def evaluate_open(
     timeframe: str,
     *,
     now_utc: datetime,
-    regime: str | None = None,
     risk_action: str | None = None,
 ) -> SessionGate:
+    # T5 — eski `regime` parametresi kaldırıldı: seans motoru onu HİÇ okumuyordu
+    # (ölü taşıyıcı); rejim-bazlı rotalama artık decision/gates.apply_gates'te.
     cfg = market_sessions.load_config()
     ctx = market_sessions.asset_context(symbol, now_utc, cfg)
     decision = market_sessions.evaluate(
@@ -70,7 +71,6 @@ def evaluate_open(
             now_utc=now_utc,
             candidate_side=side,
             candidate_timeframe=timeframe,
-            regime=regime,
             risk_gate_status=risk_action,
         ),
         cfg,

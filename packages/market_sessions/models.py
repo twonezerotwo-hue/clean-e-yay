@@ -60,7 +60,8 @@ class MarketSessionDecisionInput:
     now_utc: datetime
     candidate_side: str | None = None
     candidate_timeframe: str | None = None
-    regime: str | None = None
+    # T5 — `regime` alanı kaldırıldı: motor hiç okumuyordu (dış denetim tespiti);
+    # rejim-bazlı manual-ready rotası decision/gates.apply_gates'te yaşar.
     risk_gate_status: str | None = None
 
 

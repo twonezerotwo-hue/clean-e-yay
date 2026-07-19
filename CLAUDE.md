@@ -51,6 +51,16 @@ LLM yalnız anlatır. `PAPER_ONLY` / `NO_EXECUTION` kodda yapısal olarak zorlan
 
 ## Güncel durum — 2026-07-11 devir anı (tarihli; eskiyebilir, güncelini roadmap'te ara)
 
+- **2026-07-19 — T serisi tamir hattı BİTTİ (owner talimatı: "random ilerleme yok,
+  önem sırasına göre tamir").** 17 Temmuz dış denetiminin P0/P1'leri kapatıldı
+  (roadmap "T serisi" tablosu): T0 test zemini (2027→2048 test, 0 kırmızı) →
+  T1 yan kapı söküldü (tek tick yolu worker; ticket/recheck/bildirim worker'a
+  taşındı — prod'da fiilen ölüydü) → T2 kimlik kilidi (API Bearer + Worker parola;
+  AKTİVASYON owner secret'larına bağlı) → T3 defter transaction'ı (süreçler-arası
+  kilit + revision; lost-update bitti) → T4 pending dolum tazeliği (halt/anomali/
+  duplicate beklemesi) → T5 fırtına kuralı tamiri (gates'te, flag default KAPALI =
+  izleme; aktivasyon owner'da). Sonraki tur sırası roadmap'te sabit: masraf
+  muhasebesi → anons taşınımı → sinyal kimliği → tek karne.
 - **reentry_guard** (`packages/paper/reentry_guard.py`, commit `5f0ebde`): owner'ın en büyük
   problemi — kârda kapatınca 30 sn'de aynı bayat sinyalle geri girme — için tekrar-giriş kilidi.
   SHADOW'da (`reentry_guard.enabled: false`), tick log'unda kanıt birikiyor; yeter kanıtta owner

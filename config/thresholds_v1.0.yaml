@@ -186,6 +186,16 @@ news:
 # (regime-report `dropped_layers`); fundamental/sentinel katmansız kalırsa consensus
 # modülü de düşer ve ağırlığı redistribute edilir (quantum deseni; DATA_POLICY).
 # Snapshot warnings'e `macro_data_missing` her durumda yazılır (M2, flag'siz gözlem).
+# T5 (2026-07-19, dış denetim P0-3) — FIRTINA KURALI: DEFENSIVE/CRISIS rejimde
+# otomatik açılış owner onayına (manual_ready) düşer. Eski kural yalnız API kopya
+# motorunda yaşıyordu ve bozuk karşılaştırma yüzünden HİÇ çalışmamıştı (T1'de o
+# motorla birlikte söküldü); tamiri TEK rotalama noktasına (decision/gates) kondu.
+# DEFAULT KAPALI = İZLEME: tick log'una "onaya düşerdi" gölge satırı yazılır,
+# rota bayt-aynı. Kanıt birikince owner açar (iki ortam + tick_worker restart).
+gates:
+  regime_manual_ready:
+    enabled: false
+
 regime:
   # AKTİF (2026-07-02, owner kararı — Paket 1; canlı kanıt: FRED'siz ortamda
   # sahte Likidite 96.6 → konsensüs ~4.2p şişme. v1 davranışı flag'le geri gelir).
