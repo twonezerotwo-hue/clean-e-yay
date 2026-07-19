@@ -209,6 +209,10 @@ class PendingOrder:
 class PaperState:
     equity_usd: float
     peak_equity_usd: float
+    # T3 — defter sürüm sayacı: her transaction() commit'i +1 yazar. Kilidi
+    # kullanmayan (bug) bir yazar araya girerse commit anında sapma yakalanır
+    # (STATE_CONFLICT audit). Legacy kayıtlar 0'dan başlar.
+    revision: int = 0
     realized_pnl_usd: float = 0.0
     open_positions: list[Position] = field(default_factory=list)
     recent_trades: list[Trade] = field(default_factory=list)
@@ -236,6 +240,7 @@ class PaperState:
     def to_dict(self) -> dict:
         return {
             "schema_version": SCHEMA_VERSION,
+            "revision": self.revision,
             "equity_usd": self.equity_usd,
             "peak_equity_usd": self.peak_equity_usd,
             "realized_pnl_usd": self.realized_pnl_usd,
@@ -257,6 +262,7 @@ class PaperState:
         return cls(
             equity_usd=float(d.get("equity_usd", 0)),
             peak_equity_usd=float(d.get("peak_equity_usd", 0)),
+            revision=int(d.get("revision", 0) or 0),
             realized_pnl_usd=float(d.get("realized_pnl_usd", 0)),
             daily_pnl_usd=float(d.get("daily_pnl_usd", 0)),
             daily_anchor_date=str(d.get("daily_anchor_date", "")),
@@ -403,6 +409,141 @@ def load() -> PaperState:
 def save(state: PaperState) -> None:
     with _LOCK:
         _write_atomic(STATE_PATH, state.to_dict())
+
+
+# ── T3 (2026-07 dış denetim P0-1) — süreçler-arası defter transaction'ı ───────
+# Sorun: load() ve save() ayrı ayrı güvenli ama OKU→DEĞİŞTİR→YAZ bütünü değildi;
+# API ile tick worker AYRI SÜREÇ olarak aynı dosyayı yazınca son yazan öncekinin
+# değişikliğini silebiliyordu (lost update). Çözüm: bütün mutasyon blokları
+# OS-seviyesi dosya kilidi altında koşar (Windows msvcrt / POSIX flock —
+# governor_worker singleton kilidiyle aynı aile). `revision` sayacı, kilidi
+# KULLANMAYAN bir yazar kalırsa (bug) sapmayı commit anında görünür kılar:
+# STATE_CONFLICT audit yazılır (sessiz veri kaybı yerine görünür iz).
+# KURAL: transaction İÇ İÇE AÇILMAZ (aynı süreçte ikinci begin() kilitte bekler).
+
+
+def _txn_lock_path() -> Path:
+    return STATE_PATH.with_name(STATE_PATH.name + ".lock")
+
+
+def _flock_acquire(fh) -> None:
+    if os.name == "nt":
+        import msvcrt
+
+        # LK_LOCK ~10 sn bekleyip OSError verir — kilit alınana dek yeniden dene
+        # (bloklayan davranış; tick birkaç saniyede biter, açlık pratikte yok).
+        while True:
+            try:
+                fh.seek(0)
+                msvcrt.locking(fh.fileno(), msvcrt.LK_LOCK, 1)
+                return
+            except OSError:
+                continue
+    else:
+        import fcntl
+
+        fcntl.flock(fh.fileno(), fcntl.LOCK_EX)
+
+
+def _flock_release(fh) -> None:
+    try:
+        if os.name == "nt":
+            import msvcrt
+
+            fh.seek(0)
+            msvcrt.locking(fh.fileno(), msvcrt.LK_UNLCK, 1)
+        else:
+            import fcntl
+
+            fcntl.flock(fh.fileno(), fcntl.LOCK_UN)
+    except OSError:
+        pass
+    finally:
+        fh.close()
+
+
+def _disk_revision() -> int | None:
+    """Diskteki ham revision (parse edilemezse None — conflict kıyası atlanır)."""
+    try:
+        return int(json.loads(STATE_PATH.read_text(encoding="utf-8")).get("revision", 0) or 0)
+    except (OSError, ValueError, TypeError):
+        return None
+
+
+class Transaction:
+    """Defter mutasyonu: begin() kilidi alıp taze state yükler; commit() revision
+    artırıp yazar ve kilidi bırakır; abort() yazmadan bırakır. commit/abort
+    idempotenttir. Hata yolunda MUTLAKA abort çağrılmalı (try/finally veya
+    `transaction()` context manager'ı bunu üstlenir)."""
+
+    def __init__(self, reason: str = "") -> None:
+        self.reason = reason
+        p = _txn_lock_path()
+        p.parent.mkdir(parents=True, exist_ok=True)
+        self._fh = open(p, "a+b")
+        try:
+            _flock_acquire(self._fh)
+        except BaseException:
+            self._fh.close()
+            raise
+        self._done = False
+        self.state = load()
+        self._loaded_revision = self.state.revision
+
+    def commit(self) -> None:
+        if self._done:
+            return
+        try:
+            disk = _disk_revision()
+            if disk is not None and disk != self._loaded_revision:
+                # Kilitsiz bir yazar araya girmiş (bug sinyali). Bugünkü davranış
+                # gibi son-yazan-kazanır ama artık SESSİZ DEĞİL — audit'te iz var.
+                audit.record(
+                    "STATE_CONFLICT",
+                    reason=f"txn:{self.reason or '?'}",
+                    detail=f"loaded_rev={self._loaded_revision} disk_rev={disk}",
+                )
+            self.state.revision = self._loaded_revision + 1
+            save(self.state)
+        finally:
+            self._release()
+
+    def abort(self) -> None:
+        if self._done:
+            return
+        self._release()
+
+    def _release(self) -> None:
+        self._done = True
+        _flock_release(self._fh)
+
+
+def begin(reason: str = "") -> Transaction:
+    return Transaction(reason)
+
+
+class _TransactionCM:
+    """`with transaction("...") as ps:` — normal çıkışta commit, istisnada abort."""
+
+    def __init__(self, reason: str) -> None:
+        self._reason = reason
+        self._txn: Transaction | None = None
+
+    def __enter__(self) -> PaperState:
+        self._txn = begin(self._reason)
+        return self._txn.state
+
+    def __exit__(self, exc_type, exc, tb) -> bool:
+        assert self._txn is not None
+        if exc_type is None:
+            self._txn.commit()
+        else:
+            self._txn.abort()
+        return False
+
+
+def transaction(reason: str = "") -> _TransactionCM:
+    return _TransactionCM(reason)
 
 
 def utc_iso() -> str:

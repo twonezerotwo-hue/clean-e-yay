@@ -214,8 +214,13 @@ def repair_state(dry_run: bool = True) -> MaintenanceResult:
                 created_at=_now(), changed=False, archive_path=None,
                 changes=changes, warnings=warnings, errors=arch.errors,
             )
-        _apply(st)
-        paper_state.save(st)
+        # T3 — yazım tek kilit altında ve TAZE state üstünde: ilk tespit ile yazım
+        # arasında başka bir süreç defteri değiştirmiş olabilir; kilit içinde
+        # yeniden tespit edip onu uygularız (rapor da yazım anının gerçeğidir).
+        with paper_state.transaction("maintenance:repair") as fresh_st:
+            changes, redetect_warnings = _detect(fresh_st)
+            warnings.extend(redetect_warnings)
+            _apply(fresh_st)
 
     return MaintenanceResult(
         status="ok" if changes else "no_op", action="repair", dry_run=dry_run,
@@ -242,8 +247,14 @@ def reset_state(reason: str, preserve_learning: bool = True) -> MaintenanceResul
         )
     warnings.extend(arch.warnings)
 
-    fresh = paper_state._initial_state()
-    paper_state.save(fresh)
+    # T3 — sıfırlama da kilit altında (revision monoton devam eder; eşzamanlı
+    # tick yazımıyla yarışıp yarım devir bırakmaz).
+    txn = paper_state.begin("maintenance:reset")
+    try:
+        txn.state = paper_state._initial_state()
+        txn.commit()
+    finally:
+        txn.abort()
 
     if preserve_learning:
         warnings.append("learning_and_decision_logs_preserved")

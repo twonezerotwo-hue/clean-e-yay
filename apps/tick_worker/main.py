@@ -223,9 +223,14 @@ async def run_once() -> None:
     # Her tick'te taze okunur — kullanıcı runtime'da custom trade asset
     # eklerse bir sonraki cycle'da otomatik dahil olur (process restart gerekmez).
     MATRIX_SYMBOLS = asset_registry.trade_symbols()
+    txn = None  # T3 — istisna yolunda abort için görünür olmalı
     try:
         snap = build_snapshot()
-        ps = paper_state.load()
+        # T3 — defter mutasyon bölümü (oku→kapat/aç→yaz) süreçler-arası kilit
+        # altında: API'nin owner mutasyonlarıyla yarışta kayıt kaybolmaz.
+        # Snapshot (ağ) kilitten ÖNCE alınır; commit ilk save noktasında.
+        txn = paper_state.begin("tick")
+        ps = txn.state
         prices = {q.symbol: q.price for q in snap.prices if q.price is not None}
         verified_flags = {q.symbol: q.verified for q in snap.prices}
         closed = price_tick(ps, prices)
@@ -400,7 +405,7 @@ async def run_once() -> None:
                     rg.get("reason"), "açılış engellendi" if rg.get("active") else "açılışa izin (flag kapalı)",
                 )
 
-        paper_state.save(ps)
+        txn.commit()  # T3 — defter mutasyon bölümü biter: revision +1, kilit bırakılır
 
         # Step 9 — controlled activation (OBSERVATION mode). Run the NEW agent
         # pipeline in shadow and persist a comparison vs. the live engine. Runs
@@ -450,17 +455,19 @@ async def run_once() -> None:
                     # Phase B — controlled activation: route shadow entries to
                     # manual_ready ONLY (never auto-open; RiskGate re-runs at owner
                     # approval). Inert under the shipped affect_decision:false config.
-                    queued = shadow_activation.activate(
-                        ps,
-                        MATRIX_SYMBOLS,
-                        risk_action=_risk.action,
-                        prices=prices,
-                        snapshot_id=snap.snapshot_id,
-                        cfg=shadow_cfg,
-                        tf_weights=live_tf_weights,
-                    )
+                    # T3 — ana commit SONRASI çalışır: bayat ps'e yazmak yerine
+                    # kendi kısa transaction'ında taze state'e ekler.
+                    with paper_state.transaction("tick:shadow_activation") as ps_sa:
+                        queued = shadow_activation.activate(
+                            ps_sa,
+                            MATRIX_SYMBOLS,
+                            risk_action=_risk.action,
+                            prices=prices,
+                            snapshot_id=snap.snapshot_id,
+                            cfg=shadow_cfg,
+                            tf_weights=live_tf_weights,
+                        )
                     if queued:
-                        paper_state.save(ps)
                         log.info(
                             "shadow activation: %d entry → manual_ready", len(queued)
                         )
@@ -474,17 +481,18 @@ async def run_once() -> None:
         try:
             cr_cfg = conflict_resolver_activation.load_config()
             if cr_cfg.enabled:
-                cr_queued = conflict_resolver_activation.activate(
-                    ps,
-                    MATRIX_SYMBOLS,
-                    risk_action=_risk.action,
-                    dqs_status=snap.quality.status,
-                    prices=prices,
-                    snapshot_id=snap.snapshot_id,
-                    cfg=cr_cfg,
-                )
+                # T3 — ana commit SONRASI: kendi kısa transaction'ında taze state.
+                with paper_state.transaction("tick:conflict_resolver") as ps_cr:
+                    cr_queued = conflict_resolver_activation.activate(
+                        ps_cr,
+                        MATRIX_SYMBOLS,
+                        risk_action=_risk.action,
+                        dqs_status=snap.quality.status,
+                        prices=prices,
+                        snapshot_id=snap.snapshot_id,
+                        cfg=cr_cfg,
+                    )
                 if cr_queued:
-                    paper_state.save(ps)
                     log.info(
                         "conflict resolver activation: %d entry → manual_ready", len(cr_queued)
                     )
@@ -550,6 +558,10 @@ async def run_once() -> None:
         except Exception:
             log.debug("event bus publish failed", exc_info=True)
     except Exception as exc:  # tick loop'u öldürmez — FAILED heartbeat yaz, devam et
+        # T3 — açık kalan defter transaction'ını yazmadan bırak (commit edildiyse
+        # no-op); kilit sızıntısı API'nin owner mutasyonlarını süresiz bloklardı.
+        if txn is not None:
+            txn.abort()
         heartbeat.record(
             WORKER_NAME,
             status="FAILED",

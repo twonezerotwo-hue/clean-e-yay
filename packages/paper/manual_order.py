@@ -65,7 +65,7 @@ def place(
     if not size_usd or size_usd <= 0:
         raise ManualOrderError("tutar sıfırdan büyük olmalı", 400)
     sym = (symbol or "").strip().upper()
-    ps = paper_state.load()
+    # T3 — ağ çağrısı (snapshot) kilit DIŞINDA; defter mutasyonu tek kilit altında.
     snap = build_snapshot()
     prices = {q.symbol: q.price for q in snap.prices if q.price is not None}
     market = prices.get(sym)
@@ -74,61 +74,61 @@ def place(
     market_sane = price_sanity.price_sane_with_ohlcv_reason(sym, float(market), timeframe=timeframe)
     if market_sane is not None:
         raise ManualOrderError(f"{sym} guncel fiyati tutarsiz: {market_sane}")
-    if size_usd > ps.equity_usd:
-        raise ManualOrderError(
-            f"yetersiz bakiye: {size_usd:.0f} dolar > {ps.equity_usd:.0f} dolar"
-        )
 
-    is_market = order_type == "market" or (
-        order_type is None
-        and (not entry_price or entry_price <= 0 or abs(entry_price - market) / market < 0.001)
-    )
-    # MARKET: anında aç.
-    if is_market:
-        pos = open_position(
-            ps, symbol=sym, side=s, entry_price=float(market), size_multiplier=0.0,
-            manual=True, size_usd_override=float(size_usd), timeframe=timeframe,
-            open_reason="owner_manual", snapshot_id=snap.snapshot_id,
-            open_dqs=snap.quality.score, data_verified=True,
+    with paper_state.transaction("manual_order:place") as ps:
+        if size_usd > ps.equity_usd:
+            raise ManualOrderError(
+                f"yetersiz bakiye: {size_usd:.0f} dolar > {ps.equity_usd:.0f} dolar"
+            )
+
+        is_market = order_type == "market" or (
+            order_type is None
+            and (not entry_price or entry_price <= 0 or abs(entry_price - market) / market < 0.001)
         )
+        # MARKET: anında aç.
+        if is_market:
+            pos = open_position(
+                ps, symbol=sym, side=s, entry_price=float(market), size_multiplier=0.0,
+                manual=True, size_usd_override=float(size_usd), timeframe=timeframe,
+                open_reason="owner_manual", snapshot_id=snap.snapshot_id,
+                open_dqs=snap.quality.score, data_verified=True,
+            )
+            paper_audit.record(
+                "MANUAL_OPEN", position_id=pos.id, symbol=sym, side=s,
+                price_used=pos.entry_price, size=pos.size_usd, reason="owner_manual",
+            )
+            return {
+                "kind": "market", "position_id": pos.id, "symbol": sym, "side": s,
+                "entry_price": pos.entry_price, "size_usd": pos.size_usd,
+                "sl": pos.sl, "tp": pos.tp,
+            }
+
+        # LIMIT / STOP / STOP_LIMIT: bekleyen emir.
+        if not entry_price or entry_price <= 0:
+            raise ManualOrderError("limit/stop emir için tetik fiyatı gerekli", 400)
+        entry_sane = price_sanity.price_sane_with_ohlcv_reason(
+            sym, float(entry_price), timeframe=timeframe
+        )
+        if entry_sane is not None:
+            raise ManualOrderError(f"{sym} için {entry_price:.2f} fiyatı geçersiz aralıkta")
+        otype = order_type if order_type in ("limit", "stop", "stop_limit") else _infer_type(
+            s, float(entry_price), float(market)
+        )
+        lp = float(limit_price) if (otype == "stop_limit" and limit_price) else None
+        order = PendingOrder(
+            id=_new_id(sym), symbol=sym, side=s, size_usd=float(size_usd),
+            order_type=otype, trigger_price=float(entry_price), limit_price=lp,
+            created_at=datetime.now(UTC).isoformat(), timeframe=timeframe, reason="owner_manual",
+        )
+        ps.pending_orders.append(order)
         paper_audit.record(
-            "MANUAL_OPEN", position_id=pos.id, symbol=sym, side=s,
-            price_used=pos.entry_price, size=pos.size_usd, reason="owner_manual",
+            "PENDING_CREATED", position_id=order.id, symbol=sym, side=s,
+            price_used=order.trigger_price, size=order.size_usd, reason=otype,
         )
-        paper_state.save(ps)
         return {
-            "kind": "market", "position_id": pos.id, "symbol": sym, "side": s,
-            "entry_price": pos.entry_price, "size_usd": pos.size_usd,
-            "sl": pos.sl, "tp": pos.tp,
+            "kind": otype, "order_id": order.id, "symbol": sym, "side": s,
+            "size_usd": order.size_usd, "trigger_price": order.trigger_price, "market": market,
         }
-
-    # LIMIT / STOP / STOP_LIMIT: bekleyen emir.
-    if not entry_price or entry_price <= 0:
-        raise ManualOrderError("limit/stop emir için tetik fiyatı gerekli", 400)
-    entry_sane = price_sanity.price_sane_with_ohlcv_reason(
-        sym, float(entry_price), timeframe=timeframe
-    )
-    if entry_sane is not None:
-        raise ManualOrderError(f"{sym} için {entry_price:.2f} fiyatı geçersiz aralıkta")
-    otype = order_type if order_type in ("limit", "stop", "stop_limit") else _infer_type(
-        s, float(entry_price), float(market)
-    )
-    lp = float(limit_price) if (otype == "stop_limit" and limit_price) else None
-    order = PendingOrder(
-        id=_new_id(sym), symbol=sym, side=s, size_usd=float(size_usd),
-        order_type=otype, trigger_price=float(entry_price), limit_price=lp,
-        created_at=datetime.now(UTC).isoformat(), timeframe=timeframe, reason="owner_manual",
-    )
-    ps.pending_orders.append(order)
-    paper_audit.record(
-        "PENDING_CREATED", position_id=order.id, symbol=sym, side=s,
-        price_used=order.trigger_price, size=order.size_usd, reason=otype,
-    )
-    paper_state.save(ps)
-    return {
-        "kind": otype, "order_id": order.id, "symbol": sym, "side": s,
-        "size_usd": order.size_usd, "trigger_price": order.trigger_price, "market": market,
-    }
 
 
 def list_pending() -> list[dict]:
@@ -144,21 +144,30 @@ def list_pending() -> list[dict]:
 
 
 def cancel(order_id: str) -> bool:
-    ps = paper_state.load()
-    before = len(ps.pending_orders)
-    ps.pending_orders = [o for o in ps.pending_orders if o.id != order_id]
-    if len(ps.pending_orders) == before:
-        return False
-    paper_audit.record("PENDING_CANCELLED", position_id=order_id, reason="owner")
-    paper_state.save(ps)
-    return True
+    # T3 — explicit txn: bulunamadıysa yazmadan bırak (abort commit sonrası no-op).
+    txn = paper_state.begin("manual_order:cancel")
+    try:
+        ps = txn.state
+        before = len(ps.pending_orders)
+        ps.pending_orders = [o for o in ps.pending_orders if o.id != order_id]
+        if len(ps.pending_orders) == before:
+            return False
+        paper_audit.record("PENDING_CANCELLED", position_id=order_id, reason="owner")
+        txn.commit()
+        return True
+    finally:
+        txn.abort()
 
 
 def cancel_all() -> int:
-    ps = paper_state.load()
-    n = len(ps.pending_orders)
-    if n:
-        ps.pending_orders = []
-        paper_audit.record("PENDING_CANCELLED", reason="owner_all", size=n)
-        paper_state.save(ps)
-    return n
+    txn = paper_state.begin("manual_order:cancel_all")
+    try:
+        ps = txn.state
+        n = len(ps.pending_orders)
+        if n:
+            ps.pending_orders = []
+            paper_audit.record("PENDING_CANCELLED", reason="owner_all", size=n)
+            txn.commit()
+        return n
+    finally:
+        txn.abort()

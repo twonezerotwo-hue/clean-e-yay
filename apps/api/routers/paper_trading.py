@@ -154,19 +154,20 @@ def close_position_manual(position_id: str) -> dict:
     Güncel snapshot fiyatıyla kapatır (uydurma fiyat YOK — DATA_POLICY). Fiyat yok
     veya price-sanity dışıysa kapatma YAPILMAZ → 409; pozisyon olduğu gibi kalır
     (sonraki tick'te SL/TP/time-stop veya tekrar manuel denenebilir)."""
-    ps = paper_state.load()
-    pos = next((p for p in ps.open_positions if p.id == position_id), None)
-    if pos is None:
-        raise HTTPException(status_code=404, detail="position_not_found")
+    # T3 — ağ çağrısı (snapshot) kilit DIŞINDA; oku→kapat→yaz tek kilit altında
+    # (tick worker ile yarışta kapanış kaybolmaz). Raise → yazmadan bırakır.
     snap = build_snapshot()
     prices = {q.symbol: q.price for q in snap.prices if q.price is not None}
-    price = prices.get(pos.symbol)
-    if price is None or price <= 0:
-        raise HTTPException(status_code=409, detail="no_price_cannot_close")
-    if price_sanity.price_sane_with_ohlcv_reason(pos.symbol, price, timeframe=pos.timeframe) is not None:
-        raise HTTPException(status_code=409, detail="price_insane_cannot_close")
-    trade = close_position(ps, pos, exit_price=price, reason="MANUAL")
-    paper_state.save(ps)
+    with paper_state.transaction("api:manual_close") as ps:
+        pos = next((p for p in ps.open_positions if p.id == position_id), None)
+        if pos is None:
+            raise HTTPException(status_code=404, detail="position_not_found")
+        price = prices.get(pos.symbol)
+        if price is None or price <= 0:
+            raise HTTPException(status_code=409, detail="no_price_cannot_close")
+        if price_sanity.price_sane_with_ohlcv_reason(pos.symbol, price, timeframe=pos.timeframe) is not None:
+            raise HTTPException(status_code=409, detail="price_insane_cannot_close")
+        trade = close_position(ps, pos, exit_price=price, reason="MANUAL")
     return {
         "status": "closed",
         "position_id": position_id,
@@ -239,57 +240,62 @@ def update_position_risk_plan(position_id: str, req: RiskPlanRequest):
     PAPER_SAFE / NO_EXECUTION: sadece local paper state SL/TP alanlarını günceller;
     broker emri üretmez ve karar motoru mantığına dokunmaz.
     """
-    ps = paper_state.load()
-    pos = next((p for p in ps.open_positions if p.id == position_id), None)
-    if pos is None:
-        if any(t.id == position_id for t in ps.recent_trades):
-            return _risk_plan_error(
-                400,
-                "Pozisyon kapalı olduğu için risk planı güncellenemez.",
-            )
-        return _risk_plan_error(404, "position_not_found")
-    if getattr(pos, "lifecycle_status", "OPEN") != "OPEN":
-        return _risk_plan_error(400, "Pozisyon açık durumda olmadığı için risk planı güncellenemez.")
+    # T3 — explicit txn: hata dönüşleri yazmadan bırakır (abort commit sonrası no-op).
+    txn = paper_state.begin("api:risk_plan")
+    try:
+        ps = txn.state
+        pos = next((p for p in ps.open_positions if p.id == position_id), None)
+        if pos is None:
+            if any(t.id == position_id for t in ps.recent_trades):
+                return _risk_plan_error(
+                    400,
+                    "Pozisyon kapalı olduğu için risk planı güncellenemez.",
+                )
+            return _risk_plan_error(404, "position_not_found")
+        if getattr(pos, "lifecycle_status", "OPEN") != "OPEN":
+            return _risk_plan_error(400, "Pozisyon açık durumda olmadığı için risk planı güncellenemez.")
 
-    sl, sl_error = _parse_risk_price(req.sl, "SL")
-    if sl_error:
-        return _risk_plan_error(400, sl_error)
-    tp, tp_error = _parse_risk_price(req.tp, "TP")
-    if tp_error:
-        return _risk_plan_error(400, tp_error)
+        sl, sl_error = _parse_risk_price(req.sl, "SL")
+        if sl_error:
+            return _risk_plan_error(400, sl_error)
+        tp, tp_error = _parse_risk_price(req.tp, "TP")
+        if tp_error:
+            return _risk_plan_error(400, tp_error)
 
-    side_reason = _risk_plan_side_reason(pos, sl=sl, tp=tp)
-    if side_reason:
-        return _risk_plan_error(400, side_reason)
+        side_reason = _risk_plan_side_reason(pos, sl=sl, tp=tp)
+        if side_reason:
+            return _risk_plan_error(400, side_reason)
 
-    old_sl = pos.sl
-    old_tp = pos.tp
-    pos.sl = sl
-    pos.tp = tp
-    paper_audit.record(
-        "MANUAL_RISK_PLAN_UPDATE",
-        position_id=pos.id,
-        symbol=pos.symbol,
-        timeframe=pos.timeframe,
-        side=pos.side,
-        old_sl=old_sl,
-        old_tp=old_tp,
-        sl=pos.sl,
-        tp=pos.tp,
-        reference_price=_risk_plan_reference(pos),
-        paper_safe=True,
-        no_execution=True,
-    )
-    paper_state.save(ps)
-    return {
-        "status": "updated",
-        "position_id": pos.id,
-        "symbol": pos.symbol,
-        "sl": pos.sl,
-        "tp": pos.tp,
-        "paper_safe": True,
-        "no_execution": True,
-    }
+        old_sl = pos.sl
+        old_tp = pos.tp
+        pos.sl = sl
+        pos.tp = tp
+        paper_audit.record(
+            "MANUAL_RISK_PLAN_UPDATE",
+            position_id=pos.id,
+            symbol=pos.symbol,
+            timeframe=pos.timeframe,
+            side=pos.side,
+            old_sl=old_sl,
+            old_tp=old_tp,
+            sl=pos.sl,
+            tp=pos.tp,
+            reference_price=_risk_plan_reference(pos),
+            paper_safe=True,
+            no_execution=True,
+        )
+        txn.commit()
+        return {
+            "status": "updated",
+            "position_id": pos.id,
+            "symbol": pos.symbol,
+            "sl": pos.sl,
+            "tp": pos.tp,
+            "paper_safe": True,
+            "no_execution": True,
+        }
+    finally:
+        txn.abort()
 
 
 class ManualOrderRequest(BaseModel):
@@ -405,55 +411,59 @@ def get_manual_ready() -> dict:
 def approve_manual_ready(manual_id: str) -> dict:
     """P2 — owner onayı. Karar/guard mantığı manual_queue'da; RiskGate/DQS/KillSwitch
     açılış anında YENİDEN kontrol edilir (kuyrukta olmak otomatik güvenli değildir)."""
-    ps = paper_state.load()
+    # T3 — ağ çağrısı (snapshot) kilit DIŞINDA; onay mutasyonu tek kilit altında.
     snap = build_snapshot()
     prices = {q.symbol: q.price for q in snap.prices if q.price is not None}
-    risk_in = RiskInput(
-        dqs_score=snap.quality.score,
-        equity_usd=ps.equity_usd,
-        peak_equity_usd=ps.peak_equity_usd,
-        daily_pnl_usd=ps.daily_pnl_usd,
-        open_position_count=len(ps.open_positions),
-    )
-    entry = next((m for m in ps.manual_ready if m.id == manual_id), None)
-    result = manual_queue.approve(
-        ps, manual_id,
-        current_price=prices.get(entry.symbol) if entry else None,
-        risk_input=risk_in,
-    )
-    if result["status"] == "not_found":
-        raise HTTPException(status_code=404, detail="not_found")
-    paper_state.save(ps)
+    with paper_state.transaction("api:manual_ready_approve") as ps:
+        risk_in = RiskInput(
+            dqs_score=snap.quality.score,
+            equity_usd=ps.equity_usd,
+            peak_equity_usd=ps.peak_equity_usd,
+            daily_pnl_usd=ps.daily_pnl_usd,
+            open_position_count=len(ps.open_positions),
+        )
+        entry = next((m for m in ps.manual_ready if m.id == manual_id), None)
+        result = manual_queue.approve(
+            ps, manual_id,
+            current_price=prices.get(entry.symbol) if entry else None,
+            risk_input=risk_in,
+        )
+        if result["status"] == "not_found":
+            raise HTTPException(status_code=404, detail="not_found")
     return result
 
 
 @router.post("/paper-trading/manual-ready/{manual_id}/reject")
 def reject_manual_ready(manual_id: str) -> dict:
     """P2 — owner reddi: kuyruktan çıkar + anti-spam rejection kaydı (re-queue block)."""
-    ps = paper_state.load()
-    if not manual_queue.reject(ps, manual_id):
-        raise HTTPException(status_code=404, detail="not_found")
-    paper_state.save(ps)
+    with paper_state.transaction("api:manual_ready_reject") as ps:
+        if not manual_queue.reject(ps, manual_id):
+            raise HTTPException(status_code=404, detail="not_found")
     return {"status": "rejected"}
 
 
 @router.post("/paper-trading/manual-ready/{manual_id}/dismiss")
 def dismiss_manual_ready(manual_id: str) -> dict:
     """P2 — kuyruktan çıkar (rejection KAYDETMEZ; sonraki tick'te yeniden düşebilir)."""
-    ps = paper_state.load()
-    if not manual_queue.dismiss(ps, manual_id):
-        raise HTTPException(status_code=404, detail="not_found")
-    paper_state.save(ps)
+    with paper_state.transaction("api:manual_ready_dismiss") as ps:
+        if not manual_queue.dismiss(ps, manual_id):
+            raise HTTPException(status_code=404, detail="not_found")
     return {"status": "dismissed"}
 
 
 # Test/dev: pozisyonları sıfırla
 @router.post("/paper-trading/reset")
 def reset() -> dict:
-    ps = paper_state._initial_state()
-    # SL/TP olmadan sadece son trade ve pozisyonları temizle, equity sıfırlama:
-    # gerçek "reset" davranışı için _initial_state yeterli
-    paper_state.save(ps)
+    # T3 — sıfırlama kilit altında (tick worker yazımıyla yarışmaz).
+    txn = paper_state.begin("api:reset")
+    try:
+        ps = paper_state._initial_state()
+        # SL/TP olmadan sadece son trade ve pozisyonları temizle, equity sıfırlama:
+        # gerçek "reset" davranışı için _initial_state yeterli
+        txn.state = ps
+        txn.commit()
+    finally:
+        txn.abort()
     paper_audit.record("STATE_REPAIRED", reason="manual_reset")
     return _serialize_state(ps)
 
