@@ -20,4 +20,8 @@ jobs:
        github.event.workflow_run.head_branch == 'main')
     steps:
       - name: Run local deploy on EC2
+        env:
+          # T2 — API yazma-istekleri kilidi. Repo Settings → Secrets → Actions
+          # altinda API_AUTH_TOKEN tanimlanmadikca bos gecer (kilit kapali kalir).
+          API_AUTH_TOKEN: ${{ secrets.API_AUTH_TOKEN }}
         run: /opt/clean-e-yay/scripts/deploy-from-github.sh

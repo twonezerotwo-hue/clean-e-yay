@@ -40,7 +40,18 @@ TF_TRUST_PER_BUCKET
 SUBSIGNAL_SCORECARD_ENABLED
 TF_SCORING_V2_SHADOW
 LEARNING_ADVISOR_APPLY
+API_AUTH_TOKEN
 "
+
+# SIR flag'leri: degeri repo'da YOK (GitHub Secret / wrangler secret) — deger
+# kiyasi anlamsiz, VARLIK kiyasi yapilir (lokal set + deploy direktifi var = ok;
+# lokal set + direktif yok = sapma). test_flag_sync kor-nokta guard'i icin
+# SYNC_FLAGS listesinde de dururlar.
+SECRET_FLAGS="API_AUTH_TOKEN"
+
+_is_secret() {  # _is_secret KEY
+  case " $SECRET_FLAGS " in *" $1 "*) return 0 ;; *) return 1 ;; esac
+}
 
 # Bir flag'in dosyadaki değeri (KEY=VALUE, son eşleşme); yoksa boş.
 _val_in() {  # _val_in FILE KEY
@@ -65,9 +76,16 @@ for f in $SYNC_FLAGS; do
   lshow="${local_v:-unset}"
   dshow="${deploy_v:-NONE}"
   status="ok"
+  if _is_secret "$f"; then
+    # Sır: değer gösterilmez/kıyaslanmaz; yalnız varlık sapması aranır.
+    [ -n "$local_v" ] && lshow="set(gizli)"
+    [ -n "$deploy_v" ] && dshow="secret"
+    if [ -n "$local_v" ] && [ -z "$deploy_v" ]; then
+      status="DRIFT (lokal set, aws direktifi yok)"; drift=1
+    fi
   # Sapma tanımı: lokal ile deploy direktifi farklıysa; VEYA lokal ON ama deploy
   # hiç set etmiyorsa (AWS default'a düşer, sessiz sapma).
-  if [ -n "$local_v" ] && [ -n "$deploy_v" ] && [ "$local_v" != "$deploy_v" ]; then
+  elif [ -n "$local_v" ] && [ -n "$deploy_v" ] && [ "$local_v" != "$deploy_v" ]; then
     status="DRIFT (lokal!=aws)"; drift=1
   elif [ -n "$local_v" ] && [ -z "$deploy_v" ]; then
     case "$(echo "$local_v" | tr 'A-Z' 'a-z')" in

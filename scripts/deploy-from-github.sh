@@ -102,6 +102,13 @@ ensure_env SUBSIGNAL_SCORECARD_ENABLED 1
 # uretir → izole artifact. SALT-GOZLEM: canli skora/karara/paper'a ASLA yazmaz
 # (D7 golge yarisin girdisi). Rollback = flag kapat. Lokal .env'de de =1.
 ensure_env TF_SCORING_V2_SHADOW 1
+# T2 (2026-07 dis denetim P0-4) — API yazma-istekleri kilidi. Token SIR'dir:
+# degeri git'te DEGIL, GitHub Actions secret'inda yasar (deploy-ec2.yml env ile
+# gecirir). Secret tanimli degilse dokunulmaz -> kilit kapali kalir (bayt-ayni).
+# set_env: secret rotasyonunda kutudaki degeri de zorla gunceller.
+if [ -n "${API_AUTH_TOKEN:-}" ]; then
+  set_env API_AUTH_TOKEN "$API_AUTH_TOKEN"
+fi
 
 echo "deploy: restart services"
 sudo systemctl restart eyay-supervisor.service

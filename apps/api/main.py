@@ -48,8 +48,11 @@ _load_dotenv()
 if sys.platform == "win32":
     asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 
+import secrets  # noqa: E402
+
 from fastapi import FastAPI  # noqa: E402
 from fastapi.middleware.cors import CORSMiddleware  # noqa: E402
+from fastapi.responses import JSONResponse  # noqa: E402
 
 from apps.api.routers import (  # noqa: E402
     agent_mode,
@@ -91,12 +94,31 @@ async def lifespan(app: FastAPI):
     yield
 
 
+_MUTATING_METHODS = frozenset({"POST", "PUT", "PATCH", "DELETE"})
+
+
 def create_app() -> FastAPI:
     app = FastAPI(
         title="Clean E-yAy API",
         version="2.0.0",
         lifespan=lifespan,
     )
+
+    # T2 (2026-07 dış denetim P0-4) — uygulama seviyesinde kimlik kontrolü.
+    # API_AUTH_TOKEN tanımlıysa TÜM yazma istekleri (POST/PUT/PATCH/DELETE)
+    # `Authorization: Bearer <token>` şartına bağlanır; GET/OPTIONS açık kalır
+    # (salt-okuma; CORS preflight). Env her istekte okunur (restart gerekmez,
+    # test monkeypatch temiz). Env YOKSA davranış bayt-aynı — lokal gelişim
+    # etkilenmez. Token değeri git'e YAZILMAZ (AWS: GitHub Secret → .env;
+    # Cloudflare Worker: wrangler secret — bkz. infra/worker-proxy).
+    @app.middleware("http")
+    async def _require_auth_token(request, call_next):
+        expected = os.environ.get("API_AUTH_TOKEN", "").strip()
+        if expected and request.method in _MUTATING_METHODS:
+            got = request.headers.get("authorization", "")
+            if not secrets.compare_digest(got, f"Bearer {expected}"):
+                return JSONResponse(status_code=401, content={"detail": "unauthorized"})
+        return await call_next(request)
     # Local dev: DEV_CORS=true → tüm origin'ler. Aksi halde whitelist:
     # 4000 (web) portu + env'den ek origin (CORS_EXTRA_ORIGINS, virgülle).
     extra = os.environ.get("CORS_EXTRA_ORIGINS", "").strip()

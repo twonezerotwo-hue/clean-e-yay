@@ -109,6 +109,10 @@ def _package1_flags_off_by_default(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(loader, "_load_thresholds_base", lambda: pinned)
     # Denetim 2026-07-03 — çıkış-makinesi env flag'leri testlerde default OFF
     # (dev makinesinde .env yüklenmiş olabilir; testler baseline'ı varsayar).
+    # T2 (2026-07-19) — API yazma-istekleri kilidi: dev .env'inde token dolu
+    # olabilir; testlere sızarsa tüm mutasyon testleri 401 alır. Auth testleri
+    # kendi setenv'iyle açar.
+    monkeypatch.delenv("API_AUTH_TOKEN", raising=False)
     monkeypatch.delenv("TF_TARGET_AUTO_ONLY", raising=False)
     monkeypatch.delenv("EXIT_FORENSICS_NUDGE", raising=False)
     monkeypatch.delenv("TF_TARGET_EDGE_GATE", raising=False)

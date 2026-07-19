@@ -144,6 +144,12 @@ COVERAGE: dict[str, dict] = {
                   "boyutu KISAR (no-boost). OFF (default)→gölge; ON'da watchdog "
                   "OFF→ON baseline damgalar, post-enable çöküşte DEGRADED önerir.",
     },
+    "API_AUTH_TOKEN": {
+        "mechanism": SHADOW_EXEMPT, "monitor": None,
+        "reason": "T2 — HTTP yazma-istekleri kilidi (sır; değer GitHub/wrangler "
+                  "secret'ta). Karar/öğrenme zincirine DOKUNMAZ — yalnız yetkisiz "
+                  "isteği 401 ile çevirir; kirlenme yok, izleme gereksiz.",
+    },
 }
 
 

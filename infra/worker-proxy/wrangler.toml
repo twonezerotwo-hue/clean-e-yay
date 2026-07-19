@@ -7,3 +7,10 @@ compatibility_date = "2024-09-23"
 # burayı güncelle + `wrangler deploy` çalıştır.
 [vars]
 UPSTREAM = "https://showtimes-timothy-athens-thickness.trycloudflare.com"
+
+# T2 — parola kapısı + API kilidi (değerler git'e YAZILMAZ, secret olarak yaşar):
+#   wrangler secret put ACCESS_PASSWORD   # kokpit giriş parolası (owner belirler)
+#   wrangler secret put API_AUTH_TOKEN    # API yazma-istekleri Bearer token'ı
+#                                         # (AWS .env'dekiyle AYNI değer olmalı;
+#                                         #  GitHub Secrets → deploy-ec2.yml akışı)
+# İkisi de tanımsızken Worker eski davranışla (kapısız pass-through) çalışır.
