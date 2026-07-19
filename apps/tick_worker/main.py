@@ -41,17 +41,25 @@ from packages.learning import (
     tf_calibration,
     tf_weight_trainer,
 )
+from packages.notifications import append_many
+from packages.notifications import detector as notif_detector
 from packages.ops import heartbeat
-from packages.paper import manual_queue
+from packages.paper import manual_queue, ticket
 from packages.paper import state as paper_state
 from packages.paper.lifecycle import attempt_open, flatten_all
 from packages.paper.lifecycle import tick as price_tick
+from packages.paper.recheck import compute_rechecks
 from packages.risk import halt as halt_store
 from packages.risk.engine import RiskInput
 
 WORKER_NAME = "tick_worker"
 LOCK_PATH = Path(os.environ.get("TICK_WORKER_LOCK_PATH", "data/runtime/tick_worker.lock"))
 _LOCK_FD: int | None = None
+
+# T1 — tick'ler arası gözlem diff'i (yeni-ticket / recheck-değişimi / risk-gate /
+# DQS-düşüşü bildirimleri). Eski API tick motorundan taşındı; süreç ömrü yeter,
+# restart'ta sıfırlanması bildirim kaçırtmaz (ilk tick yeni baseline kurar).
+_PREV_STATE: dict = {"ticket_ids": set(), "verdicts": {}, "risk_action": None, "dqs": None}
 
 
 def _utc_iso() -> str:
@@ -262,6 +270,37 @@ async def run_once() -> None:
         )
         decisions_generated = len(decisions)
         now = datetime.now(UTC)
+
+        # T1 — kokpit gözlem yüzeyi (recheck önerisi + Trade Ticket kartları +
+        # tick-bazlı bildirim tespiti). Eski API tick motorundan taşındı; prod
+        # tick'i bu worker attığı için orada fiilen ölüydü (ticket listesi hep
+        # boş kalıyordu). Salt-gözlem: karar zincirine dokunmaz; best-effort,
+        # hata tick'i düşürmez.
+        try:
+            rechecks = compute_rechecks(ps.open_positions, decisions)
+            ps.last_rechecks = [r.to_dict() for r in rechecks]
+            ps.last_recheck_at = now.isoformat()
+            tickets = ticket.build_tickets_from_decisions(decisions, snap, ps)
+            ticket_dicts = [t.to_dict() for t in tickets]
+            ticket.save_last(ticket_dicts)
+            notifs = []
+            notifs += notif_detector.detect_new_tickets(_PREV_STATE["ticket_ids"], ticket_dicts)
+            notifs += notif_detector.detect_expiring_tickets(ticket_dicts)
+            notifs += notif_detector.detect_recheck_changes(_PREV_STATE["verdicts"], ps.last_rechecks)
+            notifs += notif_detector.detect_risk_gate_change(
+                _PREV_STATE["risk_action"], _risk.action, _risk.reason,
+            )
+            notifs += notif_detector.detect_dqs_drop(
+                _PREV_STATE["dqs"], snap.quality.score if snap.quality else None,
+            )
+            if notifs:
+                append_many(notifs)
+            _PREV_STATE["ticket_ids"] = {t["id"] for t in ticket_dicts if t.get("status") == "active"}
+            _PREV_STATE["verdicts"] = {r["position_id"]: r["verdict"] for r in ps.last_rechecks}
+            _PREV_STATE["risk_action"] = _risk.action
+            _PREV_STATE["dqs"] = snap.quality.score if snap.quality else None
+        except Exception:
+            log.exception("gözlem yüzeyi (ticket/recheck/bildirim) üretimi başarısız — tick devam ediyor")
 
         # Faz 8 — Conflict Gate: eski sistemin önerisini yeni Conflict Resolver'ın
         # verdict'iyle, trade_profile bazlı kademeli sıkılıkla süzer. enabled=false

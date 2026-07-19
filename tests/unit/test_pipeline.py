@@ -94,19 +94,7 @@ def test_api_endpoints() -> None:
         assert isinstance(body, dict)
 
 
-def test_paper_tick_endpoint(tmp_path, monkeypatch) -> None:
-    monkeypatch.setenv("PAPER_STATE_PATH", str(tmp_path / "tick_state.json"))
-    import importlib
-    from packages.paper import state as st
-    importlib.reload(st)
-
-    from fastapi.testclient import TestClient
-    from apps.api.main import app
-
-    client = TestClient(app)
-    r = client.post("/api/v1/paper-trading/tick")
-    assert r.status_code == 200
-    body = r.json()
-    assert "tick_at" in body
-    assert "actions" in body
-    assert isinstance(body["actions"], list)
+# T1 (2026-07 dış denetim): test_paper_tick_endpoint SİLİNDİ — POST
+# /paper-trading/tick sözleşmeden kaldırıldı (tek tick yolu apps/tick_worker;
+# worker pass'inin davranış testleri: test_halt, test_providers,
+# test_timeframe_decisions, test_tick_worker_observe).

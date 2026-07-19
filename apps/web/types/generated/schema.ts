@@ -194,23 +194,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/paper-trading/tick": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Manuel tick (yan etkili — açma/kapatma yapabilir) */
-        post: operations["postPaperTradingTick"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/paper-trading/positions/{position_id}/close": {
         parameters: {
             query?: never;
@@ -2040,17 +2023,6 @@ export interface components {
             position_id?: string;
             price?: number;
             reason?: string;
-        };
-        TickResult: {
-            /** Format: date-time */
-            tick_at: string;
-            signals_processed: number;
-            actions: {
-                symbol?: string;
-                /** @enum {string} */
-                action?: "open" | "close" | "hold" | "blocked";
-                reason?: string;
-            }[];
         };
         CalibrationBin: {
             bin_lo: number;
@@ -4105,26 +4077,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PaperTradingState"];
-                };
-            };
-        };
-    };
-    postPaperTradingTick: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["TickResult"];
                 };
             };
         };

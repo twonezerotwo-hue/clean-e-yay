@@ -17,8 +17,11 @@ PAPER_SAFE / NO_EXECUTION — karar üretmez, mevcut state'i sunar.
 """
 from __future__ import annotations
 
+import json
+import os
 from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
 from typing import Any
 
 from packages.data.ingestion.pipeline import MarketSnapshot
@@ -441,3 +444,43 @@ def build_tickets_from_decisions(
         if t.status != "invalid":
             out.append(t)
     return out
+
+
+# ── Son-tick ticket deposu (T1) ──────────────────────────────────────────────
+# Üretici tick worker'dır (tek tick yolu); API GET /paper-trading/tickets bu
+# dosyayı okur. Süreçler ayrı olduğu için paylaşım process-içi global ile değil
+# runtime dosyasıyla yapılır. Yol her çağrıda env'den okunur (test izolasyonu).
+
+_DEFAULT_STORE = "data/runtime/tickets.json"
+
+
+def _store_path() -> Path:
+    return Path(os.environ.get("TICKETS_PATH", _DEFAULT_STORE))
+
+
+def save_last(ticket_dicts: list[dict]) -> None:
+    """Son tick'in ticket listesini atomik yaz; yazılamazsa tick'i düşürme."""
+    p = _store_path()
+    try:
+        p.parent.mkdir(parents=True, exist_ok=True)
+        payload = {
+            "built_at": datetime.now(UTC).isoformat(),
+            "tickets": ticket_dicts,
+        }
+        tmp = p.with_suffix(".json.tmp")
+        tmp.write_text(json.dumps(payload), encoding="utf-8")
+        tmp.replace(p)
+    except OSError:
+        return
+
+
+def load_last() -> dict:
+    """{"built_at": str | None, "tickets": list[dict]} — dosya yok/bozuksa boş."""
+    try:
+        raw = json.loads(_store_path().read_text(encoding="utf-8"))
+        tickets = raw.get("tickets")
+        if not isinstance(tickets, list):
+            return {"built_at": None, "tickets": []}
+        return {"built_at": raw.get("built_at"), "tickets": tickets}
+    except (OSError, ValueError, TypeError):
+        return {"built_at": None, "tickets": []}

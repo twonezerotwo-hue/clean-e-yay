@@ -53,7 +53,6 @@ import type {
   GovernorReport,
   GovernorProposalsView,
   GovernorTasksView,
-  TickResult,
   TradeTicketList,
   AgentBriefing,
   VoiceSpeakRequest,
@@ -548,8 +547,6 @@ export const api = {
     fetchJSON<TriggerAnalysis>(
       `/api/v1/technical/trigger/${encodeURIComponent(symbol)}?timeframe=${encodeURIComponent(timeframe)}`,
     ),
-  paperTradingTick: () =>
-    fetchJSON<TickResult>("/api/v1/paper-trading/tick", { method: "POST" }),
   closePaperPosition: (positionId: string) =>
     fetchJSON<ClosePositionResult>(
       `/api/v1/paper-trading/positions/${positionId}/close`,

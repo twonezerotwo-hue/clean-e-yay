@@ -1,4 +1,10 @@
-"""GET /api/v1/paper-trading/state, POST /api/v1/paper-trading/tick"""
+"""GET /api/v1/paper-trading/state + owner mutasyon endpoint'leri.
+
+T1 (2026-07 dış denetim): POST /paper-trading/tick içindeki kopya karar motoru
+KALDIRILDI — tek tick yolu apps/tick_worker (conflict gate + reentry guard dahil
+birleşik kapılar orada). Ticket/recheck/bildirim üretimi de worker'a taşındı;
+bu router yalnız okur (data/runtime/tickets.json) ve owner mutasyonlarını taşır.
+"""
 from __future__ import annotations
 
 import math
@@ -9,32 +15,15 @@ from fastapi import APIRouter, HTTPException
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
-from packages.data.ingestion.pipeline import build_snapshot, get_cached_snapshot  # noqa: F401
-from packages.data.registry import assets as asset_registry
-from packages.decision.engine import decide_matrix
-from packages.notifications import append_many, list_recent, mark_ack, mark_all_ack, unread_count
-from packages.notifications import detector as notif_detector
+from packages.data.ingestion.pipeline import build_snapshot
+from packages.notifications import list_recent, mark_ack, mark_all_ack, unread_count
 from packages.paper import audit as paper_audit
-from packages.paper import maintenance, manual_order, manual_queue, position_ops, session_gate
+from packages.paper import maintenance, manual_order, manual_queue, position_ops, ticket
 from packages.paper import state as paper_state
 from packages.paper.guards import price_sanity, state_anomaly
-from packages.paper.lifecycle import (
-    attempt_open,
-    close_position,
-    flatten_all,
-    max_drawdown_pct,
-)
-from packages.paper.lifecycle import (
-    tick as price_tick,
-)
-from packages.paper.recheck import compute_rechecks
-from packages.paper.ticket import build_tickets_from_decisions
+from packages.paper.lifecycle import close_position, max_drawdown_pct
 from packages.risk import halt as halt_store
 from packages.risk.engine import RiskInput
-
-# Tick-içi geçici state (proses ömrü) — diff detector için
-_PREV_STATE: dict = {"ticket_ids": set(), "verdicts": {}, "risk_action": None, "dqs": None}
-_LAST_TICKETS: list[dict] = []
 
 router = APIRouter(tags=["paper-trading"])
 
@@ -120,14 +109,16 @@ def get_paper_state() -> dict:
 def get_tickets() -> dict:
     """Aktif Trade Ticket'lar — broker'a manuel girmeden önce tek bakış kart.
 
-    Son tick'in actionable kararlarından türetilmiş; karar zincirine dokunmaz.
-    insufficient_rr/invalid ticket'lar UI'da görünmez (filtreli döner).
+    Son WORKER tick'inin actionable kararlarından türetilmiş (T1: üretici tick
+    worker, bu endpoint data/runtime/tickets.json'dan okur); karar zincirine
+    dokunmaz. insufficient_rr/invalid ticket'lar UI'da görünmez (filtreli döner).
     """
-    visible = [t for t in _LAST_TICKETS if t.get("status") == "active"]
+    data = ticket.load_last()
+    visible = [t for t in data["tickets"] if t.get("status") == "active"]
     return {
         "tickets": visible,
         "total": len(visible),
-        "last_built_at": datetime.now(UTC).isoformat() if _LAST_TICKETS else None,
+        "last_built_at": data["built_at"],
     }
 
 
@@ -154,164 +145,6 @@ def ack_all_notifications() -> dict:
     """Tüm okunmamışları okundu işaretle."""
     n = mark_all_ack()
     return {"status": "ok", "marked": n}
-
-
-@router.post("/paper-trading/tick")
-def post_paper_tick() -> dict:
-    ps = paper_state.load()
-    now = datetime.now(UTC)
-    snap = build_snapshot()
-    # None fiyatlar lifecycle'a aktarılmaz; mock fiyat dağıtılmaz.
-    prices = {q.symbol: q.price for q in snap.prices if q.price is not None}
-    verified_flags = {q.symbol: q.verified for q in snap.prices}
-
-    # Önce mevcut pozisyonları fiyatla güncelle (SL/TP)
-    closed = price_tick(ps, prices)
-
-    risk_in = RiskInput(
-        dqs_score=snap.quality.score,
-        equity_usd=ps.equity_usd,
-        peak_equity_usd=ps.peak_equity_usd,
-        daily_pnl_usd=ps.daily_pnl_usd,
-        open_position_count=len(ps.open_positions),
-    )
-
-    # G5 — breach varsa halt'i persist et; KILL_SWITCH seviyesinde halt
-    # aktifse mevcut pozisyonları düzleştir (KILL_SWITCH_EXIT). Sadece risk
-    # azaltıcı; yeni açılışlar zaten risk engine'deki halt ile bloklanır.
-    actions: list[dict] = []
-    halts = halt_store.sync(risk_in)
-    if any(h.level == "KILL_SWITCH" for h in halts):
-        for cls in flatten_all(ps, prices):
-            closed.append(cls)
-        risk_in = RiskInput(
-            dqs_score=snap.quality.score,
-            equity_usd=ps.equity_usd,
-            peak_equity_usd=ps.peak_equity_usd,
-            daily_pnl_usd=ps.daily_pnl_usd,
-            open_position_count=len(ps.open_positions),
-        )
-
-    # T2 — (symbol, timeframe) karar uzayı. 1w decide_matrix içinde zaten
-    # paper_execution=false ile hold'a düşer; fingerprint TF segmenti taşır.
-    _regime, _risk, decisions = decide_matrix(
-        asset_registry.trade_symbols(), snap, risk_in, open_positions=ps.open_positions
-    )
-
-    # Recheck — açık pozisyonları fresh karara karşı değerlendir (read-only öneri).
-    rechecks = compute_rechecks(ps.open_positions, decisions)
-    ps.last_rechecks = [r.to_dict() for r in rechecks]
-    ps.last_recheck_at = datetime.now(UTC).isoformat()
-
-    # Trade Tickets — actionable kararlar için canlı kart payload'ı (observer).
-    tickets = build_tickets_from_decisions(decisions, snap, ps)
-    ticket_dicts = [t.to_dict() for t in tickets]
-    global _LAST_TICKETS
-    _LAST_TICKETS = ticket_dicts
-
-    # Notification detector — state değişimlerini bildirime çevir (observer).
-    notifs = []
-    notifs += notif_detector.detect_new_tickets(_PREV_STATE["ticket_ids"], ticket_dicts)
-    notifs += notif_detector.detect_expiring_tickets(ticket_dicts)
-    notifs += notif_detector.detect_recheck_changes(_PREV_STATE["verdicts"], ps.last_rechecks)
-    notifs += notif_detector.detect_risk_gate_change(
-        _PREV_STATE["risk_action"], _risk.action, _risk.reason,
-    )
-    notifs += notif_detector.detect_dqs_drop(
-        _PREV_STATE["dqs"], snap.quality.score if snap.quality else None,
-    )
-    if notifs:
-        append_many(notifs)
-
-    _PREV_STATE["ticket_ids"] = {t["id"] for t in ticket_dicts if t.get("status") == "active"}
-    _PREV_STATE["verdicts"] = {r["position_id"]: r["verdict"] for r in ps.last_rechecks}
-    _PREV_STATE["risk_action"] = _risk.action
-    _PREV_STATE["dqs"] = snap.quality.score if snap.quality else None
-
-    for cls in closed:
-        actions.append(
-            {
-                "symbol": cls.symbol,
-                "action": "close",
-                "reason": cls.close_reason,
-                "timeframe": cls.timeframe,
-            }
-        )
-
-    for d in decisions:
-        entry = {"symbol": d.symbol, "timeframe": d.timeframe}
-        if d.action == "blocked":
-            actions.append({**entry, "action": "blocked", "reason": d.reason})
-            continue
-        if d.action == "hold":
-            actions.append({**entry, "action": "hold", "reason": d.reason})
-            continue
-        side = "long" if d.action == "open_long" else "short"
-        # Market-session gate: deterministic session context (block / manual_ready /
-        # size clamp ≤ 1.0). RiskGate is already applied in decide_matrix; sessions
-        # only RESTRICT further — never relax, never boost. AI cannot override this.
-        gate = session_gate.evaluate_open(
-            d.symbol, side, d.timeframe, now_utc=now,
-            regime=_regime, risk_action=d.risk.action,
-        )
-        if gate.route == "block":
-            actions.append(
-                {**entry, "action": "blocked", "reason": gate.reason_code or "market_session_block"}
-            )
-            continue
-        session_mult = gate.effective_multiplier
-        # P2 — owner-approval kuyruğu: seans manual_ready VEYA DEFENSIVE/CRISIS rejim.
-        # Otomatik açılış YOK; (symbol, side, tf) tekrarında spam olmaz (silent block).
-        if gate.route == "manual_ready" or _regime in ("DEFENSIVE", "CRISIS"):
-            mr_reason = gate.reason_code if gate.route == "manual_ready" else d.reason
-            queued = manual_queue.route_to_manual_ready(
-                ps, symbol=d.symbol, timeframe=d.timeframe, side=side,
-                size_multiplier=d.size_multiplier * session_mult,
-                requested_price=prices.get(d.symbol),
-                reason=mr_reason, fingerprint=d.fingerprint, snapshot_id=snap.snapshot_id,
-            )
-            if queued is not None:
-                actions.append({**entry, "action": "manual_ready", "reason": mr_reason})
-            else:
-                actions.append({**entry, "action": "hold", "reason": "manual_ready_silent_block"})
-            continue
-        # P1 — açılış tek yoldan (attempt_open): duplicate/scale-in politikası +
-        # fiyat denetimi + audit burada. Seans çarpanı kısıtlayıcı uygulanır
-        # (final_size = base * min(1.0, session_multiplier)) + seans attribution.
-        pos, decision = attempt_open(
-            ps,
-            symbol=d.symbol,
-            side=side,
-            entry_price=prices.get(d.symbol),
-            size_multiplier=d.size_multiplier * session_mult,
-            timeframe=d.timeframe,
-            open_reason=d.reason,
-            snapshot_id=snap.snapshot_id,
-            fingerprint=d.fingerprint,
-            data_verified=verified_flags.get(d.symbol, False),
-            predicted_confidence=d.confidence,
-            raw_confidence=d.raw_confidence,
-            confidence_source=d.confidence_source,
-            open_dqs=snap.quality.score,
-            open_risk_action=d.risk.action,
-            **gate.attribution(),
-        )
-        if pos is not None:
-            actions.append({**entry, "action": "open", "reason": d.reason})
-        elif decision["reason"] == "no_price":
-            actions.append({**entry, "action": "blocked", "reason": "fiyat yok"})
-        elif decision.get("duplicate"):
-            actions.append({**entry, "action": "hold", "reason": "zaten açık (aynı TF)"})
-        else:
-            actions.append({**entry, "action": "blocked", "reason": decision["reason"]})
-
-    paper_state.save(ps)
-
-    return {
-        "tick_at": datetime.now(UTC).isoformat(),
-        "signals_processed": len(decisions),
-        "actions": actions,
-    }
 
 
 @router.post("/paper-trading/positions/{position_id}/close")

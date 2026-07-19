@@ -174,18 +174,6 @@ paths:
               schema:
                 $ref: "#/components/schemas/PaperTradingState"
 
-  /api/v1/paper-trading/tick:
-    post:
-      operationId: postPaperTradingTick
-      summary: Manuel tick (yan etkili — açma/kapatma yapabilir)
-      responses:
-        "200":
-          description: OK
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/TickResult"
-
   /api/v1/paper-trading/positions/{position_id}/close:
     post:
       operationId: postPaperTradingPositionClose
@@ -2107,21 +2095,6 @@ components:
         position_id: { type: string }
         price: { type: number }
         reason: { type: string }
-
-    TickResult:
-      type: object
-      required: [tick_at, signals_processed, actions]
-      properties:
-        tick_at: { type: string, format: date-time }
-        signals_processed: { type: integer }
-        actions:
-          type: array
-          items:
-            type: object
-            properties:
-              symbol: { type: string }
-              action: { type: string, enum: [open, close, hold, blocked] }
-              reason: { type: string }
 
     CalibrationBin:
       type: object

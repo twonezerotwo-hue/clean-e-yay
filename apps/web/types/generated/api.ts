@@ -530,17 +530,6 @@ export type ManualReadyActionResult = {
   reason?: string;
 };
 
-export type TickResult = {
-  tick_at: string;
-  signals_processed: number;
-  actions: {
-    symbol: string;
-    action: "open" | "close" | "hold" | "blocked";
-    reason?: string;
-    timeframe?: Timeframe;
-  }[];
-};
-
 export type CalibrationBin = {
   bin_lo: number;
   bin_hi: number;

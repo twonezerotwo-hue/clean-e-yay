@@ -116,15 +116,16 @@ def test_paper_tick_no_open_when_data_unavailable(
     from packages.data.ingestion import pipeline as pl
     pl._CACHE.clear()
 
-    from fastapi.testclient import TestClient
-    from apps.api.main import app
+    # T1 — tek tick yolu worker (POST /paper-trading/tick kaldırıldı). run_once
+    # istisnayı yutar (FAILED heartbeat) — sessiz çökme yeşil görünmesin.
+    import asyncio
 
-    client = TestClient(app)
-    r = client.post("/api/v1/paper-trading/tick")
-    assert r.status_code == 200
-    body = r.json()
-    opens = [a for a in body["actions"] if a["action"] == "open"]
-    assert opens == []  # mock fiyatla pozisyon açılmadı
+    from apps.tick_worker import main as tick_worker
+    from packages.ops import heartbeat
+
+    asyncio.run(tick_worker.run_once())
+    assert heartbeat.load("tick_worker")["status"] != "FAILED"
+    assert st.load().open_positions == []  # veri yokken pozisyon açılmadı
 
 
 def test_data_snapshot_endpoint_test_mode() -> None:

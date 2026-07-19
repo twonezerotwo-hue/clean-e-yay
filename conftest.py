@@ -21,6 +21,17 @@ if str(ROOT) not in sys.path:
 # Tüm testler için mock fixture flag (data policy gereği runtime mock yasak).
 os.environ.setdefault("TEST_USE_MOCK", "true")
 
+# T1 — packages.notifications NOTIFICATIONS_PATH'i İMPORT ANINDA okur (module-level
+# sabit); session fixture'ı geç kalır (test modülleri collection'da import edilir).
+# Bu yüzden izolasyon burada, conftest import'unda kurulur — suite gerçek
+# data/runtime/notifications.jsonl'a yazamaz.
+import tempfile  # noqa: E402
+
+os.environ.setdefault(
+    "NOTIFICATIONS_PATH",
+    os.path.join(tempfile.mkdtemp(prefix="eyay-test-notif-"), "notifications.jsonl"),
+)
+
 
 @pytest.fixture(autouse=True)
 def _f5_disabled_by_default(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -206,6 +217,22 @@ def _isolate_runtime_stores(tmp_path_factory: pytest.TempPathFactory) -> None:
     # sonucunu makineden makineye değiştiriyordu; temiz makinede dizin zaten boş
     # olduğundan davranış birebir aynı kalır.
     os.environ["OHLCV_CACHE_DIR"] = str(runtime / "ohlcv")
+    # T1 — tick worker testleri run_once() sürer: heartbeat + snapshot kaydı +
+    # ticket deposu gerçek data/runtime'a yazmasın (yollar her çağrıda env'den
+    # okunur; per-test fixture'lar yine override edebilir).
+    os.environ["WORKER_HEARTBEAT_PATH"] = str(runtime / "worker_heartbeats.json")
+    os.environ["SNAPSHOT_STORE_PATH"] = str(runtime / "snapshots")
+    os.environ["TICKETS_PATH"] = str(runtime / "tickets.json")
+    # T1 — decide/attempt_open yolunu süren HER test (eskiden API tick testleri,
+    # şimdi run_once testleri) bu gözlem defterlerine yazar; suite gerçek
+    # data/runtime kanıtını kirletmesin (dev makinesinde test artefaktı canlı
+    # gölge/audit kanıtına karışıyordu — GET /decision/shadow testinde yakalandı).
+    os.environ["SHADOW_LOG_PATH"] = str(runtime / "shadow_decisions.jsonl")
+    os.environ["PAPER_AUDIT_PATH"] = str(runtime / "paper_audit.jsonl")
+    os.environ["MISSED_OPP_LOG_PATH"] = str(runtime / "missed_opportunity.jsonl")
+    os.environ["META_GATE_PATH"] = str(runtime / "meta_gate.json")
+    os.environ["META_GATE_SHADOW_PATH"] = str(runtime / "meta_gate_shadow.jsonl")
+    os.environ["CALIBRATION_AUDIT_PATH"] = str(runtime / "calibration_jumps.jsonl")
 
 
 @pytest.fixture

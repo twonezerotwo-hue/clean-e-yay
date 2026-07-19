@@ -174,17 +174,19 @@ def test_halt_active_no_new_positions_via_tick(fresh_env) -> None:
     state.open_positions.append(_position(ps, symbol="BTCUSD", price=68_000.0))
     ps.save(state)
 
-    from apps.api.main import app
-    client = TestClient(app)
-    r = client.post("/api/v1/paper-trading/tick")
-    assert r.status_code == 200
-    body = r.json()
-    assert all(a["action"] != "open" for a in body["actions"])
+    # T1 — tek tick yolu worker (POST /paper-trading/tick kaldırıldı).
+    import asyncio
+
+    from apps.tick_worker import main as tick_worker
+    from packages.ops import heartbeat
+
+    asyncio.run(tick_worker.run_once())
+    assert heartbeat.load("tick_worker")["status"] != "FAILED"
 
     from packages.risk import halt
     assert any(h.type == "DAILY_LOSS" for h in halt.active_halts())
     after = ps.load()
-    assert after.open_positions == []  # flatten
+    assert after.open_positions == []  # flatten — halt aktifken open da yok
     assert any(
         t.close_reason == "KILL_SWITCH_EXIT" for t in after.recent_trades
     )
@@ -199,14 +201,18 @@ def test_dd_halt_blocks_new_positions_keeps_existing(fresh_env) -> None:
     state.open_positions.append(_position(ps, symbol="BTCUSD"))
     ps.save(state)
 
-    from apps.api.main import app
-    client = TestClient(app)
-    r = client.post("/api/v1/paper-trading/tick")
-    assert r.status_code == 200
-    assert all(a["action"] != "open" for a in r.json()["actions"])
+    # T1 — tek tick yolu worker (POST /paper-trading/tick kaldırıldı).
+    import asyncio
+
+    from apps.tick_worker import main as tick_worker
+    from packages.ops import heartbeat
+
+    asyncio.run(tick_worker.run_once())
+    assert heartbeat.load("tick_worker")["status"] != "FAILED"
 
     after = ps.load()
-    # RISK_REDUCE seviyesi: pozisyon zorla kapatılmaz (SL/TP yönetimi sürer)
+    # RISK_REDUCE: yeni açılış yok (mevcut 1 pozisyon dışında) ve flatten yok
+    assert len(after.open_positions) == 1
     assert any(
         t.close_reason == "KILL_SWITCH_EXIT" for t in after.recent_trades
     ) is False

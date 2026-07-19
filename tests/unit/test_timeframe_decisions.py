@@ -399,29 +399,29 @@ def test_decision_matrix_endpoint(paper_env) -> None:
     assert "risk_gate" in body and "dqs_status" in body and "mode" in body
 
 
-def test_paper_tick_endpoint_timeframe_actions(paper_env) -> None:
+def test_paper_tick_worker_timeframe_positions(paper_env) -> None:
+    """T1 — tek tick yolu worker (POST /paper-trading/tick kaldırıldı).
+
+    1w hücreleri decide_matrix içinde zaten open üretemez (üstteki matrix
+    testi); burada worker pass'i sonrası state doğrulanır: açılan her pozisyon
+    işlem-açılabilir TF'te ve valid_until damgalı.
+    """
     from packages.data.ingestion import pipeline as pl
     pl._CACHE.clear()
 
-    from fastapi.testclient import TestClient
+    import asyncio
 
-    from apps.api.main import app
+    from apps.tick_worker import main as tick_worker
+    from packages.ops import heartbeat
 
-    client = TestClient(app)
-    r = client.post("/api/v1/paper-trading/tick")
-    assert r.status_code == 200
-    body = r.json()
-    assert body["actions"], "her (symbol, tf) için aksiyon raporlanmalı"
-    # Tüm aksiyonlar timeframe taşır; 1w'de open asla yok.
-    for a in body["actions"]:
-        assert "timeframe" in a
-        if a["timeframe"] == "1w":
-            assert a["action"] != "open"
-    # Açılan pozisyonlar timeframe + valid_until taşır.
-    state = client.get("/api/v1/paper-trading/state").json()
-    for p in state["open_positions"]:
-        assert p["timeframe"] in {"15m", "1h", "4h", "1d"}
-        assert p["valid_until"] is not None
+    asyncio.run(tick_worker.run_once())
+    # run_once istisnayı yutar (FAILED heartbeat) — sessiz çökme yeşil görünmesin.
+    assert heartbeat.load("tick_worker")["status"] != "FAILED"
+
+    state = paper_env.load()
+    for p in state.open_positions:
+        assert p.timeframe in {"15m", "1h", "4h", "1d"}  # 1w'de open asla yok
+        assert p.valid_until is not None
 
 
 # ---------------- intra-batch yığılma koruması ----------------
