@@ -202,6 +202,10 @@ class PendingOrder:
     timeframe: str = "1d"
     reason: str | None = None
     sl_pct: float | None = None  # opsiyonel özel stop yüzdesi
+    # T4 — dolum-anı güvenlik beklemesi (additive): tetiklenmiş ama halt/anomali/
+    # duplicate yüzünden dolmayan emrin SON bekleme sebebi. Audit yalnız sebep
+    # değişince yazılır (spam yok); None = beklemede değil. Legacy kayıtlar None.
+    last_held_reason: str | None = None
     limit_price: float | None = None  # stop_limit: tetik (trigger) sonrası dolum fiyatı
 
 

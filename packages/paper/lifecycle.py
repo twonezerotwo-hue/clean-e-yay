@@ -18,6 +18,7 @@ from packages.learning import decision_log
 from packages.paper import audit, conviction, execution_sim, reentry_guard, sizing
 from packages.paper.guards import price_sanity, state_anomaly
 from packages.paper.state import PaperState, Position, Trade, utc_iso
+from packages.risk import halt as halt_store
 from packages.risk.trade_economics import (
     compute_fixed_targets,
     compute_structural_targets,
@@ -622,12 +623,38 @@ def _pending_triggered(order, price: float) -> bool:
     return price >= order.trigger_price if order.side == "long" else price <= order.trigger_price
 
 
+def _pending_fill_held_reason(state: PaperState, order) -> str | None:
+    """T4 — dolum ANI taze güvenlik (dış denetim P1-7).
+
+    Bekleyen emir owner niyetidir ama GECİKMİŞ niyettir: emir verildiği andaki
+    koşullar dolum anında geçerli olmayabilir (owner ekranda değilken kill-switch
+    devreye girmiş olabilir). Bu yüzden dolum anında yalnız-kısıtlayıcı üç taze
+    kontrol yapılır; koşul geçene dek emir BEKLEMEDE kalır (iptal YOK):
+      * aktif halt (KILL_SWITCH/RISK_REDUCE) — halt sırasında yeni pozisyon doğmaz;
+      * hesap anomalisi — bozuk muhasebe üstüne dolum yapılmaz;
+      * duplicate (aynı symbol+timeframe açık pozisyon) — kazara katlama önlenir
+        (owner isterse scale-in'i bilinçli, ayrı aksiyonla yapar).
+    Tekrar-giriş kilidi owner-muafiyet kuralı gereği BURADA YOKTUR."""
+    if halt_store.active_halts():
+        return "active_halt"
+    anomaly = state_anomaly.detect_state(state)
+    if anomaly.detected:
+        return "state_anomaly:" + ",".join(anomaly.reasons[:2])
+    if any(
+        p.symbol == order.symbol and p.timeframe == order.timeframe
+        for p in state.open_positions
+    ):
+        return "duplicate_same_tf"
+    return None
+
+
 def trigger_pending_orders(
     state: PaperState, prices: dict[str, float], now: datetime | None = None
 ) -> list[Position]:
     """Bekleyen limit/stop emirleri güncel fiyatla kontrol et; tetiklenenleri
     pozisyona çevir (tetik fiyatından doldur) ve kuyruktan çıkar. Fiyat yoksa/
-    geçersizse atlanır (uydurma fiyat YOK)."""
+    geçersizse atlanır (uydurma fiyat YOK). Tetiklenmiş ama güvensiz koşuldaki
+    emir beklemede tutulur (bkz. `_pending_fill_held_reason`)."""
     opened: list[Position] = []
     for o in list(state.pending_orders):
         price = prices.get(o.symbol)
@@ -637,6 +664,18 @@ def trigger_pending_orders(
             continue
         if not _pending_triggered(o, float(price)):
             continue
+        held = _pending_fill_held_reason(state, o)
+        if held is not None:
+            # Audit yalnız sebep DEĞİŞİNCE (her 30 sn tick'te spam olmasın).
+            if o.last_held_reason != held:
+                o.last_held_reason = held
+                audit.record(
+                    "PENDING_HELD", position_id=o.id, symbol=o.symbol, side=o.side,
+                    price_used=float(price), reason=held,
+                )
+            continue
+        if o.last_held_reason is not None:
+            o.last_held_reason = None
         # stop_limit: tetik sonrası limit fiyatından dolar; diğerleri tetik fiyatından.
         fill_price = (
             o.limit_price if (o.order_type == "stop_limit" and o.limit_price) else o.trigger_price
