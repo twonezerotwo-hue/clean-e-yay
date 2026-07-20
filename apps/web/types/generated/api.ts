@@ -294,7 +294,8 @@ export type Trade = {
     | "RISK_REDUCE"
     | "MANUAL"
     | "TIME_STOP_EXIT"
-    | "KILL_SWITCH_EXIT";
+    | "KILL_SWITCH_EXIT"
+    | "TRAILING_STOP_EXIT";
   fingerprint?: string;
   timeframe?: Timeframe;
   // P1 — terminal lifecycle + learning handoff (additive).

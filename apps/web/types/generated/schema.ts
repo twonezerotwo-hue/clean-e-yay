@@ -1260,7 +1260,7 @@ export interface components {
             /** Format: date-time */
             closed_at: string;
             /** @enum {string} */
-            close_reason: "SL_HIT" | "TP_HIT" | "SIGNAL_REVERSAL" | "RISK_REDUCE" | "MANUAL" | "TIME_STOP_EXIT" | "KILL_SWITCH_EXIT";
+            close_reason: "SL_HIT" | "TP_HIT" | "SIGNAL_REVERSAL" | "RISK_REDUCE" | "MANUAL" | "TIME_STOP_EXIT" | "KILL_SWITCH_EXIT" | "TRAILING_STOP_EXIT";
             fingerprint?: string;
             timeframe?: components["schemas"]["Timeframe"];
             lifecycle_status?: components["schemas"]["PaperLifecycleStatus"];

@@ -1324,7 +1324,7 @@ components:
         closed_at: { type: string, format: date-time }
         close_reason:
           type: string
-          enum: [SL_HIT, TP_HIT, SIGNAL_REVERSAL, RISK_REDUCE, MANUAL, TIME_STOP_EXIT, KILL_SWITCH_EXIT]
+          enum: [SL_HIT, TP_HIT, SIGNAL_REVERSAL, RISK_REDUCE, MANUAL, TIME_STOP_EXIT, KILL_SWITCH_EXIT, TRAILING_STOP_EXIT]
         fingerprint: { type: string }
         timeframe: { $ref: "#/components/schemas/Timeframe" }
         lifecycle_status:
