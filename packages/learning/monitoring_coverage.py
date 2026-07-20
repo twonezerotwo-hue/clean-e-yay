@@ -92,6 +92,14 @@ COVERAGE: dict[str, dict] = {
         "reason": "Ağırlık eğitimi skorlama MODU (winsorize profit-factor); ağırlık "
                   "auto-apply zaten weight_rollback outcome-rollback'ine bağlı.",
     },
+    "BINANCE_OHLCV_ENABLED": {
+        "mechanism": INPUT_HYGIENE, "monitor": None,
+        "reason": "Kripto OHLCV kaynak-KALİTE yükseltmesi (CoinGecko fitilsiz "
+                  "fiyat-noktası → Binance gerçek OHLC+hacim); yeni karar "
+                  "mekanizması değil, mevcut bar akışının girdisi. Başarısızlıkta "
+                  "CoinGecko'ya otomatik düşer (DATA_POLICY zinciri aynı); sağlık "
+                  "provider-status panelinde (ohlcv_binance) görünür.",
+    },
     "TF_TRUST_PER_BUCKET": {
         "mechanism": INPUT_HYGIENE, "monitor": None,
         "reason": "Canlı tf_weights kapısının per-TF SERTLEŞTİRMESİ (D4): kanıtsız "

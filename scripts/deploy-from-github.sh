@@ -102,6 +102,13 @@ ensure_env SUBSIGNAL_SCORECARD_ENABLED 1
 # uretir → izole artifact. SALT-GOZLEM: canli skora/karara/paper'a ASLA yazmaz
 # (D7 golge yarisin girdisi). Rollback = flag kapat. Lokal .env'de de =1.
 ensure_env TF_SCORING_V2_SHADOW 1
+# Binance OHLCV (2026-07-07, owner isi "kripto fitilsiz veri" blocker'i): kripto
+# barlari CoinGecko fiyat-noktasi (fitilsiz) yerine Binance klines'tan gelir —
+# gercek OHLC+hacim, 4h/1w NATIVE. Elliott 0-2 fitil-hassas edge'i kripto'da
+# olculebilir olur; bar arsivi gercek fitilli bar biriktirir. Basarisizlikta
+# CoinGecko'ya otomatik duser (DATA_POLICY ayni). Rollback = flag kapat.
+# Lokal .env'de de =1 (owner kurali: lokal+AWS senkron).
+ensure_env BINANCE_OHLCV_ENABLED 1
 
 echo "deploy: restart services"
 sudo systemctl restart eyay-supervisor.service

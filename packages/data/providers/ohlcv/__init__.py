@@ -8,10 +8,15 @@ Politika ([docs/DATA_POLICY.md]):
   `OHLCV_USE_FIXTURE=true`.
 
 Routing:
-- BTCUSD/ETHUSD → CoinGecko market_chart (15m/1h/1d native).
+- Kripto + `BINANCE_OHLCV_ENABLED=1` → Binance klines (5 TF native, GERÇEK
+  fitil + hacim); başarısızlıkta CoinGecko'ya düşer. Flag OFF → bayt-aynı
+  eski davranış.
+- BTCUSD/ETHUSD → CoinGecko market_chart (15m/1h/1d native, fiyat-noktası:
+  1h/1d fiilen fitilsiz).
 - XAU/XAG/DXY/VIX/... → Yahoo chart (15m/1h/1d/1w native).
-- 4h = 1h barlarından resample (her iki kaynak için).
-- 1w = kripto için 1d barlarından resample; yfinance native 1wk.
+- 4h = 1h barlarından resample (Binance native 4h veremediyse).
+- 1w = kripto için 1d barlarından resample (Binance native 1w veremediyse);
+  yfinance native 1wk.
 
 Disk cache `data/runtime/ohlcv/` altında, TTL TF'e orantılı — live
 provider rate-limit yemez, testler network'e bağımlı olmaz.
@@ -23,6 +28,7 @@ import threading
 from datetime import UTC, datetime
 
 from packages.data.providers.ohlcv import (
+    binance,
     cache,
     coingecko,
     fixtures,
@@ -41,7 +47,7 @@ _MAX_BARS: dict[Timeframe, int] = {
     "1w": 400,
 }
 
-_PROVIDER_NAMES = ("ohlcv_coingecko", "ohlcv_yfinance")
+_PROVIDER_NAMES = ("ohlcv_binance", "ohlcv_coingecko", "ohlcv_yfinance")
 
 _LOCK = threading.Lock()
 _STATUS: dict[str, dict] = {
@@ -100,36 +106,43 @@ def reset_provider_status() -> None:
             )
 
 
-def _provider_for(symbol: str):
-    if symbol in coingecko.SUPPORTED:
-        return coingecko, "ohlcv_coingecko"
-    if symbol in yfinance.SUPPORTED:
-        return yfinance, "ohlcv_yfinance"
-    return None, None
+def _providers_for(symbol: str, tf: Timeframe) -> list[tuple[object, str]]:
+    """Sembol+TF için native-yetenekli provider adayları, deneme sırasıyla.
+    Binance yalnız flag'le girer (kripto gerçek-fitil yükseltmesi); NATIVE_TFS
+    filtresi mevcut davranışı değiştirmez (eski rotada TF'ler zaten native'di)."""
+    out: list[tuple[object, str]] = []
+    if binance.enabled() and symbol in binance.SUPPORTED and tf in binance.NATIVE_TFS:
+        out.append((binance, "ohlcv_binance"))
+    if symbol in coingecko.SUPPORTED and tf in coingecko.NATIVE_TFS:
+        out.append((coingecko, "ohlcv_coingecko"))
+    if symbol in yfinance.SUPPORTED and tf in yfinance.NATIVE_TFS:
+        out.append((yfinance, "ohlcv_yfinance"))
+    return out
 
 
-def _native_bars(symbol: str, tf: Timeframe) -> list[OHLCVBar]:
-    provider, name = _provider_for(symbol)
-    if provider is None or name is None:
+def _native_bars(symbol: str, tf: Timeframe, *, allow_stale: bool = True) -> list[OHLCVBar]:
+    providers = _providers_for(symbol, tf)
+    if not providers:
         return []
     cached = cache.load(symbol, tf)
     if cached is not None and cached.fresh:
         return cached.bars
-    try:
-        bars = provider.get_bars(symbol, tf)
-        error = None if bars else "provider returned no data"
-    except Exception as exc:
-        bars = None
-        error = str(exc)[:200] or "provider raised"
-    if bars:
-        bars = bars[-_MAX_BARS[tf]:]
-        _mark(name, ok=True)
-        cache.save(symbol, tf, bars)
-        return bars
-    _mark(name, ok=False, error=error)
-    if cached is not None:
+    for provider, name in providers:
+        try:
+            bars = provider.get_bars(symbol, tf)  # type: ignore[attr-defined]
+            error = None if bars else "provider returned no data"
+        except Exception as exc:
+            bars = None
+            error = str(exc)[:200] or "provider raised"
+        if bars:
+            bars = bars[-_MAX_BARS[tf]:]
+            _mark(name, ok=True)
+            cache.save(symbol, tf, bars)
+            return bars
+        _mark(name, ok=False, error=error)
+    if cached is not None and allow_stale:
         # Stale ama gerçek veri — TF freshness kuralı DEGRADED işaretler.
-        _mark(name, ok=False, error="serving stale cache", fallback=True)
+        _mark(providers[-1][1], ok=False, error="serving stale cache", fallback=True)
         return cached.bars
     return []
 
@@ -141,11 +154,18 @@ def get_bars(symbol: str, timeframe: str = "1d") -> list[OHLCVBar]:
     if is_fixture_mode():
         return fixtures.get_bars(symbol, tf)
     if tf == "4h":
-        base = get_bars(symbol, "1h")
-        bars = resample.resample(base, "4h")[-_MAX_BARS["4h"]:]
+        # Binance açıkken 4h NATIVE gelir (gerçek fitil); flag OFF'ta aday
+        # provider yok → [] → eski resample yolu bayt-aynı çalışır. Stale
+        # cache'e düşülmez: taze 1h'ten resample her zaman mümkün.
+        bars = _native_bars(symbol, tf, allow_stale=False)
+        if not bars:
+            base = get_bars(symbol, "1h")
+            bars = resample.resample(base, "4h")[-_MAX_BARS["4h"]:]
     elif tf == "1w" and symbol in coingecko.SUPPORTED:
-        base = get_bars(symbol, "1d")
-        bars = resample.resample(base, "1w")[-_MAX_BARS["1w"]:]
+        bars = _native_bars(symbol, tf, allow_stale=False)
+        if not bars:
+            base = get_bars(symbol, "1d")
+            bars = resample.resample(base, "1w")[-_MAX_BARS["1w"]:]
     else:
         bars = _native_bars(symbol, tf)
     # Bar arşivi (BAR_HISTORY_ENABLED, default OFF → no-op): kapanmış barları
