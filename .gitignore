@@ -33,6 +33,9 @@ tmp/
 # Runtime data
 data/runtime/
 data/state/
+# Kurtarma/gecis yedekleri (data/runtime.bak-YYYYMMDD/) - runtime kadar hassas,
+# ayni sekilde commit edilmez. Desen yoksa "git add -A" sessizce defteri commit eder.
+data/runtime.bak-*/
 *.log
 
 # OS
