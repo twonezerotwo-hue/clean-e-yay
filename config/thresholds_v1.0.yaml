@@ -851,7 +851,10 @@ reentry_guard:
   # RİSK: tek tezin N kopyası çeşitlendirme yanılsaması yaratır.
   # Shadow-first: false iken rapor `cross_tf` alanıyla gözlemlenir, açılış
   # bayt-aynı. Owner panelden kaç işlemin bloklanacağını görüp açar.
-  cross_tf: false
+  # AKTİF (2026-07-22, owner "1" onayı — problem #6): kilit artık (sembol, yön)
+  # seviyesinde; "BTC 1h kârda kapandı → 4h aynı tezi hemen açar" sızıntısı kapandı.
+  # Geri-alma = false + tick_worker restart.
+  cross_tf: true
 
 # Onaylı bölge etkisi (owner kararı 2026-07-12): zone_proposer'ın owner iptal
 # etmedikçe ONAYLI sayılan bölgeleri SL/TP YERLEŞİMİNİ etkiler — TP onaylı
