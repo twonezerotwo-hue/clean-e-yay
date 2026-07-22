@@ -168,6 +168,14 @@ $env:NEXT_DIST_DIR = ".next-prod"
 $apiDown = $null
 $webDown = $null
 
+# ngrok tunnel (dashboard from phone). Binary is gitignored, so a fresh clone
+# has no tunnel until it is restored - the block above no-ops in that case.
+# Reserved domain: same URL as before the reinstall, so the phone bookmark works.
+$ngrok    = Join-Path $root "tools\ngrok.exe"
+$ngrokCfg = "$env:LOCALAPPDATA\ngrok\ngrok.yml"
+$ngrokUrl = "https://mobster-ipad-transform.ngrok-free.dev"
+$script:ngrokWarned = $false
+
 while ($true) {
     # API - plain uvicorn (endpoints run in threadpool; event loop never blocks)
     Ensure-HttpSvc "api" "http://127.0.0.1:9000/api/v1/health" 9000 $py "uvicorn" `
@@ -191,6 +199,32 @@ while ($true) {
     Ensure-HttpSvc "web" "http://127.0.0.1:4000/" 4000 $node "next" `
         @("node_modules/next/dist/bin/next","start","-p","4000","-H","127.0.0.1") `
         $web "$logs\web.out.log" "$logs\web.err.log" ([ref]$webDown)
+
+    # ngrok - phone access to the dashboard (owner request 2026-07-21).
+    # Services bind 127.0.0.1 ONLY, so nothing outside this box can reach them;
+    # the tunnel is the single deliberate exception. Started AFTER web so the
+    # first request does not hit a dead port. Reserved domain keeps the phone
+    # bookmark stable across restarts.
+    #
+    # SECURITY: this publishes the dashboard to the INTERNET, not just the LAN.
+    # Writes (POST/PUT/PATCH/DELETE) are protected by API_AUTH_TOKEN, but READS
+    # are open to anyone who knows the URL. Turn the tunnel off by deleting
+    # tools\ngrok.exe (this block then no-ops) or by removing this block.
+    #
+    # Needs a one-time credential the repo cannot carry:
+    #   tools\ngrok.exe config add-authtoken <token from dashboard.ngrok.com>
+    # Without it ngrok exits immediately; we log that instead of looping silently.
+    if (Test-Path $ngrok) {
+        if (-not (Proc-Running "ngrok.exe" "http")) {
+            if (Test-Path $ngrokCfg) {
+                Start-Svc "ngrok" $ngrok @("http","4000","--url=$ngrokUrl") `
+                    $root "$logs\ngrok.out.log" "$logs\ngrok.err.log" | Out-Null
+            } elseif (-not $script:ngrokWarned) {
+                Klog "ngrok atlandi: authtoken yok -> tools\ngrok.exe config add-authtoken <token>"
+                $script:ngrokWarned = $true
+            }
+        }
+    }
 
     Start-Sleep -Seconds 20
 }
