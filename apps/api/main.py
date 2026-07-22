@@ -18,7 +18,15 @@ def _load_dotenv() -> None:
 
     Bağımlılık yok (python-dotenv değil). Format: KEY=VALUE, # comment, boş
     satır. Quote/escape yok. Mevcut shell env'i override ETMEZ.
+
+    pytest altında HİÇ çalışmaz: conftest env'i izole eder (delenv
+    API_AUTH_TOKEN vb.), ama `importlib.reload(apps.api.main)` yapan bir test
+    bunu yeniden koşup gerçek .env token'ını process'e geri enjekte ederdi →
+    mutation uçları 401 alırdı (2026-07-22, .env geri yüklenince ortaya çıktı).
+    Üretimde (uvicorn) pytest sys.modules'te YOK → davranış bayt-aynı.
     """
+    if "pytest" in sys.modules:
+        return
     p = Path(__file__).resolve().parent.parent.parent / ".env"
     if not p.exists():
         return
