@@ -54,12 +54,23 @@ def _arms_lock(t: Trade) -> bool:
 
 
 def _latest_close_for_key(
-    trades: list[Trade], symbol: str, side: str, timeframe: str
+    trades: list[Trade], symbol: str, side: str, timeframe: str,
+    *, cross_tf: bool = False,
 ) -> Trade | None:
     """(symbol, side, timeframe) için EN SON kapanış (yoksa None). En yeni kapanış
-    o anahtarın güncel durumunu belirler: sonradan zararlı stop olduysa kilit yok."""
+    o anahtarın güncel durumunu belirler: sonradan zararlı stop olduysa kilit yok.
+
+    `cross_tf=True` (owner problemi 2026-07-21) → anahtarttan TIMEFRAME DÜŞER:
+    kilit (symbol, side) seviyesinde kurulur. Sebep: kilit TF-hapsindeyken
+    "BTC 1h kârda kapandı → 4h aynı tezi hemen açıyor" sızıntısı açık kalıyordu
+    (duplicate politikası da TF bazlı: `find_open(symbol, timeframe)`). Böylece
+    tek tezin TF kopyalarıyla çoğalması engellenir — defter 4 pozisyon gösterip
+    aslında TEK bahis taşımaz. Taze-bar koşulu ADAYIN kendi TF'ine göre ölçülür.
+    """
     for t in reversed(trades):
-        if t.symbol == symbol and t.side == side and t.timeframe == timeframe:
+        if t.symbol != symbol or t.side != side:
+            continue
+        if cross_tf or t.timeframe == timeframe:
             return t
     return None
 
@@ -91,7 +102,8 @@ def assess(
     ``active and locked`` iken engeller (shadow-first: kapalıyken rapor gözlem)."""
     cfg = cfg or {}
     trades = getattr(state, "recent_trades", None) or []
-    arming = _latest_close_for_key(trades, symbol, side, timeframe)
+    cross_tf = bool(cfg.get("cross_tf", False))
+    arming = _latest_close_for_key(trades, symbol, side, timeframe, cross_tf=cross_tf)
     if arming is None or not _arms_lock(arming):
         return {}
 
@@ -123,6 +135,8 @@ def assess(
         "symbol": symbol,
         "side": side,
         "timeframe": timeframe,
+        "cross_tf": cross_tf,
+        "armed_timeframe": arming.timeframe,
         "armed_by": arming.close_reason,
         "armed_pnl_usd": round(float(arming.pnl_usd), 2),
         "closed_at": arming.closed_at,

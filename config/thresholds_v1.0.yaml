@@ -840,6 +840,18 @@ reentry_guard:
   # YOK VEYA sinyal AYNI) bloklar; owner manuel açılış / manual_ready onayı MUAF.
   # Yalnız-BLOKLAR (işlem açtırmaz). Geri-alma = false (tick_worker restart).
   enabled: true
+  # cross_tf (2026-07-21, owner problemi #6) — DEFAULT FALSE = BAYT-AYNI.
+  # false: kilit (sembol, yön, TF) anahtarında → "BTC 1h kârda kapandı" 4h'yi
+  #        engellemez; aynı tez TF kopyalarıyla çoğalır (defter 4 pozisyon
+  #        gösterir ama TEK bahis taşır).
+  # true : kilit (sembol, yön) seviyesinde; taze-bar koşulu adayın TF'ine göre.
+  # Kanıt durumu (214 işlem yeniden oynatma): SL_HIT 66→46 (-%30), işlem
+  # 214→144. PnL iyileşmesi İSTATİSTİKSEL OLARAK KANITLANMADI (p=0.35; kazanç
+  # ilk yarıdan geliyor, ikinci yarıda etki yok). Gerekçe PnL değil KORELE
+  # RİSK: tek tezin N kopyası çeşitlendirme yanılsaması yaratır.
+  # Shadow-first: false iken rapor `cross_tf` alanıyla gözlemlenir, açılış
+  # bayt-aynı. Owner panelden kaç işlemin bloklanacağını görüp açar.
+  cross_tf: false
 
 # Onaylı bölge etkisi (owner kararı 2026-07-12): zone_proposer'ın owner iptal
 # etmedikçe ONAYLI sayılan bölgeleri SL/TP YERLEŞİMİNİ etkiler — TP onaylı
