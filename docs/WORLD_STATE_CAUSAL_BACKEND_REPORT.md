@@ -27,6 +27,11 @@ MarketSnapshot
 World state is evidence only. The legacy consensus, decision engine, RiskGate,
 EV, sizing, and paper lifecycle remain authoritative.
 
+`AssetImpact` also carries an observational `technical_confirmation` and
+`timing_status` (`CONFIRMED`, `CONFLICT`, `WAIT`, or `UNAVAILABLE`). These are
+read from the existing multi-timeframe technical snapshots only to separate
+thesis direction from entry timing; they are not merged into a decision score.
+
 ## 4. Files added
 
 - `packages/world_state/__init__.py`
