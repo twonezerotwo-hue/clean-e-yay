@@ -80,3 +80,19 @@ def test_causal_shadow_can_be_disabled_without_side_effects():
     assert shadow.enabled is False
     assert shadow.decision_apply is False
     assert shadow.impacts == ()
+
+
+def test_technical_timing_is_observational_and_separate_from_thesis():
+    world = build(_snapshot())
+    technicals = {
+        "XAUUSD": {
+            "4h": SimpleNamespace(direction_score=70.0),
+            "1d": SimpleNamespace(direction_score=65.0),
+        }
+    }
+    shadow = build_shadow(world, ["XAUUSD"], technicals=technicals)
+    impact = shadow.impacts[0]
+    assert impact.direction_score is not None
+    assert impact.technical_confirmation == 0.35
+    assert impact.timing_status == "CONFIRMED"
+    assert shadow.decision_apply is False

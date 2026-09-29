@@ -42,7 +42,11 @@ def get_cockpit_brief() -> dict:
     provenance = data_provenance(snap)
     halt_active = bool(halt_store.active_halts())
     world_state = build_world_state(snap)
-    causal_shadow = build_shadow(world_state, matrix_symbols)
+    causal_shadow = build_shadow(
+        world_state,
+        matrix_symbols,
+        technicals=snap.technicals_by_tf or snap.technicals,
+    )
     return {
         "generated_at": view["generated_at"],
         "mode": provenance,

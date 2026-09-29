@@ -1,7 +1,7 @@
 """Pure deterministic propagation from world-state factors to asset evidence."""
 from __future__ import annotations
 
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
 from datetime import UTC, datetime
 
 from packages.causal.model import AssetImpact, CausalEdge, CausalShadow
@@ -70,7 +70,48 @@ def _propagate(state: WorldStateSnapshot) -> dict[str, float]:
     return factors
 
 
-def _impact(symbol: str, factors: dict[str, float], state: WorldStateSnapshot) -> AssetImpact:
+def _technical_timing(technicals: Mapping[str, object] | None, symbol: str) -> tuple[float | None, str]:
+    """Summarise technical timing without changing the causal thesis.
+
+    The technical layer is deliberately read-only here: world/causal direction
+    remains independent, while the result only describes confirmation,
+    conflict, or a wait condition for UI shadow comparison.
+    """
+    if not technicals:
+        return None, "UNAVAILABLE"
+    raw = technicals.get(symbol)
+    if raw is None:
+        return None, "UNAVAILABLE"
+    by_tf = raw if isinstance(raw, Mapping) else {"1d": raw}
+    values: list[float] = []
+    for timeframe in ("4h", "1d", "1h", "15m"):
+        item = by_tf.get(timeframe)
+        score = getattr(item, "direction_score", None)
+        if score is None and isinstance(item, Mapping):
+            score = item.get("direction_score")
+        if score is None:
+            continue
+        try:
+            values.append(_clamp((float(score) - 50.0) / 50.0))
+        except (TypeError, ValueError):
+            continue
+    if not values:
+        return None, "UNAVAILABLE"
+    confirmation = round(sum(values) / len(values), 4)
+    directional = [value for value in values if abs(value) >= 0.15]
+    if not directional or abs(confirmation) < 0.15:
+        return confirmation, "WAIT"
+    if any(value > 0 for value in directional) and any(value < 0 for value in directional):
+        return confirmation, "CONFLICT"
+    return confirmation, "CONFIRMED"
+
+
+def _impact(
+    symbol: str,
+    factors: dict[str, float],
+    state: WorldStateSnapshot,
+    technicals: Mapping[str, object] | None = None,
+) -> AssetImpact:
     terms: list[tuple[str, float]] = []
     if symbol in {"XAUUSD", "XAGUSD"}:
         for key, weight in (("gold_pressure", 1.0), ("risk_aversion", 0.6), ("usd_pressure", -0.4)):
@@ -102,6 +143,7 @@ def _impact(symbol: str, factors: dict[str, float], state: WorldStateSnapshot) -
     negative = tuple(key for key, value in terms if value < -0.05)
     missing = tuple(key for key in ("liquidity", "risk_aversion", "usd_pressure") if key not in factors)
     conflicts = ("world factors conflict",) if positive and negative else ()
+    technical_confirmation, timing_status = _technical_timing(technicals, symbol)
     return AssetImpact(
         symbol=symbol,
         direction_score=score,
@@ -113,6 +155,8 @@ def _impact(symbol: str, factors: dict[str, float], state: WorldStateSnapshot) -
         world_state_contribution=score,
         flow_contribution=factors.get("liquidity"),
         geopolitical_contribution=factors.get("geopolitical_risk"),
+        technical_confirmation=technical_confirmation,
+        timing_status=timing_status,
         missing_evidence=missing,
         conflicts=conflicts,
     )
@@ -124,6 +168,7 @@ def build_shadow(
     *,
     enabled: bool | None = None,
     decision_apply: bool | None = None,
+    technicals: Mapping[str, object] | None = None,
 ) -> CausalShadow:
     config = load_thresholds().get("causal_world") or {}
     active = (
@@ -135,7 +180,7 @@ def build_shadow(
     if not active:
         return CausalShadow(state.generated_at, False, False, state.to_dict(), warnings=("disabled",))
     factors = _propagate(state)
-    impacts = tuple(_impact(symbol, factors, state) for symbol in symbols)
+    impacts = tuple(_impact(symbol, factors, state, technicals) for symbol in symbols)
     warnings = list(state.missing_inputs)
     if state.confidence < 0.5:
         warnings.append("low_world_state_confidence")

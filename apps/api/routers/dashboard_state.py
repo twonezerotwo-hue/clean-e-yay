@@ -55,7 +55,11 @@ def get_dashboard_state() -> dict:
     now_iso = datetime.now(UTC).isoformat()
     prov = data_provenance(snap)
     world_state = build_world_state(snap)
-    causal_shadow = build_shadow(world_state, asset_registry.trade_symbols())
+    causal_shadow = build_shadow(
+        world_state,
+        asset_registry.trade_symbols(),
+        technicals=snap.technicals_by_tf or snap.technicals,
+    )
     data_health = _data_module_health(prov, snap.quality.status, now_iso)
     # News: gerçek haber sağlayıcı yok → demo damgası (her zaman görünür uyarı)
     news_health = {

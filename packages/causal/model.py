@@ -46,6 +46,8 @@ class AssetImpact:
     geopolitical_contribution: float | None = None
     statement_contribution: float | None = None
     positioning_contribution: float | None = None
+    technical_confirmation: float | None = None
+    timing_status: str = "UNAVAILABLE"
     conflicts: tuple[str, ...] = ()
     missing_evidence: tuple[str, ...] = ()
 
