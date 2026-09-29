@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter
 
+from packages.causal.engine import build_shadow
 from packages.data.ingestion.pipeline import get_cached_snapshot
 from packages.data.provenance import data_provenance
 from packages.data.registry import assets as asset_registry
@@ -17,6 +18,7 @@ from packages.decision.engine import decide_matrix, matrix_view
 from packages.paper import state as paper_state
 from packages.risk import halt as halt_store
 from packages.risk.engine import RiskInput
+from packages.world_state.engine import build as build_world_state
 
 router = APIRouter(tags=["cockpit"])
 
@@ -39,6 +41,8 @@ def get_cockpit_brief() -> dict:
     view = matrix_view(regime, risk, decisions, snap, matrix_symbols)
     provenance = data_provenance(snap)
     halt_active = bool(halt_store.active_halts())
+    world_state = build_world_state(snap)
+    causal_shadow = build_shadow(world_state, matrix_symbols)
     return {
         "generated_at": view["generated_at"],
         "mode": provenance,
@@ -46,4 +50,6 @@ def get_cockpit_brief() -> dict:
             view, snap, ps, provenance, halt_active=halt_active
         ),
         "decision_trace": decision_trace_view(view, snap),
+        "world_state": world_state.to_dict(),
+        "causal_shadow": causal_shadow.to_dict(),
     }

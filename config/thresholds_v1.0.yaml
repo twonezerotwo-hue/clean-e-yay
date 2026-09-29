@@ -1168,6 +1168,17 @@ shadow:
   affect_decision: true
   manual_ready_only: true
 
+# World State + Causal Intelligence — additive, shadow-only evidence layer.
+# decision_apply remains false so the legacy decision/risk path is unchanged.
+causal_world:
+  enabled: true
+  llm_extractor_enabled: false
+  world_state_enabled: true
+  geopolitical_enabled: true
+  statements_enabled: true
+  causal_graph_enabled: true
+  decision_apply: false
+
 # Faz 7 — Conflict Resolver'ın kontrollü aktivasyonu (spec v2.3 §28).
 # `shadow.affect_decision`'dan TAMAMEN BAĞIMSIZ, ayrı bir aktivasyon kapısı.
 # enabled=false (varsayılan) → packages/decision/conflict_resolver_activation.py

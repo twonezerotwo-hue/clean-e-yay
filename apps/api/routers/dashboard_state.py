@@ -6,6 +6,7 @@ from datetime import UTC, datetime
 from fastapi import APIRouter
 
 from packages.agent.personas import build_votes
+from packages.causal.engine import build_shadow
 from packages.consensus.engine import build as build_consensus
 from packages.data.ingestion.pipeline import DEFAULT_SYMBOLS, get_cached_snapshot
 from packages.data.provenance import data_provenance
@@ -14,6 +15,7 @@ from packages.paper import state as paper_state
 from packages.paper.lifecycle import max_drawdown_pct
 from packages.regime.classifier import classify
 from packages.risk.engine import RiskInput, evaluate
+from packages.world_state.engine import build as build_world_state
 
 router = APIRouter(tags=["dashboard"])
 
@@ -52,6 +54,8 @@ def get_dashboard_state() -> dict:
     votes, quorum = build_votes(top_cons, regime, risk)
     now_iso = datetime.now(UTC).isoformat()
     prov = data_provenance(snap)
+    world_state = build_world_state(snap)
+    causal_shadow = build_shadow(world_state, asset_registry.trade_symbols())
     data_health = _data_module_health(prov, snap.quality.status, now_iso)
     # News: gerçek haber sağlayıcı yok → demo damgası (her zaman görünür uyarı)
     news_health = {
@@ -94,6 +98,10 @@ def get_dashboard_state() -> dict:
             "news": news_health,
         },
         "warnings": snap.warnings,
+        # Additive evidence only. Existing dashboard keys and legacy decision
+        # path remain unchanged while causal_world.decision_apply is false.
+        "world_state": world_state.to_dict(),
+        "causal_shadow": causal_shadow.to_dict(),
     }
 
 

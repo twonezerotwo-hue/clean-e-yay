@@ -112,7 +112,10 @@ def _package1_flags_off_by_default(monkeypatch: pytest.MonkeyPatch) -> None:
     # T2 (2026-07-19) — API yazma-istekleri kilidi: dev .env'inde token dolu
     # olabilir; testlere sızarsa tüm mutasyon testleri 401 alır. Auth testleri
     # kendi setenv'iyle açar.
-    monkeypatch.delenv("API_AUTH_TOKEN", raising=False)
+    # Keep an explicit empty value so tests that reload apps.api.main cannot
+    # repopulate the token from the developer .env file. Auth tests set it
+    # explicitly when they need protected-route behaviour.
+    monkeypatch.setenv("API_AUTH_TOKEN", "")
     monkeypatch.delenv("TF_TARGET_AUTO_ONLY", raising=False)
     monkeypatch.delenv("EXIT_FORENSICS_NUDGE", raising=False)
     monkeypatch.delenv("TF_TARGET_EDGE_GATE", raising=False)
@@ -255,14 +258,17 @@ def seed_ohlcv_reference() -> None:
 
     now = datetime.now(UTC)
     for symbol, close in (("BTCUSD", 60_000.0), ("ETHUSD", 4_000.0)):
-        ohlcv_cache.save(
-            symbol,
-            "15m",
-            [
-                OHLCVBar(
-                    symbol=symbol, timeframe="15m", ts=now, open=close,
-                    high=close, low=close, close=close,
-                    source="test-seed", verified=False,
-                )
-            ],
-        )
+        # Keep the intended price-sanity reference stable regardless of test
+        # order or earlier tests writing another timeframe into the cache.
+        for timeframe in ("15m", "1h", "4h", "1d", "1w"):
+            ohlcv_cache.save(
+                symbol,
+                timeframe,
+                [
+                    OHLCVBar(
+                        symbol=symbol, timeframe=timeframe, ts=now, open=close,
+                        high=close, low=close, close=close,
+                        source="test-seed", verified=False,
+                    )
+                ],
+            )
