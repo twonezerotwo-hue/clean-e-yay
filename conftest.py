@@ -215,6 +215,10 @@ def _isolate_runtime_stores(tmp_path_factory: pytest.TempPathFactory) -> None:
     # verdict okur; suite gerçek data/runtime/zone_verdicts.json'ı görmesin
     # (owner'ın canlı iptal kararları test assert'lerine sızardı).
     os.environ["ZONE_VERDICTS_PATH"] = str(runtime / "zone_verdicts.json")
+    # Evidence-calibrated causal stores must not read/write developer runtime
+    # state during tests; per-test cases may still override these paths.
+    os.environ["WORLD_STATE_ARCHIVE_PATH"] = str(runtime / "world_state_archive.jsonl")
+    os.environ["CAUSAL_CALIBRATION_PATH"] = str(runtime / "causal_calibration.json")
     # Rejim hysteresis durumu (2026-07-13) — band>0 testleri canlı
     # data/runtime/regime_state.json'a yazmasın/okumasın (suite izolasyonu).
     os.environ["REGIME_STATE_PATH"] = str(runtime / "regime_state.json")

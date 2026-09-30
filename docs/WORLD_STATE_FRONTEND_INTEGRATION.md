@@ -33,6 +33,28 @@ Both `/api/v1/dashboard/state` and `/api/v1/cockpit/brief` expose:
 | Learning evidence | backend learning study artifacts | Show `INSUFFICIENT` honestly |
 | Event attribution | causal ledger `event_id`, `channels`, `asset_predictions`, `attribution_method` | Render event-specific evidence; never aggregate-copy one event into another |
 
+## Evidence-calibrated contract
+
+| Field | Type | Meaning/example | UI recommendation | Required / unavailable |
+|---|---|---|---|---|
+| `flow_state.<axis>` | object | `{value, source_type, confidence, coverage, freshness_seconds}`; source is `REAL_FLOW` or `PRICE_FLOW_PROXY` | Flow card with REAL FLOW/PROXY badge and divergence marker | Optional; show `UNAVAILABLE` |
+| `flow_observations` | array | Canonical observations with source/evidence | Evidence drawer per axis | Optional; do not infer zero |
+| `expectations` | array | `expected_value`, `actual_value`, `baseline`, source and confidence | Expectation vs Actual panel | Optional; omit panel when unavailable |
+| `macro_surprises` | array | Numeric surprise and provenance | Surprise strength/details | Optional; show provenance |
+| `interactions` | array | Pairwise `SYNERGISTIC`, `REDUNDANT`, or `CONFLICT` result | Interaction warning/badge | Optional; no client recomputation |
+| `causal_shadow.edges[*].weight` | number | Applied weight metadata | Edge detail tooltip | Required per edge; `PRIOR` is valid |
+| `causal_shadow.edges[*].weight_source` | string | `PRIOR` or calibrated hierarchy source | PRIOR/CALIBRATED badge | Required; never hide fallback |
+| `causal_shadow.edges[*].sample_n` | integer | Evidence sample count | Calibration sample N | Required; `0` means prior |
+| `causal_shadow.edges[*].regime` / `horizon` | string/null | Conditional calibration context | Filter chips | Optional; show `UNKNOWN`/`ALL` |
+| `replay.coverage_pct` | number | Timestamp coverage of as-of archive | World State timeline/replay coverage | Optional; show insufficient archive |
+| `replay.missing_domains` | array | Missing archive/outcome domains | Coverage warning | Optional; render verbatim |
+| `asset_impacts[*].drivers` / `causal_path` | array | Backend-provided explanation chain | Asset causal path panel | Optional; frontend must not calculate |
+
+The frontend only renders, filters, sorts and visualizes these fields.  It does
+not resolve weights, apply regime/horizon fallback, calculate interactions,
+infer expectations, or promote calibration.  `UNAVAILABLE`, `INSUFFICIENT`,
+`PRIOR`, and `decision_apply=false` remain visible states.
+
 ## Frontend rules
 
 - Backend remains authoritative; no score calculation in TypeScript.

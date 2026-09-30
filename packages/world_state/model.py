@@ -118,6 +118,68 @@ class MacroSurpriseImpact:
 
 
 @dataclass(frozen=True)
+class FlowObservation:
+    """Canonical capital-flow evidence.
+
+    Rotation/momentum is deliberately represented as ``PRICE_FLOW_PROXY``;
+    it is never presented as published fund flow.  Missing values remain
+    unavailable instead of being converted to a neutral number.
+    """
+    asset_or_market: str
+    flow_type: str
+    value: float | None = None
+    normalized_value: float | None = None
+    source_type: str = "UNAVAILABLE"  # REAL_FLOW | PRICE_FLOW_PROXY | POSITIONING_PROXY
+    source: str | None = None
+    timestamp: datetime | None = None
+    freshness_seconds: float | None = None
+    confidence: float = 0.0
+    coverage: float = 0.0
+    evidence: tuple[str, ...] = ()
+
+    def to_dict(self) -> dict[str, Any]:
+        return _json(asdict(self))
+
+
+@dataclass(frozen=True)
+class ExpectationState:
+    """As-of expectation/baseline used to explain event surprise."""
+    subject: str
+    expected_value: float | None = None
+    actual_value: float | None = None
+    expected_direction: float | None = None
+    expectation_source: str = "UNAVAILABLE"
+    consensus_confidence: float = 0.0
+    pricing_confidence: float = 0.0
+    baseline_value: float | None = None
+    baseline_direction: float | None = None
+    surprise: float | None = None
+    semantic_surprise: float | None = None
+    as_of: datetime | None = None
+    valid_until: datetime | None = None
+    source: str | None = None
+    evidence: tuple[str, ...] = ()
+
+    def to_dict(self) -> dict[str, Any]:
+        return _json(asdict(self))
+
+
+@dataclass(frozen=True)
+class EventInteraction:
+    """Bounded pairwise interaction; never expands to 3-way combinations."""
+    event_ids: tuple[str, str]
+    channel: str
+    relation: str  # SYNERGISTIC | REDUNDANT | CONFLICT
+    multiplier: float
+    contribution: float
+    root_event_ids: tuple[str, ...] = ()
+    evidence: tuple[str, ...] = ()
+
+    def to_dict(self) -> dict[str, Any]:
+        return _json(asdict(self))
+
+
+@dataclass(frozen=True)
 class WorldStateSnapshot:
     generated_at: datetime
     liquidity: float | None = None
@@ -164,6 +226,15 @@ class WorldStateSnapshot:
     macro_surprise_oil: float | None = None
     positioning: dict[str, dict[str, Any]] | None = None
     macro_sources: dict[str, dict[str, Any]] | None = None
+    # Evidence-calibration additions.  They are compact references/metadata,
+    # not raw provider payloads, and remain additive to the legacy snapshot.
+    flow_state: dict[str, dict[str, Any]] | None = None
+    flow_observations: tuple[FlowObservation, ...] = ()
+    expectations: tuple[ExpectationState, ...] = ()
+    interactions: tuple[EventInteraction, ...] = ()
+    schema_version: int = 2
+    causal_config_version: str = "v1.0"
+    regime: str = "UNKNOWN"
 
     def to_dict(self) -> dict[str, Any]:
         return _json(asdict(self))

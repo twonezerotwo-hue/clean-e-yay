@@ -78,6 +78,9 @@ class MarketSnapshot:
     # v2.7 D5 — haber → catalyst half-life zekâsı (deterministik, LLM yok).
     # Karar zincirinde yalnızca kısıtlayıcı (verified + yarı-ömrü dolmamış).
     catalyst_impacts: list[CatalystImpact] = field(default_factory=list)
+    # Optional provider-neutral published capital-flow observations.  Existing
+    # providers may leave this empty; rotation remains an explicit proxy.
+    flow_observations: list[dict] = field(default_factory=list)
 
 
 def _make_id(now: datetime) -> str:

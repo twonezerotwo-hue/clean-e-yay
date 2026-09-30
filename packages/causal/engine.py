@@ -61,7 +61,22 @@ def _propagate(state: WorldStateSnapshot, config: dict) -> tuple[dict[str, float
     # feedback becoming an unbounded score multiplier.
     initial = set(factors)
     edges: list[CausalEdge] = []
-    for source, target, sign, _key, strength in _edge_specs(config):
+    calibration_cfg = config.get("calibration") or {}
+    calibration_apply = bool(calibration_cfg.get("apply", False))
+    for source, target, sign, edge_key, prior_strength in _edge_specs(config):
+        resolved = {"weight": prior_strength, "weight_source": "PRIOR", "sample_n": 0, "confidence": 0.0}
+        if calibration_apply:
+            try:
+                from packages.learning.causal_calibration import resolve_weight
+                resolved = resolve_weight(
+                    edge_key,
+                    prior_strength,
+                    regime=getattr(state, "global_flow_regime", None),
+                    horizon=None,
+                )
+            except Exception:
+                pass
+        strength = float(resolved.get("weight", prior_strength))
         source_value = factors.get(source)
         if source_value is None:
             continue
@@ -75,14 +90,20 @@ def _propagate(state: WorldStateSnapshot, config: dict) -> tuple[dict[str, float
         target_after = factors.get(target)
         edges.append(CausalEdge(
             source=source, target=target, sign=sign,
-            base_strength=strength, confidence=state.confidence,
+            base_strength=prior_strength, confidence=state.confidence,
             source_value=source_value, contribution=round(contribution, 4),
             effective_strength=round(strength * state.confidence, 4),
             applied=applied,
             target_before=target_before,
             target_after=target_after,
             reason="derived_target_updated" if applied else "direct_measurement_authoritative",
-            evidence=(f"{source}={source_value:.3f}", f"contribution={contribution:.3f}"),
+            evidence=(f"{source}={source_value:.3f}", f"contribution={contribution:.3f}", f"weight_source={resolved.get('weight_source', 'PRIOR')}"),
+            prior_strength=prior_strength,
+            weight=strength,
+            weight_source=str(resolved.get("weight_source", "PRIOR")),
+            sample_n=int(resolved.get("sample_n", 0) or 0),
+            regime=getattr(state, "global_flow_regime", None),
+            horizon=None,
         ))
     return factors, tuple(edges)
 
@@ -339,9 +360,16 @@ def build_event_asset_attribution(
         "event_id": str(event.get("event_id") or event.get("id") or ""),
         "event_type": str(event.get("event_type") or "UNKNOWN"),
         "channels": channels,
+        "factor_predictions": factors,
         "asset_predictions": predictions,
         "prediction_confidence": round(max(0.0, min(1.0, source_confidence)), 4),
         "attribution_method": "event_marginal_v1",
+        "causal_path": [
+            {"source": source, "target": target, "weight": strength, "weight_source": "PRIOR"}
+            for source, target, _sign, _key, strength in _edge_specs(config)
+            if source in factors
+        ],
+        "root_event_ids": [str(event.get("event_id") or event.get("id") or "")],
         "evidence": tuple(f"{key}={value:.4f}" for key, value in sorted(channels.items())),
     }
 
@@ -437,5 +465,6 @@ def build_shadow(
         impacts=impacts,
         causal_consensus=tuple(consensus),
         conflict_shadow=tuple(conflict_shadow),
+        interactions=tuple(item.to_dict() for item in getattr(state, "interactions", ()) or ()),
         warnings=tuple(dict.fromkeys(warnings)),
     )

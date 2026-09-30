@@ -221,3 +221,77 @@ World State and causal propagation are pure in-memory work over the existing
 snapshot. No new network request or LLM token is used. Event study/backtest
 functions are off-tick learning utilities and are not called by the decision
 hot path.
+
+## 14. Real Flow Architecture
+
+`FlowObservation` is the single flow evidence model.  Published values are
+`REAL_FLOW`; derivatives/holdings evidence is `POSITIONING_PROXY`; existing
+rotation momentum is explicitly `PRICE_FLOW_PROXY`.  Selection follows
+`REAL_FLOW → POSITIONING_PROXY → PRICE_FLOW_PROXY → UNAVAILABLE`, while all
+observations remain visible so a real-flow/price divergence is auditable.
+
+## 15. World-State Archive
+
+`packages/world_state/archive.py` reuses the file-backed runtime pattern and
+writes compact material-change snapshots to
+`data/runtime/world_state_archive.jsonl`.  It stores factor values, flow
+provenance, regime, event/statement/expectation IDs, interactions, impacts and
+consensus references; raw provider payloads are not duplicated.  Records carry
+`schema_version` and `causal_config_version`, deduplicate unchanged state, and
+are bounded by configured retention/max rows.
+
+## 16. Expectations Baseline
+
+`ExpectationState` keeps actual, expected, baseline, source and confidence
+provenance.  Numeric surprise uses explicit consensus first; statement
+repetition and previous stance reduce novelty.  Missing expectations remain
+`UNAVAILABLE` and never become a fabricated zero.
+
+## 17. Full Historical Replay
+
+`causal_historical_replay()` now consumes the World-State archive only when an
+as-of timestamp and availability watermark are present.  It reports archive
+start/end, replayable timestamps, coverage percentage, missing domains and
+15m/1h/4h/1d horizons.  `causal_historical_evaluator()` remains the separate
+materialized-row evaluator.  Published, ingested, event and consensus
+timestamps are rejected when they are after T; future bars are scoring-only.
+
+## 18. Edge Calibration
+
+`packages/learning/causal_calibration.py` measures factor-to-factor evidence
+and emits prior sign/strength, sample N, observed effect, hit rate, median,
+confidence interval, stability and a recommended strength.  A sign conflict is
+`UNSTABLE_EDGE`; it is never silently inverted.  Recommendations are written
+as shadow artifacts only and do not edit YAML or active graph weights.
+
+## 19. Regime- and Horizon-Dependent Causality
+
+Calibration groups global, regime, horizon and regime+horizon observations.
+Resolution order is `REGIME_HORIZON_CALIBRATED → HORIZON_CALIBRATED →
+REGIME_CALIBRATED → GLOBAL_CALIBRATED → PRIOR`, subject to minimum N.  Applied
+edge metadata exposes `weight`, `weight_source`, `sample_n`, `regime` and
+`horizon`; the configured activation flag remains false.
+
+## 20. Event Interaction Engine
+
+Pairwise interactions are bounded to shared causal channels.  Same-root events
+are `REDUNDANT` and damped; independent aligned shocks may be `SYNERGISTIC`;
+opposite shocks are `CONFLICT`.  Root IDs and evidence are retained to prevent
+double counting.  No 3-way/4-way combinatorial model is created.
+
+## 21. Weight Resolution and Learning Loop
+
+The existing causal graph remains the only graph.  Event ledger rows now retain
+factor predictions, factor/asset outcomes, causal paths and root event IDs.
+The off-tick event study can measure both factor transmission and asset
+returns; calibration output is recommendation-only with no automatic
+promotion.
+
+## 22. Architecture flow
+
+```text
+REAL WORLD → OBSERVATIONS → HISTORICAL ARCHIVE → EXPECTATIONS → SURPRISE
+→ WORLD STATE → SINGLE CAUSAL GRAPH → REGIME/HORIZON/INTERACTIONS
+→ CALIBRATED TRANSMISSION → ASSET IMPACT → TECHNICAL TIMING
+→ SHADOW CONSENSUS → EVENT LEDGER → FULL REPLAY → CALIBRATION
+```

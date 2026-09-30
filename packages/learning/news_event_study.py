@@ -306,6 +306,13 @@ def record_causal_events(events, now: datetime | None = None) -> int:
                 "region": item.get("region"),
                 "channels": item.get("channels") or {},
                 "asset_predictions": item.get("asset_predictions") or {},
+                "factor_predictions": item.get("factor_predictions") or item.get("channels") or {},
+                "factor_outcomes": item.get("factor_outcomes") or {},
+                "asset_outcomes": item.get("asset_outcomes") or {},
+                "causal_path": item.get("causal_path") or [],
+                "root_event_ids": item.get("root_event_ids") or [event_id],
+                "regime": item.get("regime"),
+                "horizon": item.get("horizon"),
                 "prediction_confidence": item.get("prediction_confidence"),
                 "attribution_method": item.get("attribution_method", "event_marginal_v1"),
                 "evidence": item.get("evidence") or [],
@@ -381,6 +388,7 @@ def causal_event_study(
         steps = {"1h": 1, "4h": 4, "1d": 1}.get(horizon, 1)
         return _forward_return_pct(bars, event_ts, steps)
     buckets: dict[str, list[tuple[float, float]]] = {}
+    factor_rows: list[dict] = []
     pending = 0
     for event in rows:
         predictions = event.get("asset_predictions") or {}
@@ -389,6 +397,24 @@ def causal_event_study(
             channels = {channel: 1.0 for channel in channels}
         event_type = str(event.get("event_type") or "UNKNOWN")
         region = str(event.get("region") or "UNKNOWN")
+        factor_predictions = event.get("factor_predictions") or channels
+        factor_outcomes = event.get("factor_outcomes") or {}
+        for path in event.get("causal_path") or []:
+            if not isinstance(path, dict):
+                continue
+            source = str(path.get("source") or "")
+            target = str(path.get("target") or "")
+            predicted = factor_predictions.get(source)
+            actual = factor_outcomes.get(target)
+            if predicted is not None and actual is not None:
+                factor_rows.append({
+                    "edge": f"{source}->{target}",
+                    "source_value": predicted,
+                    "target_response": actual,
+                    "regime": event.get("regime"),
+                    "horizon": event.get("horizon"),
+                    "prior_strength": path.get("weight", 0.5),
+                })
         for asset, prediction in predictions.items():
             try:
                 direction = float(prediction)
@@ -411,12 +437,22 @@ def causal_event_study(
                 for channel in channels or {"aggregate": 1.0}:
                     key = f"{event_type}|{region}|{channel}|{asset}|{horizon}"
                     buckets.setdefault(key, []).append((direction, float(actual)))
+    factor_calibration = (
+        __import__("packages.learning.causal_calibration", fromlist=["calibrate_edges"]).calibrate_edges(factor_rows, min_samples=min_n)
+        if factor_rows else {"status": "INSUFFICIENT", "recommendations": {}, "shadow_only": True, "auto_apply": False}
+    )
+    if factor_rows:
+        try:
+            __import__("packages.learning.causal_calibration", fromlist=["write_recommendations"]).write_recommendations(factor_rows)
+        except Exception:
+            pass
     table = {
         "generated_at": now.isoformat(),
         "engine": "causal_event_study_v1",
         "events_total": len(rows),
         "pending": pending,
         "buckets": {key: _causal_bucket(values, min_n) for key, values in sorted(buckets.items())},
+        "factor_calibration": factor_calibration,
         "shadow_only": True,
         "auto_promotion": False,
     }
@@ -480,16 +516,45 @@ def causal_historical_evaluator(rows, *, min_n: int = 8) -> dict:
     for row in rows or []:
         # A row may carry event timestamps separately.  Future evidence is
         # rejected before scoring; the forward return itself is outcome-only.
-        as_of = row.get("as_of") or row.get("timestamp")
-        event_ts = row.get("event_ts")
+        as_of = row.get("as_of") or row.get("snapshot_as_of") or row.get("timestamp")
+        event_ts = row.get("event_ts") or row.get("published_at")
+        skip_row = False
         if as_of and event_ts:
             try:
-                if str(event_ts) > str(as_of):
+                as_of_dt = datetime.fromisoformat(str(as_of).replace("Z", "+00:00"))
+                event_dt = datetime.fromisoformat(str(event_ts).replace("Z", "+00:00"))
+                if as_of_dt.tzinfo is None:
+                    as_of_dt = as_of_dt.replace(tzinfo=UTC)
+                if event_dt.tzinfo is None:
+                    event_dt = event_dt.replace(tzinfo=UTC)
+                if event_dt > as_of_dt:
                     ignored_future_rows += 1
-                    continue
-            except TypeError:
+                    skip_row = True
+            except (TypeError, ValueError):
                 ignored_future_rows += 1
-                continue
+                skip_row = True
+        # Optional provenance fields let replay callers prove that ingestion
+        # and publication were also as-of, not merely event timestamps.
+        for field in ("published_at", "ingested_at", "consensus_as_of"):
+            value = row.get(field)
+            if value and as_of:
+                try:
+                    value_dt = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+                    asof_dt = datetime.fromisoformat(str(as_of).replace("Z", "+00:00"))
+                    if value_dt.tzinfo is None:
+                        value_dt = value_dt.replace(tzinfo=UTC)
+                    if asof_dt.tzinfo is None:
+                        asof_dt = asof_dt.replace(tzinfo=UTC)
+                    if value_dt > asof_dt:
+                        ignored_future_rows += 1
+                        skip_row = True
+                        break
+                except (TypeError, ValueError):
+                    ignored_future_rows += 1
+                    skip_row = True
+                    break
+        if skip_row:
+            continue
         try:
             causal = float(row.get("causal_direction", 0.0))
             legacy = float(row.get("legacy_direction", 0.0))
@@ -530,31 +595,52 @@ def causal_historical_evaluator(rows, *, min_n: int = 8) -> dict:
     return {**dimensions, "status": "HISTORICAL_EVALUATOR", "samples": sum(item.get("n", 0) for group in dimensions.values() for item in group.values()), "future_rows_ignored": ignored_future_rows, "shadow_only": True, "auto_promotion": False}
 
 
-def causal_historical_replay(rows, *, min_n: int = 8) -> dict:
-    """Report whether a true as-of snapshot replay is available.
+def causal_historical_replay(rows=None, *, min_n: int = 8, horizons: tuple[str, ...] = ("15m", "1h", "4h", "1d")) -> dict:
+    """Replay compact as-of World-State rows without future leakage.
 
-    The repository currently stores OHLCV and event ledgers, but not complete
-    MarketSnapshot-at-T archives (news, macro, technicals and rotation as one
-    immutable record).  It is therefore unsafe to claim full replay.  The
-    materialised-row evaluator remains available and the honest status is
-    ``INSUFFICIENT_ARCHIVE`` until such snapshots exist.
+    Rows are normally loaded from the canonical World-State archive.  A row is
+    replayable only when it carries ``snapshot_as_of`` and the event/macro
+    availability watermark.  Outcomes are scoring-only; missing future bars
+    remain pending rather than being invented.
     """
+    if rows is None:
+        try:
+            from packages.world_state.archive import all_records
+            rows = all_records()
+        except Exception:
+            rows = []
     rows = list(rows or [])
-    replay_ready = [row for row in rows if row.get("snapshot_as_of") and row.get("available_events_as_of") is not None]
+    replay_ready = [
+        row for row in rows
+        if row.get("snapshot_as_of") and row.get("available_events_as_of") is not None
+    ]
+    evaluator_rows = []
+    for row in replay_ready:
+        # Archive rows may already contain materialised outcome records.  They
+        # are copied only as scoring fields; all state provenance stays as-of.
+        evaluator_rows.extend(row.get("outcomes") or ([row] if "forward_return" in row else []))
+    evaluator = causal_historical_evaluator(evaluator_rows, min_n=min_n)
+    total = len(rows)
+    replayable = len(replay_ready)
+    coverage = round(replayable / max(1, total), 4)
+    missing_domains: list[str] = []
     if not replay_ready:
-        return {
-            "status": "INSUFFICIENT_ARCHIVE",
-            "samples": 0,
-            "archive_coverage": 0.0,
-            "evaluator": causal_historical_evaluator(rows, min_n=min_n),
-            "shadow_only": True,
-            "auto_promotion": False,
-        }
+        missing_domains.extend(("world_state_archive", "available_event_watermark"))
+    if replay_ready and not evaluator_rows:
+        missing_domains.append("future_outcomes")
     return {
-        "status": "INSUFFICIENT_ARCHIVE",
-        "samples": 0,
-        "archive_coverage": round(len(replay_ready) / max(1, len(rows)), 4),
-        "evaluator": causal_historical_evaluator(replay_ready, min_n=min_n),
+        "status": "REAL_REPLAY" if replayable else "INSUFFICIENT_ARCHIVE",
+        "samples": evaluator.get("samples", 0),
+        "archive_coverage": coverage,
+        "archive_start": rows[0].get("snapshot_as_of", rows[0].get("generated_at")) if rows else None,
+        "archive_end": rows[-1].get("snapshot_as_of", rows[-1].get("generated_at")) if rows else None,
+        "timestamps_total": total,
+        "timestamps_replayable": replayable,
+        "coverage_pct": round(coverage * 100.0, 2),
+        "missing_domains": missing_domains,
+        "horizons": list(horizons),
+        "evaluator": evaluator,
+        "future_rows_ignored": evaluator.get("future_rows_ignored", 0),
         "shadow_only": True,
         "auto_promotion": False,
     }

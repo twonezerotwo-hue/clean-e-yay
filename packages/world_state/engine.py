@@ -13,6 +13,9 @@ from typing import Any
 from packages.data.ingestion.pipeline import MarketSnapshot
 from packages.data.registry.loader import load_thresholds
 from packages.world_state.model import (
+    EventInteraction,
+    ExpectationState,
+    FlowObservation,
     GeopoliticalEvent,
     MacroSurpriseImpact,
     PolicyStatement,
@@ -31,6 +34,180 @@ def _flow(rotation: Any, symbol: str) -> float | None:
     if value is None:
         return None
     return _clamp((float(value) - 50.0) / 50.0)
+
+
+_FLOW_AXES = {
+    "DXY": "usd", "TLT": "treasury", "SP500": "equity", "HYG": "credit",
+    "LQD": "credit", "XAUUSD": "metals", "XAGUSD": "metals", "BRENT": "energy",
+    "BTCUSD": "crypto", "ETHUSD": "crypto",
+}
+
+
+def _flow_observations(snapshot: MarketSnapshot, rotation: Any, now: datetime) -> tuple[tuple[FlowObservation, ...], dict[str, dict[str, Any]]]:
+    """Normalise optional published flow evidence and proxy rotation evidence.
+
+    The ingestion pipeline may expose ``flow_observations`` in a future
+    provider-neutral shape.  Until then, rotation remains an explicitly named
+    price-flow proxy.  A proxy is supplementary and cannot overwrite a real
+    observation for the same axis.
+    """
+    raw = getattr(snapshot, "flow_observations", None) or ()
+    observations: list[FlowObservation] = []
+    for item in raw if isinstance(raw, (list, tuple)) else (raw,):
+        if isinstance(item, FlowObservation):
+            obs = item
+        elif isinstance(item, dict):
+            try:
+                obs = FlowObservation(
+                    asset_or_market=str(item.get("asset_or_market") or item.get("asset") or ""),
+                    flow_type=str(item.get("flow_type") or "capital_flow"),
+                    value=float(item["value"]) if item.get("value") is not None else None,
+                    normalized_value=float(item["normalized_value"]) if item.get("normalized_value") is not None else None,
+                    source_type=str(item.get("source_type") or "UNAVAILABLE").upper(),
+                    source=item.get("source"),
+                    timestamp=item.get("timestamp"),
+                    freshness_seconds=float(item["freshness_seconds"]) if item.get("freshness_seconds") is not None else None,
+                    confidence=float(item.get("confidence") or 0.0),
+                    coverage=float(item.get("coverage") or 0.0),
+                    evidence=tuple(str(x) for x in item.get("evidence") or ()),
+                )
+            except (TypeError, ValueError):
+                continue
+        else:
+            continue
+        if obs.asset_or_market and obs.source_type in {"REAL_FLOW", "POSITIONING_PROXY", "PRICE_FLOW_PROXY"}:
+            observations.append(obs)
+
+    # Existing rotation is always labelled proxy; never infer a real fund-flow
+    # claim from price momentum.
+    for symbol, _axis in _FLOW_AXES.items():
+        value = _flow(rotation, symbol)
+        if value is None:
+            continue
+        observations.append(FlowObservation(
+            asset_or_market=symbol,
+            flow_type="rotation_momentum",
+            normalized_value=value,
+            source_type="PRICE_FLOW_PROXY",
+            source="rotation.per_symbol",
+            timestamp=getattr(snapshot, "generated_at", now),
+            freshness_seconds=max(0.0, (now - getattr(snapshot, "generated_at", now)).total_seconds()) if getattr(snapshot, "generated_at", None) else None,
+            confidence=0.35,
+            coverage=1.0,
+            evidence=("price-based rotation; not published fund flow",),
+        ))
+
+    rank = {"REAL_FLOW": 3, "POSITIONING_PROXY": 2, "PRICE_FLOW_PROXY": 1, "UNAVAILABLE": 0}
+    selected: dict[str, FlowObservation] = {}
+    for obs in observations:
+        axis = _FLOW_AXES.get(obs.asset_or_market, str(obs.asset_or_market).casefold())
+        current = selected.get(axis)
+        if current is None or rank.get(obs.source_type, 0) > rank.get(current.source_type, 0):
+            selected[axis] = obs
+    state = {
+        axis: {
+            "value": obs.normalized_value,
+            "source_type": obs.source_type,
+            "source": obs.source,
+            "confidence": obs.confidence,
+            "coverage": obs.coverage,
+            "freshness_seconds": obs.freshness_seconds,
+            "evidence": list(obs.evidence),
+        }
+        for axis, obs in sorted(selected.items())
+    }
+    return tuple(observations), state
+
+
+def _selected_flow(flow_state: dict[str, dict[str, Any]], axis: str, fallback: float | None) -> float | None:
+    item = flow_state.get(axis) or {}
+    value = item.get("value")
+    return _clamp(float(value)) if value is not None else fallback
+
+
+def _expectations(snapshot: MarketSnapshot, statements: tuple[PolicyStatement, ...], now: datetime) -> tuple[ExpectationState, ...]:
+    out: list[ExpectationState] = []
+    for item in getattr(snapshot, "catalysts", ()) or ():
+        expected = getattr(item, "expected", None)
+        actual = getattr(item, "actual", None)
+        if expected is None and actual is None:
+            continue
+        volatility = getattr(item, "historical_surprise_volatility", None)
+        surprise = normalized_surprise(actual, expected, volatility)
+        if surprise is None and actual is not None and expected is not None:
+            surprise = _clamp((float(actual) - float(expected)) / max(abs(float(expected)), 1.0))
+        out.append(ExpectationState(
+            subject=str(getattr(item, "title", None) or getattr(item, "id", "unknown")),
+            expected_value=float(expected) if expected is not None else None,
+            actual_value=float(actual) if actual is not None else None,
+            expected_direction=None,
+            expectation_source="EXPLICIT_CONSENSUS" if expected is not None else "UNAVAILABLE",
+            consensus_confidence=1.0 if expected is not None and getattr(item, "verified", False) else 0.5 if expected is not None else 0.0,
+            pricing_confidence=0.0,
+            surprise=surprise,
+            as_of=getattr(item, "ts", None),
+            source=getattr(item, "source", None),
+            evidence=(f"event_id={getattr(item, 'id', '')}", "actual/expected from calendar"),
+        ))
+    for statement in statements:
+        direction = statement.tightening_easing
+        if direction is None and statement.baseline_direction is None:
+            continue
+        out.append(ExpectationState(
+            subject=f"statement:{statement.institution or 'unknown'}",
+            expected_direction=statement.baseline_direction,
+            baseline_direction=statement.baseline_direction,
+            expected_value=statement.expected_value,
+            actual_value=statement.actual_value,
+            expectation_source="PREVIOUS_GUIDANCE" if statement.baseline_direction is not None else "UNAVAILABLE",
+            consensus_confidence=statement.source_confidence,
+            semantic_surprise=statement.semantic_surprise,
+            surprise=statement.numeric_surprise,
+            as_of=statement.published_at,
+            source=statement.evidence[-1] if statement.evidence else None,
+            evidence=(f"repetition={statement.repetition_score or 0.0:.2f}",),
+        ))
+    return tuple(out)
+
+
+def _event_interactions(events: tuple[GeopoliticalEvent, ...], surprises: tuple[MacroSurpriseImpact, ...]) -> tuple[EventInteraction, ...]:
+    """Bounded pairwise synergy/redundancy; no 3-way expansion."""
+    items: list[tuple[str, set[str], float, str]] = []
+    for event in events:
+        channels = set(event.channels or ())
+        for channel, _value in (event.channel_strengths or {}).items():
+            channels.add(channel)
+        items.append((event.event_id, channels, float(event.severity or 0.0) * float(event.source_confidence or 0.0), event.event_type))
+    for event in surprises:
+        channels = {key for key, value in {
+            "inflation_pressure": event.inflation_contribution,
+            "growth_pressure": event.growth_contribution,
+            "rates_pressure": event.rates_contribution,
+            "oil_pressure": event.oil_contribution,
+        }.items() if value}
+        items.append((event.event_id, channels, float(event.effective_strength or 0.0), event.event_type))
+    out: list[EventInteraction] = []
+    for index, (left_id, left_channels, left_value, left_type) in enumerate(items):
+        for right_id, right_channels, right_value, right_type in items[index + 1:]:
+            common = left_channels & right_channels
+            if not common or not left_id or not right_id:
+                continue
+            channel = sorted(common)[0]
+            same_root = left_type == right_type or left_id.split(":", 1)[0] == right_id.split(":", 1)[0]
+            signed_left = left_value
+            signed_right = right_value
+            relation = "REDUNDANT" if same_root else "SYNERGISTIC"
+            multiplier = 0.55 if same_root else 1.15
+            if signed_left * signed_right < 0:
+                relation, multiplier = "CONFLICT", 0.35
+            contribution = _clamp((signed_left + signed_right) * (multiplier - 1.0))
+            out.append(EventInteraction(
+                event_ids=(left_id, right_id), channel=channel, relation=relation,
+                multiplier=multiplier, contribution=contribution,
+                root_event_ids=(left_id, right_id),
+                evidence=(f"{left_type}+{right_type}", "pairwise_bounded"),
+            ))
+    return tuple(out)
 
 
 def _mean(values: list[float | None]) -> float | None:
@@ -515,6 +692,7 @@ def build(snapshot: MarketSnapshot, *, now: datetime | None = None) -> WorldStat
             missing_inputs=("world_state_disabled",),
         )
     rotation = snapshot.rotation
+    flow_observations, flow_state = _flow_observations(snapshot, rotation, current)
     flows = {
         "usd": _flow(rotation, "DXY"),
         "treasury": _flow(rotation, "TLT"),
@@ -524,6 +702,19 @@ def build(snapshot: MarketSnapshot, *, now: datetime | None = None) -> WorldStat
         "energy": _flow(rotation, "BRENT"),
         "crypto": _mean([_flow(rotation, "BTCUSD"), _flow(rotation, "ETHUSD")]),
     }
+    # Published flow outranks positioning and price proxies on the same axis;
+    # the proxy remains visible for divergence audits.
+    flows = {axis: _selected_flow(flow_state, axis, value) for axis, value in flows.items()}
+    for axis in ("usd", "treasury", "equity", "credit", "metals", "energy", "crypto", "defensive"):
+        flow_state.setdefault(axis, {
+            "value": flows.get(axis),
+            "source_type": "DERIVED" if axis == "defensive" and flows.get(axis) is not None else "UNAVAILABLE" if flows.get(axis) is None else "PRICE_FLOW_PROXY",
+            "source": "world_state_derived" if axis == "defensive" else None,
+            "confidence": 0.0 if flows.get(axis) is None else 0.35,
+            "coverage": 0.0 if flows.get(axis) is None else 1.0,
+            "freshness_seconds": None,
+            "evidence": [],
+        })
     usd = flows["usd"]
     equity = flows["equity"]
     treasury = flows["treasury"]
@@ -532,6 +723,8 @@ def build(snapshot: MarketSnapshot, *, now: datetime | None = None) -> WorldStat
     events = _geo_events(snapshot, current, config) if config.get("geopolitical_enabled", True) else ()
     statements = _statements(snapshot, current, config) if config.get("statements_enabled", True) else ()
     macro_surprises = _macro_surprises(snapshot, current, config) if config.get("statements_enabled", True) else ()
+    expectations = _expectations(snapshot, statements, current)
+    interactions = _event_interactions(events, macro_surprises)
     geo = _mean([e.severity * e.source_confidence for e in events if e.confirmed_action])
     energy_risk = _mean([e.energy_exposure * (e.severity or 0.0) * e.source_confidence for e in events])
     shipping = _mean([e.shipping_exposure * (e.severity or 0.0) * e.source_confidence for e in events])
@@ -549,11 +742,29 @@ def build(snapshot: MarketSnapshot, *, now: datetime | None = None) -> WorldStat
     growth = _blend_pressure(_mean([equity, -trade if trade is not None else None]), surprise_growth, 0.75)
     rates = _blend_pressure(rates, surprise_rates)
     oil_pressure = _blend_pressure(flows["energy"], surprise_oil)
+    interaction_by_channel: dict[str, list[float]] = {}
+    for interaction in interactions:
+        interaction_by_channel.setdefault(interaction.channel, []).append(interaction.contribution)
+    # Pairwise interaction is deliberately a small bounded adjustment; the
+    # direct measured factor remains authoritative and no 3-way expansion is
+    # attempted.
+    inflation = _blend_pressure(inflation, _mean(interaction_by_channel.get("inflation_pressure", [])), 0.15)
+    oil_pressure = _blend_pressure(oil_pressure, _mean(interaction_by_channel.get("oil_pressure", [])), 0.15)
+    risk_aversion_interaction = _mean(interaction_by_channel.get("risk_aversion", []))
     real_yield = _clamp(rates - (inflation or 0.0) * 0.5) if rates is not None else None
-    risk_aversion = _mean([-equity if equity is not None else None, credit_stress, shipping])
+    risk_aversion = _blend_pressure(_mean([-equity if equity is not None else None, credit_stress, shipping]), risk_aversion_interaction, 0.15)
     liquidity = _mean([flows["crypto"], equity, -usd if usd is not None else None, -rates if rates is not None else None, credit_flow])
     defensive = _mean([treasury, -usd if usd is not None else None, flows["metals"]])
-    flow_axis_values = list(flows.values())
+    flow_state["defensive"] = {
+        "value": defensive,
+        "source_type": "DERIVED" if defensive is not None else "UNAVAILABLE",
+        "source": "world_state_derived",
+        "confidence": 0.35 if defensive is not None else 0.0,
+        "coverage": 1.0 if defensive is not None else 0.0,
+        "freshness_seconds": None,
+        "evidence": ["treasury/usd/metals composite"] if defensive is not None else [],
+    }
+    flow_axis_values = [*list(flows.values()), defensive]
     flow_coverage = round(sum(value is not None for value in flow_axis_values) / len(flow_axis_values), 4)
     macro_values = [rates, real_yield, inflation, growth, usd]
     macro_coverage = round(sum(value is not None for value in macro_values) / len(macro_values), 4)
@@ -637,6 +848,13 @@ def build(snapshot: MarketSnapshot, *, now: datetime | None = None) -> WorldStat
         macro_surprise_rates=surprise_rates,
         macro_surprise_oil=surprise_oil,
         positioning=positioning,
+        flow_state=flow_state,
+        flow_observations=flow_observations,
+        expectations=expectations,
+        interactions=interactions,
+        schema_version=2,
+        causal_config_version=str(config.get("config_version") or "v1.0"),
+        regime=flow_regime,
         macro_sources={
             "US02Y": us02y_source,
             "US10Y": us10y_source,

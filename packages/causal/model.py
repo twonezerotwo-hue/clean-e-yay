@@ -33,6 +33,13 @@ class CausalEdge:
     target_after: float | None = None
     reason: str | None = None
     evidence: tuple[str, ...] = ()
+    prior_strength: float | None = None
+    weight: float | None = None
+    weight_source: str = "PRIOR"
+    sample_n: int = 0
+    regime: str | None = None
+    horizon: str | None = None
+    confidence_interval: tuple[float | None, float | None] | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return _json(asdict(self))
@@ -80,6 +87,7 @@ class CausalShadow:
     impacts: tuple[AssetImpact, ...] = ()
     causal_consensus: tuple[dict[str, Any], ...] = ()
     conflict_shadow: tuple[dict[str, Any], ...] = ()
+    interactions: tuple[dict[str, Any], ...] = ()
     warnings: tuple[str, ...] = ()
 
     def to_dict(self) -> dict[str, Any]:

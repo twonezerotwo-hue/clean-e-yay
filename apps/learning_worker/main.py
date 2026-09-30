@@ -630,10 +630,24 @@ def run_once() -> dict:
         causal_recorded = 0
         try:
             from packages.causal.engine import build_event_asset_attribution
+            from packages.causal.engine import build_shadow as _build_shadow
             from packages.data.ingestion.pipeline import get_cached_snapshot
             from packages.data.registry import assets as _asset_registry
+            from packages.world_state import archive as _world_archive
             from packages.world_state.engine import build as _build_world
-            _world = _build_world(get_cached_snapshot())
+            _cached_snapshot = get_cached_snapshot()
+            _world = _build_world(_cached_snapshot)
+            _shadow = _build_shadow(
+                _world,
+                _asset_registry.trade_symbols(),
+                technicals=(getattr(_cached_snapshot, "technicals_by_tf", None) or getattr(_cached_snapshot, "technicals", None)),
+            )
+            _world_archive.record(
+                _world,
+                snapshot_id=getattr(_cached_snapshot, "snapshot_id", None),
+                asset_impacts=_shadow.impacts,
+                causal_consensus=_shadow.causal_consensus,
+            )
             by_event = []
             symbols = _asset_registry.trade_symbols()
             for event in _world.geopolitical_events:

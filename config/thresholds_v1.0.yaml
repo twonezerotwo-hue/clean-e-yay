@@ -1172,6 +1172,7 @@ shadow:
 # decision_apply remains false so the legacy decision/risk path is unchanged.
 causal_world:
   enabled: true
+  config_version: v1.0
   llm_extractor_enabled: false
   world_state_enabled: true
   geopolitical_enabled: true
@@ -1193,6 +1194,31 @@ causal_world:
     gdp: 480
     policy_rate: 720
     oil_inventory: 180
+  # Evidence-calibrated additions.  All heavy work is off-tick and all
+  # calibrated values remain recommendations until an owner explicitly opts in.
+  archive:
+    enabled: true
+    cadence_seconds: 300
+    max_snapshots: 5000
+    retention_days: 365
+    material_change_epsilon: 0.02
+  flow:
+    enabled: true
+    real_flow_precedence: [REAL_FLOW, POSITIONING_PROXY, PRICE_FLOW_PROXY]
+  expectations:
+    enabled: true
+    min_consensus_confidence: 0.50
+  calibration:
+    enabled: true
+    apply: false
+    min_samples: 8
+    confidence_level: 0.95
+  interaction:
+    enabled: true
+    max_pairwise_events: 64
+  replay:
+    enabled: true
+    horizons: [15m, 1h, 4h, 1d]
   statement_authority:
     chair: 1.00
     governor: 0.88
