@@ -232,6 +232,10 @@ class WorldStateSnapshot:
     flow_observations: tuple[FlowObservation, ...] = ()
     expectations: tuple[ExpectationState, ...] = ()
     interactions: tuple[EventInteraction, ...] = ()
+    # Domain-specific availability watermarks.  ``generated_at`` is the time
+    # this derived view was built; it is never treated as proof that every
+    # input domain was available at that instant.
+    provenance: dict[str, Any] | None = None
     schema_version: int = 2
     causal_config_version: str = "v1.0"
     regime: str = "UNKNOWN"

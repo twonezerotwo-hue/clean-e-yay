@@ -48,6 +48,13 @@ Both `/api/v1/dashboard/state` and `/api/v1/cockpit/brief` expose:
 | `causal_shadow.edges[*].regime` / `horizon` | string/null | Conditional calibration context | Filter chips | Optional; show `UNKNOWN`/`ALL` |
 | `replay.coverage_pct` | number | Timestamp coverage of as-of archive | World State timeline/replay coverage | Optional; show insufficient archive |
 | `replay.missing_domains` | array | Missing archive/outcome domains | Coverage warning | Optional; render verbatim |
+| `replay.status` | string | `REAL_REPLAY`, `PARTIAL_REPLAY`, `INSUFFICIENT_PROVENANCE`, `INSUFFICIENT_ARCHIVE`, or `INSUFFICIENT_OUTCOMES` | Status badge; never infer success from row count | Required |
+| `replay.timestamps_reconstructable` / `timestamps_scored` | integer | Reconstruction and scored timestamp counts | Timeline coverage | Optional |
+| `replay.missing_provenance_domains` | array | Domain-specific availability gaps | Explain why replay is partial | Optional |
+| `causal_shadow.edges_by_horizon` | object | Horizon-specific edge metadata when test-only calibration is applied | Timeframe edge tooltip/filter | Optional; PRIOR remains default |
+| archive `archive_write_reason` / `material_changes` | string/array | `CADENCE_CHECKPOINT`, `MATERIAL_CHANGE`, `REGIME_CHANGE`, `NEW_EVIDENCE` | Archive timeline annotation | Optional |
+| calibration `raw_rows` / `eligible_rows` / `rejected_rows` / `rejection_reasons` | integer/object | Evidence quality and sample N audit | Calibration quality panel | Required for artifact |
+| calibration `archive_window` | object | Start/end archive timestamps used by worker | Provenance tooltip | Optional |
 | `asset_impacts[*].drivers` / `causal_path` | array | Backend-provided explanation chain | Asset causal path panel | Optional; frontend must not calculate |
 
 The frontend only renders, filters, sorts and visualizes these fields.  It does
@@ -71,3 +78,7 @@ infer expectations, or promote calibration.  `UNAVAILABLE`, `INSUFFICIENT`,
   with another.
 - `macro_surprise_contribution` is numeric-release evidence and must remain
   separate from `statement_contribution` (policy communication).
+- Interaction contributions are rendered from backend `interactions`; the
+  client must not recompute redundancy, synergy, conflict or channel blends.
+- Archive checkpoint/material-change reasons and calibration rejection counts
+  are audit fields, not trading signals.

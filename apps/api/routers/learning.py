@@ -658,6 +658,11 @@ def get_causal_calibration() -> dict:
     """Evidence-calibrated causal edge recommendations (read-only shadow)."""
     return causal_calibration.load_recommendations() or {
         "status": "INSUFFICIENT",
+        "raw_rows": 0,
+        "eligible_rows": 0,
+        "rejected_rows": 0,
+        "rejection_reasons": {},
+        "archive_window": {"start": None, "end": None},
         "recommendations": {},
         "shadow_only": True,
         "auto_apply": False,

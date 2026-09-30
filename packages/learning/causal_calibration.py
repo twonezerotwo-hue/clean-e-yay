@@ -12,6 +12,7 @@ import math
 import os
 import statistics
 from collections.abc import Iterable
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -73,15 +74,74 @@ def _bucket(rows: list[dict[str, Any]], prior_strength: float, min_samples: int)
     }
 
 
+def _valid_row(row: dict[str, Any]) -> tuple[bool, str | None]:
+    """Quality gate for evidence; rejected rows must not increase sample N."""
+    if row.get("data_verified") is not True:
+        return False, "unverified_source"
+    for name in ("source_value", "target_response"):
+        if _num(row.get(name)) is None:
+            return False, f"missing_{name}"
+    if _num(row.get("source_value")) == 0.0:
+        return False, "zero_source_value"
+    if not row.get("prediction_as_of") or not row.get("outcome_as_of"):
+        return False, "missing_timestamp"
+    try:
+        prediction = datetime.fromisoformat(str(row["prediction_as_of"]).replace("Z", "+00:00"))
+        outcome = datetime.fromisoformat(str(row["outcome_as_of"]).replace("Z", "+00:00"))
+        if prediction.tzinfo is None:
+            prediction = prediction.replace(tzinfo=UTC)
+        if outcome.tzinfo is None:
+            outcome = outcome.replace(tzinfo=UTC)
+        if outcome <= prediction:
+            return False, "future_leakage_or_bad_timestamp"
+    except (TypeError, ValueError):
+        return False, "bad_timestamp"
+    if row.get("expired"):
+        return False, "expired_event"
+    if row.get("valid_until"):
+        try:
+            valid_until = datetime.fromisoformat(str(row["valid_until"]).replace("Z", "+00:00"))
+            if valid_until.tzinfo is None:
+                valid_until = valid_until.replace(tzinfo=UTC)
+            if valid_until <= outcome:
+                return False, "expired_event"
+        except (TypeError, ValueError):
+            return False, "bad_timestamp"
+    return True, None
+
+
+def _quality_filter(rows: Iterable[dict[str, Any]]) -> tuple[list[dict[str, Any]], dict[str, int], int]:
+    eligible: list[dict[str, Any]] = []
+    rejected: dict[str, int] = {}
+    raw = 0
+    seen: set[tuple[Any, ...]] = set()
+    for row in rows or ():
+        if not isinstance(row, dict):
+            continue
+        raw += 1
+        ok, reason = _valid_row(row)
+        if not ok:
+            key = reason or "invalid"
+            rejected[key] = rejected.get(key, 0) + 1
+            continue
+        roots = tuple(sorted(set(row.get("root_event_ids") or ([row.get("event_id")] if row.get("event_id") else ["WORLD_STATE"]))))
+        dedup = (row.get("edge"), roots, row.get("horizon"), row.get("prediction_as_of"))
+        if dedup in seen:
+            rejected["duplicate_root_horizon"] = rejected.get("duplicate_root_horizon", 0) + 1
+            continue
+        seen.add(dedup)
+        eligible.append(row)
+    return eligible, rejected, raw
+
+
 def calibrate_edges(rows: Iterable[dict[str, Any]], *, priors: dict[str, float] | None = None, min_samples: int | None = None) -> dict[str, Any]:
     """Measure edge evidence grouped by global/regime/horizon cells."""
     cfg = _cfg()
     minimum = int(min_samples or cfg.get("min_samples", 8))
     prior_map = priors or {}
+    eligible, rejection_reasons, raw_rows = _quality_filter(rows)
     groups: dict[str, list[dict[str, Any]]] = {}
-    for row in rows or ():
-        if not isinstance(row, dict):
-            continue
+    for row in eligible:
         edge = str(row.get("edge") or f"{row.get('source')}->{row.get('target')}")
         if edge in {"None->None", "->"}:
             continue
@@ -99,6 +159,10 @@ def calibrate_edges(rows: Iterable[dict[str, Any]], *, priors: dict[str, float] 
     return {
         "status": "OK" if recommendations else "INSUFFICIENT",
         "min_samples": minimum,
+        "raw_rows": raw_rows,
+        "eligible_rows": len(eligible),
+        "rejected_rows": raw_rows - len(eligible),
+        "rejection_reasons": rejection_reasons,
         "recommendations": recommendations,
         "shadow_only": True,
         "auto_apply": False,
@@ -110,9 +174,9 @@ def _path() -> Path:
     return raw if raw.is_absolute() else REPO_ROOT / raw
 
 
-def write_recommendations(rows: Iterable[dict[str, Any]], *, priors: dict[str, float] | None = None) -> dict[str, Any]:
+def write_recommendations(rows: Iterable[dict[str, Any]], *, priors: dict[str, float] | None = None, metadata: dict[str, Any] | None = None) -> dict[str, Any]:
     report = calibrate_edges(rows, priors=priors)
-    payload = {**report, "generated_at": __import__("datetime").datetime.now(__import__("datetime").UTC).isoformat()}
+    payload = {**report, **(metadata or {}), "generated_at": datetime.now(UTC).isoformat()}
     try:
         path = _path()
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -122,6 +186,49 @@ def write_recommendations(rows: Iterable[dict[str, Any]], *, priors: dict[str, f
     except OSError:
         pass
     return payload
+
+
+def run_if_due(*, now: datetime | None = None, force: bool = False) -> dict[str, Any]:
+    """Off-tick calibration loop over matured archive outcomes.
+
+    Artifact freshness gates archive parsing.  This function is safe to call
+    from every worker cycle and never mutates decisions or graph config.
+    """
+    now = now or datetime.now(UTC)
+    cfg = _cfg()
+    if not bool(cfg.get("enabled", True)):
+        return {"status": "DISABLED", "raw_rows": 0, "eligible_rows": 0}
+    path = _path()
+    try:
+        interval = max(0.0, float(cfg.get("interval_seconds", 300) or 300))
+    except (TypeError, ValueError):
+        interval = 300.0
+    try:
+        artifact_time = datetime.fromtimestamp(path.stat().st_mtime, UTC) if path.exists() else None
+        archive_raw = Path(os.environ.get("WORLD_STATE_ARCHIVE_PATH", "data/runtime/world_state_archive.jsonl"))
+        archive_path = archive_raw if archive_raw.is_absolute() else REPO_ROOT / archive_raw
+        archive_time = datetime.fromtimestamp(archive_path.stat().st_mtime, UTC) if archive_path.exists() else None
+        archive_changed = bool(archive_time and (artifact_time is None or archive_time > artifact_time))
+        if not force and artifact_time and not archive_changed and (now - artifact_time).total_seconds() < interval:
+            return {"status": "SKIPPED_NOT_DUE", "generated_at": artifact_time.isoformat()}
+    except OSError:
+        artifact_time = None
+    from packages.world_state.archive import all_records, materialize_edge_outcomes
+    rows = all_records()
+    materialized = materialize_edge_outcomes(rows)
+    archive_window = {
+        "start": rows[0].get("generated_at") if rows else None,
+        "end": rows[-1].get("generated_at") if rows else None,
+    }
+    metadata = {
+        "archive_window": archive_window,
+        "rows_seen": materialized.get("raw_rows", 0),
+        "rows_used": len(materialized.get("rows") or []),
+        "runtime_loop": True,
+        "auto_apply": False,
+        "shadow_only": True,
+    }
+    return write_recommendations(materialized.get("rows") or [], metadata=metadata)
 
 
 def load_recommendations() -> dict[str, Any]:
@@ -151,11 +258,19 @@ def resolve_weight(edge: str, prior_strength: float, *, regime: str | None = Non
         n = int(item.get("n", 0) or 0)
         value = item.get("recommended_strength")
         if n >= minimum and value is not None and not item.get("sign_conflict"):
-            return {"weight": float(value), "weight_source": source, "sample_n": n, "confidence": min(1.0, n / max(1, minimum)), "regime": regime, "horizon": horizon}
+            return {
+                "weight": float(value),
+                "weight_source": source,
+                "sample_n": n,
+                "confidence": min(1.0, n / max(1, minimum)),
+                "confidence_interval": item.get("confidence_interval"),
+                "regime": regime,
+                "horizon": horizon,
+            }
     return {"weight": float(prior_strength), "weight_source": "PRIOR", "sample_n": 0, "confidence": 0.0, "regime": regime, "horizon": horizon}
 
 
 # Explicit name for callers/tests that describe this as an empirical graph fit.
 calibrate_causal_graph = calibrate_edges
 
-__all__ = ["calibrate_causal_graph", "calibrate_edges", "load_recommendations", "resolve_weight", "write_recommendations"]
+__all__ = ["calibrate_causal_graph", "calibrate_edges", "load_recommendations", "resolve_weight", "run_if_due", "write_recommendations"]

@@ -89,7 +89,10 @@ def verdict_for(symbol: str, low: float, high: float) -> str:
                 continue
         except (KeyError, TypeError, ValueError):
             continue
-        if latest is None or str(r.get("ts", "")) > str(latest.get("ts", "")):
+        # Windows clock resolution can produce equal ISO timestamps for two
+        # consecutive owner decisions; append order is the deterministic
+        # tie-breaker, so the latest record still wins.
+        if latest is None or str(r.get("ts", "")) >= str(latest.get("ts", "")):
             latest = r
     if latest is None:
         return "onayli"  # owner kararı: iptal edilmedikçe onaylı

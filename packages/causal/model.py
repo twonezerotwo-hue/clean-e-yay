@@ -84,6 +84,7 @@ class CausalShadow:
     decision_apply: bool
     world_state: dict[str, Any]
     edges: tuple[CausalEdge, ...] = ()
+    edges_by_horizon: dict[str, tuple[CausalEdge, ...]] | None = None
     impacts: tuple[AssetImpact, ...] = ()
     causal_consensus: tuple[dict[str, Any], ...] = ()
     conflict_shadow: tuple[dict[str, Any], ...] = ()

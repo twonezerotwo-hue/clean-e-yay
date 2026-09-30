@@ -249,12 +249,14 @@ repetition and previous stance reduce novelty.  Missing expectations remain
 
 ## 17. Full Historical Replay
 
-`causal_historical_replay()` now consumes the World-State archive only when an
-as-of timestamp and availability watermark are present.  It reports archive
-start/end, replayable timestamps, coverage percentage, missing domains and
-15m/1h/4h/1d horizons.  `causal_historical_evaluator()` remains the separate
-materialized-row evaluator.  Published, ingested, event and consensus
-timestamps are rejected when they are after T; future bars are scoring-only.
+`causal_historical_evaluator()` remains the materialized-row scorer.  The
+separate `causal_historical_replay()` first requires domain-specific
+watermarks, a stored reconstruction input, and then rebuilds the existing
+WorldState/causal shadow at T.  An archive row alone cannot become
+`REAL_REPLAY`; honest statuses include `PARTIAL_REPLAY`,
+`INSUFFICIENT_PROVENANCE`, `INSUFFICIENT_ARCHIVE`, and
+`INSUFFICIENT_OUTCOMES`.  Future event/ingestion/macro fields and future bars
+are rejected; revised values cannot overwrite a first-release as-of state.
 
 ## 18. Edge Calibration
 
@@ -295,3 +297,37 @@ REAL WORLD → OBSERVATIONS → HISTORICAL ARCHIVE → EXPECTATIONS → SURPRISE
 → CALIBRATED TRANSMISSION → ASSET IMPACT → TECHNICAL TIMING
 → SHADOW CONSENSUS → EVENT LEDGER → FULL REPLAY → CALIBRATION
 ```
+
+## 23. Closed-Loop Calibration Runtime
+
+The learning worker calls `causal_calibration.run_if_due()` off-tick.  It uses
+the same bounded World-State archive to materialize matured
+`source_value → target_response` factor deltas, applies root/horizon
+deduplication and quality rejection, then writes
+`data/runtime/causal_calibration.json`.  The artifact reports raw, eligible and
+rejected rows plus rejection reasons and archive window.  It is recommendation
+only; `causal_world.calibration.apply=false` remains the production default.
+
+## 24. Archive Material-Change Policy
+
+`cadence_seconds` controls periodic checkpoints while
+`material_change_epsilon` gates factor noise.  Regime, new event/statement/
+macro/expectation evidence and material factors bypass cadence.  Rows carry
+`archive_write_reason`, `material_changes`, domain provenance, and edge
+predictions; retention/max-row limits remain enforced.
+
+## 25. Interaction Channel Application
+
+Interactions use one config-driven bounded map for inflation, growth, rates,
+oil, risk, energy, shipping, trade, sanctions and liquidity.  Same-root
+redundancy is damped by the existing pairwise engine; independent aligned and
+opposite shocks remain bounded synergy/conflict evidence.  Direct factors stay
+authoritative and no duplicate graph is created.
+
+## 26. Remaining Limitations
+
+Runtime snapshots currently expose unavailable domain watermarks when the
+ingestion provider does not supply them, so they remain evaluator/archive
+evidence rather than claiming full historical reconstruction.  Calibration
+recommendations require matured archive horizons and sufficient verified N;
+they are never auto-promoted.

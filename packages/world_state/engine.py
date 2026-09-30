@@ -745,15 +745,37 @@ def build(snapshot: MarketSnapshot, *, now: datetime | None = None) -> WorldStat
     interaction_by_channel: dict[str, list[float]] = {}
     for interaction in interactions:
         interaction_by_channel.setdefault(interaction.channel, []).append(interaction.contribution)
-    # Pairwise interaction is deliberately a small bounded adjustment; the
-    # direct measured factor remains authoritative and no 3-way expansion is
-    # attempted.
-    inflation = _blend_pressure(inflation, _mean(interaction_by_channel.get("inflation_pressure", [])), 0.15)
-    oil_pressure = _blend_pressure(oil_pressure, _mean(interaction_by_channel.get("oil_pressure", [])), 0.15)
+    # One central channel map keeps every supported interaction auditable.  A
+    # bounded blend means pairwise evidence can explain/adjust a direct factor
+    # but can never replace it or create a new shock from nothing.
+    interaction_cfg = config.get("interaction") or {}
+    interaction_weight = max(0.0, min(0.5, float(interaction_cfg.get("weight", 0.15) or 0.15)))
+    interaction_map = {
+        "inflation_pressure": "inflation_pressure",
+        "growth_pressure": "growth_pressure",
+        "rates_pressure": "rates_pressure",
+        "oil_pressure": "oil_pressure",
+        "risk_aversion": "risk_aversion",
+        "energy_supply_risk": "energy_supply_risk",
+        "shipping_risk": "shipping_risk",
+        "trade_risk": "trade_risk",
+        "sanctions_pressure": "sanctions_pressure",
+        "liquidity": "liquidity",
+    }
+    interaction_values = {key: _mean(interaction_by_channel.get(channel, [])) for channel, key in interaction_map.items()}
+    inflation = _blend_pressure(inflation, interaction_values["inflation_pressure"], interaction_weight)
+    growth = _blend_pressure(growth, interaction_values["growth_pressure"], interaction_weight)
+    rates = _blend_pressure(rates, interaction_values["rates_pressure"], interaction_weight)
+    oil_pressure = _blend_pressure(oil_pressure, interaction_values["oil_pressure"], interaction_weight)
+    energy_risk = _blend_pressure(energy_risk, interaction_values["energy_supply_risk"], interaction_weight)
+    shipping = _blend_pressure(shipping, interaction_values["shipping_risk"], interaction_weight)
+    trade = _blend_pressure(trade, interaction_values["trade_risk"], interaction_weight)
+    sanctions = _blend_pressure(sanctions, interaction_values["sanctions_pressure"], interaction_weight)
     risk_aversion_interaction = _mean(interaction_by_channel.get("risk_aversion", []))
     real_yield = _clamp(rates - (inflation or 0.0) * 0.5) if rates is not None else None
-    risk_aversion = _blend_pressure(_mean([-equity if equity is not None else None, credit_stress, shipping]), risk_aversion_interaction, 0.15)
+    risk_aversion = _blend_pressure(_mean([-equity if equity is not None else None, credit_stress, shipping]), risk_aversion_interaction, interaction_weight)
     liquidity = _mean([flows["crypto"], equity, -usd if usd is not None else None, -rates if rates is not None else None, credit_flow])
+    liquidity = _blend_pressure(liquidity, interaction_values["liquidity"], interaction_weight)
     defensive = _mean([treasury, -usd if usd is not None else None, flows["metals"]])
     flow_state["defensive"] = {
         "value": defensive,
@@ -852,6 +874,16 @@ def build(snapshot: MarketSnapshot, *, now: datetime | None = None) -> WorldStat
         flow_observations=flow_observations,
         expectations=expectations,
         interactions=interactions,
+        provenance={
+            "snapshot_as_of": current,
+            "market_data_as_of": getattr(snapshot, "market_data_as_of", None),
+            "events_available_as_of": getattr(snapshot, "events_available_as_of", None),
+            "statements_available_as_of": getattr(snapshot, "statements_available_as_of", None),
+            "macro_available_as_of": getattr(snapshot, "macro_available_as_of", None),
+            "expectations_as_of": getattr(snapshot, "expectations_as_of", None),
+            "flow_available_as_of": getattr(snapshot, "flow_available_as_of", None),
+            "ingested_at": getattr(snapshot, "ingested_at", None),
+        },
         schema_version=2,
         causal_config_version=str(config.get("config_version") or "v1.0"),
         regime=flow_regime,

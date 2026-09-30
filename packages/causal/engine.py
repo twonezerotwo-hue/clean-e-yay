@@ -45,7 +45,7 @@ def _edge_specs(config: dict) -> tuple[tuple[str, str, int, str, float], ...]:
     return tuple((source, target, sign, key, float(graph.get(key, default))) for source, target, sign, key, default in _EDGE_DEFAULTS)
 
 
-def _propagate(state: WorldStateSnapshot, config: dict) -> tuple[dict[str, float], tuple[CausalEdge, ...]]:
+def _propagate(state: WorldStateSnapshot, config: dict, horizon: str | None = None) -> tuple[dict[str, float], tuple[CausalEdge, ...]]:
     factors: dict[str, float] = {}
     for name in (
         "liquidity", "usd_pressure", "rates_pressure", "real_yield_pressure",
@@ -64,7 +64,7 @@ def _propagate(state: WorldStateSnapshot, config: dict) -> tuple[dict[str, float
     calibration_cfg = config.get("calibration") or {}
     calibration_apply = bool(calibration_cfg.get("apply", False))
     for source, target, sign, edge_key, prior_strength in _edge_specs(config):
-        resolved = {"weight": prior_strength, "weight_source": "PRIOR", "sample_n": 0, "confidence": 0.0}
+        resolved = {"weight": prior_strength, "weight_source": "PRIOR", "sample_n": 0, "confidence": 0.0, "confidence_interval": None}
         if calibration_apply:
             try:
                 from packages.learning.causal_calibration import resolve_weight
@@ -72,7 +72,7 @@ def _propagate(state: WorldStateSnapshot, config: dict) -> tuple[dict[str, float
                     edge_key,
                     prior_strength,
                     regime=getattr(state, "global_flow_regime", None),
-                    horizon=None,
+                    horizon=horizon,
                 )
             except Exception:
                 pass
@@ -103,7 +103,8 @@ def _propagate(state: WorldStateSnapshot, config: dict) -> tuple[dict[str, float
             weight_source=str(resolved.get("weight_source", "PRIOR")),
             sample_n=int(resolved.get("sample_n", 0) or 0),
             regime=getattr(state, "global_flow_regime", None),
-            horizon=None,
+            horizon=horizon,
+            confidence_interval=tuple(resolved.get("confidence_interval")) if resolved.get("confidence_interval") else None,
         ))
     return factors, tuple(edges)
 
@@ -393,8 +394,16 @@ def build_shadow(
     apply = bool(config.get("decision_apply", False)) if decision_apply is None else bool(decision_apply)
     if not active:
         return CausalShadow(state.generated_at, False, False, state.to_dict(), warnings=("disabled",))
-    factors, edges = _propagate(state, config)
+    factors, edges = _propagate(state, config, horizon=None)
     impacts = tuple(_impact(symbol, factors, state, technicals) for symbol in symbols)
+    horizon_edges: dict[str, tuple[CausalEdge, ...]] = {}
+    horizon_impacts: dict[tuple[str, str], AssetImpact] = {}
+    if bool((config.get("calibration") or {}).get("apply", False)):
+        for timeframe in ("15m", "1h", "4h", "1d"):
+            tf_factors, tf_edges = _propagate(state, config, horizon=timeframe)
+            horizon_edges[timeframe] = tf_edges
+            for symbol in symbols:
+                horizon_impacts[(symbol, timeframe)] = _impact(symbol, tf_factors, state, technicals)
     consensus: list[dict[str, object]] = []
     conflict_shadow: list[dict[str, object]] = []
     for impact in impacts:
@@ -406,14 +415,27 @@ def build_shadow(
             direction = "bearish"
         else:
             direction = "neutral"
-        world_thesis_score = round(50.0 + (impact.direction_score or 0.0) * 50.0, 2) if impact.direction_score is not None else None
         tf_keys = [key for key in (legacy_scores or {}) if key.startswith(f"{impact.symbol}|")]
         rows = [(str((legacy_scores or {}).get(key, {}).get("timeframe") or key.split("|", 1)[1]), (legacy_scores or {}).get(key) or {}) for key in tf_keys]
         if not rows:
-            rows = [("shadow", (legacy_scores or {}).get(impact.symbol) or {})]
+            rows = (
+                [(tf, {}) for tf in ("15m", "1h", "4h", "1d")]
+                if horizon_edges
+                else [("shadow", (legacy_scores or {}).get(impact.symbol) or {})]
+            )
         for timeframe, legacy in rows:
+            tf_impact = horizon_impacts.get((impact.symbol, timeframe), impact)
+            if tf_impact.direction_score is None or tf_impact.confidence < 0.25:
+                direction = "ABSTAIN"
+            elif tf_impact.direction_score > 0.15:
+                direction = "bullish"
+            elif tf_impact.direction_score < -0.15:
+                direction = "bearish"
+            else:
+                direction = "neutral"
+            world_thesis_score = round(50.0 + (tf_impact.direction_score or 0.0) * 50.0, 2) if tf_impact.direction_score is not None else None
             tf_confirmation = _technical_tf(technicals, impact.symbol, timeframe)
-            entry_timing_state = _entry_timing_state(impact.direction_score, tf_confirmation, impact.positioning_reasons)
+            entry_timing_state = _entry_timing_state(tf_impact.direction_score, tf_confirmation, tf_impact.positioning_reasons)
             timing_modifier = (tf_confirmation or 0.0) * 10.0
             final_shadow_score_tf = max(0.0, min(100.0, round((world_thesis_score or 50.0) + timing_modifier, 2))) if world_thesis_score is not None else None
             consensus.append({
@@ -424,7 +446,7 @@ def build_shadow(
                 "world_score": world_thesis_score,
                 "world_thesis_score": world_thesis_score,
                 "world_thesis_direction": direction,
-                "causal_score": round(50.0 + (impact.direction_score or 0.0) * 50.0, 2) if impact.direction_score is not None else None,
+                "causal_score": round(50.0 + (tf_impact.direction_score or 0.0) * 50.0, 2) if tf_impact.direction_score is not None else None,
                 "technical_confirmation_tf": tf_confirmation,
                 "technical_confirmation_mtf": impact.technical_confirmation,
                 "technical_confirmation": tf_confirmation if tf_confirmation is not None else impact.technical_confirmation,
@@ -436,9 +458,9 @@ def build_shadow(
                 "final_shadow_score_tf": final_shadow_score_tf if direction != "ABSTAIN" else None,
                 "final_shadow_score": final_shadow_score_tf if direction != "ABSTAIN" else None,
                 "final_shadow_direction": direction,
-                "confidence": impact.confidence,
-                "coverage": round(1.0 - len(impact.missing_evidence) / max(1, len(impact.drivers) + len(impact.missing_evidence)), 4),
-                "warnings": list(impact.conflicts) + list(impact.missing_evidence),
+                "confidence": tf_impact.confidence,
+                "coverage": round(1.0 - len(tf_impact.missing_evidence) / max(1, len(tf_impact.drivers) + len(tf_impact.missing_evidence)), 4),
+                "warnings": list(tf_impact.conflicts) + list(tf_impact.missing_evidence),
                 "divergence_reason": "legacy_vs_causal" if legacy.get("direction") and legacy.get("direction") != direction else None,
             })
         supplied = (conflict_inputs or {}).get(impact.symbol) or {}
@@ -462,6 +484,7 @@ def build_shadow(
         decision_apply=apply,
         world_state=state.to_dict(),
         edges=edges,
+        edges_by_horizon=horizon_edges,
         impacts=impacts,
         causal_consensus=tuple(consensus),
         conflict_shadow=tuple(conflict_shadow),

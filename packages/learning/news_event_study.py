@@ -595,13 +595,120 @@ def causal_historical_evaluator(rows, *, min_n: int = 8) -> dict:
     return {**dimensions, "status": "HISTORICAL_EVALUATOR", "samples": sum(item.get("n", 0) for group in dimensions.values() for item in group.values()), "future_rows_ignored": ignored_future_rows, "shadow_only": True, "auto_promotion": False}
 
 
-def causal_historical_replay(rows=None, *, min_n: int = 8, horizons: tuple[str, ...] = ("15m", "1h", "4h", "1d")) -> dict:
-    """Replay compact as-of World-State rows without future leakage.
+def _reconstruct_archive_row(row: dict, horizons: tuple[str, ...]) -> tuple[dict | None, list[str], int]:
+    """Rebuild a WorldState/causal shadow only from complete as-of inputs."""
+    required = (
+        "market_data_as_of", "events_available_as_of", "statements_available_as_of",
+        "macro_available_as_of", "expectations_as_of", "flow_available_as_of",
+    )
+    missing = [name for name in required if not row.get(name)]
+    if missing:
+        return None, missing, 0
+    inputs = row.get("reconstruction_inputs")
+    if not isinstance(inputs, dict):
+        # A compact archive row is evidence, not a replay input.  This is the
+        # critical guard against falsely labelling a row REAL_REPLAY.
+        return None, ["reconstruction_inputs"], 0
+    try:
+        from packages.causal.engine import build_shadow
+        from packages.world_state.model import WorldStateSnapshot
+        generated = datetime.fromisoformat(str(row.get("snapshot_as_of") or row.get("generated_at")).replace("Z", "+00:00"))
+        if generated.tzinfo is None:
+            generated = generated.replace(tzinfo=UTC)
+        raw_state = inputs.get("world_state") or inputs.get("factors") or {}
+        if not raw_state and row.get("snapshot_id"):
+            # Reuse the canonical snapshot store when a reconstruction input
+            # points at one; this keeps replay on the repository's existing
+            # source of truth instead of introducing a second provider.
+            from packages.data import snapshot_store
+            stored = snapshot_store.get(str(row["snapshot_id"])) or {}
+            raw_state = stored.get("world_state") or stored.get("factors") or {}
+        if not isinstance(raw_state, dict):
+            return None, ["reconstruction_inputs.world_state"], 0
+        allowed = {
+            "liquidity", "usd_pressure", "rates_pressure", "real_yield_pressure",
+            "inflation_pressure", "growth_pressure", "risk_aversion", "credit_stress",
+            "energy_supply_risk", "shipping_risk", "sanctions_pressure", "trade_risk",
+            "oil_pressure", "geopolitical_risk", "crypto_liquidity", "equity_risk_appetite",
+            "flow_state", "regime", "global_flow_regime", "confidence", "data_quality",
+        }
+        state_values = {key: value for key, value in raw_state.items() if key in allowed}
+        state_values.setdefault("global_flow_regime", row.get("regime") or "UNKNOWN")
+        state_values.setdefault("regime", row.get("regime") or "UNKNOWN")
+        state_values.setdefault("confidence", float(row.get("factor_confidence") or 0.0))
+        state = WorldStateSnapshot(generated_at=generated, **state_values)
+        symbols = inputs.get("symbols") or [item.get("symbol") for item in row.get("asset_impacts") or [] if item.get("symbol")]
+        shadow = build_shadow(state, symbols, decision_apply=False)
+        # Outcomes are accepted solely for evaluation, after reconstruction.
+        outcomes = list(row.get("outcomes") or [])
+        for outcome in outcomes:
+            outcome["as_of"] = row.get("snapshot_as_of")
+            outcome["snapshot_as_of"] = row.get("snapshot_as_of")
+        return {"shadow": shadow.to_dict(), "outcomes": outcomes}, [], 1
+    except (TypeError, ValueError, KeyError):
+        return None, ["reconstruction_error"], 0
 
-    Rows are normally loaded from the canonical World-State archive.  A row is
-    replayable only when it carries ``snapshot_as_of`` and the event/macro
-    availability watermark.  Outcomes are scoring-only; missing future bars
-    remain pending rather than being invented.
+
+def _replay_history_outcomes(row: dict, horizons: tuple[str, ...]) -> list[dict]:
+    """Score reconstructed predictions against stored future OHLCV only."""
+    try:
+        from packages.data.providers.ohlcv import history
+    except Exception:
+        return []
+    as_of = row.get("snapshot_as_of") or row.get("generated_at")
+    if not as_of:
+        return []
+    try:
+        as_of_dt = datetime.fromisoformat(str(as_of).replace("Z", "+00:00"))
+        if as_of_dt.tzinfo is None:
+            as_of_dt = as_of_dt.replace(tzinfo=UTC)
+    except (TypeError, ValueError):
+        return []
+    steps = {"15m": ("15m", 1), "1h": ("1h", 1), "4h": ("1h", 4), "1d": ("1d", 1)}
+    consensus = row.get("causal_consensus") or []
+    impacts = {item.get("symbol"): item for item in row.get("asset_impacts") or [] if item.get("symbol")}
+    outputs: list[dict] = []
+    for symbol, impact in impacts.items():
+        try:
+            causal_score = float(impact.get("direction_score"))
+        except (TypeError, ValueError):
+            continue
+        legacy_sign = 0.0
+        for item in consensus:
+            if item.get("symbol") == symbol:
+                direction = str(item.get("legacy_direction") or "").lower()
+                legacy_sign = 1.0 if direction in {"bullish", "long", "buy"} else -1.0 if direction in {"bearish", "short", "sell"} else 0.0
+                break
+        for horizon in horizons:
+            tf, count = steps.get(str(horizon), ("1h", 1))
+            try:
+                bars = history.load(str(symbol), tf)
+                forward = _forward_return_pct(bars, as_of_dt, count)
+            except Exception:
+                forward = None
+            if forward is None:
+                continue
+            outputs.append({
+                "asset": symbol,
+                "timeframe": str(horizon),
+                "regime": row.get("regime", "UNKNOWN"),
+                "event_type": "WORLD_STATE",
+                "causal_direction": causal_score,
+                "legacy_direction": legacy_sign,
+                "forward_return": forward,
+                "as_of": as_of,
+                "snapshot_as_of": as_of,
+            })
+    return outputs
+
+
+def causal_historical_replay(rows=None, *, min_n: int = 8, horizons: tuple[str, ...] = ("15m", "1h", "4h", "1d")) -> dict:
+    """True as-of reconstruction replay, distinct from the evaluator.
+
+    The evaluator scores already-materialised rows.  This path first proves
+    domain-specific availability, reconstructs ``WorldState(T)`` and the
+    existing causal graph, then passes only post-T outcomes to the evaluator.
+    No archive row alone can become ``REAL_REPLAY``.
     """
     if rows is None:
         try:
@@ -609,38 +716,89 @@ def causal_historical_replay(rows=None, *, min_n: int = 8, horizons: tuple[str, 
             rows = all_records()
         except Exception:
             rows = []
-    rows = list(rows or [])
-    replay_ready = [
-        row for row in rows
-        if row.get("snapshot_as_of") and row.get("available_events_as_of") is not None
-    ]
-    evaluator_rows = []
-    for row in replay_ready:
-        # Archive rows may already contain materialised outcome records.  They
-        # are copied only as scoring fields; all state provenance stays as-of.
-        evaluator_rows.extend(row.get("outcomes") or ([row] if "forward_return" in row else []))
-    evaluator = causal_historical_evaluator(evaluator_rows, min_n=min_n)
+    rows = sorted(list(rows or []), key=lambda item: str(item.get("generated_at") or item.get("snapshot_as_of") or ""))
     total = len(rows)
-    replayable = len(replay_ready)
-    coverage = round(replayable / max(1, total), 4)
-    missing_domains: list[str] = []
-    if not replay_ready:
-        missing_domains.extend(("world_state_archive", "available_event_watermark"))
-    if replay_ready and not evaluator_rows:
-        missing_domains.append("future_outcomes")
+    if not rows:
+        return {
+            "status": "INSUFFICIENT_ARCHIVE", "samples": 0, "archive_coverage": 0.0,
+            "archive_start": None, "archive_end": None, "timestamps_total": 0,
+            "timestamps_reconstructable": 0, "timestamps_scored": 0,
+            "coverage_pct": 0.0, "missing_provenance_domains": ["world_state_archive"],
+            "missing_domains": ["world_state_archive"], "horizons": list(horizons),
+            "by_asset": {}, "by_timeframe": {}, "by_regime": {}, "by_event_type": {},
+            "future_rows_ignored": 0, "revision_leakage_blocked": 0,
+            "shadow_only": True, "auto_promotion": False,
+        }
+    reconstructed = 0
+    evaluator_rows: list[dict] = []
+    missing_domains: set[str] = set()
+    future_ignored = 0
+    revision_blocked = 0
+    for row in rows:
+        as_of = row.get("snapshot_as_of") or row.get("generated_at")
+        # Any explicit future availability watermark is blocked before graph
+        # reconstruction; revised values must not enter the earlier state.
+        for field in ("market_data_as_of", "events_available_as_of", "statements_available_as_of", "macro_available_as_of", "expectations_as_of", "flow_available_as_of", "ingested_at"):
+            value = row.get(field)
+            if value and as_of:
+                try:
+                    lhs = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+                    rhs = datetime.fromisoformat(str(as_of).replace("Z", "+00:00"))
+                    if lhs.tzinfo is None:
+                        lhs = lhs.replace(tzinfo=UTC)
+                    if rhs.tzinfo is None:
+                        rhs = rhs.replace(tzinfo=UTC)
+                    if lhs > rhs:
+                        future_ignored += 1
+                        missing_domains.add(field)
+                        break
+                except (TypeError, ValueError):
+                    missing_domains.add(field)
+        else:
+            result, missing, count = _reconstruct_archive_row(row, horizons)
+            if count:
+                reconstructed += count
+                outcomes = result.get("outcomes") or _replay_history_outcomes(row, horizons)
+                evaluator_rows.extend(outcomes)
+            else:
+                missing_domains.update(missing)
+            if row.get("revised_value") is not None or row.get("revision"):
+                revision_blocked += 1
+                missing_domains.add("revisions")
+    evaluator = causal_historical_evaluator(evaluator_rows, min_n=min_n)
+    scored = int(evaluator.get("samples", 0) or 0)
+    coverage = reconstructed / max(1, total)
+    if reconstructed == 0:
+        status = "INSUFFICIENT_PROVENANCE" if missing_domains else "INSUFFICIENT_ARCHIVE"
+    elif scored == 0:
+        status = "INSUFFICIENT_OUTCOMES"
+    elif reconstructed < total:
+        status = "PARTIAL_REPLAY"
+    else:
+        status = "REAL_REPLAY"
+    if scored == 0:
+        missing_domains.add("future_outcomes")
     return {
-        "status": "REAL_REPLAY" if replayable else "INSUFFICIENT_ARCHIVE",
-        "samples": evaluator.get("samples", 0),
-        "archive_coverage": coverage,
-        "archive_start": rows[0].get("snapshot_as_of", rows[0].get("generated_at")) if rows else None,
-        "archive_end": rows[-1].get("snapshot_as_of", rows[-1].get("generated_at")) if rows else None,
+        "status": status,
+        "samples": scored,
+        "archive_coverage": round(coverage, 4),
+        "archive_start": rows[0].get("snapshot_as_of", rows[0].get("generated_at")),
+        "archive_end": rows[-1].get("snapshot_as_of", rows[-1].get("generated_at")),
         "timestamps_total": total,
-        "timestamps_replayable": replayable,
+        "timestamps_reconstructable": reconstructed,
+        "timestamps_replayable": reconstructed,
+        "timestamps_scored": scored,
         "coverage_pct": round(coverage * 100.0, 2),
-        "missing_domains": missing_domains,
+        "missing_provenance_domains": sorted(missing_domains),
+        "missing_domains": sorted(missing_domains),
         "horizons": list(horizons),
+        "by_asset": evaluator.get("by_asset", {}),
+        "by_timeframe": evaluator.get("by_timeframe", {}),
+        "by_regime": evaluator.get("by_regime", {}),
+        "by_event_type": evaluator.get("by_event_type", {}),
         "evaluator": evaluator,
-        "future_rows_ignored": evaluator.get("future_rows_ignored", 0),
+        "future_rows_ignored": future_ignored + evaluator.get("future_rows_ignored", 0),
+        "revision_leakage_blocked": revision_blocked,
         "shadow_only": True,
         "auto_promotion": False,
     }

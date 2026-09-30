@@ -628,6 +628,7 @@ def run_once() -> dict:
         # already-produced market view and appends predictions to the bounded
         # ledger; it never feeds weights, orders, or the live decision path.
         causal_recorded = 0
+        calibration_runtime = {"status": "NOT_RUN"}
         try:
             from packages.causal.engine import build_event_asset_attribution
             from packages.causal.engine import build_shadow as _build_shadow
@@ -647,6 +648,7 @@ def run_once() -> dict:
                 snapshot_id=getattr(_cached_snapshot, "snapshot_id", None),
                 asset_impacts=_shadow.impacts,
                 causal_consensus=_shadow.causal_consensus,
+                edges=_shadow.edges,
             )
             by_event = []
             symbols = _asset_registry.trade_symbols()
@@ -670,11 +672,17 @@ def run_once() -> dict:
                 by_event.append(item)
             causal_recorded = _nes.record_causal_events(by_event)
             _nes.causal_event_study()
+            # Matured archived factor responses are the sole input to the
+            # causal edge calibration artifact.  This is off-tick and
+            # fail-soft; calibration.apply remains false in production.
+            from packages.learning import causal_calibration as _cc
+            calibration_runtime = _cc.run_if_due()
         except Exception as causal_exc:
             errors.append(f"causal_event_ledger:{type(causal_exc).__name__}")
+            calibration_runtime = {"status": "ERROR", "error": type(causal_exc).__name__}
         news_study_status = "OK"
-        log.info("news_event_study: +%s events, causal=%s, matured=%s verdict=%s",
-                 recorded, causal_recorded, nt.get("matured"), nt.get("global_verdict"))
+        log.info("news_event_study: +%s events, causal=%s, matured=%s verdict=%s calibration=%s",
+                 recorded, causal_recorded, nt.get("matured"), nt.get("global_verdict"), calibration_runtime.get("status"))
     except Exception as exc:  # defensive — worker patlamamalı
         news_study_status = f"ERROR:{type(exc).__name__}"
         errors.append(f"news_event_study:{type(exc).__name__}")

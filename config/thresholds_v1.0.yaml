@@ -1213,8 +1213,10 @@ causal_world:
     apply: false
     min_samples: 8
     confidence_level: 0.95
+    interval_seconds: 300
   interaction:
     enabled: true
+    weight: 0.15
     max_pairwise_events: 64
   replay:
     enabled: true
