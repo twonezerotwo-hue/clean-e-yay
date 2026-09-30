@@ -123,20 +123,6 @@ def _latest_timestamp_before(items: list[object], cutoff: datetime, attribute: s
     return max(values) if values else None
 
 
-def _latest_mapping_timestamp(items: list[dict]) -> datetime | None:
-    values: list[datetime] = []
-    for item in items or []:
-        raw = item.get("timestamp") or item.get("ts") if isinstance(item, dict) else None
-        if not raw:
-            continue
-        try:
-            value = raw if isinstance(raw, datetime) else datetime.fromisoformat(str(raw).replace("Z", "+00:00"))
-            values.append(value if value.tzinfo is not None else value.replace(tzinfo=UTC))
-        except (TypeError, ValueError):
-            continue
-    return max(values) if values else None
-
-
 def _latest_provider_ingestion(status: dict[str, dict]) -> datetime | None:
     values: list[datetime] = []
     for item in (status or {}).values():
@@ -338,8 +324,9 @@ def build_snapshot(symbols: list[str] | None = None) -> MarketSnapshot:
     # is not an availability watermark; use only past releases or the
     # provider's recorded ingestion time, never a future catalyst timestamp.
     macro_available_as_of = _latest_timestamp_before(catalysts, now) or _provider_ingestion_for(provider_status, ("calendar",))
-    flow_observations = []
-    flow_available_as_of = _latest_mapping_timestamp(flow_observations)
+    # No provider-neutral real-flow observations are ingested by this pipeline
+    # yet; World-State may still expose the explicit rotation price proxy.
+    flow_available_as_of = None
     ingested_at = _latest_provider_ingestion(provider_status)
     # Domain status is kept separately from the legacy watermark fields so an
     # explicitly unavailable source is not confused with unknown provenance.
@@ -366,7 +353,7 @@ def build_snapshot(symbols: list[str] | None = None) -> MarketSnapshot:
         ),
         "flow": _domain_provenance(
             provider_status, ("rotation",), flow_available_as_of,
-            has_evidence=bool(getattr(rotation, "per_symbol", {}) or flow_observations),
+            has_evidence=bool(getattr(rotation, "per_symbol", {})),
         ),
     }
     return MarketSnapshot(
