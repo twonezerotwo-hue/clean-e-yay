@@ -624,9 +624,30 @@ def run_once() -> dict:
         from packages.learning import news_event_study as _nes
         recorded = _nes.record_events()
         nt = _nes.compute()
+        # Causal graph observation is deliberately off-tick.  It snapshots the
+        # already-produced market view and appends predictions to the bounded
+        # ledger; it never feeds weights, orders, or the live decision path.
+        causal_recorded = 0
+        try:
+            from packages.causal.engine import build_shadow
+            from packages.data.ingestion.pipeline import get_cached_snapshot
+            from packages.data.registry import assets as _asset_registry
+            from packages.world_state.engine import build as _build_world
+            _world = _build_world(get_cached_snapshot())
+            _shadow = build_shadow(_world, _asset_registry.trade_symbols(), decision_apply=False)
+            by_event = []
+            predictions = {impact.symbol: impact.direction_score for impact in _shadow.impacts if impact.direction_score is not None}
+            for event in _world.geopolitical_events:
+                item = event.to_dict()
+                item["asset_predictions"] = predictions
+                by_event.append(item)
+            causal_recorded = _nes.record_causal_events(by_event)
+            _nes.causal_event_study()
+        except Exception as causal_exc:
+            errors.append(f"causal_event_ledger:{type(causal_exc).__name__}")
         news_study_status = "OK"
-        log.info("news_event_study: +%s events, matured=%s verdict=%s",
-                 recorded, nt.get("matured"), nt.get("global_verdict"))
+        log.info("news_event_study: +%s events, causal=%s, matured=%s verdict=%s",
+                 recorded, causal_recorded, nt.get("matured"), nt.get("global_verdict"))
     except Exception as exc:  # defensive — worker patlamamalı
         news_study_status = f"ERROR:{type(exc).__name__}"
         errors.append(f"news_event_study:{type(exc).__name__}")

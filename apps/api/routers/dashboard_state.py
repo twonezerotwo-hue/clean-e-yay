@@ -11,6 +11,7 @@ from packages.consensus.engine import build as build_consensus
 from packages.data.ingestion.pipeline import DEFAULT_SYMBOLS, get_cached_snapshot
 from packages.data.provenance import data_provenance
 from packages.data.registry import assets as asset_registry
+from packages.data.types import TIMEFRAMES
 from packages.paper import state as paper_state
 from packages.paper.lifecycle import max_drawdown_pct
 from packages.regime.classifier import classify
@@ -55,13 +56,19 @@ def get_dashboard_state() -> dict:
     now_iso = datetime.now(UTC).isoformat()
     prov = data_provenance(snap)
     world_state = build_world_state(snap)
+    legacy_scores: dict[str, dict[str, object]] = {}
+    for symbol in asset_registry.trade_symbols():
+        # Reuse canonical consensus for every trade asset/timeframe. This is
+        # additive shadow comparison; the live decision engine is untouched.
+        for timeframe in TIMEFRAMES:
+            cons = build_consensus(symbol, snap, regime, timeframe)
+            legacy_scores[f"{symbol}|{timeframe}"] = {"score": cons.score, "direction": cons.direction, "timeframe": timeframe}
+        legacy_scores[symbol] = legacy_scores[f"{symbol}|1d"]
     causal_shadow = build_shadow(
         world_state,
         asset_registry.trade_symbols(),
         technicals=snap.technicals_by_tf or snap.technicals,
-        legacy_scores={
-            DEFAULT_SYMBOLS[0]: {"score": top_cons.score, "direction": top_cons.direction}
-        },
+        legacy_scores=legacy_scores,
     )
     data_health = _data_module_health(prov, snap.quality.status, now_iso)
     # News: gerçek haber sağlayıcı yok → demo damgası (her zaman görünür uyarı)

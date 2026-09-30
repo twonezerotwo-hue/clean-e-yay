@@ -28,6 +28,10 @@ class CausalEdge:
     source_value: float | None = None
     contribution: float | None = None
     effective_strength: float | None = None
+    applied: bool = False
+    target_before: float | None = None
+    target_after: float | None = None
+    reason: str | None = None
     evidence: tuple[str, ...] = ()
 
     def to_dict(self) -> dict[str, Any]:
@@ -49,6 +53,7 @@ class AssetImpact:
     geopolitical_contribution: float | None = None
     statement_contribution: float | None = None
     positioning_contribution: float | None = None
+    positioning_reasons: tuple[str, ...] = ()
     technical_confirmation: float | None = None
     timing_status: str = "UNAVAILABLE"
     positioning_state: str = "UNAVAILABLE"

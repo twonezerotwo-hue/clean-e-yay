@@ -1209,6 +1209,10 @@ causal_world:
     real_yield_to_gold: 0.65
     usd_to_gold: 0.45
     liquidity_to_crypto: 0.65
+    sanctions_to_trade: 0.70
+    trade_to_growth: 0.45
+    trade_to_inflation: 0.30
+    sanctions_to_risk: 0.35
   asset_exposures:
     crypto: { liquidity: 1.0, usd_pressure: -0.5, real_yield_pressure: -0.3, risk_aversion: -0.5 }
     precious_metal: { gold_pressure: 1.0, real_yield_pressure: -0.5, usd_pressure: -0.4, risk_aversion: 0.6, inflation_pressure: 0.3 }

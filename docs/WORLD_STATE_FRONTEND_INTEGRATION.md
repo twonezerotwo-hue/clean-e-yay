@@ -20,10 +20,13 @@ Both `/api/v1/dashboard/state` and `/api/v1/cockpit/brief` expose:
 | Geopolitical Risk | `geopolitical_events`, `geopolitical_risk` | Show confirmation and source confidence |
 | Active Statements | `statements` | Show authority and freshness |
 | Causal Drivers | `causal_shadow.edges` | Explain source → target transmission |
+| Edge audit | edge `applied`, `target_before`, `target_after`, `reason` | Separate applied propagation from direct-measurement evidence |
 | Asset Thesis | `causal_shadow.impacts` | Label as shadow thesis |
 | Macro | `world_state.rates_pressure`, `real_yield_pressure`, `inflation_pressure`, `growth_pressure` | Render unavailable fields explicitly |
+| Macro provenance | `world_state.macro_sources` | Show DIRECT/DERIVED/PROXY/UNAVAILABLE and method |
 | Money Flow | `world_state.usd_flow`, `treasury_flow`, `equity_flow`, `credit_flow`, `metals_flow`, `energy_flow`, `crypto_flow`, `defensive_flow` | Show axis coverage |
 | Positioning | `world_state.positioning`, impact `positioning_state`, `volatility_regime` | Caution context only |
+| Positioning reasons | impact `positioning_reasons`, `positioning_contribution` | Show crowding/options/squeeze/volatility caution |
 | Legacy vs Causal | `causal_shadow.causal_consensus` | Backend provides scores and divergence reason |
 | Conflict / Confluence | impact `confluence_state`, `causal_shadow.conflict_shadow` | Informational; never execute |
 | Learning evidence | backend learning study artifacts | Show `INSUFFICIENT` honestly |
@@ -38,3 +41,7 @@ Both `/api/v1/dashboard/state` and `/api/v1/cockpit/brief` expose:
   `-1..1`; consensus scores are `0..100`.
 - The frontend must render `ABSTAIN`, `UNKNOWN`, `UNAVAILABLE`, and missing
   evidence as such; it must not replace them with neutral certainty.
+- Expired events remain visible for audit (`expired=true`, effective strength 0)
+  but must not render as active pressure.
+- Legacy comparison rows are timeframe-specific; do not overwrite one timeframe
+  with another.

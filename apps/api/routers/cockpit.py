@@ -43,17 +43,32 @@ def get_cockpit_brief() -> dict:
     halt_active = bool(halt_store.active_halts())
     world_state = build_world_state(snap)
     legacy_scores: dict[str, dict[str, object]] = {}
+    conflict_inputs: dict[str, dict[str, object]] = {}
     for decision in decisions:
-        legacy_scores.setdefault(decision.symbol, {})
-        legacy_scores[decision.symbol] = {
+        key = f"{decision.symbol}|{decision.timeframe}"
+        legacy_scores[key] = {
             "score": decision.consensus.score,
             "direction": decision.consensus.direction,
+            "timeframe": decision.timeframe,
         }
+        if decision.timeframe == "1d":
+            legacy_scores[decision.symbol] = legacy_scores[key]
+            conflict_inputs[decision.symbol] = {
+                "dqs_status": "OK" if snap.quality.status == "OK" else "DEGRADED",
+                "risk_gate_action": risk.action,
+                "trigger_confirmed": bool(decision.actionable),
+                "sl_tp_rr_valid": None if decision.expected_value is None else decision.expected_value >= 0.0,
+                "setup_type": "SETUP" if decision.candidate_action != "hold" else "NO_TRADE",
+                "historical_edge_strong_negative": ((decision.meta_gate_report or {}).get("verdict") == "AVOID") if decision.meta_gate_report else None,
+                "size_multiplier": decision.size_multiplier,
+                "alignment_status": "ALIGNED" if decision.consensus.confluence_aligned else "PARTIAL",
+            }
     causal_shadow = build_shadow(
         world_state,
         matrix_symbols,
         technicals=snap.technicals_by_tf or snap.technicals,
         legacy_scores=legacy_scores,
+        conflict_inputs=conflict_inputs,
     )
     return {
         "generated_at": view["generated_at"],
