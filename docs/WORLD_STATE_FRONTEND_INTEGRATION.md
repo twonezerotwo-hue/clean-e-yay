@@ -9,7 +9,7 @@ Both `/api/v1/dashboard/state` and `/api/v1/cockpit/brief` expose:
 - `world_state`: normalized pressures, flow regime, confidence, coverage,
   missing inputs, geopolitical events, and policy statements.
 - `causal_shadow`: graph edges, per-asset impacts, conflicts, warnings, and the
-  `decision_apply` flag.
+  `causal_consensus`, `conflict_shadow`, and the `decision_apply` flag.
 
 ## Future components
 
@@ -21,7 +21,12 @@ Both `/api/v1/dashboard/state` and `/api/v1/cockpit/brief` expose:
 | Active Statements | `statements` | Show authority and freshness |
 | Causal Drivers | `causal_shadow.edges` | Explain source → target transmission |
 | Asset Thesis | `causal_shadow.impacts` | Label as shadow thesis |
-| Legacy vs Causal | existing decision trace + shadow impacts | Never let frontend merge scores |
+| Macro | `world_state.rates_pressure`, `real_yield_pressure`, `inflation_pressure`, `growth_pressure` | Render unavailable fields explicitly |
+| Money Flow | `world_state.usd_flow`, `treasury_flow`, `equity_flow`, `credit_flow`, `metals_flow`, `energy_flow`, `crypto_flow`, `defensive_flow` | Show axis coverage |
+| Positioning | `world_state.positioning`, impact `positioning_state`, `volatility_regime` | Caution context only |
+| Legacy vs Causal | `causal_shadow.causal_consensus` | Backend provides scores and divergence reason |
+| Conflict / Confluence | impact `confluence_state`, `causal_shadow.conflict_shadow` | Informational; never execute |
+| Learning evidence | backend learning study artifacts | Show `INSUFFICIENT` honestly |
 
 ## Frontend rules
 
@@ -29,3 +34,7 @@ Both `/api/v1/dashboard/state` and `/api/v1/cockpit/brief` expose:
 - `decision_apply=false` must be visible as a shadow badge.
 - Missing evidence must not render as neutral certainty.
 - No EVREN key or provider detail reaches the browser.
+- All score scales are explicit: world pressures and asset directions are
+  `-1..1`; consensus scores are `0..100`.
+- The frontend must render `ABSTAIN`, `UNKNOWN`, `UNAVAILABLE`, and missing
+  evidence as such; it must not replace them with neutral certainty.

@@ -25,6 +25,9 @@ class CausalEdge:
     sign: int
     base_strength: float
     confidence: float
+    source_value: float | None = None
+    contribution: float | None = None
+    effective_strength: float | None = None
     evidence: tuple[str, ...] = ()
 
     def to_dict(self) -> dict[str, Any]:
@@ -48,6 +51,9 @@ class AssetImpact:
     positioning_contribution: float | None = None
     technical_confirmation: float | None = None
     timing_status: str = "UNAVAILABLE"
+    positioning_state: str = "UNAVAILABLE"
+    volatility_regime: str = "UNAVAILABLE"
+    confluence_state: str = "INSUFFICIENT_EVIDENCE"
     conflicts: tuple[str, ...] = ()
     missing_evidence: tuple[str, ...] = ()
 
@@ -63,6 +69,8 @@ class CausalShadow:
     world_state: dict[str, Any]
     edges: tuple[CausalEdge, ...] = ()
     impacts: tuple[AssetImpact, ...] = ()
+    causal_consensus: tuple[dict[str, Any], ...] = ()
+    conflict_shadow: tuple[dict[str, Any], ...] = ()
     warnings: tuple[str, ...] = ()
 
     def to_dict(self) -> dict[str, Any]:

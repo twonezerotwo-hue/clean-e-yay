@@ -59,6 +59,9 @@ def get_dashboard_state() -> dict:
         world_state,
         asset_registry.trade_symbols(),
         technicals=snap.technicals_by_tf or snap.technicals,
+        legacy_scores={
+            DEFAULT_SYMBOLS[0]: {"score": top_cons.score, "direction": top_cons.direction}
+        },
     )
     data_health = _data_module_health(prov, snap.quality.status, now_iso)
     # News: gerçek haber sağlayıcı yok → demo damgası (her zaman görünür uyarı)

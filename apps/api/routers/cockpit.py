@@ -42,10 +42,18 @@ def get_cockpit_brief() -> dict:
     provenance = data_provenance(snap)
     halt_active = bool(halt_store.active_halts())
     world_state = build_world_state(snap)
+    legacy_scores: dict[str, dict[str, object]] = {}
+    for decision in decisions:
+        legacy_scores.setdefault(decision.symbol, {})
+        legacy_scores[decision.symbol] = {
+            "score": decision.consensus.score,
+            "direction": decision.consensus.direction,
+        }
     causal_shadow = build_shadow(
         world_state,
         matrix_symbols,
         technicals=snap.technicals_by_tf or snap.technicals,
+        legacy_scores=legacy_scores,
     )
     return {
         "generated_at": view["generated_at"],

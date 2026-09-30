@@ -53,6 +53,10 @@ thesis direction from entry timing; they are not merged into a decision score.
 - `conftest.py`: test-only isolation fix; paper price references are seeded for
   every supported timeframe and auth is kept explicitly empty during reloads.
   This does not change runtime behaviour.
+- `config/assets.yaml` and `packages/data/registry/assets.py`: additive asset
+  class metadata so causal exposure selection uses the existing registry.
+- `packages/learning/news_event_study.py`: additive causal ledger, event study,
+  and legacy-vs-causal observation backtest; no second learning framework.
 
 No existing response key was removed or renamed. No database or runtime state
 file was migrated.
@@ -85,7 +89,7 @@ available in `/api/v1/dashboard/state` and `/api/v1/cockpit/brief`:
 
 Added coverage for bounded scores, missing-data abstention, numeric-surprise
 fallback, graph propagation, disable behavior, and shadow output. The targeted
-suite passed: 21 tests. The full main-based suite passes with 2058 tests and
+suite passed: 33 tests. The full main-based suite passes with 2064 tests and
 one environment-dependent architecture test skipped because
 `node/openapi-typescript` is not installed. There is one existing Starlette/httpx
 deprecation warning.
@@ -102,8 +106,67 @@ deprecation warning.
 - EVREN/LLM extraction is intentionally not wired into the decision path.
 - Gürsar and Touche repositories were not available in the workspace.
 
+## 12. Completion audit
+
+### Money flow and macro world state
+
+The existing rotation basket is reused to expose separate normalized axes for
+USD, Treasuries, equities, credit, metals, energy, crypto, and defensive flow.
+Macro rates, real-yield, inflation, and growth pressures remain `None` when
+their source evidence is unavailable. Flow and macro domain coverage are
+reported separately; regime classification uses deterministic stress/flow
+rules rather than one asset average.
+
+### Geopolitics, statements, and surprise
+
+Geopolitical headlines are clustered by normalized story key, taxonomy is
+expanded to attacks, ceasefires, sanctions, chokepoints, shipping, pipelines,
+trade, and nuclear escalation, and exposure channels are emitted before asset
+impact. Source families prevent syndicated copies from counting as independent
+confirmation. Confidence combines credibility, confirmation, diversity,
+freshness/decay, and official-source evidence.
+
+Statement authority is config-driven. Institution, role, repetition, baseline
+stance, semantic surprise, and optional `actual`/`expected` numeric fields are
+deterministically extracted. No statement can create a trade action.
+
+### Causal graph and asset exposures
+
+Graph priors live under the single `causal_world.graph` config block. Active
+edges now return source value, contribution, effective strength, and evidence,
+matching the actual bounded one-pass propagation. Direct measured factors stay
+authoritative, so derived nodes cannot double-count the same input. Asset
+exposures come from the existing asset registry metadata plus the single
+`causal_world.asset_exposures` mapping; no second symbol universe is created.
+
+### Positioning, conflict, and consensus
+
+Verified derivatives, options, and 1d volatility snapshots are reused as
+positioning context. Crowded-long/short and elevated volatility reduce
+confidence/caution only; they never flip the thesis or relax a risk gate.
+Existing `packages.decision.conflict_resolver` is called for an informational
+shadow verdict. `causal_consensus` compares legacy score/direction when supplied,
+includes confluence, technical timing, coverage, and `ABSTAIN` for insufficient
+evidence. All of these fields are additive and non-authoritative.
+
+### Learning and backtest
+
+`packages/learning/news_event_study.py` now also provides a bounded causal event
+ledger, channel/asset/horizon event study, and legacy-vs-causal observation
+backtest. Ledgers are deduplicated and size-capped under `data/runtime/`.
+Forward-return rows are required; missing rows remain pending. Results are
+`INSUFFICIENT` below the sample threshold and cannot auto-promote weights or
+activate decisions.
+
 ## 11. Activation plan
 
 Observe `causal_shadow` alongside legacy decisions, then add event-study and
 walk-forward evidence. Any future activation must remain behind the existing
 RiskGate and owner-approved challenger process.
+
+## 13. Performance
+
+World State and causal propagation are pure in-memory work over the existing
+snapshot. No new network request or LLM token is used. Event study/backtest
+functions are off-tick learning utilities and are not called by the decision
+hot path.

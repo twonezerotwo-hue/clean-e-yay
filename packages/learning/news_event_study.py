@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import json
 import os
+import statistics
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -28,6 +29,7 @@ _LEDGER_MAX_MB = 32
 _HORIZON_DEFAULT = 5
 _TF_DEFAULT = "1d"
 _MIN_BUCKET_N_DEFAULT = 8
+_CAUSAL_LEDGER_MAX_MB = 32
 
 
 def _cfg() -> dict:
@@ -258,4 +260,180 @@ def viewmodel() -> dict:
         "global_verdict": (table or {}).get("global_verdict", "UNPROVEN"),
         "config": {"min_bucket_n": int(_cfg().get("min_bucket_n", _MIN_BUCKET_N_DEFAULT))},
         "shadow_only": True,
+    }
+
+
+# ── causal shadow observation (same learning infrastructure, no auto-promotion) ─
+
+def _causal_ledger_path() -> Path:
+    return Path(os.environ.get(
+        "CAUSAL_EVENT_LEDGER_PATH", "data/runtime/causal_event_ledger.jsonl"
+    ))
+
+
+def _causal_study_path() -> Path:
+    return Path(os.environ.get(
+        "CAUSAL_EVENT_STUDY_PATH", "data/runtime/causal_event_study.json"
+    ))
+
+
+def record_causal_events(events, now: datetime | None = None) -> int:
+    """Persist causal predictions once per event id.
+
+    This is an observation ledger only. It accepts the serialisable
+    ``GeopoliticalEvent``/``AssetImpact`` shapes produced by PR #56 or plain
+    dictionaries, and never changes graph weights or decisions.
+    """
+    now = now or datetime.now(UTC)
+    path = _causal_ledger_path()
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        if path.exists() and path.stat().st_size > _CAUSAL_LEDGER_MAX_MB * 1024 * 1024:
+            return 0
+        known = _known_ids(path)
+        rows: list[str] = []
+        for event in events or []:
+            item = event if isinstance(event, dict) else event.to_dict()
+            event_id = str(item.get("event_id") or item.get("id") or "")
+            if not event_id or event_id in known:
+                continue
+            known.add(event_id)
+            rows.append(json.dumps({
+                "id": event_id,
+                "event_id": event_id,
+                "ts": item.get("published_at") or item.get("ts") or now.isoformat(),
+                "event_type": item.get("event_type", "UNKNOWN"),
+                "region": item.get("region"),
+                "channels": item.get("channels") or {},
+                "asset_predictions": item.get("asset_predictions") or {},
+                "recorded_at": now.isoformat(),
+            }, ensure_ascii=False))
+        if rows:
+            with path.open("a", encoding="utf-8") as handle:
+                handle.write("\n".join(rows) + "\n")
+        return len(rows)
+    except Exception:
+        return 0
+
+
+def _read_causal_ledger() -> list[dict]:
+    path = _causal_ledger_path()
+    if not path.exists():
+        return []
+    try:
+        return [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line.strip()]
+    except (OSError, ValueError, TypeError):
+        return []
+
+
+def _causal_bucket(rows: list[tuple[float, float]], min_n: int) -> dict:
+    directional = [pred * actual for pred, actual in rows]
+    hits = [value for value in directional if value > 0]
+    n = len(rows)
+    avg = sum(directional) / n if n else None
+    median = statistics.median(directional) if directional else None
+    hit_rate = len(hits) / n if n else None
+    verdict = "INSUFFICIENT" if n < min_n else "PREDICTIVE" if (hit_rate or 0) > 0.5 and (avg or 0) > 0 else "NO_EDGE"
+    return {
+        "n": n,
+        "hit_rate": round(hit_rate, 4) if hit_rate is not None else None,
+        "avg_directional_return": round(avg, 4) if avg is not None else None,
+        "median_directional_return": round(median, 4) if median is not None else None,
+        "confidence": round(min(1.0, n / max(1, min_n)), 4),
+        "verdict": verdict,
+    }
+
+
+def causal_event_study(
+    events=None,
+    *,
+    forward_returns: dict | None = None,
+    horizons: tuple[str, ...] = ("1h", "4h", "1d"),
+    min_n: int = 8,
+    now: datetime | None = None,
+) -> dict:
+    """Build event/channel/asset/horizon evidence without promotion.
+
+    ``forward_returns`` is an optional deterministic test/offline input. In
+    production, callers may supply it from the existing OHLCV history layer;
+    absent returns are kept pending rather than fabricated.
+    """
+    now = now or datetime.now(UTC)
+    rows = list(events if events is not None else _read_causal_ledger())
+    returns = forward_returns or {}
+    buckets: dict[str, list[tuple[float, float]]] = {}
+    pending = 0
+    for event in rows:
+        predictions = event.get("asset_predictions") or {}
+        channels = event.get("channels") or {}
+        if isinstance(channels, list):
+            channels = {channel: 1.0 for channel in channels}
+        event_type = str(event.get("event_type") or "UNKNOWN")
+        region = str(event.get("region") or "UNKNOWN")
+        for asset, prediction in predictions.items():
+            try:
+                direction = float(prediction)
+            except (TypeError, ValueError):
+                continue
+            for horizon in horizons:
+                actual = (returns.get((event.get("event_id") or event.get("id"), asset, horizon))
+                          if returns else None)
+                if actual is None:
+                    pending += 1
+                    continue
+                for channel in channels or {"aggregate": 1.0}:
+                    key = f"{event_type}|{region}|{channel}|{asset}|{horizon}"
+                    buckets.setdefault(key, []).append((direction, float(actual)))
+    table = {
+        "generated_at": now.isoformat(),
+        "engine": "causal_event_study_v1",
+        "events_total": len(rows),
+        "pending": pending,
+        "buckets": {key: _causal_bucket(values, min_n) for key, values in sorted(buckets.items())},
+        "shadow_only": True,
+        "auto_promotion": False,
+    }
+    try:
+        path = _causal_study_path()
+        path.parent.mkdir(parents=True, exist_ok=True)
+        tmp = path.with_suffix(".tmp")
+        tmp.write_text(json.dumps(table, ensure_ascii=False, indent=1), encoding="utf-8")
+        tmp.replace(path)
+    except OSError:
+        pass
+    return table
+
+
+def causal_backtest(rows, *, min_n: int = 8) -> dict:
+    """Compare causal and legacy directional evidence without look-ahead."""
+    by_asset: dict[str, dict[str, int]] = {}
+    divergences = 0
+    causal_correct_when_legacy_wrong = 0
+    legacy_correct_when_causal_wrong = 0
+    for row in rows or []:
+        asset = str(row.get("asset", "UNKNOWN"))
+        causal = float(row.get("causal_direction", 0.0))
+        legacy = float(row.get("legacy_direction", 0.0))
+        forward = float(row.get("forward_return", 0.0))
+        causal_hit = causal * forward > 0
+        legacy_hit = legacy * forward > 0
+        stats = by_asset.setdefault(asset, {"n": 0, "causal_hits": 0, "legacy_hits": 0})
+        stats["n"] += 1
+        stats["causal_hits"] += int(causal_hit)
+        stats["legacy_hits"] += int(legacy_hit)
+        if (causal > 0) != (legacy > 0):
+            divergences += 1
+            causal_correct_when_legacy_wrong += int(causal_hit and not legacy_hit)
+            legacy_correct_when_causal_wrong += int(legacy_hit and not causal_hit)
+    for stats in by_asset.values():
+        stats["causal_hit_rate"] = round(stats["causal_hits"] / stats["n"], 4) if stats["n"] else None
+        stats["legacy_hit_rate"] = round(stats["legacy_hits"] / stats["n"], 4) if stats["n"] else None
+        stats["verdict"] = "INSUFFICIENT" if stats["n"] < min_n else "OBSERVE"
+    return {
+        "by_asset": by_asset,
+        "divergence_count": divergences,
+        "causal_correct_when_legacy_wrong": causal_correct_when_legacy_wrong,
+        "legacy_correct_when_causal_wrong": legacy_correct_when_causal_wrong,
+        "shadow_only": True,
+        "auto_promotion": False,
     }

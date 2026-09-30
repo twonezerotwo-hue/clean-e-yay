@@ -40,12 +40,17 @@ class GeopoliticalEvent:
     nuclear_risk: float | None = None
     direct_us_involvement: bool | None = None
     source_confidence: float = 0.0
+    source_credibility: float = 0.0
+    independent_confirmation_count: int = 0
+    official_confirmation: bool = False
     confirmation_count: int = 0
     source_diversity: int = 0
     published_at: datetime | None = None
     freshness_seconds: float | None = None
     half_life_minutes: int | None = None
     valid_until: datetime | None = None
+    decay_factor: float = 1.0
+    channels: tuple[str, ...] = ()
     evidence: tuple[str, ...] = ()
 
     def to_dict(self) -> dict[str, Any]:
@@ -71,6 +76,7 @@ class PolicyStatement:
     actual_value: float | None = None
     numeric_surprise: float | None = None
     semantic_surprise: float | None = None
+    baseline_direction: float | None = None
     market_relevance: float | None = None
     published_at: datetime | None = None
     freshness_seconds: float | None = None
@@ -97,6 +103,19 @@ class WorldStateSnapshot:
     geopolitical_risk: float | None = None
     crypto_liquidity: float | None = None
     equity_risk_appetite: float | None = None
+    usd_flow: float | None = None
+    treasury_flow: float | None = None
+    equity_flow: float | None = None
+    credit_flow: float | None = None
+    metals_flow: float | None = None
+    energy_flow: float | None = None
+    crypto_flow: float | None = None
+    defensive_flow: float | None = None
+    macro_coverage: float = 0.0
+    flow_coverage: float = 0.0
+    geopolitical_coverage: float = 0.0
+    statement_coverage: float = 0.0
+    positioning_coverage: float = 0.0
     global_flow_regime: str = "UNKNOWN"
     confidence: float = 0.0
     data_quality: str = "UNAVAILABLE"
@@ -105,6 +124,7 @@ class WorldStateSnapshot:
     missing_inputs: tuple[str, ...] = ()
     geopolitical_events: tuple[GeopoliticalEvent, ...] = ()
     statements: tuple[PolicyStatement, ...] = ()
+    positioning: dict[str, dict[str, Any]] | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return _json(asdict(self))

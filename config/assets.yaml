@@ -13,16 +13,18 @@
 # Sıra ÖNEMLİ: snapshot evreni bu sırayı korur (işlem 4'lüsü önce, sonra makro).
 version: "1.0.0"
 assets:
-  BTCUSD: { label: "BTC",         kind: risk,      roles: [trade, liquidity] }
-  ETHUSD: { label: "ETH",         kind: risk,      roles: [trade] }
-  XAUUSD: { label: "Altın",       kind: hedge,     roles: [trade, liquidity] }
-  XAGUSD: { label: "Gümüş",       kind: hedge,     roles: [trade, liquidity] }
-  DXY:    { label: "Nakit (DXY)", kind: cash,      roles: [macro, liquidity] }
-  US10Y:  { label: "US10Y",       kind: safe,      roles: [macro] }
-  US02Y:  { label: "US02Y",       kind: safe,      roles: [macro] }
-  VIX:    { label: "VIX",         kind: risk,      roles: [macro] }
-  CPI:    { label: "CPI",         kind: macro,     roles: [macro] }
+  BTCUSD: { label: "BTC",         kind: risk,      asset_class: crypto,         roles: [trade, liquidity] }
+  ETHUSD: { label: "ETH",         kind: risk,      asset_class: crypto,         roles: [trade] }
+  XAUUSD: { label: "Altın",       kind: hedge,     asset_class: precious_metal, roles: [trade, liquidity] }
+  XAGUSD: { label: "Gümüş",       kind: hedge,     asset_class: precious_metal, roles: [trade, liquidity] }
+  DXY:    { label: "Nakit (DXY)", kind: cash,      asset_class: fx,             roles: [macro, liquidity] }
+  US10Y:  { label: "US10Y",       kind: safe,      asset_class: rates,          roles: [macro] }
+  US02Y:  { label: "US02Y",       kind: safe,      asset_class: rates,          roles: [macro] }
+  VIX:    { label: "VIX",         kind: risk,      asset_class: volatility,     roles: [macro] }
+  CPI:    { label: "CPI",         kind: macro,     asset_class: macro,          roles: [macro] }
   # Yalnızca likidite sepeti (snapshot evreninde değil; OHLCV'den on-demand).
-  SP500:  { label: "Hisseler",    kind: risk,      roles: [liquidity] }
-  BRENT:  { label: "Brent",       kind: commodity, roles: [liquidity, trade] }
-  TLT:    { label: "Tahvil",      kind: safe,      roles: [liquidity] }
+  SP500:  { label: "Hisseler",    kind: risk,      asset_class: equity,        roles: [liquidity] }
+  BRENT:  { label: "Brent",       kind: commodity, asset_class: energy,        roles: [liquidity, trade] }
+  TLT:    { label: "Tahvil",      kind: safe,      asset_class: rates,         roles: [liquidity] }
+  HYG:    { label: "HY Credit",   kind: risk,      asset_class: credit,        roles: [liquidity] }
+  LQD:    { label: "IG Credit",   kind: safe,      asset_class: credit,        roles: [liquidity] }

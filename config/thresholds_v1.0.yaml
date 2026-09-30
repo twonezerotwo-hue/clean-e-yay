@@ -1178,6 +1178,43 @@ causal_world:
   statements_enabled: true
   causal_graph_enabled: true
   decision_apply: false
+  source:
+    official_bonus: 0.12
+    rumor_cap: 0.25
+    confirmation_factor: 0.12
+    diversity_factor: 0.10
+  decay:
+    default_half_life_minutes: 240
+  statement_authority:
+    chair: 1.00
+    governor: 0.88
+    voting_member: 0.78
+    regional_president: 0.65
+    minister: 0.80
+    treasury_secretary: 0.95
+    president: 0.92
+    official_spokesperson: 0.70
+    anonymous_source: 0.15
+    unknown: 0.35
+  graph:
+    shipping_to_energy: 0.80
+    energy_to_oil: 0.80
+    oil_to_inflation: 0.55
+    inflation_to_rates: 0.50
+    rates_to_real_yield: 0.65
+    rates_to_liquidity: 0.55
+    usd_to_liquidity: 0.55
+    risk_to_credit: 0.60
+    credit_to_equity: 0.65
+    real_yield_to_gold: 0.65
+    usd_to_gold: 0.45
+    liquidity_to_crypto: 0.65
+  asset_exposures:
+    crypto: { liquidity: 1.0, usd_pressure: -0.5, real_yield_pressure: -0.3, risk_aversion: -0.5 }
+    precious_metal: { gold_pressure: 1.0, real_yield_pressure: -0.5, usd_pressure: -0.4, risk_aversion: 0.6, inflation_pressure: 0.3 }
+    equity: { equity_risk_appetite: 1.0, liquidity: 0.5, credit_stress: -0.7, risk_aversion: -0.5, rates_pressure: -0.3, growth_pressure: 0.4 }
+    energy: { energy_supply_risk: 0.9, shipping_risk: 0.5, growth_pressure: 0.3, usd_pressure: -0.2 }
+    other: { liquidity: 0.7, risk_aversion: -0.5, usd_pressure: -0.3 }
 
 # Faz 7 — Conflict Resolver'ın kontrollü aktivasyonu (spec v2.3 §28).
 # `shadow.affect_decision`'dan TAMAMEN BAĞIMSIZ, ayrı bir aktivasyon kapısı.
