@@ -84,7 +84,10 @@ def _propagate(state: WorldStateSnapshot, config: dict, horizon: str | None = No
                 )
             except Exception:
                 pass
-        strength = float(resolved.get("weight", prior_strength))
+        # Weight is always a non-negative magnitude.  Direction comes only
+        # from the configured topology sign; this prevents a legacy signed
+        # calibration artifact from double-flipping a negative edge.
+        strength = abs(float(resolved.get("weight", prior_strength)))
         source_value = factors.get(source)
         if source_value is None:
             continue

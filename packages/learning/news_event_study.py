@@ -601,10 +601,14 @@ def _snapshot_from_reconstruction(row: dict, payload: dict, as_of: datetime):
     from packages.data.quality.dqs import QualityReport
     from packages.data.types import (
         Catalyst,
+        CatalystImpact,
+        DerivativesSnapshot,
         NewsHeadline,
+        OptionsSnapshot,
         PriceQuote,
         RotationView,
         TechnicalSnapshot,
+        VolatilitySnapshot,
     )
 
     def _before(items: list[dict], field: str = "ts") -> list[dict]:
@@ -621,9 +625,53 @@ def _snapshot_from_reconstruction(row: dict, payload: dict, as_of: datetime):
                 continue
         return kept
 
+    def _decode(value: object, model):
+        if not isinstance(value, dict):
+            return None
+        raw = value.get("ts")
+        # These normalized positioning/evidence models carry a timestamp in
+        # the runtime contract.  Do not let a Pydantic default_factory invent
+        # one while replaying an old/incomplete payload.
+        if not raw:
+            return None
+        if raw:
+            try:
+                timestamp = datetime.fromisoformat(str(raw).replace("Z", "+00:00"))
+                if timestamp.tzinfo is None:
+                    timestamp = timestamp.replace(tzinfo=UTC)
+                if timestamp > as_of:
+                    return None
+            except (TypeError, ValueError):
+                return None
+        try:
+            return model(**value)
+        except (TypeError, ValueError):
+            return None
+
+    def _decode_map(value: object, model) -> dict:
+        result: dict = {}
+        if not isinstance(value, dict):
+            return result
+        for key, item in value.items():
+            decoded = _decode(item, model)
+            if decoded is not None:
+                result[str(key)] = decoded
+        return result
+
+    def _decode_nested_map(value: object, model) -> dict:
+        result: dict = {}
+        if not isinstance(value, dict):
+            return result
+        for key, items in value.items():
+            decoded = _decode_map(items, model)
+            if decoded:
+                result[str(key)] = decoded
+        return result
+
     prices = [PriceQuote(**item) for item in _before(payload.get("prices") or [])]
     headlines = [NewsHeadline(**item) for item in _before(payload.get("headlines") or [])]
     catalysts = [Catalyst(**item) for item in _before(payload.get("catalysts") or [])]
+    catalyst_impacts = [item for item in (_decode(item, CatalystImpact) for item in payload.get("catalyst_impacts") or []) if item is not None]
     technicals = {
         symbol: TechnicalSnapshot(**value)
         for symbol, value in (payload.get("technicals") or {}).items()
@@ -651,7 +699,11 @@ def _snapshot_from_reconstruction(row: dict, payload: dict, as_of: datetime):
         warnings=list(payload.get("warnings") or []),
         provider_status=dict(payload.get("provider_status") or {}),
         technicals_by_tf=payload.get("technicals_by_tf"),
-        flow_observations=list(payload.get("flow_observations") or []),
+        derivatives=_decode_map(payload.get("derivatives"), DerivativesSnapshot),
+        volatility=_decode_nested_map(payload.get("volatility"), VolatilitySnapshot),
+        options=_decode_map(payload.get("options"), OptionsSnapshot),
+        catalyst_impacts=catalyst_impacts,
+        flow_observations=_before(payload.get("flow_observations") or [], field="timestamp"),
         market_data_as_of=row.get("market_data_as_of"),
         events_available_as_of=row.get("events_available_as_of"),
         statements_available_as_of=row.get("statements_available_as_of"),
@@ -659,16 +711,76 @@ def _snapshot_from_reconstruction(row: dict, payload: dict, as_of: datetime):
         expectations_as_of=row.get("expectations_as_of"),
         flow_available_as_of=row.get("flow_available_as_of"),
         ingested_at=row.get("ingested_at"),
+        provenance_domains=dict(payload.get("provenance_domains") or row.get("provenance_domains") or {}),
     )
+
+
+_REPLAY_DOMAINS = {
+    "market": "market_data_as_of",
+    "events": "events_available_as_of",
+    "statements": "statements_available_as_of",
+    "macro": "macro_available_as_of",
+    "expectations": "expectations_as_of",
+    "flow": "flow_available_as_of",
+}
+
+
+def _replay_provenance_gaps(row: dict, as_of: str | None) -> tuple[list[str], bool]:
+    """Apply AVAILABLE/UNAVAILABLE/UNKNOWN replay eligibility semantics."""
+    domains = row.get("provenance_domains")
+    domains = domains if isinstance(domains, dict) else {}
+    missing: list[str] = []
+    future = False
+    for domain, field in _REPLAY_DOMAINS.items():
+        entry = domains.get(domain)
+        explicit = isinstance(entry, dict) and entry.get("status")
+        status = str(entry.get("status")).upper() if explicit else ("AVAILABLE" if row.get(field) else "UNKNOWN")
+        raw = (entry or {}).get("as_of") if isinstance(entry, dict) else None
+        raw = raw or row.get(field)
+        if status == "UNAVAILABLE":
+            continue
+        if status != "AVAILABLE" or not raw:
+            missing.append(domain)
+            continue
+        if as_of:
+            try:
+                lhs = datetime.fromisoformat(str(raw).replace("Z", "+00:00"))
+                rhs = datetime.fromisoformat(str(as_of).replace("Z", "+00:00"))
+                if lhs.tzinfo is None:
+                    lhs = lhs.replace(tzinfo=UTC)
+                if rhs.tzinfo is None:
+                    rhs = rhs.replace(tzinfo=UTC)
+                if lhs > rhs:
+                    missing.append(domain)
+                    future = True
+            except (TypeError, ValueError):
+                missing.append(domain)
+    return missing, future
+
+
+def _replay_provenance_summary(rows: list[dict]) -> dict[str, dict[str, str | None]]:
+    """Expose a conservative domain-state summary for the replay UI."""
+    summary: dict[str, dict[str, str | None]] = {}
+    for domain, field in _REPLAY_DOMAINS.items():
+        entries = []
+        for row in rows:
+            value = (row.get("provenance_domains") or {}).get(domain)
+            if isinstance(value, dict) and value.get("status"):
+                entries.append(value)
+            elif row.get(field):
+                entries.append({"status": "AVAILABLE", "as_of": row.get(field)})
+            else:
+                entries.append({"status": "UNKNOWN", "as_of": None})
+        statuses = {str(item.get("status", "UNKNOWN")).upper() for item in entries}
+        status = "UNKNOWN" if "UNKNOWN" in statuses else "AVAILABLE" if "AVAILABLE" in statuses else "UNAVAILABLE"
+        as_of = next((item.get("as_of") for item in reversed(entries) if str(item.get("status", "")).upper() == "AVAILABLE"), None)
+        summary[domain] = {"status": status, "as_of": str(as_of) if as_of is not None else None}
+    return summary
 
 
 def _reconstruct_archive_row(row: dict, horizons: tuple[str, ...]) -> tuple[dict | None, list[str], int]:
     """Rebuild a WorldState/causal shadow only from complete as-of inputs."""
-    required = (
-        "market_data_as_of", "events_available_as_of", "statements_available_as_of",
-        "macro_available_as_of", "expectations_as_of", "flow_available_as_of",
-    )
-    missing = [name for name in required if not row.get(name)]
+    missing, _future = _replay_provenance_gaps(row, row.get("snapshot_as_of") or row.get("generated_at"))
     if missing:
         return None, missing, 0
     inputs = row.get("reconstruction_inputs")
@@ -838,6 +950,7 @@ def causal_historical_replay(rows=None, *, min_n: int = 8, horizons: tuple[str, 
             "missing_domains": ["world_state_archive"], "horizons": list(horizons),
             "by_asset": {}, "by_timeframe": {}, "by_regime": {}, "by_event_type": {},
             "future_rows_ignored": 0, "revision_leakage_blocked": 0,
+            "provenance_domains": {},
             "shadow_only": True, "auto_promotion": False,
         }
     reconstructed = 0
@@ -847,25 +960,24 @@ def causal_historical_replay(rows=None, *, min_n: int = 8, horizons: tuple[str, 
     revision_blocked = 0
     for row in rows:
         as_of = row.get("snapshot_as_of") or row.get("generated_at")
-        # Any explicit future availability watermark is blocked before graph
-        # reconstruction; revised values must not enter the earlier state.
-        for field in ("market_data_as_of", "events_available_as_of", "statements_available_as_of", "macro_available_as_of", "expectations_as_of", "flow_available_as_of", "ingested_at"):
-            value = row.get(field)
-            if value and as_of:
-                try:
-                    lhs = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
-                    rhs = datetime.fromisoformat(str(as_of).replace("Z", "+00:00"))
-                    if lhs.tzinfo is None:
-                        lhs = lhs.replace(tzinfo=UTC)
-                    if rhs.tzinfo is None:
-                        rhs = rhs.replace(tzinfo=UTC)
-                    if lhs > rhs:
-                        future_ignored += 1
-                        missing_domains.add(field)
-                        break
-                except (TypeError, ValueError):
-                    missing_domains.add(field)
-        else:
+        # Any future availability watermark is blocked before graph
+        # reconstruction, while an explicitly UNAVAILABLE domain is accepted.
+        missing, future = _replay_provenance_gaps(row, as_of)
+        ingested = row.get("ingested_at")
+        if ingested and as_of:
+            try:
+                lhs = datetime.fromisoformat(str(ingested).replace("Z", "+00:00"))
+                rhs = datetime.fromisoformat(str(as_of).replace("Z", "+00:00"))
+                if lhs.tzinfo is None:
+                    lhs = lhs.replace(tzinfo=UTC)
+                if rhs.tzinfo is None:
+                    rhs = rhs.replace(tzinfo=UTC)
+                if lhs > rhs:
+                    missing.append("ingested_at")
+                    future = True
+            except (TypeError, ValueError):
+                missing.append("ingested_at")
+        if not missing:
             result, missing, count = _reconstruct_archive_row(row, horizons)
             if count:
                 reconstructed += count
@@ -874,9 +986,12 @@ def causal_historical_replay(rows=None, *, min_n: int = 8, horizons: tuple[str, 
                 evaluator_rows.extend(outcomes)
             else:
                 missing_domains.update(missing)
-            if row.get("revised_value") is not None or row.get("revision"):
-                revision_blocked += 1
-                missing_domains.add("revisions")
+        else:
+            missing_domains.update(missing)
+            future_ignored += int(future)
+        if row.get("revised_value") is not None or row.get("revision"):
+            revision_blocked += 1
+            missing_domains.add("revisions")
     evaluator = causal_historical_evaluator(evaluator_rows, min_n=min_n)
     scored = int(evaluator.get("samples", 0) or 0)
     coverage = reconstructed / max(1, total)
@@ -903,6 +1018,7 @@ def causal_historical_replay(rows=None, *, min_n: int = 8, horizons: tuple[str, 
         "coverage_pct": round(coverage * 100.0, 2),
         "missing_provenance_domains": sorted(missing_domains),
         "missing_domains": sorted(missing_domains),
+        "provenance_domains": _replay_provenance_summary(rows),
         "horizons": list(horizons),
         "by_asset": evaluator.get("by_asset", {}),
         "by_timeframe": evaluator.get("by_timeframe", {}),

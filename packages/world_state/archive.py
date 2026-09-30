@@ -93,6 +93,15 @@ def _iso(value: Any) -> str | None:
 def _provenance(world: Any, generated: Any, explicit: dict[str, Any] | None = None) -> dict[str, Any]:
     supplied = getattr(world, "provenance", None) or {}
     supplied = {**supplied, **(explicit or {})}
+    raw_domains = supplied.get("domains") or supplied.get("provenance_domains") or {}
+    domains = {
+        str(name): {
+            "status": str((value or {}).get("status", "UNKNOWN")).upper(),
+            "as_of": _iso((value or {}).get("as_of")),
+        }
+        for name, value in raw_domains.items()
+        if isinstance(value, dict)
+    }
     # Only snapshot_as_of can safely fall back to the derived snapshot time.
     # Other domains remain unavailable unless the ingestion layer supplied a
     # real watermark.
@@ -105,6 +114,7 @@ def _provenance(world: Any, generated: Any, explicit: dict[str, Any] | None = No
         "expectations_as_of": _iso(supplied.get("expectations_as_of")),
         "flow_available_as_of": _iso(supplied.get("flow_available_as_of")),
         "ingested_at": _iso(supplied.get("ingested_at")),
+        "provenance_domains": domains,
     }
 
 
@@ -215,6 +225,7 @@ def compact_record(
         "expectations_as_of": domain_provenance["expectations_as_of"],
         "flow_available_as_of": domain_provenance["flow_available_as_of"],
         "ingested_at": domain_provenance["ingested_at"],
+        "provenance_domains": domain_provenance["provenance_domains"],
         # Backward-compatible alias; unlike the old implementation it is not
         # fabricated from generated_at.
         "available_events_as_of": domain_provenance["events_available_as_of"],

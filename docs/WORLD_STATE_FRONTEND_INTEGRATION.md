@@ -52,12 +52,19 @@ Both `/api/v1/dashboard/state` and `/api/v1/cockpit/brief` expose:
 | `replay.status` | string | `REAL_REPLAY`, `PARTIAL_REPLAY`, `INSUFFICIENT_PROVENANCE`, `INSUFFICIENT_ARCHIVE`, or `INSUFFICIENT_OUTCOMES` | Status badge; never infer success from row count | Required |
 | `replay.timestamps_reconstructable` / `timestamps_scored` | integer | Reconstruction and scored timestamp counts | Timeline coverage | Optional |
 | `replay.missing_provenance_domains` | array | Domain-specific availability gaps | Explain why replay is partial | Optional |
+| `replay.provenance_domains.<domain>.status` | string | `AVAILABLE`, `UNAVAILABLE`, or `UNKNOWN` | Render domain status verbatim; only UNKNOWN blocks replay | Optional |
+| `replay.provenance_domains.<domain>.as_of` | string/null | Availability watermark for the domain | Show watermark and unavailable reason | Optional |
 | snapshot provenance fields | string/null | `market_data_as_of`, `events_available_as_of`, `statements_available_as_of`, `macro_available_as_of`, `expectations_as_of`, `flow_available_as_of`, `ingested_at` | Timeline provenance tooltip | Optional; `null` means provider watermark unavailable |
 | `causal_shadow.edges_by_horizon` | object | Horizon-specific edge metadata when test-only calibration is applied | Timeframe edge tooltip/filter | Optional; PRIOR remains default |
 | archive `archive_write_reason` / `material_changes` | string/array | `CADENCE_CHECKPOINT`, `MATERIAL_CHANGE`, `REGIME_CHANGE`, `NEW_EVIDENCE` | Archive timeline annotation | Optional |
 | calibration `raw_rows` / `eligible_rows` / `rejected_rows` / `rejection_reasons` | integer/object | Evidence quality and sample N audit | Calibration quality panel | Required for artifact |
 | calibration `archive_window` | object | Start/end archive timestamps used by worker | Provenance tooltip | Optional |
 | `asset_impacts[*].drivers` / `causal_path` | array | Backend-provided explanation chain | Asset causal path panel | Optional; frontend must not calculate |
+
+Edge `sign` and `weight` are separate display values: sign is topology
+direction, weight is a non-negative calibrated magnitude. The client never
+multiplies them or resolves calibration. Replay positioning fields are
+backend-built and must be rendered as evidence only.
 
 The frontend only renders, filters, sorts and visualizes these fields.  It does
 not resolve weights, apply regime/horizon fallback, calculate interactions,

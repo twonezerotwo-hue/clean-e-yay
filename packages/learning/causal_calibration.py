@@ -57,8 +57,10 @@ def _bucket(rows: list[dict[str, Any]], prior_strength: float, min_samples: int,
     stable = n >= min_samples and not sign_conflict and (hit_rate or 0.0) >= 0.5
     recommended = None
     if n >= min_samples and observed is not None and not sign_conflict:
-        recommended = round(max(-1.0, min(1.0, prior_strength * min(1.5, max(0.0, abs(observed))))), 6)
-        recommended = abs(recommended) * prior_sign
+        # Direction belongs to the topology ``sign`` field.  The calibrated
+        # recommendation is magnitude only; returning a negative weight here
+        # would make the graph multiply by ``sign`` a second time.
+        recommended = round(max(0.0, min(1.0, prior_strength * min(1.5, max(0.0, abs(observed))))), 6)
     return {
         "n": n,
         "prior_sign": prior_sign,
@@ -70,6 +72,7 @@ def _bucket(rows: list[dict[str, Any]], prior_strength: float, min_samples: int,
         "confidence_interval": ci,
         "stability": "STABLE" if stable else "UNSTABLE_EDGE" if sign_conflict else "INSUFFICIENT",
         "sign_conflict": sign_conflict,
+        "sign": prior_sign,
         "recommended_strength": recommended,
         "recommendation_only": True,
     }
@@ -261,7 +264,10 @@ def resolve_weight(edge: str, prior_strength: float, *, regime: str | None = Non
         value = item.get("recommended_strength")
         if n >= minimum and value is not None and not item.get("sign_conflict"):
             return {
-                "weight": float(value),
+                # Artifacts are magnitude-only by contract.  Keep this guard
+                # for old/manual artifacts that may still contain a signed
+                # recommendation; topology sign is applied by the graph.
+                "weight": abs(float(value)),
                 "weight_source": source,
                 "sample_n": n,
                 "confidence": min(1.0, n / max(1, minimum)),

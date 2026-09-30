@@ -883,6 +883,7 @@ def build(snapshot: MarketSnapshot, *, now: datetime | None = None) -> WorldStat
             "expectations_as_of": getattr(snapshot, "expectations_as_of", None),
             "flow_available_as_of": getattr(snapshot, "flow_available_as_of", None),
             "ingested_at": getattr(snapshot, "ingested_at", None),
+            "domains": getattr(snapshot, "provenance_domains", None) or {},
         },
         schema_version=2,
         causal_config_version=str(config.get("config_version") or "v1.0"),

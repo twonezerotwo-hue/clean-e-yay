@@ -89,6 +89,7 @@ def _causal_reconstruction_payload(snap) -> dict:
     World-State archive keeps references only and does not duplicate payloads.
     """
     return {
+        "causal_reconstruction_schema_version": 2,
         "snapshot_id": snap.snapshot_id,
         "generated_at": snap.generated_at.isoformat(),
         "prices": [_model_json(item) for item in snap.prices],
@@ -101,6 +102,10 @@ def _causal_reconstruction_payload(snap) -> dict:
         "warnings": list(snap.warnings),
         "provider_status": snap.provider_status or {},
         "flow_observations": list(snap.flow_observations or []),
+        "derivatives": _model_json(getattr(snap, "derivatives", {})),
+        "volatility": _model_json(getattr(snap, "volatility", {})),
+        "options": _model_json(getattr(snap, "options", {})),
+        "catalyst_impacts": _model_json(getattr(snap, "catalyst_impacts", [])),
         "market_data_as_of": snap.market_data_as_of,
         "events_available_as_of": snap.events_available_as_of,
         "statements_available_as_of": snap.statements_available_as_of,
@@ -108,6 +113,7 @@ def _causal_reconstruction_payload(snap) -> dict:
         "expectations_as_of": snap.expectations_as_of,
         "flow_available_as_of": snap.flow_available_as_of,
         "ingested_at": snap.ingested_at,
+        "provenance_domains": _model_json(getattr(snap, "provenance_domains", {})),
     }
 
 

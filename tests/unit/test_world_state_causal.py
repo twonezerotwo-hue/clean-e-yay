@@ -4,12 +4,23 @@ from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
 
-from packages.causal.engine import build_event_asset_attribution, build_shadow
-from packages.data.types import Catalyst, PriceQuote
+from packages.causal.engine import _propagate, build_event_asset_attribution, build_shadow
+from packages.data.ingestion.pipeline import MarketSnapshot
+from packages.data.quality.dqs import QualityReport
+from packages.data.types import (
+    Catalyst,
+    CatalystImpact,
+    DerivativesSnapshot,
+    OptionsSnapshot,
+    PriceQuote,
+    RotationView,
+    VolatilitySnapshot,
+)
 from packages.learning import news_event_study
-from packages.learning.causal_calibration import calibrate_edges
+from packages.learning.causal_calibration import calibrate_edges, resolve_weight
 from packages.world_state.archive import materialize_edge_outcomes
 from packages.world_state.engine import _decay_factor, build, normalized_surprise
+from packages.world_state.model import WorldStateSnapshot
 
 
 def _snapshot(**kwargs):
@@ -325,6 +336,140 @@ def test_negative_edge_calibration_uses_topology_sign():
     assert bucket["prior_sign"] == -1
     assert bucket["sign_conflict"] is False
     assert bucket["stability"] == "STABLE"
+    assert bucket["recommended_strength"] >= 0
+    assert bucket["sign"] == -1
+    assert all(
+        item["recommended_strength"] is None or item["recommended_strength"] >= 0
+        for item in report["recommendations"].values()
+    )
+    resolved = resolve_weight(
+        "rates_to_liquidity", 0.55, regime="RISK_OFF", horizon="1h",
+        recommendations=report,
+    )
+    assert resolved["weight_source"] == "REGIME_HORIZON_CALIBRATED"
+    assert resolved["weight"] == bucket["recommended_strength"]
+
+
+def test_calibrated_negative_and_positive_edges_keep_topology_direction(monkeypatch):
+    state = WorldStateSnapshot(
+        generated_at=datetime(2026, 1, 1, tzinfo=UTC),
+        rates_pressure=1.0,
+        shipping_risk=1.0,
+    )
+    config = {"graph": {"rates_to_liquidity": 0.4, "shipping_to_energy": 0.4}, "calibration": {"apply": False}}
+    factors, edges = _propagate(state, config)
+    by_id = {edge.edge_id: edge for edge in edges}
+    assert by_id["rates_to_liquidity"].contribution < 0
+    assert by_id["shipping_to_energy"].contribution > 0
+
+    import packages.learning.causal_calibration as calibration
+
+    monkeypatch.setattr(
+        calibration,
+        "resolve_weight",
+        lambda *args, **kwargs: {"weight": -0.4, "weight_source": "REGIME_HORIZON_CALIBRATED", "sample_n": 8},
+    )
+    factors, edges = _propagate(
+        state,
+        {"graph": {"rates_to_liquidity": 0.55}, "calibration": {"apply": True}},
+        horizon="4h",
+    )
+    assert factors["liquidity"] < 0
+    assert next(edge for edge in edges if edge.edge_id == "rates_to_liquidity").contribution < 0
+
+
+def _provenance_row(domains: dict, *, snapshot_as_of: str = "2026-01-01T00:00:00+00:00") -> dict:
+    stamp = snapshot_as_of
+    return {
+        "generated_at": stamp,
+        "snapshot_as_of": stamp,
+        "provenance_domains": domains,
+        "reconstruction_inputs": {"world_state": {"liquidity": 0.2}, "symbols": ["BTCUSD"]},
+    }
+
+
+def test_replay_provenance_unavailable_flow_does_not_block():
+    stamp = "2026-01-01T00:00:00+00:00"
+    domains = {name: {"status": "AVAILABLE", "as_of": stamp} for name in ("market", "events", "statements", "macro", "expectations")}
+    domains["flow"] = {"status": "UNAVAILABLE", "as_of": None}
+    report = news_event_study.causal_historical_replay([_provenance_row(domains)], min_n=1)
+    assert report["status"] != "INSUFFICIENT_PROVENANCE"
+    assert "flow" not in report["missing_provenance_domains"]
+
+
+def test_replay_provenance_unknown_or_available_without_watermark_blocks():
+    stamp = "2026-01-01T00:00:00+00:00"
+    domains = {name: {"status": "AVAILABLE", "as_of": stamp} for name in ("market", "events", "statements", "macro", "expectations")}
+    domains["flow"] = {"status": "UNKNOWN", "as_of": None}
+    report = news_event_study.causal_historical_replay([_provenance_row(domains)], min_n=1)
+    assert report["status"] == "INSUFFICIENT_PROVENANCE"
+    assert "flow" in report["missing_provenance_domains"]
+    domains["flow"] = {"status": "AVAILABLE", "as_of": None}
+    report = news_event_study.causal_historical_replay([_provenance_row(domains)], min_n=1)
+    assert report["status"] == "INSUFFICIENT_PROVENANCE"
+
+
+def test_replay_provenance_future_available_watermark_blocks_but_unavailable_does_not():
+    stamp = "2026-01-01T00:00:00+00:00"
+    domains = {name: {"status": "AVAILABLE", "as_of": stamp} for name in ("market", "events", "statements", "macro", "expectations", "flow")}
+    domains["events"] = {"status": "AVAILABLE", "as_of": "2026-01-01T00:01:00+00:00"}
+    report = news_event_study.causal_historical_replay([_provenance_row(domains)], min_n=1)
+    assert report["status"] == "INSUFFICIENT_PROVENANCE"
+    domains["events"] = {"status": "UNAVAILABLE", "as_of": None}
+    report = news_event_study.causal_historical_replay([_provenance_row(domains)], min_n=1)
+    assert report["status"] != "INSUFFICIENT_PROVENANCE"
+
+
+def test_replay_snapshot_restores_positioning_models_and_filters_future_evidence():
+    as_of = datetime(2026, 1, 1, tzinfo=UTC)
+    quality = QualityReport(90, 90, 90, 0, 90, 90, "OK")
+    current_derivatives = DerivativesSnapshot(
+        symbol="BTCUSD", funding_rate=0.001, oi_change_pct=0.1,
+        squeeze_level="HIGH", status="OK", verified=True, ts=as_of,
+    )
+    future_derivatives = DerivativesSnapshot(
+        symbol="ETHUSD", funding_rate=0.001, oi_change_pct=0.1,
+        squeeze_level="HIGH", status="OK", verified=True,
+        ts=as_of + timedelta(minutes=1),
+    )
+    current_options = OptionsSnapshot(
+        symbol="BTCUSD", skew_25d=0.1, status="OK", verified=True, ts=as_of,
+    )
+    current_volatility = VolatilitySnapshot(
+        symbol="BTCUSD", timeframe="1d", regime="EXTREME", status="OK", verified=True, ts=as_of,
+    )
+    snapshot = MarketSnapshot(
+        snapshot_id="snap-parity", generated_at=as_of, prices=[], technicals={},
+        headlines=[], catalysts=[], rotation=RotationView(status="UNAVAILABLE"), quality=quality,
+        derivatives={"BTCUSD": current_derivatives},
+        options={"BTCUSD": current_options}, volatility={"BTCUSD": {"1d": current_volatility}},
+        catalyst_impacts=[CatalystImpact(catalyst_id="c1", event_type="unknown", ts=as_of)],
+    )
+    payload = {key: value for key, value in {
+        "snapshot_id": snapshot.snapshot_id,
+        "prices": [], "technicals": {}, "headlines": [], "catalysts": [],
+        "rotation": snapshot.rotation.model_dump(mode="json"), "quality": {
+            "score": 90, "freshness": 90, "completeness": 90, "drift": 0,
+            "reconciliation": 90, "decision_usage": 90, "status": "OK",
+        },
+        "derivatives": {
+            **{key: value.model_dump(mode="json") for key, value in snapshot.derivatives.items()},
+            "ETHUSD": future_derivatives.model_dump(mode="json"),
+        },
+        "options": {key: value.model_dump(mode="json") for key, value in snapshot.options.items()},
+        "volatility": {key: {tf: value.model_dump(mode="json") for tf, value in by_tf.items()} for key, by_tf in snapshot.volatility.items()},
+        "catalyst_impacts": [value.model_dump(mode="json") for value in snapshot.catalyst_impacts],
+    }.items()}
+    row = {"snapshot_id": "snap-parity"}
+    replay_snapshot = news_event_study._snapshot_from_reconstruction(row, payload, as_of)
+    runtime_world = build(snapshot, now=as_of)
+    replay_world = build(replay_snapshot, now=as_of)
+    assert runtime_world.positioning == replay_world.positioning
+    assert replay_snapshot.derivatives["BTCUSD"].squeeze_level == "HIGH"
+    assert "ETHUSD" not in replay_snapshot.derivatives
+    assert replay_snapshot.options["BTCUSD"].skew_25d == current_options.skew_25d
+    assert replay_snapshot.volatility["BTCUSD"]["1d"].regime == "EXTREME"
+    assert replay_snapshot.catalyst_impacts[0].catalyst_id == "c1"
 
 
 def test_replay_scores_reconstructed_prediction_not_stale_archive_impact():

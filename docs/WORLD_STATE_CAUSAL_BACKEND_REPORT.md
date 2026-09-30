@@ -263,6 +263,27 @@ there is no parallel replay engine.  An archive row alone cannot become
 `INSUFFICIENT_OUTCOMES`.  Future event/ingestion/macro fields and future bars
 are rejected; revised values cannot overwrite a first-release as-of state.
 
+### Replay provenance domain states
+
+Each replay domain (`market`, `events`, `statements`, `macro`, `expectations`,
+`flow`) carries `AVAILABLE`, `UNAVAILABLE`, or `UNKNOWN`. `AVAILABLE` requires
+a real watermark at or before T; `UNAVAILABLE` explicitly means the provider
+did not supply that domain and is accepted; `UNKNOWN` is a blocker. This keeps
+an absent flow provider distinct from flow evidence that was used without a
+known timestamp. Legacy rows without the explicit state remain conservative:
+an absent watermark is treated as unknown.
+
+### Runtime snapshot replay parity
+
+The snapshot-store reconstruction payload is schema-versioned (`2`) and retains
+the normalized runtime fields for derivatives, volatility, options and catalyst
+impacts in addition to prices, technicals, news, catalysts, rotation and flow
+observations. Deserialization uses the existing models, drops nested evidence
+after T, and treats missing old fields as empty/unavailable. Replay then calls
+the existing `world_state.build(snapshot_T)` path, so positioning, options
+caution, volatility regime and squeeze state use the same runtime calculation
+rather than a duplicate replay engine.
+
 ## 18. Edge Calibration
 
 `packages/learning/causal_calibration.py` measures factor-to-factor evidence
@@ -270,6 +291,18 @@ and emits prior sign/strength, sample N, observed effect, hit rate, median,
 confidence interval, stability and a recommended strength.  A sign conflict is
 `UNSTABLE_EDGE`; it is never silently inverted.  Recommendations are written
 as shadow artifacts only and do not edit YAML or active graph weights.
+
+### Calibration sign invariant
+
+The canonical edge ID and topology sign are separate from the calibrated
+magnitude. `edge_id` is the configured graph key (for example
+`rates_to_liquidity`), `sign` is `-1` for an inverse relationship, and
+`prior_strength`/`recommended_strength`/resolved `weight` are always
+non-negative magnitudes. The graph applies exactly one direction operation:
+`source_value * sign * positive_strength`. This prevents signed legacy
+artifacts from double-flipping negative edges. The calibration artifact is
+recommendation-only and `causal_world.calibration.apply=false` remains the
+production default.
 
 ## 19. Regime- and Horizon-Dependent Causality
 
