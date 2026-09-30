@@ -78,6 +78,21 @@ class MarketSnapshot:
     # v2.7 D5 — haber → catalyst half-life zekâsı (deterministik, LLM yok).
     # Karar zincirinde yalnızca kısıtlayıcı (verified + yarı-ömrü dolmamış).
     catalyst_impacts: list[CatalystImpact] = field(default_factory=list)
+    # Optional provider-neutral published capital-flow observations.  Existing
+    # providers may leave this empty; rotation remains an explicit proxy.
+    flow_observations: list[dict] = field(default_factory=list)
+    # Historical replay provenance.  These are domain watermarks, not aliases
+    # for ``generated_at``; unknown provider watermarks remain None.
+    market_data_as_of: datetime | None = None
+    events_available_as_of: datetime | None = None
+    statements_available_as_of: datetime | None = None
+    macro_available_as_of: datetime | None = None
+    expectations_as_of: datetime | None = None
+    flow_available_as_of: datetime | None = None
+    ingested_at: datetime | None = None
+    # Explicit replay semantics: AVAILABLE has a real watermark, UNAVAILABLE
+    # means the domain supplied no evidence, UNKNOWN is a provenance blocker.
+    provenance_domains: dict[str, dict] = field(default_factory=dict)
 
 
 def _make_id(now: datetime) -> str:
@@ -94,6 +109,66 @@ def _regime_macro_missing(prices: list[PriceQuote]) -> list[str]:
     return sorted(
         q.symbol for q in prices if q.symbol in _REGIME_MACRO_SYMBOLS and q.price is None
     )
+
+
+def _latest_timestamp(items: list[object], attribute: str = "ts") -> datetime | None:
+    values = [getattr(item, attribute, None) for item in items]
+    values = [value for value in values if isinstance(value, datetime)]
+    return max(values) if values else None
+
+
+def _latest_timestamp_before(items: list[object], cutoff: datetime, attribute: str = "ts") -> datetime | None:
+    values = [getattr(item, attribute, None) for item in items]
+    values = [value for value in values if isinstance(value, datetime) and value <= cutoff]
+    return max(values) if values else None
+
+
+def _latest_provider_ingestion(status: dict[str, dict]) -> datetime | None:
+    values: list[datetime] = []
+    for item in (status or {}).values():
+        raw = item.get("last_success_at") if isinstance(item, dict) else None
+        if not raw:
+            continue
+        try:
+            value = datetime.fromisoformat(str(raw).replace("Z", "+00:00"))
+            values.append(value if value.tzinfo is not None else value.replace(tzinfo=UTC))
+        except (TypeError, ValueError):
+            continue
+    return max(values) if values else None
+
+
+def _provider_ingestion_for(status: dict[str, dict], names: tuple[str, ...]) -> datetime | None:
+    return _latest_provider_ingestion({name: status.get(name) for name in names if name in status})
+
+
+def _provider_state(status: dict[str, dict], names: tuple[str, ...]) -> str:
+    states = [str((status.get(name) or {}).get("status", "unknown")).lower() for name in names]
+    if any(state == "ok" for state in states):
+        return "AVAILABLE"
+    if states and all(state in {"disabled", "unavailable", "down", "degraded"} for state in states):
+        return "UNAVAILABLE"
+    return "UNKNOWN"
+
+
+def _domain_provenance(
+    status: dict[str, dict],
+    names: tuple[str, ...],
+    watermark: datetime | None,
+    *,
+    has_evidence: bool,
+) -> dict[str, object]:
+    """Return an honest AVAILABLE/UNAVAILABLE/UNKNOWN domain state."""
+    state = _provider_state(status, names)
+    if watermark is not None:
+        return {"status": "AVAILABLE", "as_of": watermark}
+    if state == "AVAILABLE":
+        # A successful zero-result provider is still an as-of observation; its
+        # recorded ingestion time is the only non-fabricated watermark.
+        observed_at = _provider_ingestion_for(status, names)
+        return {"status": "AVAILABLE", "as_of": observed_at} if observed_at else {"status": "UNKNOWN", "as_of": None}
+    if state == "UNAVAILABLE" and not has_evidence:
+        return {"status": "UNAVAILABLE", "as_of": None}
+    return {"status": "UNKNOWN", "as_of": None}
 
 
 def build_snapshot(symbols: list[str] | None = None) -> MarketSnapshot:
@@ -238,6 +313,49 @@ def build_snapshot(symbols: list[str] | None = None) -> MarketSnapshot:
     }
     if price_provider.is_runtime_mock_explicit():
         warnings.insert(0, "PRICE_USE_MOCK=true — TEST/MOCK MODE")
+    market_data_as_of = _latest_timestamp(prices)
+    events_available_as_of = _latest_timestamp(headlines)
+    # Statements and expectations in World-State are deterministic views of
+    # the same published headline/catalyst inputs; carry that source
+    # watermark, never generated_at as a fabricated availability proof.
+    statements_available_as_of = events_available_as_of
+    expectations_as_of = statements_available_as_of
+    # Calendar rows may describe a future scheduled release.  Its event time
+    # is not an availability watermark; use only past releases or the
+    # provider's recorded ingestion time, never a future catalyst timestamp.
+    macro_available_as_of = _latest_timestamp_before(catalysts, now) or _provider_ingestion_for(provider_status, ("calendar",))
+    # No provider-neutral real-flow observations are ingested by this pipeline
+    # yet; World-State may still expose the explicit rotation price proxy.
+    flow_available_as_of = None
+    ingested_at = _latest_provider_ingestion(provider_status)
+    # Domain status is kept separately from the legacy watermark fields so an
+    # explicitly unavailable source is not confused with unknown provenance.
+    provenance_domains = {
+        "market": _domain_provenance(
+            provider_status, ("coingecko", "yfinance", "fred", "twelvedata", "alphavantage", "finnhub"),
+            market_data_as_of, has_evidence=bool(prices),
+        ),
+        "events": _domain_provenance(
+            provider_status, ("news", "geo_news"), events_available_as_of,
+            has_evidence=bool(headlines),
+        ),
+        "statements": _domain_provenance(
+            provider_status, ("news", "geo_news"), statements_available_as_of,
+            has_evidence=bool(headlines),
+        ),
+        "expectations": _domain_provenance(
+            provider_status, ("news", "geo_news", "calendar"), expectations_as_of,
+            has_evidence=bool(headlines or catalysts),
+        ),
+        "macro": _domain_provenance(
+            provider_status, ("calendar",), macro_available_as_of,
+            has_evidence=bool(catalysts),
+        ),
+        "flow": _domain_provenance(
+            provider_status, ("rotation",), flow_available_as_of,
+            has_evidence=bool(getattr(rotation, "per_symbol", {})),
+        ),
+    }
     return MarketSnapshot(
         snapshot_id=_make_id(now),
         generated_at=now,
@@ -254,6 +372,14 @@ def build_snapshot(symbols: list[str] | None = None) -> MarketSnapshot:
         volatility=volatility,
         options=options,
         catalyst_impacts=catalyst_impacts,
+        market_data_as_of=market_data_as_of,
+        events_available_as_of=events_available_as_of,
+        statements_available_as_of=statements_available_as_of,
+        macro_available_as_of=macro_available_as_of,
+        expectations_as_of=expectations_as_of,
+        flow_available_as_of=flow_available_as_of,
+        ingested_at=ingested_at,
+        provenance_domains=provenance_domains,
     )
 
 

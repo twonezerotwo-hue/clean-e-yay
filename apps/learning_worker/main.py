@@ -624,9 +624,69 @@ def run_once() -> dict:
         from packages.learning import news_event_study as _nes
         recorded = _nes.record_events()
         nt = _nes.compute()
+        # Causal graph observation is deliberately off-tick.  It snapshots the
+        # already-produced market view and appends predictions to the bounded
+        # ledger; it never feeds weights, orders, or the live decision path.
+        causal_recorded = 0
+        calibration_runtime = {"status": "NOT_RUN"}
+        try:
+            from packages.causal.engine import build_event_asset_attribution
+            from packages.causal.engine import build_shadow as _build_shadow
+            from packages.data.ingestion.pipeline import get_cached_snapshot
+            from packages.data.registry import assets as _asset_registry
+            from packages.world_state import archive as _world_archive
+            from packages.world_state.engine import build as _build_world
+            _cached_snapshot = get_cached_snapshot()
+            _world = _build_world(_cached_snapshot)
+            _shadow = _build_shadow(
+                _world,
+                _asset_registry.trade_symbols(),
+                technicals=(getattr(_cached_snapshot, "technicals_by_tf", None) or getattr(_cached_snapshot, "technicals", None)),
+            )
+            _world_archive.record(
+                _world,
+                snapshot_id=getattr(_cached_snapshot, "snapshot_id", None),
+                asset_impacts=_shadow.impacts,
+                causal_consensus=_shadow.causal_consensus,
+                edges=_shadow.edges,
+                reconstruction_inputs={
+                    "snapshot_id": getattr(_cached_snapshot, "snapshot_id", None),
+                    "source": "snapshot_store",
+                },
+            )
+            by_event = []
+            symbols = _asset_registry.trade_symbols()
+            for event in _world.geopolitical_events:
+                item = event.to_dict()
+                item.update(build_event_asset_attribution(item, symbols))
+                by_event.append(item)
+            for event in _world.macro_surprises:
+                item = event.to_dict()
+                channels = {
+                    key: value for key, value in {
+                        "inflation_pressure": event.inflation_contribution,
+                        "growth_pressure": event.growth_contribution,
+                        "rates_pressure": event.rates_contribution,
+                        "oil_pressure": event.oil_contribution,
+                    }.items() if value
+                }
+                item["channels"] = channels
+                item["source_confidence"] = event.numeric_confidence
+                item.update(build_event_asset_attribution(item, symbols))
+                by_event.append(item)
+            causal_recorded = _nes.record_causal_events(by_event)
+            _nes.causal_event_study()
+            # Matured archived factor responses are the sole input to the
+            # causal edge calibration artifact.  This is off-tick and
+            # fail-soft; calibration.apply remains false in production.
+            from packages.learning import causal_calibration as _cc
+            calibration_runtime = _cc.run_if_due()
+        except Exception as causal_exc:
+            errors.append(f"causal_event_ledger:{type(causal_exc).__name__}")
+            calibration_runtime = {"status": "ERROR", "error": type(causal_exc).__name__}
         news_study_status = "OK"
-        log.info("news_event_study: +%s events, matured=%s verdict=%s",
-                 recorded, nt.get("matured"), nt.get("global_verdict"))
+        log.info("news_event_study: +%s events, causal=%s, matured=%s verdict=%s calibration=%s",
+                 recorded, causal_recorded, nt.get("matured"), nt.get("global_verdict"), calibration_runtime.get("status"))
     except Exception as exc:  # defensive — worker patlamamalı
         news_study_status = f"ERROR:{type(exc).__name__}"
         errors.append(f"news_event_study:{type(exc).__name__}")

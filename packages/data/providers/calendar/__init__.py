@@ -183,6 +183,10 @@ def list_catalysts(
                 hours_until=hours_until,
                 source="event_calendar.yaml",
                 verified=True,
+                actual=ev.get("actual"),
+                expected=ev.get("expected"),
+                previous=ev.get("previous"),
+                historical_surprise_volatility=ev.get("historical_surprise_volatility"),
             )
         )
 

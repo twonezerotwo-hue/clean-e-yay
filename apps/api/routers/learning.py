@@ -20,6 +20,7 @@ from packages.learning import (
     calibration_audit,
     calibration_store,
     calibration_trainer,
+    causal_calibration,
     challenger_trainer,
     cohorts,
     council_scorecard,
@@ -60,6 +61,7 @@ from packages.learning import outcomes as outcomes_mod
 from packages.learning.calibration import reliability_bins
 from packages.learning.summary import build_summary
 from packages.risk import trade_economics as te
+from packages.world_state import archive as world_state_archive
 
 router = APIRouter(tags=["learning"])
 
@@ -649,6 +651,29 @@ def get_news_event_study() -> dict:
     dürüst `global_verdict=UNPROVEN` ("news ağırlığı kanıtsız"). Hiçbir çıktı
     karara/ağırlığa dokunmaz — news görünürlüğü challenger'a AYRI owner kararı."""
     return news_event_study.viewmodel()
+
+
+@router.get("/learning/causal-calibration")
+def get_causal_calibration() -> dict:
+    """Evidence-calibrated causal edge recommendations (read-only shadow)."""
+    return causal_calibration.load_recommendations() or {
+        "status": "INSUFFICIENT",
+        "raw_rows": 0,
+        "eligible_rows": 0,
+        "rejected_rows": 0,
+        "rejection_reasons": {},
+        "archive_window": {"start": None, "end": None},
+        "recommendations": {},
+        "shadow_only": True,
+        "auto_apply": False,
+    }
+
+
+@router.get("/learning/world-state-archive")
+def get_world_state_archive() -> dict:
+    """Compact World-State archive status and recent rows (read-only)."""
+    rows = world_state_archive.all_records()
+    return {**world_state_archive.status(), "records_preview": rows[-20:]}
 
 
 @router.get("/learning/backtest-challenger")

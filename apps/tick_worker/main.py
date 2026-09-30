@@ -17,6 +17,7 @@ import os
 import signal
 import time
 import uuid
+from dataclasses import asdict
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -64,6 +65,56 @@ _PREV_STATE: dict = {"ticket_ids": set(), "verdicts": {}, "risk_action": None, "
 
 def _utc_iso() -> str:
     return datetime.now(UTC).isoformat()
+
+
+def _model_json(value):
+    """Serialize existing provider models for the canonical snapshot store."""
+    if isinstance(value, datetime):
+        return value.isoformat()
+    if isinstance(value, dict):
+        return {str(key): _model_json(item) for key, item in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_model_json(item) for item in value]
+    if hasattr(value, "model_dump"):
+        return value.model_dump(mode="json")
+    if hasattr(value, "dict"):
+        return value.dict()
+    return asdict(value) if hasattr(value, "__dataclass_fields__") else value
+
+
+def _causal_reconstruction_payload(snap) -> dict:
+    """Persist raw as-of inputs in snapshot_store for later replay.
+
+    This is additive to the existing full snapshot store; the compact
+    World-State archive keeps references only and does not duplicate payloads.
+    """
+    return {
+        "causal_reconstruction_schema_version": 2,
+        "snapshot_id": snap.snapshot_id,
+        "generated_at": snap.generated_at.isoformat(),
+        "prices": [_model_json(item) for item in snap.prices],
+        "technicals": {key: _model_json(value) for key, value in snap.technicals.items()},
+        "technicals_by_tf": _model_json(snap.technicals_by_tf) if snap.technicals_by_tf else None,
+        "headlines": [_model_json(item) for item in snap.headlines],
+        "catalysts": [_model_json(item) for item in snap.catalysts],
+        "rotation": _model_json(snap.rotation),
+        "quality": _model_json(snap.quality),
+        "warnings": list(snap.warnings),
+        "provider_status": snap.provider_status or {},
+        "flow_observations": list(snap.flow_observations or []),
+        "derivatives": _model_json(getattr(snap, "derivatives", {})),
+        "volatility": _model_json(getattr(snap, "volatility", {})),
+        "options": _model_json(getattr(snap, "options", {})),
+        "catalyst_impacts": _model_json(getattr(snap, "catalyst_impacts", [])),
+        "market_data_as_of": snap.market_data_as_of,
+        "events_available_as_of": snap.events_available_as_of,
+        "statements_available_as_of": snap.statements_available_as_of,
+        "macro_available_as_of": snap.macro_available_as_of,
+        "expectations_as_of": snap.expectations_as_of,
+        "flow_available_as_of": snap.flow_available_as_of,
+        "ingested_at": snap.ingested_at,
+        "provenance_domains": _model_json(getattr(snap, "provenance_domains", {})),
+    }
 
 
 # S1-4 — OPSİYONEL sağlayıcılar: bazı ağlardan kalıcı erişilemeyen yan
@@ -163,6 +214,7 @@ def _snapshot_record(snap, view: dict, risk, ps) -> dict:
             ],
             "warnings": list(snap.warnings)[:8],
         },
+        "causal_reconstruction": _causal_reconstruction_payload(snap),
         "decision_matrix": view,
         "risk_state": {
             "action": risk.action,

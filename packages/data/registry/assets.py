@@ -21,6 +21,7 @@ class Asset:
     label: str
     kind: str
     roles: tuple[str, ...]
+    asset_class: str = "other"
 
 
 @lru_cache(maxsize=1)
@@ -36,6 +37,7 @@ def _load_yaml() -> tuple[Asset, ...]:
                 label=str(meta.get("label", sym)),
                 kind=str(meta.get("kind", "macro")),
                 roles=tuple(meta.get("roles") or []),
+                asset_class=str(meta.get("asset_class", meta.get("kind", "other"))),
             )
         )
     return tuple(out)
@@ -47,7 +49,7 @@ def _load() -> tuple[Asset, ...]:
     yaml_assets = list(_load_yaml())
     yaml_symbols = {a.symbol for a in yaml_assets}
     custom = [
-        Asset(symbol=c.symbol, label=c.label, kind=c.kind, roles=c.roles)
+        Asset(symbol=c.symbol, label=c.label, kind=c.kind, roles=c.roles, asset_class=c.kind)
         for c in custom_assets.all_custom()
         if c.symbol not in yaml_symbols
     ]

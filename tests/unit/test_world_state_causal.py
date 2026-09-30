@@ -1,0 +1,531 @@
+from __future__ import annotations
+
+from dataclasses import replace
+from datetime import UTC, datetime, timedelta
+from types import SimpleNamespace
+
+from packages.causal.engine import _propagate, build_event_asset_attribution, build_shadow
+from packages.data.ingestion.pipeline import MarketSnapshot
+from packages.data.quality.dqs import QualityReport
+from packages.data.types import (
+    Catalyst,
+    CatalystImpact,
+    DerivativesSnapshot,
+    OptionsSnapshot,
+    PriceQuote,
+    RotationView,
+    VolatilitySnapshot,
+)
+from packages.learning import news_event_study
+from packages.learning.causal_calibration import calibrate_edges, resolve_weight
+from packages.world_state.archive import materialize_edge_outcomes
+from packages.world_state.engine import _decay_factor, build, normalized_surprise
+from packages.world_state.model import WorldStateSnapshot
+
+
+def _snapshot(**kwargs):
+    rotation = SimpleNamespace(
+        status="OK",
+        per_symbol={"DXY": 70.0, "SP500": 65.0, "BTCUSD": 60.0, "ETHUSD": 55.0,
+                    "HYG": 45.0, "LQD": 55.0, "XAUUSD": 58.0, "XAGUSD": 52.0,
+                    "TLT": 53.0, "BRENT": 57.0},
+        evidence=["rotation fixture"],
+    )
+    quality = SimpleNamespace(status="OK", score=90.0)
+    values = {
+        "generated_at": datetime.now(UTC), "rotation": rotation, "quality": quality,
+        "headlines": [], "catalysts": [], "catalyst_impacts": [],
+    }
+    values.update(kwargs)
+    return SimpleNamespace(**values)
+
+
+def test_world_state_reuses_flow_and_keeps_scale_bounded():
+    world = build(_snapshot())
+    assert -1.0 <= world.usd_pressure <= 1.0
+    assert -1.0 <= world.liquidity <= 1.0
+    assert world.global_flow_regime in {"RISK_ON", "RISK_OFF", "NEUTRAL", "LIQUIDITY_EXPANSION", "MIXED", "UNKNOWN"}
+    assert "rates" in world.missing_inputs
+    assert world.macro_sources["US10Y"]["source_type"] == "UNAVAILABLE"
+
+
+def test_missing_inputs_are_not_filled_with_fake_neutral():
+    snap = _snapshot()
+    snap.rotation.per_symbol = {}
+    world = build(snap)
+    assert world.usd_pressure is None
+    assert "DXY" in world.missing_inputs
+    assert world.coverage == 0.0
+
+
+def test_numeric_surprise_requires_all_inputs():
+    assert normalized_surprise(110.0, 100.0, 5.0) == 1.0
+    assert normalized_surprise(110.0, None, 5.0) is None
+    assert normalized_surprise(110.0, 100.0, 0.0) is None
+
+
+def test_runtime_macro_rates_do_not_read_rotation_fixture_keys():
+    snap = _snapshot(prices=[PriceQuote(symbol="US10Y", price=4.2, source="fred", verified=True, status="OK")])
+    snap.rotation.per_symbol["US10Y"] = 99.0
+    world = build(snap)
+    assert world.rates_pressure is None
+    assert world.macro_sources["US10Y"]["source_type"] == "DIRECT"
+
+
+def test_headline_taxonomy_and_valid_until_are_independent_of_legacy_prefix():
+    now = datetime.now(UTC)
+    headline = SimpleNamespace(id="geo-new", title="Iran threatens to close Strait of Hormuz", title_tr=None,
+                               verified=True, ts=now, source="Reuters", region="Middle East")
+    world = build(_snapshot(headlines=[headline]))
+    assert world.geopolitical_events[0].event_type == "CHOKEPOINT_THREAT"
+    expired_impact = SimpleNamespace(headline_id="geo-new", event_type="unknown", confidence=0.9,
+                                     surprise_level=0.8, expected_half_life_minutes=120,
+                                     valid_until=now.replace(year=now.year - 1))
+    expired = build(_snapshot(headlines=[headline], catalyst_impacts=[expired_impact]))
+    assert expired.geopolitical_events[0].expired is True
+    assert expired.geopolitical_events[0].severity == 0.0
+
+
+def _macro(title: str, actual: float, expected: float, *, event_id: str = "macro-1", volatility: float | None = 1.0) -> Catalyst:
+    return Catalyst(id=event_id, ts=datetime.now(UTC), title=title, source="calendar", verified=True,
+                    actual=actual, expected=expected, historical_surprise_volatility=volatility)
+
+
+def test_macro_surprise_semantics_reach_world_factors():
+    positive = build(_snapshot(catalysts=[_macro("US CPI", 3.4, 3.0)]))
+    negative = build(_snapshot(catalysts=[_macro("US CPI", 2.6, 3.0)]))
+    assert positive.macro_surprises[0].inflation_contribution > 0
+    assert negative.macro_surprises[0].inflation_contribution < 0
+    assert positive.inflation_pressure > negative.inflation_pressure
+
+    nfp = build(_snapshot(catalysts=[_macro("Nonfarm Payrolls", 220.0, 180.0, event_id="nfp")]))
+    unemployment = build(_snapshot(catalysts=[_macro("Unemployment Rate", 5.0, 4.5, event_id="unemployment")]))
+    oil = build(_snapshot(catalysts=[_macro("EIA Crude Oil Inventory", 10.0, 2.0, event_id="oil")]))
+    assert nfp.growth_pressure > 0 and nfp.rates_pressure > 0
+    assert unemployment.growth_pressure < 0
+    assert oil.macro_surprise_oil < 0
+
+
+def test_macro_surprise_fallback_is_marked_lower_confidence_and_asset_visible():
+    world = build(_snapshot(catalysts=[_macro("US CPI", 3.4, 3.0, volatility=None)]))
+    surprise = world.macro_surprises[0]
+    assert surprise.normalization_method == "relative_difference_fallback"
+    assert surprise.numeric_confidence < 1.0
+    impact = build_shadow(world, ["BTCUSD"]).impacts[0]
+    assert impact.macro_surprise_contribution is not None
+
+
+def test_positioning_never_flips_thesis_sign():
+    world = build(_snapshot())
+    bullish = replace(world, positioning={"BTCUSD": {"state": "CROWDED_LONG", "squeeze_state": "HIGH", "options": {"state": "RICH_VOL_OR_BACKWARDATION"}, "volatility": {"regime": "EXTREME"}}})
+    bearish = replace(world, positioning={"BTCUSD": {"state": "CROWDED_SHORT", "squeeze_state": "HIGH", "options": {"state": "PUT_SKEW_CAUTION"}, "volatility": {"regime": "EXTREME"}}})
+    base = build_shadow(world, ["BTCUSD"]).impacts[0]
+    long_risk = build_shadow(bullish, ["BTCUSD"]).impacts[0]
+    short_risk = build_shadow(bearish, ["BTCUSD"]).impacts[0]
+    if base.direction_score is not None:
+        assert long_risk.direction_score == base.direction_score
+        assert short_risk.direction_score == base.direction_score
+    assert long_risk.confidence <= base.confidence
+    assert short_risk.confidence <= base.confidence
+
+
+def test_event_attribution_is_marginal_and_does_not_copy_global_prediction():
+    hormuz = build_event_asset_attribution({"event_id": "a", "event_type": "CHOKEPOINT_THREAT", "channel_strengths": {"shipping_risk": 0.8, "energy_supply_risk": 0.7}, "source_confidence": 0.8}, ["BRENT", "BTCUSD"])
+    sanctions = build_event_asset_attribution({"event_id": "b", "event_type": "SANCTIONS", "channel_strengths": {"sanctions_pressure": 0.8, "trade_risk": 0.7}, "source_confidence": 0.8}, ["BRENT", "BTCUSD"])
+    assert hormuz["asset_predictions"] != sanctions["asset_predictions"]
+    assert hormuz["event_id"] != sanctions["event_id"]
+
+
+def test_historical_replay_reports_archive_limit_honestly_and_tf_scores_differ():
+    from packages.learning.news_event_study import (
+        causal_historical_evaluator,
+        causal_historical_replay,
+    )
+    assert causal_historical_replay([])["status"] == "INSUFFICIENT_ARCHIVE"
+    evaluated = causal_historical_evaluator([{"asset": "BTCUSD", "causal_direction": 1, "legacy_direction": -1, "forward_return": 0.02, "as_of": "2026-01-01", "event_ts": "2026-01-02"}])
+    assert evaluated["samples"] == 0
+    world = build(_snapshot())
+    technicals = {"BTCUSD": {"15m": SimpleNamespace(direction_score=30.0), "1h": SimpleNamespace(direction_score=50.0), "4h": SimpleNamespace(direction_score=70.0)}}
+    shadow = build_shadow(world, ["BTCUSD"], technicals=technicals, legacy_scores={"BTCUSD|15m": {"score": 40, "direction": "bearish", "timeframe": "15m"}, "BTCUSD|4h": {"score": 60, "direction": "bullish", "timeframe": "4h"}})
+    rows = {row["timeframe"]: row for row in shadow.causal_consensus}
+    assert rows["15m"]["world_thesis_score"] == rows["4h"]["world_thesis_score"]
+    assert rows["15m"]["final_shadow_score_tf"] != rows["4h"]["final_shadow_score_tf"]
+    assert rows["15m"]["entry_timing_state"] != rows["4h"]["entry_timing_state"]
+
+
+def test_duplicate_headlines_do_not_create_duplicate_geopolitical_events():
+    now = datetime.now(UTC)
+    impact = SimpleNamespace(
+        headline_id="h1", event_type="geopolitical_escalation", confidence=0.8,
+        surprise_level=0.7, expected_half_life_minutes=120, valid_until=None,
+    )
+    duplicate = SimpleNamespace(
+        id="h2", title="Missile attack threatens shipping", title_tr=None,
+        verified=True, ts=now, source="copy-b", region="X",
+    )
+    original = SimpleNamespace(
+        id="h1", title="Missile attack threatens shipping", title_tr=None,
+        verified=True, ts=now, source="source-a", region="X",
+    )
+    world = build(_snapshot(headlines=[original, duplicate], catalyst_impacts=[impact]))
+    assert len(world.geopolitical_events) == 1
+
+
+def test_causal_shadow_is_evidence_only_and_bounded():
+    world = build(_snapshot())
+    shadow = build_shadow(world, ["XAUUSD", "BTCUSD", "SP500"], decision_apply=False)
+    assert shadow.enabled is True
+    assert shadow.decision_apply is False
+    assert len(shadow.edges) > 0
+    assert {item.symbol for item in shadow.impacts} == {"XAUUSD", "BTCUSD", "SP500"}
+    assert all(item.direction_score is None or -1.0 <= item.direction_score <= 1.0 for item in shadow.impacts)
+
+
+def test_causal_shadow_can_be_disabled_without_side_effects():
+    world = build(_snapshot())
+    shadow = build_shadow(world, ["BTCUSD"], enabled=False, decision_apply=True)
+    assert shadow.enabled is False
+    assert shadow.decision_apply is False
+    assert shadow.impacts == ()
+
+
+def test_technical_timing_is_observational_and_separate_from_thesis():
+    world = build(_snapshot())
+    technicals = {
+        "XAUUSD": {
+            "4h": SimpleNamespace(direction_score=70.0),
+            "1d": SimpleNamespace(direction_score=65.0),
+        }
+    }
+    shadow = build_shadow(world, ["XAUUSD"], technicals=technicals)
+    impact = shadow.impacts[0]
+    assert impact.direction_score is not None
+    assert impact.technical_confirmation == 0.35
+    assert impact.timing_status == "CONFIRMED"
+    assert shadow.decision_apply is False
+
+
+def test_causal_ledger_deduplicates_and_study_is_observation_only(tmp_path, monkeypatch):
+    monkeypatch.setenv("CAUSAL_EVENT_LEDGER_PATH", str(tmp_path / "causal.jsonl"))
+    monkeypatch.setenv("CAUSAL_EVENT_STUDY_PATH", str(tmp_path / "study.json"))
+    event = {
+        "event_id": "geo-1",
+        "event_type": "CHOKEPOINT_THREAT",
+        "region": "Middle East",
+        "channels": {"shipping_risk": 0.8},
+        "asset_predictions": {"BRENT": 0.6},
+    }
+    assert news_event_study.record_causal_events([event, event]) == 1
+    table = news_event_study.causal_event_study(
+        forward_returns={("geo-1", "BRENT", "1h"): 0.02},
+        horizons=("1h",),
+        min_n=2,
+    )
+    bucket = next(iter(table["buckets"].values()))
+    assert bucket["n"] == 1
+    assert bucket["verdict"] == "INSUFFICIENT"
+    assert table["shadow_only"] is True
+    assert table["auto_promotion"] is False
+
+
+def test_causal_backtest_reports_divergence_without_promotion():
+    report = news_event_study.causal_backtest([
+        {"asset": "BRENT", "causal_direction": 1, "legacy_direction": -1, "forward_return": 0.02}
+    ], min_n=2)
+    assert report["divergence_count"] == 1
+    assert report["causal_correct_when_legacy_wrong"] == 1
+    assert report["shadow_only"] is True
+
+
+def test_decay_half_life_and_source_diversity_are_applied():
+    assert _decay_factor(0.0, 60) == 1.0
+    assert _decay_factor(60.0 * 60.0, 60) == 0.5
+    now = datetime.now(UTC)
+    impact_a = SimpleNamespace(
+        headline_id="h1", event_type="geopolitical_escalation", confidence=0.7,
+        surprise_level=0.8, expected_half_life_minutes=60, valid_until=None,
+    )
+    impact_b = SimpleNamespace(
+        headline_id="h2", event_type="geopolitical_escalation", confidence=0.7,
+        surprise_level=0.8, expected_half_life_minutes=60, valid_until=None,
+    )
+    h1 = SimpleNamespace(id="h1", title="Missile attack threatens shipping", title_tr=None,
+                         verified=True, ts=now, source="Reuters", region="X")
+    h2 = SimpleNamespace(id="h2", title="Missile attack threatens shipping", title_tr=None,
+                         verified=True, ts=now, source="AP", region="X")
+    world = build(_snapshot(headlines=[h1, h2], catalyst_impacts=[impact_a, impact_b]))
+    event = world.geopolitical_events[0]
+    assert event.source_diversity == 2
+    assert event.independent_confirmation_count == 2
+    assert event.decay_factor == 1.0
+
+
+def test_statement_authority_numeric_and_repetition_are_deterministic():
+    now = datetime.now(UTC)
+    first = SimpleNamespace(id="s1", title="Fed Chair Powell says hawkish higher for longer",
+                            title_tr=None, verified=True, source="Federal Reserve official", ts=now,
+                            actual=5.5, expected=5.0, historical_surprise_volatility=0.25)
+    repeated = SimpleNamespace(id="s2", title="Fed Chair Powell says hawkish higher for longer",
+                               title_tr=None, verified=True, source="Federal Reserve official", ts=now)
+    world = build(_snapshot(headlines=[first, repeated]))
+    assert world.statements[0].speaker_role == "chair"
+    assert world.statements[0].authority_score == 1.0
+    assert world.statements[0].numeric_surprise == 1.0
+    assert world.statements[1].repetition_score == 1.0
+    assert world.statements[1].new_information_score < world.statements[0].new_information_score
+
+
+def test_causal_graph_exposes_actual_edges_and_consensus():
+    world = build(_snapshot())
+    shadow = build_shadow(world, ["BTCUSD"], legacy_scores={"BTCUSD": {"score": 62.0, "direction": "bullish"}})
+    assert shadow.edges
+    assert all(edge.source_value is not None and edge.contribution is not None for edge in shadow.edges)
+    assert shadow.causal_consensus[0]["legacy_score"] == 62.0
+    assert shadow.conflict_shadow[0]["final_action"] == "UNAVAILABLE"
+
+
+def test_archive_materialization_keeps_canonical_edge_id_and_sign():
+    now = datetime(2026, 1, 1, tzinfo=UTC)
+    rows = [
+        {
+            "generated_at": now.isoformat(),
+            "snapshot_as_of": now.isoformat(),
+            "data_verified": True,
+            "factors": {"rates_pressure": 0.5, "liquidity": 0.2},
+            "edge_predictions": [{
+                "edge_id": "rates_to_liquidity",
+                "source": "rates_pressure",
+                "target": "liquidity",
+                "sign": -1,
+                "source_value": 0.5,
+                "prior_strength": 0.55,
+            }],
+        },
+        {
+            "generated_at": (now + timedelta(hours=1)).isoformat(),
+            "snapshot_as_of": (now + timedelta(hours=1)).isoformat(),
+            "data_verified": True,
+            "factors": {"rates_pressure": 0.5, "liquidity": 0.0},
+            "edge_predictions": [],
+        },
+    ]
+    report = materialize_edge_outcomes(rows, horizons=("1h",))
+    assert report["rows"][0]["edge_id"] == "rates_to_liquidity"
+    assert report["rows"][0]["edge"] == "rates_to_liquidity"
+    assert report["rows"][0]["sign"] == -1
+
+
+def test_negative_edge_calibration_uses_topology_sign():
+    base = datetime(2026, 1, 1, tzinfo=UTC)
+    rows = [{
+        "edge_id": "rates_to_liquidity",
+        "edge": "rates_to_liquidity",
+        "source_value": 0.5,
+        "target_response": -0.2,
+        "sign": -1,
+        "prior_strength": 0.55,
+        "regime": "RISK_OFF",
+        "horizon": "1h",
+        "root_event_ids": [f"event-{index}"],
+        "prediction_as_of": (base + timedelta(hours=index)).isoformat(),
+        "outcome_as_of": (base + timedelta(hours=index, minutes=30)).isoformat(),
+        "data_verified": True,
+    } for index in range(8)]
+    report = calibrate_edges(rows)
+    bucket = report["recommendations"]["rates_to_liquidity|REGIME:RISK_OFF|HORIZON:1h"]
+    assert bucket["prior_sign"] == -1
+    assert bucket["sign_conflict"] is False
+    assert bucket["stability"] == "STABLE"
+    assert bucket["recommended_strength"] >= 0
+    assert bucket["sign"] == -1
+    assert all(
+        item["recommended_strength"] is None or item["recommended_strength"] >= 0
+        for item in report["recommendations"].values()
+    )
+    resolved = resolve_weight(
+        "rates_to_liquidity", 0.55, regime="RISK_OFF", horizon="1h",
+        recommendations=report,
+    )
+    assert resolved["weight_source"] == "REGIME_HORIZON_CALIBRATED"
+    assert resolved["weight"] == bucket["recommended_strength"]
+
+
+def test_calibrated_negative_and_positive_edges_keep_topology_direction(monkeypatch):
+    state = WorldStateSnapshot(
+        generated_at=datetime(2026, 1, 1, tzinfo=UTC),
+        rates_pressure=1.0,
+        shipping_risk=1.0,
+    )
+    config = {"graph": {"rates_to_liquidity": 0.4, "shipping_to_energy": 0.4}, "calibration": {"apply": False}}
+    factors, edges = _propagate(state, config)
+    by_id = {edge.edge_id: edge for edge in edges}
+    assert by_id["rates_to_liquidity"].contribution < 0
+    assert by_id["shipping_to_energy"].contribution > 0
+
+    import packages.learning.causal_calibration as calibration
+
+    monkeypatch.setattr(
+        calibration,
+        "resolve_weight",
+        lambda *args, **kwargs: {"weight": -0.4, "weight_source": "REGIME_HORIZON_CALIBRATED", "sample_n": 8},
+    )
+    factors, edges = _propagate(
+        state,
+        {"graph": {"rates_to_liquidity": 0.55}, "calibration": {"apply": True}},
+        horizon="4h",
+    )
+    assert factors["liquidity"] < 0
+    assert next(edge for edge in edges if edge.edge_id == "rates_to_liquidity").contribution < 0
+
+
+def _provenance_row(domains: dict, *, snapshot_as_of: str = "2026-01-01T00:00:00+00:00") -> dict:
+    stamp = snapshot_as_of
+    return {
+        "generated_at": stamp,
+        "snapshot_as_of": stamp,
+        "provenance_domains": domains,
+        "reconstruction_inputs": {"world_state": {"liquidity": 0.2}, "symbols": ["BTCUSD"]},
+    }
+
+
+def test_replay_provenance_unavailable_flow_does_not_block():
+    stamp = "2026-01-01T00:00:00+00:00"
+    domains = {name: {"status": "AVAILABLE", "as_of": stamp} for name in ("market", "events", "statements", "macro", "expectations")}
+    domains["flow"] = {"status": "UNAVAILABLE", "as_of": None}
+    report = news_event_study.causal_historical_replay([_provenance_row(domains)], min_n=1)
+    assert report["status"] != "INSUFFICIENT_PROVENANCE"
+    assert "flow" not in report["missing_provenance_domains"]
+
+
+def test_replay_provenance_unknown_or_available_without_watermark_blocks():
+    stamp = "2026-01-01T00:00:00+00:00"
+    domains = {name: {"status": "AVAILABLE", "as_of": stamp} for name in ("market", "events", "statements", "macro", "expectations")}
+    domains["flow"] = {"status": "UNKNOWN", "as_of": None}
+    report = news_event_study.causal_historical_replay([_provenance_row(domains)], min_n=1)
+    assert report["status"] == "INSUFFICIENT_PROVENANCE"
+    assert "flow" in report["missing_provenance_domains"]
+    domains["flow"] = {"status": "AVAILABLE", "as_of": None}
+    report = news_event_study.causal_historical_replay([_provenance_row(domains)], min_n=1)
+    assert report["status"] == "INSUFFICIENT_PROVENANCE"
+
+
+def test_replay_provenance_future_available_watermark_blocks_but_unavailable_does_not():
+    stamp = "2026-01-01T00:00:00+00:00"
+    domains = {name: {"status": "AVAILABLE", "as_of": stamp} for name in ("market", "events", "statements", "macro", "expectations", "flow")}
+    domains["events"] = {"status": "AVAILABLE", "as_of": "2026-01-01T00:01:00+00:00"}
+    report = news_event_study.causal_historical_replay([_provenance_row(domains)], min_n=1)
+    assert report["status"] == "INSUFFICIENT_PROVENANCE"
+    domains["events"] = {"status": "UNAVAILABLE", "as_of": None}
+    report = news_event_study.causal_historical_replay([_provenance_row(domains)], min_n=1)
+    assert report["status"] != "INSUFFICIENT_PROVENANCE"
+
+
+def test_replay_snapshot_restores_positioning_models_and_filters_future_evidence():
+    as_of = datetime(2026, 1, 1, tzinfo=UTC)
+    quality = QualityReport(90, 90, 90, 0, 90, 90, "OK")
+    current_derivatives = DerivativesSnapshot(
+        symbol="BTCUSD", funding_rate=0.001, oi_change_pct=0.1,
+        squeeze_level="HIGH", status="OK", verified=True, ts=as_of,
+    )
+    future_derivatives = DerivativesSnapshot(
+        symbol="ETHUSD", funding_rate=0.001, oi_change_pct=0.1,
+        squeeze_level="HIGH", status="OK", verified=True,
+        ts=as_of + timedelta(minutes=1),
+    )
+    current_options = OptionsSnapshot(
+        symbol="BTCUSD", skew_25d=0.1, status="OK", verified=True, ts=as_of,
+    )
+    current_volatility = VolatilitySnapshot(
+        symbol="BTCUSD", timeframe="1d", regime="EXTREME", status="OK", verified=True, ts=as_of,
+    )
+    snapshot = MarketSnapshot(
+        snapshot_id="snap-parity", generated_at=as_of, prices=[], technicals={},
+        headlines=[], catalysts=[], rotation=RotationView(status="UNAVAILABLE"), quality=quality,
+        derivatives={"BTCUSD": current_derivatives},
+        options={"BTCUSD": current_options}, volatility={"BTCUSD": {"1d": current_volatility}},
+        catalyst_impacts=[CatalystImpact(catalyst_id="c1", event_type="unknown", ts=as_of)],
+    )
+    payload = {key: value for key, value in {
+        "snapshot_id": snapshot.snapshot_id,
+        "prices": [], "technicals": {}, "headlines": [], "catalysts": [],
+        "rotation": snapshot.rotation.model_dump(mode="json"), "quality": {
+            "score": 90, "freshness": 90, "completeness": 90, "drift": 0,
+            "reconciliation": 90, "decision_usage": 90, "status": "OK",
+        },
+        "derivatives": {
+            **{key: value.model_dump(mode="json") for key, value in snapshot.derivatives.items()},
+            "ETHUSD": future_derivatives.model_dump(mode="json"),
+        },
+        "options": {key: value.model_dump(mode="json") for key, value in snapshot.options.items()},
+        "volatility": {key: {tf: value.model_dump(mode="json") for tf, value in by_tf.items()} for key, by_tf in snapshot.volatility.items()},
+        "catalyst_impacts": [value.model_dump(mode="json") for value in snapshot.catalyst_impacts],
+    }.items()}
+    row = {"snapshot_id": "snap-parity"}
+    replay_snapshot = news_event_study._snapshot_from_reconstruction(row, payload, as_of)
+    runtime_world = build(snapshot, now=as_of)
+    replay_world = build(replay_snapshot, now=as_of)
+    assert runtime_world.positioning == replay_world.positioning
+    assert replay_snapshot.derivatives["BTCUSD"].squeeze_level == "HIGH"
+    assert "ETHUSD" not in replay_snapshot.derivatives
+    assert replay_snapshot.options["BTCUSD"].skew_25d == current_options.skew_25d
+    assert replay_snapshot.volatility["BTCUSD"]["1d"].regime == "EXTREME"
+    assert replay_snapshot.catalyst_impacts[0].catalyst_id == "c1"
+
+
+def test_replay_scores_reconstructed_prediction_not_stale_archive_impact():
+    as_of = datetime(2026, 1, 1, tzinfo=UTC)
+    stamp = as_of.isoformat()
+    row = {
+        "generated_at": stamp,
+        "snapshot_as_of": stamp,
+        "market_data_as_of": stamp,
+        "events_available_as_of": stamp,
+        "statements_available_as_of": stamp,
+        "macro_available_as_of": stamp,
+        "expectations_as_of": stamp,
+        "flow_available_as_of": stamp,
+        "factor_confidence": 1.0,
+        "regime": "RISK_ON",
+        # Deliberately stale/opposite archived impact.
+        "asset_impacts": [{"symbol": "BTCUSD", "direction_score": -1.0}],
+        "reconstruction_inputs": {
+            "world_state": {"liquidity": 0.8, "confidence": 1.0},
+            "symbols": ["BTCUSD"],
+        },
+        "outcomes": [{
+            "asset": "BTCUSD",
+            "timeframe": "1h",
+            "regime": "RISK_ON",
+            "event_type": "WORLD_STATE",
+            "causal_direction": -1.0,
+            "legacy_direction": 0.0,
+            "forward_return": 0.1,
+        }],
+    }
+    report = news_event_study.causal_historical_replay([row], min_n=1)
+    assert report["status"] == "REAL_REPLAY"
+    assert report["by_asset"]["BTCUSD"]["causal_hits"] == 1
+
+
+def test_raw_snapshot_reconstruction_filters_future_evidence_at_as_of():
+    as_of = datetime(2026, 1, 1, tzinfo=UTC)
+    payload = {
+        "snapshot_id": "snap-raw",
+        "prices": [],
+        "technicals": {},
+        "headlines": [{
+            "id": "future-headline", "source": "fixture",
+            "ts": (as_of + timedelta(minutes=1)).isoformat(),
+            "title": "future evidence must not enter replay", "verified": True,
+        }],
+        "catalysts": [],
+        "rotation": {"status": "OK", "per_symbol": {}},
+        "quality": {"score": 90, "freshness": 90, "completeness": 90,
+                    "drift": 0, "reconciliation": 90, "decision_usage": 90,
+                    "status": "OK"},
+    }
+    snapshot = news_event_study._snapshot_from_reconstruction(
+        {"snapshot_id": "snap-raw"}, payload, as_of
+    )
+    assert snapshot.snapshot_id == "snap-raw"
+    assert snapshot.headlines == []
