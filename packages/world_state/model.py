@@ -50,7 +50,9 @@ class GeopoliticalEvent:
     half_life_minutes: int | None = None
     valid_until: datetime | None = None
     decay_factor: float = 1.0
+    expired: bool = False
     channels: tuple[str, ...] = ()
+    channel_strengths: dict[str, float] | None = None
     evidence: tuple[str, ...] = ()
 
     def to_dict(self) -> dict[str, Any]:
@@ -75,6 +77,8 @@ class PolicyStatement:
     expected_value: float | None = None
     actual_value: float | None = None
     numeric_surprise: float | None = None
+    normalization_method: str | None = None
+    numeric_confidence: float | None = None
     semantic_surprise: float | None = None
     baseline_direction: float | None = None
     market_relevance: float | None = None
@@ -100,6 +104,8 @@ class WorldStateSnapshot:
     credit_stress: float | None = None
     energy_supply_risk: float | None = None
     shipping_risk: float | None = None
+    sanctions_pressure: float | None = None
+    trade_risk: float | None = None
     geopolitical_risk: float | None = None
     crypto_liquidity: float | None = None
     equity_risk_appetite: float | None = None
@@ -125,6 +131,7 @@ class WorldStateSnapshot:
     geopolitical_events: tuple[GeopoliticalEvent, ...] = ()
     statements: tuple[PolicyStatement, ...] = ()
     positioning: dict[str, dict[str, Any]] | None = None
+    macro_sources: dict[str, dict[str, Any]] | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return _json(asdict(self))

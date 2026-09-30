@@ -6,6 +6,7 @@
 - Branch: `feat/world-state-causal-shadow-v1`
 - Mode: additive, deterministic, shadow-only
 - `causal_world.decision_apply`: `false`
+- PR scope: additive shadow evidence only; legacy Decision/RiskGate/EV/Sizing/Paper remain authoritative.
 
 ## 2. Reused architecture
 
@@ -96,8 +97,13 @@ deprecation warning.
 
 ## 10. Known limitations
 
-- There is no verified statement provider or numeric macro-consensus feed yet;
-  statement and numeric-surprise models remain conservative evidence models.
+- The repository calendar is mostly date-only today. Structured actual/expected/
+  previous fields are accepted and use historical surprise volatility when
+  present; otherwise the explicit relative-difference fallback is marked with
+  reduced numeric confidence. Missing macro history remains unavailable.
+- Growth uses equity/credit only as an explicitly labelled proxy when a direct
+  growth series is absent; CPI quote levels are provenance context, not fake
+  pressure.
 - Causal weights are deterministic priors and are not yet calibrated from an
   event-outcome dataset.
 - Existing `packages/learning/news_event_study.py` remains the compatible
@@ -123,8 +129,10 @@ Geopolitical headlines are clustered by normalized story key, taxonomy is
 expanded to attacks, ceasefires, sanctions, chokepoints, shipping, pipelines,
 trade, and nuclear escalation, and exposure channels are emitted before asset
 impact. Source families prevent syndicated copies from counting as independent
-confirmation. Confidence combines credibility, confirmation, diversity,
-freshness/decay, and official-source evidence.
+confirmation. Confidence is source reliability (credibility, confirmation,
+diversity, and official evidence); freshness decay is applied once to effective
+event strength. Canonical clustering tolerates deterministic wording/synonym
+changes.
 
 Statement authority is config-driven. Institution, role, repetition, baseline
 stance, semantic surprise, and optional `actual`/`expected` numeric fields are
@@ -132,8 +140,9 @@ deterministically extracted. No statement can create a trade action.
 
 ### Causal graph and asset exposures
 
-Graph priors live under the single `causal_world.graph` config block. Active
-edges now return source value, contribution, effective strength, and evidence,
+Graph priors live under the single `causal_world.graph` config block, including
+sanctions/trade transmission. Active edges now return source value, contribution,
+effective strength, applied/non-applied state, target before/after, reason, and evidence,
 matching the actual bounded one-pass propagation. Direct measured factors stay
 authoritative, so derived nodes cannot double-count the same input. Asset
 exposures come from the existing asset registry metadata plus the single
@@ -141,19 +150,23 @@ exposures come from the existing asset registry metadata plus the single
 
 ### Positioning, conflict, and consensus
 
-Verified derivatives, options, and 1d volatility snapshots are reused as
-positioning context. Crowded-long/short and elevated volatility reduce
-confidence/caution only; they never flip the thesis or relax a risk gate.
-Existing `packages.decision.conflict_resolver` is called for an informational
-shadow verdict. `causal_consensus` compares legacy score/direction when supplied,
+Verified derivatives, options, skew, put/call, squeeze, and 1d volatility
+snapshots are reused as positioning context. Crowded-long/short, options
+crowding/fear, squeeze risk, and elevated volatility reduce confidence/caution
+only; they never flip the thesis or relax a risk gate. Existing
+`packages.decision.conflict_resolver` is called only with real legacy context;
+missing RR/history/size inputs remain unavailable. `causal_consensus` compares
+legacy score/direction per `(symbol,timeframe)` when supplied,
 includes confluence, technical timing, coverage, and `ABSTAIN` for insufficient
 evidence. All of these fields are additive and non-authoritative.
 
 ### Learning and backtest
 
 `packages/learning/news_event_study.py` now also provides a bounded causal event
-ledger, channel/asset/horizon event study, and legacy-vs-causal observation
-backtest. Ledgers are deduplicated and size-capped under `data/runtime/`.
+ledger, channel/asset/horizon event study using existing OHLCV history, a
+timestamped historical replay evaluator, and legacy-vs-causal observation
+backtest. The learning worker records causal event + asset predictions off-tick;
+ledgers are deduplicated and size-capped under `data/runtime/`.
 Forward-return rows are required; missing rows remain pending. Results are
 `INSUFFICIENT` below the sample threshold and cannot auto-promote weights or
 activate decisions.

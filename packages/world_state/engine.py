@@ -38,7 +38,12 @@ def _headline_text(headline: Any) -> str:
 
 
 def _story_key(text: str) -> str:
-    return re.sub(r"\W+", " ", text.casefold()).strip()
+    # Canonicalise light syndication rewrites (word order/punctuation) while
+    # retaining enough content to avoid merging unrelated headlines.
+    synonym = {"tehran": "iran", "warns": "threat", "warned": "threat", "threatens": "threat", "threatening": "threat", "shut": "close", "closed": "close", "halted": "halt"}
+    tokens = [synonym.get(t, t) for t in re.findall(r"[\w']+", text.casefold())
+              if len(t) > 2 and t not in {"the", "and", "for", "from", "says", "said", "with", "could", "may", "strait", "bir", "ile", "için"}]
+    return " ".join(sorted(set(tokens)))
 
 
 def _source_family(source: Any) -> str:
@@ -77,16 +82,16 @@ def _event_taxonomy(text: str, raw_type: Any) -> str:
         (("ceasefire", "truce", "ateşkes"), "CEASEFIRE"),
         (("peace talks", "barış görüş", "negotiat"), "PEACE_TALKS"),
         (("sanction", "yaptırım"), "SANCTIONS_RELIEF" if any(x in value for x in ("relief", "lift", "kaldır")) else "SANCTIONS"),
-        (("chokepoint", "strait", "hormuz", "boğaz"), "CHOKEPOINT_THREAT" if any(x in value for x in ("threat", "could", "may", "tehdit")) else "CHOKEPOINT_DISRUPTION"),
+        (("chokepoint", "strait", "hormuz", "boğaz"), "CHOKEPOINT_THREAT" if any(x in value for x in ("threat", "threaten", "could", "may", "warn", "tehdit")) else "CHOKEPOINT_DISRUPTION"),
         (("shipping attack", "ship attack", "gemi saldır", "vessel hit"), "SHIPPING_ATTACK"),
         (("port disruption", "port closure", "liman kapat"), "PORT_DISRUPTION"),
         (("pipeline", "boru hatt"), "PIPELINE_DISRUPTION"),
-        (("energy infrastructure", "refinery", "enerji tesisi"), "ENERGY_INFRASTRUCTURE_ATTACK"),
         (("airstrike", "air strike", "hava saldır"), "AIRSTRIKE"),
         (("missile", "füze"), "MISSILE_ATTACK"),
+        (("energy infrastructure", "refinery", "enerji tesisi"), "ENERGY_INFRASTRUCTURE_ATTACK"),
         (("drone", "iha", "sih"), "DRONE_ATTACK"),
         (("ground offensive", "kara harekat", "invasion"), "GROUND_OFFENSIVE"),
-        (("trade restriction", "tariff", "ticaret kısıt"), "TRADE_RESTRICTION"),
+        (("trade restriction", "export restriction", "export ban", "tariff", "ticaret kısıt"), "TRADE_RESTRICTION"),
         (("de-escalat", "gerilimi azalt", "withdraw", "çekil"), "MILITARY_DEESCALATION"),
         (("escalat", "attack", "strike", "saldır", "çatışma"), "MILITARY_ESCALATION"),
     )
@@ -102,8 +107,10 @@ def _event_channels(event_type: str, text: str) -> tuple[str, ...]:
     channels: list[str] = []
     if event_type in {"CHOKEPOINT_THREAT", "CHOKEPOINT_DISRUPTION", "SHIPPING_ATTACK", "PORT_DISRUPTION"} or any(x in value for x in ("shipping", "strait", "hormuz", "gemi", "liman")):
         channels.append("shipping_risk")
-    if event_type in {"PIPELINE_DISRUPTION", "ENERGY_INFRASTRUCTURE_ATTACK", "CHOKEPOINT_DISRUPTION"} or any(x in value for x in ("oil", "energy", "pipeline", "opec", "petrol")):
+    if any(x in value for x in ("oil", "energy", "pipeline", "refinery", "opec", "petrol")):
         channels.append("energy_supply_risk")
+    if "refinery" in value or "energy infrastructure" in value or "enerji tesisi" in value:
+        channels.append("energy_infrastructure_attack")
     if event_type in {"SANCTIONS", "SANCTIONS_RELIEF", "TRADE_RESTRICTION"}:
         channels.extend(("trade_risk", "sanctions_pressure"))
     if event_type in {"MILITARY_ESCALATION", "AIRSTRIKE", "MISSILE_ATTACK", "DRONE_ATTACK", "GROUND_OFFENSIVE", "NUCLEAR_ESCALATION"}:
@@ -117,7 +124,12 @@ def _geo_events(snapshot: MarketSnapshot, now: datetime, config: dict[str, Any])
     for headline in snapshot.headlines:
         impact = by_id.get(getattr(headline, "id", ""))
         event_type = getattr(impact, "event_type", "unknown") if impact else "unknown"
-        if not str(event_type).startswith("geopolitical_"):
+        # Taxonomy is headline-first.  The legacy catalyst impact is useful
+        # evidence, but an absent/unknown prefix must never hide a geopolitical
+        # event from the causal shadow.
+        text = _headline_text(headline)
+        if (not text.strip() or
+                _event_taxonomy(text, event_type) == "UNKNOWN"):
             continue
         grouped.setdefault(_story_key(_headline_text(headline)), []).append((headline, impact))
 
@@ -142,14 +154,28 @@ def _geo_events(snapshot: MarketSnapshot, now: datetime, config: dict[str, Any])
         credibility = max((_source_credibility(getattr(row, "source", None), True) for row in verified_rows), default=0.20)
         confidence = credibility * min(1.0, 0.75 + len(verified_rows) * float(source_cfg.get("confirmation_factor", 0.12)))
         confidence *= min(1.0, 0.80 + len(families) * float(source_cfg.get("diversity_factor", 0.10)))
-        confidence *= decay
+        # Decay is applied exactly once to effective event strength.  It is not
+        # folded into source confidence, otherwise the graph silently applies
+        # decay² when it multiplies severity by confidence.
         if official:
             confidence += float(source_cfg.get("official_bonus", 0.12))
         confidence = min(1.0, max(raw_conf, confidence))
         if not verified_rows:
             confidence = min(confidence, float(source_cfg.get("rumor_cap", 0.25)))
         raw_severity = abs(float(getattr(impact, "surprise_level", 0.0) or 0.0)) or 0.5
+        valid_until = getattr(impact, "valid_until", None)
+        if isinstance(valid_until, str):
+            try:
+                valid_until = datetime.fromisoformat(valid_until)
+                if valid_until.tzinfo is None:
+                    valid_until = valid_until.replace(tzinfo=UTC)
+            except ValueError:
+                valid_until = None
+        expired = bool(valid_until is not None and valid_until <= now)
+        effective_decay = 0.0 if expired else decay
         channels = _event_channels(event_type, title)
+        effective_strength = raw_severity * confidence * effective_decay
+        channel_strengths = {channel: round(effective_strength, 4) for channel in channels}
         events.append(
             GeopoliticalEvent(
                 event_id=str(getattr(headline, "id", "")),
@@ -160,7 +186,7 @@ def _geo_events(snapshot: MarketSnapshot, now: datetime, config: dict[str, Any])
                 status="CONFIRMED" if confirmed else "THREAT",
                 confirmed_action=confirmed,
                 threat_only=threat_only,
-                severity=_clamp(raw_severity * decay, 0.0, 1.0),
+                severity=_clamp(raw_severity * effective_decay, 0.0, 1.0),
                 energy_exposure=1.0 if any(w in lower for w in ("oil", "energy", "pipeline", "opec", "petrol")) else 0.0,
                 shipping_exposure=1.0 if any(w in lower for w in ("shipping", "port", "strait", "gemi", "hormuz")) else 0.0,
                 trade_exposure=1.0 if event_type in {"SANCTIONS", "SANCTIONS_RELIEF", "TRADE_RESTRICTION"} else 0.0,
@@ -177,9 +203,11 @@ def _geo_events(snapshot: MarketSnapshot, now: datetime, config: dict[str, Any])
                 published_at=ts,
                 freshness_seconds=age,
                 half_life_minutes=half_life,
-                valid_until=getattr(impact, "valid_until", None),
-                decay_factor=decay,
+                valid_until=valid_until,
+                decay_factor=effective_decay,
+                expired=expired,
                 channels=channels,
+                channel_strengths=channel_strengths,
                 evidence=tuple(_headline_text(row)[:240] for row, _ in rows[:4]),
             )
         )
@@ -188,7 +216,7 @@ def _geo_events(snapshot: MarketSnapshot, now: datetime, config: dict[str, Any])
 
 def _statements(snapshot: MarketSnapshot, now: datetime, config: dict[str, Any]) -> tuple[PolicyStatement, ...]:
     result: list[PolicyStatement] = []
-    keywords = ("fed", "fomc", "federal reserve", "ecb", "boj", "pboс", "bank of england", "powell", "lagarde", "treasury", "white house", "opec", "saudi", "russia", "china")
+    keywords = ("fed", "fomc", "federal reserve", "ecb", "boj", "pboc", "people's bank", "bank of england", "boe", "powell", "lagarde", "treasury", "white house", "opec", "saudi", "russia", "china", "central bank")
     authority_cfg = config.get("statement_authority") or {}
     previous: dict[str, list[float]] = {}
     signatures: set[tuple[str, int]] = set()
@@ -206,6 +234,10 @@ def _statements(snapshot: MarketSnapshot, now: datetime, config: dict[str, Any])
             institution = "ECB"
         elif "boj" in lower:
             institution = "BOJ"
+        elif "boe" in lower or "bank of england" in lower:
+            institution = "BOE"
+        elif "pboc" in lower or "people's bank" in lower:
+            institution = "PBOC"
         elif "opec" in lower:
             institution = "OPEC"
         elif "treasury" in lower:
@@ -247,8 +279,10 @@ def _statements(snapshot: MarketSnapshot, now: datetime, config: dict[str, Any])
         expected = getattr(headline, "expected", None)
         historical_volatility = getattr(headline, "historical_surprise_volatility", None)
         numeric = normalized_surprise(actual, expected, historical_volatility)
+        normalization_method = "historical_volatility" if numeric is not None else None
         if numeric is None and actual is not None and expected is not None:
             numeric = _clamp((float(actual) - float(expected)) / max(abs(float(expected)), 1.0))
+            normalization_method = "relative_difference_fallback"
         ts = getattr(headline, "ts", None)
         authority = float(authority_cfg.get(role, authority_cfg.get("unknown", 0.35)))
         verified = bool(getattr(headline, "verified", False))
@@ -271,6 +305,8 @@ def _statements(snapshot: MarketSnapshot, now: datetime, config: dict[str, Any])
                 actual_value=float(actual) if actual is not None else None,
                 expected_value=float(expected) if expected is not None else None,
                 numeric_surprise=numeric,
+                normalization_method=normalization_method,
+                numeric_confidence=1.0 if normalization_method == "historical_volatility" else 0.5 if normalization_method else None,
                 semantic_surprise=semantic if direction else None,
                 baseline_direction=baseline,
                 market_relevance=round(authority * (0.7 if direction else 0.3), 4),
@@ -280,6 +316,35 @@ def _statements(snapshot: MarketSnapshot, now: datetime, config: dict[str, Any])
                 evidence=(text[:240], f"authority={authority:.2f}", f"source={credibility:.2f}"),
             )
         )
+    # Structured calendar outcomes are canonical macro evidence when present.
+    # They are additive to headline statements and remain absent for the
+    # repository's date-only calendar rows.
+    for catalyst in getattr(snapshot, "catalysts", ()) or ():
+        actual = getattr(catalyst, "actual", None)
+        expected = getattr(catalyst, "expected", None)
+        if actual is None or expected is None:
+            continue
+        title = str(getattr(catalyst, "title", ""))
+        numeric = normalized_surprise(actual, expected, getattr(catalyst, "historical_surprise_volatility", None))
+        method = "historical_volatility"
+        if numeric is None:
+            numeric = _clamp((float(actual) - float(expected)) / max(abs(float(expected)), 1.0))
+            method = "relative_difference_fallback"
+        result.append(PolicyStatement(
+            statement_id=str(getattr(catalyst, "id", "")),
+            institution="macro_calendar",
+            speaker_role="release",
+            authority_score=0.75,
+            topic="macro_event",
+            policy_direction="unknown",
+            source_confidence=0.75 if getattr(catalyst, "verified", False) else 0.25,
+            actual_value=float(actual), expected_value=float(expected),
+            numeric_surprise=numeric, semantic_surprise=None,
+            market_relevance=0.8, published_at=getattr(catalyst, "ts", None),
+            half_life_minutes=240, normalization_method=method,
+            numeric_confidence=1.0 if method == "historical_volatility" else 0.5,
+            evidence=(title[:240], f"source={getattr(catalyst, 'source', 'unknown')}"),
+        ))
     return tuple(result)
 
 
@@ -306,13 +371,30 @@ def _positioning(snapshot: MarketSnapshot) -> tuple[dict[str, dict[str, Any]], f
             crowded = "CROWDED_LONG"
         elif funding is not None and oi_change is not None and funding < -0.0003 and oi_change > 0.05:
             crowded = "CROWDED_SHORT"
-        out[symbol] = {"type": "derivatives", "funding_rate": funding, "oi_change_pct": oi_change, "squeeze_level": getattr(item, "squeeze_level", None), "state": crowded}
+        squeeze = getattr(item, "squeeze_level", None)
+        squeeze_state = None
+        if isinstance(squeeze, str):
+            squeeze_state = squeeze.upper()
+        elif squeeze is not None:
+            squeeze_state = "HIGH" if float(squeeze) >= 0.7 else "ELEVATED" if float(squeeze) >= 0.45 else "NORMAL"
+        out[symbol] = {"type": "derivatives", "funding_rate": funding, "oi_change_pct": oi_change, "squeeze_level": squeeze, "squeeze_state": squeeze_state, "state": crowded}
     for symbol, item in (getattr(snapshot, "options", {}) or {}).items():
         total += 1
         if getattr(item, "status", "DEGRADED") != "OK" or not getattr(item, "verified", False):
             continue
         available += 1
-        out.setdefault(symbol, {})["options"] = {"regime": getattr(item, "regime", None), "skew_25d": getattr(item, "skew_25d", None), "put_call_oi_ratio": getattr(item, "put_call_oi_ratio", None)}
+        skew = getattr(item, "skew_25d", None)
+        pcr = getattr(item, "put_call_oi_ratio", None)
+        iv_spread = getattr(item, "iv_rv_spread", None)
+        term_slope = getattr(item, "term_slope", None)
+        options_state = "NEUTRAL"
+        if getattr(item, "regime", None) in {"RICH_VOL", "TERM_STRESS"} or (iv_spread is not None and float(iv_spread) > 0.1) or (term_slope is not None and float(term_slope) < 0):
+            options_state = "RICH_VOL_OR_BACKWARDATION"
+        elif (skew is not None and float(skew) > 0.05) or (pcr is not None and float(pcr) > 1.3):
+            options_state = "PUT_SKEW_CAUTION"
+        elif (skew is not None and float(skew) < -0.05) or (pcr is not None and float(pcr) < 0.7):
+            options_state = "CALL_CROWDING"
+        out.setdefault(symbol, {})["options"] = {"regime": getattr(item, "regime", None), "atm_iv": getattr(item, "atm_iv", None), "iv_rv_spread": iv_spread, "term_slope": term_slope, "skew_25d": skew, "put_call_oi_ratio": pcr, "state": options_state}
     for symbol, by_tf in (getattr(snapshot, "volatility", {}) or {}).items():
         item = by_tf.get("1d") if isinstance(by_tf, dict) else None
         total += 1
@@ -321,6 +403,47 @@ def _positioning(snapshot: MarketSnapshot) -> tuple[dict[str, dict[str, Any]], f
         available += 1
         out.setdefault(symbol, {})["volatility"] = {"regime": getattr(item, "regime", None), "vol_state": getattr(item, "vol_state", None)}
     return out, round(available / total, 4) if total else 0.0
+
+
+def _macro_signal(snapshot: MarketSnapshot, symbol: str) -> tuple[float | None, dict[str, Any]]:
+    """Return a measured macro pressure and explicit provenance.
+
+    A one-point FRED quote is a level, not a pressure signal.  Pressure is
+    therefore derived only from archived OHLCV history; if that history is not
+    available we expose the direct quote as context and keep the factor None.
+    This prevents rotation's per-symbol scores from masquerading as US02Y/
+    US10Y macro data.
+    """
+    quotes = getattr(snapshot, "prices", None)
+    quote = next((q for q in (quotes or []) if getattr(q, "symbol", None) == symbol), None)
+    source: dict[str, Any] = {"source_type": "UNAVAILABLE", "source": symbol, "method": "none"}
+    if quote is not None:
+        source.update({"source_type": "DIRECT", "source": getattr(quote, "source", symbol), "method": "price_quote", "verified": bool(getattr(quote, "verified", False)), "level": getattr(quote, "price", None)})
+    try:
+        from packages.data.providers.ohlcv import history
+        from packages.data.providers.rotation.flow import vol_norm_momentum
+        bars = history.load(symbol, "1d")
+        if len(bars) < 128 and symbol in {"US02Y", "US10Y", "CPI"}:
+            # Reuse the existing FRED history path when configured.  It is
+            # internally TTL-cached and returns [] without an API key.
+            from packages.data.providers.price.fred import get_history
+            bars = get_history(symbol) or bars
+        closes = [float(bar.close) for bar in bars if getattr(bar, "close", None)]
+        signal = vol_norm_momentum(closes)
+        if signal is not None:
+            source.update({"source_type": "DERIVED", "method": "vol_norm_momentum", "history_bars": len(closes)})
+            return _clamp(signal / 3.0), source
+    except Exception:
+        pass
+    # Compatibility for old, explicitly fixture-shaped snapshots only.  A
+    # production MarketSnapshot always has `prices`, so runtime never reads
+    # rotation.per_symbol for macro rates.
+    if not hasattr(snapshot, "prices"):
+        legacy = _flow(getattr(snapshot, "rotation", None), symbol)
+        if legacy is not None:
+            source.update({"source_type": "LEGACY_FIXTURE", "method": "fixture_rotation"})
+            return legacy, source
+    return None, source
 
 
 def build(snapshot: MarketSnapshot, *, now: datetime | None = None) -> WorldStateSnapshot:
@@ -353,9 +476,14 @@ def build(snapshot: MarketSnapshot, *, now: datetime | None = None) -> WorldStat
     geo = _mean([e.severity * e.source_confidence for e in events if e.confirmed_action])
     energy_risk = _mean([e.energy_exposure * (e.severity or 0.0) * e.source_confidence for e in events])
     shipping = _mean([e.shipping_exposure * (e.severity or 0.0) * e.source_confidence for e in events])
-    rates = _mean([_flow(rotation, "US02Y"), _flow(rotation, "US10Y")])
-    inflation = _mean([energy_risk, geo, flows["energy"] if flows["energy"] is not None and flows["energy"] > 0 else None])
-    growth = equity
+    sanctions = _mean([e.financial_sanctions_exposure * (e.severity or 0.0) * e.source_confidence for e in events])
+    trade = _mean([e.trade_exposure * (e.severity or 0.0) * e.source_confidence for e in events])
+    us02y, us02y_source = _macro_signal(snapshot, "US02Y")
+    us10y, us10y_source = _macro_signal(snapshot, "US10Y")
+    rates = _mean([us02y, us10y])
+    cpi_signal, cpi_source = _macro_signal(snapshot, "CPI")
+    inflation = _mean([cpi_signal, energy_risk, sanctions, flows["energy"] if flows["energy"] is not None and flows["energy"] > 0 else None])
+    growth = _mean([equity, -trade if trade is not None else None])
     real_yield = _clamp(rates - (inflation or 0.0) * 0.5) if rates is not None else None
     risk_aversion = _mean([-equity if equity is not None else None, credit_stress, shipping])
     liquidity = _mean([flows["crypto"], equity, -usd if usd is not None else None, -rates if rates is not None else None, credit_flow])
@@ -364,8 +492,8 @@ def build(snapshot: MarketSnapshot, *, now: datetime | None = None) -> WorldStat
     flow_coverage = round(sum(value is not None for value in flow_axis_values) / len(flow_axis_values), 4)
     macro_values = [rates, real_yield, inflation, growth, usd]
     macro_coverage = round(sum(value is not None for value in macro_values) / len(macro_values), 4)
-    geo_coverage = 1.0 if snapshot.headlines else 0.0
-    statement_coverage = 1.0 if snapshot.headlines else 0.0
+    geo_coverage = round(sum(e.source_confidence > 0 for e in events) / max(1, len(events)), 4) if events else 0.0
+    statement_coverage = round(sum(s.source_confidence > 0 for s in statements) / max(1, len(statements)), 4) if statements else 0.0
     positioning, positioning_coverage = _positioning(snapshot)
     regime_inputs = [liquidity, risk_aversion, inflation, growth, defensive]
     if liquidity is None:
@@ -439,4 +567,13 @@ def build(snapshot: MarketSnapshot, *, now: datetime | None = None) -> WorldStat
         geopolitical_events=events,
         statements=statements,
         positioning=positioning,
+        macro_sources={
+            "US02Y": us02y_source,
+            "US10Y": us10y_source,
+            "CPI": cpi_source,
+            "growth": {"source_type": "PROXY", "source": "equity_flow" if equity is not None else "UNAVAILABLE", "components": ["SP500", "trade_risk"]},
+            "real_yield": {"source_type": "DERIVED", "method": "rates_pressure_minus_inflation_pressure" if rates is not None and inflation is not None else "UNAVAILABLE"},
+        },
+        sanctions_pressure=sanctions,
+        trade_risk=trade,
     )

@@ -361,6 +361,22 @@ def causal_event_study(
     now = now or datetime.now(UTC)
     rows = list(events if events is not None else _read_causal_ledger())
     returns = forward_returns or {}
+    bars_cache: dict[tuple[str, str], list] = {}
+
+    def _ohlcv_return(asset: str, event_ts: datetime, horizon: str) -> float | None:
+        # Use only bars strictly after the event timestamp.  No prediction is
+        # scored until the requested post-event bar actually exists.
+        tf = "1d" if horizon == "1d" else "1h"
+        key = (asset, tf)
+        if key not in bars_cache:
+            try:
+                from packages.data.providers.ohlcv import get_bars, history
+                bars_cache[key] = history.merged(history.load(asset, tf), get_bars(asset, tf) or [])
+            except Exception:
+                bars_cache[key] = []
+        bars = bars_cache[key]
+        steps = {"1h": 1, "4h": 4, "1d": 1}.get(horizon, 1)
+        return _forward_return_pct(bars, event_ts, steps)
     buckets: dict[str, list[tuple[float, float]]] = {}
     pending = 0
     for event in rows:
@@ -378,6 +394,14 @@ def causal_event_study(
             for horizon in horizons:
                 actual = (returns.get((event.get("event_id") or event.get("id"), asset, horizon))
                           if returns else None)
+                if actual is None and not returns:
+                    try:
+                        event_ts = datetime.fromisoformat(str(event.get("ts") or now.isoformat()))
+                        if event_ts.tzinfo is None:
+                            event_ts = event_ts.replace(tzinfo=UTC)
+                        actual = _ohlcv_return(str(asset), event_ts, horizon)
+                    except (TypeError, ValueError):
+                        actual = None
                 if actual is None:
                     pending += 1
                     continue
@@ -437,3 +461,54 @@ def causal_backtest(rows, *, min_n: int = 8) -> dict:
         "shadow_only": True,
         "auto_promotion": False,
     }
+
+
+def causal_historical_replay(rows, *, min_n: int = 8) -> dict:
+    """Replay timestamped, already-materialised evidence without look-ahead.
+
+    The caller supplies one row per event/snapshot with values that were
+    available at that timestamp and a *post-event* forward return.  This keeps
+    the replay deterministic and lets the existing snapshot/backtest loaders
+    provide the data without creating a second provider.  Future fields are
+    accepted only as scoring outcomes.
+    """
+    dimensions = {"by_asset": {}, "by_timeframe": {}, "by_regime": {}, "by_event_type": {}}
+    for row in rows or []:
+        try:
+            causal = float(row.get("causal_direction", 0.0))
+            legacy = float(row.get("legacy_direction", 0.0))
+            forward = float(row["forward_return"])
+        except (KeyError, TypeError, ValueError):
+            continue
+        keys = {
+            "by_asset": str(row.get("asset", "UNKNOWN")),
+            "by_timeframe": str(row.get("timeframe", "UNKNOWN")),
+            "by_regime": str(row.get("regime", "UNKNOWN")),
+            "by_event_type": str(row.get("event_type", "UNKNOWN")),
+        }
+        for dimension, key in keys.items():
+            bucket = dimensions[dimension].setdefault(key, {"n": 0, "causal_hits": 0, "legacy_hits": 0, "false_positives": 0, "abstentions": 0, "sum_forward_return": 0.0, "divergence_count": 0, "causal_correct_when_legacy_wrong": 0, "legacy_correct_when_causal_wrong": 0})
+            causal_hit = causal * forward > 0
+            legacy_hit = legacy * forward > 0
+            bucket["n"] += 1
+            bucket["causal_hits"] += int(causal_hit)
+            bucket["legacy_hits"] += int(legacy_hit)
+            bucket["false_positives"] += int(causal != 0 and not causal_hit)
+            bucket["abstentions"] += int(causal == 0)
+            bucket["sum_forward_return"] += forward
+            bucket["divergence_count"] += int((causal > 0) != (legacy > 0))
+            bucket["causal_correct_when_legacy_wrong"] += int(causal_hit and not legacy_hit)
+            bucket["legacy_correct_when_causal_wrong"] += int(legacy_hit and not causal_hit)
+    for group in dimensions.values():
+        for bucket in group.values():
+            n = bucket["n"]
+            bucket.update({
+                "causal_hit_rate": round(bucket["causal_hits"] / n, 4) if n else None,
+                "legacy_hit_rate": round(bucket["legacy_hits"] / n, 4) if n else None,
+                "avg_forward_return": round(bucket["sum_forward_return"] / n, 4) if n else None,
+                "false_positive_rate": round(bucket["false_positives"] / n, 4) if n else None,
+                "abstention_rate": round(bucket["abstentions"] / n, 4) if n else None,
+                "verdict": "INSUFFICIENT" if n < min_n else "OBSERVE",
+            })
+            bucket.pop("sum_forward_return", None)
+    return {**dimensions, "shadow_only": True, "auto_promotion": False}

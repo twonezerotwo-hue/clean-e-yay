@@ -4,6 +4,7 @@ from datetime import UTC, datetime
 from types import SimpleNamespace
 
 from packages.causal.engine import build_shadow
+from packages.data.types import PriceQuote
 from packages.learning import news_event_study
 from packages.world_state.engine import _decay_factor, build, normalized_surprise
 
@@ -13,7 +14,7 @@ def _snapshot(**kwargs):
         status="OK",
         per_symbol={"DXY": 70.0, "SP500": 65.0, "BTCUSD": 60.0, "ETHUSD": 55.0,
                     "HYG": 45.0, "LQD": 55.0, "XAUUSD": 58.0, "XAGUSD": 52.0,
-                    "TLT": 53.0, "BRENT": 57.0, "US10Y": 54.0, "US02Y": 52.0},
+                    "TLT": 53.0, "BRENT": 57.0},
         evidence=["rotation fixture"],
     )
     quality = SimpleNamespace(status="OK", score=90.0)
@@ -30,7 +31,8 @@ def test_world_state_reuses_flow_and_keeps_scale_bounded():
     assert -1.0 <= world.usd_pressure <= 1.0
     assert -1.0 <= world.liquidity <= 1.0
     assert world.global_flow_regime in {"RISK_ON", "RISK_OFF", "NEUTRAL", "LIQUIDITY_EXPANSION", "MIXED", "UNKNOWN"}
-    assert world.missing_inputs == ()
+    assert "rates" in world.missing_inputs
+    assert world.macro_sources["US10Y"]["source_type"] == "UNAVAILABLE"
 
 
 def test_missing_inputs_are_not_filled_with_fake_neutral():
@@ -46,6 +48,28 @@ def test_numeric_surprise_requires_all_inputs():
     assert normalized_surprise(110.0, 100.0, 5.0) == 1.0
     assert normalized_surprise(110.0, None, 5.0) is None
     assert normalized_surprise(110.0, 100.0, 0.0) is None
+
+
+def test_runtime_macro_rates_do_not_read_rotation_fixture_keys():
+    snap = _snapshot(prices=[PriceQuote(symbol="US10Y", price=4.2, source="fred", verified=True, status="OK")])
+    snap.rotation.per_symbol["US10Y"] = 99.0
+    world = build(snap)
+    assert world.rates_pressure is None
+    assert world.macro_sources["US10Y"]["source_type"] == "DIRECT"
+
+
+def test_headline_taxonomy_and_valid_until_are_independent_of_legacy_prefix():
+    now = datetime.now(UTC)
+    headline = SimpleNamespace(id="geo-new", title="Iran threatens to close Strait of Hormuz", title_tr=None,
+                               verified=True, ts=now, source="Reuters", region="Middle East")
+    world = build(_snapshot(headlines=[headline]))
+    assert world.geopolitical_events[0].event_type == "CHOKEPOINT_THREAT"
+    expired_impact = SimpleNamespace(headline_id="geo-new", event_type="unknown", confidence=0.9,
+                                     surprise_level=0.8, expected_half_life_minutes=120,
+                                     valid_until=now.replace(year=now.year - 1))
+    expired = build(_snapshot(headlines=[headline], catalyst_impacts=[expired_impact]))
+    assert expired.geopolitical_events[0].expired is True
+    assert expired.geopolitical_events[0].severity == 0.0
 
 
 def test_duplicate_headlines_do_not_create_duplicate_geopolitical_events():

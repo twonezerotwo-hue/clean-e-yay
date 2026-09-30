@@ -477,6 +477,12 @@ class Catalyst(BaseModel):
     hours_until: float | None = None
     source: str = "unknown"
     verified: bool = False
+    # Optional structured macro outcome fields.  Legacy calendar rows remain
+    # valid; absent values stay None rather than becoming neutral surprises.
+    actual: float | None = None
+    expected: float | None = None
+    previous: float | None = None
+    historical_surprise_volatility: float | None = None
 
 
 # v2.7 D5 — Catalyst half-life intelligence. Haber → catalyst sınıflandırması.
