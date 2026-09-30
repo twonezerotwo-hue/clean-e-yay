@@ -28,8 +28,10 @@ Both `/api/v1/dashboard/state` and `/api/v1/cockpit/brief` expose:
 | Positioning | `world_state.positioning`, impact `positioning_state`, `volatility_regime` | Caution context only |
 | Positioning reasons | impact `positioning_reasons`, `positioning_contribution` | Show crowding/options/squeeze/volatility caution |
 | Legacy vs Causal | `causal_shadow.causal_consensus` | Backend provides scores and divergence reason |
+| World thesis vs timing | `world_thesis_score`, `world_thesis_direction`, `technical_confirmation_tf`, `entry_timing_state`, `final_shadow_score_tf` | Keep global thesis separate from timeframe entry timing |
 | Conflict / Confluence | impact `confluence_state`, `causal_shadow.conflict_shadow` | Informational; never execute |
 | Learning evidence | backend learning study artifacts | Show `INSUFFICIENT` honestly |
+| Event attribution | causal ledger `event_id`, `channels`, `asset_predictions`, `attribution_method` | Render event-specific evidence; never aggregate-copy one event into another |
 
 ## Frontend rules
 
@@ -45,3 +47,5 @@ Both `/api/v1/dashboard/state` and `/api/v1/cockpit/brief` expose:
   but must not render as active pressure.
 - Legacy comparison rows are timeframe-specific; do not overwrite one timeframe
   with another.
+- `macro_surprise_contribution` is numeric-release evidence and must remain
+  separate from `statement_contribution` (policy communication).

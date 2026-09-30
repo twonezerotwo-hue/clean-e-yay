@@ -1,10 +1,11 @@
 from __future__ import annotations
 
+from dataclasses import replace
 from datetime import UTC, datetime
 from types import SimpleNamespace
 
-from packages.causal.engine import build_shadow
-from packages.data.types import PriceQuote
+from packages.causal.engine import build_event_asset_attribution, build_shadow
+from packages.data.types import Catalyst, PriceQuote
 from packages.learning import news_event_study
 from packages.world_state.engine import _decay_factor, build, normalized_surprise
 
@@ -70,6 +71,73 @@ def test_headline_taxonomy_and_valid_until_are_independent_of_legacy_prefix():
     expired = build(_snapshot(headlines=[headline], catalyst_impacts=[expired_impact]))
     assert expired.geopolitical_events[0].expired is True
     assert expired.geopolitical_events[0].severity == 0.0
+
+
+def _macro(title: str, actual: float, expected: float, *, event_id: str = "macro-1", volatility: float | None = 1.0) -> Catalyst:
+    return Catalyst(id=event_id, ts=datetime.now(UTC), title=title, source="calendar", verified=True,
+                    actual=actual, expected=expected, historical_surprise_volatility=volatility)
+
+
+def test_macro_surprise_semantics_reach_world_factors():
+    positive = build(_snapshot(catalysts=[_macro("US CPI", 3.4, 3.0)]))
+    negative = build(_snapshot(catalysts=[_macro("US CPI", 2.6, 3.0)]))
+    assert positive.macro_surprises[0].inflation_contribution > 0
+    assert negative.macro_surprises[0].inflation_contribution < 0
+    assert positive.inflation_pressure > negative.inflation_pressure
+
+    nfp = build(_snapshot(catalysts=[_macro("Nonfarm Payrolls", 220.0, 180.0, event_id="nfp")]))
+    unemployment = build(_snapshot(catalysts=[_macro("Unemployment Rate", 5.0, 4.5, event_id="unemployment")]))
+    oil = build(_snapshot(catalysts=[_macro("EIA Crude Oil Inventory", 10.0, 2.0, event_id="oil")]))
+    assert nfp.growth_pressure > 0 and nfp.rates_pressure > 0
+    assert unemployment.growth_pressure < 0
+    assert oil.macro_surprise_oil < 0
+
+
+def test_macro_surprise_fallback_is_marked_lower_confidence_and_asset_visible():
+    world = build(_snapshot(catalysts=[_macro("US CPI", 3.4, 3.0, volatility=None)]))
+    surprise = world.macro_surprises[0]
+    assert surprise.normalization_method == "relative_difference_fallback"
+    assert surprise.numeric_confidence < 1.0
+    impact = build_shadow(world, ["BTCUSD"]).impacts[0]
+    assert impact.macro_surprise_contribution is not None
+
+
+def test_positioning_never_flips_thesis_sign():
+    world = build(_snapshot())
+    bullish = replace(world, positioning={"BTCUSD": {"state": "CROWDED_LONG", "squeeze_state": "HIGH", "options": {"state": "RICH_VOL_OR_BACKWARDATION"}, "volatility": {"regime": "EXTREME"}}})
+    bearish = replace(world, positioning={"BTCUSD": {"state": "CROWDED_SHORT", "squeeze_state": "HIGH", "options": {"state": "PUT_SKEW_CAUTION"}, "volatility": {"regime": "EXTREME"}}})
+    base = build_shadow(world, ["BTCUSD"]).impacts[0]
+    long_risk = build_shadow(bullish, ["BTCUSD"]).impacts[0]
+    short_risk = build_shadow(bearish, ["BTCUSD"]).impacts[0]
+    if base.direction_score is not None:
+        assert long_risk.direction_score == base.direction_score
+        assert short_risk.direction_score == base.direction_score
+    assert long_risk.confidence <= base.confidence
+    assert short_risk.confidence <= base.confidence
+
+
+def test_event_attribution_is_marginal_and_does_not_copy_global_prediction():
+    hormuz = build_event_asset_attribution({"event_id": "a", "event_type": "CHOKEPOINT_THREAT", "channel_strengths": {"shipping_risk": 0.8, "energy_supply_risk": 0.7}, "source_confidence": 0.8}, ["BRENT", "BTCUSD"])
+    sanctions = build_event_asset_attribution({"event_id": "b", "event_type": "SANCTIONS", "channel_strengths": {"sanctions_pressure": 0.8, "trade_risk": 0.7}, "source_confidence": 0.8}, ["BRENT", "BTCUSD"])
+    assert hormuz["asset_predictions"] != sanctions["asset_predictions"]
+    assert hormuz["event_id"] != sanctions["event_id"]
+
+
+def test_historical_replay_reports_archive_limit_honestly_and_tf_scores_differ():
+    from packages.learning.news_event_study import (
+        causal_historical_evaluator,
+        causal_historical_replay,
+    )
+    assert causal_historical_replay([])["status"] == "INSUFFICIENT_ARCHIVE"
+    evaluated = causal_historical_evaluator([{"asset": "BTCUSD", "causal_direction": 1, "legacy_direction": -1, "forward_return": 0.02, "as_of": "2026-01-01", "event_ts": "2026-01-02"}])
+    assert evaluated["samples"] == 0
+    world = build(_snapshot())
+    technicals = {"BTCUSD": {"15m": SimpleNamespace(direction_score=30.0), "1h": SimpleNamespace(direction_score=50.0), "4h": SimpleNamespace(direction_score=70.0)}}
+    shadow = build_shadow(world, ["BTCUSD"], technicals=technicals, legacy_scores={"BTCUSD|15m": {"score": 40, "direction": "bearish", "timeframe": "15m"}, "BTCUSD|4h": {"score": 60, "direction": "bullish", "timeframe": "4h"}})
+    rows = {row["timeframe"]: row for row in shadow.causal_consensus}
+    assert rows["15m"]["world_thesis_score"] == rows["4h"]["world_thesis_score"]
+    assert rows["15m"]["final_shadow_score_tf"] != rows["4h"]["final_shadow_score_tf"]
+    assert rows["15m"]["entry_timing_state"] != rows["4h"]["entry_timing_state"]
 
 
 def test_duplicate_headlines_do_not_create_duplicate_geopolitical_events():

@@ -92,6 +92,32 @@ class PolicyStatement:
 
 
 @dataclass(frozen=True)
+class MacroSurpriseImpact:
+    """Numeric macro release mapped to causal factors (not a statement)."""
+    event_id: str
+    event_type: str
+    topic: str
+    raw_surprise: float | None = None
+    normalized_surprise: float | None = None
+    numeric_confidence: float = 0.0
+    normalization_method: str | None = None
+    inflation_contribution: float = 0.0
+    growth_contribution: float = 0.0
+    rates_contribution: float = 0.0
+    oil_contribution: float = 0.0
+    effective_strength: float = 0.0
+    published_at: datetime | None = None
+    verified: bool = False
+    source: str | None = None
+    half_life_minutes: int | None = None
+    decay_factor: float = 1.0
+    evidence: tuple[str, ...] = ()
+
+    def to_dict(self) -> dict[str, Any]:
+        return _json(asdict(self))
+
+
+@dataclass(frozen=True)
 class WorldStateSnapshot:
     generated_at: datetime
     liquidity: float | None = None
@@ -106,6 +132,7 @@ class WorldStateSnapshot:
     shipping_risk: float | None = None
     sanctions_pressure: float | None = None
     trade_risk: float | None = None
+    oil_pressure: float | None = None
     geopolitical_risk: float | None = None
     crypto_liquidity: float | None = None
     equity_risk_appetite: float | None = None
@@ -130,6 +157,11 @@ class WorldStateSnapshot:
     missing_inputs: tuple[str, ...] = ()
     geopolitical_events: tuple[GeopoliticalEvent, ...] = ()
     statements: tuple[PolicyStatement, ...] = ()
+    macro_surprises: tuple[MacroSurpriseImpact, ...] = ()
+    macro_surprise_inflation: float | None = None
+    macro_surprise_growth: float | None = None
+    macro_surprise_rates: float | None = None
+    macro_surprise_oil: float | None = None
     positioning: dict[str, dict[str, Any]] | None = None
     macro_sources: dict[str, dict[str, Any]] | None = None
 

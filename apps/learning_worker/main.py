@@ -629,17 +629,30 @@ def run_once() -> dict:
         # ledger; it never feeds weights, orders, or the live decision path.
         causal_recorded = 0
         try:
-            from packages.causal.engine import build_shadow
+            from packages.causal.engine import build_event_asset_attribution
             from packages.data.ingestion.pipeline import get_cached_snapshot
             from packages.data.registry import assets as _asset_registry
             from packages.world_state.engine import build as _build_world
             _world = _build_world(get_cached_snapshot())
-            _shadow = build_shadow(_world, _asset_registry.trade_symbols(), decision_apply=False)
             by_event = []
-            predictions = {impact.symbol: impact.direction_score for impact in _shadow.impacts if impact.direction_score is not None}
+            symbols = _asset_registry.trade_symbols()
             for event in _world.geopolitical_events:
                 item = event.to_dict()
-                item["asset_predictions"] = predictions
+                item.update(build_event_asset_attribution(item, symbols))
+                by_event.append(item)
+            for event in _world.macro_surprises:
+                item = event.to_dict()
+                channels = {
+                    key: value for key, value in {
+                        "inflation_pressure": event.inflation_contribution,
+                        "growth_pressure": event.growth_contribution,
+                        "rates_pressure": event.rates_contribution,
+                        "oil_pressure": event.oil_contribution,
+                    }.items() if value
+                }
+                item["channels"] = channels
+                item["source_confidence"] = event.numeric_confidence
+                item.update(build_event_asset_attribution(item, symbols))
                 by_event.append(item)
             causal_recorded = _nes.record_causal_events(by_event)
             _nes.causal_event_study()

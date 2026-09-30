@@ -306,6 +306,9 @@ def record_causal_events(events, now: datetime | None = None) -> int:
                 "region": item.get("region"),
                 "channels": item.get("channels") or {},
                 "asset_predictions": item.get("asset_predictions") or {},
+                "prediction_confidence": item.get("prediction_confidence"),
+                "attribution_method": item.get("attribution_method", "event_marginal_v1"),
+                "evidence": item.get("evidence") or [],
                 "recorded_at": now.isoformat(),
             }, ensure_ascii=False))
         if rows:
@@ -463,8 +466,8 @@ def causal_backtest(rows, *, min_n: int = 8) -> dict:
     }
 
 
-def causal_historical_replay(rows, *, min_n: int = 8) -> dict:
-    """Replay timestamped, already-materialised evidence without look-ahead.
+def causal_historical_evaluator(rows, *, min_n: int = 8) -> dict:
+    """Evaluate timestamped, already-materialised evidence without look-ahead.
 
     The caller supplies one row per event/snapshot with values that were
     available at that timestamp and a *post-event* forward return.  This keeps
@@ -473,7 +476,20 @@ def causal_historical_replay(rows, *, min_n: int = 8) -> dict:
     accepted only as scoring outcomes.
     """
     dimensions = {"by_asset": {}, "by_timeframe": {}, "by_regime": {}, "by_event_type": {}}
+    ignored_future_rows = 0
     for row in rows or []:
+        # A row may carry event timestamps separately.  Future evidence is
+        # rejected before scoring; the forward return itself is outcome-only.
+        as_of = row.get("as_of") or row.get("timestamp")
+        event_ts = row.get("event_ts")
+        if as_of and event_ts:
+            try:
+                if str(event_ts) > str(as_of):
+                    ignored_future_rows += 1
+                    continue
+            except TypeError:
+                ignored_future_rows += 1
+                continue
         try:
             causal = float(row.get("causal_direction", 0.0))
             legacy = float(row.get("legacy_direction", 0.0))
@@ -511,4 +527,34 @@ def causal_historical_replay(rows, *, min_n: int = 8) -> dict:
                 "verdict": "INSUFFICIENT" if n < min_n else "OBSERVE",
             })
             bucket.pop("sum_forward_return", None)
-    return {**dimensions, "shadow_only": True, "auto_promotion": False}
+    return {**dimensions, "status": "HISTORICAL_EVALUATOR", "samples": sum(item.get("n", 0) for group in dimensions.values() for item in group.values()), "future_rows_ignored": ignored_future_rows, "shadow_only": True, "auto_promotion": False}
+
+
+def causal_historical_replay(rows, *, min_n: int = 8) -> dict:
+    """Report whether a true as-of snapshot replay is available.
+
+    The repository currently stores OHLCV and event ledgers, but not complete
+    MarketSnapshot-at-T archives (news, macro, technicals and rotation as one
+    immutable record).  It is therefore unsafe to claim full replay.  The
+    materialised-row evaluator remains available and the honest status is
+    ``INSUFFICIENT_ARCHIVE`` until such snapshots exist.
+    """
+    rows = list(rows or [])
+    replay_ready = [row for row in rows if row.get("snapshot_as_of") and row.get("available_events_as_of") is not None]
+    if not replay_ready:
+        return {
+            "status": "INSUFFICIENT_ARCHIVE",
+            "samples": 0,
+            "archive_coverage": 0.0,
+            "evaluator": causal_historical_evaluator(rows, min_n=min_n),
+            "shadow_only": True,
+            "auto_promotion": False,
+        }
+    return {
+        "status": "INSUFFICIENT_ARCHIVE",
+        "samples": 0,
+        "archive_coverage": round(len(replay_ready) / max(1, len(rows)), 4),
+        "evaluator": causal_historical_evaluator(replay_ready, min_n=min_n),
+        "shadow_only": True,
+        "auto_promotion": False,
+    }

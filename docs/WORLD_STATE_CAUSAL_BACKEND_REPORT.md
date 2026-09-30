@@ -123,6 +123,16 @@ their source evidence is unavailable. Flow and macro domain coverage are
 reported separately; regime classification uses deterministic stress/flow
 rules rather than one asset average.
 
+### Macro Surprise Transmission
+
+Structured calendar outcomes are mapped by event semantics: CPI/PCE to
+inflation/rates, NFP to growth/rates, unemployment with inverse growth sign,
+GDP/PMI/retail sales to growth, policy-rate releases to rates, and oil
+inventory with inverse oil pressure. Surprise normalization and half-life are
+config-driven; fallback normalization is marked with reduced confidence.
+Macro release evidence is separate from policy statements and is exposed on
+`WorldStateSnapshot.macro_surprises` and `AssetImpact.macro_surprise_contribution`.
+
 ### Geopolitics, statements, and surprise
 
 Geopolitical headlines are clustered by normalized story key, taxonomy is
@@ -160,6 +170,20 @@ legacy score/direction per `(symbol,timeframe)` when supplied,
 includes confluence, technical timing, coverage, and `ABSTAIN` for insufficient
 evidence. All of these fields are additive and non-authoritative.
 
+### Positioning No-Flip Invariant
+
+Positioning, options, squeeze and volatility are confidence/timing evidence
+only. `AssetImpact.direction_score` is the base causal thesis and is not
+modified by positioning; caution is represented by `positioning_multiplier`,
+`entry_quality`, `positioning_state`, and `positioning_reasons`.
+
+### Event-Specific Causal Attribution
+
+The off-tick worker uses `build_event_asset_attribution()` for each event's own
+channel strengths. Global predictions are never copied to every event. Macro
+surprise events and geopolitical events share the bounded ledger schema with
+an explicit `attribution_method` and prediction confidence.
+
 ### Learning and backtest
 
 `packages/learning/news_event_study.py` now also provides a bounded causal event
@@ -167,6 +191,20 @@ ledger, channel/asset/horizon event study using existing OHLCV history, a
 timestamped historical replay evaluator, and legacy-vs-causal observation
 backtest. The learning worker records causal event + asset predictions off-tick;
 ledgers are deduplicated and size-capped under `data/runtime/`.
+
+### Historical Replay vs Evaluator
+
+`causal_historical_evaluator()` evaluates timestamped materialized rows and
+rejects rows whose event timestamp is after the as-of timestamp. A complete
+MarketSnapshot-at-T archive is not present, so `causal_historical_replay()`
+reports `INSUFFICIENT_ARCHIVE` rather than claiming full reconstruction.
+
+### Per-Timeframe Causal Timing
+
+World thesis score/direction are global per symbol. Each causal consensus row
+adds timeframe-specific technical confirmation, `entry_timing_state`, and
+`final_shadow_score_tf`; the timing view can be `WAIT`, `CONFLICT`, or
+`CAUTION` without changing thesis direction.
 Forward-return rows are required; missing rows remain pending. Results are
 `INSUFFICIENT` below the sample threshold and cannot auto-promote weights or
 activate decisions.

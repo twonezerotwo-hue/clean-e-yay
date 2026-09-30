@@ -44,15 +44,19 @@ class AssetImpact:
     direction_score: float | None
     confidence: float
     time_horizon: str
+    base_thesis_score: float | None = None
     drivers: tuple[str, ...] = ()
     positive_drivers: tuple[str, ...] = ()
     negative_drivers: tuple[str, ...] = ()
     world_state_contribution: float | None = None
     flow_contribution: float | None = None
     macro_contribution: float | None = None
+    macro_surprise_contribution: float | None = None
     geopolitical_contribution: float | None = None
     statement_contribution: float | None = None
     positioning_contribution: float | None = None
+    positioning_multiplier: float = 1.0
+    entry_quality: str = "UNAVAILABLE"
     positioning_reasons: tuple[str, ...] = ()
     technical_confirmation: float | None = None
     timing_status: str = "UNAVAILABLE"

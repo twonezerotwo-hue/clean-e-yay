@@ -1185,6 +1185,14 @@ causal_world:
     diversity_factor: 0.10
   decay:
     default_half_life_minutes: 240
+  macro_surprise_half_life_minutes:
+    inflation: 360
+    jobs: 360
+    unemployment: 360
+    growth: 360
+    gdp: 480
+    policy_rate: 720
+    oil_inventory: 180
   statement_authority:
     chair: 1.00
     governor: 0.88

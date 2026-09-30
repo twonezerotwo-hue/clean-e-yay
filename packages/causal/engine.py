@@ -135,6 +135,16 @@ def _technical_tf(technicals: Mapping[str, object] | None, symbol: str, timefram
         return None
 
 
+def _entry_timing_state(thesis: float | None, technical: float | None, positioning_reasons: tuple[str, ...] = ()) -> str:
+    if thesis is None or technical is None:
+        return "WAIT"
+    if abs(thesis) < 0.05 or abs(technical) < 0.15:
+        return "WAIT"
+    if thesis * technical < -0.02:
+        return "CAUTION" if positioning_reasons else "CONFLICT"
+    return "CAUTION" if positioning_reasons else "CONFIRMED"
+
+
 def _impact(
     symbol: str,
     factors: dict[str, float],
@@ -207,7 +217,23 @@ def _impact(
         if abs(contribution) > 0.01:
             statement_drivers.append(f"statement:{statement.institution}:{'tightening' if direction > 0 else 'easing'}")
     statement_contribution = _clamp(statement_contribution)
-    adjusted_score = _clamp((score or 0.0) + positioning_adjustment + statement_contribution) if score is not None else None
+    macro_surprise_contribution = 0.0
+    macro_surprise_drivers: list[str] = []
+    for surprise in state.macro_surprises or ():
+        contribution = (
+            surprise.inflation_contribution * float(exposures.get("inflation_pressure", 0.0))
+            + surprise.growth_contribution * float(exposures.get("growth_pressure", 0.0))
+            + surprise.rates_contribution * float(exposures.get("rates_pressure", 0.0))
+            + surprise.oil_contribution * float(exposures.get("energy_supply_risk", exposures.get("growth_pressure", 0.0)))
+        )
+        macro_surprise_contribution += contribution
+        if abs(contribution) > 0.005:
+            macro_surprise_drivers.append(f"macro_surprise:{surprise.event_type}:{surprise.event_id}")
+    macro_surprise_contribution = _clamp(macro_surprise_contribution)
+    base_thesis_score = _clamp((score or 0.0) + statement_contribution) if score is not None else None
+    # Positioning is a confidence/timing layer only. It must never be allowed
+    # to cross or manufacture the causal thesis sign.
+    adjusted_score = base_thesis_score
     conflicts = ("world factors conflict",) if positive and negative else ()
     technical_confirmation, timing_status = _technical_timing(technicals, symbol)
     if technical_confirmation is None:
@@ -221,22 +247,36 @@ def _impact(
     else:
         confluence = "MIXED"
     coverage = len(terms) / max(1, len(exposures))
-    confidence = state.confidence * min(1.0, coverage) * (0.75 if positioning_state == "UNAVAILABLE" else 1.0)
+    positioning_multiplier = max(0.0, min(1.0, 1.0 - min(0.75, abs(positioning_adjustment))))
+    confidence = state.confidence * min(1.0, coverage) * (0.75 if positioning_state == "UNAVAILABLE" else 1.0) * positioning_multiplier
     if positioning_reasons:
         confidence *= 0.92
+    entry_quality = "CONFIRMED" if timing_status == "CONFIRMED" and not positioning_reasons else "CAUTION" if positioning_reasons else timing_status
+    if squeeze_state == "HIGH" and positioning_state == "CROWDED_LONG":
+        positioning_state = "LONG_SQUEEZE_RISK"
+    elif squeeze_state == "HIGH" and positioning_state == "CROWDED_SHORT":
+        positioning_state = "SHORT_SQUEEZE_RISK"
+    elif volatility_regime in {"EXTREME", "ELEVATED"}:
+        positioning_state = "VOL_STRESS"
+    elif options_state != "" and options_state != "NEUTRAL":
+        positioning_state = "OPTIONS_STRESS"
     return AssetImpact(
         symbol=symbol,
         direction_score=adjusted_score,
         confidence=round(max(0.0, min(1.0, confidence)), 4),
         time_horizon=horizon,
-        drivers=tuple(key for key, _ in terms) + tuple(statement_drivers),
+        base_thesis_score=base_thesis_score,
+        drivers=tuple(key for key, _ in terms) + tuple(statement_drivers) + tuple(macro_surprise_drivers),
         positive_drivers=positive,
         negative_drivers=negative,
         world_state_contribution=adjusted_score,
         flow_contribution=_clamp(sum(factors[key] * float(exposures[key]) for key in exposures if key in {"liquidity", "usd_pressure", "crypto_liquidity", "equity_risk_appetite"} and key in factors)) if terms else None,
         macro_contribution=_clamp(sum(factors[key] * float(exposures[key]) for key in exposures if key in {"rates_pressure", "real_yield_pressure", "inflation_pressure", "growth_pressure"} and key in factors)) if terms else None,
+        macro_surprise_contribution=macro_surprise_contribution,
         geopolitical_contribution=_clamp(sum(factors[key] * float(exposures[key]) for key in exposures if key in {"risk_aversion", "energy_supply_risk", "shipping_risk", "credit_stress"} and key in factors)) if terms else None,
         positioning_contribution=positioning_adjustment,
+        positioning_multiplier=round(positioning_multiplier, 4),
+        entry_quality=entry_quality,
         statement_contribution=statement_contribution,
         positioning_reasons=tuple(positioning_reasons),
         technical_confirmation=technical_confirmation,
@@ -247,6 +287,63 @@ def _impact(
         missing_evidence=missing,
         conflicts=conflicts,
     )
+
+
+def build_event_asset_attribution(
+    event: Mapping[str, object],
+    symbols: Iterable[str],
+) -> dict[str, object]:
+    """Compute marginal asset predictions from one event's channels only.
+
+    This is intentionally smaller than a full snapshot rebuild and is called
+    by the off-tick learning worker. No global world-state prediction is copied
+    into unrelated event rows.
+    """
+    config = load_thresholds().get("causal_world") or {}
+    raw_channels = event.get("channel_strengths") or event.get("channels") or {}
+    if isinstance(raw_channels, (list, tuple)):
+        raw_channels = {str(channel): 1.0 for channel in raw_channels}
+    channels = {str(key): float(value) for key, value in (raw_channels or {}).items() if value is not None}
+    factors: dict[str, float] = {}
+    for channel, value in channels.items():
+        factor = {
+            "shipping_risk": "shipping_risk",
+            "energy_supply_risk": "energy_supply_risk",
+            "trade_risk": "trade_risk",
+            "sanctions_pressure": "sanctions_pressure",
+            "risk_aversion": "risk_aversion",
+            "inflation_pressure": "inflation_pressure",
+            "growth_pressure": "growth_pressure",
+            "rates_pressure": "rates_pressure",
+            "oil_pressure": "oil_pressure",
+            "energy_infrastructure_attack": "energy_supply_risk",
+        }.get(channel)
+        if factor:
+            factors[factor] = _clamp(factors.get(factor, 0.0) + value)
+    # Reuse the same bounded graph priors, but never inject unrelated snapshot
+    # factors. Direct event channels are authoritative for this marginal pass.
+    for source, target, sign, _key, strength in _edge_specs(config):
+        if source in factors and target not in factors:
+            factors[target] = _clamp(factors[source] * sign * strength)
+    exposures_cfg = (config.get("asset_exposures") or {})
+    predictions: dict[str, float] = {}
+    for symbol in symbols:
+        asset = asset_registry.get(symbol)
+        asset_class = asset.asset_class if asset is not None else "other"
+        exposures = exposures_cfg.get(asset_class) or exposures_cfg.get("other") or {}
+        terms = [factors[key] * float(weight) for key, weight in exposures.items() if key in factors]
+        if terms:
+            predictions[symbol] = _clamp(sum(terms))
+    source_confidence = float(event.get("source_confidence", event.get("numeric_confidence", 0.0)) or 0.0)
+    return {
+        "event_id": str(event.get("event_id") or event.get("id") or ""),
+        "event_type": str(event.get("event_type") or "UNKNOWN"),
+        "channels": channels,
+        "asset_predictions": predictions,
+        "prediction_confidence": round(max(0.0, min(1.0, source_confidence)), 4),
+        "attribution_method": "event_marginal_v1",
+        "evidence": tuple(f"{key}={value:.4f}" for key, value in sorted(channels.items())),
+    }
 
 
 def build_shadow(
@@ -281,30 +378,35 @@ def build_shadow(
             direction = "bearish"
         else:
             direction = "neutral"
-        timing = impact.technical_confirmation
-        shadow_score = 50.0 + (impact.direction_score or 0.0) * 50.0
-        if timing is not None:
-            shadow_score += timing * 10.0
-        shadow_score = max(0.0, min(100.0, round(shadow_score, 2)))
+        world_thesis_score = round(50.0 + (impact.direction_score or 0.0) * 50.0, 2) if impact.direction_score is not None else None
         tf_keys = [key for key in (legacy_scores or {}) if key.startswith(f"{impact.symbol}|")]
         rows = [(str((legacy_scores or {}).get(key, {}).get("timeframe") or key.split("|", 1)[1]), (legacy_scores or {}).get(key) or {}) for key in tf_keys]
         if not rows:
             rows = [("shadow", (legacy_scores or {}).get(impact.symbol) or {})]
         for timeframe, legacy in rows:
             tf_confirmation = _technical_tf(technicals, impact.symbol, timeframe)
+            entry_timing_state = _entry_timing_state(impact.direction_score, tf_confirmation, impact.positioning_reasons)
+            timing_modifier = (tf_confirmation or 0.0) * 10.0
+            final_shadow_score_tf = max(0.0, min(100.0, round((world_thesis_score or 50.0) + timing_modifier, 2))) if world_thesis_score is not None else None
             consensus.append({
                 "symbol": impact.symbol,
                 "timeframe": timeframe,
                 "legacy_score": legacy.get("score"),
                 "legacy_direction": legacy.get("direction"),
-                "world_score": round(50.0 + (impact.world_state_contribution or 0.0) * 50.0, 2) if impact.world_state_contribution is not None else None,
+                "world_score": world_thesis_score,
+                "world_thesis_score": world_thesis_score,
+                "world_thesis_direction": direction,
                 "causal_score": round(50.0 + (impact.direction_score or 0.0) * 50.0, 2) if impact.direction_score is not None else None,
                 "technical_confirmation_tf": tf_confirmation,
                 "technical_confirmation_mtf": impact.technical_confirmation,
                 "technical_confirmation": tf_confirmation if tf_confirmation is not None else impact.technical_confirmation,
+                "entry_timing_state": entry_timing_state,
                 "positioning_adjustment": impact.positioning_contribution,
+                "positioning_state": impact.positioning_state,
+                "positioning_reasons": list(impact.positioning_reasons),
                 "confluence_state": impact.confluence_state,
-                "final_shadow_score": shadow_score if direction != "ABSTAIN" else None,
+                "final_shadow_score_tf": final_shadow_score_tf if direction != "ABSTAIN" else None,
+                "final_shadow_score": final_shadow_score_tf if direction != "ABSTAIN" else None,
                 "final_shadow_direction": direction,
                 "confidence": impact.confidence,
                 "coverage": round(1.0 - len(impact.missing_evidence) / max(1, len(impact.drivers) + len(impact.missing_evidence)), 4),
@@ -312,14 +414,16 @@ def build_shadow(
                 "divergence_reason": "legacy_vs_causal" if legacy.get("direction") and legacy.get("direction") != direction else None,
             })
         supplied = (conflict_inputs or {}).get(impact.symbol) or {}
-        required = ("dqs_status", "risk_gate_action", "trigger_confirmed", "sl_tp_rr_valid", "setup_type", "historical_edge_strong_negative", "size_multiplier", "alignment_status")
+        required = ("dqs_status", "risk_gate_action", "trigger_confirmed", "trade_economics_valid", "setup_type", "historical_edge_strong_negative", "size_multiplier", "alignment_status")
         missing_context = [key for key in required if key not in supplied or supplied[key] is None]
         if missing_context:
             # No resolver call is made with fabricated HOLD/True/size values.
             # UNAVAILABLE is explicit and cannot be mistaken for a trade state.
             conflict_shadow.append({"symbol": impact.symbol, "final_action": "UNAVAILABLE", "blocked_by": ["inputs_unavailable"], "path": [], "inputs_unavailable": missing_context})
         else:
-            resolution = resolve_conflict(ConflictInputs(**{key: supplied[key] for key in required}))
+            resolver_payload = {key: supplied[key] for key in required if key != "trade_economics_valid"}
+            resolver_payload["sl_tp_rr_valid"] = supplied["trade_economics_valid"]
+            resolution = resolve_conflict(ConflictInputs(**resolver_payload))
             conflict_shadow.append({"symbol": impact.symbol, "final_action": resolution.final_action, "blocked_by": resolution.blocked_by, "path": resolution.conflict_resolution_path, "inputs_used": list(required)})
     warnings = list(state.missing_inputs)
     if state.confidence < 0.5:

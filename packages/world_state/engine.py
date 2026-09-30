@@ -12,7 +12,12 @@ from typing import Any
 
 from packages.data.ingestion.pipeline import MarketSnapshot
 from packages.data.registry.loader import load_thresholds
-from packages.world_state.model import GeopoliticalEvent, PolicyStatement, WorldStateSnapshot
+from packages.world_state.model import (
+    GeopoliticalEvent,
+    MacroSurpriseImpact,
+    PolicyStatement,
+    WorldStateSnapshot,
+)
 
 
 def _clamp(value: float, low: float = -1.0, high: float = 1.0) -> float:
@@ -316,35 +321,6 @@ def _statements(snapshot: MarketSnapshot, now: datetime, config: dict[str, Any])
                 evidence=(text[:240], f"authority={authority:.2f}", f"source={credibility:.2f}"),
             )
         )
-    # Structured calendar outcomes are canonical macro evidence when present.
-    # They are additive to headline statements and remain absent for the
-    # repository's date-only calendar rows.
-    for catalyst in getattr(snapshot, "catalysts", ()) or ():
-        actual = getattr(catalyst, "actual", None)
-        expected = getattr(catalyst, "expected", None)
-        if actual is None or expected is None:
-            continue
-        title = str(getattr(catalyst, "title", ""))
-        numeric = normalized_surprise(actual, expected, getattr(catalyst, "historical_surprise_volatility", None))
-        method = "historical_volatility"
-        if numeric is None:
-            numeric = _clamp((float(actual) - float(expected)) / max(abs(float(expected)), 1.0))
-            method = "relative_difference_fallback"
-        result.append(PolicyStatement(
-            statement_id=str(getattr(catalyst, "id", "")),
-            institution="macro_calendar",
-            speaker_role="release",
-            authority_score=0.75,
-            topic="macro_event",
-            policy_direction="unknown",
-            source_confidence=0.75 if getattr(catalyst, "verified", False) else 0.25,
-            actual_value=float(actual), expected_value=float(expected),
-            numeric_surprise=numeric, semantic_surprise=None,
-            market_relevance=0.8, published_at=getattr(catalyst, "ts", None),
-            half_life_minutes=240, normalization_method=method,
-            numeric_confidence=1.0 if method == "historical_volatility" else 0.5,
-            evidence=(title[:240], f"source={getattr(catalyst, 'source', 'unknown')}"),
-        ))
     return tuple(result)
 
 
@@ -353,6 +329,88 @@ def normalized_surprise(actual: float | None, expected: float | None, historical
     if actual is None or expected is None or historical_volatility is None or historical_volatility <= 0:
         return None
     return _clamp((float(actual) - float(expected)) / float(historical_volatility))
+
+
+def _macro_topic(title: str) -> tuple[str, str] | None:
+    value = title.casefold()
+    rules = (
+        (("core cpi", "cpi", "pce", "inflation"), ("inflation", "inflation")),
+        (("unemployment", "jobless rate"), ("unemployment", "growth")),
+        (("nonfarm", "nfp", "payroll", "jobs", "employment"), ("jobs", "growth")),
+        (("gdp", "gross domestic"), ("gdp", "growth")),
+        (("pmi", "retail sales", "industrial production"), ("growth", "growth")),
+        (("fed", "fomc", "rate decision", "interest rate"), ("policy_rate", "rates")),
+        (("oil inventory", "crude inventory", "eia inventory"), ("oil_inventory", "oil")),
+    )
+    for keywords, result in rules:
+        if any(keyword in value for keyword in keywords):
+            return result
+    return None
+
+
+def _macro_surprises(snapshot: MarketSnapshot, now: datetime, config: dict[str, Any]) -> tuple[MacroSurpriseImpact, ...]:
+    half_lives = config.get("macro_surprise_half_life_minutes") or {}
+    result: list[MacroSurpriseImpact] = []
+    seen: set[str] = set()
+    for catalyst in getattr(snapshot, "catalysts", ()) or ():
+        event_id = str(getattr(catalyst, "id", ""))
+        actual = getattr(catalyst, "actual", None)
+        expected = getattr(catalyst, "expected", None)
+        topic_info = _macro_topic(str(getattr(catalyst, "title", "")))
+        if not event_id or event_id in seen or actual is None or expected is None or topic_info is None:
+            continue
+        seen.add(event_id)
+        topic, channel = topic_info
+        historical_volatility = getattr(catalyst, "historical_surprise_volatility", None)
+        normalized = normalized_surprise(actual, expected, historical_volatility)
+        method = "historical_volatility"
+        confidence = 1.0
+        if normalized is None:
+            normalized = _clamp((float(actual) - float(expected)) / max(abs(float(expected)), 1.0))
+            method = "relative_difference_fallback"
+            confidence = 0.5
+        if topic == "unemployment" or topic == "oil_inventory":
+            normalized *= -1.0
+        half_life = int(half_lives.get(topic, 360 if topic in {"inflation", "jobs", "gdp", "growth"} else 720 if topic == "policy_rate" else 180))
+        ts = getattr(catalyst, "ts", None)
+        age = max(0.0, (now - ts).total_seconds()) if ts else None
+        decay = _decay_factor(age, half_life)
+        verified = bool(getattr(catalyst, "verified", False))
+        confidence *= 1.0 if verified else 0.5
+        effective = float(normalized or 0.0) * confidence * decay
+        inflation = effective if channel == "inflation" else 0.0
+        growth = effective if channel == "growth" else 0.0
+        rates = effective if channel == "rates" else effective * 0.6 if channel == "inflation" else effective * 0.35 if channel == "growth" else 0.0
+        oil = effective if channel == "oil" else 0.0
+        result.append(MacroSurpriseImpact(
+            event_id=event_id,
+            event_type=topic,
+            topic=topic,
+            raw_surprise=round(float(actual) - float(expected), 6),
+            normalized_surprise=round(float(normalized), 6),
+            numeric_confidence=confidence,
+            normalization_method=method,
+            inflation_contribution=round(inflation, 6),
+            growth_contribution=round(growth, 6),
+            rates_contribution=round(rates, 6),
+            oil_contribution=round(oil, 6),
+            effective_strength=round(effective, 6),
+            published_at=ts,
+            verified=verified,
+            source=getattr(catalyst, "source", None),
+            half_life_minutes=half_life,
+            decay_factor=decay,
+            evidence=(str(getattr(catalyst, "title", ""))[:240], f"normalization={method}"),
+        ))
+    return tuple(result)
+
+
+def _blend_pressure(base: float | None, surprise: float | None, surprise_weight: float = 0.35) -> float | None:
+    if base is None:
+        return _clamp(surprise) if surprise is not None else None
+    if surprise is None:
+        return base
+    return _clamp(base * (1.0 - surprise_weight) + surprise * surprise_weight)
 
 
 def _positioning(snapshot: MarketSnapshot) -> tuple[dict[str, dict[str, Any]], float]:
@@ -473,6 +531,7 @@ def build(snapshot: MarketSnapshot, *, now: datetime | None = None) -> WorldStat
     credit_stress = _clamp(-credit_flow) if credit_flow is not None else None
     events = _geo_events(snapshot, current, config) if config.get("geopolitical_enabled", True) else ()
     statements = _statements(snapshot, current, config) if config.get("statements_enabled", True) else ()
+    macro_surprises = _macro_surprises(snapshot, current, config) if config.get("statements_enabled", True) else ()
     geo = _mean([e.severity * e.source_confidence for e in events if e.confirmed_action])
     energy_risk = _mean([e.energy_exposure * (e.severity or 0.0) * e.source_confidence for e in events])
     shipping = _mean([e.shipping_exposure * (e.severity or 0.0) * e.source_confidence for e in events])
@@ -482,8 +541,14 @@ def build(snapshot: MarketSnapshot, *, now: datetime | None = None) -> WorldStat
     us10y, us10y_source = _macro_signal(snapshot, "US10Y")
     rates = _mean([us02y, us10y])
     cpi_signal, cpi_source = _macro_signal(snapshot, "CPI")
-    inflation = _mean([cpi_signal, energy_risk, sanctions, flows["energy"] if flows["energy"] is not None and flows["energy"] > 0 else None])
-    growth = _mean([equity, -trade if trade is not None else None])
+    surprise_inflation = _mean([item.inflation_contribution for item in macro_surprises])
+    surprise_growth = _mean([item.growth_contribution for item in macro_surprises])
+    surprise_rates = _mean([item.rates_contribution for item in macro_surprises])
+    surprise_oil = _mean([item.oil_contribution for item in macro_surprises])
+    inflation = _blend_pressure(_mean([cpi_signal, energy_risk, sanctions, flows["energy"] if flows["energy"] is not None and flows["energy"] > 0 else None]), surprise_inflation)
+    growth = _blend_pressure(_mean([equity, -trade if trade is not None else None]), surprise_growth, 0.75)
+    rates = _blend_pressure(rates, surprise_rates)
+    oil_pressure = _blend_pressure(flows["energy"], surprise_oil)
     real_yield = _clamp(rates - (inflation or 0.0) * 0.5) if rates is not None else None
     risk_aversion = _mean([-equity if equity is not None else None, credit_stress, shipping])
     liquidity = _mean([flows["crypto"], equity, -usd if usd is not None else None, -rates if rates is not None else None, credit_flow])
@@ -566,6 +631,11 @@ def build(snapshot: MarketSnapshot, *, now: datetime | None = None) -> WorldStat
         missing_inputs=missing,
         geopolitical_events=events,
         statements=statements,
+        macro_surprises=macro_surprises,
+        macro_surprise_inflation=surprise_inflation,
+        macro_surprise_growth=surprise_growth,
+        macro_surprise_rates=surprise_rates,
+        macro_surprise_oil=surprise_oil,
         positioning=positioning,
         macro_sources={
             "US02Y": us02y_source,
@@ -576,4 +646,5 @@ def build(snapshot: MarketSnapshot, *, now: datetime | None = None) -> WorldStat
         },
         sanctions_pressure=sanctions,
         trade_risk=trade,
+        oil_pressure=oil_pressure,
     )
