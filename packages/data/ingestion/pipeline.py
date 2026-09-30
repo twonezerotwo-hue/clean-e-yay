@@ -81,6 +81,15 @@ class MarketSnapshot:
     # Optional provider-neutral published capital-flow observations.  Existing
     # providers may leave this empty; rotation remains an explicit proxy.
     flow_observations: list[dict] = field(default_factory=list)
+    # Historical replay provenance.  These are domain watermarks, not aliases
+    # for ``generated_at``; unknown provider watermarks remain None.
+    market_data_as_of: datetime | None = None
+    events_available_as_of: datetime | None = None
+    statements_available_as_of: datetime | None = None
+    macro_available_as_of: datetime | None = None
+    expectations_as_of: datetime | None = None
+    flow_available_as_of: datetime | None = None
+    ingested_at: datetime | None = None
 
 
 def _make_id(now: datetime) -> str:
@@ -97,6 +106,40 @@ def _regime_macro_missing(prices: list[PriceQuote]) -> list[str]:
     return sorted(
         q.symbol for q in prices if q.symbol in _REGIME_MACRO_SYMBOLS and q.price is None
     )
+
+
+def _latest_timestamp(items: list[object], attribute: str = "ts") -> datetime | None:
+    values = [getattr(item, attribute, None) for item in items]
+    values = [value for value in values if isinstance(value, datetime)]
+    return max(values) if values else None
+
+
+def _latest_mapping_timestamp(items: list[dict]) -> datetime | None:
+    values: list[datetime] = []
+    for item in items or []:
+        raw = item.get("timestamp") or item.get("ts") if isinstance(item, dict) else None
+        if not raw:
+            continue
+        try:
+            value = raw if isinstance(raw, datetime) else datetime.fromisoformat(str(raw).replace("Z", "+00:00"))
+            values.append(value if value.tzinfo is not None else value.replace(tzinfo=UTC))
+        except (TypeError, ValueError):
+            continue
+    return max(values) if values else None
+
+
+def _latest_provider_ingestion(status: dict[str, dict]) -> datetime | None:
+    values: list[datetime] = []
+    for item in (status or {}).values():
+        raw = item.get("last_success_at") if isinstance(item, dict) else None
+        if not raw:
+            continue
+        try:
+            value = datetime.fromisoformat(str(raw).replace("Z", "+00:00"))
+            values.append(value if value.tzinfo is not None else value.replace(tzinfo=UTC))
+        except (TypeError, ValueError):
+            continue
+    return max(values) if values else None
 
 
 def build_snapshot(symbols: list[str] | None = None) -> MarketSnapshot:
@@ -241,6 +284,16 @@ def build_snapshot(symbols: list[str] | None = None) -> MarketSnapshot:
     }
     if price_provider.is_runtime_mock_explicit():
         warnings.insert(0, "PRICE_USE_MOCK=true — TEST/MOCK MODE")
+    market_data_as_of = _latest_timestamp(prices)
+    events_available_as_of = _latest_timestamp(headlines)
+    # Statements and expectations in World-State are deterministic views of
+    # the same published headline/catalyst inputs; carry that source
+    # watermark, never generated_at as a fabricated availability proof.
+    statements_available_as_of = events_available_as_of
+    expectations_as_of = statements_available_as_of
+    macro_available_as_of = _latest_timestamp(catalysts)
+    flow_available_as_of = _latest_mapping_timestamp(getattr(rotation, "flow_observations", []) or [])
+    ingested_at = _latest_provider_ingestion(provider_status)
     return MarketSnapshot(
         snapshot_id=_make_id(now),
         generated_at=now,
@@ -257,6 +310,13 @@ def build_snapshot(symbols: list[str] | None = None) -> MarketSnapshot:
         volatility=volatility,
         options=options,
         catalyst_impacts=catalyst_impacts,
+        market_data_as_of=market_data_as_of,
+        events_available_as_of=events_available_as_of,
+        statements_available_as_of=statements_available_as_of,
+        macro_available_as_of=macro_available_as_of,
+        expectations_as_of=expectations_as_of,
+        flow_available_as_of=flow_available_as_of,
+        ingested_at=ingested_at,
     )
 
 

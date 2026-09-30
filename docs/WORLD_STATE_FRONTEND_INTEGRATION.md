@@ -43,6 +43,7 @@ Both `/api/v1/dashboard/state` and `/api/v1/cockpit/brief` expose:
 | `macro_surprises` | array | Numeric surprise and provenance | Surprise strength/details | Optional; show provenance |
 | `interactions` | array | Pairwise `SYNERGISTIC`, `REDUNDANT`, or `CONFLICT` result | Interaction warning/badge | Optional; no client recomputation |
 | `causal_shadow.edges[*].weight` | number | Applied weight metadata | Edge detail tooltip | Required per edge; `PRIOR` is valid |
+| `causal_shadow.edges[*].edge_id` / `sign` | string/number | Canonical graph edge identity and topology sign | Stable edge label; show negative topology explicitly | Required when present; never infer sign from magnitude |
 | `causal_shadow.edges[*].weight_source` | string | `PRIOR` or calibrated hierarchy source | PRIOR/CALIBRATED badge | Required; never hide fallback |
 | `causal_shadow.edges[*].sample_n` | integer | Evidence sample count | Calibration sample N | Required; `0` means prior |
 | `causal_shadow.edges[*].regime` / `horizon` | string/null | Conditional calibration context | Filter chips | Optional; show `UNKNOWN`/`ALL` |
@@ -51,6 +52,7 @@ Both `/api/v1/dashboard/state` and `/api/v1/cockpit/brief` expose:
 | `replay.status` | string | `REAL_REPLAY`, `PARTIAL_REPLAY`, `INSUFFICIENT_PROVENANCE`, `INSUFFICIENT_ARCHIVE`, or `INSUFFICIENT_OUTCOMES` | Status badge; never infer success from row count | Required |
 | `replay.timestamps_reconstructable` / `timestamps_scored` | integer | Reconstruction and scored timestamp counts | Timeline coverage | Optional |
 | `replay.missing_provenance_domains` | array | Domain-specific availability gaps | Explain why replay is partial | Optional |
+| snapshot provenance fields | string/null | `market_data_as_of`, `events_available_as_of`, `statements_available_as_of`, `macro_available_as_of`, `expectations_as_of`, `flow_available_as_of`, `ingested_at` | Timeline provenance tooltip | Optional; `null` means provider watermark unavailable |
 | `causal_shadow.edges_by_horizon` | object | Horizon-specific edge metadata when test-only calibration is applied | Timeframe edge tooltip/filter | Optional; PRIOR remains default |
 | archive `archive_write_reason` / `material_changes` | string/array | `CADENCE_CHECKPOINT`, `MATERIAL_CHANGE`, `REGIME_CHANGE`, `NEW_EVIDENCE` | Archive timeline annotation | Optional |
 | calibration `raw_rows` / `eligible_rows` / `rejected_rows` / `rejection_reasons` | integer/object | Evidence quality and sample N audit | Calibration quality panel | Required for artifact |

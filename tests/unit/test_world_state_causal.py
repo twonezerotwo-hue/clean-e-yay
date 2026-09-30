@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 from dataclasses import replace
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
 
 from packages.causal.engine import build_event_asset_attribution, build_shadow
 from packages.data.types import Catalyst, PriceQuote
 from packages.learning import news_event_study
+from packages.learning.causal_calibration import calibrate_edges
+from packages.world_state.archive import materialize_edge_outcomes
 from packages.world_state.engine import _decay_factor, build, normalized_surprise
 
 
@@ -269,3 +271,116 @@ def test_causal_graph_exposes_actual_edges_and_consensus():
     assert all(edge.source_value is not None and edge.contribution is not None for edge in shadow.edges)
     assert shadow.causal_consensus[0]["legacy_score"] == 62.0
     assert shadow.conflict_shadow[0]["final_action"] == "UNAVAILABLE"
+
+
+def test_archive_materialization_keeps_canonical_edge_id_and_sign():
+    now = datetime(2026, 1, 1, tzinfo=UTC)
+    rows = [
+        {
+            "generated_at": now.isoformat(),
+            "snapshot_as_of": now.isoformat(),
+            "data_verified": True,
+            "factors": {"rates_pressure": 0.5, "liquidity": 0.2},
+            "edge_predictions": [{
+                "edge_id": "rates_to_liquidity",
+                "source": "rates_pressure",
+                "target": "liquidity",
+                "sign": -1,
+                "source_value": 0.5,
+                "prior_strength": 0.55,
+            }],
+        },
+        {
+            "generated_at": (now + timedelta(hours=1)).isoformat(),
+            "snapshot_as_of": (now + timedelta(hours=1)).isoformat(),
+            "data_verified": True,
+            "factors": {"rates_pressure": 0.5, "liquidity": 0.0},
+            "edge_predictions": [],
+        },
+    ]
+    report = materialize_edge_outcomes(rows, horizons=("1h",))
+    assert report["rows"][0]["edge_id"] == "rates_to_liquidity"
+    assert report["rows"][0]["edge"] == "rates_to_liquidity"
+    assert report["rows"][0]["sign"] == -1
+
+
+def test_negative_edge_calibration_uses_topology_sign():
+    base = datetime(2026, 1, 1, tzinfo=UTC)
+    rows = [{
+        "edge_id": "rates_to_liquidity",
+        "edge": "rates_to_liquidity",
+        "source_value": 0.5,
+        "target_response": -0.2,
+        "sign": -1,
+        "prior_strength": 0.55,
+        "regime": "RISK_OFF",
+        "horizon": "1h",
+        "root_event_ids": [f"event-{index}"],
+        "prediction_as_of": (base + timedelta(hours=index)).isoformat(),
+        "outcome_as_of": (base + timedelta(hours=index, minutes=30)).isoformat(),
+        "data_verified": True,
+    } for index in range(8)]
+    report = calibrate_edges(rows)
+    bucket = report["recommendations"]["rates_to_liquidity|REGIME:RISK_OFF|HORIZON:1h"]
+    assert bucket["prior_sign"] == -1
+    assert bucket["sign_conflict"] is False
+    assert bucket["stability"] == "STABLE"
+
+
+def test_replay_scores_reconstructed_prediction_not_stale_archive_impact():
+    as_of = datetime(2026, 1, 1, tzinfo=UTC)
+    stamp = as_of.isoformat()
+    row = {
+        "generated_at": stamp,
+        "snapshot_as_of": stamp,
+        "market_data_as_of": stamp,
+        "events_available_as_of": stamp,
+        "statements_available_as_of": stamp,
+        "macro_available_as_of": stamp,
+        "expectations_as_of": stamp,
+        "flow_available_as_of": stamp,
+        "factor_confidence": 1.0,
+        "regime": "RISK_ON",
+        # Deliberately stale/opposite archived impact.
+        "asset_impacts": [{"symbol": "BTCUSD", "direction_score": -1.0}],
+        "reconstruction_inputs": {
+            "world_state": {"liquidity": 0.8, "confidence": 1.0},
+            "symbols": ["BTCUSD"],
+        },
+        "outcomes": [{
+            "asset": "BTCUSD",
+            "timeframe": "1h",
+            "regime": "RISK_ON",
+            "event_type": "WORLD_STATE",
+            "causal_direction": -1.0,
+            "legacy_direction": 0.0,
+            "forward_return": 0.1,
+        }],
+    }
+    report = news_event_study.causal_historical_replay([row], min_n=1)
+    assert report["status"] == "REAL_REPLAY"
+    assert report["by_asset"]["BTCUSD"]["causal_hits"] == 1
+
+
+def test_raw_snapshot_reconstruction_filters_future_evidence_at_as_of():
+    as_of = datetime(2026, 1, 1, tzinfo=UTC)
+    payload = {
+        "snapshot_id": "snap-raw",
+        "prices": [],
+        "technicals": {},
+        "headlines": [{
+            "id": "future-headline", "source": "fixture",
+            "ts": (as_of + timedelta(minutes=1)).isoformat(),
+            "title": "future evidence must not enter replay", "verified": True,
+        }],
+        "catalysts": [],
+        "rotation": {"status": "OK", "per_symbol": {}},
+        "quality": {"score": 90, "freshness": 90, "completeness": 90,
+                    "drift": 0, "reconciliation": 90, "decision_usage": 90,
+                    "status": "OK"},
+    }
+    snapshot = news_event_study._snapshot_from_reconstruction(
+        {"snapshot_id": "snap-raw"}, payload, as_of
+    )
+    assert snapshot.snapshot_id == "snap-raw"
+    assert snapshot.headlines == []

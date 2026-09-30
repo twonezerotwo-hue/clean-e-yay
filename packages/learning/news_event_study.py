@@ -595,6 +595,73 @@ def causal_historical_evaluator(rows, *, min_n: int = 8) -> dict:
     return {**dimensions, "status": "HISTORICAL_EVALUATOR", "samples": sum(item.get("n", 0) for group in dimensions.values() for item in group.values()), "future_rows_ignored": ignored_future_rows, "shadow_only": True, "auto_promotion": False}
 
 
+def _snapshot_from_reconstruction(row: dict, payload: dict, as_of: datetime):
+    """Decode a compact historical MarketSnapshot input and enforce as-of T."""
+    from packages.data.ingestion.pipeline import MarketSnapshot
+    from packages.data.quality.dqs import QualityReport
+    from packages.data.types import (
+        Catalyst,
+        NewsHeadline,
+        PriceQuote,
+        RotationView,
+        TechnicalSnapshot,
+    )
+
+    def _before(items: list[dict], field: str = "ts") -> list[dict]:
+        kept: list[dict] = []
+        for item in items or []:
+            raw = item.get(field)
+            try:
+                timestamp = datetime.fromisoformat(str(raw).replace("Z", "+00:00")) if raw else None
+                if timestamp is not None and timestamp.tzinfo is None:
+                    timestamp = timestamp.replace(tzinfo=UTC)
+                if timestamp is None or timestamp <= as_of:
+                    kept.append(item)
+            except (TypeError, ValueError):
+                continue
+        return kept
+
+    prices = [PriceQuote(**item) for item in _before(payload.get("prices") or [])]
+    headlines = [NewsHeadline(**item) for item in _before(payload.get("headlines") or [])]
+    catalysts = [Catalyst(**item) for item in _before(payload.get("catalysts") or [])]
+    technicals = {
+        symbol: TechnicalSnapshot(**value)
+        for symbol, value in (payload.get("technicals") or {}).items()
+        if isinstance(value, dict)
+    }
+    rotation = RotationView(**(payload.get("rotation") or {}))
+    quality = QualityReport(
+        score=float((payload.get("quality") or {}).get("score", 0.0)),
+        freshness=float((payload.get("quality") or {}).get("freshness", 0.0)),
+        completeness=float((payload.get("quality") or {}).get("completeness", 0.0)),
+        drift=float((payload.get("quality") or {}).get("drift", 0.0)),
+        reconciliation=float((payload.get("quality") or {}).get("reconciliation", 0.0)),
+        decision_usage=float((payload.get("quality") or {}).get("decision_usage", 0.0)),
+        status=str((payload.get("quality") or {}).get("status", "DEGRADED")),
+    )
+    return MarketSnapshot(
+        snapshot_id=str(payload.get("snapshot_id") or row.get("snapshot_id") or "historical"),
+        generated_at=as_of,
+        prices=prices,
+        technicals=technicals,
+        headlines=headlines,
+        catalysts=catalysts,
+        rotation=rotation,
+        quality=quality,
+        warnings=list(payload.get("warnings") or []),
+        provider_status=dict(payload.get("provider_status") or {}),
+        technicals_by_tf=payload.get("technicals_by_tf"),
+        flow_observations=list(payload.get("flow_observations") or []),
+        market_data_as_of=row.get("market_data_as_of"),
+        events_available_as_of=row.get("events_available_as_of"),
+        statements_available_as_of=row.get("statements_available_as_of"),
+        macro_available_as_of=row.get("macro_available_as_of"),
+        expectations_as_of=row.get("expectations_as_of"),
+        flow_available_as_of=row.get("flow_available_as_of"),
+        ingested_at=row.get("ingested_at"),
+    )
+
+
 def _reconstruct_archive_row(row: dict, horizons: tuple[str, ...]) -> tuple[dict | None, list[str], int]:
     """Rebuild a WorldState/causal shadow only from complete as-of inputs."""
     required = (
@@ -611,10 +678,29 @@ def _reconstruct_archive_row(row: dict, horizons: tuple[str, ...]) -> tuple[dict
         return None, ["reconstruction_inputs"], 0
     try:
         from packages.causal.engine import build_shadow
+        from packages.world_state.engine import build as build_world_state
         from packages.world_state.model import WorldStateSnapshot
         generated = datetime.fromisoformat(str(row.get("snapshot_as_of") or row.get("generated_at")).replace("Z", "+00:00"))
         if generated.tzinfo is None:
             generated = generated.replace(tzinfo=UTC)
+        snapshot_payload = inputs.get("market_snapshot")
+        if not isinstance(snapshot_payload, dict) and row.get("snapshot_id"):
+            from packages.data import snapshot_store
+            stored = snapshot_store.get(str(row["snapshot_id"])) or {}
+            snapshot_payload = stored.get("causal_reconstruction")
+        if isinstance(snapshot_payload, dict):
+            snapshot = _snapshot_from_reconstruction(row, snapshot_payload, generated)
+            world = build_world_state(snapshot, now=generated)
+            symbols = inputs.get("symbols") or [item.get("symbol") for item in row.get("asset_impacts") or [] if item.get("symbol")]
+            shadow = build_shadow(
+                world,
+                symbols,
+                decision_apply=False,
+                technicals=inputs.get("technicals"),
+                legacy_scores=inputs.get("legacy_scores"),
+            )
+            outcomes = list(row.get("outcomes") or [])
+            return {"shadow": shadow.to_dict(), "outcomes": outcomes}, [], 1
         raw_state = inputs.get("world_state") or inputs.get("factors") or {}
         if not raw_state and row.get("snapshot_id"):
             # Reuse the canonical snapshot store when a reconstruction input
@@ -623,7 +709,7 @@ def _reconstruct_archive_row(row: dict, horizons: tuple[str, ...]) -> tuple[dict
             from packages.data import snapshot_store
             stored = snapshot_store.get(str(row["snapshot_id"])) or {}
             raw_state = stored.get("world_state") or stored.get("factors") or {}
-        if not isinstance(raw_state, dict):
+        if not isinstance(raw_state, dict) or not raw_state:
             return None, ["reconstruction_inputs.world_state"], 0
         allowed = {
             "liquidity", "usd_pressure", "rates_pressure", "real_yield_pressure",
@@ -633,12 +719,20 @@ def _reconstruct_archive_row(row: dict, horizons: tuple[str, ...]) -> tuple[dict
             "flow_state", "regime", "global_flow_regime", "confidence", "data_quality",
         }
         state_values = {key: value for key, value in raw_state.items() if key in allowed}
+        if not state_values:
+            return None, ["reconstruction_inputs.world_state"], 0
         state_values.setdefault("global_flow_regime", row.get("regime") or "UNKNOWN")
         state_values.setdefault("regime", row.get("regime") or "UNKNOWN")
         state_values.setdefault("confidence", float(row.get("factor_confidence") or 0.0))
         state = WorldStateSnapshot(generated_at=generated, **state_values)
         symbols = inputs.get("symbols") or [item.get("symbol") for item in row.get("asset_impacts") or [] if item.get("symbol")]
-        shadow = build_shadow(state, symbols, decision_apply=False)
+        shadow = build_shadow(
+            state,
+            symbols,
+            decision_apply=False,
+            technicals=inputs.get("technicals"),
+            legacy_scores=inputs.get("legacy_scores"),
+        )
         # Outcomes are accepted solely for evaluation, after reconstruction.
         outcomes = list(row.get("outcomes") or [])
         for outcome in outcomes:
@@ -649,7 +743,7 @@ def _reconstruct_archive_row(row: dict, horizons: tuple[str, ...]) -> tuple[dict
         return None, ["reconstruction_error"], 0
 
 
-def _replay_history_outcomes(row: dict, horizons: tuple[str, ...]) -> list[dict]:
+def _replay_history_outcomes(row: dict, shadow: dict, horizons: tuple[str, ...]) -> list[dict]:
     """Score reconstructed predictions against stored future OHLCV only."""
     try:
         from packages.data.providers.ohlcv import history
@@ -665,8 +759,8 @@ def _replay_history_outcomes(row: dict, horizons: tuple[str, ...]) -> list[dict]
     except (TypeError, ValueError):
         return []
     steps = {"15m": ("15m", 1), "1h": ("1h", 1), "4h": ("1h", 4), "1d": ("1d", 1)}
-    consensus = row.get("causal_consensus") or []
-    impacts = {item.get("symbol"): item for item in row.get("asset_impacts") or [] if item.get("symbol")}
+    consensus = shadow.get("causal_consensus") or []
+    impacts = {item.get("symbol"): item for item in shadow.get("impacts") or [] if item.get("symbol")}
     outputs: list[dict] = []
     for symbol, impact in impacts.items():
         try:
@@ -700,6 +794,23 @@ def _replay_history_outcomes(row: dict, horizons: tuple[str, ...]) -> list[dict]
                 "snapshot_as_of": as_of,
             })
     return outputs
+
+
+def _rebind_reconstructed_outcomes(outcomes: list[dict], shadow: dict) -> list[dict]:
+    """Ensure materialized outcome rows use the newly rebuilt prediction."""
+    directions = {
+        item.get("symbol"): item.get("direction_score")
+        for item in shadow.get("impacts") or ()
+        if item.get("symbol")
+    }
+    rebound: list[dict] = []
+    for original in outcomes:
+        row = dict(original)
+        symbol = row.get("asset") or row.get("symbol")
+        if symbol in directions and directions[symbol] is not None:
+            row["causal_direction"] = directions[symbol]
+        rebound.append(row)
+    return rebound
 
 
 def causal_historical_replay(rows=None, *, min_n: int = 8, horizons: tuple[str, ...] = ("15m", "1h", "4h", "1d")) -> dict:
@@ -758,7 +869,8 @@ def causal_historical_replay(rows=None, *, min_n: int = 8, horizons: tuple[str, 
             result, missing, count = _reconstruct_archive_row(row, horizons)
             if count:
                 reconstructed += count
-                outcomes = result.get("outcomes") or _replay_history_outcomes(row, horizons)
+                outcomes = result.get("outcomes") or _replay_history_outcomes(row, result["shadow"], horizons)
+                outcomes = _rebind_reconstructed_outcomes(outcomes, result["shadow"])
                 evaluator_rows.extend(outcomes)
             else:
                 missing_domains.update(missing)

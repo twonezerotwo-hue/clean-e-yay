@@ -195,9 +195,13 @@ ledgers are deduplicated and size-capped under `data/runtime/`.
 ### Historical Replay vs Evaluator
 
 `causal_historical_evaluator()` evaluates timestamped materialized rows and
-rejects rows whose event timestamp is after the as-of timestamp. A complete
-MarketSnapshot-at-T archive is not present, so `causal_historical_replay()`
-reports `INSUFFICIENT_ARCHIVE` rather than claiming full reconstruction.
+rejects rows whose event timestamp is after the as-of timestamp.  The runtime
+tick worker now retains a compact raw `MarketSnapshot` payload in the existing
+snapshot store.  When domain watermarks are complete,
+`causal_historical_replay()` filters that payload to T, calls the existing
+`world_state.build()` and shadow pipeline, and scores the reconstructed output.
+An archive row alone cannot become `REAL_REPLAY`; factor-only legacy rows are
+explicitly reported as factor-state reconstruction rather than raw replay.
 
 ### Per-Timeframe Causal Timing
 
@@ -251,8 +255,9 @@ repetition and previous stance reduce novelty.  Missing expectations remain
 
 `causal_historical_evaluator()` remains the materialized-row scorer.  The
 separate `causal_historical_replay()` first requires domain-specific
-watermarks, a stored reconstruction input, and then rebuilds the existing
-WorldState/causal shadow at T.  An archive row alone cannot become
+watermarks and a stored raw `MarketSnapshot(T)` input, then rebuilds the
+existing WorldState/causal shadow at T.  It reuses the production builders;
+there is no parallel replay engine.  An archive row alone cannot become
 `REAL_REPLAY`; honest statuses include `PARTIAL_REPLAY`,
 `INSUFFICIENT_PROVENANCE`, `INSUFFICIENT_ARCHIVE`, and
 `INSUFFICIENT_OUTCOMES`.  Future event/ingestion/macro fields and future bars
@@ -326,8 +331,9 @@ authoritative and no duplicate graph is created.
 
 ## 26. Remaining Limitations
 
-Runtime snapshots currently expose unavailable domain watermarks when the
-ingestion provider does not supply them, so they remain evaluator/archive
-evidence rather than claiming full historical reconstruction.  Calibration
-recommendations require matured archive horizons and sufficient verified N;
-they are never auto-promoted.
+`MarketSnapshot` carries optional domain availability watermarks and the tick
+worker persists the raw reconstruction payload beside the existing snapshot
+record.  Provider gaps remain `None` (never fabricated from `generated_at`),
+so affected rows stay evaluator/archive evidence rather than claiming full
+historical reconstruction.  Calibration recommendations require matured
+archive horizons and sufficient verified N; they are never auto-promoted.

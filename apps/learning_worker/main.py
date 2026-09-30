@@ -649,6 +649,10 @@ def run_once() -> dict:
                 asset_impacts=_shadow.impacts,
                 causal_consensus=_shadow.causal_consensus,
                 edges=_shadow.edges,
+                reconstruction_inputs={
+                    "snapshot_id": getattr(_cached_snapshot, "snapshot_id", None),
+                    "source": "snapshot_store",
+                },
             )
             by_event = []
             symbols = _asset_registry.trade_symbols()

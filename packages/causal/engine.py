@@ -32,6 +32,14 @@ _EDGE_DEFAULTS: tuple[tuple[str, str, int, str, float], ...] = (
 )
 
 
+def canonical_edge_id(source: str, target: str) -> str:
+    """Return the configured topology id for a source/target pair."""
+    for edge_source, edge_target, _sign, edge_key, _prior in _EDGE_DEFAULTS:
+        if edge_source == source and edge_target == target:
+            return edge_key
+    return f"{source}->{target}"
+
+
 def _clamp(value: float) -> float:
     return round(max(-1.0, min(1.0, value)), 4)
 
@@ -105,6 +113,7 @@ def _propagate(state: WorldStateSnapshot, config: dict, horizon: str | None = No
             regime=getattr(state, "global_flow_regime", None),
             horizon=horizon,
             confidence_interval=tuple(resolved.get("confidence_interval")) if resolved.get("confidence_interval") else None,
+            edge_id=edge_key,
         ))
     return factors, tuple(edges)
 

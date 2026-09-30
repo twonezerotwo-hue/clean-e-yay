@@ -40,6 +40,10 @@ class CausalEdge:
     regime: str | None = None
     horizon: str | None = None
     confidence_interval: tuple[float | None, float | None] | None = None
+    # Stable topology identifier (for example ``rates_to_liquidity``).  The
+    # source/target pair remains explanatory metadata; calibration and replay
+    # use this canonical id end-to-end.
+    edge_id: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return _json(asdict(self))

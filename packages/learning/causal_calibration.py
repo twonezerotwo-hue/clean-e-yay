@@ -30,10 +30,11 @@ def _num(value: Any) -> float | None:
         return None
 
 
-def _bucket(rows: list[dict[str, Any]], prior_strength: float, min_samples: int) -> dict[str, Any]:
+def _bucket(rows: list[dict[str, Any]], prior_strength: float, min_samples: int, edge_sign: int | None = None) -> dict[str, Any]:
     effects: list[float] = []
     hits = 0
-    prior_sign = 1 if prior_strength >= 0 else -1
+    prior_sign = edge_sign if edge_sign in {-1, 1} else (1 if prior_strength >= 0 else -1)
+    prior_strength = abs(float(prior_strength))
     for row in rows:
         source = _num(row.get("source_value"))
         target = _num(row.get("target_response", row.get("observed_effect")))
@@ -142,7 +143,7 @@ def calibrate_edges(rows: Iterable[dict[str, Any]], *, priors: dict[str, float] 
     eligible, rejection_reasons, raw_rows = _quality_filter(rows)
     groups: dict[str, list[dict[str, Any]]] = {}
     for row in eligible:
-        edge = str(row.get("edge") or f"{row.get('source')}->{row.get('target')}")
+        edge = str(row.get("edge_id") or row.get("edge") or f"{row.get('source')}->{row.get('target')}")
         if edge in {"None->None", "->"}:
             continue
         groups.setdefault(f"{edge}|GLOBAL|ALL", []).append(row)
@@ -155,7 +156,8 @@ def calibrate_edges(rows: Iterable[dict[str, Any]], *, priors: dict[str, float] 
     for key, values in sorted(groups.items()):
         edge = key.split("|", 1)[0]
         prior = float(prior_map.get(edge, values[0].get("prior_strength", 0.5) or 0.5))
-        recommendations[key] = _bucket(values, prior, minimum)
+        edge_sign = int(values[0].get("sign", 0) or 0)
+        recommendations[key] = _bucket(values, prior, minimum, edge_sign=edge_sign or None)
     return {
         "status": "OK" if recommendations else "INSUFFICIENT",
         "min_samples": minimum,

@@ -193,11 +193,15 @@ def compact_record(
     edge_rows = []
     for edge in edges or ():
         item = edge if isinstance(edge, dict) else edge.to_dict()
+        edge_id = item.get("edge_id")
+        if not edge_id and item.get("source") and item.get("target"):
+            from packages.causal.engine import canonical_edge_id
+            edge_id = canonical_edge_id(str(item["source"]), str(item["target"]))
         edge_rows.append({key: item.get(key) for key in (
             "source", "target", "sign", "source_value", "contribution", "weight",
             "prior_strength", "weight_source", "sample_n", "confidence",
             "confidence_interval", "regime", "horizon", "applied",
-        ) if item.get(key) is not None})
+        ) if item.get(key) is not None} | {"edge_id": edge_id})
     record = {
         "schema_version": SCHEMA_VERSION,
         "causal_config_version": getattr(world, "causal_config_version", "v1.0"),
@@ -371,7 +375,11 @@ def materialize_edge_outcomes(
             if source_name is None or target_name is None or source_value is None:
                 rejected["missing_prediction"] = rejected.get("missing_prediction", 0) + 1
                 continue
-            edge_key = f"{source_name}->{target_name}"
+            edge_id = edge.get("edge_id")
+            if not edge_id:
+                from packages.causal.engine import canonical_edge_id
+                edge_id = canonical_edge_id(str(source_name), str(target_name))
+            edge_key = str(edge_id)
             event_ids = tuple(sorted(set(current.get("event_ids") or ()) | set(current.get("macro_event_ids") or ())))
             root_event_ids = tuple(current.get("root_event_ids") or event_ids)
             if not root_event_ids:
@@ -416,8 +424,10 @@ def materialize_edge_outcomes(
                 seen.add(dedup)
                 output.append({
                     "edge": edge_key,
+                    "edge_id": edge_key,
                     "source": source_name,
                     "target": target_name,
+                    "sign": int(edge.get("sign", 1) or 1),
                     "source_value": source_numeric,
                     "target_response": round(response, 8),
                     "regime": current.get("regime") or "UNKNOWN",
