@@ -116,7 +116,7 @@ export function AgentBrainCard({
       </div>
 
       <div className="mt-3 text-[10px] uppercase tracking-widest text-white/30">
-        Yalnızca okuma · PAPER_SAFE / NO_EXECUTION · karar = deterministik engine + RiskGate
+        PAPER_AUTO_OPEN · NO_LIVE_EXECUTION · karar = deterministik engine + RiskGate; gerçek broker emri yok
       </div>
     </PanelFrame>
   );

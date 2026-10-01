@@ -11,6 +11,7 @@ from fastapi import APIRouter
 from packages.data.registry import assets as asset_registry
 from packages.data.registry.loader import load_thresholds
 from packages.paper import state as paper_state
+from packages.portfolio import build_portfolio_risk
 from packages.risk import correlation
 from packages.risk import halt as halt_store
 from packages.risk.engine import RiskInput
@@ -79,3 +80,15 @@ def get_correlation() -> dict:
         "equity_usd": round(ps.equity_usd, 2),
         "insufficient_pairs": insufficient,
     }
+
+
+@router.get("/risk/portfolio")
+def get_portfolio_risk() -> dict:
+    """Read-only portfolio concentration and world-thesis alignment.
+
+    This endpoint never mutates paper state and is intentionally separate from
+    the RiskGate.  It gives the future cockpit a backend-owned exposure view
+    without changing current execution behaviour.
+    """
+    ps = paper_state.load()
+    return build_portfolio_risk(ps).to_dict()

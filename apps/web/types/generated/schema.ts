@@ -381,6 +381,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/risk/portfolio": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read-only portfolio concentration and world-thesis alignment */
+        get: operations["getRiskPortfolio"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/risk/halts": {
         parameters: {
             query?: never;
@@ -1696,6 +1713,13 @@ export interface components {
             quorum_reached?: boolean;
             module_health: components["schemas"]["ModuleHealth"];
             warnings?: string[];
+            portfolio_risk?: components["schemas"]["PortfolioRiskReport"];
+            world_state?: components["schemas"]["WorldStateEvidence"];
+            world_brief?: components["schemas"]["WorldBrief"];
+            /** @description Additive world-state and forecast evidence; never an execution instruction. */
+            causal_shadow?: {
+                [key: string]: unknown;
+            };
         };
         AIReport: {
             meta: components["schemas"]["SnapshotMeta"];
@@ -2160,6 +2184,175 @@ export interface components {
             equity_usd?: number;
             insufficient_pairs?: string[];
         };
+        /** @description Evidence-only approximate price distribution. Quantiles are not guaranteed targets and do not open or size a trade. */
+        ForecastBand: {
+            symbol: string;
+            /** @enum {string} */
+            horizon: "1h" | "4h" | "1d" | "1w";
+            /** Format: date-time */
+            as_of: string;
+            current_price?: number | null;
+            point_estimate?: number | null;
+            p10?: number | null;
+            p25?: number | null;
+            p50?: number | null;
+            p75?: number | null;
+            p90?: number | null;
+            /** @enum {string} */
+            directional_bias: "BULLISH" | "BEARISH" | "NEUTRAL" | "UNKNOWN";
+            confidence: number;
+            volatility_abs?: number | null;
+            volatility_source?: string;
+            method: string;
+            available: boolean;
+            missing_inputs?: string[];
+            warnings?: string[];
+        };
+        /** @description Additive world-state evidence; missing physical measurements remain explicit. */
+        WorldStateEvidence: {
+            graph_context?: components["schemas"]["WorldGraphContext"];
+            physical_commodity?: components["schemas"]["PhysicalCommodityReport"];
+            scenario_report?: components["schemas"]["ScenarioReport"];
+            /** @description Dünya etkisiyle bulunan aday varlıklar; işlem evrenini değiştirmez. */
+            asset_discovery?: {
+                [key: string]: unknown;
+            };
+        } & {
+            [key: string]: unknown;
+        };
+        /** @description LLM veya deterministik fallback tarafından üretilen dünya özeti. Yalnızca mevcut backend kanıtını açıklar; karar, emir veya sizing girdisi değildir. */
+        WorldBrief: {
+            /** @enum {string} */
+            status: "OK" | "NO_EVENT" | "UNAVAILABLE";
+            /** @enum {string} */
+            trigger?: "WORLD_EVENT" | "NEWS_SCAN" | "NO_EVENT";
+            /** @enum {string} */
+            source: "llm" | "fallback";
+            model?: string | null;
+            title: string;
+            summary: string;
+            why_it_matters?: string;
+            what_to_watch?: string[];
+            invalidators?: string[];
+            affected_assets?: string[];
+            scenario_report?: {
+                [key: string]: unknown;
+            };
+            forecast_bands?: {
+                [key: string]: unknown;
+            }[];
+            actionability: string;
+            /** @enum {string} */
+            execution: "NO_EXECUTION";
+            evidence_used?: string[];
+            missing_data?: string[];
+            warnings?: string[];
+            llm?: {
+                [key: string]: unknown;
+            };
+        };
+        WorldGraphContext: {
+            graph_version?: string;
+            event_matches?: {
+                [key: string]: unknown;
+            }[];
+            entity_ids?: string[];
+            paths?: {
+                [key: string]: unknown;
+            }[];
+            affected_assets?: string[];
+            factor_channels?: string[];
+            warnings?: string[];
+        };
+        PhysicalCommodityAssessment: {
+            commodity_id: string;
+            commodity_name: string;
+            /** @enum {string} */
+            status: "OK" | "PARTIAL" | "UNVERIFIED" | "INSUFFICIENT_DATA";
+            unit: string;
+            baseline_supply?: number | null;
+            at_risk_supply?: number | null;
+            alternative_supply?: number | null;
+            inventory_release?: number | null;
+            spare_capacity?: number | null;
+            demand?: number | null;
+            gross_supply_shock?: number | null;
+            effective_supply_shock?: number | null;
+            effective_supply_shock_pct?: number | null;
+            mitigation_coverage?: number | null;
+            affected_assets?: string[];
+            factor_channels?: string[];
+            topology_entities?: string[];
+            observation_as_of?: string | null;
+            observation_source?: string | null;
+            missing_inputs?: string[];
+            warnings?: string[];
+            method: string;
+        };
+        PhysicalCommodityReport: {
+            version: string;
+            /** @enum {string} */
+            status: "OK" | "INSUFFICIENT_DATA" | "NO_MATCH";
+            assessments: {
+                [key: string]: components["schemas"]["PhysicalCommodityAssessment"];
+            };
+            graph_entities?: string[];
+            warnings?: string[];
+        };
+        ScenarioResult: {
+            event_id: string;
+            scenario_id: string;
+            name: string;
+            probability: number;
+            /** @enum {string} */
+            probability_source: "PRIOR_ONLY" | "EVIDENCE_ADJUSTED";
+            class_name: string;
+            horizon: string;
+            affected_assets?: {
+                [key: string]: number;
+            };
+            factor_channels?: string[];
+            invalidators?: string[];
+            evidence_used?: string[];
+            warnings?: string[];
+        };
+        ScenarioReport: {
+            version: string;
+            /** @enum {string} */
+            status: "OK" | "NO_MATCH" | "UNAVAILABLE";
+            events: {
+                event_id?: string;
+                event_type?: string;
+                scenarios?: components["schemas"]["ScenarioResult"][];
+            }[];
+            warnings?: string[];
+        };
+        /** @description Read-only paper-ledger exposure view; no rebalance or execution. */
+        PortfolioRiskReport: {
+            /** Format: date-time */
+            generated_at: string;
+            /** @enum {string} */
+            status: "OK" | "INSUFFICIENT_DATA";
+            equity_usd: number;
+            gross_exposure_usd: number;
+            net_exposure_usd: number;
+            gross_exposure_pct?: number | null;
+            net_exposure_pct?: number | null;
+            max_symbol_weight?: number | null;
+            concentration_hhi?: number | null;
+            symbol_exposure?: {
+                [key: string]: unknown;
+            };
+            theme_exposure?: {
+                [key: string]: unknown;
+            };
+            thesis_conflicts?: {
+                [key: string]: unknown;
+            }[];
+            warnings?: string[];
+            /** @enum {string} */
+            execution: "NO_EXECUTION";
+        };
         HaltEvent: {
             id: string;
             /** @enum {string} */
@@ -2344,7 +2537,7 @@ export interface components {
         TechnicalTf: components["schemas"]["TechnicalSnapshotTF"];
         ProviderStatus: {
             /** @enum {string} */
-            status: "ok" | "degraded" | "down" | "unknown";
+            status: "ok" | "degraded" | "down" | "unknown" | "disabled";
             /** Format: date-time */
             last_success_at?: string | null;
             last_error?: string | null;
@@ -2788,6 +2981,12 @@ export interface components {
             };
             agent_brief: components["schemas"]["AgentBrief"];
             decision_trace: components["schemas"]["DecisionTrace"];
+            portfolio_risk?: components["schemas"]["PortfolioRiskReport"];
+            world_state?: components["schemas"]["WorldStateEvidence"];
+            world_brief?: components["schemas"]["WorldBrief"];
+            causal_shadow?: {
+                [key: string]: unknown;
+            };
         };
         /** @description R1 — replay store durumu. status=active (kayıt var) / empty (kayıt yok). mode=active_snapshot_replay / insufficient_snapshots / reserved_not_active. Rolling backtest motoru aktif değil. */
         ReplayStatus: {
@@ -4358,6 +4557,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CorrelationState"];
+                };
+            };
+        };
+    };
+    getRiskPortfolio: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PortfolioRiskReport"];
                 };
             };
         };

@@ -29,6 +29,7 @@ import { ExecutionReadinessPanel } from "@/components/panels/ExecutionReadinessP
 import { OrderTicketPanel } from "@/components/panels/OrderTicketPanel";
 import { NewsPanel } from "@/components/panels/NewsPanel";
 import { ScenarioPanel } from "@/components/panels/ScenarioPanel";
+import { WorldBriefPanel } from "@/components/panels/WorldBriefPanel";
 import { GovernorPanel } from "@/components/panels/GovernorPanel";
 import { TaskQueuePanel } from "@/components/panels/TaskQueuePanel";
 import { LearningPanel } from "@/components/panels/LearningPanel";
@@ -1183,6 +1184,7 @@ export function CockpitView() {
     const layer1Items: Layer1StackItem[] = [
       { key: "holographic_signals", label: "Sinyal Kartlari", node: <HolographicSignalDeck brief={brief} /> },
       { key: "news", label: "Haberler", node: <NewsPanel defaultView="radar" /> },
+      { key: "world_brief", label: "Dünya Özeti", node: <WorldBriefPanel /> },
       { key: "execution_readiness", label: "Checklist", node: <ExecutionReadinessPanel /> },
       { key: "event_calendar", label: "Olay Takvimi", node: <EventCalendarPanel /> },
       { key: "scenario", label: "Senaryo", node: <ScenarioPanel /> },
@@ -1209,6 +1211,15 @@ export function CockpitView() {
               selectedSymbol={selectedLayer2Symbol}
               onSelectSymbol={setSelectedLayer2Symbol}
             />
+
+            <Layer2DetailGroup
+              index="00"
+              title="World Evidence"
+              detail="Haberin dünya grafiği, emtia arzı, senaryo olasılığı, varlık adayları ve fiyat bantları; karar yolundan ayrı gözlemsel kanıt."
+              badge="read-only"
+            >
+              <WorldBriefPanel detail />
+            </Layer2DetailGroup>
 
             <div className="layer2-command-strip grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
               <HudMetric label="Asset" value={selectedLayer2Symbol} tone="text-accent-cyan" />

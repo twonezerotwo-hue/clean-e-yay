@@ -294,7 +294,7 @@ export function OrderTicketPanel() {
             </div>
           </div>
           <p className="mobile-summary-line">
-            PAPER_SAFE / NO_EXECUTION korunur; gerçek broker emri yok.
+            PAPER_SAFE / NO_LIVE_EXECUTION korunur; uygun sinyalde paper pozisyon otomatik açılabilir, gerçek broker emri yok.
           </p>
           <p className="mobile-flip-hint">Detay için dokun</p>
         </div>

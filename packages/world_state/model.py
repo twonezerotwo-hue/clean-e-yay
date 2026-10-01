@@ -239,6 +239,14 @@ class WorldStateSnapshot:
     schema_version: int = 2
     causal_config_version: str = "v1.0"
     regime: str = "UNKNOWN"
+    # Static topology expansion of verified events.  This is context only;
+    # current event confidence remains owned by the event/evidence fields.
+    graph_context: dict[str, Any] | None = None
+    # Physical balance is deliberately separate from topology.  Without
+    # verified as-of measurements it remains INSUFFICIENT_DATA.
+    physical_commodity: dict[str, Any] | None = None
+    scenario_report: dict[str, Any] | None = None
+    asset_discovery: dict[str, Any] | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return _json(asdict(self))

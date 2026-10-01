@@ -80,7 +80,7 @@ export function SystemHealthBar() {
         }
         actions={
           <span className="rounded px-1.5 py-0.5 bg-white/5 text-white/50 ring-1 ring-white/10 uppercase tracking-wide text-[10px]">
-            NO_EXECUTION
+            NO_LIVE_EXECUTION
           </span>
         }
       />

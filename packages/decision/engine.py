@@ -34,7 +34,7 @@ from packages.data.providers import technical as tech_provider
 from packages.data.registry import guard_overrides
 from packages.data.registry.loader import load_thresholds
 from packages.data.types import TIMEFRAMES
-from packages.decision import correlation_veto, learning_advisor, sizing_layers
+from packages.decision import correlation_veto, learning_advisor, paper_policy, sizing_layers
 from packages.learning import empirical_pwin, meta_gate, mistake_memory, regime_risk_brake
 from packages.learning.calibration_store import (
     apply_inflation_guardrail,
@@ -337,6 +337,7 @@ def decide_for_symbol(
     corr_entries: list | None = None,
     timeframe: str = "1d",
     recent_edge: float | None = None,
+    paper_exploration: bool = False,
 ) -> TradeDecision:
     th = load_thresholds()["consensus"]
     cons = build_consensus(symbol, snap, regime, timeframe)
@@ -480,22 +481,26 @@ def decide_for_symbol(
     # (Nötr/düşük-güvenli sinyallerle pozisyon açılmasını engeller. RiskGate'i
     #  bypass etmez; yalnızca ek kısıt. Owner config'ten ayarlanır.)
     min_open_conf = float(th.get("min_open_confidence", 0.0))
+    paper_cfg = paper_policy.load_config() if paper_exploration else None
+    paper_soft_reasons: list[str] = []
     if cal_conf < min_open_conf:
-        return TradeDecision(
-            symbol=symbol,
-            action="hold",
-            confidence=round(cal_conf, 3),
-            size_multiplier=0.0,
-            consensus=cons,
-            risk=risk,
-            reason=f"Düşük güven: p(win) %{cal_conf * 100:.0f} < taban %{min_open_conf * 100:.0f}",
-            raw_confidence=round(raw_conf, 4),
-            confidence_source=conf_source,
-            fingerprint=fp,
-            timeframe=timeframe,
-            candidate_action=candidate,
-            blocked_by=["confidence_floor"],
-        )
+        if paper_cfg is None or not paper_policy.allows_confidence(cal_conf, paper_cfg):
+            return TradeDecision(
+                symbol=symbol,
+                action="hold",
+                confidence=round(cal_conf, 3),
+                size_multiplier=0.0,
+                consensus=cons,
+                risk=risk,
+                reason=f"Düşük güven: p(win) %{cal_conf * 100:.0f} < taban %{min_open_conf * 100:.0f}",
+                raw_confidence=round(raw_conf, 4),
+                confidence_source=conf_source,
+                fingerprint=fp,
+                timeframe=timeframe,
+                candidate_action=candidate,
+                blocked_by=["confidence_floor"],
+            )
+        paper_soft_reasons.append("confidence_floor")
 
     # ----- F5: EV (beklenen değer) kapısı — olasılık + ödül/risk BİRLİKTE pozitif
     #  değilse açma. EV her zaman hesaplanır (gözlem); ev_gate.enabled iken kısıtlar.
@@ -543,24 +548,26 @@ def decide_for_symbol(
         None if emp is None else round(_expected_value(emp.p_win, rr, cost_r), 4)
     )
     if ev_cfg.get("enabled", False) and expected_value < float(ev_cfg.get("min_ev", 0.0)):
-        return TradeDecision(
-            symbol=symbol,
-            action="hold",
-            confidence=round(cal_conf, 3),
-            size_multiplier=0.0,
-            consensus=cons,
-            risk=risk,
-            reason=ev_reason,
-            raw_confidence=round(raw_conf, 4),
-            confidence_source=conf_source,
-            fingerprint=fp,
-            timeframe=timeframe,
-            candidate_action=candidate,
-            blocked_by=["ev_gate"],
-            expected_value=round(expected_value, 4),
-            p_win_empirical=p_win_empirical,
-            expected_value_empirical=expected_value_empirical,
-        )
+        if paper_cfg is None or not paper_policy.allows_expected_value(expected_value, paper_cfg):
+            return TradeDecision(
+                symbol=symbol,
+                action="hold",
+                confidence=round(cal_conf, 3),
+                size_multiplier=0.0,
+                consensus=cons,
+                risk=risk,
+                reason=ev_reason,
+                raw_confidence=round(raw_conf, 4),
+                confidence_source=conf_source,
+                fingerprint=fp,
+                timeframe=timeframe,
+                candidate_action=candidate,
+                blocked_by=["ev_gate"],
+                expected_value=round(expected_value, 4),
+                p_win_empirical=p_win_empirical,
+                expected_value_empirical=expected_value_empirical,
+            )
+        paper_soft_reasons.append("ev_gate")
 
     # Confluence yoksa boyut yarıya iner
     if not cons.confluence_aligned:
@@ -916,6 +923,12 @@ def decide_for_symbol(
     # reason + size_multiplier üzerinden görünür.
     size *= pol["risk_multiplier"]
 
+    # Paper exploration may relax only the two soft gates above.  It always
+    # applies a small size cap and leaves the reason visible to the cockpit.
+    if paper_cfg is not None and paper_soft_reasons:
+        size = paper_policy.cap_size(size, paper_cfg)
+        blocked_by.extend(f"paper_exploration:{reason}" for reason in paper_soft_reasons)
+
     # ----- F5: Kelly sizing — boyutu ölçülen edge'e oransal CAP'le (yalnız küçültür).
     #  fractional-Kelly $ = fraction × f* × equity; size_mult cap'i = bu / max_pos.
     #  no-AI-boost: yalnız min() ile kısar, asla büyütmez. (Owner config; default KAPALI) -----
@@ -1193,6 +1206,7 @@ def decide_matrix(
     paper_state_input: RiskInput,
     open_positions: list | None = None,
     timeframes: list[str] | None = None,
+    paper_exploration: bool = False,
 ) -> tuple[RegimeOutput, RiskDecision, list[TradeDecision]]:
     """T2 — (symbol, timeframe) karar matrisi.
 
@@ -1222,16 +1236,21 @@ def decide_matrix(
     for s in symbols:
         per_tf: dict[str, TradeDecision] = {}
         for tf in tfs:
+            decision_kwargs = {
+                "mistakes": mems,
+                "open_positions": pass_positions,
+                "equity_usd": paper_state_input.equity_usd,
+                "corr_entries": corr_entries,
+                "timeframe": tf,
+            }
+            if paper_exploration:
+                decision_kwargs["paper_exploration"] = True
             d = decide_for_symbol(
                 s,
                 snap,
                 regime,
                 risk,
-                mistakes=mems,
-                open_positions=pass_positions,
-                equity_usd=paper_state_input.equity_usd,
-                corr_entries=corr_entries,
-                timeframe=tf,
+                **decision_kwargs,
             )
             per_tf[tf] = d
             if (

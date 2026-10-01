@@ -49,6 +49,25 @@ def test_world_state_reuses_flow_and_keeps_scale_bounded():
     assert world.macro_sources["US10Y"]["source_type"] == "UNAVAILABLE"
 
 
+def test_world_state_carries_topology_context_without_changing_factor_semantics():
+    now = datetime.now(UTC)
+    headline = SimpleNamespace(
+        id="geo-graph", title="Yemen Houthi threat near Bab el-Mandeb disrupts Red Sea shipping",
+        title_tr=None, verified=True, ts=now, source="fixture", region="Red Sea",
+    )
+    world = build(_snapshot(headlines=[headline]))
+    assert world.graph_context["graph_version"] == "world-graph-v1.0"
+    assert "BRENT" in world.graph_context["affected_assets"]
+    assert world.energy_supply_risk is not None
+    assert world.physical_commodity["status"] == "INSUFFICIENT_DATA"
+    assert world.physical_commodity["assessments"]["commodity:crude_oil"]["effective_supply_shock"] is None
+    assert world.scenario_report["status"] == "OK"
+    assert world.scenario_report["events"][0]["scenarios"]
+    assert world.asset_discovery["status"] == "OK"
+    assert world.asset_discovery["candidates"][0]["symbol"] == "BRENT"
+    assert world.asset_discovery["candidates"][0]["promotion_status"] == "OBSERVE_ONLY"
+
+
 def test_missing_inputs_are_not_filled_with_fake_neutral():
     snap = _snapshot()
     snap.rotation.per_symbol = {}
@@ -179,6 +198,20 @@ def test_causal_shadow_is_evidence_only_and_bounded():
     assert len(shadow.edges) > 0
     assert {item.symbol for item in shadow.impacts} == {"XAUUSD", "BTCUSD", "SP500"}
     assert all(item.direction_score is None or -1.0 <= item.direction_score <= 1.0 for item in shadow.impacts)
+
+
+def test_causal_shadow_forecasts_are_additive_and_not_decision_inputs():
+    world = build(_snapshot())
+    shadow = build_shadow(
+        world,
+        ["BTCUSD"],
+        prices={"BTCUSD": PriceQuote(symbol="BTCUSD", price=100.0, status="OK", verified=True)},
+        technicals={"BTCUSD": {"1d": SimpleNamespace(key_levels=SimpleNamespace(atr=5.0))}},
+        decision_apply=False,
+    )
+    assert shadow.decision_apply is False
+    assert len(shadow.forecasts) == 4
+    assert all(row["method"] == "normal_approximation_shadow_v1" for row in shadow.forecasts)
 
 
 def test_causal_shadow_can_be_disabled_without_side_effects():

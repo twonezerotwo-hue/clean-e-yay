@@ -6,7 +6,7 @@
 # Loglar: logs\*.log
 $ErrorActionPreference = "SilentlyContinue"
 
-$root = "C:\Users\twone\Desktop\Clean E-yAy"
+$root = Split-Path -Parent $PSScriptRoot
 $node = "C:\Program Files\nodejs\node.exe"
 $py   = Join-Path $root ".venv\Scripts\python.exe"
 $ngrok = Join-Path $root "tools\ngrok.exe"
@@ -57,7 +57,10 @@ if (-not (Test-Http "http://127.0.0.1:9000/api/v1/health" 30)) {
 
 # 1b) tick_worker — AYRI süreç (canlı veri/pozisyon + disk cache tazeler).
 $workerRunning = Get-CimInstance Win32_Process -Filter "name='python.exe'" -ErrorAction SilentlyContinue |
-    Where-Object { $_.CommandLine -like '*tick_worker*' }
+    Where-Object {
+        $_.CommandLine -like '*tick_worker*' -and
+        $_.ExecutablePath -eq ([IO.Path]::GetFullPath($py))
+    }
 if (-not $workerRunning) {
     Start-Process -WindowStyle Hidden -FilePath $py `
         -ArgumentList "-m","apps.tick_worker.main" -WorkingDirectory $root `
@@ -66,7 +69,10 @@ if (-not $workerRunning) {
 
 # 1b2) learning_worker — AYRI süreç (kalibrasyon/öneri döngüsü, 5 dakikada bir).
 $learningRunning = Get-CimInstance Win32_Process -Filter "name='python.exe'" -ErrorAction SilentlyContinue |
-    Where-Object { $_.CommandLine -like '*learning_worker.loop*' }
+    Where-Object {
+        $_.CommandLine -like '*learning_worker.loop*' -and
+        $_.ExecutablePath -eq ([IO.Path]::GetFullPath($py))
+    }
 if (-not $learningRunning) {
     Start-Process -WindowStyle Hidden -FilePath $py `
         -ArgumentList "-m","apps.learning_worker.loop" -WorkingDirectory $root `
@@ -77,7 +83,10 @@ if (-not $learningRunning) {
 # read-only koşar; owner butona basmadan sonuçlar birikir). AWS'te supervisor
 # aynı döngüyü kendi içinde çalıştırır; bu blok yalnız lokal üç-süreç deseni için.
 $governorRunning = Get-CimInstance Win32_Process -Filter "name='python.exe'" -ErrorAction SilentlyContinue |
-    Where-Object { $_.CommandLine -like '*governor_worker.loop*' }
+    Where-Object {
+        $_.CommandLine -like '*governor_worker.loop*' -and
+        $_.ExecutablePath -eq ([IO.Path]::GetFullPath($py))
+    }
 if (-not $governorRunning) {
     Start-Process -WindowStyle Hidden -FilePath $py `
         -ArgumentList "-m","apps.governor_worker.loop" -WorkingDirectory $root `

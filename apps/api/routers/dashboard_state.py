@@ -5,6 +5,7 @@ from datetime import UTC, datetime
 
 from fastapi import APIRouter
 
+from packages.agent.llm.world_report import build_world_brief
 from packages.agent.personas import build_votes
 from packages.causal.engine import build_shadow
 from packages.consensus.engine import build as build_consensus
@@ -14,6 +15,7 @@ from packages.data.registry import assets as asset_registry
 from packages.data.types import TIMEFRAMES
 from packages.paper import state as paper_state
 from packages.paper.lifecycle import max_drawdown_pct
+from packages.portfolio import build_portfolio_risk
 from packages.regime.classifier import classify
 from packages.risk.engine import RiskInput, evaluate
 from packages.world_state.engine import build as build_world_state
@@ -68,7 +70,21 @@ def get_dashboard_state() -> dict:
         world_state,
         asset_registry.trade_symbols(),
         technicals=snap.technicals_by_tf or snap.technicals,
+        prices={quote.symbol: quote for quote in snap.prices},
+        volatility=snap.volatility,
         legacy_scores=legacy_scores,
+    )
+    portfolio_risk = build_portfolio_risk(
+        ps,
+        impacts={impact.symbol: impact for impact in causal_shadow.impacts},
+    )
+    world_brief = build_world_brief(
+        headlines=snap.headlines,
+        world_state=world_state.to_dict(),
+        causal_shadow=causal_shadow.to_dict(),
+        portfolio_risk=portfolio_risk.to_dict(),
+        risk_gate={"action": risk.action, "reason": risk.reason},
+        dqs={"status": snap.quality.status, "score": snap.quality.score},
     )
     data_health = _data_module_health(prov, snap.quality.status, now_iso)
     # News: gerçek haber sağlayıcı yok → demo damgası (her zaman görünür uyarı)
@@ -115,7 +131,9 @@ def get_dashboard_state() -> dict:
         # Additive evidence only. Existing dashboard keys and legacy decision
         # path remain unchanged while causal_world.decision_apply is false.
         "world_state": world_state.to_dict(),
+        "world_brief": world_brief,
         "causal_shadow": causal_shadow.to_dict(),
+        "portfolio_risk": portfolio_risk.to_dict(),
     }
 
 

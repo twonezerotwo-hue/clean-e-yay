@@ -14,6 +14,7 @@ from typing import Any, Literal
 
 from packages.data.ingestion.pipeline import get_cached_snapshot
 from packages.data.registry import assets as asset_registry
+from packages.decision import paper_policy
 from packages.decision.engine import decide_matrix, matrix_view
 from packages.notifications import list_recent as list_notifications
 from packages.ops import heartbeat
@@ -115,7 +116,11 @@ def _safe_cells(snap):
         )
         symbols = asset_registry.trade_symbols()
         regime, risk, decisions = decide_matrix(
-            symbols, snap, risk_in, open_positions=ps.open_positions
+            symbols,
+            snap,
+            risk_in,
+            open_positions=ps.open_positions,
+            paper_exploration=paper_policy.enabled(),
         )
         view = matrix_view(regime, risk, decisions, snap, symbols)
         return view.get("cells") or []
@@ -547,8 +552,8 @@ def _executive(snap, regime, cells, engine) -> dict[str, Any]:
             f"{event_clause.capitalize()}."
         )
         recommendation = (
-            "Sinyal şimdi risk kontrolünden geçecek; onaylanırsa işlem deneme hesabında (gerçek para "
-            "değil) otomatik açılır ve Trade Ticket panelinde görünür. Senin bir şey yapman gerekmiyor."
+            "Sinyal risk kontrolünden geçecek; PAPER_ONLY / NO_EXECUTION modunda uygun bulunursa "
+            "yalnızca simülasyon pozisyonu açılır. Gerçek broker emri gönderilmez."
         )
     elif gap <= 2:
         stance, label_, tone = "watching", "İZLEMEDE", "info"

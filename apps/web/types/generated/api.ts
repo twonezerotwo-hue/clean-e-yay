@@ -227,6 +227,152 @@ export type DashboardState = {
   quorum_reached?: boolean;
   module_health: ModuleHealth;
   warnings?: string[];
+  portfolio_risk?: PortfolioRiskReport;
+  world_state?: WorldStateEvidence;
+  world_brief?: WorldBrief;
+  causal_shadow?: Record<string, unknown>;
+};
+
+export type ForecastBand = {
+  symbol: string;
+  horizon: "1h" | "4h" | "1d" | "1w";
+  as_of: string;
+  current_price?: number | null;
+  point_estimate?: number | null;
+  p10?: number | null;
+  p25?: number | null;
+  p50?: number | null;
+  p75?: number | null;
+  p90?: number | null;
+  directional_bias: "BULLISH" | "BEARISH" | "NEUTRAL" | "UNKNOWN";
+  confidence: number;
+  volatility_abs?: number | null;
+  volatility_source: string;
+  method: string;
+  available: boolean;
+  missing_inputs?: string[];
+  warnings?: string[];
+};
+
+export type PortfolioRiskReport = {
+  generated_at: string;
+  status: "OK" | "INSUFFICIENT_DATA";
+  equity_usd: number;
+  gross_exposure_usd: number;
+  net_exposure_usd: number;
+  gross_exposure_pct?: number | null;
+  net_exposure_pct?: number | null;
+  max_symbol_weight?: number | null;
+  concentration_hhi?: number | null;
+  symbol_exposure: Record<string, Record<string, number>>;
+  theme_exposure: Record<string, Record<string, number>>;
+  thesis_conflicts?: Array<Record<string, unknown>>;
+  warnings?: string[];
+  execution: "NO_EXECUTION";
+};
+
+export type WorldGraphContext = {
+  graph_version?: string;
+  event_matches?: Array<Record<string, unknown>>;
+  entity_ids?: string[];
+  paths?: Array<Record<string, unknown>>;
+  affected_assets?: string[];
+  factor_channels?: string[];
+  warnings?: string[];
+};
+
+export type PhysicalCommodityAssessment = {
+  commodity_id: string;
+  commodity_name: string;
+  status: "OK" | "PARTIAL" | "UNVERIFIED" | "INSUFFICIENT_DATA";
+  unit: string;
+  baseline_supply?: number | null;
+  at_risk_supply?: number | null;
+  alternative_supply?: number | null;
+  inventory_release?: number | null;
+  spare_capacity?: number | null;
+  demand?: number | null;
+  gross_supply_shock?: number | null;
+  effective_supply_shock?: number | null;
+  effective_supply_shock_pct?: number | null;
+  mitigation_coverage?: number | null;
+  affected_assets: string[];
+  factor_channels: string[];
+  topology_entities: string[];
+  observation_as_of?: string | null;
+  observation_source?: string | null;
+  missing_inputs?: string[];
+  warnings?: string[];
+  method: string;
+};
+
+export type PhysicalCommodityReport = {
+  version: string;
+  status: "OK" | "INSUFFICIENT_DATA" | "NO_MATCH";
+  assessments: Record<string, PhysicalCommodityAssessment>;
+  graph_entities?: string[];
+  warnings?: string[];
+};
+
+export type ScenarioResult = {
+  event_id: string;
+  scenario_id: string;
+  name: string;
+  probability: number;
+  probability_source: "PRIOR_ONLY" | "EVIDENCE_ADJUSTED";
+  class_name: string;
+  horizon: string;
+  affected_assets?: Record<string, number>;
+  factor_channels?: string[];
+  invalidators?: string[];
+  evidence_used?: string[];
+  warnings?: string[];
+};
+
+export type ScenarioReport = {
+  version: string;
+  status: "OK" | "NO_MATCH" | "UNAVAILABLE";
+  events: Array<{
+    event_id?: string;
+    event_type?: string;
+    scenarios?: ScenarioResult[];
+  }>;
+  warnings?: string[];
+};
+
+export type WorldStateEvidence = {
+  graph_context?: WorldGraphContext;
+  physical_commodity?: PhysicalCommodityReport;
+  scenario_report?: ScenarioReport;
+  asset_discovery?: {
+    status?: "OK" | "NO_MATCH";
+    candidate_count?: number;
+    candidates?: Array<Record<string, unknown>>;
+    promotion_policy?: string;
+    warnings?: string[];
+  };
+  [key: string]: unknown;
+};
+
+export type WorldBrief = {
+  status: "OK" | "NO_EVENT" | "UNAVAILABLE";
+  trigger?: "WORLD_EVENT" | "NEWS_SCAN" | "NO_EVENT";
+  source: "llm" | "fallback";
+  model?: string | null;
+  title: string;
+  summary: string;
+  why_it_matters?: string;
+  what_to_watch?: string[];
+  invalidators?: string[];
+  affected_assets?: string[];
+  scenario_report?: Record<string, unknown>;
+  forecast_bands?: Array<Record<string, unknown>>;
+  actionability: string;
+  execution: "NO_EXECUTION";
+  evidence_used?: string[];
+  missing_data?: string[];
+  warnings?: string[];
+  llm?: Record<string, unknown>;
 };
 
 // v2.6 — persona katmanı (narrative-only; decision path'e yazmaz).
@@ -666,7 +812,7 @@ export type SystemHealth = {
 };
 
 export type ProviderStatus = {
-  status: "ok" | "degraded" | "down" | "unknown";
+  status: "ok" | "degraded" | "down" | "unknown" | "disabled";
   last_success_at: string | null;
   last_error: string | null;
   calls: number;
@@ -1426,6 +1572,10 @@ export type CockpitBrief = {
   mode?: ProvenanceMode;
   agent_brief: AgentBrief;
   decision_trace: DecisionTrace;
+  portfolio_risk?: PortfolioRiskReport;
+  world_state?: WorldStateEvidence;
+  world_brief?: WorldBrief;
+  causal_shadow?: Record<string, unknown>;
 };
 
 // ── Market sessions (read-only, paper-safe) — backend owns session meaning ────

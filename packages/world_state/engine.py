@@ -264,7 +264,7 @@ def _event_taxonomy(text: str, raw_type: Any) -> str:
         (("ceasefire", "truce", "ateşkes"), "CEASEFIRE"),
         (("peace talks", "barış görüş", "negotiat"), "PEACE_TALKS"),
         (("sanction", "yaptırım"), "SANCTIONS_RELIEF" if any(x in value for x in ("relief", "lift", "kaldır")) else "SANCTIONS"),
-        (("chokepoint", "strait", "hormuz", "boğaz"), "CHOKEPOINT_THREAT" if any(x in value for x in ("threat", "threaten", "could", "may", "warn", "tehdit")) else "CHOKEPOINT_DISRUPTION"),
+        (("chokepoint", "strait", "hormuz", "bab el-mandeb", "bab al mandab", "red sea", "gulf of aden", "boğaz", "kızıldeniz", "aden körfezi"), "CHOKEPOINT_THREAT" if any(x in value for x in ("threat", "threaten", "could", "may", "warn", "tehdit")) else "CHOKEPOINT_DISRUPTION"),
         (("shipping attack", "ship attack", "gemi saldır", "vessel hit"), "SHIPPING_ATTACK"),
         (("port disruption", "port closure", "liman kapat"), "PORT_DISRUPTION"),
         (("pipeline", "boru hatt"), "PIPELINE_DISRUPTION"),
@@ -721,6 +721,15 @@ def build(snapshot: MarketSnapshot, *, now: datetime | None = None) -> WorldStat
     credit_flow = flows["credit"]
     credit_stress = _clamp(-credit_flow) if credit_flow is not None else None
     events = _geo_events(snapshot, current, config) if config.get("geopolitical_enabled", True) else ()
+    from packages.discovery import build_world_candidates
+    from packages.physical import build_assessments as build_physical_assessments
+    from packages.scenarios import build_report as build_scenario_report
+    from packages.world_graph import build_context as build_world_graph_context
+
+    graph_context = build_world_graph_context(events).to_dict()
+    physical_commodity = build_physical_assessments(graph_context)
+    scenario_report = build_scenario_report(events).to_dict()
+    asset_discovery = build_world_candidates(graph_context, scenario_report)
     statements = _statements(snapshot, current, config) if config.get("statements_enabled", True) else ()
     macro_surprises = _macro_surprises(snapshot, current, config) if config.get("statements_enabled", True) else ()
     expectations = _expectations(snapshot, statements, current)
@@ -888,6 +897,10 @@ def build(snapshot: MarketSnapshot, *, now: datetime | None = None) -> WorldStat
         schema_version=2,
         causal_config_version=str(config.get("config_version") or "v1.0"),
         regime=flow_regime,
+        graph_context=graph_context,
+        physical_commodity=physical_commodity,
+        scenario_report=scenario_report,
+        asset_discovery=asset_discovery,
         macro_sources={
             "US02Y": us02y_source,
             "US10Y": us10y_source,

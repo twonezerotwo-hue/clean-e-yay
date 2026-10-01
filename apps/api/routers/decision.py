@@ -12,7 +12,7 @@ from fastapi import APIRouter
 from packages.data.ingestion.pipeline import get_cached_snapshot
 from packages.data.provenance import data_provenance
 from packages.data.registry import assets as asset_registry
-from packages.decision import shadow
+from packages.decision import paper_policy, shadow
 from packages.decision.engine import decide_matrix, matrix_view
 from packages.paper import state as paper_state
 from packages.risk.engine import RiskInput
@@ -33,7 +33,11 @@ def get_decision_matrix() -> dict:
         open_position_count=len(ps.open_positions),
     )
     regime, risk, decisions = decide_matrix(
-        matrix_symbols, snap, risk_in, open_positions=ps.open_positions
+        matrix_symbols,
+        snap,
+        risk_in,
+        open_positions=ps.open_positions,
+        paper_exploration=paper_policy.enabled(),
     )
     view = matrix_view(regime, risk, decisions, snap, matrix_symbols)
     view["mode"] = data_provenance(snap)

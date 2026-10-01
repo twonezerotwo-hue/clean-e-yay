@@ -32,6 +32,7 @@ import { CatalystImpactPanel } from "@/components/panels/CatalystImpactPanel";
 import { EventCalendarPanel } from "@/components/panels/EventCalendarPanel";
 import { NewsPanel } from "@/components/panels/NewsPanel";
 import { ScenarioPanel } from "@/components/panels/ScenarioPanel";
+import { WorldBriefPanel } from "@/components/panels/WorldBriefPanel";
 import { TradingPanel } from "@/components/panels/TradingPanel";
 import { LearningPanel } from "@/components/panels/LearningPanel";
 import { OutcomeLedgerPanel } from "@/components/panels/OutcomeLedgerPanel";
@@ -70,7 +71,7 @@ export default function HomePage() {
         </div>
         <div className="flex items-center gap-3">
           <div className="text-xs uppercase tracking-widest text-accent-cyan">
-            PAPER_ONLY - NO_EXECUTION
+            PAPER_ONLY · PAPER_AUTO_OPEN · NO_LIVE_EXECUTION
           </div>
         </div>
       </header>
@@ -150,6 +151,7 @@ export default function HomePage() {
           <GridCell span="2"><CatalystImpactPanel /></GridCell>
           <GridCell span="1"><EventCalendarPanel /></GridCell>
           <GridCell span="full"><ScenarioPanel /></GridCell>
+          <GridCell span="full"><WorldBriefPanel detail /></GridCell>
         </PanelGroup>
 
         <PanelGroup title="Ogrenme & Kalibrasyon" hint="paper / agirlik / platt / TF kalibrasyon">
@@ -202,7 +204,7 @@ export default function HomePage() {
       </section>
 
       <footer className="pt-8 text-xs text-white/40">
-        PAPER_ONLY - NO_EXECUTION - karar-destek; final karar deterministik engine + RiskGate.
+        PAPER_ONLY · PAPER_AUTO_OPEN · NO_LIVE_EXECUTION - karar-destek; uygun sinyaller RiskGate sonrası paper state'e otomatik açılır, gerçek broker emri gönderilmez.
       </footer>
     </main>
   );

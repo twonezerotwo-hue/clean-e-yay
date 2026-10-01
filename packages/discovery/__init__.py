@@ -10,9 +10,12 @@ from __future__ import annotations
 
 import os
 
+from packages.discovery.world_candidates import build_world_candidates
+
 _OFF_VALUES = {"0", "false", "no", "off", ""}
 
 
 def scan_enabled() -> bool:
     """DISCOVERY_SCAN_ENABLED açık mı? (TF_TARGET_EDGE_GATE deseni — default OFF.)"""
     return os.environ.get("DISCOVERY_SCAN_ENABLED", "0").strip().lower() not in _OFF_VALUES
+__all__ = ["build_world_candidates", "scan_enabled"]

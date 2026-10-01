@@ -32,6 +32,7 @@ from packages.decision import (
     conflict_gate,
     conflict_resolver_activation,
     gates,
+    paper_policy,
     shadow,
     shadow_activation,
 )
@@ -323,7 +324,11 @@ async def run_once() -> None:
         # T2 — (symbol, timeframe) karar uzayı; fingerprint TF segmenti taşır,
         # 1w decide_matrix içinde paper_execution=false ile hold'a düşer.
         _regime, _risk, decisions = decide_matrix(
-            MATRIX_SYMBOLS, snap, risk_in, open_positions=ps.open_positions
+            MATRIX_SYMBOLS,
+            snap,
+            risk_in,
+            open_positions=ps.open_positions,
+            paper_exploration=paper_policy.enabled(),
         )
         decisions_generated = len(decisions)
         now = datetime.now(UTC)

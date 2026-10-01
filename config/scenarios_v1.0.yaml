@@ -1,0 +1,38 @@
+# Initial priors only; not a live geopolitical forecast.  Runtime evidence and
+# later calibration can update these weights, but no LLM-generated probability
+# is accepted by the engine.
+version: "scenarios-v1.0"
+event_types: [CHOKEPOINT_THREAT, CHOKEPOINT_DISRUPTION, SHIPPING_ATTACK, MILITARY_ESCALATION, AIRSTRIKE, MISSILE_ATTACK, DRONE_ATTACK, GROUND_OFFENSIVE]
+scenarios:
+  - id: DEESCALATION
+    name: De-escalation / route normalisation
+    prior_probability: 0.35
+    class: DEESCALATION
+    horizon: 1d-2w
+    factor_channels: [shipping_risk, energy_supply_risk, risk_aversion]
+    asset_direction: {BRENT: -1, XAUUSD: -1, SP500: 1}
+    invalidators: [verified_ceasefire, shipping_normalisation, route_reopened]
+  - id: LIMITED_CONFLICT
+    name: Continued limited conflict
+    prior_probability: 0.45
+    class: PERSISTENCE
+    horizon: 1d-4w
+    factor_channels: [shipping_risk, energy_supply_risk, risk_aversion]
+    asset_direction: {BRENT: 1, XAUUSD: 1, SP500: -1}
+    invalidators: [verified_ceasefire, sustained_route_normalisation]
+  - id: CHOKEPOINT_DISRUPTION
+    name: Severe chokepoint disruption
+    prior_probability: 0.15
+    class: ESCALATION
+    horizon: 4h-4w
+    factor_channels: [shipping_risk, energy_supply_risk, inflation_pressure, trade_risk]
+    asset_direction: {BRENT: 1, XAUUSD: 1, SP500: -1}
+    invalidators: [route_reopened, verified_alternative_capacity, inventory_release]
+  - id: REGIONAL_ESCALATION
+    name: Regional escalation
+    prior_probability: 0.05
+    class: ESCALATION
+    horizon: 4h-8w
+    factor_channels: [risk_aversion, energy_supply_risk, sanctions_pressure, inflation_pressure]
+    asset_direction: {BRENT: 1, XAUUSD: 1, SP500: -1, BTCUSD: -1}
+    invalidators: [verified_deescalation, force_withdrawal, diplomatic_agreement]

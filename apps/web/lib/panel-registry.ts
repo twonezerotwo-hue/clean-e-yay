@@ -41,6 +41,7 @@ export type PanelKey =
   | "command_signals"
   | "event_calendar"
   | "scenario"
+  | "world_brief"
   | "capital_rotation"
   | "news"
   | "patterns"
@@ -156,6 +157,7 @@ export const PANEL_REGISTRY: PanelMeta[] = [
   { id: "event_calendar",   title: "Olay Takvimi",         defaultVisible: true,  span: "1",    group: "macro",           tier: "detay" },
   { id: "news",             title: "Haberler",             defaultVisible: true,  span: "2",    group: "macro",           tier: "detay" },
   { id: "scenario",         title: "Senaryo",              defaultVisible: true,  span: "1",    group: "macro",           tier: "detay" },
+  { id: "world_brief",      title: "Dünya Özeti",           defaultVisible: true,  span: "full", group: "macro",           tier: "detay" },
   // ── DETAY — Öğrenme & Kalibrasyon ────────────────────────────────────────
   { id: "trading",          title: "Paper Trading",        defaultVisible: true,  span: "2",    group: "learning",        tier: "detay" },
   { id: "outcome_ledger",   title: "Outcome Ledger",       defaultVisible: true,  span: "2",    group: "learning",        tier: "detay" },

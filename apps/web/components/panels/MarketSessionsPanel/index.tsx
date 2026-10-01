@@ -92,7 +92,7 @@ export function MarketSessionsPanel() {
   if (!data || !data.markets.length) {
     return (
       <PanelFrame id="market_sessions">
-        <PanelHeader title="Market Sessions" subtitle="PAPER_SAFE · NO_EXECUTION" />
+        <PanelHeader title="Market Sessions" subtitle="PAPER_SAFE · NO_LIVE_EXECUTION" />
         <EmptyState />
       </PanelFrame>
     );
@@ -126,7 +126,7 @@ export function MarketSessionsPanel() {
         </div>
       )}
       <div className="mt-2 text-[9px] uppercase tracking-widest text-white/30">
-        {data.paper_safe ? "PAPER_SAFE" : ""} · {data.no_execution ? "NO_EXECUTION" : ""}
+        {data.paper_safe ? "PAPER_SAFE" : ""} · {data.no_execution ? "NO_LIVE_EXECUTION" : ""} · PAPER_AUTO_OPEN
       </div>
     </PanelFrame>
   );

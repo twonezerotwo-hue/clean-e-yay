@@ -1,0 +1,15 @@
+# Physical supply-chain topology and measurement contract.
+# Numeric values are intentionally absent here: current production, inventory,
+# rerouting and spare-capacity numbers must arrive with an as-of source.
+version: "physical-commodities-v1.0"
+commodities:
+  - id: commodity:crude_oil
+    name: Crude oil
+    unit: mbd
+    asset_symbols: [BRENT]
+    factor_channels: [energy_supply_risk, shipping_risk, inflation_pressure]
+  - id: commodity:refined_products
+    name: Refined petroleum products
+    unit: mbd
+    asset_symbols: [BRENT]
+    factor_channels: [energy_supply_risk, shipping_risk, inflation_pressure]

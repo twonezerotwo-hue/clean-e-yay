@@ -575,6 +575,15 @@ correlation_baseline:
 paper_trading:
   initial_equity_usd: 100000
   max_position_usd: 25000
+  # Paper-only exploration: lets the running simulator collect bounded forward
+  # evidence when a candidate is stopped only by confidence/EV soft gates.
+  # Risk, stale-data, session, price-sanity, duplicate and position-cap gates
+  # remain hard. Requires PAPER_ONLY=true and NO_EXECUTION=true in the process.
+  paper_auto_open:
+    enabled: true
+    min_confidence: 0.20
+    max_negative_ev: -0.40
+    max_size_multiplier: 0.35
   # Intra-batch yığılma koruması: decide_matrix tek pass'te aynı sembolün birden
   # çok TF'sini açabilir (XAGUSD 15m/1h/4h short); pass-başı snapshot'ı donduğu için
   # kardeşler birbirini görmez → correlation cluster cap ateşlenemiyor. true iken

@@ -79,7 +79,7 @@ export function PaperActionPanel() {
     <PanelFrame id="paper_action">
       <PanelHeader
         title="Paper Action State"
-        subtitle="PAPER_ONLY · NO_EXECUTION"
+        subtitle="PAPER_ONLY · PAPER_AUTO_OPEN · NO_LIVE_EXECUTION"
         actions={
           summary?.frozen ? (
             <span className="rounded px-1.5 py-0.5 bg-signal-down/20 text-signal-down uppercase tracking-wide text-[10px]">

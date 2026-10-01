@@ -13,10 +13,16 @@ Clean E-yAy
 │
 ├─ packages/
 │  ├─ data/                    # veri toplama + DQS + snapshot
+│  ├─ world_graph/             # versioned topology: entity/capability/dependency
+│  ├─ physical/                # as-of commodity/supply-chain balance evidence
+│  ├─ scenarios/               # evidence-calibrated scenario distributions
+│  ├─ discovery/               # world-driven candidates; promotion remains gated
 │  ├─ regime/                  # piyasa rejimi
 │  ├─ consensus/               # sinyal/agent birleşimi
 │  ├─ decision/                # deterministik karar motoru
 │  ├─ risk/                    # risk gate / kill switch / sizing
+│  ├─ forecast/                # probabilistic price bands (evidence-only)
+│  ├─ portfolio/               # read-only exposure/concentration view
 │  ├─ paper/                   # paper trading lifecycle
 │  ├─ learning/                # calibration / mistake memory / rebalance
 │  ├─ agent/                   # planner / specialist agents / orchestrator
@@ -78,6 +84,28 @@ Rebalance Proposal
   ↓
 Owner Approval
 ```
+
+World-state evidence is built alongside the snapshot and remains additive:
+
+```text
+Verified market/news/macro inputs
+  ↓
+World Graph → World-State + physical commodity balance + scenario distribution + causal shadow
+  ├─ asset impact / causal consensus
+  ├─ approximate price bands (ATR or realized-volatility backed)
+  ├─ affected-asset candidates (observation only; no universe mutation)
+  ├─ portfolio exposure / thesis-conflict report
+  └─ LLM World Brief (narrative-only, cache'li, fallback'li)
+```
+
+These outputs are observation-only.  They do not feed sizing, open an order,
+bypass the Risk Gate, or enable live execution.  A discovered asset is never
+promoted automatically: provider identity and liquidity must be verified by
+the existing owner-gated discovery flow. Missing price or volatility evidence
+produces an explicit unavailable row instead of a neutral or fabricated
+forecast. The LLM receives only bounded backend evidence; it cannot add
+assets, prices, targets, actions, or risk overrides that are absent from that
+evidence.
 
 E-yAy artık şöyle çalışacak:
 
@@ -410,6 +438,7 @@ Tek `score` ile her şeyi ölçmeye çalışma.
 ```text
 packages/decision/
 ├─ __init__.py
+├─ paper_policy.py
 ├─ models.py
 ├─ policy.py
 ├─ orchestrator.py
@@ -489,11 +518,17 @@ tabanında sadece `apps/tick_worker/main.py::run_once()` içinde bir kez
 conflict_resolver_activation — hepsi bu tek kapıdan önce sıraya girer veya
 `manual_ready`'e yönlendirir; hiçbiri paralel bir ikinci açılış yolu açmaz.
 
+Paper otomatik açılış ile canlı broker yürütmesi ayrı sözleşmelerdir.
+`PAPER_ONLY` ve `NO_EXECUTION` birlikte açıkken
+`paper_trading.paper_auto_open.enabled`, yalnızca güven/EV yumuşak kapılarında
+sınırlı keşif boyutuna izin verir. Risk, bayat veri, seans, fiyat, duplicate ve
+pozisyon limitleri bu profilde de değişmez; gerçek broker yolu yoktur.
+
 ### Config anahtarları (`config/thresholds_v1.0.yaml`)
 
 | Flag | Açıksa ne olur | Şu an |
 |---|---|---|
-| `shadow.affect_decision` | Shadow karar zincirini etkiler (Faz B köprüsü) | **false** |
+| `shadow.affect_decision` | Shadow karar zincirini etkiler (Faz B köprüsü) | **true — manual_ready_only** |
 | `conflict_resolver_activation.enabled` | Conflict Resolver'ın CANDIDATE_OPEN dediği **yeni** girişler (eski sistem hiç önermemiş olsa bile) manual_ready'e eklenir | **false** |
 | `conflict_gate.enabled` | Eski sistemin önerisi, trade_profile bazlı kademeli sıkılıkla süzülür (aşağıdaki tablo) | **true** — ama sadece POSITION etkin |
 

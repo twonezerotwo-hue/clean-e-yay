@@ -67,8 +67,19 @@ function Free-Port([int]$p) {
     Start-Sleep -Seconds 1
 }
 function Get-Procs([string]$exe, [string]$match) {
-    return @(Get-CimInstance Win32_Process -Filter "name='$exe'" -ErrorAction SilentlyContinue |
-        Where-Object { $_.CommandLine -like "*$match*" })
+    $exePath = $null
+    if ($exe -and (Test-Path $exe)) {
+        $exePath = [IO.Path]::GetFullPath($exe)
+    }
+    return @(Get-CimInstance Win32_Process -Filter "name='$(Split-Path $exe -Leaf)'" -ErrorAction SilentlyContinue |
+        Where-Object {
+            if ($_.CommandLine -notlike "*$match*") { return $false }
+            # A keeper must not adopt a worker/API belonging to another checkout.
+            # Full executable matching is used when the service path is known;
+            # legacy tools with a bare executable name keep the old global check.
+            if ($exePath) { return $_.ExecutablePath -eq $exePath }
+            return $true
+        })
 }
 function Proc-Running([string]$exe, [string]$match) { return ((Get-Procs $exe $match).Count -gt 0) }
 function Kill-Procs([string]$exe, [string]$match) {
@@ -118,7 +129,7 @@ function Ensure-HttpSvc([string]$label, [string]$url, [int]$port, [string]$exe, 
 
 # Ensure a worker that has no HTTP surface: process presence is the health check.
 function Ensure-Worker([string]$label, [string]$module) {
-    if (Proc-Running "python.exe" $module) { return }
+    if (Proc-Running $py $module) { return }
     Start-Svc $label $py @("-m", $module) $root "$logs\$label.out.log" "$logs\$label.err.log" | Out-Null
 }
 

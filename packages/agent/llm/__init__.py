@@ -13,5 +13,6 @@ akışına geri yazılmaz (SAFETY_RULES + ARCHITECTURE §2).
 - `guard`   — prompt injection / bypass taleplerine güvenli ret.
 - `system_memory` — paper/audit/decision log kaynaklı read-only cevaplar.
 - `report`  — persona bölümleri (LLM veya deterministik fallback).
+- `world_report` — dünya olayı/emtia/forecast kanıtının LLM yönetici özeti.
 - `chat`    — state-grounded soru-cevap.
 """

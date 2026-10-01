@@ -1,0 +1,103 @@
+# Static topology only.  This file does not describe today's conflict status;
+# it records bounded, reviewable capabilities and dependencies used to expand
+# verified events into causal hypotheses.  Runtime headlines remain the only
+# source of current event severity.
+version: "world-graph-v1.0"
+entities:
+  - id: country:yemen
+    type: COUNTRY
+    name: Yemen
+    aliases: [yemen, yemeni]
+    attributes: {region: red_sea, asset_symbols: [BRENT], factor_channels: [shipping_risk, energy_supply_risk, trade_risk]}
+  - id: actor:houthi
+    type: MILITARY_GROUP
+    name: Houthi movement
+    aliases: [houthi, houthis, ansar allah]
+    attributes: {asset_symbols: [BRENT], factor_channels: [shipping_risk, energy_supply_risk, risk_aversion]}
+  - id: country:saudi_arabia
+    type: COUNTRY
+    name: Saudi Arabia
+    aliases: [saudi arabia, saudi, kingdom of saudi arabia]
+    attributes: {asset_symbols: [BRENT, XAUUSD], factor_channels: [energy_supply_risk, inflation_pressure]}
+  - id: country:iran
+    type: COUNTRY
+    name: Iran
+    aliases: [iran, iranian]
+    attributes: {asset_symbols: [BRENT, XAUUSD], factor_channels: [energy_supply_risk, sanctions_pressure, risk_aversion]}
+  - id: chokepoint:bab_el_mandeb
+    type: CHOKEPOINT
+    name: Bab el-Mandeb
+    aliases: [bab el mandeb, bab-el-mandeb, bab al mandab]
+    attributes: {asset_symbols: [BRENT], factor_channels: [shipping_risk, energy_supply_risk, trade_risk]}
+  - id: route:red_sea
+    type: SHIPPING_LANE
+    name: Red Sea shipping lane
+    aliases: [red sea, red-sea, kızıldeniz, kizildeniz]
+    attributes: {asset_symbols: [BRENT], factor_channels: [shipping_risk, trade_risk]}
+  - id: route:gulf_of_aden
+    type: SHIPPING_LANE
+    name: Gulf of Aden
+    aliases: [gulf of aden, aden gulf, aden körfezi]
+    attributes: {asset_symbols: [BRENT], factor_channels: [shipping_risk, trade_risk]}
+  - id: route:suez
+    type: CHOKEPOINT
+    name: Suez Canal access
+    aliases: [suez, suez canal, süveyş, suveys]
+    attributes: {asset_symbols: [BRENT], factor_channels: [shipping_risk, trade_risk, inflation_pressure]}
+  - id: route:cape_of_good_hope
+    type: ALTERNATIVE_ROUTE
+    name: Cape of Good Hope rerouting
+    aliases: [cape of good hope, cape reroute, ümit burnu]
+    attributes: {asset_symbols: [BRENT], factor_channels: [shipping_risk, trade_risk, inflation_pressure]}
+  - id: infrastructure:east_west_pipeline
+    type: PIPELINE
+    name: Saudi East-West Pipeline
+    aliases: [east-west pipeline, yanbu pipeline, petroline]
+    attributes: {asset_symbols: [BRENT], factor_channels: [energy_supply_risk, shipping_risk]}
+  - id: port:yanbu
+    type: PORT
+    name: Yanbu export terminal
+    aliases: [yanbu, yanbu port]
+    attributes: {asset_symbols: [BRENT], factor_channels: [energy_supply_risk, shipping_risk]}
+  - id: commodity:crude_oil
+    type: COMMODITY
+    name: Crude oil
+    aliases: [crude, crude oil, petrol, oil, brent]
+    attributes: {asset_symbols: [BRENT], factor_channels: [energy_supply_risk, inflation_pressure]}
+  - id: commodity:refined_products
+    type: COMMODITY
+    name: Refined petroleum products
+    aliases: [refined products, diesel, gasoline, fuel]
+    attributes: {asset_symbols: [BRENT], factor_channels: [energy_supply_risk, inflation_pressure]}
+  - id: market:shipping
+    type: MARKET
+    name: Maritime freight and insurance
+    aliases: [shipping, tanker, freight, war risk insurance, navlun, sigorta]
+    attributes: {asset_symbols: [BRENT], factor_channels: [shipping_risk, inflation_pressure, trade_risk]}
+  - id: macro:inflation
+    type: MACRO_FACTOR
+    name: Headline inflation
+    aliases: [inflation, enflasyon]
+    attributes: {asset_symbols: [XAUUSD, SP500], factor_channels: [inflation_pressure, rates_pressure]}
+  - id: macro:rates
+    type: MACRO_FACTOR
+    name: Rates and real yields
+    aliases: [rates, interest rates, faiz, real yields, reel faiz]
+    attributes: {asset_symbols: [XAUUSD, US10Y, DXY], factor_channels: [rates_pressure, real_yield_pressure, usd_pressure]}
+
+relations:
+  - {source: country:yemen, relation: CONTAINS, target: actor:houthi, weight: 0.8}
+  - {source: actor:houthi, relation: OPERATES_NEAR, target: chokepoint:bab_el_mandeb, weight: 0.8}
+  - {source: chokepoint:bab_el_mandeb, relation: CONNECTS, target: route:red_sea, weight: 0.9}
+  - {source: chokepoint:bab_el_mandeb, relation: CONNECTS, target: route:gulf_of_aden, weight: 0.9}
+  - {source: route:red_sea, relation: DEPENDS_ON, target: route:suez, weight: 0.7}
+  - {source: route:red_sea, relation: ALTERNATIVE_TO, target: route:cape_of_good_hope, weight: 0.7}
+  - {source: country:saudi_arabia, relation: PRODUCES, target: commodity:crude_oil, weight: 0.9}
+  - {source: country:saudi_arabia, relation: OWNS, target: infrastructure:east_west_pipeline, weight: 0.9}
+  - {source: infrastructure:east_west_pipeline, relation: CONNECTS, target: port:yanbu, weight: 0.8}
+  - {source: port:yanbu, relation: EXPORTS, target: commodity:crude_oil, weight: 0.8}
+  - {source: route:red_sea, relation: TRANSPORTS, target: commodity:crude_oil, weight: 0.7}
+  - {source: route:red_sea, relation: TRANSPORTS, target: commodity:refined_products, weight: 0.6}
+  - {source: market:shipping, relation: AFFECTS, target: commodity:crude_oil, weight: 0.6}
+  - {source: commodity:crude_oil, relation: AFFECTS, target: macro:inflation, weight: 0.6}
+  - {source: macro:inflation, relation: AFFECTS, target: macro:rates, weight: 0.5}

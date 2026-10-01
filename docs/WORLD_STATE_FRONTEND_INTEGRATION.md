@@ -1,6 +1,7 @@
 # World State Frontend Integration TODO
 
-Backend fields are additive and frontend changes are intentionally deferred.
+Backend fields are additive. The existing cockpit/dashboard layers now render
+the bounded `world_brief` narrative without changing the decision path.
 
 ## Existing API fields
 
@@ -10,6 +11,8 @@ Both `/api/v1/dashboard/state` and `/api/v1/cockpit/brief` expose:
   missing inputs, geopolitical events, and policy statements.
 - `causal_shadow`: graph edges, per-asset impacts, conflicts, warnings, and the
   `causal_consensus`, `conflict_shadow`, and the `decision_apply` flag.
+- `world_brief`: cached/fallback narrative generated from bounded backend
+  evidence. It is informational only; `execution` is always `NO_EXECUTION`.
 
 ## Future components
 
@@ -32,6 +35,7 @@ Both `/api/v1/dashboard/state` and `/api/v1/cockpit/brief` expose:
 | Conflict / Confluence | impact `confluence_state`, `causal_shadow.conflict_shadow` | Informational; never execute |
 | Learning evidence | backend learning study artifacts | Show `INSUFFICIENT` honestly |
 | Event attribution | causal ledger `event_id`, `channels`, `asset_predictions`, `attribution_method` | Render event-specific evidence; never aggregate-copy one event into another |
+| World Brief | `world_brief` | Layer 1 compact summary and Layer 2 evidence detail; narrative only, never a client-side signal or order |
 
 ## Evidence-calibrated contract
 

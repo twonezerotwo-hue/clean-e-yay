@@ -94,6 +94,9 @@ class CausalShadow:
     conflict_shadow: tuple[dict[str, Any], ...] = ()
     interactions: tuple[dict[str, Any], ...] = ()
     warnings: tuple[str, ...] = ()
+    # Additive, evidence-only probabilistic price bands.  These are explicitly
+    # separate from the decision consensus and never feed sizing or execution.
+    forecasts: tuple[dict[str, Any], ...] = ()
 
     def to_dict(self) -> dict[str, Any]:
         return _json(asdict(self))

@@ -642,6 +642,8 @@ def run_once() -> dict:
                 _world,
                 _asset_registry.trade_symbols(),
                 technicals=(getattr(_cached_snapshot, "technicals_by_tf", None) or getattr(_cached_snapshot, "technicals", None)),
+                prices={quote.symbol: quote for quote in getattr(_cached_snapshot, "prices", ())},
+                volatility=getattr(_cached_snapshot, "volatility", None),
             )
             _world_archive.record(
                 _world,
@@ -649,6 +651,7 @@ def run_once() -> dict:
                 asset_impacts=_shadow.impacts,
                 causal_consensus=_shadow.causal_consensus,
                 edges=_shadow.edges,
+                forecasts=_shadow.forecasts,
                 reconstruction_inputs={
                     "snapshot_id": getattr(_cached_snapshot, "snapshot_id", None),
                     "source": "snapshot_store",

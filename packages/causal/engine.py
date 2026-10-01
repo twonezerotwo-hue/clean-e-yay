@@ -394,9 +394,12 @@ def build_shadow(
     enabled: bool | None = None,
     decision_apply: bool | None = None,
     technicals: Mapping[str, object] | None = None,
+    prices: Mapping[str, object] | Iterable[object] | None = None,
+    volatility: Mapping[str, object] | None = None,
     legacy_scores: Mapping[str, Mapping[str, object]] | None = None,
     conflict_inputs: Mapping[str, Mapping[str, object]] | None = None,
 ) -> CausalShadow:
+    symbols = tuple(str(symbol) for symbol in symbols)
     config = load_thresholds().get("causal_world") or {}
     active = (
         bool(config.get("enabled", True) and config.get("causal_graph_enabled", True))
@@ -487,9 +490,32 @@ def build_shadow(
             resolver_payload["sl_tp_rr_valid"] = supplied["trade_economics_valid"]
             resolution = resolve_conflict(ConflictInputs(**resolver_payload))
             conflict_shadow.append({"symbol": impact.symbol, "final_action": resolution.final_action, "blocked_by": resolution.blocked_by, "path": resolution.conflict_resolution_path, "inputs_used": list(required)})
+    # Probabilistic bands are a read-only extension.  Import locally so legacy
+    # causal consumers and replay paths remain usable even when optional
+    # forecast dependencies are unavailable.
+    forecasts: tuple[dict[str, object], ...] = ()
+    if prices is not None or volatility is not None:
+        try:
+            from packages.forecast import build_forecasts
+
+            forecasts = tuple(item.to_dict() for item in build_forecasts(
+                symbols,
+                prices=prices,
+                impacts=impacts,
+                technicals=technicals,
+                volatility=volatility,
+                now=state.generated_at,
+            ))
+        except (ImportError, TypeError, ValueError):
+            # Forecast is observational and must never take down the decision
+            # or worker path if a provider payload is malformed.
+            forecasts = ()
     warnings = list(state.missing_inputs)
     if state.confidence < 0.5:
         warnings.append("low_world_state_confidence")
+    if prices is not None or volatility is not None:
+        if not forecasts:
+            warnings.append("forecast_unavailable")
     return CausalShadow(
         generated_at=datetime.now(UTC),
         enabled=True,
@@ -501,5 +527,6 @@ def build_shadow(
         causal_consensus=tuple(consensus),
         conflict_shadow=tuple(conflict_shadow),
         interactions=tuple(item.to_dict() for item in getattr(state, "interactions", ()) or ()),
+        forecasts=forecasts,
         warnings=tuple(dict.fromkeys(warnings)),
     )

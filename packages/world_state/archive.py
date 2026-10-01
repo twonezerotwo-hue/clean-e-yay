@@ -60,6 +60,11 @@ def _fingerprint(record: dict[str, Any]) -> str:
         "statement_ids": record.get("statement_ids"),
         "expectation_ids": record.get("expectation_ids"),
         "interaction_count": len(record.get("interactions") or []),
+        "graph_context": {
+            "graph_version": (record.get("graph_context") or {}).get("graph_version"),
+            "entity_ids": (record.get("graph_context") or {}).get("entity_ids"),
+            "affected_assets": (record.get("graph_context") or {}).get("affected_assets"),
+        },
     }
     return hashlib.sha256(json.dumps(material, sort_keys=True, separators=(",", ":")).encode()).hexdigest()[:20]
 
@@ -172,6 +177,7 @@ def compact_record(
     asset_impacts: Any = (),
     causal_consensus: Any = (),
     edges: Any = (),
+    forecasts: Any = (),
     provenance: dict[str, Any] | None = None,
     reconstruction_inputs: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
@@ -212,6 +218,17 @@ def compact_record(
             "prior_strength", "weight_source", "sample_n", "confidence",
             "confidence_interval", "regime", "horizon", "applied",
         ) if item.get(key) is not None} | {"edge_id": edge_id})
+    forecast_rows = []
+    for forecast in forecasts or ():
+        item = forecast if isinstance(forecast, dict) else forecast.to_dict()
+        # Keep the archive compact and replayable: all quantiles are retained,
+        # while no provider payload or order instruction is copied.
+        forecast_rows.append({key: item.get(key) for key in (
+            "symbol", "horizon", "as_of", "current_price", "point_estimate",
+            "p10", "p25", "p50", "p75", "p90", "directional_bias",
+            "confidence", "volatility_abs", "volatility_source", "method",
+            "available", "missing_inputs", "warnings",
+        ) if key in item})
     record = {
         "schema_version": SCHEMA_VERSION,
         "causal_config_version": getattr(world, "causal_config_version", "v1.0"),
@@ -247,12 +264,17 @@ def compact_record(
         ],
         "macro_event_ids": [getattr(item, "event_id", None) for item in getattr(world, "macro_surprises", ()) if getattr(item, "event_id", None)],
         "interactions": [item.to_dict() for item in getattr(world, "interactions", ())],
+        "graph_context": getattr(world, "graph_context", None),
+        "physical_commodity": getattr(world, "physical_commodity", None),
+        "scenario_report": getattr(world, "scenario_report", None),
+        "asset_discovery": getattr(world, "asset_discovery", None),
         "asset_impacts": impacts,
         "causal_consensus": consensus,
         "factor_confidence": getattr(world, "confidence", None),
         "factor_coverage": getattr(world, "coverage", None),
         "factor_provenance": getattr(world, "macro_sources", None),
         "edge_predictions": edge_rows,
+        "forecast_bands": forecast_rows,
         "data_verified": str(getattr(world, "data_quality", "UNAVAILABLE")) not in {"UNAVAILABLE", "INVALID"},
         "reconstruction_inputs": reconstruction_inputs,
     }
@@ -267,6 +289,7 @@ def record(
     asset_impacts: Any = (),
     causal_consensus: Any = (),
     edges: Any = (),
+    forecasts: Any = (),
     provenance: dict[str, Any] | None = None,
     reconstruction_inputs: dict[str, Any] | None = None,
     now: datetime | None = None,
@@ -280,7 +303,7 @@ def record(
     """
     row = compact_record(
         world, snapshot_id=snapshot_id, asset_impacts=asset_impacts,
-        causal_consensus=causal_consensus, edges=edges,
+        causal_consensus=causal_consensus, edges=edges, forecasts=forecasts,
         provenance=provenance, reconstruction_inputs=reconstruction_inputs,
     )
     archived_at = now or datetime.now(UTC)

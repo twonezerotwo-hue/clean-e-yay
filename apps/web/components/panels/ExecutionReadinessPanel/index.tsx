@@ -227,7 +227,7 @@ export function ExecutionReadinessPanel() {
           system.data?.no_execution === true &&
           staleWorkers.length === 0 &&
           !haltActive,
-        metric: `${system.data?.paper_safe ? "PAPER_SAFE" : "paper?"} · ${system.data?.no_execution ? "NO_EXECUTION" : "exec?"}`,
+        metric: `${system.data?.paper_safe ? "PAPER_SAFE" : "paper?"} · ${system.data?.no_execution ? "NO_LIVE_EXECUTION" : "exec?"} · PAPER_AUTO_OPEN`,
         detail: haltActive
           ? "Risk halt aktif; yeni işlem kapısı kapalı."
           : staleWorkers.length

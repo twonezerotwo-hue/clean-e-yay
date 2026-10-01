@@ -5,6 +5,8 @@ en üste çıkışını kilitler (observer; karar vermez).
 """
 from __future__ import annotations
 
+from types import SimpleNamespace
+
 from packages.agent import briefing
 
 
@@ -61,3 +63,34 @@ def test_fmt_age():
     assert briefing._fmt_age(45).endswith("sn")
     assert briefing._fmt_age(600).endswith("dk")
     assert briefing._fmt_age(11000).endswith("sa")
+
+
+def test_signal_briefing_distinguishes_paper_from_live_execution(monkeypatch):
+    """Paper otomatik açılış ile gerçek broker emrini birbirine karıştırmaz."""
+    snap = SimpleNamespace(
+        quality=SimpleNamespace(score=90.0, status="OK"),
+        provider_status={},
+    )
+    monkeypatch.setattr(briefing, "get_cached_snapshot", lambda: snap)
+    monkeypatch.setattr(briefing, "classify", lambda _snap: SimpleNamespace(label="NEUTRAL"))
+    monkeypatch.setattr(briefing, "_safe_cells", lambda _snap: [{
+        "symbol": "BTCUSDT",
+        "timeframe": "1h",
+        "direction": "LONG",
+        "score": 60.0,
+    }])
+    monkeypatch.setattr(
+        briefing,
+        "_engine_health",
+        lambda: {"status": "OK", "age_seconds": 1.0, "cycle_count": 1, "stale": False},
+    )
+    monkeypatch.setattr(briefing.halt_store, "active_halts", lambda: [])
+    monkeypatch.setattr(briefing.paper_state, "load", lambda: SimpleNamespace(open_positions=[]))
+    monkeypatch.setattr(briefing, "_nearest_event", lambda _snap: None)
+
+    out = briefing.build()["executive"]
+    if out["stance"] == "signal":
+        text = out["recommendation"].lower()
+        assert "paper_only" in text
+        assert "gerçek broker emri gönderilmez" in text
+        assert "otomatik açılır" not in text

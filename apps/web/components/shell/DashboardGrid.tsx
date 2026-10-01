@@ -67,6 +67,7 @@ const PANEL_ID_BY_COMPONENT: Record<string, string> = {
   TradingPanel: "trading",
   VolatilityPanel: "volatility",
   WatchConditionsPanel: "watch_conditions",
+  WorldBriefPanel: "world_brief",
   WeightHistoryPanel: "weight_history",
   WeightProposalPanel: "weight_proposal",
 };
