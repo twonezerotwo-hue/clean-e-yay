@@ -14,7 +14,7 @@ jobs:
         with:
           python-version: "3.11"
       - run: pip install ruff pytest fastapi httpx pydantic pyyaml
-      - run: ruff check packages apps/api apps/tick_worker apps/learning_worker
+      - run: ruff check packages apps/api apps/tick_worker apps/learning_worker apps/supervisor
       - run: pytest
 
   web:

@@ -26,10 +26,10 @@ if [ -z "$PY" ]; then
 fi
 
 echo "[pre-push] ruff check (CI yolları)..."
-if ! "$PY" -m ruff check packages apps/api apps/tick_worker apps/learning_worker; then
+if ! "$PY" -m ruff check packages apps/api apps/tick_worker apps/learning_worker apps/supervisor; then
   echo ""
   echo "❌ ruff HATASI — bu commit'te CI KIRMIZI olur ve Deploy EC2 AWS'e GİTMEZ."
-  echo "   Düzelt: $PY -m ruff check --fix packages apps/api apps/tick_worker apps/learning_worker"
+  echo "   Düzelt: $PY -m ruff check --fix packages apps/api apps/tick_worker apps/learning_worker apps/supervisor"
   echo "   Bilinçliyse bypass: git push --no-verify"
   exit 1
 fi

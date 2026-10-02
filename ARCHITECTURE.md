@@ -1037,7 +1037,7 @@ correlation universe
 ## 17. Operasyonel mimari
 
 ```text
-docker-compose
+systemd (AWS) + Windows keeper (lokal)
 .env.example
 pnpm-lock.yaml
 CI

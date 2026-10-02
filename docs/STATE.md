@@ -79,7 +79,7 @@ yazılır ve EXPLORATION kohortuna düşer: yalnız güven kalibrasyonu (`calibr
 ```
 pytest -q                                      # birim + sözleşme + golden
 python -m tests.golden.golden_replay --check   # canlı config ile karar matrisi bayt-aynı mı
-ruff check packages apps/api apps/tick_worker apps/learning_worker
+ruff check packages apps/api apps/tick_worker apps/learning_worker apps/supervisor
 python scripts/codegen.py --check              # openapi → TS
 cd apps/web && pnpm exec tsc --noEmit && pnpm build
 make smoke                                     # çalışan API gerekir

@@ -1,11 +1,9 @@
-"""Supervisor — API + tick_worker + learning_worker tek event-loop'ta.
+"""Supervisor — API + tick_worker + learning_worker tek süreçte.
 
 apps/api ince HTTP katmanı kalır (arka plan döngüsü içermez — architecture
-guard). Bu supervisor, üç süreci tek komutla birlikte çalıştırmak içindir:
+guard). Lokal keeper ve AWS bu süreci çalıştırır (owner kararı K6):
 
     python -m apps.supervisor
 
-Her şeyi tek process'te asyncio task olarak yönetir (Windows'ta tek pencere,
-ücretsiz 7/24). Worker'ları ayrı process olarak istersen `make workers` veya
-docker-compose hâlâ geçerli.
+Event loop yalnız HTTP'ye kalır; tick ve learning ayrı thread'de koşar.
 """
