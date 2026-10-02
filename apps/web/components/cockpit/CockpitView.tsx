@@ -68,6 +68,7 @@ import { LearningBrainPanel } from "@/components/panels/LearningBrainPanel";
 import type { CockpitBrief } from "@/types/generated/api";
 
 import { HolographicSignalDeck } from "./HolographicSignalDeck";
+import { TabbedBox } from "@/components/shell/TabbedBox";
 import { Layer0ReporterAgent, type Layer0HeroProps } from "./Layer0ReporterAgent";
 import {
   Layer2AssetDrilldownPanel,
@@ -1375,64 +1376,65 @@ export function CockpitView() {
               <LearnStep step="02" label="Veri yeterli ve temiz mi">
                 <DatasetHealthPanel />
               </LearnStep>
-              <LearnStep step="03" label="Öğrenme motoru — 5 dk'da bir koşar">
-                <LearningWorkerPanel />
+              <LearnStep step="03" label="Öğrenme motoru — ne öğrendi, tüm kanıt özeti">
+                <TabbedBox
+                  tabs={[
+                    { key: "worker", label: "Motor", node: <LearningWorkerPanel /> },
+                    { key: "learning", label: "Ne öğrendi", node: <LearningPanel /> },
+                    { key: "brain", label: "Kanıt özeti", node: <LearningBrainPanel /> },
+                  ]}
+                />
               </LearnStep>
-              <LearnStep step="04" label="Ne öğrendi — kalibrasyon + ağırlıklar">
-                <LearningPanel />
-              </LearnStep>
-              <LearnStep step="05" label="Güvenlik kapısı — kazanç kalıcı mı, şans mı">
+              <LearnStep step="04" label="Güvenlik kapısı — kazanç kalıcı mı, şans mı">
                 <EdgeReportPanel />
               </LearnStep>
-              <LearnStep step="06" label="Teşhis — kayıp nereden sızıyor">
+              <LearnStep step="05" label="Teşhis — kayıp nereden sızıyor">
                 <EntryExitQualityPanel />
               </LearnStep>
-              <LearnStep step="07" label="Çıkış otopsisi — en pahalı çıkış hataları">
+              <LearnStep step="06" label="Çıkış otopsisi — en pahalı çıkış hataları">
                 <ExitForensicsPanel />
               </LearnStep>
-              <LearnStep step="08" label="Otomatik ince-ayar — kapı açıksa, rollback'li">
-                <ThresholdAutotunePanel />
+              <LearnStep step="07" label="Eşikler — otomatik ince-ayar + elle A/B deney">
+                <TabbedBox
+                  tabs={[
+                    { key: "autotune", label: "İnce-ayar", node: <ThresholdAutotunePanel /> },
+                    { key: "ab", label: "A/B deney", node: <ThresholdAbPanel /> },
+                  ]}
+                />
               </LearnStep>
-              <LearnStep step="09" label="Koruma filtreleri — zarar verirse oto-kapanır">
+              <LearnStep step="08" label="Koruma filtreleri — zarar verirse oto-kapanır">
                 <GuardSafetyPanel />
               </LearnStep>
-              <LearnStep step="10" label="Elle deney — A/B backtest, canlıya dokunmaz">
-                <ThresholdAbPanel />
-              </LearnStep>
-              <LearnStep step="11" label="Keşif — yeni aday tarama (hipotetik, işlem açmaz)">
+              <LearnStep step="09" label="Keşif — yeni aday tarama (hipotetik, işlem açmaz)">
                 <DiscoveryPanel />
               </LearnStep>
-              <LearnStep step="12" label="Backtest challenger — geçmiş-prova kanıtı (izole, canlıya dokunmaz)">
+              <LearnStep step="10" label="Backtest challenger — geçmiş-prova kanıtı (izole, canlıya dokunmaz)">
                 <BacktestChallengerPanel />
               </LearnStep>
-              <LearnStep step="13" label="Öğrenme Beyni — tüm kanıt tek ekranda (özet)" wide>
-                <LearningBrainPanel />
-              </LearnStep>
-              <LearnStep step="14" label="Sinyal karnesi — hangi sinyal hangi zaman diliminde kanıtlı" wide>
+              <LearnStep step="11" label="Sinyal karnesi — hangi sinyal hangi zaman diliminde kanıtlı" wide>
                 <SubsignalScorecardPanel />
               </LearnStep>
-              <LearnStep step="15" label="Yeni beyin (gölge) — rejim-anahtarlı v2 yönü, izler karar vermez" wide>
-                <TfScoringShadowPanel />
+              <LearnStep step="12" label="Teknik oy (v4, canlı) — üretici + doğrulama karnesi; geri alma owner kararı" wide>
+                <TabbedBox
+                  tabs={[
+                    { key: "producer", label: "Canlı yön", node: <TfScoringShadowPanel /> },
+                    { key: "race", label: "Karne", node: <TfScoringRacePanel /> },
+                  ]}
+                />
               </LearnStep>
-              <LearnStep step="16" label="Yarış raporu — yeni beyin eskiyi/tabanı geçiyor mu, terfi owner onayıyla" wide>
-                <TfScoringRacePanel />
-              </LearnStep>
-              <LearnStep step="17" label="Haberin edge'i (gölge) — haber sonrası fiyat yönü tutuyor mu, ölçer karar vermez" wide>
+              <LearnStep step="13" label="Haberin edge'i (gölge) — haber sonrası fiyat yönü tutuyor mu, ölçer karar vermez" wide>
                 <NewsEventStudyPanel />
               </LearnStep>
-              <LearnStep step="18" label="Kalibrasyon sağlığı — güven-ayarı oturmuşluğu + gerçekleşen-R kâr hesabı hazırlığı (tek eksen, birleşik panel)" wide>
-                <CalibrationHealthPanel />
-              </LearnStep>
-              <LearnStep step="19" label="Çıkış verim backtest — en verimli sabit + trailing stop aralığı (gerçek fiyat geçmişi)" wide>
+              <LearnStep step="14" label="Çıkış verim backtest — en verimli sabit + trailing stop aralığı (gerçek fiyat geçmişi)" wide>
                 <ExitBacktestPanel />
               </LearnStep>
-              <LearnStep step="20" label="0-2 strateji + house-money — owner nihai LONG akışının gölge karnesi (giriş + fib hedef + trailing + sabit-bahis re-giriş)" wide>
+              <LearnStep step="15" label="0-2 strateji (donduruldu) — owner LONG akışının gölge ölçümü; yeni karar yok" wide>
                 <ZeroTwoStrategyPanel />
               </LearnStep>
-              <LearnStep step="21" label="Bölge önerileri — owner kesişim yöntemi her asset'te: işaretli grafik + iptal edilmedikçe onaylı (onaylılar flag açıkken SL/TP yerleşimini etkiler)" wide>
+              <LearnStep step="16" label="Bölge önerileri — owner kesişim yöntemi her asset'te: işaretli grafik + iptal edilmedikçe onaylı (onaylılar flag açıkken SL/TP yerleşimini etkiler)" wide>
                 <ZoneProposerPanel />
               </LearnStep>
-              <LearnStep step="22" label="Konsey karnesi — katmanlar birlikte ne söylüyor: modül yayılımları + veriden türetilen sanki-filtreler (in-sample kanıt)" wide>
+              <LearnStep step="17" label="Konsey karnesi — katmanlar birlikte ne söylüyor: modül yayılımları + veriden türetilen sanki-filtreler (in-sample kanıt)" wide>
                 <CouncilPanel />
               </LearnStep>
             </div>
@@ -1446,12 +1448,23 @@ export function CockpitView() {
             badgeTone="border-amber-400/30 bg-amber-400/10 text-amber-200"
           >
             <div className="grid gap-3 lg:grid-cols-2">
-              <CalibrationPanel />
-              <CalibrationJumpsPanel />
+              <TabbedBox
+                tabs={[
+                  { key: "calibration", label: "Kalibrasyon", node: <CalibrationPanel /> },
+                  { key: "health", label: "Sağlık", node: <CalibrationHealthPanel /> },
+                  { key: "jumps", label: "Sıçramalar", node: <CalibrationJumpsPanel /> },
+                ]}
+              />
               <TfWeightsPanel />
               <div className="lg:col-span-2"><TfTargetsPanel /></div>
-              <WeightProposalPanel />
-              <WeightHistoryPanel />
+              <div className="lg:col-span-2">
+                <TabbedBox
+                  tabs={[
+                    { key: "proposal", label: "Ağırlık önerisi", node: <WeightProposalPanel /> },
+                    { key: "history", label: "Geçmiş", node: <WeightHistoryPanel /> },
+                  ]}
+                />
+              </div>
             </div>
           </Layer2DetailGroup>
 

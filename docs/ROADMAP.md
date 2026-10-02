@@ -38,12 +38,14 @@ listeler. Temizlik boyunca yeni özellik, yeni flag, yeni veri kaynağı eklenme
 - **K7** Telefon erişimi (ngrok, şifresiz) olduğu gibi kalır.
 - **K8** Ekran sadeleşir: ana ekranda yalnız owner'ın karar verdiği/her gün baktığı
   paneller; diğer state'ler tek "Detaylar" sayfasında (docs/DASHBOARD_RULES.md).
+- **K8b** Heart (Katman 1) aynı kalır; yalnız Conscious'taki tekrar eden kutular sekmeli
+  tek kutuya birleşir (owner her gün haber/dünya özetine bakıyor).
 - **K5** Ağırlıklar git'te (`config/weights_active.json`), owner onayıyla değişir;
   oto-uygulama kapalı.
 
 ## Açık owner kararları
 
-1. Ana ekranda kalacak panellerin listesi (K8'in uygulaması, Faz 4).
+- (şu an açık owner kararı yok)
 
 ## Temizlikten sonra (ölçüm işleri)
 
