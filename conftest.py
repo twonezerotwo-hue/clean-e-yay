@@ -240,8 +240,6 @@ def _isolate_runtime_stores(tmp_path_factory: pytest.TempPathFactory) -> None:
     os.environ["SHADOW_LOG_PATH"] = str(runtime / "shadow_decisions.jsonl")
     os.environ["PAPER_AUDIT_PATH"] = str(runtime / "paper_audit.jsonl")
     os.environ["MISSED_OPP_LOG_PATH"] = str(runtime / "missed_opportunity.jsonl")
-    os.environ["META_GATE_PATH"] = str(runtime / "meta_gate.json")
-    os.environ["META_GATE_SHADOW_PATH"] = str(runtime / "meta_gate_shadow.jsonl")
     os.environ["CALIBRATION_AUDIT_PATH"] = str(runtime / "calibration_jumps.jsonl")
 
 

@@ -1,6 +1,6 @@
 """Karar-kanıt tüketicisi — TÜM öğrenmeleri TEK birleşik fikre indirger.
 
-Owner talebi (2026-07-09): dağınık learning'ler (mistake_memory / meta_gate /
+Owner talebi (2026-07-09): dağınık learning'ler (mistake_memory /
 reflection / calibration / EV) her karara ayrı ayrı değil, TEK "fikir" olarak
 girsin. Bu modül o fikri üretir: her açılış adayına birleşik bir hüküm
 (`CONFIRM / CAUTION / AVOID`) + gerekçeler + advisory boyut-ipucu.
@@ -61,20 +61,6 @@ def _reflection_symbol_memory(symbol: str) -> dict | None:
         return None
 
 
-def _meta_stance(meta_report: dict | None) -> str | None:
-    """meta_gate gölge hükmünü normalize et (GİRME/negatif → CAUTION sinyali)."""
-    if not meta_report:
-        return None
-    v = str(meta_report.get("verdict") or meta_report.get("label") or "").upper()
-    if not v:
-        return None
-    if any(k in v for k in ("AVOID", "GIRME", "GİRME", "NEG", "SKIP", "BLOCK")):
-        return "CAUTION"
-    if any(k in v for k in ("ENTER", "GIR", "GİR", "POS", "GO")):
-        return "CONFIRM"
-    return None
-
-
 def advise(
     *,
     symbol: str,
@@ -82,7 +68,6 @@ def advise(
     regime: str,
     dominant_module: str,
     mistake_action: str,
-    meta_report: dict | None = None,
     calibrated_confidence: float | None = None,
     expected_value: float | None = None,
     min_confidence: float = 0.5,
@@ -112,13 +97,7 @@ def advise(
         reasons.append("mistake_memory: WARNING")
         sources.append("mistake_memory")
 
-    # 2) meta_gate gölge hükmü.
-    if _meta_stance(meta_report) == "CAUTION":
-        escalate("CAUTION")
-        reasons.append("meta_gate: GİRME eğilimi")
-        sources.append("meta_gate")
-
-    # 3) reflection — son benzer işlem dersleri (cache'li, ucuz).
+    # 2) reflection — son benzer işlem dersleri (cache'li, ucuz).
     mem = _reflection_symbol_memory(symbol)
     if mem:
         summ = mem.get("summary") or {}
@@ -129,7 +108,7 @@ def advise(
             reasons.append(f"reflection: son {n} işlem %{wp:.0f} kazandı (zayıf hafıza)")
             sources.append("reflection")
 
-    # 4) kalibre güven + EV (zaten hesaplanmış) — düşükse DİKKAT.
+    # 3) kalibre güven + EV (zaten hesaplanmış) — düşükse DİKKAT.
     if calibrated_confidence is not None and calibrated_confidence < min_confidence:
         escalate("CAUTION")
         reasons.append(f"düşük p(win) %{calibrated_confidence * 100:.0f}")

@@ -53,7 +53,6 @@ import { TfScoringShadowPanel } from "@/components/panels/TfScoringShadowPanel";
 import { TfScoringRacePanel } from "@/components/panels/TfScoringRacePanel";
 import { EntryExitQualityPanel } from "@/components/panels/EntryExitQualityPanel";
 import { ExitForensicsPanel } from "@/components/panels/ExitForensicsPanel";
-import { MetaGatePanel } from "@/components/panels/MetaGatePanel";
 import { NewsEventStudyPanel } from "@/components/panels/NewsEventStudyPanel";
 import { CalibrationHealthPanel } from "@/components/panels/CalibrationHealthPanel";
 import { CouncilPanel } from "@/components/panels/CouncilPanel";
@@ -1420,25 +1419,22 @@ export function CockpitView() {
               <LearnStep step="16" label="Yarış raporu — yeni beyin eskiyi/tabanı geçiyor mu, terfi owner onayıyla" wide>
                 <TfScoringRacePanel />
               </LearnStep>
-              <LearnStep step="17" label="Meta-kapı (gölge) — GİR/GİRME ikinci görüşü, seçiciliği ölçer karar vermez" wide>
-                <MetaGatePanel />
-              </LearnStep>
-              <LearnStep step="18" label="Haberin edge'i (gölge) — haber sonrası fiyat yönü tutuyor mu, ölçer karar vermez" wide>
+              <LearnStep step="17" label="Haberin edge'i (gölge) — haber sonrası fiyat yönü tutuyor mu, ölçer karar vermez" wide>
                 <NewsEventStudyPanel />
               </LearnStep>
-              <LearnStep step="19" label="Kalibrasyon sağlığı — güven-ayarı oturmuşluğu + gerçekleşen-R kâr hesabı hazırlığı (tek eksen, birleşik panel)" wide>
+              <LearnStep step="18" label="Kalibrasyon sağlığı — güven-ayarı oturmuşluğu + gerçekleşen-R kâr hesabı hazırlığı (tek eksen, birleşik panel)" wide>
                 <CalibrationHealthPanel />
               </LearnStep>
-              <LearnStep step="20" label="Çıkış verim backtest — en verimli sabit + trailing stop aralığı (gerçek fiyat geçmişi)" wide>
+              <LearnStep step="19" label="Çıkış verim backtest — en verimli sabit + trailing stop aralığı (gerçek fiyat geçmişi)" wide>
                 <ExitBacktestPanel />
               </LearnStep>
-              <LearnStep step="21" label="0-2 strateji + house-money — owner nihai LONG akışının gölge karnesi (giriş + fib hedef + trailing + sabit-bahis re-giriş)" wide>
+              <LearnStep step="20" label="0-2 strateji + house-money — owner nihai LONG akışının gölge karnesi (giriş + fib hedef + trailing + sabit-bahis re-giriş)" wide>
                 <ZeroTwoStrategyPanel />
               </LearnStep>
-              <LearnStep step="22" label="Bölge önerileri — owner kesişim yöntemi her asset'te: işaretli grafik + iptal edilmedikçe onaylı (onaylılar flag açıkken SL/TP yerleşimini etkiler)" wide>
+              <LearnStep step="21" label="Bölge önerileri — owner kesişim yöntemi her asset'te: işaretli grafik + iptal edilmedikçe onaylı (onaylılar flag açıkken SL/TP yerleşimini etkiler)" wide>
                 <ZoneProposerPanel />
               </LearnStep>
-              <LearnStep step="23" label="Konsey karnesi — katmanlar birlikte ne söylüyor: modül yayılımları + veriden türetilen sanki-filtreler (in-sample kanıt)" wide>
+              <LearnStep step="22" label="Konsey karnesi — katmanlar birlikte ne söylüyor: modül yayılımları + veriden türetilen sanki-filtreler (in-sample kanıt)" wide>
                 <CouncilPanel />
               </LearnStep>
             </div>

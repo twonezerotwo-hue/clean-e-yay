@@ -603,19 +603,6 @@ def run_once() -> dict:
         regime_brake_status = f"ERROR:{type(exc).__name__}"
         errors.append(f"regime_risk_brake:{type(exc).__name__}")
 
-    # Y-5 — meta-label kapısı bariyer-tarihçe tablosu (SALT-GÖLGE; motor hükmü
-    # karara uygulamaz). Off-tick: AUTO kohort outcome'larından dominant×TF
-    # kovası kalite skoru (Y-2 barrier_label REUSE). Ucuz (state okur).
-    meta_gate_status = "ERROR"
-    try:
-        from packages.learning import meta_gate as _mg
-        mg = _mg.compute()
-        meta_gate_status = "OK"
-        log.info("meta_gate: buckets=%s", len(mg.get("buckets") or {}))
-    except Exception as exc:  # defensive — worker patlamamalı
-        meta_gate_status = f"ERROR:{type(exc).__name__}"
-        errors.append(f"meta_gate:{type(exc).__name__}")
-
     # Y-6 — haber olay-çalışması (SALT-GÖZLEM). Off-tick: o anki verified haberleri
     # damgala (dedupe) + olgunlaşan olaylar için N-bar ileri-getiri karnesi
     # (ohlcv.history REUSE). Kanıt bar-arşivi gibi haftayla büyür; karara dokunmaz.
@@ -911,7 +898,6 @@ def run_once() -> dict:
         "challenger_train_status": challenger_train_status,  # B-3 ağırlık+quantum karne (DISABLED=flag OFF)
         "challenger_promotion_status": challenger_promotion_status,  # B-4 terfi kriteri (DISABLED=flag OFF)
         "regime_brake_status": regime_brake_status,  # Y-1 rejim risk freni tablosu (gözlem; uygulama flag'le)
-        "meta_gate_status": meta_gate_status,  # Y-5 meta-label kapısı tablosu (SALT-GÖLGE)
         "news_study_status": news_study_status,  # Y-6 haber olay-çalışması karnesi (SALT-GÖZLEM)
         "exit_backtest_status": exit_backtest_status,  # Çıkış stop-verim backtest (interval-kapılı; SKIP_FRESH=taze)
         "zero_two_scorecard_status": zero_two_scorecard_status,  # 0-2 karnesi (owner edge'i; interval-kapılı SALT-ANALİZ)

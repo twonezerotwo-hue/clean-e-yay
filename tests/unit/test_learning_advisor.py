@@ -46,13 +46,6 @@ def test_reflection_weak_memory_causes_caution(tmp_path, monkeypatch):
     assert a.stance == "CAUTION" and "reflection" in a.sources
 
 
-def test_meta_gate_skip_causes_caution():
-    a = la.advise(symbol="ETHUSD", timeframe="1h", regime="NEUTRAL",
-                  dominant_module="quantum", mistake_action="NEUTRAL",
-                  meta_report={"verdict": "SKIP"})
-    assert a.stance == "CAUTION" and "meta_gate" in a.sources
-
-
 def test_apply_flag_default_off(monkeypatch):
     """Flag KAPALI (default) → apply_enabled False (boyut bayt-aynı kalır)."""
     monkeypatch.delenv("LEARNING_ADVISOR_APPLY", raising=False)

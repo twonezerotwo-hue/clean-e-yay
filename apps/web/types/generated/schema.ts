@@ -841,23 +841,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/learning/meta-gate": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Y-5 — Meta-label kapısı (GİR/GİRME gölge hükmü + seçicilik karnesi, SALT-GÖLGE, read-only) */
-        get: operations["getLearningMetaGate"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/learning/news-event-study": {
         parameters: {
             query?: never;
@@ -5129,28 +5112,6 @@ export interface operations {
         requestBody?: never;
         responses: {
             /** @description OK (veri yoksa status=NO_DATA) */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
-                };
-            };
-        };
-    };
-    getLearningMetaGate: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK (tablo yoksa status=NO_TABLE) */
             200: {
                 headers: {
                     [name: string]: unknown;

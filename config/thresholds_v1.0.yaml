@@ -601,21 +601,6 @@ paper_trading:
   tp_rr_ratio: 2.0
   trailing_stop_enabled: true
 
-# Y-5 — Meta-label kapısı (mlfinlab meta-labeling), SALT-GÖLGE: her açılış adayına
-# "GİR/GİRME" hükmü damgalanır (mevcut kanıtlardan: EV + ampirik p + mistake_memory
-# + Y-2 bariyer tarihçesi + Y-1 rejim freni), karar/boyut DEĞİŞMEZ. Uygulama flag'i
-# BİLEREK YOK (ölü flag yasağı): aktivasyon, /learning/meta-gate scorecard'ı
-# TAKE>SKIP seçicilik kanıtı gösterince AYRI dilim + owner kararı (kırmızı çizgi).
-meta_gate:
-  min_score: 0.0       # skor >= eşik → TAKE, altı → SKIP (gölge hüküm)
-  min_bucket_n: 8      # bariyer-tarihçe kovası bundan azsa o bileşen nötr
-  weights:             # bileşen ağırlıkları (kanıtsız bileşen zaten 0/nötr)
-    ev: 1.0
-    empirical: 1.0
-    mistake: 1.0
-    barrier_history: 1.0
-    regime_brake: 0.5
-
 # Y-6 — Haber olay-çalışması (event study), SALT-GÖZLEM: haber damgası sonrası
 # N-bar ileri-getiri (kaynak × sentiment kovası) → "haberin edge'i var mı".
 # Kanıt bar-arşivi gibi zamanla birikir; kanıtsızsa dürüst "UNPROVEN". Config-flag

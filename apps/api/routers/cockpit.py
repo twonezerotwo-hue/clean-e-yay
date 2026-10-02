@@ -67,7 +67,10 @@ def get_cockpit_brief() -> dict:
                 "trade_economics_valid": None,
                 "rr_context_unavailable": True,
                 "setup_type": "SETUP" if decision.candidate_action != "hold" else "NO_TRADE",
-                "historical_edge_strong_negative": ((decision.meta_gate_report or {}).get("verdict") == "AVOID") if decision.meta_gate_report else None,
+                # Not (temizlik H15): eskiden meta_gate hükmünden "AVOID" aranıyordu;
+                # meta_gate yalnız TAKE/SKIP ürettiği için değer HEP False/None'du.
+                # meta_gate söküldü; çıktı bayt-aynı korunur (aday → False, değil → None).
+                "historical_edge_strong_negative": False if decision.candidate_action in ("open_long", "open_short") else None,
                 "size_multiplier": decision.size_multiplier,
                 "alignment_status": "ALIGNED" if decision.consensus.confluence_aligned else "PARTIAL",
             }

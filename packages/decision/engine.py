@@ -35,7 +35,7 @@ from packages.data.registry import guard_overrides
 from packages.data.registry.loader import load_thresholds
 from packages.data.types import TIMEFRAMES
 from packages.decision import correlation_veto, learning_advisor, paper_policy, sizing_layers
-from packages.learning import empirical_pwin, meta_gate, mistake_memory, regime_risk_brake
+from packages.learning import empirical_pwin, mistake_memory, regime_risk_brake
 from packages.learning.calibration_store import (
     apply_inflation_guardrail,
     predict_calibrated_tf,
@@ -107,10 +107,6 @@ class TradeDecision:
     # bilgisi burada taşınır; `regime_risk_brake.enabled` iken boyut kısılır,
     # kapalıyken yalnız gözlem (applied=False). Boş = frenlenecek kanıt yok.
     regime_brake_report: dict = field(default_factory=dict)
-    # Y-5 — meta-label kapısı (SALT-GÖLGE): açılış adayına GİR/GİRME hükmü.
-    # Karara/boyuta ASLA uygulanmaz (uygulama flag'i yok; aktivasyon scorecard
-    # seçicilik kanıtı + owner kararıyla AYRI dilim). Boş = aday değil/hata.
-    meta_gate_report: dict = field(default_factory=dict)
     # Karar-kanıt tüketicisi (2026-07-09): tüm learning'lerin TEK birleşik fikri
     # (CONFIRM/CAUTION/AVOID + gerekçe). VARSAYILAN GÖLGE — boyutu değiştirmez;
     # canlı etki yalnız LEARNING_ADVISOR_APPLY=1 (owner). Boş = aday değil/hata.
@@ -1008,23 +1004,6 @@ def decide_for_symbol(
             size = max(0.0, round(size * brake_mult, 3))
             blocked_by.append("regime_risk_brake")
 
-    # ----- Y-5: meta-label kapısı — SALT-GÖLGE (mlfinlab meta-labeling): açılış
-    # adayına "GİR/GİRME" hükmü damgalanır + fingerprint'le gölge deftere yazılır
-    # (scorecard kapanışla birleştirir). Karar/boyut DEĞİŞMEZ; uygulama flag'i
-    # YOK — aktivasyon seçicilik kanıtı + owner kararıyla ayrı dilim. -----
-    meta_gate_report: dict = {}
-    if candidate in ("open_long", "open_short"):
-        try:
-            meta_gate_report = meta_gate.assess(
-                dominant_module=cons.dominant_module, timeframe=timeframe,
-                regime_label=regime.label, expected_value=expected_value,
-                p_win_empirical=p_win_empirical, mistake_action=verdict.action,
-                regime_braked=brake_evidence is not None,
-            )
-            meta_gate.record_shadow(fp, meta_gate_report)
-        except Exception:  # gölge hükmü kararı asla düşürmez
-            meta_gate_report = {}
-
     # Karar-kanıt tüketicisi: tüm learning'leri TEK fikre indir. VARSAYILAN GÖLGE
     # (boyut değişmez); LEARNING_ADVISOR_APPLY=1 iken advice yalnız KISAR (no-boost).
     # Asla raise etmez — kararı düşürmez.
@@ -1034,7 +1013,7 @@ def decide_for_symbol(
             adv = learning_advisor.advise(
                 symbol=symbol, timeframe=timeframe, regime=regime.label,
                 dominant_module=cons.dominant_module, mistake_action=verdict.action,
-                meta_report=meta_gate_report, calibrated_confidence=cal_conf,
+                calibrated_confidence=cal_conf,
                 expected_value=expected_value, min_confidence=min_open_conf,
             )
             if learning_advisor.apply_enabled() and adv.size_hint < 1.0 and size > 0.0:
@@ -1098,7 +1077,6 @@ def decide_for_symbol(
         p_win_empirical=p_win_empirical,
         expected_value_empirical=expected_value_empirical,
         regime_brake_report=regime_brake_report,
-        meta_gate_report=meta_gate_report,
         learning_advice=learning_advice,
         sizing_layers_report=sizing_layers_report,
         correlation_veto_report=correlation_veto_report,
@@ -1395,9 +1373,6 @@ def matrix_view(
                 # fren bilgisi + applied bayrağı. Owner aktivasyon kararını buradan
                 # izler (flag OFF iken applied=False ile birikir). Boş = kanıt yok.
                 "regime_brake": dict(d.regime_brake_report),
-                # Y-5 gözlem — meta-label kapısının gölge hükmü (TAKE/SKIP + skor).
-                # Karara uygulanmaz; seçicilik kanıtı /learning/meta-gate scorecard.
-                "meta_gate": dict(d.meta_gate_report),
                 # Karar-kanıt tüketicisi (2026-07-09): tüm learning'lerin TEK
                 # birleşik fikri. VARSAYILAN GÖLGE (applied=False); owner
                 # LEARNING_ADVISOR_APPLY ile canlıya alır. Boş = aday değil.

@@ -50,7 +50,6 @@ export const qk = {
     ["learning", "threshold-ab", paramPath, values, symbol, timeframe] as const,
   entryExitQuality: ["learning", "entry-exit-quality"] as const,
   exitForensics: ["learning", "exit-forensics"] as const,
-  metaGate: ["learning", "meta-gate"] as const,
   calibrationFit: ["learning", "calibration-fit"] as const,
   payoffReadiness: ["learning", "payoff-readiness"] as const,
   exitBacktest: ["learning", "exit-backtest"] as const,

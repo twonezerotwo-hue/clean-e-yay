@@ -64,7 +64,6 @@ import type {
   CalibrationFitView,
   EvidenceBusView,
   ExitBacktestView,
-  MetaGateView,
   NewsEventStudyView,
   PayoffReadinessView,
   ZeroTwoStrategyView,
@@ -655,7 +654,6 @@ export const api = {
     fetchJSON<EntryExitQualityView>("/api/v1/learning/entry-exit-quality"),
   exitForensics: () =>
     fetchJSON<ExitForensicsView>("/api/v1/learning/exit-forensics"),
-  metaGate: () => fetchJSON<MetaGateView>("/api/v1/learning/meta-gate"),
   calibrationFit: () =>
     fetchJSON<CalibrationFitView>("/api/v1/learning/calibration-fit"),
   payoffReadiness: () =>
