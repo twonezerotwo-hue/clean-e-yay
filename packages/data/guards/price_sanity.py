@@ -33,6 +33,11 @@ def _max_jump_pct() -> float:
     return float(_cfg().get("max_jump_pct", 30.0))
 
 
+def _max_tick_jump_pct() -> float:
+    """H3 — yönetim tick'inde şüpheli sıçrama eşiği (önceki tick'e göre)."""
+    return float(_cfg().get("max_tick_jump_pct", 8.0))
+
+
 def _max_open_deviation_pct() -> float:
     """OPEN-time OHLCV-reference tolerance — tighter than `max_jump_pct`.
 
@@ -157,5 +162,16 @@ def tick_price_usable(
         pct = abs(price - last_price) / last_price * 100.0
         if pct > _max_jump_pct():
             return False
+        # H3 (temizlik) — önceki tick'e göre büyük sıçrama + sembolün kendi son
+        # OHLCV kapanışından da büyük sapma = bozuk/kaymış kote (vadeli kontrat
+        # kayması). Açılıştaki %10 OHLCV kontrolünün yönetimdeki karşılığı. Önceden
+        # yalnız >%30 reddediliyordu: BRENT 1.5 saatte %15 sahte sıçramayla -4.3R stop.
+        # Gerçek büyük hareket kendini onarır: OHLCV cache yetişince sapma düşer.
+        if pct > _max_tick_jump_pct():
+            reference, _label = ohlcv_reference_price(symbol)
+            if reference is not None and reference > 0:
+                dev = abs(price - reference) / reference * 100.0
+                if dev > _max_open_deviation_pct():
+                    return False
         return True
     return _in_bounds(symbol, price)

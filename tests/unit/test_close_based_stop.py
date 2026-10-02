@@ -17,6 +17,15 @@ from packages.data.types import OHLCVBar
 from packages.paper import lifecycle
 
 
+@pytest.fixture(autouse=True)
+def _no_ohlcv_reference(monkeypatch):
+    """Bu dosya oyuncak fiyatlar (100/94/121) kullanır; suite'in başka testlerinin
+    cache'e yazdığı gerçek BTCUSD referansı (60k) H3 tick bekçisini tetiklemesin."""
+    from packages.data.guards import price_sanity
+
+    monkeypatch.setattr(price_sanity, "ohlcv_reference_price", lambda s, tf="15m": (None, None))
+
+
 @pytest.fixture
 def fresh_env(tmp_path, monkeypatch):
     monkeypatch.setenv("PAPER_STATE_PATH", str(tmp_path / "paper.json"))
@@ -85,7 +94,7 @@ def test_flag_off_wick_triggers_sl(fresh_env, monkeypatch):
 def test_flag_on_wick_survives_when_close_above_stop(fresh_env, monkeypatch):
     """Flag açık: tick fitil 94 stop 95'i delse de son KAPANIŞ 97 (stop üstü) → AÇIK kalır."""
     monkeypatch.setattr(lifecycle, "_close_based_stop_enabled", lambda: True)
-    monkeypatch.setattr(lifecycle, "_last_closed_close", lambda s, tf, now: 97.0)
+    monkeypatch.setattr(lifecycle, "_last_closed_close", lambda s, tf, now, opened_at=None: 97.0)
     st, _pos = _open_long(fresh_env, fresh_env)
     closed = lifecycle.tick(st, {"BTCUSD": 94.0})
     assert closed == []                     # fitil-avına yem OLMADI
@@ -95,7 +104,7 @@ def test_flag_on_wick_survives_when_close_above_stop(fresh_env, monkeypatch):
 def test_flag_on_close_breach_triggers_sl(fresh_env, monkeypatch):
     """Flag açık: son KAPANIŞ 94 stop 95'i geçti → SL_HIT (fitil delmese bile)."""
     monkeypatch.setattr(lifecycle, "_close_based_stop_enabled", lambda: True)
-    monkeypatch.setattr(lifecycle, "_last_closed_close", lambda s, tf, now: 94.0)
+    monkeypatch.setattr(lifecycle, "_last_closed_close", lambda s, tf, now, opened_at=None: 94.0)
     st, _pos = _open_long(fresh_env, fresh_env)
     closed = lifecycle.tick(st, {"BTCUSD": 96.0})   # tick stop üstünde ama kapanış altında
     assert len(closed) == 1 and closed[0].close_reason == "SL_HIT"
@@ -104,7 +113,7 @@ def test_flag_on_close_breach_triggers_sl(fresh_env, monkeypatch):
 def test_flag_on_tp_still_wick(fresh_env, monkeypatch):
     """Flag açık: TP hâlâ tick (fitil) ile — kâr al fitille (owner kuralı)."""
     monkeypatch.setattr(lifecycle, "_close_based_stop_enabled", lambda: True)
-    monkeypatch.setattr(lifecycle, "_last_closed_close", lambda s, tf, now: 100.0)
+    monkeypatch.setattr(lifecycle, "_last_closed_close", lambda s, tf, now, opened_at=None: 100.0)
     st, _pos = _open_long(fresh_env, fresh_env)
     closed = lifecycle.tick(st, {"BTCUSD": 121.0})   # tick TP 120'yi geçti
     assert len(closed) == 1 and closed[0].close_reason == "TP_HIT"
@@ -113,7 +122,7 @@ def test_flag_on_tp_still_wick(fresh_env, monkeypatch):
 def test_flag_on_no_close_falls_back_to_wick(fresh_env, monkeypatch):
     """Flag açık ama kapanış okunamıyor (None) → fitil davranışına düşer (güvenli)."""
     monkeypatch.setattr(lifecycle, "_close_based_stop_enabled", lambda: True)
-    monkeypatch.setattr(lifecycle, "_last_closed_close", lambda s, tf, now: None)
+    monkeypatch.setattr(lifecycle, "_last_closed_close", lambda s, tf, now, opened_at=None: None)
     st, _pos = _open_long(fresh_env, fresh_env)
     closed = lifecycle.tick(st, {"BTCUSD": 94.0})
     assert len(closed) == 1 and closed[0].close_reason == "SL_HIT"

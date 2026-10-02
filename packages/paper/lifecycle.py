@@ -65,6 +65,26 @@ def _close_based_stop_enabled() -> bool:
     return bool((load_thresholds().get("exit_close_based_stop") or {}).get("enabled", False))
 
 
+def _disaster_stop_mult() -> float:
+    """H2 (temizlik, owner kararı 2026-10-02: 2 birim) — kapanış-bazlı stop bar
+    kapanışını beklerken fiyatın kaçabileceği tavan, açılış risk mesafesinin katı
+    olarak. 2.0 → toplam kayıp ≈ en fazla 2R. ≤1.0 → acil fren = düz fitil stopu."""
+    cfg = load_thresholds().get("exit_close_based_stop") or {}
+    try:
+        return max(1.0, float(cfg.get("disaster_mult", 2.0)))
+    except (TypeError, ValueError):
+        return 2.0
+
+
+def _disaster_level(pos: Position, mult: float) -> float | None:
+    """Acil fren seviyesi: SL'nin `mult-1` risk mesafesi ötesi (long: altı, short: üstü)."""
+    if pos.sl is None or pos.entry_price is None or pos.entry_price <= 0:
+        return None
+    dist = abs(pos.entry_price - pos.sl)
+    extra = (mult - 1.0) * dist
+    return pos.sl - extra if pos.side == "long" else pos.sl + extra
+
+
 def _structural_stop_cfg() -> dict:
     """P2 parça-2 — yapısal stop yerleşimi config (default enabled False → SL yeri
     mevcut ATR motoruyla, bayt-aynı). monkeypatch-seam."""
@@ -84,15 +104,31 @@ def _recent_bars_for_stop(symbol: str, timeframe: str, count: int = 15) -> list:
     return list(cached.bars)[-count:]
 
 
-def _last_closed_close(symbol: str, timeframe: str, now: datetime) -> float | None:
+def _last_closed_close(
+    symbol: str, timeframe: str, now: datetime, opened_at: str | None = None
+) -> float | None:
     """Pozisyon TF'inin son KAPANMIŞ barının kapanışı (kapanış-bazlı SL tetiği).
 
     Forming (henüz kapanmamış) bar ATLANIR — yoksa kapanış-bazlı avantaj kaybolur
     (forming close ≈ tick). ohlcv 1d/TF disk cache okur (ağ yok). Cache yok/yetersiz/
-    bilinmeyen TF → None (çağıran fitil davranışına düşer; uydurma yok). Saf/defansif."""
+    bilinmeyen TF → None (çağıran fitil davranışına düşer; uydurma yok). Saf/defansif.
+
+    H1 (temizlik) — iki ek şart, sağlanmazsa None (fitil davranışı):
+    - Bar pozisyon AÇILDIKTAN SONRA kapanmış olmalı. Önceden açılıştan önceki günün
+      kapanışı stop tetikliyordu (BTCUSD 1d: 68,333'ten açılıp 1 dk sonra önceki
+      kapanış 62,755'ten -2R ile stop).
+    - Bar bayat olmamalı: kapanışı en fazla 2 TF süresi önce. Cache güncellenmezse
+      günler önceki bir kapanış stop'u tetikleyip dolum fiyatı oluyordu."""
     tf_sn = _TF_SECONDS.get(timeframe)
     if tf_sn is None:
         return None
+    opened_ts: float | None = None
+    if opened_at:
+        try:
+            _o = datetime.fromisoformat(opened_at)
+            opened_ts = (_o if _o.tzinfo else _o.replace(tzinfo=UTC)).timestamp()
+        except (TypeError, ValueError):
+            opened_ts = None
     try:
         from packages.data.providers.ohlcv import cache as ohlcv_cache
         cached = ohlcv_cache.load(symbol, timeframe)  # type: ignore[arg-type]
@@ -103,7 +139,12 @@ def _last_closed_close(symbol: str, timeframe: str, now: datetime) -> float | No
     now_ts = now.timestamp()
     for b in reversed(cached.bars):
         ts = b.ts if b.ts.tzinfo else b.ts.replace(tzinfo=UTC)
-        if ts.timestamp() + tf_sn <= now_ts:  # bar kapanmış (açılış + TF süresi geçti)
+        close_ts = ts.timestamp() + tf_sn
+        if close_ts <= now_ts:  # bar kapanmış (açılış + TF süresi geçti)
+            if opened_ts is not None and close_ts <= opened_ts:
+                return None  # pozisyondan önce kapanmış bar stop tetikleyemez
+            if now_ts - close_ts > 2 * tf_sn:
+                return None  # bayat cache — fitil davranışına düş
             return float(b.close) if b.close and b.close > 0 else None
     return None
 
@@ -771,10 +812,25 @@ def tick(
         # bar kapanışı (fitil-avı bağışık). Kapanış yoksa None → fitil davranışı
         # (güvenli fallback). Flag kapalıyken sl_trig=None → tetikleme bayt-aynı.
         # TP her zaman tick `price` ile (kâr al fitille; owner kuralı yalnız STOP).
+        close_based = _close_based_stop_enabled()
         sl_trig = (
-            _last_closed_close(pos.symbol, pos.timeframe, now)
-            if _close_based_stop_enabled() else None
+            _last_closed_close(pos.symbol, pos.timeframe, now, pos.opened_at)
+            if close_based else None
         )
+        # H2 — acil fren: kapanış-bazlı stop bar kapanışını beklerken fiyat (fitil)
+        # açılış riskinin `disaster_mult` katına ulaşırsa beklemeden çık. Kapanış-bazlı
+        # stop kapalıyken SL zaten fitille tetiklenir; bu blok çalışmaz.
+        if close_based:
+            lvl = _disaster_level(pos, _disaster_stop_mult())
+            if lvl is not None and (
+                (pos.side == "long" and price <= lvl) or (pos.side == "short" and price >= lvl)
+            ):
+                audit.record(
+                    "DISASTER_STOP", position_id=pos.id, symbol=pos.symbol,
+                    timeframe=pos.timeframe, reason="disaster_stop", price_used=price,
+                )
+                closed.append(close_position(state, pos, exit_price=price, reason="SL_HIT"))
+                continue
         # SL/TP kontrol — formalized fill simulation (fill at observed tick price).
         fill = execution_sim.simulate_exit_fill(
             side=pos.side, entry_price=pos.entry_price, sl=pos.sl, tp=pos.tp,

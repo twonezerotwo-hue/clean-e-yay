@@ -817,6 +817,9 @@ quantum_dampen:
 # backtest kanıtıyla açar; yanlışsa false ile anında geri (tick_worker restart).
 exit_close_based_stop:
   enabled: true           # 2026-07-11 CANLI (owner kararı): stop fitille değil bar KAPANIŞIYLA tetiklenir (stop-avı bağışık)
+  # H2 acil fren (2026-10-02 owner kararı: 2 birim): bar kapanışı beklenirken fiyat (fitil)
+  # açılış riskinin bu katına ulaşırsa beklemeden çıkılır. Canlıda -8R / -4.3R kayıplar oldu.
+  disaster_mult: 2.0
 
 # P2 parça-2 — YAPISAL stop yerleşimi (2026-07-10). Açılışta stop = son `lookback`
 # barın dip/tepesi (owner "0 noktası/son dip altı"), `buffer_pct` kadar ötede (owner
@@ -883,6 +886,7 @@ zone_influence:
 price_sanity:
   max_jump_pct: 30.0          # reddet: |Δ| önceki sane fiyata göre > %30
   max_open_deviation_pct: 10.0  # OPEN-time: |Δ| sembolün kendi son OHLCV close'una göre > %10 → reddet
+  max_tick_jump_pct: 8.0      # H3 yönetim tick'i: önceki tick'e göre >%8 VE OHLCV'den >%10 sapma → o tick yok sayılır
   bounds:                     # mutlak [lo, hi]; listede olmayan sembol → yalnız pozitiflik
     BTCUSD: [20000, 500000]
     XAUUSD: [1500, 7000]
