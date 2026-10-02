@@ -126,7 +126,7 @@ def test_event_risk_never_loosens_killswitch_from_dqs() -> None:
 
 
 def test_event_risk_does_not_bypass_daily_loss_halt() -> None:
-    # Günlük zarar limiti aşılmış → KILL_SWITCH; event riski yine ezemez.
+    # Günlük zarar limiti aşılmış → en az RISK_REDUCE (H11); event riski gevşetemez.
     cands = event_risk.risk_candidates([_cat("US CPI", "critical", 4)])
     breached = RiskInput(
         dqs_score=90.0,
@@ -136,7 +136,8 @@ def test_event_risk_does_not_bypass_daily_loss_halt() -> None:
         open_position_count=0,
     )
     decision = evaluate_risk(breached, event_candidates=cands)
-    assert decision.action == "KILL_SWITCH"
+    from packages.risk.engine import PRIORITY
+    assert PRIORITY[decision.action] >= PRIORITY["RISK_REDUCE"]
 
 
 def test_event_risk_candidate_action_is_only_restrictive() -> None:

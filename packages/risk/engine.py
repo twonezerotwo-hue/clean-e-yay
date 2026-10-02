@@ -77,13 +77,15 @@ def evaluate(
             ("KILL_SWITCH", "Veri kalitesi karar için yetersiz", [f"DQS {inp.dqs_score:.1f} < 55"])
         )
 
-    # 2) Günlük zarar
+    # 2) Günlük zarar — H11 (owner kararı 2026-10-02, dokümana uyum): yeni pozisyon
+    #    YOK, açık pozisyonlar kalır; halt UTC gün dönümünde kendiliğinden kalkar.
+    #    (Önceden KILL_SWITCH'ti: küçük kayıpta sert, büyük kayıpta yumuşak.)
     daily_limit = -th["max_daily_loss_pct"] * inp.equity_usd
     if inp.daily_pnl_usd <= daily_limit:
         candidates.append(
             (
-                "KILL_SWITCH",
-                "Günlük zarar limiti aşıldı",
+                "RISK_REDUCE",
+                "Günlük zarar limiti aşıldı — bugün yeni pozisyon yok",
                 [f"daily pnl {inp.daily_pnl_usd:.0f} ≤ {daily_limit:.0f}"],
             )
         )
@@ -104,10 +106,11 @@ def evaluate(
     if inp.peak_equity_usd > 0:
         dd = (inp.peak_equity_usd - dd_equity) / inp.peak_equity_usd
         if dd >= th["max_drawdown_pct"]:
+            # H11 — max DD = KILL_SWITCH: pozisyonlar kapanır, owner reset'e kadar durur.
             candidates.append(
                 (
-                    "RISK_REDUCE",
-                    "Maksimum drawdown sınırı aşıldı",
+                    "KILL_SWITCH",
+                    "Maksimum drawdown sınırı aşıldı — owner reset gerekli",
                     [f"{dd_label} {dd:.1%} ≥ {th['max_drawdown_pct']:.0%}"],
                 )
             )
@@ -133,7 +136,7 @@ def evaluate(
     for h in halt_store.active_halts():
         candidates.append(
             (
-                h.level,  # DAILY_LOSS→KILL_SWITCH, MAX_DRAWDOWN→RISK_REDUCE
+                h.level,  # DAILY_LOSS→RISK_REDUCE (gün sonu kalkar), MAX_DRAWDOWN→KILL_SWITCH
                 f"{h.type} halt aktif — owner reset gerekli",
                 [h.reason, *h.evidence],
             )

@@ -73,7 +73,7 @@ def test_daily_loss_breach_activates_halt(fresh_env) -> None:
     active = halt.sync(_risk_input(daily_pnl=-2500))
     assert len(active) == 1
     assert active[0].type == "DAILY_LOSS"
-    assert active[0].level == "KILL_SWITCH"
+    assert active[0].level == "RISK_REDUCE"  # H11: yeni pozisyon yok, gün sonu kalkar
     # Persist edildi
     assert halt.active_halts()[0].type == "DAILY_LOSS"
 
@@ -84,7 +84,7 @@ def test_max_dd_breach_activates_halt(fresh_env) -> None:
     active = halt.sync(_risk_input(equity=91_000, peak=100_000))
     assert len(active) == 1
     assert active[0].type == "MAX_DRAWDOWN"
-    assert active[0].level == "RISK_REDUCE"
+    assert active[0].level == "KILL_SWITCH"  # H11: kapat + owner reset
 
 
 def test_halt_is_idempotent_and_sticky(fresh_env) -> None:
@@ -92,7 +92,7 @@ def test_halt_is_idempotent_and_sticky(fresh_env) -> None:
     halt.sync(_risk_input(daily_pnl=-2500))
     halt.sync(_risk_input(daily_pnl=-2500))  # aynı tip tekrar açılmaz
     assert len(halt.load().events) == 1
-    # Otomatik reset yok: breach geçse de (gün dönümü vb.) halt aktif kalır
+    # Aynı gün içinde breach geçse de halt aktif kalır (gün dönümü ayrı test)
     active = halt.sync(_risk_input(daily_pnl=0.0))
     assert len(active) == 1
     assert active[0].active is True
@@ -115,9 +115,9 @@ def test_engine_escalates_on_active_daily_halt(fresh_env) -> None:
     from packages.risk import halt
     from packages.risk.engine import evaluate
     halt.sync(_risk_input(daily_pnl=-2500))
-    # Breach geçti ama halt sticky → KILL_SWITCH sürer
+    # Breach geçti ama halt gün boyu sürer → RISK_REDUCE (yeni pozisyon yok)
     d = evaluate(_risk_input(daily_pnl=0.0))
-    assert d.action == "KILL_SWITCH"
+    assert d.action == "RISK_REDUCE"
     assert "halt" in d.reason
 
 
@@ -126,7 +126,7 @@ def test_engine_escalates_on_active_dd_halt(fresh_env) -> None:
     from packages.risk.engine import evaluate
     halt.sync(_risk_input(equity=91_000, peak=100_000))
     d = evaluate(_risk_input(equity=100_000, peak=100_000))
-    assert d.action == "RISK_REDUCE"
+    assert d.action == "KILL_SWITCH"
 
 
 def test_engine_unchanged_without_halt(fresh_env) -> None:
@@ -158,8 +158,8 @@ def test_flatten_all_closes_positions_with_price(fresh_env) -> None:
 
 
 def test_halt_active_no_new_positions_via_tick(fresh_env) -> None:
-    """Daily-loss breach'li state → tick: halt aktive olur, open yok,
-    mevcut pozisyon KILL_SWITCH_EXIT ile kapanır."""
+    """H11 — Daily-loss breach'li state → tick: halt aktive olur, yeni açılış yok,
+    mevcut pozisyon KAPANMAZ (zorla kapanış yalnız max-DD KILL_SWITCH'te)."""
     ps = fresh_env
     state = ps.load()
     state.daily_pnl_usd = -5000.0  # %2 limitin çok üstünde
@@ -186,19 +186,20 @@ def test_halt_active_no_new_positions_via_tick(fresh_env) -> None:
     from packages.risk import halt
     assert any(h.type == "DAILY_LOSS" for h in halt.active_halts())
     after = ps.load()
-    assert after.open_positions == []  # flatten — halt aktifken open da yok
-    assert any(
+    assert [p.symbol for p in after.open_positions] == ["BTCUSD"]  # yeni yok, eski duruyor
+    assert not any(
         t.close_reason == "KILL_SWITCH_EXIT" for t in after.recent_trades
     )
 
 
-def test_dd_halt_blocks_new_positions_keeps_existing(fresh_env) -> None:
-    """Max-DD halt (RISK_REDUCE) → yeni açılış yok; flatten da yok."""
+def test_dd_halt_flattens_and_blocks(fresh_env) -> None:
+    """H11 — Max-DD halt (KILL_SWITCH) → mevcut pozisyon KILL_SWITCH_EXIT ile kapanır,
+    yeni açılış yok; owner reset'e kadar sürer."""
     ps = fresh_env
     state = ps.load()
     state.equity_usd = 90_000.0
     state.peak_equity_usd = 100_000.0  # DD %10 ≥ %8
-    state.open_positions.append(_position(ps, symbol="BTCUSD"))
+    state.open_positions.append(_position(ps, symbol="BTCUSD", price=68_000.0))
     ps.save(state)
 
     # T1 — tek tick yolu worker (POST /paper-trading/tick kaldırıldı).
@@ -211,11 +212,37 @@ def test_dd_halt_blocks_new_positions_keeps_existing(fresh_env) -> None:
     assert heartbeat.load("tick_worker")["status"] != "FAILED"
 
     after = ps.load()
-    # RISK_REDUCE: yeni açılış yok (mevcut 1 pozisyon dışında) ve flatten yok
-    assert len(after.open_positions) == 1
-    assert any(
-        t.close_reason == "KILL_SWITCH_EXIT" for t in after.recent_trades
-    ) is False
+    assert after.open_positions == []
+    assert any(t.close_reason == "KILL_SWITCH_EXIT" for t in after.recent_trades)
+
+
+def test_daily_halt_clears_on_utc_day_rollover(fresh_env) -> None:
+    """H11 — önceki UTC günün DAILY_LOSS halt'i kendiliğinden kalkar; MAX_DRAWDOWN kalmaz."""
+    from packages.risk import halt
+    state = halt.HaltState(events=[
+        halt.HaltEvent(id="d", type="DAILY_LOSS", level="RISK_REDUCE",
+                       started_at="2020-01-01T10:00:00+00:00", reason="x"),
+        halt.HaltEvent(id="m", type="MAX_DRAWDOWN", level="KILL_SWITCH",
+                       started_at="2020-01-01T10:00:00+00:00", reason="y"),
+    ])
+    halt.save(state)
+    assert [h.type for h in halt.active_halts()] == ["MAX_DRAWDOWN"]  # okuma da filtreler
+    active = halt.sync(_risk_input())
+    assert [h.type for h in active] == ["MAX_DRAWDOWN"]
+    daily = next(e for e in halt.load().events if e.type == "DAILY_LOSS")
+    assert daily.active is False and daily.cleared_by == "day_rollover"
+
+
+def test_legacy_halt_levels_are_normalized(fresh_env) -> None:
+    """H11 öncesi diske yazılmış (ters) seviyeler okurken güncel politikaya çevrilir."""
+    from packages.risk import halt
+    legacy = {"events": [
+        {"id": "m", "type": "MAX_DRAWDOWN", "level": "RISK_REDUCE",
+         "started_at": "2020-01-01T10:00:00+00:00", "reason": "y", "evidence": [],
+         "active": True, "cleared_at": None, "cleared_by": None},
+    ]}
+    st = halt.HaltState.from_dict(legacy)
+    assert st.events[0].level == "KILL_SWITCH"
 
 
 # ---------------- endpoints ----------------

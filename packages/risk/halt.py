@@ -2,14 +2,15 @@
 
 Politika:
 - Halt **sadece risk azaltıcıdır**: aktifken risk engine'e ek candidate
-  ekler (DAILY_LOSS → KILL_SWITCH, MAX_DRAWDOWN → RISK_REDUCE; her ikisi de
-  en az NO_POSITION_INCREASE'in üstünde). RiskGate'in mevcut hard
-  gate'lerini **bypass etmez**, gevşetmez.
+  ekler. H11 (owner kararı 2026-10-02, README/Iron Law #2 ile uyum):
+    DAILY_LOSS   → RISK_REDUCE: yeni pozisyon yok, açıklar kalır; UTC gün
+                   dönümünde KENDİLİĞİNDEN kalkar (cleared_by="day_rollover").
+    MAX_DRAWDOWN → KILL_SWITCH: tick worker tüm pozisyonları kapatır; yalnız
+                   owner reset (`POST /api/v1/risk/halts/reset`) ile kalkar.
+  (Önceden tersiydi: günlük %2'de zorla kapanış, %8 DD'de yalnız yeni açılış yok.)
+  RiskGate'in mevcut hard gate'lerini **bypass etmez**, gevşetmez.
 - Breach tespiti tick yollarında `sync(risk_input)` ile yapılır ve diske
-  yazılır; `active_halts()` salt okur.
-- **Otomatik reset yok** — aktif halt yalnızca owner reset
-  (`POST /api/v1/risk/halts/reset`) ile kalkar. Gün dönümünde daily_pnl
-  sıfırlansa bile halt sürer.
+  yazılır; `active_halts()` salt okur (önceki günün DAILY_LOSS'unu saymaz).
 - PAPER_SAFE / NO_EXECUTION: broker yok; halt yalnızca paper karar
   akışını kısıtlar.
 """
@@ -27,8 +28,8 @@ from packages.data.registry.loader import load_thresholds
 _LOCK = threading.Lock()
 
 HALT_LEVELS = {
-    "DAILY_LOSS": "KILL_SWITCH",
-    "MAX_DRAWDOWN": "RISK_REDUCE",
+    "DAILY_LOSS": "RISK_REDUCE",
+    "MAX_DRAWDOWN": "KILL_SWITCH",
 }
 MAX_HISTORY = 100
 
@@ -55,7 +56,12 @@ class HaltState:
 
     @classmethod
     def from_dict(cls, d: dict) -> HaltState:
-        return cls(events=[HaltEvent(**e) for e in d.get("events", [])])
+        events = [HaltEvent(**e) for e in d.get("events", [])]
+        # H11 — seviye TİPTEN türetilir: H11 öncesi diske yazılmış kayıtlar eski
+        # (ters) seviyeyi taşır; okurken güncel politikaya normalize edilir.
+        for e in events:
+            e.level = HALT_LEVELS.get(e.type, e.level)
+        return cls(events=events)
 
 
 def _path() -> Path:
@@ -85,9 +91,19 @@ def save(state: HaltState) -> None:
         p.write_text(json.dumps(state.to_dict(), indent=2), encoding="utf-8")
 
 
+def _today_utc() -> str:
+    return datetime.now(UTC).date().isoformat()
+
+
+def _is_stale_daily(e: HaltEvent, today: str) -> bool:
+    """H11 — önceki UTC günün DAILY_LOSS halt'i artık geçerli değil."""
+    return e.type == "DAILY_LOSS" and (e.started_at or "")[:10] < today
+
+
 def active_halts(state: HaltState | None = None) -> list[HaltEvent]:
     state = state if state is not None else load()
-    return [e for e in state.events if e.active]
+    today = _today_utc()
+    return [e for e in state.events if e.active and not _is_stale_daily(e, today)]
 
 
 def metrics(inp) -> dict:
@@ -143,12 +159,20 @@ def sync(inp) -> list[HaltEvent]:
     """Breach varsa halt'i aktive et ve persist et; aktif halt'leri döndür.
 
     Aynı tipte zaten aktif halt varsa yenisi açılmaz (idempotent).
-    Hiçbir halt otomatik kapanmaz — sadece owner reset.
+    DAILY_LOSS UTC gün dönümünde kapanır; MAX_DRAWDOWN yalnız owner reset ile.
     """
     state = load()
-    active_types = {e.type for e in state.events if e.active}
     changed = False
     now = _utc_iso()
+    # H11 — gün dönümü: önceki günün DAILY_LOSS halt'i kendiliğinden kapanır.
+    today = _today_utc()
+    for e in state.events:
+        if e.active and _is_stale_daily(e, today):
+            e.active = False
+            e.cleared_at = now
+            e.cleared_by = "day_rollover"
+            changed = True
+    active_types = {e.type for e in state.events if e.active}
     for halt_type, reason, evidence in _breaches(inp):
         if halt_type in active_types:
             continue

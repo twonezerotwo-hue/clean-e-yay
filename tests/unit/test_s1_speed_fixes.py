@@ -153,7 +153,7 @@ def test_mtm_flag_on_tightens_drawdown(monkeypatch):
     monkeypatch.setattr(eng, "load_thresholds", lambda: _mtm_thresholds(True))
     monkeypatch.setattr(eng.halt_store, "active_halts", list)
     d = evaluate(_inp(mtm_equity_usd=90_000.0))
-    assert d.action == "RISK_REDUCE"
+    assert d.action == "KILL_SWITCH"  # H11: max DD = KILL_SWITCH
     assert any("DD(mtm)" in e for e in d.evidence)
 
 
@@ -164,7 +164,7 @@ def test_mtm_profit_never_relaxes_gate(monkeypatch):
     monkeypatch.setattr(eng.halt_store, "active_halts", list)
     # Realized %9 dd (fren çeker); MTM karda olsa bile gate GEVŞEMEZ (min()).
     d = evaluate(_inp(equity_usd=91_000.0, mtm_equity_usd=99_000.0))
-    assert d.action == "RISK_REDUCE"
+    assert d.action == "KILL_SWITCH"  # H11: max DD = KILL_SWITCH
 
 
 def test_mtm_none_is_byte_same(monkeypatch):

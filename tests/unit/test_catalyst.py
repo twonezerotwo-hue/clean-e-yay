@@ -352,7 +352,11 @@ def test_matrix_kill_switch_overrides_catalyst(paper_env) -> None:
     _force_bullish(snap)
     snap.catalyst_impacts = [_live_impact("CAUTION")]
     _r, risk, decisions = decide_matrix(
-        ["BTCUSD"], snap, _risk_in(daily_pnl=-9000.0), timeframes=["1h"]
+        ["BTCUSD"], snap,
+        # H11: KILL_SWITCH artık max DD (günlük zarar RISK_REDUCE).
+        RiskInput(dqs_score=90.0, equity_usd=90_000, peak_equity_usd=100_000,
+                  daily_pnl_usd=0.0, open_position_count=0),
+        timeframes=["1h"],
     )
     assert risk.action == "KILL_SWITCH"
     assert decisions[0].action == "blocked"
