@@ -24,8 +24,10 @@ listeler. Temizlik boyunca yeni özellik, yeni flag, yeni veri kaynağı eklenme
 - **H2** Acil fren 2 birimde (`disaster_mult: 2.0`).
 - **H11** Günlük %2 → yeni pozisyon yok, gün sonu kalkar; %8 DD → kapat + owner reset.
 - **H12** BRENT verisindeki kontrat-geçişi sıçramalarına dokunulmaz.
-- Teknik üçlü (`elliott_confluence`, `sr_strength`, `candle_confirm`) silinmez;
-  temizlikten sonra geçmiş veride açık/kapalı ölçülüp karar verilir.
+- **K9** Teknik üçlü (`elliott_confluence`, `sr_strength`, `candle_confirm`) açık. Ölçüm
+  (27 seri, 1h/4h/1d, 1055 işlem, canlı stop kuralı): açık/kapalı farkı +5R toplam,
+  işlem başına +0.005R — zararsız, kayda değer fayda yok. Canlı teknik oy v4'ten
+  geldiği için yalnız yedek teknik motoru ve rejim kripto katmanını etkiler.
 - Fırtına kuralı (`gates.regime_manual_ready`) ve kaynak politikası
   (`consensus.enforce_decision_usage`) kalır; açma kararı ayrı.
 
@@ -49,7 +51,6 @@ listeler. Temizlik boyunca yeni özellik, yeni flag, yeni veri kaynağı eklenme
 
 ## Temizlikten sonra (ölçüm işleri)
 
-- Teknik üçlünün geçmiş veride açık/kapalı karşılaştırması.
 - Temiz veriyle (H1–H3 sonrası) 30 gün paper → strateji kararı: işlemlerin
   çoğu konsensüs skoru 40–60 bandında açılıyor; alt sinyallerden yalnız
   `vwap_fade` ölçülebilir avantaj taşıyor.

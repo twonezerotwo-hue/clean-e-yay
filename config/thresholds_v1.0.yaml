@@ -1068,7 +1068,7 @@ technical:
   # üretemez/şişiremez. enabled=false → bölgeler bayt-aynı; elliott'lu bölge
   # farkı evidence'a shadow satırı olarak yazılır.
   elliott_confluence:
-    enabled: false
+    enabled: true   # 2026-10-02 owner kararı (ölçüm: 1055 işlemde etki ~0, zararsız)
     min_confidence: 60.0   # hard-rule geçen sayımların tabanı (60 = kurallar tamam)
 
   # T-3 — Destek/direnç gücü (owner onayı 2026-07-02, kodlama; aktivasyon ayrı).
@@ -1078,7 +1078,7 @@ technical:
   # Açıkken: 1 dokunuş 0.5, 2 dokunuş 0.6, 3+ dokunuş 0.7 (+elliott confluence
   # ile birlikte tavan 0.9) — çok test edilmiş seviye daha güvenilir kanıt.
   sr_strength:
-    enabled: false
+    enabled: true   # 2026-10-02 owner kararı (ölçüm: 1055 işlemde etki ~0, zararsız)
 
   # T-4 — Kilit seviyede mum teyidi (owner onayı 2026-07-02, kodlama; aktivasyon ayrı).
   # Pin bar (hammer/shooting star) + engulfing tespiti (yalnız KAPANMIŞ barlar,
@@ -1088,7 +1088,7 @@ technical:
   # uyum/çelişki tartar. enabled=false → skor bayt-aynı; tespit evidence'a her
   # zaman yazılır (gözlem).
   candle_confirm:
-    enabled: false
+    enabled: true   # 2026-10-02 owner kararı (ölçüm: 1055 işlemde etki ~0, zararsız)
 
 # T2 — AgentDecision (deterministic). ConsensusSnapshot + RiskGate aksiyonu →
 # tek yüksek-seviye aksiyon + entry_timeframe. EVIDENCE→aksiyon köprüsü; trade
