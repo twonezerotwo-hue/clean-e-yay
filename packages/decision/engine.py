@@ -354,6 +354,25 @@ def decide_for_symbol(
         timeframe=timeframe,
     )
 
+    def _hold(**fields) -> TradeDecision:
+        """Kapı bloğu → "hold" kararı. Ortak alanlar tek yerde; her kapı yalnız
+        kendi gerekçesini, blocked_by'ını ve raporlarını verir (B11). Değişkenler
+        çağrı anında okunur (closure)."""
+        return TradeDecision(
+            symbol=symbol,
+            action="hold",
+            confidence=round(cal_conf, 3),
+            size_multiplier=0.0,
+            consensus=cons,
+            risk=risk,
+            raw_confidence=round(raw_conf, 4),
+            confidence_source=conf_source,
+            fingerprint=fp,
+            timeframe=timeframe,
+            candidate_action=candidate,
+            **fields,
+        )
+
     # ----- Risk hard gate'leri ÖNCE (timeframe dahil hiçbir katman bypass etmez) -----
     if risk.action == "KILL_SWITCH":
         return TradeDecision(
@@ -449,19 +468,8 @@ def decide_for_symbol(
     action: Action = candidate
     size = base_size
     if action == "hold":
-        return TradeDecision(
-            symbol=symbol,
-            action="hold",
-            confidence=round(cal_conf, 3),
-            size_multiplier=0.0,
-            consensus=cons,
-            risk=risk,
+        return _hold(
             reason="Consensus eşiği aşılmadı",
-            raw_confidence=round(raw_conf, 4),
-            confidence_source=conf_source,
-            fingerprint=fp,
-            timeframe=timeframe,
-            candidate_action=candidate,
         )
 
     # ----- Minimum güven tabanı: skor eşiği geçse de kalibre p(win) düşükse açma -----
@@ -472,19 +480,8 @@ def decide_for_symbol(
     paper_soft_reasons: list[str] = []
     if cal_conf < min_open_conf:
         if paper_cfg is None or not paper_policy.allows_confidence(cal_conf, paper_cfg):
-            return TradeDecision(
-                symbol=symbol,
-                action="hold",
-                confidence=round(cal_conf, 3),
-                size_multiplier=0.0,
-                consensus=cons,
-                risk=risk,
+            return _hold(
                 reason=f"Düşük güven: p(win) %{cal_conf * 100:.0f} < taban %{min_open_conf * 100:.0f}",
-                raw_confidence=round(raw_conf, 4),
-                confidence_source=conf_source,
-                fingerprint=fp,
-                timeframe=timeframe,
-                candidate_action=candidate,
                 blocked_by=["confidence_floor"],
             )
         paper_soft_reasons.append("confidence_floor")
@@ -536,19 +533,8 @@ def decide_for_symbol(
     )
     if ev_cfg.get("enabled", False) and expected_value < float(ev_cfg.get("min_ev", 0.0)):
         if paper_cfg is None or not paper_policy.allows_expected_value(expected_value, paper_cfg):
-            return TradeDecision(
-                symbol=symbol,
-                action="hold",
-                confidence=round(cal_conf, 3),
-                size_multiplier=0.0,
-                consensus=cons,
-                risk=risk,
+            return _hold(
                 reason=ev_reason,
-                raw_confidence=round(raw_conf, 4),
-                confidence_source=conf_source,
-                fingerprint=fp,
-                timeframe=timeframe,
-                candidate_action=candidate,
                 blocked_by=["ev_gate"],
                 expected_value=round(expected_value, 4),
                 p_win_empirical=p_win_empirical,
@@ -564,20 +550,9 @@ def decide_for_symbol(
     # ----- G3: Mistake memory gate (RiskGate'i ASLA bypass etmez) -----
     verdict = mistake_memory.evaluate(fp, mistakes)
     if verdict.action == "AVOID":
-        return TradeDecision(
-            symbol=symbol,
-            action="hold",
-            confidence=round(cal_conf, 3),
-            size_multiplier=0.0,
-            consensus=cons,
-            risk=risk,
+        return _hold(
             reason=f"mistake_memory: {verdict.reason}",
-            raw_confidence=round(raw_conf, 4),
-            confidence_source=conf_source,
-            fingerprint=fp,
             mistake_verdict=_verdict_to_dict(verdict),
-            timeframe=timeframe,
-            candidate_action=candidate,
             blocked_by=["mistake_memory:AVOID"],
         )
 
@@ -609,24 +584,11 @@ def decide_for_symbol(
             "open_opposite_usd": round(sum(float(p.size_usd) for p in conflict_legs), 2),
         }
         if sc_enabled:
-            return TradeDecision(
-                symbol=symbol,
-                action="hold",
-                confidence=round(cal_conf, 3),
-                size_multiplier=0.0,
-                consensus=cons,
-                risk=risk,
-                reason=(
-                    f"self_conflict: {symbol} üzerinde zaten {len(conflict_legs)} "
-                    f"{opposite_side.upper()} açık — zıt yön ({cand_side.upper()}) engellendi"
-                ),
-                raw_confidence=round(raw_conf, 4),
-                confidence_source=conf_source,
-                fingerprint=fp,
+            return _hold(
+                reason=f"self_conflict: {symbol} üzerinde zaten {len(conflict_legs)} "
+                    f"{opposite_side.upper()} açık — zıt yön ({cand_side.upper()}) engellendi",
                 mistake_verdict=_verdict_to_dict(verdict),
                 self_conflict_report=self_conflict_report,
-                timeframe=timeframe,
-                candidate_action=candidate,
                 blocked_by=["self_conflict_guard"],
             )
     else:
@@ -642,26 +604,13 @@ def decide_for_symbol(
         symbol, cand_side, open_positions, equity_usd, _concentration_cfg()
     )
     if concentration_report.get("active") and concentration_report.get("breach"):
-        return TradeDecision(
-            symbol=symbol,
-            action="hold",
-            confidence=round(cal_conf, 3),
-            size_multiplier=0.0,
-            consensus=cons,
-            risk=risk,
-            reason=(
-                f"concentration: {symbol} üzerinde zaten "
+        return _hold(
+            reason=f"concentration: {symbol} üzerinde zaten "
                 f"{concentration_report['open_same_dir_count']} {cand_side.upper()} açık "
-                f"({concentration_report['exposure_pct']:.0%} equity) — aynı-yön yığını engellendi"
-            ),
-            raw_confidence=round(raw_conf, 4),
-            confidence_source=conf_source,
-            fingerprint=fp,
+                f"({concentration_report['exposure_pct']:.0%} equity) — aynı-yön yığını engellendi",
             mistake_verdict=_verdict_to_dict(verdict),
             self_conflict_report=self_conflict_report,
             concentration_report=concentration_report,
-            timeframe=timeframe,
-            candidate_action=candidate,
             blocked_by=["concentration_guard"],
         )
 
@@ -675,24 +624,11 @@ def decide_for_symbol(
     )
     cluster_dict = asdict(cluster)
     if cluster.size_factor <= 0.0:
-        return TradeDecision(
-            symbol=symbol,
-            action="hold",
-            confidence=round(cal_conf, 3),
-            size_multiplier=0.0,
-            consensus=cons,
-            risk=risk,
-            reason=(
-                f"correlation_cluster: aynı yönlü exposure {cluster.cluster_pct:.0%}"
-                f" ≥ cap {cluster.max_cluster_pct:.0%}"
-            ),
-            raw_confidence=round(raw_conf, 4),
-            confidence_source=conf_source,
-            fingerprint=fp,
+        return _hold(
+            reason=f"correlation_cluster: aynı yönlü exposure {cluster.cluster_pct:.0%}"
+                f" ≥ cap {cluster.max_cluster_pct:.0%}",
             mistake_verdict=_verdict_to_dict(verdict),
             cluster_report=cluster_dict,
-            timeframe=timeframe,
-            candidate_action=candidate,
             blocked_by=["correlation_cluster_cap"],
         )
     size *= min(1.0, cluster.size_factor)
@@ -722,22 +658,11 @@ def decide_for_symbol(
             "is_proxy": deriv_snap.is_proxy,
         }
         if dv.block:
-            return TradeDecision(
-                symbol=symbol,
-                action="hold",
-                confidence=round(cal_conf, 3),
-                size_multiplier=0.0,
-                consensus=cons,
-                risk=risk,
+            return _hold(
                 reason=f"derivatives_risk: {dv.reason}",
-                raw_confidence=round(raw_conf, 4),
-                confidence_source=conf_source,
-                fingerprint=fp,
                 mistake_verdict=_verdict_to_dict(verdict),
                 cluster_report=cluster_dict,
                 derivatives_report=derivatives_dict,
-                timeframe=timeframe,
-                candidate_action=candidate,
                 blocked_by=[f"derivatives_risk:{dv.level}"],
             )
         size *= dv.size_factor
@@ -767,23 +692,12 @@ def decide_for_symbol(
             "vol_zscore": vol_snap.vol_zscore,
         }
         if vv.block:
-            return TradeDecision(
-                symbol=symbol,
-                action="hold",
-                confidence=round(cal_conf, 3),
-                size_multiplier=0.0,
-                consensus=cons,
-                risk=risk,
+            return _hold(
                 reason=f"volatility_risk: {vv.reason}",
-                raw_confidence=round(raw_conf, 4),
-                confidence_source=conf_source,
-                fingerprint=fp,
                 mistake_verdict=_verdict_to_dict(verdict),
                 cluster_report=cluster_dict,
                 derivatives_report=derivatives_dict,
                 volatility_report=volatility_dict,
-                timeframe=timeframe,
-                candidate_action=candidate,
                 blocked_by=[f"volatility_risk:{vv.level}"],
             )
         size *= vv.size_factor
@@ -806,24 +720,13 @@ def decide_for_symbol(
             "event_type": cv.event_type,
         }
         if cv.block:
-            return TradeDecision(
-                symbol=symbol,
-                action="hold",
-                confidence=round(cal_conf, 3),
-                size_multiplier=0.0,
-                consensus=cons,
-                risk=risk,
+            return _hold(
                 reason=f"catalyst_risk: {cv.reason}",
-                raw_confidence=round(raw_conf, 4),
-                confidence_source=conf_source,
-                fingerprint=fp,
                 mistake_verdict=_verdict_to_dict(verdict),
                 cluster_report=cluster_dict,
                 derivatives_report=derivatives_dict,
                 volatility_report=volatility_dict,
                 catalyst_report=catalyst_dict,
-                timeframe=timeframe,
-                candidate_action=candidate,
                 blocked_by=[f"catalyst_risk:{cv.level}"],
             )
         size *= cv.size_factor
@@ -856,25 +759,14 @@ def decide_for_symbol(
                 "is_proxy": opt_snap.is_proxy,
             }
             if ov.block:
-                return TradeDecision(
-                    symbol=symbol,
-                    action="hold",
-                    confidence=round(cal_conf, 3),
-                    size_multiplier=0.0,
-                    consensus=cons,
-                    risk=risk,
+                return _hold(
                     reason=f"options_risk: {ov.reason}",
-                    raw_confidence=round(raw_conf, 4),
-                    confidence_source=conf_source,
-                    fingerprint=fp,
                     mistake_verdict=_verdict_to_dict(verdict),
                     cluster_report=cluster_dict,
                     derivatives_report=derivatives_dict,
                     volatility_report=volatility_dict,
                     catalyst_report=catalyst_dict,
                     options_report=options_dict,
-                    timeframe=timeframe,
-                    candidate_action=candidate,
                     blocked_by=[f"options_risk:{ov.level}"],
                 )
             size *= ov.size_factor
@@ -885,25 +777,14 @@ def decide_for_symbol(
     if not pol["paper_execution"]:
         # 1w strategic view — doğrudan paper trade açmaz; yön bilgisi
         # matrix'te bias olarak görünür.
-        return TradeDecision(
-            symbol=symbol,
-            action="hold",
-            confidence=round(cal_conf, 3),
-            size_multiplier=0.0,
-            consensus=cons,
-            risk=risk,
+        return _hold(
             reason=f"timeframe {timeframe} ({pol['role']}): paper execution kapalı — sadece bias",
-            raw_confidence=round(raw_conf, 4),
-            confidence_source=conf_source,
-            fingerprint=fp,
             mistake_verdict=_verdict_to_dict(verdict),
             cluster_report=cluster_dict,
             derivatives_report=derivatives_dict,
             volatility_report=volatility_dict,
             catalyst_report=catalyst_dict,
             options_report=options_dict,
-            timeframe=timeframe,
-            candidate_action=candidate,
             blocked_by=["timeframe_policy:no_paper_execution"],
         )
     # Çarpan sadece küçültür (≤1.0 clamp'li) — blocked_by'a girmez,
@@ -945,17 +826,8 @@ def decide_for_symbol(
     except Exception:  # gölge/veto fikri kararı asla düşürmez
         correlation_veto_report = {}
     if correlation_veto_report.get("active") and correlation_veto_report.get("vetoed"):
-        return TradeDecision(
-            symbol=symbol,
-            action="hold",
-            confidence=round(cal_conf, 3),
-            size_multiplier=0.0,
-            consensus=cons,
-            risk=risk,
+        return _hold(
             reason=f"correlation_veto: {correlation_veto_report.get('reason', '')}",
-            raw_confidence=round(raw_conf, 4),
-            confidence_source=conf_source,
-            fingerprint=fp,
             mistake_verdict=_verdict_to_dict(verdict),
             cluster_report=cluster_dict,
             self_conflict_report=self_conflict_report,
@@ -964,8 +836,6 @@ def decide_for_symbol(
             volatility_report=volatility_dict,
             catalyst_report=catalyst_dict,
             options_report=options_dict,
-            timeframe=timeframe,
-            candidate_action=candidate,
             blocked_by=[*blocked_by, "correlation_veto"],
             correlation_veto_report=correlation_veto_report,
         )
