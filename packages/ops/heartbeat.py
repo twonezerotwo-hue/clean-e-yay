@@ -19,6 +19,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from packages.data.registry.loader import REPO_ROOT
+from packages.ops.store import write_text_atomic
 
 DEFAULT_PATH = "data/runtime/worker_heartbeats.json"
 
@@ -58,10 +59,7 @@ def load(worker_name: str) -> dict | None:
 def _save(all_hb: dict[str, dict]) -> None:
     p = _path()
     try:
-        p.parent.mkdir(parents=True, exist_ok=True)
-        tmp = p.with_name(f"{p.name}.tmp-{os.getpid()}")
-        tmp.write_text(json.dumps(all_hb, indent=2, default=str), encoding="utf-8")
-        os.replace(tmp, p)
+        write_text_atomic(p, json.dumps(all_hb, indent=2, default=str))
     except OSError:
         pass  # heartbeat ASLA worker'ı kesmez
 

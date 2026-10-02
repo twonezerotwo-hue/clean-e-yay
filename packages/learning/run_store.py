@@ -14,6 +14,7 @@ import os
 from pathlib import Path
 
 from packages.data.registry.loader import REPO_ROOT
+from packages.ops.store import write_text_atomic
 
 DEFAULT_PATH = "data/runtime/learning_run.json"
 
@@ -27,10 +28,7 @@ def save(run: dict) -> dict:
     """Atomik yaz (temp + os.replace); yazım hatası yutulur (worker patlamaz)."""
     p = _path()
     try:
-        p.parent.mkdir(parents=True, exist_ok=True)
-        tmp = p.with_name(f"{p.name}.tmp-{os.getpid()}")
-        tmp.write_text(json.dumps(run, indent=2, default=str), encoding="utf-8")
-        os.replace(tmp, p)
+        write_text_atomic(p, json.dumps(run, indent=2, default=str))
     except OSError:
         pass
     return run

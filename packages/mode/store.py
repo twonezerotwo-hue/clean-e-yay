@@ -19,6 +19,7 @@ from pathlib import Path
 
 from packages.data.registry.loader import REPO_ROOT
 from packages.mode.config import TRADE_PROFILES
+from packages.ops.store import write_text_atomic
 
 _LOCK = threading.Lock()
 
@@ -80,10 +81,7 @@ def save_overrides(payload: dict) -> dict:
     clean = sanitize(payload)
     path = _store_path()
     with _LOCK:
-        path.parent.mkdir(parents=True, exist_ok=True)
-        tmp = path.with_suffix(".tmp")
-        tmp.write_text(json.dumps(clean, ensure_ascii=False, indent=2), encoding="utf-8")
-        tmp.replace(path)
+        write_text_atomic(path, json.dumps(clean, ensure_ascii=False, indent=2))
     return clean
 
 

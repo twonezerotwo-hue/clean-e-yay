@@ -32,6 +32,7 @@ from pathlib import Path
 
 from packages.data.registry.loader import REPO_ROOT, load_thresholds
 from packages.learning import weight_rollback
+from packages.ops.store import write_text_atomic
 
 _LOCK = threading.Lock()
 _HISTORY_CAP = 100
@@ -216,10 +217,7 @@ def _load() -> dict:
 def _save(data: dict) -> None:
     path = _store_path()
     with _LOCK:
-        path.parent.mkdir(parents=True, exist_ok=True)
-        tmp = path.with_name(f"{path.name}.tmp-{os.getpid()}")
-        tmp.write_text(json.dumps(data, indent=2, default=str), encoding="utf-8")
-        os.replace(tmp, path)
+        write_text_atomic(path, json.dumps(data, indent=2, default=str))
 
 
 # ------------------------------ flag okuma -----------------------------------

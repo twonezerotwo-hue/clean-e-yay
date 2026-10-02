@@ -26,6 +26,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from packages.learning import outcomes as outcomes_mod
+from packages.ops.store import write_text_atomic
 
 _ENGINE = "reflection_v1"
 _DEFAULT_CROSS = 10   # çapraz-sembol son ders sayısı
@@ -173,10 +174,7 @@ def write_digest() -> dict:
     try:
         digest = build_digest()
         p = _path()
-        p.parent.mkdir(parents=True, exist_ok=True)
-        tmp = p.with_suffix(".tmp")
-        tmp.write_text(json.dumps(digest, ensure_ascii=False, indent=1), encoding="utf-8")
-        tmp.replace(p)
+        write_text_atomic(p, json.dumps(digest, ensure_ascii=False, indent=1))
         return {"status": "OK", "total_lessons": digest["total_lessons"]}
     except (OSError, ValueError, TypeError) as exc:
         return {"status": f"ERROR:{type(exc).__name__}"}

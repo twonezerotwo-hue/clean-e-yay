@@ -26,6 +26,7 @@ from typing import Any
 
 from packages.data.ingestion.pipeline import MarketSnapshot
 from packages.decision.engine import TradeDecision
+from packages.ops.store import write_text_atomic
 from packages.paper.guards import price_sanity
 from packages.paper.state import PaperState
 from packages.risk.trade_economics import compute_adaptive_targets
@@ -467,9 +468,7 @@ def save_last(ticket_dicts: list[dict]) -> None:
             "built_at": datetime.now(UTC).isoformat(),
             "tickets": ticket_dicts,
         }
-        tmp = p.with_suffix(".json.tmp")
-        tmp.write_text(json.dumps(payload), encoding="utf-8")
-        tmp.replace(p)
+        write_text_atomic(p, json.dumps(payload))
     except OSError:
         return
 

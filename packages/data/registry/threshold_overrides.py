@@ -24,6 +24,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from packages.data.registry.loader import REPO_ROOT
+from packages.ops.store import write_text_atomic
 
 _LOCK = threading.Lock()
 _CACHE: dict = {"key": None, "data": {"overrides": {}}}
@@ -76,10 +77,7 @@ def _load_cached() -> dict:
 def _write(data: dict) -> None:
     path = _path()
     with _LOCK:
-        path.parent.mkdir(parents=True, exist_ok=True)
-        tmp = path.with_suffix(".tmp")
-        tmp.write_text(json.dumps(data, indent=2, default=str), encoding="utf-8")
-        tmp.replace(path)
+        write_text_atomic(path, json.dumps(data, indent=2, default=str))
         _CACHE["key"] = None
 
 

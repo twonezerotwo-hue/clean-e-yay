@@ -24,6 +24,8 @@ import os
 import re
 from pathlib import Path
 
+from packages.ops.store import write_text_atomic
+
 SCHEMA_VERSION = 1
 DEFAULT_DIR = "data/runtime/snapshots"
 DEFAULT_MAX_SNAPSHOTS = 500
@@ -99,9 +101,7 @@ def record(payload: dict) -> str | None:
     try:
         d.mkdir(parents=True, exist_ok=True)
         final = d / _filename(gen, sid)
-        tmp = final.with_name(f"{final.name}.tmp-{os.getpid()}")
-        tmp.write_text(json.dumps(body, ensure_ascii=False, default=str), encoding="utf-8")
-        os.replace(tmp, final)  # atomik: yarım dosya asla görünmez
+        write_text_atomic(final, json.dumps(body, ensure_ascii=False, default=str))  # atomik: yarım dosya asla görünmez
     except OSError:
         return None
     _prune()

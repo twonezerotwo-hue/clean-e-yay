@@ -30,6 +30,7 @@ from pathlib import Path
 
 from packages.data.registry.loader import REPO_ROOT
 from packages.learning import tf_target_store, weight_rollback
+from packages.ops.store import write_text_atomic
 
 _LOCK = threading.Lock()
 _HISTORY_CAP = 100
@@ -81,10 +82,7 @@ def load() -> dict:
 def _save(data: dict) -> None:
     path = _store_path()
     with _LOCK:
-        path.parent.mkdir(parents=True, exist_ok=True)
-        tmp = path.with_suffix(".tmp")
-        tmp.write_text(json.dumps(data, indent=2, default=str), encoding="utf-8")
-        tmp.replace(path)
+        write_text_atomic(path, json.dumps(data, indent=2, default=str))
 
 
 def get_active() -> dict | None:

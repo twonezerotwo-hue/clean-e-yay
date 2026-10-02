@@ -35,6 +35,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from packages.elliott import zero_two
+from packages.ops.store import write_text_atomic
 
 _ENGINE = "zero_two_strategy_v1"
 _INTERVAL_ENV = "ZERO_TWO_STRATEGY_INTERVAL_SEC"
@@ -292,10 +293,7 @@ def compute(now: datetime | None = None) -> dict:
 
 def _write(report: dict) -> None:
     p = _path()
-    p.parent.mkdir(parents=True, exist_ok=True)
-    tmp = p.with_suffix(".tmp")
-    tmp.write_text(json.dumps(report, ensure_ascii=False, indent=1), encoding="utf-8")
-    tmp.replace(p)
+    write_text_atomic(p, json.dumps(report, ensure_ascii=False, indent=1))
 
 
 def run_if_due() -> dict:

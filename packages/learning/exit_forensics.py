@@ -19,7 +19,6 @@ from __future__ import annotations
 
 import json
 import os
-import time
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -27,6 +26,7 @@ from packages.learning import cohorts
 from packages.learning import outcomes as outcomes_mod
 from packages.learning.outcomes import CanonicalOutcome
 from packages.learning.tf_target_trainer import _classify_close
+from packages.ops.store import write_text_atomic
 
 # entry_exit_quality._MIN_MOVE_PCT deseni: bundan küçük hareket "hiç işlemedi".
 MIN_MOVE_PCT = 0.05
@@ -424,18 +424,7 @@ def write_snapshot(outcomes: list[CanonicalOutcome] | None = None) -> dict:
         "total_bad_exit_cost_usd_est": _total_bad_exit_cost(rep),
     })
     payload = {"latest": rep, "history": history[-HISTORY_MAX:]}
-    path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.with_suffix(".tmp")
-    tmp.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
-    # Windows: virüs tarayıcı/indexer dosyayı anlık kilitleyebilir → kısa retry
-    # (worker asla patlamaz; son deneme başarısızsa exception yukarı çıkar,
-    # run_once zaten try/except ile sarıyor).
-    for attempt in range(3):
-        try:
-            tmp.replace(path)
-            break
-        except PermissionError:
-            if attempt == 2:
-                raise
-            time.sleep(0.05)
+    # Windows kilidine karşı retry write_text_atomic içinde (son deneme başarısızsa
+    # exception yukarı çıkar; run_once zaten try/except ile sarıyor).
+    write_text_atomic(path, json.dumps(payload, ensure_ascii=False, indent=2))
     return payload

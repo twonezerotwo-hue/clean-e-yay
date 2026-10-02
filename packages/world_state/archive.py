@@ -16,6 +16,7 @@ from pathlib import Path
 from typing import Any
 
 from packages.data.registry.loader import REPO_ROOT, load_thresholds
+from packages.ops.store import write_text_atomic
 
 SCHEMA_VERSION = 2
 _LOCK = threading.Lock()
@@ -363,10 +364,7 @@ def record(
         rows = rows[-max_rows:]
         path = _path()
         try:
-            path.parent.mkdir(parents=True, exist_ok=True)
-            tmp = path.with_suffix(path.suffix + f".tmp-{os.getpid()}")
-            tmp.write_text("\n".join(json.dumps(item, ensure_ascii=False, separators=(",", ":")) for item in rows) + "\n", encoding="utf-8")
-            os.replace(tmp, path)
+            write_text_atomic(path, "\n".join(json.dumps(item, ensure_ascii=False, separators=(",", ":")) for item in rows) + "\n")
         except OSError:
             return None
     return row

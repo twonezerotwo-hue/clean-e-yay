@@ -26,6 +26,8 @@ import os
 from datetime import UTC, datetime
 from pathlib import Path
 
+from packages.ops.store import write_text_atomic
+
 FLAG = "TF_SCORING_V2_SHADOW"
 _ENV_TRUE = frozenset({"1", "true", "yes", "on"})
 _ART = "data/runtime/tf_scoring_v2_shadow.json"
@@ -153,10 +155,7 @@ def _bias_label(direction: float | None) -> str:
 
 def _write(payload: dict) -> None:
     path = artifact_path()
-    path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.with_suffix(".json.tmp")
-    tmp.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
-    tmp.replace(path)
+    write_text_atomic(path, json.dumps(payload, ensure_ascii=False, indent=2))
 
 
 def run() -> dict:

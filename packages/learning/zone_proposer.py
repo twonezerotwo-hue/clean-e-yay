@@ -31,6 +31,7 @@ import yaml
 
 from packages.data.registry.loader import CONFIG_DIR
 from packages.learning.zone_plan_shadow import log_fib
+from packages.ops.store import write_text_atomic
 
 _ENGINE = "zone_proposer_v1"
 _INTERVAL_ENV = "ZONE_PROPOSER_INTERVAL_SEC"
@@ -442,10 +443,7 @@ def compute(now: datetime | None = None) -> dict:
 
 def _write(report: dict) -> None:
     p = _path()
-    p.parent.mkdir(parents=True, exist_ok=True)
-    tmp = p.with_suffix(".tmp")
-    tmp.write_text(json.dumps(report, ensure_ascii=False, indent=1), encoding="utf-8")
-    tmp.replace(p)
+    write_text_atomic(p, json.dumps(report, ensure_ascii=False, indent=1))
 
 
 def _zones_overlap(a: dict, b: dict, tol: float = 0.01) -> bool:

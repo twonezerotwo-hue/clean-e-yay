@@ -25,6 +25,7 @@ from packages.data.registry.loader import (
     weights_manifest_path,
 )
 from packages.learning import weight_autoapply_store
+from packages.ops.store import write_text_atomic
 
 ProposalStatus = Literal["PENDING", "APPROVED", "REJECTED"]
 
@@ -144,9 +145,7 @@ def _save(data: dict) -> None:
     with _LOCK:
         path.parent.mkdir(parents=True, exist_ok=True)
         # Atomik yazım: tmp'e yaz + replace — yarım/bozuk JSON bırakmaz.
-        tmp = path.with_suffix(".tmp")
-        tmp.write_text(json.dumps(data, indent=2), encoding="utf-8")
-        tmp.replace(path)
+        write_text_atomic(path, json.dumps(data, indent=2))
 
 
 def get_pending() -> dict | None:

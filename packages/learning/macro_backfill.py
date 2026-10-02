@@ -21,6 +21,8 @@ import os
 import time
 from datetime import UTC, datetime, timedelta
 
+from packages.ops.store import write_text_atomic
+
 _log = logging.getLogger("learning.macro_backfill")
 
 # Yahoo ticker'ları (rotasyon evreni + makro eksenler; BTC = BTC-USD).
@@ -75,12 +77,7 @@ def _write_merged(symbol: str, fetched: list) -> dict:
     existing = history.load(symbol, "1d")
     merged = history.merged(fetched, existing)
     path = history._path(symbol, "1d")
-    path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.with_suffix(".jsonl.tmp")
-    with tmp.open("w", encoding="utf-8") as fh:
-        for b in merged:
-            fh.write(json.dumps(b.model_dump(mode="json")) + "\n")
-    tmp.replace(path)
+    write_text_atomic(path, "".join(json.dumps(b.model_dump(mode="json")) + "\n" for b in merged))
     yrs = (merged[-1].ts - merged[0].ts).days / 365.0
     return {
         "symbol": symbol, "status": "OK", "before": len(existing),

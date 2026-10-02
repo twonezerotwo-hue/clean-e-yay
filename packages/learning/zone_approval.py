@@ -19,6 +19,8 @@ import os
 from datetime import UTC, datetime
 from pathlib import Path
 
+from packages.ops.store import write_text_atomic
+
 ACTIONS = ("iptal", "onay")
 # Bant örtüşme toleransı (oransal): kenarlar bu kadar yakınsa aynı bölge sayılır.
 _TOL = 0.005
@@ -41,10 +43,7 @@ def _load() -> list[dict]:
 
 def _save(records: list[dict]) -> None:
     p = _path()
-    p.parent.mkdir(parents=True, exist_ok=True)
-    tmp = p.with_suffix(".tmp")
-    tmp.write_text(json.dumps(records, ensure_ascii=False, indent=1), encoding="utf-8")
-    tmp.replace(p)
+    write_text_atomic(p, json.dumps(records, ensure_ascii=False, indent=1))
 
 
 def _overlaps(a_low: float, a_high: float, b_low: float, b_high: float) -> bool:

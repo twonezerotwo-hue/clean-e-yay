@@ -44,6 +44,7 @@ from packages.data.providers.technical.timeframe import (
     _clamp,
     _ema_stack,
 )
+from packages.ops.store import write_text_atomic
 from packages.signals import (
     bollinger_fade,
     candle_rejection,
@@ -247,10 +248,7 @@ def artifact_path() -> Path:
 
 def _write(payload: dict) -> None:
     path = artifact_path()
-    path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.with_suffix(".json.tmp")
-    tmp.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
-    tmp.replace(path)
+    write_text_atomic(path, json.dumps(payload, ensure_ascii=False, indent=2))
 
 
 def _interval_sec() -> int:

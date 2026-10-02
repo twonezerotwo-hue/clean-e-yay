@@ -16,6 +16,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from packages.data.types import OHLCVBar, Timeframe
+from packages.ops.store import write_text_atomic
 
 CACHE_TTL_SEC: dict[Timeframe, int] = {
     "15m": 300,        # 5 dk
@@ -73,9 +74,7 @@ def save(symbol: str, timeframe: Timeframe, bars: list[OHLCVBar]) -> None:
             "fetched_at": datetime.now(UTC).isoformat(),
             "bars": [b.model_dump(mode="json") for b in bars],
         }
-        tmp = p.with_suffix(".json.tmp")
-        tmp.write_text(json.dumps(payload), encoding="utf-8")
-        tmp.replace(p)
+        write_text_atomic(p, json.dumps(payload))
     except OSError:
         # Cache yazılamaması veri akışını durdurmaz.
         return

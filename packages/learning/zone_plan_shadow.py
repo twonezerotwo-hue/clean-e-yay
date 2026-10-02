@@ -45,6 +45,8 @@ from pathlib import Path
 
 import yaml
 
+from packages.ops.store import write_text_atomic
+
 _ENGINE = "zone_plan_shadow_v1"
 _INTERVAL_ENV = "ZONE_PLAN_SHADOW_INTERVAL_SEC"
 _DEFAULT_INTERVAL_SEC = 24 * 3600
@@ -371,10 +373,7 @@ def compute(now: datetime | None = None) -> dict:
 
 def _write(report: dict) -> None:
     p = _path()
-    p.parent.mkdir(parents=True, exist_ok=True)
-    tmp = p.with_suffix(".tmp")
-    tmp.write_text(json.dumps(report, ensure_ascii=False, indent=1), encoding="utf-8")
-    tmp.replace(p)
+    write_text_atomic(p, json.dumps(report, ensure_ascii=False, indent=1))
 
 
 def run_if_due() -> dict:

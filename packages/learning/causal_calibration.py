@@ -17,6 +17,7 @@ from pathlib import Path
 from typing import Any
 
 from packages.data.registry.loader import REPO_ROOT, load_thresholds
+from packages.ops.store import write_text_atomic
 
 
 def _cfg() -> dict[str, Any]:
@@ -184,10 +185,7 @@ def write_recommendations(rows: Iterable[dict[str, Any]], *, priors: dict[str, f
     payload = {**report, **(metadata or {}), "generated_at": datetime.now(UTC).isoformat()}
     try:
         path = _path()
-        path.parent.mkdir(parents=True, exist_ok=True)
-        tmp = path.with_suffix(".tmp")
-        tmp.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
-        tmp.replace(path)
+        write_text_atomic(path, json.dumps(payload, ensure_ascii=False, indent=2))
     except OSError:
         pass
     return payload

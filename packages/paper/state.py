@@ -15,6 +15,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from packages.data.registry.loader import load_thresholds
+from packages.ops.store import write_text_atomic
 from packages.paper import audit, execution_sim
 
 SCHEMA_VERSION = 1
@@ -333,29 +334,9 @@ def _read_text_with_retry(path: Path) -> str:
     raise last
 
 
-def _replace_with_retry(tmp: Path, path: Path) -> None:
-    """`os.replace` de aynı geçici kilide takılabilir (okuyucu dosyayı tutarken).
-    Yeniden dener ki yazım sessizce düşmesin ve tmp dosyası ortada kalmasın."""
-    last: OSError | None = None
-    for attempt in range(_READ_RETRIES):
-        try:
-            os.replace(tmp, path)
-            return
-        except OSError as exc:
-            last = exc
-            time.sleep(_RETRY_BASE_SLEEP_S * (attempt + 1))
-    assert last is not None
-    raise last
-
-
 def _write_atomic(path: Path, payload: dict) -> None:
-    """Atomik yazım: temp dosya + os.replace (yarım dosya asla görünmez).
-
-    os.replace geçici kilide takılırsa retry'lı (bkz. _replace_with_retry)."""
-    path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.with_name(f"{path.name}.tmp-{os.getpid()}")
-    tmp.write_text(json.dumps(payload, indent=2, default=str), encoding="utf-8")
-    _replace_with_retry(tmp, path)
+    """Atomik yazım (benzersiz tmp + retry'lı os.replace; packages.ops.store)."""
+    write_text_atomic(path, json.dumps(payload, indent=2, default=str))
 
 
 def _backup_corrupt(path: Path) -> str | None:

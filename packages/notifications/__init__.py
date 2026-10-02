@@ -17,6 +17,8 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+from packages.ops.store import write_text_atomic
+
 NOTIFICATIONS_PATH = Path(
     os.environ.get("NOTIFICATIONS_PATH", "data/runtime/notifications.jsonl")
 )
@@ -84,11 +86,8 @@ def _read_all() -> list[Notification]:
 
 
 def _write_all(items: list[Notification]) -> None:
-    NOTIFICATIONS_PATH.parent.mkdir(parents=True, exist_ok=True)
-    tmp = NOTIFICATIONS_PATH.with_name(f"{NOTIFICATIONS_PATH.name}.tmp-{os.getpid()}")
     payload = "\n".join(json.dumps(n.to_dict(), default=str) for n in items[-MAX_NOTIFICATIONS:])
-    tmp.write_text(payload + ("\n" if payload else ""), encoding="utf-8")
-    os.replace(tmp, NOTIFICATIONS_PATH)
+    write_text_atomic(NOTIFICATIONS_PATH, payload + ("\n" if payload else ""))
 
 
 def _publish(notif: Notification) -> None:

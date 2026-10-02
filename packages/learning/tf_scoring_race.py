@@ -32,6 +32,7 @@ from pathlib import Path
 from packages.data.registry.loader import load_thresholds
 from packages.learning import promotion_rail as rail
 from packages.learning import tf_scoring_shadow
+from packages.ops.store import write_text_atomic
 
 _LEDGER = "data/runtime/tf_scoring_race.jsonl"
 _REPORT = "data/runtime/tf_scoring_race_report.json"
@@ -327,10 +328,7 @@ def _beats(a: float | None, b: float | None) -> bool | None:
 def _write_report(payload: dict) -> None:
     try:
         path = report_path()
-        path.parent.mkdir(parents=True, exist_ok=True)
-        tmp = path.with_suffix(".json.tmp")
-        tmp.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
-        tmp.replace(path)
+        write_text_atomic(path, json.dumps(payload, ensure_ascii=False, indent=2))
     except OSError:
         pass
 

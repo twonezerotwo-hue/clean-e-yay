@@ -28,6 +28,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from packages.data.registry.loader import load_thresholds
+from packages.ops.store import write_text_atomic
 
 
 def _cfg() -> dict:
@@ -133,10 +134,7 @@ def compute(outcomes=None, challenger_records=None, now: datetime | None = None)
 
 def _write(report: dict) -> None:
     p = _path()
-    p.parent.mkdir(parents=True, exist_ok=True)
-    tmp = p.with_suffix(".tmp")
-    tmp.write_text(json.dumps(report, ensure_ascii=False, indent=1), encoding="utf-8")
-    tmp.replace(p)
+    write_text_atomic(p, json.dumps(report, ensure_ascii=False, indent=1))
 
 
 # ── sıcak yol okuyucu (decision engine) — mtime cache, ağ/hesap yok ─────────────

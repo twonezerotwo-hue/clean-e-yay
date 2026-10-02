@@ -24,6 +24,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from packages.data.registry.loader import load_thresholds
+from packages.ops.store import write_text_atomic
 
 _LEDGER_MAX_MB = 32
 _HORIZON_DEFAULT = 5
@@ -227,10 +228,7 @@ def compute(events=None, now: datetime | None = None) -> dict:
         "note": "SALT-GOZLEM: karara/agirliga dokunmaz; news gorunurlugu ayri owner karari",
     }
     p = _table_path()
-    p.parent.mkdir(parents=True, exist_ok=True)
-    tmp = p.with_suffix(".tmp")
-    tmp.write_text(json.dumps(table, ensure_ascii=False, indent=1), encoding="utf-8")
-    tmp.replace(p)
+    write_text_atomic(p, json.dumps(table, ensure_ascii=False, indent=1))
     return table
 
 
@@ -458,10 +456,7 @@ def causal_event_study(
     }
     try:
         path = _causal_study_path()
-        path.parent.mkdir(parents=True, exist_ok=True)
-        tmp = path.with_suffix(".tmp")
-        tmp.write_text(json.dumps(table, ensure_ascii=False, indent=1), encoding="utf-8")
-        tmp.replace(path)
+        write_text_atomic(path, json.dumps(table, ensure_ascii=False, indent=1))
     except OSError:
         pass
     return table

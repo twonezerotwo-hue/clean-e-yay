@@ -31,6 +31,7 @@ from pathlib import Path
 from typing import Any, Literal
 
 from packages.data.registry.loader import REPO_ROOT
+from packages.ops.store import write_text_atomic
 
 ProposalStatus = Literal["PENDING", "APPROVED", "REJECTED"]
 
@@ -87,12 +88,7 @@ def load() -> dict:
 def _save(data: dict) -> None:
     path = _store_path()
     with _LOCK:
-        path.parent.mkdir(parents=True, exist_ok=True)
-        tmp = path.with_suffix(".tmp")
-        tmp.write_text(
-            json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8"
-        )
-        tmp.replace(path)
+        write_text_atomic(path, json.dumps(data, ensure_ascii=False, indent=2))
 
 
 def _safe_dict(value: Any) -> dict:

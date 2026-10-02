@@ -27,6 +27,7 @@ from pathlib import Path
 from packages.data.registry import threshold_overrides
 from packages.data.registry.loader import REPO_ROOT, load_thresholds
 from packages.learning import edge_report, threshold_ab, weight_rollback
+from packages.ops.store import write_text_atomic
 
 NUDGE_STEP = 0.10           # ±%10 aday
 MIN_IMPROVEMENT = 0.0005    # avg_return_pct bu kadar iyileşmeli (gürültü değil)
@@ -84,10 +85,7 @@ def _load_state() -> dict:
 
 def _save_state(data: dict) -> None:
     path = _state_path()
-    path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.with_suffix(".tmp")
-    tmp.write_text(json.dumps(data, indent=2, default=str), encoding="utf-8")
-    tmp.replace(path)
+    write_text_atomic(path, json.dumps(data, indent=2, default=str))
 
 
 def _min_outcomes() -> int:

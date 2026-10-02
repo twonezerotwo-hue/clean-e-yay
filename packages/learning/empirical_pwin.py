@@ -27,6 +27,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from packages.data.registry.loader import REPO_ROOT, load_thresholds
+from packages.ops.store import write_text_atomic
 
 DEFAULT_PATH = "data/runtime/empirical_pwin.json"
 DEFAULT_MIN_SAMPLES = 20
@@ -185,10 +186,7 @@ def write_table(state=None) -> dict:
     )
     p = _path()
     with _LOCK:
-        p.parent.mkdir(parents=True, exist_ok=True)
-        tmp = p.with_name(f"{p.name}.tmp-{os.getpid()}")
-        tmp.write_text(json.dumps(payload, indent=2), encoding="utf-8")
-        os.replace(tmp, p)
+        write_text_atomic(p, json.dumps(payload, indent=2))
         _CACHE.pop(str(p), None)
     return payload
 
