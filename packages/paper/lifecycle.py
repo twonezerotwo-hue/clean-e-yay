@@ -108,6 +108,14 @@ def _last_closed_close(symbol: str, timeframe: str, now: datetime) -> float | No
     return None
 
 
+EXPLORATION_PREFIX = "paper_exploration:"
+
+
+def is_exploration(blocked_by: list[str] | None) -> bool:
+    """K1 — karar paper keşif politikasıyla mı açıldı? (`paper_exploration:<kapı>`)."""
+    return any(str(b).startswith(EXPLORATION_PREFIX) for b in (blocked_by or []))
+
+
 def _new_id(symbol: str, opened_at: str) -> str:
     return hashlib.sha1(f"{symbol}|{opened_at}".encode()).hexdigest()[:10]
 
@@ -150,6 +158,7 @@ def open_position(
     size_usd_override: float | None = None,
     atr: float | None = None,
     module_contributions: dict[str, float] | None = None,
+    open_blocked_by: list[str] | None = None,
 ) -> Position:
     # Konviksiyon kademesi (kalibre p(win) → risk çarpanları). Zayıf konviksiyon:
     # küçük boyut + YAKIN stop + KISA vade + sıkı trailing. Floor (min_open_confidence)
@@ -259,6 +268,8 @@ def open_position(
         trail_active=False,
         # F1-3 — consensus modül katkı vektörü (manuel/legacy açılışta None).
         open_module_contributions=module_contributions,
+        open_blocked_by=list(open_blocked_by) if open_blocked_by is not None else None,
+        exploration=is_exploration(open_blocked_by),
     )
     state.open_positions.append(pos)
     audit.record(
@@ -346,6 +357,7 @@ def attempt_open(
     atr: float | None = None,
     module_contributions: dict[str, float] | None = None,
     apply_reentry_guard: bool = False,
+    open_blocked_by: list[str] | None = None,
 ) -> tuple[Position | None, dict]:
     """P1 — tek açılış giriş noktası: denetim → blocked/opened + audit.
 
@@ -445,6 +457,7 @@ def attempt_open(
         open_session_evidence=open_session_evidence,
         atr=atr,
         module_contributions=module_contributions,
+        open_blocked_by=open_blocked_by,
     )
     return pos, decision
 
@@ -502,6 +515,8 @@ def close_position(
         snapshot_id=pos.snapshot_id,
         open_dqs=pos.open_dqs,
         open_risk_action=pos.open_risk_action,
+        open_blocked_by=getattr(pos, "open_blocked_by", None),
+        exploration=bool(getattr(pos, "exploration", False)),
         open_config_provenance=getattr(pos, "open_config_provenance", None),
         open_session_action=pos.open_session_action,
         open_session_phase=pos.open_session_phase,

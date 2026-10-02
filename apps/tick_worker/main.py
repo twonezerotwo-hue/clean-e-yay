@@ -427,6 +427,12 @@ async def run_once() -> None:
                 predicted_confidence=d.confidence,
                 raw_confidence=d.raw_confidence,
                 confidence_source=d.confidence_source,
+                # H5 (temizlik) — açılış anındaki DQS + RiskGate kararı. Önceden
+                # geçirilmiyordu: decision_log'da 247/247 risk_action_missing.
+                open_dqs=snap.quality.score,
+                open_risk_action=_risk.action,
+                # H6 — kapı atfı + keşif damgası (paper_exploration:*).
+                open_blocked_by=list(d.blocked_by),
                 atr=tf_atr,
                 # F1-3 — modül katkı vektörü (score×weight): dominant_module tek-modül
                 # attribution'unun ham verisi; kapanışta decision_log'a taşınır.

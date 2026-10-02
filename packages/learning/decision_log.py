@@ -68,6 +68,9 @@ def entry_for(trade: Trade) -> dict:
             "snapshot_id": trade.snapshot_id,
             "dqs": trade.open_dqs,
             "risk_gate": trade.open_risk_action,
+            # H6 / K1 — kapı atfı + keşif damgası (legacy: None / False).
+            "blocked_by": getattr(trade, "open_blocked_by", None),
+            "exploration": bool(getattr(trade, "exploration", False)),
             "predicted_confidence": trade.predicted_confidence,
             "raw_confidence": trade.raw_confidence,
             "confidence_source": trade.confidence_source,

@@ -108,6 +108,12 @@ class Position:
     # Trade'e, oradan decision_log'a taşınır; learning summary attribution okur.
     # Manuel/legacy açılışlar None (consensus vektörü yok — uydurma yok).
     open_module_contributions: dict[str, float] | None = None
+    # H6 (temizlik) — açılış kararının kapı atfı (TradeDecision.blocked_by): hangi
+    # kapı boyutu kıstı / hangi yumuşak kapı keşifle esnetildi. Legacy/manuel → None.
+    open_blocked_by: list[str] | None = None
+    # K1 — paper keşif açılışı (paper_policy: yumuşak güven/EV kapısı esnetildi).
+    # Öğrenme kohortları bunu ayırabilsin diye açıkça damgalanır.
+    exploration: bool = False
 
     @property
     def unrealized_pnl_usd(self) -> float:
@@ -157,6 +163,9 @@ class Trade:
     open_risk_pct: float | None = None
     # F1-3 — açılış anındaki consensus modül katkı vektörü (pozisyondan miras).
     open_module_contributions: dict[str, float] | None = None
+    # H6 / K1 — pozisyondan miras: açılış kapı atfı + keşif damgası.
+    open_blocked_by: list[str] | None = None
+    exploration: bool = False
     # Exit-forensics — kapanan dilimin $ büyüklüğü (kısmi kapanışta realized_size).
     # Kötü çıkışın $ maliyetini kesin hesaplamak için; legacy kayıtlar None.
     size_usd: float | None = None

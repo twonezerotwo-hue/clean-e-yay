@@ -69,6 +69,9 @@ class CanonicalOutcome:
     # dominant_module tek-modül attribution'unun ham verisi; module_attribution()
     # bunu okur. Manuel/legacy açılışlar None.
     module_contributions: dict[str, float] | None = None
+    # K1 — paper keşif açılışı mı (yumuşak güven/EV kapısı esnetildi). Kohort
+    # ayrımı için açıkça taşınır; legacy kayıtlar False.
+    exploration: bool = False
 
 
 def _duration_seconds(opened_at: str | None, closed_at: str | None) -> float | None:
@@ -152,11 +155,11 @@ def build_outcome(t: Trade) -> CanonicalOutcome:
         fingerprint=getattr(t, "fingerprint", None),
         regime=parsed["regime"] or "UNKNOWN",
         dominant_module=parsed["dominant_module"] or "unknown",
-        # P1 Trade candidate/final/gate attribution taşımıyor → açılmış trade
-        # için final == candidate (open_*), bloklanmamış (blocked_by boş).
+        # Açılmış trade için final == candidate (open_*). H6: blocked_by artık
+        # açılış kararının kapı atfını taşır (legacy kayıtlar boş liste).
         candidate_action=final,
         final_action=final,
-        blocked_by=[],
+        blocked_by=list(getattr(t, "open_blocked_by", None) or []),
         gates_applied=[],
         snapshot_id=getattr(t, "snapshot_id", None),
         decision_id=None,
@@ -173,6 +176,7 @@ def build_outcome(t: Trade) -> CanonicalOutcome:
         module_contributions=_module_contributions(
             getattr(t, "open_module_contributions", None)
         ),
+        exploration=bool(getattr(t, "exploration", False)),
     )
 
 
@@ -227,7 +231,7 @@ def build_outcome_from_log_entry(entry: dict) -> CanonicalOutcome:
         dominant_module=parsed["dominant_module"] or "unknown",
         candidate_action=final,
         final_action=final,
-        blocked_by=[],
+        blocked_by=list(opening.get("blocked_by") or []),
         gates_applied=[],
         snapshot_id=opening.get("snapshot_id"),
         decision_id=None,
@@ -242,6 +246,7 @@ def build_outcome_from_log_entry(entry: dict) -> CanonicalOutcome:
         r_multiple=_r_multiple(pnl_pct, risk_pct),
         size_usd=_opt_float(outcome.get("size_usd")),
         module_contributions=_module_contributions(opening.get("module_contributions")),
+        exploration=bool(opening.get("exploration", False)),
     )
 
 
