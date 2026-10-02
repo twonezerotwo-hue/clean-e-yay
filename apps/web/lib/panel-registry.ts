@@ -4,12 +4,10 @@
  *
  * UX4 — 3-tier IA:
  *   ANA (daima açık, tek-bakış operasyonel cockpit):
- *     hero    → Agent Brief
  *     command → Karar Merkezi + Analist (deterministik → neden)
  *     risk    → Risk & Yürütme (gate · drawdown · paper · seans)
  *     matrix  → Karar Matrisi (TF + Agent)
  *     watch   → İzlenecek Koşullar
- *     chat    → Agent'a Sor
  *   DETAY (collapsed, uzman bakışı):
  *     decision_detail → Karar İzi (trace · votes · shadow · checks · candidates)
  *     market          → Piyasa Yapısı (türev · vol · options · korelasyon · rotasyon)
@@ -23,7 +21,6 @@
  * okunur). Frontend hesap yapmaz — paneller mevcut selector/brief'i sunar.
  */
 export type PanelKey =
-  | "agent_narrator"
   | "risk_durumu"
   | "haberler_catalyst"
   | "trade_ticket"
@@ -37,7 +34,6 @@ export type PanelKey =
   | "agent_votes"
   | "position_checks"
   | "ai_report"
-  | "chat"
   | "command_signals"
   | "event_calendar"
   | "scenario"
@@ -83,13 +79,11 @@ export type PanelKey =
 
 export type PanelGroupId =
   // ana tier
-  | "hero"
   | "ticket"
   | "command"
   | "risk"
   | "matrix"
   | "watch"
-  | "chat"
   // detay tier
   | "decision_detail"
   | "market"
@@ -111,8 +105,6 @@ export type PanelMeta = {
 };
 
 export const PANEL_REGISTRY: PanelMeta[] = [
-  // ── ANA — Hero (Agent Narrator) ──────────────────────────────────────────
-  { id: "agent_narrator",   title: "Agent",                defaultVisible: true,  span: "full", group: "hero",            tier: "ana" },
   // ── ANA — Trade Ticket (broker handoff) ──────────────────────────────────
   { id: "trade_ticket",     title: "Trade Ticket",         defaultVisible: true,  span: "full", group: "ticket",          tier: "ana" },
   // ── ANA — Risk Durumu (RiskGate + Drawdown + Catalyst birleşik) ──────────
@@ -134,8 +126,6 @@ export const PANEL_REGISTRY: PanelMeta[] = [
   { id: "agent_matrix",     title: "Agent Matrisi",        defaultVisible: true,  span: "full", group: "matrix",          tier: "ana" },
   // ── ANA — İzlenecek Koşullar ─────────────────────────────────────────────
   { id: "watch_conditions", title: "İzlenecek Koşullar",   defaultVisible: true,  span: "full", group: "watch",           tier: "ana" },
-  // ── ANA — Agent'a Sor ────────────────────────────────────────────────────
-  { id: "chat",             title: "Agent'a Sor",          defaultVisible: true,  span: "full", group: "chat",            tier: "ana" },
 
   // ── DETAY — Karar İzi ────────────────────────────────────────────────────
   { id: "decision_trace",   title: "Decision Trace",       defaultVisible: true,  span: "2",    group: "decision_detail", tier: "detay" },

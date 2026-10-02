@@ -18,13 +18,11 @@ const SPAN: Record<string, string> = {
 const PANEL_ID_BY_COMPONENT: Record<string, string> = {
   AgentBriefPanel: "agent_brief",
   AgentMatrixPanel: "agent_matrix",
-  AgentNarratorPanel: "agent_narrator",
   AgentVotesPanel: "agent_votes",
   AIReportPanel: "ai_report",
   CalibrationPanel: "calibration",
   CapitalRotationPanel: "capital_rotation",
   CatalystImpactPanel: "catalyst_impact",
-  ChatPanel: "chat",
   CommandSignalsPanel: "command_signals",
   CorrelationPanel: "correlation",
   CryptoDerivativesPanel: "crypto_derivatives",

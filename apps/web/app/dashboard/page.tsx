@@ -4,14 +4,12 @@ import type { ReactNode } from "react";
 
 import { DashboardGrid, GridCell } from "@/components/shell/DashboardGrid";
 import { MockModeBanner } from "@/components/shell/MockModeBanner";
-import { AgentNarratorPanel } from "@/components/panels/AgentNarratorPanel";
-import { ExecutionReadinessPanel } from "@/components/panels/ExecutionReadinessPanel";
+import { TabbedBox } from "@/components/shell/TabbedBox";
 import { TradeTicketPanel } from "@/components/panels/TradeTicketPanel";
 import { RiskDurumuPanel } from "@/components/panels/RiskDurumuPanel";
 import { TimeframeMatrixPanel } from "@/components/panels/TimeframeMatrixPanel";
 import { AgentMatrixPanel } from "@/components/panels/AgentMatrixPanel";
 import { PositionChecksPanel } from "@/components/panels/PositionChecksPanel";
-import { ChatPanel } from "@/components/panels/ChatPanel";
 import { AgentBriefPanel } from "@/components/panels/AgentBriefPanel";
 import { DecisionPanel } from "@/components/panels/DecisionPanel";
 import { AIReportPanel } from "@/components/panels/AIReportPanel";
@@ -27,27 +25,8 @@ import { CryptoDerivativesPanel } from "@/components/panels/CryptoDerivativesPan
 import { VolatilityPanel } from "@/components/panels/VolatilityPanel";
 import { OptionsVolPanel } from "@/components/panels/OptionsVolPanel";
 import { CorrelationPanel } from "@/components/panels/CorrelationPanel";
-import { CapitalRotationPanel } from "@/components/panels/CapitalRotationPanel";
 import { CatalystImpactPanel } from "@/components/panels/CatalystImpactPanel";
-import { EventCalendarPanel } from "@/components/panels/EventCalendarPanel";
-import { NewsPanel } from "@/components/panels/NewsPanel";
-import { ScenarioPanel } from "@/components/panels/ScenarioPanel";
-import { WorldBriefPanel } from "@/components/panels/WorldBriefPanel";
 import { TradingPanel } from "@/components/panels/TradingPanel";
-import { LearningPanel } from "@/components/panels/LearningPanel";
-import { OutcomeLedgerPanel } from "@/components/panels/OutcomeLedgerPanel";
-import { LearningWorkerPanel } from "@/components/panels/LearningWorkerPanel";
-import { WeightProposalPanel } from "@/components/panels/WeightProposalPanel";
-import { WeightHistoryPanel } from "@/components/panels/WeightHistoryPanel";
-import { CalibrationPanel } from "@/components/panels/CalibrationPanel";
-import { MistakeMemoryPanel } from "@/components/panels/MistakeMemoryPanel";
-import { HistoricalEdgePanel } from "@/components/panels/HistoricalEdgePanel";
-import { ConflictGateLearningPanel } from "@/components/panels/ConflictGateLearningPanel";
-import { TfWeightsPanel } from "@/components/panels/TfWeightsPanel";
-import { TfTargetsPanel } from "@/components/panels/TfTargetsPanel";
-import { MissedOpportunitiesPanel } from "@/components/panels/MissedOpportunitiesPanel";
-import { CalibrationJumpsPanel } from "@/components/panels/CalibrationJumpsPanel";
-import { AgentModePanel } from "@/components/panels/AgentModePanel";
 import { DataQualityPanel } from "@/components/panels/DataQualityPanel";
 import { ProviderStatusPanel } from "@/components/panels/ProviderStatusPanel";
 import { SnapshotPanel } from "@/components/panels/SnapshotPanel";
@@ -57,170 +36,161 @@ import { SystemHealthBar } from "@/components/panels/SystemHealthBar";
 import { ReplayStatusPanel } from "@/components/panels/ReplayStatusPanel";
 import { useKeyboardShortcuts } from "@/hooks/useKeyboardShortcuts";
 
-export default function HomePage() {
+// Detaylar sayfası (owner kararı K8): yalnız katmanlarda (Brain / Heart / Soul /
+// Conscious) GÖSTERİLMEYEN durumlar burada. Katmandaki bir panel buraya tekrar
+// eklenmez; aynı konudaki paneller sekmeli tek kutuda (TabbedBox) durur.
+const SECTIONS = [
+  { id: "risk_gate", label: "Risk" },
+  { id: "karar", label: "Karar" },
+  { id: "pozisyonlar", label: "Pozisyonlar" },
+  { id: "piyasa", label: "Piyasa" },
+  { id: "sistem", label: "Sistem & Veri" },
+] as const;
+
+export default function DetailsPage() {
   useKeyboardShortcuts();
 
   return (
     <main className="mx-auto max-w-7xl space-y-6 px-4 py-6">
-      <header className="flex items-center justify-between">
+      <header className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="font-display text-2xl tracking-tight">Clean E-yAy</h1>
+          <h1 className="font-display text-2xl tracking-tight">Clean E-yAy · Detaylar</h1>
           <p className="mt-0.5 text-xs text-white/50">
-            agent operating cockpit - karar-destek
+            katmanlarda olmayan durumlar · karar-destek
           </p>
         </div>
-        <div className="flex items-center gap-3">
-          <div className="text-xs uppercase tracking-widest text-accent-cyan">
-            PAPER_ONLY · PAPER_AUTO_OPEN · NO_LIVE_EXECUTION
-          </div>
+        <div className="text-xs uppercase tracking-widest text-accent-cyan">
+          PAPER_ONLY · PAPER_AUTO_OPEN · NO_LIVE_EXECUTION
         </div>
       </header>
 
       <MockModeBanner />
 
-      <section className="relative overflow-hidden rounded-xl border border-white/10 bg-[#090d12]/82">
-        <div className="pointer-events-none absolute inset-0 opacity-[0.12] [background-image:linear-gradient(rgba(255,255,255,0.58)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.58)_1px,transparent_1px)] [background-size:56px_56px]" />
-        <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-emerald-300/30 to-transparent" />
-        <div className="relative p-4 sm:p-5">
-          <AgentNarratorPanel />
-        </div>
-      </section>
+      <nav className="flex flex-wrap items-center gap-1.5 border-b border-ink-700/50 pb-3 text-[10px] uppercase tracking-[0.14em]">
+        {SECTIONS.map((s) => (
+          <a
+            key={s.id}
+            href={`#${s.id}`}
+            className="rounded-full border border-white/10 bg-white/[0.03] px-2.5 py-1 text-white/60 transition hover:border-accent-cyan/45 hover:text-accent-cyan"
+          >
+            {s.label}
+          </a>
+        ))}
+        <span className="ml-auto normal-case tracking-normal text-white/35">
+          Sohbet ve açık pozisyonlar → <a className="text-accent-cyan/80 hover:underline" href="/#layer-0">Brain</a>
+          {" · "}checklist, haber, takvim, senaryo, likidite → <a className="text-accent-cyan/80 hover:underline" href="/#layer-1">Heart</a>
+          {" · "}dünya özeti → <a className="text-accent-cyan/80 hover:underline" href="/#layer-2">Soul</a>
+          {" · "}öğrenme ve kalibrasyon → <a className="text-accent-cyan/80 hover:underline" href="/#layer-3">Conscious</a>
+        </span>
+      </nav>
 
-      <PanelGroup title="Check List" hint="10 kontrol / 30 saniye / read-only">
-        <GridCell span="full" lazy={false}><ExecutionReadinessPanel /></GridCell>
-      </PanelGroup>
-
-      <PanelGroup title="Trade Ticket" hint="broker'a manuel girmeden tek-bakis kart">
-        <GridCell span="full" lazy={false}><TradeTicketPanel /></GridCell>
-      </PanelGroup>
-
-      <PanelGroup title="Risk Durumu" hint="ana engel / drawdown / yaklasan olaylar">
+      <PanelGroup id="risk_gate" title="Risk" hint="ana engel · paper aksiyon · seanslar · halt geçmişi">
         <GridCell span="full" lazy={false}><RiskDurumuPanel /></GridCell>
+        <GridCell span="full" lazy={false}>
+          {/* Drawdown çubukları Risk Durumu'nda; Drawdown Guard'ın ek bilgisi halt geçmişi. */}
+          <TabbedBox
+            tabs={[
+              { key: "paper_action", label: "Paper aksiyon", node: <PaperActionPanel /> },
+              { key: "sessions", label: "Seanslar", node: <MarketSessionsPanel /> },
+              { key: "halts", label: "Halt geçmişi", node: <DrawdownGuardPanel /> },
+            ]}
+          />
+        </GridCell>
       </PanelGroup>
 
-      <PanelGroup title="Karar Matrisi" hint="candidate -> final / TF + agent overlay">
-        <GridCell span="full" lazy={false}><TimeframeMatrixPanel /></GridCell>
-        <GridCell span="full" lazy={false}><AgentMatrixPanel /></GridCell>
+      <PanelGroup id="karar" title="Karar" hint="matris · neden · adaylar · izleme">
+        <GridCell span="full">
+          <TabbedBox
+            tabs={[
+              { key: "tf_matrix", label: "Timeframe matrisi", node: <TimeframeMatrixPanel /> },
+              { key: "agent_matrix", label: "Agent matrisi", node: <AgentMatrixPanel /> },
+            ]}
+          />
+        </GridCell>
+        <GridCell span="full">
+          <TabbedBox
+            tabs={[
+              { key: "decision", label: "Karar merkezi", node: <DecisionPanel /> },
+              { key: "trace", label: "Karar izi", node: <DecisionTracePanel /> },
+              { key: "votes", label: "Kanıt zinciri", node: <AgentVotesPanel /> },
+              { key: "ticket", label: "Sinyal oluşumu", node: <TradeTicketPanel /> },
+              { key: "candidates", label: "Adaylar", node: <CommandSignalsPanel /> },
+              { key: "watch", label: "İzleme koşulları", node: <WatchConditionsPanel /> },
+              { key: "shadow", label: "Gölge", node: <ShadowPanel /> },
+            ]}
+          />
+        </GridCell>
+        <GridCell span="full">
+          <TabbedBox
+            tabs={[
+              { key: "ai_report", label: "AI analist raporu", node: <AIReportPanel /> },
+              { key: "brief", label: "Agent brief", node: <AgentBriefPanel /> },
+            ]}
+          />
+        </GridCell>
       </PanelGroup>
 
-      <PanelGroup title="Pozisyon Kontrolleri" hint="acik pozisyon + recheck verdict">
-        <GridCell span="full" lazy={false}><PositionChecksPanel /></GridCell>
+      <PanelGroup id="pozisyonlar" title="Pozisyonlar" hint="recheck kararı · paper defteri">
+        <GridCell span="full">
+          <TabbedBox
+            tabs={[
+              { key: "checks", label: "Kontroller", node: <PositionChecksPanel /> },
+              { key: "paper", label: "Paper defteri", node: <TradingPanel /> },
+            ]}
+          />
+        </GridCell>
       </PanelGroup>
 
-      <PanelGroup title="Agent'a Sor" hint="state-grounded / LLM karar vermez">
-        <GridCell span="full" lazy={false}><ChatPanel /></GridCell>
+      <PanelGroup id="piyasa" title="Piyasa" hint="katalizör · volatilite · korelasyon · türev · opsiyon">
+        <GridCell span="full">
+          <TabbedBox
+            tabs={[
+              { key: "catalyst", label: "Katalizör etkisi", node: <CatalystImpactPanel /> },
+              { key: "volatility", label: "Volatilite", node: <VolatilityPanel /> },
+              { key: "correlation", label: "Korelasyon", node: <CorrelationPanel /> },
+              { key: "derivatives", label: "Kripto türevleri", node: <CryptoDerivativesPanel /> },
+              { key: "options", label: "Opsiyon IV", node: <OptionsVolPanel /> },
+            ]}
+          />
+        </GridCell>
       </PanelGroup>
 
-      <section className="space-y-7 rounded-2xl border border-ink-700/60 bg-ink-800/40 px-5 py-5">
-        <div className="border-b border-ink-700/50 pb-2">
-          <h2 className="text-sm font-medium tracking-wide text-white/80">
-            DETAY - Uzman bakisi
-          </h2>
-          <p className="mt-1 text-xs text-white/40">
-            Karar izi, piyasa yapisi, makro, haber, ogrenme ve kalibrasyon panelleri kapali bolum olmadan acik akar.
-          </p>
-        </div>
+      <PanelGroup id="sistem" title="Sistem & Veri" hint="sağlık · veri kalitesi · sağlayıcı · replay">
+        <GridCell span="full"><SystemHealthBar /></GridCell>
+        <GridCell span="full">
+          <TabbedBox
+            tabs={[
+              { key: "dqs", label: "Veri kalitesi", node: <DataQualityPanel /> },
+              { key: "providers", label: "Sağlayıcılar", node: <ProviderStatusPanel /> },
+              { key: "snapshot", label: "Snapshot", node: <SnapshotPanel /> },
+              { key: "market_data", label: "Piyasa verisi", node: <MarketDataPanel /> },
+              { key: "replay", label: "Replay", node: <ReplayStatusPanel /> },
+              { key: "audit", label: "Pano denetimi", node: <PanelAuditPanel /> },
+            ]}
+          />
+        </GridCell>
+      </PanelGroup>
 
-        <PanelGroup title="Komuta & Karar" hint="brief / decision / AI rapor / trace / oylama / shadow / adaylar / izleme">
-          <GridCell span="full"><AgentBriefPanel /></GridCell>
-          <GridCell span="2"><DecisionPanel /></GridCell>
-          <GridCell span="1"><AIReportPanel /></GridCell>
-          <GridCell span="2"><DecisionTracePanel /></GridCell>
-          <GridCell span="1"><AgentVotesPanel /></GridCell>
-          <GridCell span="full"><ShadowPanel /></GridCell>
-          <GridCell span="full"><CommandSignalsPanel /></GridCell>
-          <GridCell span="full"><WatchConditionsPanel /></GridCell>
-        </PanelGroup>
-
-        <PanelGroup title="Risk Detayi" hint="Drawdown / Paper Action / Market Sessions">
-          <GridCell span="2"><DrawdownGuardPanel /></GridCell>
-          <GridCell span="1"><MarketSessionsPanel /></GridCell>
-          <GridCell span="full"><PaperActionPanel /></GridCell>
-        </PanelGroup>
-
-        <PanelGroup title="Piyasa Yapisi" hint="turev / volatilite / options / korelasyon / rotasyon">
-          <GridCell span="1"><CryptoDerivativesPanel /></GridCell>
-          <GridCell span="1"><VolatilityPanel /></GridCell>
-          <GridCell span="1"><OptionsVolPanel /></GridCell>
-          <GridCell span="full"><CorrelationPanel /></GridCell>
-          <GridCell span="full" lazy={false}><CapitalRotationPanel /></GridCell>
-        </PanelGroup>
-
-        <PanelGroup title="Makro / Catalyst / Haber" hint="haber radari, catalyst etkisi ve olay takvimi ayri paneller olarak acik">
-          <GridCell span="full"><NewsPanel /></GridCell>
-          <GridCell span="2"><CatalystImpactPanel /></GridCell>
-          <GridCell span="1"><EventCalendarPanel /></GridCell>
-          <GridCell span="full"><ScenarioPanel /></GridCell>
-          <GridCell span="full"><WorldBriefPanel detail /></GridCell>
-        </PanelGroup>
-
-        <PanelGroup title="Ogrenme & Kalibrasyon" hint="paper / agirlik / platt / TF kalibrasyon">
-          <GridCell span="2"><TradingPanel /></GridCell>
-          <GridCell span="1"><LearningPanel /></GridCell>
-          <GridCell span="2"><OutcomeLedgerPanel /></GridCell>
-          <GridCell span="1"><LearningWorkerPanel /></GridCell>
-          <GridCell span="2"><WeightProposalPanel /></GridCell>
-          <GridCell span="1"><WeightHistoryPanel /></GridCell>
-          <GridCell span="2"><CalibrationPanel /></GridCell>
-          <GridCell span="1"><MistakeMemoryPanel /></GridCell>
-          <GridCell span="2"><HistoricalEdgePanel /></GridCell>
-          <GridCell span="2"><ConflictGateLearningPanel /></GridCell>
-          <GridCell span="2"><TfWeightsPanel /></GridCell>
-          <GridCell span="2"><TfTargetsPanel /></GridCell>
-          <GridCell span="2"><MissedOpportunitiesPanel /></GridCell>
-          <GridCell span="2"><CalibrationJumpsPanel /></GridCell>
-          <GridCell span="2"><AgentModePanel /></GridCell>
-        </PanelGroup>
-      </section>
-
-      <section className="space-y-7 rounded-2xl border border-ink-700/60 bg-ink-800/40 px-5 py-5">
-        <div className="border-b border-ink-700/50 pb-2">
-          <h2 className="text-sm font-medium tracking-wide text-white/80">
-            OPS - Sistem & Veri
-          </h2>
-          <p className="mt-1 text-xs text-white/40">
-            Data quality, provider, system health, replay ve audit panelleri default kapali degil.
-          </p>
-        </div>
-
-        <PanelGroup title="Data Quality & Providers" hint="veri kalitesi / saglayici / snapshot / piyasa verisi / denetim">
-          <GridCell span="2"><DataQualityPanel /></GridCell>
-          <GridCell span="1"><ProviderStatusPanel /></GridCell>
-          <GridCell span="1"><SnapshotPanel /></GridCell>
-          <GridCell span="2"><MarketDataPanel /></GridCell>
-          <GridCell span="1"><PanelAuditPanel /></GridCell>
-        </PanelGroup>
-
-        <PanelGroup title="System / Replay" hint="sistem sagligi / replay / sozlesme">
-          <GridCell span="full"><SystemHealthBar /></GridCell>
-          <GridCell span="1"><ReplayStatusPanel /></GridCell>
-          <GridCell span="full">
-            <p className="text-[10px] text-white/35">
-              Sozlesme: <code>contracts/openapi.yaml</code> - tipler codegen ile
-              uretilir (tek dogruluk kaynagi).
-            </p>
-          </GridCell>
-        </PanelGroup>
-      </section>
-
-      <footer className="pt-8 text-xs text-white/40">
-        PAPER_ONLY · PAPER_AUTO_OPEN · NO_LIVE_EXECUTION - karar-destek; uygun sinyaller RiskGate sonrası paper state'e otomatik açılır, gerçek broker emri gönderilmez.
+      <footer className="pt-6 text-xs text-white/40">
+        Karar-destek: uygun sinyaller RiskGate sonrası yalnız paper state'e açılır; gerçek broker emri gönderilmez.
       </footer>
     </main>
   );
 }
 
 function PanelGroup({
+  id,
   title,
   hint,
   children,
 }: {
+  id: string;
   title: string;
   hint?: string;
   children: ReactNode;
 }) {
   return (
-    <section className="space-y-3">
+    <section id={id} className="scroll-mt-4 space-y-3">
       <div className="flex items-baseline gap-3 border-b border-ink-700/50 pb-1.5">
         <h3 className="text-xs font-semibold uppercase tracking-[0.2em] text-white/70">
           {title}
