@@ -17,7 +17,6 @@ GET /api/v1/learning/guard-safety
 GET /api/v1/learning/monitoring-coverage
 GET /api/v1/learning/reflection
 GET /api/v1/learning/regime-risk-brake
-GET /api/v1/learning/source-selection
 GET /api/v1/learning/threshold-ab
 GET /api/v1/learning/threshold-autotune
 GET /api/v1/learning/world-state-archive

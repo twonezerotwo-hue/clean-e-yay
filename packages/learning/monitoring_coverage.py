@@ -115,11 +115,6 @@ COVERAGE: dict[str, dict] = {
         "reason": "İzole backtest challenger kanalı (B serisi); canlı ağırlık/paper/"
                   "karara ASLA yazmaz — ayrı kanal.",
     },
-    "LEARNING_INCLUDE_SHADOW": {
-        "mechanism": SHADOW_EXEMPT, "monitor": None,
-        "reason": "Kaynak seçici salt-gözlem (I3); yalnız damgalı kanıt gösterir, "
-                  "canlı karara/hücreye dokunmaz.",
-    },
     "BAR_HISTORY_ENABLED": {
         "mechanism": SHADOW_EXEMPT, "monitor": None,
         "reason": "Bar arşivi salt-veri biriktirme (kanıt-büyütme); izole JSONL'e "
