@@ -59,8 +59,10 @@ EXECUTION_MODE = "PAPER"  # NO_EXECUTION contract — observation is paper-only.
 # S1-2 (2026-07-04) — log rotasyonu: dosya bu boyutu aşınca `.1` yan-dosyasına
 # devrilir (tek nesil arşiv; eski `.1` ezilir). Okuyucu gerekirse `.1`'e uzanır,
 # bu yüzden rotasyon anında bile son DEFAULT_MAX_READ kayıt hep erişilebilir.
+# B12 (temizlik 2026-10): 128 → 32 MB. En büyük okuyucu son 500 kaydı (~4 MB)
+# okuyor; 128 MB tavan + .1 diskte ~260 MB tutuyordu. Yeni üst sınır ~64 MB.
 _MAX_MB_ENV = "SHADOW_LOG_MAX_MB"
-_DEFAULT_MAX_MB = 128.0
+_DEFAULT_MAX_MB = 32.0
 # Tail okuma chunk boyutu — ortalama satır ~8KB; 200 satır ≈ 1.6MB, iki chunk yeter.
 _TAIL_CHUNK_BYTES = 1_048_576
 

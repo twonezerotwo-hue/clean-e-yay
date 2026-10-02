@@ -80,7 +80,6 @@ export type PanelKey =
   | "calibration_jumps"
   | "agent_mode"
   | "governor"
-  | "governor_proposals"
   | "governor_tasks";
 
 export type PanelGroupId =
@@ -180,7 +179,6 @@ export const PANEL_REGISTRY: PanelMeta[] = [
 
   // ── DETAY — Governor (öz-yönetim) ────────────────────────────────────────
   { id: "governor",            title: "Governor",          defaultVisible: true, span: "full", group: "governor",       tier: "detay" },
-  { id: "governor_proposals",  title: "Öneri Defteri",     defaultVisible: true, span: "2",    group: "governor",       tier: "detay" },
   { id: "governor_tasks",      title: "Görev Kuyruğu",     defaultVisible: true, span: "2",    group: "governor",       tier: "detay" },
 
   // ── OPS — Sistem / Veri (default kapalı) ─────────────────────────────────
