@@ -76,6 +76,8 @@ def _to_lesson(o) -> Lesson | None:
     # Yalnız kapanmış + doğrulanmış + yön-yüzdesi olan outcome derse girer.
     if not getattr(o, "data_verified", False) or o.pnl_pct is None:
         return None
+    if getattr(o, "exploration", False):  # K1: keşif işlemi ders sayılmaz
+        return None
     return Lesson(
         symbol=o.symbol,
         timeframe=o.timeframe,

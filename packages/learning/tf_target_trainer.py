@@ -340,7 +340,7 @@ def train(
         verified = [o for o in rows if cohorts.classify(o) == cohorts.AUTO]
         dataset_tag = "auto_cohort"
     else:
-        verified = [o for o in rows if o.data_verified]
+        verified = [o for o in rows if o.data_verified]  # learning_grade keşfi zaten süzdü
         dataset_tag = "verified"
     if not verified:
         return {"status": "INSUFFICIENT", "reason": "no_verified_trades",

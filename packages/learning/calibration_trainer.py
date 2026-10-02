@@ -34,7 +34,10 @@ def _samples_from_state() -> list[tuple[str, float, bool]]:
     F4-1: timeframe per-TF fit için taşınır; global fit tüm örnekleri kullanır."""
     out: list[tuple[str, float, bool]] = []
     # Veri hijyeni (2026-07-12): legacy (regime=UNKNOWN) kayıtlar fit'e girmez.
-    for o in outcomes_mod.learning_grade(outcomes_mod.outcomes_from_state()):
+    # K1: keşif işlemleri kalibrasyona GİRER (düşük-güven bandını doldurur).
+    for o in outcomes_mod.learning_grade(
+        outcomes_mod.outcomes_from_state(), include_exploration=True
+    ):
         if not o.data_verified or o.raw_confidence is None:
             continue
         out.append((str(o.timeframe or "1d"), float(o.raw_confidence), bool(o.pnl > 0)))

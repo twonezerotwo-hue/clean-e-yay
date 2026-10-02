@@ -2110,6 +2110,8 @@ export interface components {
             };
             manual: components["schemas"]["CohortStats"];
             excluded: components["schemas"]["CohortStats"];
+            /** @description K1 (2026-10-02) — paper keşif açılışları (yumuşak güven/EV kapısı esnetildi). AUTO performansına karışmaz; yalnız güven kalibrasyonuna veri olur. */
+            exploration?: components["schemas"]["CohortStats"];
         };
         /** @description Kohort başına outcome özeti (win_rate paydası kararlı işlemler — breakeven ayrı sayılır; F1-2 deseniyle hizalı). */
         CohortStats: {

@@ -10,6 +10,8 @@ outcome'u üç kohorta ayırır ve kohort-bazlı istatistik üretir:
             pending_stop_limit) — owner başarısı/sorumluluğu, auto değil.
 - EXCLUDED: ne fingerprint ne owner izi taşıyan kayıtlar (test/unknown) —
             hiçbir başarı metriğine girmemeli, sadece şeffaflık için sayılır.
+- EXPLORATION: paper keşif açılışları (K1, 2026-10-02) — bilinçli zayıf sinyal;
+            AUTO performansına karışmaz, ayrı kolonda raporlanır.
 
 Salt gözlem (read-only): karar/ağırlık yoluna dokunmaz; summary.py additive
 olarak gömer, dashboard ayrı kolonlarda gösterir.
@@ -21,6 +23,7 @@ from packages.learning.outcomes import CanonicalOutcome
 AUTO = "auto"
 MANUAL = "manual"
 EXCLUDED = "excluded"
+EXPLORATION = "exploration"
 
 # Owner-kaynaklı open_reason önekleri (packages/paper/manual_order.py,
 # position_ops.py). pending_stop_limit: owner'ın koyduğu bekleyen emir dolmuş.
@@ -29,6 +32,8 @@ _MANUAL_OPEN_PREFIXES = ("owner", "pending", "manual")
 
 def classify(o: CanonicalOutcome) -> str:
     """Tek outcome → kohort. Deterministik; trainer filtresiyle hizalı."""
+    if getattr(o, "exploration", False):
+        return EXPLORATION
     if o.fingerprint and o.data_verified:
         return AUTO
     reason = (o.open_reason or "").strip().lower()
@@ -73,7 +78,10 @@ def cohort_summary(outcomes: list[CanonicalOutcome]) -> dict:
     değil" yanılsamasını ekranda çürütmek için. `auto.manual_closed`: auto
     açılıp owner'ın kapattığı işlem sayısı (ayrı dürüstlük kalemi).
     """
-    per: dict[str, dict] = {AUTO: _empty_stats(), MANUAL: _empty_stats(), EXCLUDED: _empty_stats()}
+    per: dict[str, dict] = {
+        AUTO: _empty_stats(), MANUAL: _empty_stats(), EXCLUDED: _empty_stats(),
+        EXPLORATION: _empty_stats(),
+    }
     auto_by_tf: dict[str, dict] = {}
     auto_manual_closed = 0
     for o in outcomes:

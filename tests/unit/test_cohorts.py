@@ -127,6 +127,6 @@ def test_build_summary_embeds_cohorts_additively():
 
     out = summary_mod.build_summary()
     assert "cohorts" in out
-    assert set(out["cohorts"].keys()) == {"auto", "manual", "excluded"}
+    assert set(out["cohorts"].keys()) == {"auto", "manual", "excluded", "exploration"}
     # additive garanti: eski alanlar durur
     assert "total_trades" in out and "by_timeframe" in out

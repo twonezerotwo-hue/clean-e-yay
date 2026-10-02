@@ -120,6 +120,8 @@ def _aggregate_by(trades, key_fn) -> list[Mistake]:
     for t in trades:
         if not getattr(t, "data_verified", False):
             continue
+        if getattr(t, "exploration", False):  # K1: keşif işlemi hata hafızasına girmez
+            continue
         if not t.fingerprint:
             continue
         key = key_fn(t.fingerprint)

@@ -71,3 +71,36 @@ def test_legacy_log_entry_defaults() -> None:
     entry = {"opening_signal": {"fingerprint": None}, "outcome": {}, "exit": {}}
     o = outcomes.build_outcome_from_log_entry(entry)
     assert o.exploration is False and o.blocked_by == []
+
+
+# ── K1 kohort politikası: keşif yalnız kalibrasyona girer ──────────────────────
+
+def _outcome(exploration: bool):
+    entry = {
+        "opening_signal": {
+            "fingerprint": "BTCUSD|v2|1d|NEUTRAL|bullish|S55|X|touche",
+            "data_verified": True,
+            "raw_confidence": 0.2,
+            "exploration": exploration,
+        },
+        "outcome": {"entry_price": 100.0, "exit_price": 101.0, "pnl_usd": 1.0},
+        "exit": {"reason": "TP_HIT"},
+        "timeframe": "1d",
+        "side": "long",
+    }
+    return outcomes.build_outcome_from_log_entry(entry)
+
+
+def test_learning_grade_excludes_exploration_by_default() -> None:
+    normal, expl = _outcome(False), _outcome(True)
+    assert outcomes.learning_grade([normal, expl]) == [normal]
+    assert outcomes.learning_grade([normal, expl], include_exploration=True) == [normal, expl]
+
+
+def test_cohort_classifies_exploration_separately() -> None:
+    from packages.learning import cohorts
+
+    assert cohorts.classify(_outcome(True)) == cohorts.EXPLORATION
+    assert cohorts.classify(_outcome(False)) == cohorts.AUTO
+    summary = cohorts.cohort_summary([_outcome(True), _outcome(False)])
+    assert summary["exploration"]["trades"] == 1 and summary["auto"]["trades"] == 1

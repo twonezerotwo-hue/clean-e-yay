@@ -169,7 +169,7 @@ def report() -> dict:
         from packages.learning import cohorts
         outs = [o for o in rows if cohorts.classify(o) == cohorts.AUTO]
     else:
-        outs = [o for o in rows if o.data_verified]
+        outs = [o for o in rows if o.data_verified and not outcomes_mod.is_exploration(o)]
 
     grouped: dict[tuple[str, str], list[CanonicalOutcome]] = {}
     for o in outs:

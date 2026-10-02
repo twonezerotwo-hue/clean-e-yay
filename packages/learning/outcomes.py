@@ -288,7 +288,9 @@ def outcome_to_dict(o: CanonicalOutcome) -> dict:
 LEGACY_REGIMES = frozenset({"UNKNOWN"})
 
 
-def learning_grade(outcomes: list[CanonicalOutcome]) -> list[CanonicalOutcome]:
+def learning_grade(
+    outcomes: list[CanonicalOutcome], *, include_exploration: bool = False
+) -> list[CanonicalOutcome]:
     """Fingerprint'i çözülemeyen legacy kayıtları (regime=UNKNOWN) öğrenmeden
     karantinala. Ölçüldü (2026-07-12, 203 işlem): 13 legacy işlem ortalama
     -2.04R ile fit/ağırlık/kapı hesaplarını zehirliyordu. Bu süzgeç YALNIZ
@@ -298,8 +300,19 @@ def learning_grade(outcomes: list[CanonicalOutcome]) -> list[CanonicalOutcome]:
     yalnız öğrenmeye girmez."""
     # getattr-savunmacı: regime alanı olmayan (test-fake / harici) nesneler
     # süzülmez — yalnız GERÇEK legacy (regime=UNKNOWN) karantinaya girer.
+    #
+    # K1 owner kararı (2026-10-02): paper keşif işlemleri (exploration=True) YALNIZ
+    # güven kalibrasyonuna girer (include_exploration=True: calibration_trainer,
+    # tf_calibration). Ağırlık/eşik/hedef/fren/ampirik p(win) gibi diğer öğrenenler
+    # onları görmez — bilinçli zayıf sinyal "normal işlem" sanılmasın.
     return [o for o in outcomes
-            if getattr(o, "regime", None) not in LEGACY_REGIMES]
+            if getattr(o, "regime", None) not in LEGACY_REGIMES
+            and (include_exploration or not is_exploration(o))]
+
+
+def is_exploration(o: object) -> bool:
+    """K1 — paper keşif açılışından gelen outcome/trade mi? (legacy: False)."""
+    return bool(getattr(o, "exploration", False))
 
 
 # --------------------------------------------------------------------------

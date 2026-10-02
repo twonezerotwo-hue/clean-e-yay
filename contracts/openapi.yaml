@@ -2205,6 +2205,12 @@ components:
                   description: Auto açılıp owner'ın kapattığı işlem sayısı.
         manual: { $ref: "#/components/schemas/CohortStats" }
         excluded: { $ref: "#/components/schemas/CohortStats" }
+        exploration:
+          description: >
+            K1 (2026-10-02) — paper keşif açılışları (yumuşak güven/EV kapısı esnetildi).
+            AUTO performansına karışmaz; yalnız güven kalibrasyonuna veri olur.
+          allOf:
+            - $ref: "#/components/schemas/CohortStats"
 
     CohortStats:
       type: object
