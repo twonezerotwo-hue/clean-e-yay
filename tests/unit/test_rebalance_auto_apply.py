@@ -26,8 +26,9 @@ def g3_env(tmp_path, monkeypatch):
     monkeypatch.setenv("WEIGHTS_MANIFEST_PATH", str(tmp_path / "weights_active.json"))
     monkeypatch.setenv("WEIGHTS_OUTPUT_DIR", str(tmp_path / "weights_out"))
     monkeypatch.setenv("WEIGHT_AUTOAPPLY_PATH", str(tmp_path / "weight_autoapply.json"))
-    # Default knob'lar: AÇIK / band 0.05 / min 15. Testler gerektikçe ezer.
-    monkeypatch.delenv("REBALANCE_AUTO_APPLY", raising=False)
+    # K5 (2026-10-02): üretim default'u KAPALI (owner onayı). Bu dosya mekanizmanın
+    # kendisini (opt-in açıkken) test eder → AÇIK / band 0.05 / min 15.
+    monkeypatch.setenv("REBALANCE_AUTO_APPLY", "1")
     monkeypatch.delenv("REBALANCE_AUTO_APPLY_BAND", raising=False)
     monkeypatch.delenv("REBALANCE_ROLLBACK_MIN_OUTCOMES", raising=False)
     from packages.paper import state as ps
@@ -289,3 +290,11 @@ def test_proposal_endpoint_surfaces_auto_apply(g3_env):
     assert "auto_apply" in body
     assert body["auto_apply"]["active"]["applied_version"] == "1.1.0"
     assert any(e.get("event") == "AUTO_APPLIED" for e in body["auto_apply"]["ledger"])
+
+
+def test_auto_apply_default_off_k5(g3_env, monkeypatch):
+    """K5 — env yoksa otonom uygulama KAPALI: dar-bant öneri bile PENDING'e düşer."""
+    monkeypatch.delenv("REBALANCE_AUTO_APPLY", raising=False)
+    from packages.learning import rebalance_store as rs
+
+    assert rs._auto_apply_enabled() is False

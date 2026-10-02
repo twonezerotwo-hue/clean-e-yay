@@ -1,0 +1,7 @@
+{
+  "version": "1.17.0",
+  "yaml_path": "config/weights_v1.17.0.yaml",
+  "approved_by": "owner",
+  "approved_at": "2026-10-02T00:00:00+00:00",
+  "note": "K5 (owner, 2026-10-02): ağırlıkların tek kaynağı git. Lokal canlı ağırlık (1.17.0, önceden runtime'da 'auto') repoya alındı; iki ortam bu dosyayı okur. Değişiklik yalnız owner onayıyla (lokalde approve → config/ dosyaları → PR)."
+}

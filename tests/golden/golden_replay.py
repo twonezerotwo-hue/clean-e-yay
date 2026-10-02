@@ -127,7 +127,8 @@ def isolated_runtime() -> Iterator[Path]:
             os.environ[n] = str(rt / f"{n.lower()}.json")
         os.environ["OHLCV_CACHE_DIR"] = str(rt / "ohlcv")
         os.environ["WEIGHTS_OUTPUT_DIR"] = str(rt / "weights")
-        os.environ["WEIGHTS_MANIFEST_PATH"] = str(rt / "weights_manifest.json")
+        # K5: ağırlıkların tek kaynağı git (config/weights_active.json) — golden
+        # canlı ağırlıkla koşar; WEIGHTS_MANIFEST_PATH bilerek SET EDİLMEZ.
         yield rt
     finally:
         os.environ.clear()

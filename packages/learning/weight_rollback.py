@@ -185,7 +185,15 @@ def _decide(active: dict, *, post_exp: float, post_n: int, baseline: float,
 
 def check_rollback() -> dict:
     """İzlenen auto-apply'ı değerlendir. Durum: no_active | monitoring | CONFIRMED |
-    ROLLED_BACK. Defensive: hata vermez biçimde tasarlandı (worker patlamasın)."""
+    ROLLED_BACK. Defensive: hata vermez biçimde tasarlandı (worker patlamasın).
+
+    K5 (owner, 2026-10-02): ağırlıklar git'teyse (config/weights_active.json)
+    otomatik geri alma YAPILMAZ — geri alma git manifest'ini yerelde değiştirip iki
+    ortamı ayrıştırırdı. Değişiklik yalnız owner onayı + PR ile."""
+    from packages.data.registry import loader
+
+    if loader.weights_manifest_path() == loader.GIT_WEIGHTS_MANIFEST:
+        return {"status": "owner_gated"}
     active = weight_autoapply_store.get_active()
     if not active:
         return {"status": "no_active"}

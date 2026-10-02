@@ -208,6 +208,10 @@ def _isolate_runtime_stores(tmp_path_factory: pytest.TempPathFactory) -> None:
         ("EXIT_BACKTEST_PATH", "exit_backtest.json"),
     ):
         os.environ.setdefault(_env, str(runtime / _name))
+    # K5 — git'teki config/weights_active.json suite'e sızmasın: testler baseline
+    # (weights_v1.0) ağırlıkları varsayar; ağırlık testleri kendi yolunu verir.
+    os.environ.setdefault("WEIGHTS_MANIFEST_PATH", str(runtime / "weights_active.json"))
+    os.environ.setdefault("WEIGHTS_OUTPUT_DIR", str(runtime / "weights"))
     # F4-2 — karar motoru her decide çağrısında bu artifact'ı okur; suite gerçek
     # diskteki tabloyu görmesin (bayt-aynılık assertion'ları deterministik kalsın).
     os.environ["EMPIRICAL_PWIN_PATH"] = str(runtime / "empirical_pwin.json")

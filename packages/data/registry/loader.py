@@ -19,12 +19,24 @@ WEIGHTS_RUNTIME_DIR = REPO_ROOT / "data" / "runtime" / "weights"
 DEFAULT_WEIGHTS_FILE = "weights_v1.0.yaml"
 
 
+# K5 (owner, 2026-10-02) — ağırlıkların TEK kaynağı git: config/weights_active.json.
+# Varsa runtime manifest'in (data/runtime/weights_active.json) önüne geçer → lokal
+# ve AWS aynı ağırlıkla çalışır. Yoksa (eski kurulum) runtime manifest'e düşülür.
+GIT_WEIGHTS_MANIFEST = CONFIG_DIR / "weights_active.json"
+
+
 def weights_manifest_path() -> Path:
-    """Aktif weights manifest yolu — env her çağrıda okunur (testler için)."""
-    p = Path(
-        os.environ.get("WEIGHTS_MANIFEST_PATH", "data/runtime/weights_active.json")
-    )
-    return p if p.is_absolute() else REPO_ROOT / p
+    """Aktif weights manifest yolu — env her çağrıda okunur (testler için).
+
+    Öncelik: WEIGHTS_MANIFEST_PATH env > config/weights_active.json (git) >
+    data/runtime/weights_active.json (eski, ortam-başına)."""
+    env = os.environ.get("WEIGHTS_MANIFEST_PATH")
+    if env:
+        p = Path(env)
+        return p if p.is_absolute() else REPO_ROOT / p
+    if GIT_WEIGHTS_MANIFEST.exists():
+        return GIT_WEIGHTS_MANIFEST
+    return REPO_ROOT / "data" / "runtime" / "weights_active.json"
 
 
 @lru_cache(maxsize=1)

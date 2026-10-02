@@ -18,6 +18,8 @@ from typing import Literal
 import yaml
 
 from packages.data.registry.loader import (
+    CONFIG_DIR,
+    GIT_WEIGHTS_MANIFEST,
     REPO_ROOT,
     WEIGHTS_RUNTIME_DIR,
     weights_manifest_path,
@@ -30,9 +32,11 @@ _LOCK = threading.Lock()
 _MIN_EFFECTIVE_DELTA = 0.0001
 
 # G3 — otonom (worker) yolunda dar-bant otomatik uygulama. API propose/approve
-# endpoint'leri ETKİLENMEZ (owner-kapısı orada aynen durur). Ana anahtar default
-# AÇIK; `REBALANCE_AUTO_APPLY=0` ile kapatılır (kapalıyken davranış set_pending'e
-# düşer — bugünkü saf owner akışı). Bant: bir modülün ağırlığı tek seferde en fazla
+# endpoint'leri ETKİLENMEZ (owner-kapısı orada aynen durur). K5 (owner, 2026-10-02):
+# ana anahtar default KAPALI — trainer önerisi PENDING'e düşer, owner onaylar
+# (Iron Law #6). `REBALANCE_AUTO_APPLY=1` ile eski otonom davranış açılabilir.
+# Not: açıkken aynı sürüm uygula → geri al → yeniden uygula döngüsüne giriyordu
+# (1.17.0 üç kez ROLLED_BACK sonrası tekrar uygulandı). Bant: bir modülün ağırlığı tek seferde en fazla
 # ±REBALANCE_AUTO_APPLY_BAND (default 0.05) oynayabilir; bir delta bile bant dışı →
 # PENDING (owner). Bkz. [[weight_autoapply_store]] + [[weight_rollback]].
 _AUTO_APPLY_BAND_DEFAULT = 0.05
@@ -40,7 +44,7 @@ _AUTO_APPLY_OFF = {"0", "false", "no", "off", ""}
 
 
 def _auto_apply_enabled() -> bool:
-    return os.environ.get("REBALANCE_AUTO_APPLY", "1").strip().lower() not in _AUTO_APPLY_OFF
+    return os.environ.get("REBALANCE_AUTO_APPLY", "0").strip().lower() not in _AUTO_APPLY_OFF
 
 
 def _max_abs_delta() -> float:
@@ -65,6 +69,10 @@ def _weights_output_dir() -> Path:
     if p:
         path = Path(p)
         return path if path.is_absolute() else REPO_ROOT / path
+    # K5 — git manifest kullanılıyorsa onaylanan yaml da git'e (config/) yazılır;
+    # owner onayı lokalde yapılır, config/ değişikliği PR ile AWS'e gider.
+    if not os.environ.get("WEIGHTS_MANIFEST_PATH") and GIT_WEIGHTS_MANIFEST.exists():
+        return CONFIG_DIR
     return WEIGHTS_RUNTIME_DIR
 
 

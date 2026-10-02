@@ -40,7 +40,7 @@ Runtime durumu (`data/runtime/`) ortamlar arasında **paylaşılmaz**.
 | Eşikler ve YAML flag'leri | `config/thresholds_v1.0.yaml` (git ile iki ortama taşınır) |
 | Env flag'leri (AWS) | `scripts/deploy-from-github.sh` içindeki `ensure_env` / `set_env` satırları |
 | Env flag'leri (lokal) | `.env` (gitignored); sapma kontrolü `scripts/flag-sync-check.sh` |
-| Aktif ağırlıklar | `data/runtime/weights_active.json` (oto-uygulama açık; ortam başına ayrı — temizlik H8) |
+| Aktif ağırlıklar | `config/weights_active.json` (git; owner onaylı, iki ortamda aynı). Oto-uygulama kapalı (`REBALANCE_AUTO_APPLY=1` ile açılır); git manifest'te oto-geri-alma devre dışı |
 | API sözleşmesi | `contracts/openapi.yaml` → `make codegen`; sözleşme dışı borç `tests/contract/contractless_routes.txt` |
 
 Bir flag'in açık olup olmadığını söylemeden önce bu dosyalara bak; dataclass
@@ -69,7 +69,7 @@ default'u (`= False`) çoğu zaman config'te ezilir.
 `paper_trading.paper_auto_open` açık (owner kararı K1): güven/EV yumuşak
 kapılarında kalan aday küçük boyutla açılabilir. Bu pozisyonlar
 `exploration=true` damgalanır ve `decision_log`'a kapı listesiyle (`blocked_by`)
-yazılır. Öğrenme kohortlarının bunları ayırıp ayırmayacağı açık karar (ROADMAP).
+yazılır ve EXPLORATION kohortuna düşer: yalnız güven kalibrasyonu (`calibration_trainer`, `tf_calibration`) bunları kullanır, diğer öğreniciler dışarıda bırakır.
 
 ## Doğrulama (her değişiklikte)
 
