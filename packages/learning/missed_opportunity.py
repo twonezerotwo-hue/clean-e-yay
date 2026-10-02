@@ -30,6 +30,7 @@ from typing import Any
 
 from packages.data.providers import ohlcv
 from packages.data.registry.loader import load_thresholds
+from packages.ops.store import read_jsonl_tail
 
 _log = logging.getLogger(__name__)
 
@@ -332,25 +333,8 @@ def _append(entry: dict) -> None:
 
 def read_recent(limit: int = DEFAULT_MAX_READ) -> list[dict]:
     """Son `limit` event (en yeni en sonda); bozuk satır atlanır."""
-    p = _path()
-    if not p.exists():
-        return []
-    try:
-        lines = p.read_text(encoding="utf-8").splitlines()
-    except OSError:
-        return []
-    out: list[dict] = []
-    for line in lines[-max(1, limit):]:
-        line = line.strip()
-        if not line:
-            continue
-        try:
-            obj = json.loads(line)
-        except (json.JSONDecodeError, ValueError):
-            continue
-        if isinstance(obj, dict):
-            out.append(obj)
-    return out
+    # B12 — dosyanın yalnız sonu okunur (append-only günlük sınırsız büyür).
+    return read_jsonl_tail(_path(), limit)
 
 
 def resolutions(limit: int = DEFAULT_MAX_READ) -> list[dict]:

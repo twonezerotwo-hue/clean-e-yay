@@ -19,6 +19,8 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from packages.ops.store import read_jsonl_tail
+
 DEFAULT_PATH = "data/runtime/decision_log.jsonl"
 DEFAULT_MAX_READ = 200
 EXECUTION_MODE = "PAPER"  # NO_EXECUTION contract — attribution is paper-only.
@@ -158,25 +160,8 @@ def record_close(trade: Trade) -> dict:
 
 def read_recent(limit: int = DEFAULT_MAX_READ) -> list[dict]:
     """Son `limit` attribution kaydı (en yeni en sonda); bozuk satır atlanır."""
-    p = _path()
-    if not p.exists():
-        return []
-    try:
-        lines = p.read_text(encoding="utf-8").splitlines()
-    except OSError:
-        return []
-    out: list[dict] = []
-    for line in lines[-max(1, limit):]:
-        line = line.strip()
-        if not line:
-            continue
-        try:
-            obj = json.loads(line)
-        except (json.JSONDecodeError, ValueError):
-            continue
-        if isinstance(obj, dict):
-            out.append(obj)
-    return out
+    # B12 — dosyanın yalnız sonu okunur (append-only günlük sınırsız büyür).
+    return read_jsonl_tail(_path(), limit)
 
 
 def summary(limit: int = DEFAULT_MAX_READ) -> dict:

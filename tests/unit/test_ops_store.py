@@ -88,3 +88,26 @@ def test_no_handrolled_tmp_replace_in_packages():
         if pat.search(f.read_text(encoding="utf-8")):
             offenders.append(rel)
     assert offenders == [], f"write_text_atomic kullan: {offenders}"
+
+
+def _old_tail(path, limit):
+    lines = Path(path).read_text(encoding="utf-8").splitlines()
+    return lines[-max(1, limit):]
+
+
+@pytest.mark.parametrize("ending", ["\n", "\r\n", ""])
+@pytest.mark.parametrize("limit", [1, 3, 200, 5000])
+def test_read_tail_lines_matches_full_read(tmp_path, ending, limit):
+    rows = [json.dumps({"i": i, "t": "ğüş" * (i % 7)}, ensure_ascii=False) for i in range(1200)]
+    p = tmp_path / "log.jsonl"
+    p.write_bytes((ending.join(rows) + ending).encode("utf-8") if ending else "\n".join(rows).encode("utf-8"))
+    got = store.read_tail_lines(p, limit, chunk=257)  # küçük blok: sınır durumları
+    assert got == _old_tail(p, limit)
+
+
+def test_read_jsonl_tail_skips_bad_and_missing(tmp_path):
+    p = tmp_path / "x.jsonl"
+    assert store.read_jsonl_tail(p, 10) == []
+    p.write_text('{"a":1}\n\nbozuk\n[1,2]\n{"b":2}\n', encoding="utf-8")
+    assert store.read_jsonl_tail(p, 10) == [{"a": 1}, {"b": 2}]
+    assert store.read_jsonl_tail(p, 1) == [{"b": 2}]
