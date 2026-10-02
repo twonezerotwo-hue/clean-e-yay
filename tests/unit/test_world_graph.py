@@ -26,6 +26,24 @@ def test_world_graph_does_not_invent_match_for_unknown_event():
     assert "graph_no_entity_match:unknown" in context.warnings
 
 
+def test_world_graph_matches_headline_kept_in_event_evidence():
+    """Causal events carry the source headline in ``evidence``."""
+    from types import SimpleNamespace
+
+    context = build_context([
+        SimpleNamespace(
+            event_id="news-1",
+            event_type="CHOKEPOINT_DISRUPTION",
+            region="Middle East",
+            evidence=("Houthi attack near Red Sea shipping route",),
+            actors=(),
+        )
+    ])
+
+    assert context.event_matches[0]["status"] == "MATCHED"
+    assert "BRENT" in context.affected_assets
+
+
 def test_world_graph_failure_is_observation_only(monkeypatch):
     monkeypatch.setenv("WORLD_GRAPH_CONFIG_PATH", "C:/does-not-exist/world-graph.yaml")
     context = build_context([{"event_id": "x", "title": "Bab el-Mandeb"}])

@@ -123,8 +123,29 @@ def test_matrix_viewmodel_shape():
     assert vm["timeframes"][0] == "15m"
     row = vm["symbols"][0]
     assert row["symbol"] == "BTCUSD"
-    assert {"stance", "consensus", "decision", "economics", "per_timeframe"} <= set(row)
+    assert {
+        "decision_id",
+        "stance",
+        "consensus",
+        "decision",
+        "confidence_breakdown",
+        "economics",
+        "technical_knowledge",
+        "book_evidence",
+        "formation_playbook",
+        "book_feature_shadow",
+        "per_timeframe",
+    } <= set(row)
+    assert row["decision_id"].startswith("dec_")
+    assert row["confidence_breakdown"]["source"] == "alignment_x_agreement"
+    assert row["confidence_breakdown"]["is_win_probability"] is False
+    assert row["book_evidence"]["applied"] is False
     assert row["economics"]["allow"] is True
+    assert row["formation_playbook"]["mode"] == "evidence_only"
+    assert row["formation_playbook"]["promoted_to_decision"] is False
+    assert row["book_feature_shadow"]["promotion_status"] == "shadow"
+    assert row["book_feature_shadow"]["applied"] is False
+    assert row["book_feature_shadow"]["cells"]
     # C — per-TF gated direction + location-gate diagnostic surfaced for the panel.
     cells = {c["timeframe"]: c for c in row["per_timeframe"]}
     assert {"1d", "1h"} <= set(cells)
@@ -143,3 +164,16 @@ def test_deterministic_decision_ignoring_ts():
         b.decision.action, b.decision.size_multiplier, b.decision.entry_timeframe,
     )
     assert a.economics == b.economics
+
+
+def test_matrix_trace_id_changes_when_risk_gate_changes():
+    per_tf = _aligned_bull(stop=99.5, target=101.0)
+    open_view = ap.build_symbol_view("BTCUSD", per_tf, current_price=100.0, risk_action=None)
+    blocked_view = ap.build_symbol_view(
+        "BTCUSD", per_tf, current_price=100.0, risk_action="NO_POSITION_INCREASE"
+    )
+    open_row = ap.matrix_viewmodel([open_view], risk_action=None)["symbols"][0]
+    blocked_row = ap.matrix_viewmodel(
+        [blocked_view], risk_action="NO_POSITION_INCREASE"
+    )["symbols"][0]
+    assert open_row["decision_id"] != blocked_row["decision_id"]

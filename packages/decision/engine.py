@@ -35,6 +35,7 @@ from packages.data.registry import guard_overrides
 from packages.data.registry.loader import load_thresholds
 from packages.data.types import TIMEFRAMES
 from packages.decision import correlation_veto, learning_advisor, paper_policy, sizing_layers
+from packages.decision.trace import stable_decision_id
 from packages.learning import empirical_pwin, meta_gate, mistake_memory, regime_risk_brake
 from packages.learning.calibration_store import (
     apply_inflation_guardrail,
@@ -127,6 +128,35 @@ class TradeDecision:
     # kanıtı) o işlemde boyut kısılır. VARSAYILAN GÖLGE (quantum_dampen.enabled=false →
     # rapor dolu, boyut bayt-aynı); açıkken YALNIZ KISAR. Boş = quantum katkısı yok.
     quantum_dampen_report: dict = field(default_factory=dict)
+    # P0 trace identity and confidence provenance. Additive telemetry only: these
+    # fields never participate in action, size, or RiskGate decisions.
+    decision_id: str = ""
+    confidence_breakdown: dict = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        if not self.decision_id:
+            self.decision_id = stable_decision_id(
+                {
+                    "path": "decision_engine",
+                    "symbol": self.symbol,
+                    "timeframe": self.timeframe,
+                    "risk_action": getattr(self.risk, "action", None),
+                    "score": getattr(self.consensus, "score", None),
+                    "direction": getattr(self.consensus, "direction", None),
+                    "candidate_action": self.candidate_action,
+                    "action": self.action,
+                    "blocked_by": list(self.blocked_by),
+                }
+            )
+        if not self.confidence_breakdown:
+            self.confidence_breakdown = {
+                "value": round(float(self.confidence), 4),
+                "raw_score_distance": round(float(self.raw_confidence), 4),
+                "source": self.confidence_source,
+                "consensus_score": getattr(self.consensus, "score", None),
+                "is_win_probability": self.confidence_source in {"fitted", "fitted_tf", "fitted_capped", "fitted_tf_capped"},
+                "book_evidence_applied": False,
+            }
 
 
 def _timeframe_policy(timeframe: str) -> dict:

@@ -34,6 +34,14 @@ from packages.data.types import (
     Timeframe,
 )
 from packages.decision import agent_decision
+from packages.decision.trace import (
+    book_evidence_status,
+    matrix_confidence_breakdown,
+    matrix_decision_id,
+)
+from packages.knowledge.book_features import build_from_agent as build_book_features
+from packages.knowledge.formation_playbook import build_from_agent as build_formation_playbook
+from packages.knowledge.technical_analysis import decision_evidence_summary
 from packages.risk import trade_economics
 
 # Lowest → highest; lowest available close is the freshest spot reference.
@@ -49,6 +57,10 @@ class SymbolAgentView:
     consensus: ConsensusSnapshot
     decision: AgentDecision
     economics: trade_economics.TradeEconomics | None = None
+    # Book references are explanatory evidence only; they never alter `decision`.
+    technical_knowledge: dict | None = None
+    formation_playbook: dict | None = None
+    book_feature_shadow: dict | None = None
 
 
 def build_symbol_view(
@@ -98,6 +110,9 @@ def build_symbol_view(
         consensus=consensus,
         decision=decision,
         economics=economics,
+        technical_knowledge=decision_evidence_summary(limit=4),
+        formation_playbook=build_formation_playbook(agent_out),
+        book_feature_shadow=build_book_features(agent_out),
     )
 
 
@@ -265,10 +280,22 @@ def matrix_viewmodel(
         symbols.append(
             {
                 "symbol": v.symbol,
+                "decision_id": matrix_decision_id(
+                    symbol=v.symbol,
+                    risk_action=risk_action,
+                    consensus=v.consensus,
+                    decision=v.decision,
+                    economics=v.economics,
+                ),
                 "stance": v.agent.stance,
                 "consensus": v.consensus.model_dump(mode="json"),
                 "decision": v.decision.model_dump(mode="json"),
+                "confidence_breakdown": matrix_confidence_breakdown(v.consensus, v.decision),
                 "economics": asdict(v.economics) if v.economics is not None else None,
+                "technical_knowledge": v.technical_knowledge,
+                "book_evidence": book_evidence_status(v.technical_knowledge),
+                "formation_playbook": v.formation_playbook,
+                "book_feature_shadow": v.book_feature_shadow,
                 "reversal_bias": rev_bias,
                 "pattern": pattern,
                 "per_timeframe": _per_timeframe_cells(v),

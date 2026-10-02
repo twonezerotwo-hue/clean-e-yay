@@ -179,6 +179,39 @@ class ManualReady:
 
 
 @dataclass
+class NewsPreparedSetup:
+    """News/world-evidence setup kept ready for the canonical decision loop.
+
+    This is deliberately not an order.  It is an expiring, paper-safe intent
+    that records the evidence and waits for the existing RiskGate, session and
+    technical decision path to permit an entry on a later tick.
+    """
+    id: str
+    symbol: str
+    timeframe: str
+    side: str
+    created_at: str
+    valid_until: str
+    status: str = "WAITING_RISK"  # WAITING_RISK | ARMED | ACTIVATED | EXPIRED | STALE
+    world_direction: str | None = None
+    world_score: float | None = None
+    confidence: float | None = None
+    technical_confirmation: float | None = None
+    confluence_state: str | None = None
+    current_price: float | None = None
+    point_estimate: float | None = None
+    p10: float | None = None
+    p50: float | None = None
+    p90: float | None = None
+    event_type: str | None = None
+    news_title: str | None = None
+    evidence: list[str] = field(default_factory=list)
+    snapshot_id: str | None = None
+    last_checked_at: str | None = None
+    last_blocker: str | None = None
+
+
+@dataclass
 class RejectedSignal:
     """Owner-rejected signal — silent-blocks the same symbol+side+timeframe."""
     symbol: str
@@ -223,6 +256,7 @@ class PaperState:
     daily_pnl_usd: float = 0.0
     daily_anchor_date: str = ""
     manual_ready: list[ManualReady] = field(default_factory=list)
+    news_prepared_setups: list[NewsPreparedSetup] = field(default_factory=list)
     rejected_signals: list[RejectedSignal] = field(default_factory=list)
     pending_orders: list[PendingOrder] = field(default_factory=list)
     # Tick yan ürünü: açık pozisyon başına recheck verdict listesi (read-only öneri).
@@ -253,6 +287,7 @@ class PaperState:
             "open_positions": [asdict(p) for p in self.open_positions],
             "recent_trades": [asdict(t) for t in self.recent_trades[-200:]],
             "manual_ready": [asdict(m) for m in self.manual_ready],
+            "news_prepared_setups": [asdict(m) for m in self.news_prepared_setups],
             "rejected_signals": [asdict(r) for r in self.rejected_signals],
             "pending_orders": [asdict(o) for o in self.pending_orders],
             "last_rechecks": list(self.last_rechecks),
@@ -283,6 +318,11 @@ class PaperState:
             manual_ready=[
                 ManualReady(**_only_known(ManualReady, m))
                 for m in d.get("manual_ready", [])
+                if isinstance(m, dict)
+            ],
+            news_prepared_setups=[
+                NewsPreparedSetup(**_only_known(NewsPreparedSetup, m))
+                for m in d.get("news_prepared_setups", [])
                 if isinstance(m, dict)
             ],
             rejected_signals=[

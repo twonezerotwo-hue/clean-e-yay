@@ -43,6 +43,7 @@ from packages.learning import (
     regime_risk_brake,
     source_selector,
     subsignal_scorecard,
+    technical_books_replay,
     tf_calibration,
     tf_scoring_race,
     tf_scoring_shadow,
@@ -685,6 +686,17 @@ def get_backtest_challenger() -> dict:
     B-4 terfi durumu. Canlı ağırlık/paper/karara ASLA dokunmaz. Flag
     BACKTEST_CHALLENGER_ENABLED kapalıysa enabled=false + boş görünüm."""
     return challenger_trainer.viewmodel()
+
+
+@router.get("/learning/technical-books-replay")
+def get_technical_books_replay() -> dict:
+    """Book evidence × realised future-price replay (read-only challenger).
+
+    Stored snapshots only; no live refetch, paper mutation, decision recalculation,
+    weight update, or broker execution.  Topic results are promotion candidates,
+    never live configuration.
+    """
+    return technical_books_replay.run_replay()
 
 
 @router.get("/learning/calibration-jumps")

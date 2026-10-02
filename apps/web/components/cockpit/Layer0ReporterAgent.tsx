@@ -1368,28 +1368,18 @@ export function Layer0ReporterAgent({
         : "idle";
   const positions = paper.data?.open_positions ?? [];
   const totalPnl = paper.data?.unrealized_pnl_usd ?? 0;
-  const subtitleSpeaker =
-    modelMode === "listening"
-      ? "SEN"
-      : modelMode === "thinking"
-        ? "ANALIZ"
-        : modelMode === "speaking"
-          ? "E-yAy"
-          : "E-yAy";
   const subtitleText =
     modelMode === "listening"
-      ? "Dinliyorum — holograma basili tut; biraktiginda otomatik cevaplarim."
+      ? "Dinliyorum."
       : modelMode === "thinking"
         ? lastUserText
           ? `Sorun okunuyor: ${shortLine(lastUserText, 110)}`
-          : "Sistem state, haber, risk ve sinyal katmanlarini tararken bekle."
+          : "State ve kanıtlar taranıyor."
         : modelMode === "speaking"
           ? streamPhase === "streaming"
             ? "E-yAy canli yaziyor."
             : "E-yAy yaniti okunuyor."
-          : silent
-            ? "Sessiz mod acik — yaziyla sor, cevap yazili gelir."
-            : "Holograma basili tut konus, birak; ya da asagidan yaz.";
+          : "";
 
   // Yeni mesaj/parça geldikçe transcript dibe kilitli kalır — kullanıcı yukarı
   // scroll ettiyse (stickToBottom=false) okuma bozulmaz.
@@ -1453,10 +1443,6 @@ export function Layer0ReporterAgent({
             <span className="min-w-0 truncate text-base normal-case tracking-normal text-white/90">
               E-yAy
             </span>
-            <span className="hidden items-center gap-1 truncate text-[9px] normal-case tracking-normal text-emerald-300/80 lg:flex">
-              <span className="reporter-wake-dot shrink-0" aria-hidden />
-              {silent ? "sessiz mod — yaziyla" : "bas-konus acik"}
-            </span>
           </div>
           <button
             type="button"
@@ -1480,13 +1466,6 @@ export function Layer0ReporterAgent({
           </button>
         </div>
 
-        <div className="relative z-10 mt-3 flex items-center justify-between gap-3 text-[10px] uppercase tracking-widest text-white/38">
-          <span>CANLI ANALIZ</span>
-          <span className="text-accent-cyan/60">
-            {voiceLoading ? "AUDIO RENDER" : speaking ? "VOICE OUT" : listening ? "MIC IN" : subtitleSpeaker}
-          </span>
-        </div>
-
         <div
           ref={chatScrollRef}
           onScroll={(event) => {
@@ -1496,7 +1475,7 @@ export function Layer0ReporterAgent({
           }}
           className="layer0-voice-scroll mt-2 min-h-0 flex-1 space-y-2 overflow-y-auto pr-1"
         >
-          <div className="layer0-voice-kicker">{subtitleText}</div>
+          {subtitleText ? <div className="layer0-voice-kicker">{subtitleText}</div> : null}
           {messages.length === 0 ? (
             <div className="layer0-chat-msg layer0-chat-msg--agent">
               <div className="layer0-chat-msg-role">E-yAy · brifing</div>

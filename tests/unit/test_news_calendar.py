@@ -137,6 +137,17 @@ def test_asset_impact_directions() -> None:
     assert war.get("BRENT") == 1.0
 
 
+def test_asset_impact_resolves_registry_label_for_runtime_asset(monkeypatch) -> None:
+    from types import SimpleNamespace
+
+    monkeypatch.setattr(
+        "packages.data.registry.assets.all_assets",
+        lambda: [SimpleNamespace(symbol="NATGAS", label="Natural Gas", asset_class="energy")],
+    )
+    impact = classify.classify_asset_impact("Natural gas supply disruption", "bearish")
+    assert impact.get("NATGAS") == -1.0
+
+
 # ---------------- calendar YAML load ----------------
 
 def _write_cal(tmp_path, body: str):

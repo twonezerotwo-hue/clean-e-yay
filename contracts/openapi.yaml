@@ -730,6 +730,19 @@ paths:
                 type: object
                 additionalProperties: true
 
+  /api/v1/learning/technical-books-replay:
+    get:
+      operationId: getLearningTechnicalBooksReplay
+      summary: Teknik kitap kanıtı × gerçekleşmiş snapshot replay (shadow-only, read-only)
+      responses:
+        "200":
+          description: OK (yeterli snapshot yoksa status=insufficient_snapshots)
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+
   /api/v1/learning/discovery:
     get:
       operationId: getLearningDiscovery
@@ -1884,6 +1897,40 @@ components:
           nullable: true
           description: P1 — learning handoff; kaynak snapshot.
 
+    NewsPreparedSetup:
+      type: object
+      required: [id, symbol, timeframe, side, created_at, valid_until, status]
+      description: >
+        Haber/dünya kanıtından üretilen, süreli paper setup niyeti. Emir değildir;
+        mevcut teknik, seans ve RiskGate zinciri izin verirse sonraki tick'te
+        canonical paper açılışıyla eşleşir.
+      properties:
+        id: { type: string }
+        symbol: { type: string }
+        timeframe: { type: string }
+        side: { type: string, enum: [long, short] }
+        created_at: { type: string, format: date-time }
+        valid_until: { type: string, format: date-time }
+        status: { type: string, enum: [WAITING_RISK, ARMED, ACTIVATED, EXPIRED, STALE] }
+        world_direction: { type: string, nullable: true }
+        world_score: { type: number, nullable: true }
+        confidence: { type: number, nullable: true }
+        technical_confirmation: { type: number, nullable: true }
+        confluence_state: { type: string, nullable: true }
+        current_price: { type: number, nullable: true }
+        point_estimate: { type: number, nullable: true }
+        p10: { type: number, nullable: true }
+        p50: { type: number, nullable: true }
+        p90: { type: number, nullable: true }
+        event_type: { type: string, nullable: true }
+        news_title: { type: string, nullable: true }
+        evidence:
+          type: array
+          items: { type: string }
+        snapshot_id: { type: string, nullable: true }
+        last_checked_at: { type: string, format: date-time, nullable: true }
+        last_blocker: { type: string, nullable: true }
+
     PaperTradingState:
       type: object
       required: [equity_usd, realized_pnl_usd, open_positions, recent_trades]
@@ -1918,6 +1965,12 @@ components:
         manual_ready_count:
           type: integer
           description: P2 — owner onayı bekleyen aday sayısı (DEFENSIVE/CRISIS).
+        news_prepared_setups_count:
+          type: integer
+          description: Doğrulanmış haber kanıtına bağlı, aktif ve süresi dolmamış hazırlık sayısı.
+        news_prepared_setups:
+          type: array
+          items: { $ref: "#/components/schemas/NewsPreparedSetup" }
         position_rechecks:
           type: array
           description: |
@@ -3485,6 +3538,9 @@ components:
         causal_shadow:
           type: object
           additionalProperties: true
+        news_prepared_setups:
+          type: array
+          items: { $ref: "#/components/schemas/NewsPreparedSetup" }
 
     ReplayStatus:
       type: object
@@ -4305,13 +4361,40 @@ components:
       required: [symbol, stance, consensus, decision]
       properties:
         symbol: { type: string }
+        decision_id:
+          type: string
+          description: Deterministic trace id for the closed-bar decision inputs and final gates.
         stance: { type: string, enum: [ALLOW, CAUTION, ABSTAIN, DEGRADED] }
         consensus: { $ref: "#/components/schemas/ConsensusSnapshot" }
         decision: { $ref: "#/components/schemas/AgentDecision" }
+        confidence_breakdown:
+          type: object
+          description: Explains matrix confidence; not a win probability and never book-promoted.
+          additionalProperties: true
         economics:
           anyOf:
             - $ref: "#/components/schemas/TradeEconomics"
             - type: "null"
+        technical_knowledge:
+          type: object
+          nullable: true
+          description: Evidence-only references from the user-provided technical-analysis corpus.
+          additionalProperties: true
+        book_evidence:
+          type: object
+          nullable: false
+          description: Explicit evidence-only boundary for the technical-book corpus.
+          additionalProperties: true
+        formation_playbook:
+          type: object
+          nullable: true
+          description: Evidence-only formation entry/management/exit plan; never an action.
+          additionalProperties: true
+        book_feature_shadow:
+          type: object
+          nullable: true
+          description: Replay-ready technical book features; shadow-only until labelled promotion.
+          additionalProperties: true
         reversal_bias: { type: string, enum: [BULLISH, BEARISH, NEUTRAL], nullable: true }
         pattern: { type: string, nullable: true }
         per_timeframe:

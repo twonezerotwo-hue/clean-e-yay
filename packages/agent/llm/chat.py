@@ -1149,11 +1149,11 @@ _HISTORY_MAX_CHARS = 300
 
 # Chat üretim sıcaklığı — 0.2 şablon gibi tekrar eden cümleler üretiyordu;
 # persona raporları (report.py) 0.2'de kalır, sohbet biraz daha doğal akar.
-_CHAT_TEMPERATURE = 0.5
+_CHAT_TEMPERATURE = 0.6
 
 # Cache anahtar sürümü — prompt/yönlendirme değişince artır ki file-backed
 # cache'teki (2 saat TTL) eski üsluptaki cevaplar dönmesin.
-_PROMPT_VERSION = "v3"
+_PROMPT_VERSION = "v4-natural-tr"
 
 # Side-effect'li owner komutları (emir aç/iptal, pozisyon op'u): cevap
 # DETERMİNİSTİK kalır, LLM parafrazına GİRMEZ — sayı/SL-TP bozulmaz, cevap
