@@ -30,7 +30,7 @@ LLM yalnız anlatır. `PAPER_ONLY` / `NO_EXECUTION` kodda yapısal olarak zorlan
    (owner kararı, devir için). Roadmap dışı işlerde önce sor. Push öncesi tam doğrulama (test) ŞART.
 9. **Yeni env-flag eklerken:** conftest'e `delenv` + `scripts/flag-sync-check.sh` SYNC_FLAGS listesine ekle.
    YAML flag ise flag-sync-check gerekmez (git taşır).
-10. **PowerShell script'lerine ASCII dışı karakter YAZMA** (keep-alive zinciri kırılıyor).
+10. **PowerShell script'lerine ASCII dışı karakter YAZMA** (keeper sessizce ölüyor).
 11. **Dokümana eskiyen durum kopyalama.** Flag değeri, test sayısı, "X canlı" iddiası dokümana
     yazılmaz; `docs/STATE.md` nereden okunacağını söyler. Durum değişince STATE/ROADMAP güncellenir,
     tarihli "devir notu" bölümü açılmaz.
@@ -48,8 +48,9 @@ LLM yalnız anlatır. `PAPER_ONLY` / `NO_EXECUTION` kodda yapısal olarak zorlan
 - **Sözleşme ratchet'i:** yeni route önce `contracts/openapi.yaml`'a eklenir (+ `make codegen`);
   `tests/contract/contractless_routes.txt` yalnız küçülebilir.
 - Fresh clone: `.\scripts\bootstrap.ps1` (Win) veya `./scripts/bootstrap.sh` — venv + bağımlılık + smoke.
-- Dashboard prod: port 4000'de `next start` (`.next-prod`). FE değişince `.next-prod` rebuild +
-  `scripts/start-dashboard.ps1`. Aynı portta `next dev` çalıştırma — çakışma beyaz ekran yapar.
+- Dashboard prod: port 4000'de `next start` (`.next-prod`), lokal keeper `scripts/local-autostart.ps1`
+  kaldırır. FE değişince `.next-prod` rebuild + web (node) sürecini durdur; keeper 20 sn'de yeniden
+  kaldırır. Aynı portta `next dev` çalıştırma — çakışma beyaz ekran yapar.
 - Lokalde YAML config-flag aktivasyonu worker restart ister (`lru_cache`).
 - AWS: main'e merge = GitHub Actions self-hosted runner ile otomatik canlı deploy (worker'lar restart
   edilir). EC2'ye SSH YOK; kutuda komut koşturmak gerekirse pull_request tetiklemeli draft PR

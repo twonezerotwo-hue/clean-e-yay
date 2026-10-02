@@ -39,8 +39,9 @@ Gerekli: Python **3.11+** PATH'te. Web tarafı için ayrıca Node 20+ + pnpm.
 - **Karar-destek**, otonom işlem motoru değil. `PAPER_ONLY`, `REPLAY_ONLY`, `NO_EXECUTION`.
 - AI açıklar; deterministic kod karar verir.
 - Sözleşme-önce: `contracts/openapi.yaml` tek doğruluk kaynağı; tipler ve client codegen.
-- Ayrı süreçler: HTTP API, tick worker, learning worker — biri çökerse
-  diğerleri etkilenmez. (AWS bugün hepsini tek supervisor sürecinde koşuyor; bkz. docs/STATE.md.)
+- Tek çalışma şekli: API + tick worker + learning worker tek `apps.supervisor`
+  sürecinde (lokal ve AWS aynı); tick ve learning ayrı thread'de koşar, API donmaz.
+  Bkz. docs/STATE.md.
 
 ## Mimari
 
@@ -197,7 +198,7 @@ make codegen   # OpenAPI → Pydantic + TS (TODO: codegen pipeline)
 ## Deployment / 7-24 readiness (DEP1)
 
 Gerçek 7/24 local/production-like çalıştırma için checklist. Güncel topoloji
-(lokal keeper vs AWS supervisor) için bkz. [docs/STATE.md](docs/STATE.md).
+(her yerde `apps.supervisor`) için bkz. [docs/STATE.md](docs/STATE.md).
 
 ### Local production runbook (REL1)
 

@@ -4,9 +4,9 @@
 # every 20s it ensures the local stack is up and starts ONLY what is down.
 #
 # Stack (LOCAL ONLY - no public tunnel):
-#   API             plain uvicorn         http://127.0.0.1:9000
-#   tick_worker     long-lived daemon     (30s loop, live data/positions)
-#   learning_worker self-paced loop       (calibration/proposals)
+#   supervisor      API + tick + learning http://127.0.0.1:9000
+#                   ONE process, same as AWS (owner decision 2026-10-02).
+#                   Tick/learning run in threads, so the API never freezes.
 #   Ollama          local LLM             http://127.0.0.1:11434 (if installed)
 #   web             next start .next-prod http://127.0.0.1:4000
 #
@@ -126,16 +126,10 @@ function Ensure-HttpSvc([string]$label, [string]$url, [int]$port, [string]$exe, 
     }
 }
 
-# Ensure a worker that has no HTTP surface: process presence is the health check.
-function Ensure-Worker([string]$label, [string]$module) {
-    if (Proc-Running $py $module) { return }
-    Start-Svc $label $py @("-m", $module) $root "$logs\$label.out.log" "$logs\$label.err.log" | Out-Null
-}
-
 # ---- shared env for all child services -------------------------------------
 $env:PYTHONPATH = $root
 
-# .env -> process environment, so ALL FOUR services inherit it (2026-07-21 fix).
+# .env -> process environment, so every child service inherits it (2026-07-21 fix).
 # Only apps/api/main.py calls _load_dotenv(); tick/learning/governor workers never
 # read the file. That silently disabled every owner-approved learning flag and
 # every provider key in exactly the processes that consume them - the API looked
@@ -173,6 +167,37 @@ $env:PATH       = "C:\Program Files\nodejs;" + $env:PATH
 # certifi -> SSL_CERT_FILE so live providers do not fail CERTIFICATE_VERIFY_FAILED
 if (Test-Path $py) { $cert = & $py -m certifi 2>$null; if ($cert) { $env:SSL_CERT_FILE = $cert } }
 $env:NEXT_DIST_DIR = ".next-prod"
+# supervisor binds 0.0.0.0 by default (AWS); local stays on loopback only.
+$env:API_HOST = "127.0.0.1"
+$env:API_PORT = "9000"
+
+# ---- one-time migration: separate processes -> supervisor ------------------
+# Older keepers ran API (uvicorn), tick_worker, learning loop and governor as
+# separate processes. Left alive they would hold port 9000 (health stays green,
+# supervisor never starts) and the tick lock. Stop them once, here.
+$migrated = $false
+foreach ($m in @("apps.api.main:app", "apps.tick_worker.main", "apps.learning_worker.loop", "apps.governor_worker")) {
+    if (Proc-Running $py $m) {
+        Kill-Procs $py $m
+        Klog "eski ayri surec durduruldu: $m"
+        $migrated = $true
+    }
+}
+# The venv launcher may leave its real python child behind: free the API port
+# and stop the old tick by the pid in its own lock file.
+if ($migrated) {
+    Free-Port 9000
+    $tickLock = Join-Path $root "data\runtime\tick_worker.lock"
+    if (Test-Path $tickLock) {
+        $lockPid = 0
+        [int]::TryParse(((Get-Content $tickLock -Raw) -split "\|")[0], [ref]$lockPid) | Out-Null
+        $p = Get-CimInstance Win32_Process -Filter "ProcessId=$lockPid" -ErrorAction SilentlyContinue
+        if ($p -and $p.CommandLine -like "*apps.tick_worker.main*") {
+            Stop-Process -Id $lockPid -Force -ErrorAction SilentlyContinue
+            Klog "eski tick sureci durduruldu (kilit pid=$lockPid)"
+        }
+    }
+}
 
 # ---- keeper loop -----------------------------------------------------------
 $apiDown = $null
@@ -187,14 +212,10 @@ $ngrokUrl = "https://mobster-ipad-transform.ngrok-free.dev"
 $script:ngrokWarned = $false
 
 while ($true) {
-    # API - plain uvicorn (endpoints run in threadpool; event loop never blocks)
-    Ensure-HttpSvc "api" "http://127.0.0.1:9000/api/v1/health" 9000 $py "uvicorn" `
-        @("-m","uvicorn","apps.api.main:app","--host","127.0.0.1","--port","9000") `
-        $root "$logs\api.out.log" "$logs\api.err.log" ([ref]$apiDown)
-
-    # workers - process presence is the health signal
-    Ensure-Worker "worker"   "apps.tick_worker.main"
-    Ensure-Worker "learning" "apps.learning_worker.loop"
+    # supervisor - API + tick + learning in one process (health = API answers)
+    Ensure-HttpSvc "supervisor" "http://127.0.0.1:9000/api/v1/health" 9000 $py "apps.supervisor" `
+        @("-m","apps.supervisor") `
+        $root "$logs\supervisor.out.log" "$logs\supervisor.err.log" ([ref]$apiDown)
 
     # Ollama - local LLM for chat/persona narration (dead process => robotic chat)
     $ollama = "$env:LOCALAPPDATA\Programs\Ollama\ollama.exe"

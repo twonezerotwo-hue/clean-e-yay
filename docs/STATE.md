@@ -27,10 +27,13 @@ snapshot (fiyat + OHLCV + makro + haber, DQS)
 
 | Ortam | Nasıl kalkar | Süreçler |
 | --- | --- | --- |
-| Lokal (Windows) | `scripts/local-autostart.ps1` keeper (20 sn'de bir sağlık) | API (uvicorn :9000), web (`next start` :4000), tick worker, learning worker (kendi döngüsü), Ollama; ngrok tüneli varsa |
-| AWS (EC2) | `main`'e merge → GitHub Actions → `scripts/deploy-from-github.sh` | `eyay-supervisor.service`: API + worker'lar **tek süreçte** (`apps/supervisor`) |
+| Lokal (Windows) | `scripts/local-autostart.ps1` keeper (20 sn'de bir sağlık) | `apps.supervisor` (127.0.0.1:9000), web (`next start` :4000), Ollama; ngrok tüneli varsa |
+| AWS (EC2) | `main`'e merge → GitHub Actions → `scripts/deploy-from-github.sh` | `eyay-supervisor.service` (`apps.supervisor`), `eyay-web.service` |
 
-İki ortam aynı kodu koşar ama topolojileri farklı (temizlik B2 maddesi).
+İki ortam aynı şekilde çalışır (owner kararı): API, tick ve learning tek
+`apps.supervisor` sürecinde. Tick ve learning ayrı thread'de koşar; event loop
+yalnız HTTP'ye kalır. Tick, `tick_worker.lock` tekil-süreç kilidini alır: başka
+bir tick yazarı canlıysa tick atlanır (log'da "tick atlandı"), API sürer.
 Runtime durumu (`data/runtime/`) ortamlar arasında **paylaşılmaz**.
 
 ## Konfigürasyon — tek kaynaklar

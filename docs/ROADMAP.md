@@ -16,7 +16,7 @@ listeler. Temizlik boyunca yeni özellik, yeni flag, yeni veri kaynağı eklenme
 | 2 | Ölü kod: hiç açılmamış 4 özellik, meta_gate, 0-2 karnesi, governor görev üreticisi söküldü; doküman arşivi | Hazır |
 | 3 | Owner kararları (K1–K5 verildi) + ağırlıklar git'te (H8/K5) + test izolasyonu (H17); temiz veriyle yeniden eğitim (H7) | Sürüyor |
 | 4 | Birleştirmeler: kanıt katmanı, 7 backtest motoru → 1, 7 kalibrasyon modülü → 1, tek store yardımcısı, flag defteri, sözleşme borcu, panel birleştirme | Bekliyor |
-| 5 | Tek çalışma topolojisi (AWS'de de ayrı süreçler), karar motorunun bölünmesi | Bekliyor |
+| 5 | Tek çalışma topolojisi (her yerde supervisor — hazır), karar motorunun bölünmesi | Sürüyor |
 
 ## Verilmiş owner kararları (2026-10-02)
 
@@ -34,14 +34,14 @@ listeler. Temizlik boyunca yeni özellik, yeni flag, yeni veri kaynağı eklenme
 - **K3** `meta_gate` silindi; `learning_advisor` kalır.
 - **K4** 0-2 karnesi silindi, 0-2 stratejisi donduruldu; bölge önerici kalır;
   governor görev üreticisi silindi, öneri/onay defteri kalır.
+- **K6** Tek çalışma şekli: her yerde `apps.supervisor` (tick/learning thread'de, API donmaz).
 - **K5** Ağırlıklar git'te (`config/weights_active.json`), owner onayıyla değişir;
   oto-uygulama kapalı.
 
 ## Açık owner kararları
 
-1. Çalışma topolojisi: her yerde ayrı süreç mi, her yerde supervisor mı?
-2. Telefon erişimi: ngrok'a kimlik doğrulama mı, yalnız LAN/VPN mi?
-3. Dashboard kuralı: "backend yeni state üretirse panel eklenir" kuralı çok panele yol açtı;
+1. Telefon erişimi: ngrok'a kimlik doğrulama mı, yalnız LAN/VPN mi?
+2. Dashboard kuralı: "backend yeni state üretirse panel eklenir" kuralı çok panele yol açtı;
    yalnız owner'ın karar verdiği konular panel alsın mı?
 
 ## Temizlikten sonra (ölçüm işleri)

@@ -11,6 +11,13 @@ Ortam değişkenleri:
 Mimari not: arka plan döngülerinin sahibi BURASIDIR, apps/api değil. Bu
 sayede apps/api ince HTTP katmanı olarak kalır (architecture guard geçer),
 ama kullanıcı hâlâ tek komutla 7/24 agent + API alır.
+
+Tek çalışma şekli (owner kararı, 2026-10-02): lokal keeper da AWS de bu
+süreci çalıştırır. tick_worker.run_once adı async olsa da içi senkron
+(build_snapshot ~20 sn); event loop'ta koşarsa API her tick'te donar. Bu
+yüzden tick ve learning ayrı thread'de koşar, loop yalnız HTTP'ye kalır.
+Tick ayrıca tick_worker'ın tekil-süreç kilidini alır: başka bir tick süreci
+canlıysa ikinci bir defter yazarı başlatılmaz.
 """
 from __future__ import annotations
 
@@ -43,6 +50,44 @@ async def _learning_loop(stop: asyncio.Event, interval: int) -> None:
     _log.info("learning loop stopped")
 
 
+def _run_tick_once_blocking() -> None:
+    """tick_worker.run_once'ı bu thread'in kendi event loop'unda koş."""
+    from apps.tick_worker import main as tick
+
+    asyncio.run(tick.run_once())
+
+
+async def _tick_loop(stop: asyncio.Event, interval: int) -> None:
+    """Tick döngüsü — iş thread'de, bekleme loop'ta (API hiç bloke olmaz)."""
+    from apps.tick_worker import main as tick
+
+    _log.info("tick loop started, interval=%ds", interval)
+    locked = False
+    try:
+        while not stop.is_set():
+            if not locked:
+                try:
+                    tick._acquire_single_instance()
+                    locked = True
+                except RuntimeError as exc:
+                    # Başka tick yazarı canlı (ör. eski ayrı süreç). Çift yazar
+                    # defteri ayrıştırır; o ölene kadar tick atlanır, API sürer.
+                    _log.error("tick atlandı — %s", exc)
+            if locked:
+                try:
+                    await asyncio.to_thread(_run_tick_once_blocking)
+                except Exception:
+                    _log.exception("tick run_once failed")
+            try:
+                await asyncio.wait_for(stop.wait(), timeout=interval)
+            except TimeoutError:
+                pass
+    finally:
+        if locked:
+            tick._release_single_instance()
+    _log.info("tick loop stopped")
+
+
 async def _serve() -> None:
     import uvicorn
 
@@ -58,19 +103,15 @@ async def _serve() -> None:
     tasks: list[asyncio.Task] = []
 
     if _env_truthy("RUN_WORKERS", "true"):
-        # tick_worker kendi sinyal handler'larını kurmasın — supervisor/uvicorn yönetir.
-        os.environ.setdefault("TICK_SKIP_SIGNAL_HANDLERS", "1")
-        from apps.tick_worker.main import _STOP as tick_stop
-        from apps.tick_worker.main import run as tick_run
+        from apps.tick_worker.main import INTERVAL as tick_interval
 
         interval = int(os.environ.get("LEARNING_INTERVAL_SEC", "300"))
         tasks = [
-            asyncio.create_task(tick_run(), name="tick_worker"),
+            asyncio.create_task(_tick_loop(stop, tick_interval), name="tick_worker"),
             asyncio.create_task(_learning_loop(stop, interval), name="learning_loop"),
         ]
         _log.info("agent ON — tick + learning workers running alongside API")
     else:
-        tick_stop = None
         _log.info("agent OFF (RUN_WORKERS=false) — API only")
 
     try:
@@ -78,14 +119,14 @@ async def _serve() -> None:
         # worker'ları durdururuz.
         await server.serve()
     finally:
+        # Normal çıkışta döngüler stop'u görür ve thread'deki tick bitirilir.
+        # SIGTERM/SIGINT'te uvicorn sinyali serve() sonrası yeniden yükseltir;
+        # süreç burada beklemeden biter (eski davranış). Tick kilidi bayat kalır,
+        # sonraki açılış ölü pid'i görüp devralır.
         stop.set()
-        if tick_stop is not None:
-            tick_stop.set()
-        for t in tasks:
-            t.cancel()
         for t in tasks:
             try:
-                await asyncio.wait_for(t, timeout=5.0)
+                await asyncio.wait_for(t, timeout=60.0)
             except (asyncio.CancelledError, TimeoutError, Exception):
                 pass
 
