@@ -18,7 +18,7 @@ from pydantic import BaseModel, Field
 from packages.data.ingestion.pipeline import build_snapshot
 from packages.notifications import list_recent, mark_ack, mark_all_ack, unread_count
 from packages.paper import audit as paper_audit
-from packages.paper import maintenance, manual_order, manual_queue, position_ops, ticket
+from packages.paper import maintenance, manual_order, manual_queue, ticket
 from packages.paper import state as paper_state
 from packages.paper.guards import price_sanity, state_anomaly
 from packages.paper.lifecycle import close_position, max_drawdown_pct
@@ -325,57 +325,6 @@ def open_position_manual(req: ManualOrderRequest) -> dict:
     except manual_order.ManualOrderError as exc:
         raise HTTPException(status_code=exc.code, detail=str(exc)) from exc
     return {"status": "ok", **res}
-
-
-class ModifyRequest(BaseModel):
-    sl: float | None = None
-    tp: float | None = None
-
-
-class TrailingRequest(BaseModel):
-    distance_pct: float = Field(gt=0)
-    activate_pct: float | None = None
-
-
-class PartialCloseRequest(BaseModel):
-    fraction: float | None = None
-    size_usd: float | None = None
-
-
-class ScaleInRequest(BaseModel):
-    size_usd: float = Field(gt=0)
-
-
-def _pos_op(fn, *args, **kwargs) -> dict:
-    try:
-        return fn(*args, **kwargs)
-    except position_ops.PositionOpError as exc:
-        raise HTTPException(status_code=exc.code, detail=str(exc)) from exc
-
-
-@router.post("/paper-trading/positions/{pos_ref}/modify")
-def modify_position(pos_ref: str, req: ModifyRequest) -> dict:
-    return {"status": "ok", **_pos_op(position_ops.modify_sltp, pos_ref, sl=req.sl, tp=req.tp)}
-
-
-@router.post("/paper-trading/positions/{pos_ref}/trailing")
-def trailing_position(pos_ref: str, req: TrailingRequest) -> dict:
-    return {"status": "ok", **_pos_op(position_ops.set_trailing, pos_ref, req.distance_pct, req.activate_pct)}
-
-
-@router.post("/paper-trading/positions/{pos_ref}/partial-close")
-def partial_close_position(pos_ref: str, req: PartialCloseRequest) -> dict:
-    return {"status": "ok", **_pos_op(position_ops.partial_close, pos_ref, fraction=req.fraction, size_usd=req.size_usd)}
-
-
-@router.post("/paper-trading/positions/{pos_ref}/scale-in")
-def scale_in_position(pos_ref: str, req: ScaleInRequest) -> dict:
-    return {"status": "ok", **_pos_op(position_ops.scale_in, pos_ref, req.size_usd)}
-
-
-@router.post("/paper-trading/positions/{pos_ref}/flip")
-def flip_position(pos_ref: str) -> dict:
-    return {"status": "ok", **_pos_op(position_ops.flip, pos_ref)}
 
 
 @router.get("/paper-trading/orders")

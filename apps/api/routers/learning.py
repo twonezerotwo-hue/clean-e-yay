@@ -8,7 +8,7 @@ import os
 from dataclasses import asdict
 
 from fastapi import APIRouter, HTTPException
-from fastapi.responses import HTMLResponse, Response
+from fastapi.responses import Response
 from pydantic import BaseModel
 
 from packages.data.registry.loader import load_thresholds
@@ -20,7 +20,6 @@ from packages.learning import (
     calibration_audit,
     calibration_store,
     calibration_trainer,
-    causal_calibration,
     challenger_trainer,
     cohorts,
     council_scorecard,
@@ -35,11 +34,8 @@ from packages.learning import (
     historical_edge,
     missed_opportunity,
     mistake_memory,
-    monitoring_coverage,
     news_event_study,
     promotion_criteria,
-    reflection,
-    regime_risk_brake,
     subsignal_scorecard,
     tf_calibration,
     tf_scoring_race,
@@ -52,14 +48,12 @@ from packages.learning import (
     threshold_trainer,
     zero_two_strategy,
     zone_chart,
-    zone_plan_shadow,
     zone_proposer,
 )
 from packages.learning import outcomes as outcomes_mod
 from packages.learning.calibration import reliability_bins
 from packages.learning.summary import build_summary
 from packages.risk import trade_economics as te
-from packages.world_state import archive as world_state_archive
 
 router = APIRouter(tags=["learning"])
 
@@ -138,16 +132,6 @@ def get_zero_two_strategy() -> dict:
     return zero_two_strategy.viewmodel()
 
 
-@router.get("/learning/zone-plan")
-def get_zone_plan() -> dict:
-    """Bölge-planı gölge karnesi (read-only, PAPER_SAFE, SALT-ANALİZ). Owner'ın
-    el-çizimi kesişim bölgeleri (config/zone_plans.yaml — sistem bölge ÜRETMEZ)
-    üzerinde dallı işlem planı gölge-yürütülür: parçalı çekirdek girişi, break-even
-    kuralı, derin-katman ortalama düşürme + retest TP, kalıcı geri-alımda yüksek
-    bakiye + %3 stop, LOG-fib çıkış merdiveni. Canlı karara ASLA dokunmaz."""
-    return zone_plan_shadow.viewmodel()
-
-
 @router.get("/learning/council")
 def get_council() -> dict:
     """Konsey karnesi (read-only, PAPER_SAFE, SALT-ANALİZ). Katmanlar-arası
@@ -196,15 +180,6 @@ def post_zone_verdict(req: ZoneVerdictRequest) -> dict:
     }
 
 
-@router.get("/learning/zone-proposer/review", response_class=HTMLResponse)
-def get_zone_proposer_review() -> HTMLResponse:
-    """Aday bölge GÖRSEL incelemesi (read-only, PAPER_SAFE). Tüm evrenin gerçek
-    haftalık grafikleri üzerine makinenin çizdikleri işaretlenir (trend çizgileri,
-    fibler, kesişim, bölge bantları; owner planı varsa turkuaz bindirme) — owner
-    gözüyle kontrol edip onay/ret verir. Hesap yapmaz; karar owner'da."""
-    return HTMLResponse(zone_chart.review_html())
-
-
 @router.get("/learning/zone-proposer/chart/{symbol}")
 def get_zone_proposer_chart(symbol: str) -> Response:
     """Tek asset'in işaretli SVG grafiği (read-only, PAPER_SAFE). Veri yoksa 404."""
@@ -212,15 +187,6 @@ def get_zone_proposer_chart(symbol: str) -> Response:
     if svg is None:
         raise HTTPException(404, f"{symbol}: haftalık bar verisi yok")
     return Response(content=svg, media_type="image/svg+xml")
-
-
-@router.get("/learning/reflection")
-def get_reflection() -> dict:
-    """Yansıma/hafıza döngüsü (read-only, PAPER_SAFE, SALT-GÖZLEM). Kapanan
-    işlemlerden çıkarılan dersler (çapraz-sembol + per-sembol) — "ne oldu, kaça,
-    hangi setup". Karar hattına BAĞLI DEĞİL (enjeksiyon ayrı owner adımı);
-    dersler yalnız gerçekleşen outcome alanlarından türer (uydurma yok)."""
-    return reflection.viewmodel()
 
 
 @router.get("/learning/payoff-readiness")
@@ -603,24 +569,6 @@ def get_evidence_bus() -> dict:
     return evidence_bus.viewmodel()
 
 
-@router.get("/learning/monitoring-coverage")
-def get_monitoring_coverage() -> dict:
-    """I5 — İzleme kapsama (read-only, PAPER_SAFE). Canlıya dokunan her davranış
-    flag'inin nasıl izlendiği (watchdog / kendi-rollback / girdi-hijyeni / tuning /
-    shadow-muaf) + WATCHDOG'ların REGISTRY'de kayıtlı olduğu. 'İzlemesiz canlı-
-    dokunuş yok' değişmezi test_monitoring_coverage ile guard'lı."""
-    return monitoring_coverage.coverage_summary()
-
-
-@router.get("/learning/regime-risk-brake")
-def get_regime_risk_brake() -> dict:
-    """Y-1 — Rejim risk freni (read-only, PAPER_SAFE). Rejim başına çift-kaynak
-    kanıt (canlı AUTO kohort + backtest challenger) ve fren hükmü; `enabled`
-    KAPALIYKEN salt-gözlem (engine kararlarda applied=False raporu taşır).
-    Owner aktivasyon kararını bu kanıttan verir; geri-alma = flag false."""
-    return regime_risk_brake.viewmodel()
-
-
 @router.get("/learning/news-event-study")
 def get_news_event_study() -> dict:
     """Y-6 — Haber olay-çalışması (read-only, PAPER_SAFE, SALT-GÖZLEM). Haber
@@ -629,29 +577,6 @@ def get_news_event_study() -> dict:
     dürüst `global_verdict=UNPROVEN` ("news ağırlığı kanıtsız"). Hiçbir çıktı
     karara/ağırlığa dokunmaz — news görünürlüğü challenger'a AYRI owner kararı."""
     return news_event_study.viewmodel()
-
-
-@router.get("/learning/causal-calibration")
-def get_causal_calibration() -> dict:
-    """Evidence-calibrated causal edge recommendations (read-only shadow)."""
-    return causal_calibration.load_recommendations() or {
-        "status": "INSUFFICIENT",
-        "raw_rows": 0,
-        "eligible_rows": 0,
-        "rejected_rows": 0,
-        "rejection_reasons": {},
-        "archive_window": {"start": None, "end": None},
-        "recommendations": {},
-        "shadow_only": True,
-        "auto_apply": False,
-    }
-
-
-@router.get("/learning/world-state-archive")
-def get_world_state_archive() -> dict:
-    """Compact World-State archive status and recent rows (read-only)."""
-    rows = world_state_archive.all_records()
-    return {**world_state_archive.status(), "records_preview": rows[-20:]}
 
 
 @router.get("/learning/backtest-challenger")

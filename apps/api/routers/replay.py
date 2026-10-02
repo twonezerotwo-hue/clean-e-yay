@@ -24,7 +24,6 @@ from __future__ import annotations
 from fastapi import APIRouter, HTTPException
 
 from packages.data import backtest, snapshot_store, strategy_backtest
-from packages.learning.news_event_study import causal_historical_replay
 
 router = APIRouter(tags=["replay"])
 
@@ -72,12 +71,6 @@ def get_replay_backtest() -> dict:
     yoksa insufficient_future_data (her ikisi de 200, dürüst body).
     """
     return backtest.run_backtest()
-
-
-@router.get("/replay/causal-world-state")
-def get_causal_world_state_replay() -> dict:
-    """As-of World-State replay; no live refetch and no decision mutation."""
-    return causal_historical_replay()
 
 
 @router.get("/replay/backtest/{run_id}")
