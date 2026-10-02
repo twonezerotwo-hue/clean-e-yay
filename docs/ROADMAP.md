@@ -15,8 +15,8 @@ listeler. Temizlik boyunca yeni özellik, yeni flag, yeni veri kaynağı eklenme
 | 1 | Veriyi bozan hatalar: H5/H6 atıf + keşif etiketi, H1 bayat/önceki bar stopu, H2 2R acil fren, H3 tick bekçisi, H11 zarar frenleri | Hazır |
 | 2 | Ölü kod: hiç açılmamış 4 özellik, meta_gate, 0-2 karnesi, governor görev üreticisi söküldü; doküman arşivi | Hazır |
 | 3 | Owner kararları (K1–K8) + ağırlıklar git'te (H8/K5) + test izolasyonu (H17) + hata kayıpları öğrenmeden ayrıldı (H7) | Hazır |
-| 4 | Birleştirmeler: kanıt katmanı, 7 backtest motoru → 1, 7 kalibrasyon modülü → 1, tek store yardımcısı, flag defteri, sözleşme borcu, panel birleştirme | Bekliyor |
-| 5 | Tek çalışma topolojisi (her yerde supervisor — hazır), karar motorunun bölünmesi | Sürüyor |
+| 4 | Birleştirmeler — yapıldı: tek atomik store yardımcısı (B6), strateji backtest'i canlı stop kuralıyla (B4), kaynak seçici söküldü (G6), tek çalıştırma girişi (B3). Kalan: flag defteri (B9), YAML bölme (B8), sözleşme borcu (B1/F6), panel sadeleştirme (K8) | Sürüyor |
+| 5 | Tek çalışma şekli (K6, hazır); GET'lerin canlı rejim hafızasına yazması kaldırıldı (H10, hazır); karar motorunun bölünmesi (B11) | Sürüyor |
 
 ## Verilmiş owner kararları (2026-10-02)
 
