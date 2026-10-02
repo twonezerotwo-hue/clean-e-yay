@@ -51,7 +51,11 @@ consensus:
   # zemin motor 95 hücrede %52.6 / +0.59% (beats_backup=false). Kural "V4_BEHIND
   # → owner geri alır". Teknik oy ZEMİN motora döndü; v4 gölgede yarışmaya devam
   # eder (tf_scoring_race COLLECTING). Karne V4_AHEAD derse tekrar açılır.
-  touche_v4: false
+  # TEKRAR AÇILDI (2026-10-02, owner kararı): karne V4_AHEAD — v4 isabet %49
+  # (n=406) vs zemin %44 (n=503). Not: fark istatistiksel olarak anlamlı değil
+  # (z≈1.5); öneri 30 gün daha ölçmekti, owner canlıya almayı seçti. Kural aynı:
+  # karne V4_BEHIND derse owner'a sorulur, geri-alma = false (tek satır).
+  touche_v4: true
   # quantum v2 — sembol-başı kesitsel GÖRECELİ-GÜÇ (para akışı) skoru. false
   # (DEFAULT) → v1 birebir: tek makro risk-on tilt herkese aynı girer (ölü yük).
   # true → v2: her sembol akranlarına göre lider/geride notu alır (oynaklık-adil,
