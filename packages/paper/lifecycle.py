@@ -78,11 +78,7 @@ def _disaster_stop_mult() -> float:
 
 def _disaster_level(pos: Position, mult: float) -> float | None:
     """Acil fren seviyesi: SL'nin `mult-1` risk mesafesi ötesi (long: altı, short: üstü)."""
-    if pos.sl is None or pos.entry_price is None or pos.entry_price <= 0:
-        return None
-    dist = abs(pos.entry_price - pos.sl)
-    extra = (mult - 1.0) * dist
-    return pos.sl - extra if pos.side == "long" else pos.sl + extra
+    return execution_sim.disaster_level(pos.side, pos.entry_price, pos.sl, mult)
 
 
 def _structural_stop_cfg() -> dict:

@@ -113,10 +113,59 @@ def simulate_exit_fill(
     )
 
 
+def disaster_level(side: str, entry_price: float | None, sl: float | None, mult: float) -> float | None:
+    """H2 acil fren seviyesi: SL'nin `mult-1` risk mesafesi ötesi (long: altı, short: üstü).
+    Canlı lifecycle ve bar-düzeyi backtest aynı formülü kullanır. Pure."""
+    if sl is None or entry_price is None or entry_price <= 0:
+        return None
+    extra = (mult - 1.0) * abs(entry_price - sl)
+    return sl - extra if side == "long" else sl + extra
+
+
+def bar_exit(
+    *,
+    side: str,
+    entry_price: float,
+    sl: float | None,
+    tp: float | None,
+    high: float,
+    low: float,
+    close: float,
+    close_based: bool,
+    disaster_mult: float = 2.0,
+) -> tuple[str, float] | None:
+    """Canlı çıkış kurallarının KAPANMIŞ bir bar içindeki karşılığı (backtest için).
+
+    close_based=False → fitil stopu: SL önce, sonra TP; dolum seviyede.
+    close_based=True (canlı ayar) → bar içinde sırasıyla:
+      1. acil fren: fitil `disaster_level`'e değerse SL_HIT, dolum o seviyede;
+      2. TP: fitil hedefe değerse TP_HIT (canlıda TP tick'le, bar kapanmadan olur);
+      3. kapanış stopu: bar KAPANIŞI SL'nin ötesindeyse SL_HIT, dolum kapanışta
+         (canlı `simulate_exit_fill` ile aynı: tetik kapanış fiyatı).
+    Bar içi sıra bilinmediğinde muhafazakâr: fren TP'den önce. Pure."""
+    long = side == "long"
+    if not close_based:
+        if sl is not None and ((long and low <= sl) or (not long and high >= sl)):
+            return SL_HIT, sl
+        if tp is not None and ((long and high >= tp) or (not long and low <= tp)):
+            return TP_HIT, tp
+        return None
+    lvl = disaster_level(side, entry_price, sl, disaster_mult)
+    if lvl is not None and ((long and low <= lvl) or (not long and high >= lvl)):
+        return SL_HIT, lvl
+    if tp is not None and ((long and high >= tp) or (not long and low <= tp)):
+        return TP_HIT, tp
+    if sl is not None and ((long and close <= sl) or (not long and close >= sl)):
+        return SL_HIT, close
+    return None
+
+
 __all__ = [
     "SL_HIT",
     "TP_HIT",
     "Fill",
+    "bar_exit",
+    "disaster_level",
     "realized_pnl",
     "simulate_exit_fill",
     "triggered_exit",

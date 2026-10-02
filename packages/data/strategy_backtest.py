@@ -10,8 +10,9 @@ değerle doldurmak yanıltıcı olur (DATA_POLICY).
 
 Look-ahead yok: her adımda sadece o ana kadar kapanmış barlar görülür
 (`bars[: i + 1]`). SL/TP gerçek paper-trading eşikleriyle aynı
-(`config/thresholds_v1.0.yaml: paper_trading.sl_pct` / `tp_rr_ratio`), fill
-mantığı `packages.paper.execution_sim` ile aynı formülü kullanır.
+(`config/thresholds_v1.0.yaml: paper_trading.sl_pct` / `tp_rr_ratio`). Stop
+tetikleme canlıyla aynı kuraldır (`execution_sim.bar_exit`): kapanış-bazlı stop
+açıksa SL bar kapanışıyla, acil fren fitille, TP fitille (temizlik B4).
 
 PAPER_SAFE / NO_EXECUTION — gerçek emir yok, sadece simülasyon; paper state'e
 hiçbir şey yazmaz.
@@ -52,6 +53,16 @@ def _sl_tp_pct(symbol: str) -> tuple[float, float]:
     return sl_pct, tp_pct
 
 
+def _exit_policy() -> tuple[bool, float]:
+    """Canlı lifecycle ile aynı çıkış ayarı: (kapanış-bazlı stop açık mı, acil fren katı)."""
+    cfg = load_thresholds().get("exit_close_based_stop") or {}
+    try:
+        mult = max(1.0, float(cfg.get("disaster_mult", 2.0)))
+    except (TypeError, ValueError):
+        mult = 2.0
+    return bool(cfg.get("enabled", False)), mult
+
+
 def run_signal_backtest(symbol: str = "BTCUSD", timeframe: str = "1d") -> dict:
     """Tek sembol/TF — canlı teknik bias motoruyla üretilmiş sinyal + gerçek
     SL/TP kuralıyla simüle edilmiş trade zinciri. Aynı anda tek pozisyon
@@ -67,6 +78,7 @@ def run_signal_backtest(symbol: str = "BTCUSD", timeframe: str = "1d") -> dict:
         }
 
     sl_pct, tp_pct = _sl_tp_pct(symbol)
+    close_based, disaster_mult = _exit_policy()
     trades: list[SimTrade] = []
     open_side: str | None = None
     entry_price = 0.0
@@ -79,17 +91,11 @@ def run_signal_backtest(symbol: str = "BTCUSD", timeframe: str = "1d") -> dict:
         bar = window[-1]
 
         if open_side is not None:
-            hit: tuple[str, float] | None = None
-            if open_side == "long":
-                if bar.low <= sl:
-                    hit = (execution_sim.SL_HIT, sl)
-                elif bar.high >= tp:
-                    hit = (execution_sim.TP_HIT, tp)
-            else:
-                if bar.high >= sl:
-                    hit = (execution_sim.SL_HIT, sl)
-                elif bar.low <= tp:
-                    hit = (execution_sim.TP_HIT, tp)
+            hit = execution_sim.bar_exit(
+                side=open_side, entry_price=entry_price, sl=sl, tp=tp,
+                high=bar.high, low=bar.low, close=bar.close,
+                close_based=close_based, disaster_mult=disaster_mult,
+            )
             if hit is not None:
                 reason, fill_price = hit
                 pnl_pct = (
