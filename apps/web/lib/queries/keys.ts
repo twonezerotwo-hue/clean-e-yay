@@ -2,6 +2,7 @@ export const qk = {
   health: ["health"] as const,
   systemHealth: ["system", "health"] as const,
   regimeReport: ["regime-report"] as const,
+  eventOutcomes: ["calendar", "event-outcomes"] as const,
   dashboardState: ["dashboard-state"] as const,
   aiReport: ["ai-report"] as const,
   paperTradingState: ["paper-trading", "state"] as const,

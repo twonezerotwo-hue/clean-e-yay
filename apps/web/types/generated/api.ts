@@ -88,6 +88,69 @@ export type EventRiskView = {
   triggers?: EventRiskTrigger[];
 };
 
+// Olay-sonrası takip (salt-gözlem): takvim olayı açıklanınca sonuç + beklenen vs
+// gerçekleşen asset tepkisi. Karar zinciri değişmez.
+export type EventOutcomeStatus = "UPCOMING" | "AWAITING_RESULT" | "MEASURING" | "DONE";
+export type EventOutcomeDirection = "low" | "high" | "mixed" | "unknown";
+export type EventOutcomeFamily = "jobs" | "inflation" | "central_bank" | "other";
+export type EventOutcomeTimeSource = "time" | "expectation" | "default_noon";
+export type EventOutcomeHitMark = "hit" | "miss" | "flat";
+
+export type EventOutcomeUpcoming = {
+  id: string;
+  title: string;
+  importance?: string | null;
+  release_ts: string;
+  time_source: EventOutcomeTimeSource;
+  minutes_until: number;
+};
+
+export type EventOutcomeHorizon = {
+  ts?: string | null;
+  source?: string | null;
+  missing: boolean;
+  moves: Record<string, number>;
+  hits?: { per_asset: Record<string, EventOutcomeHitMark>; hit: number; scored: number } | null;
+};
+
+export type EventOutcomeRecord = {
+  id: string;
+  title?: string | null;
+  family?: EventOutcomeFamily;
+  importance?: string | null;
+  release_ts: string;
+  time_source?: string | null;
+  status: EventOutcomeStatus;
+  market_impact?: string | null;
+  outcome: {
+    direction: EventOutcomeDirection;
+    label?: string | null;
+    votes: Record<string, number>;
+    decided_at?: string | null;
+    headlines: { ts: string; title: string; source?: string; vote: "low" | "high" | "none" }[];
+  };
+  expected: Record<string, number>;
+  baseline_source?: string | null;
+  realized: Record<string, EventOutcomeHorizon>;
+};
+
+export type EventOutcomeBucket = {
+  family: string;
+  direction: "low" | "high";
+  events: number;
+  horizons: Record<string, { hit: number; scored: number; hit_rate?: number | null }>;
+};
+
+export type EventOutcomesView = {
+  generated_at: string;
+  mode: "observe_only";
+  horizons: string[];
+  upcoming: EventOutcomeUpcoming[];
+  recent: EventOutcomeRecord[];
+  summary: { buckets: EventOutcomeBucket[]; note: string };
+  assumption: { expected_low: Record<string, number>; note: string };
+};
+
 export type RegimeReport = {
   meta: SnapshotMeta;
   regime_label: RegimeLabel;
@@ -646,6 +709,7 @@ export type NotificationType =
   | "ticket_expired"
   | "ticket_blocked"
   | "zone_candidate"
+  | "event_outcome"
   | "recheck_exit_recommend"
   | "recheck_reduce"
   | "risk_gate_changed"

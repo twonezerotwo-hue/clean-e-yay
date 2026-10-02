@@ -15,10 +15,12 @@ from __future__ import annotations
 
 import hashlib
 import os
+import re
 import threading
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime, timedelta, tzinfo
 from datetime import time as dt_time
 from pathlib import Path
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 import yaml
 
@@ -197,3 +199,84 @@ def list_catalysts(
     out.sort(key=lambda c: c.ts)
     _mark(ok=True)
     return out[:limit]
+
+
+# ---------------------------------------------------------------------------
+# Açıklanma anı — olay-sonrası takip (learning/event_outcomes) için
+# ---------------------------------------------------------------------------
+
+# "08:30 ET" / "14:00 ET" — takvimdeki `time` ya da `expectation` metninden.
+_ET_TIME_RE = re.compile(r"\b(\d{1,2}):(\d{2})\s*ET\b")
+
+
+def _eastern() -> tzinfo:
+    """ABD Doğu saati (yaz saati dahil); tz veritabanı yoksa sabit EST."""
+    try:
+        return ZoneInfo("America/New_York")
+    except ZoneInfoNotFoundError:  # pragma: no cover - tzdata bağımlılıklarda
+        from datetime import timezone
+
+        return timezone(timedelta(hours=-5))
+
+
+def release_time_utc(ev: dict) -> tuple[datetime, str] | None:
+    """Olayın açıklanma anı (UTC) ve kaynağı.
+
+    Öncelik: `time` alanı ("14:00 ET") → `expectation` metnindeki saat →
+    yoksa gün ortası 12:00 UTC (`default_noon`; yaklaşık). Tarih okunamazsa None.
+    """
+    try:
+        ev_date = datetime.strptime(str(ev["date"]), "%Y-%m-%d").date()
+    except (KeyError, TypeError, ValueError):
+        return None
+    for field in ("time", "expectation"):
+        m = _ET_TIME_RE.search(str(ev.get(field) or ""))
+        if m:
+            hh, mm = int(m.group(1)), int(m.group(2))
+            if hh < 24 and mm < 60:
+                local = datetime.combine(ev_date, dt_time(hh, mm), tzinfo=_eastern())
+                return local.astimezone(UTC), field
+    return datetime.combine(ev_date, dt_time(12, 0), tzinfo=UTC), "default_noon"
+
+
+def events_in_window(
+    now: datetime,
+    *,
+    past_hours: float,
+    future_hours: float,
+    yaml_path: Path | None = None,
+) -> list[dict]:
+    """Açıklanma anı [now - past_hours, now + future_hours] içindeki takvim olayları.
+
+    `list_catalysts`'tan farklı olarak geçmiş olayları da döner (olay sonrası
+    takip için). Salt-okuma; fixture modunda boş (doğrulanmamış olay izlenmez).
+    """
+    if yaml_path is None and is_fixture_mode():
+        return []
+    path = yaml_path or DEFAULT_CALENDAR_PATH
+    try:
+        raw_events = (yaml.safe_load(path.read_text(encoding="utf-8")) or {}).get("events") or []
+    except Exception:
+        return []
+    lo = now - timedelta(hours=past_hours)
+    hi = now + timedelta(hours=future_hours)
+    out: list[dict] = []
+    for ev in raw_events if isinstance(raw_events, list) else []:
+        if not isinstance(ev, dict):
+            continue
+        rel = release_time_utc(ev)
+        if rel is None or not (lo <= rel[0] <= hi):
+            continue
+        out.append(
+            {
+                "id": str(ev.get("id") or hashlib.sha1(str(ev).encode()).hexdigest()[:10]),
+                "title": str(ev.get("name", "")),
+                "category": ev.get("category"),
+                "importance": _IMPORTANCE_MAP.get(str(ev.get("importance", "")).upper(), "medium"),
+                "market_impact": ev.get("market_impact"),
+                "release_ts": rel[0],
+                "time_source": rel[1],
+            }
+        )
+    out.sort(key=lambda e: e["release_ts"])
+    return out

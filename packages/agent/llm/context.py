@@ -21,7 +21,7 @@ from packages.data.ingestion.pipeline import (
 from packages.data.provenance import data_provenance
 from packages.data.registry import assets as asset_registry
 from packages.decision.engine import decide_matrix, matrix_view
-from packages.learning import mistake_memory
+from packages.learning import event_outcomes, mistake_memory
 from packages.paper import state as paper_state
 from packages.risk import correlation
 from packages.risk import halt as halt_store
@@ -374,7 +374,16 @@ def build_compact_context() -> dict:
         "catalysts": [
             {"title": c.title, "importance": c.importance} for c in snap.catalysts[:3]
         ],
+        # Olay-sonrası takip: ne açıklandı, beklenen vs gerçekleşen tepki (salt-gözlem).
+        "event_outcomes": _event_outcomes_summary(),
     }
+
+
+def _event_outcomes_summary() -> dict:
+    try:
+        return event_outcomes.compact_for_chat()
+    except Exception:  # bağlam üretimi asla düşmesin
+        return {"recent_releases": [], "next_event": None}
 
 
 # Digest'e GİRMEYEN volatil alanlar — snapshot_id her 30sn değişir; cache

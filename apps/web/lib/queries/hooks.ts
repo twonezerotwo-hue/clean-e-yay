@@ -22,6 +22,17 @@ export const useSystemHealth = () => {
   });
 };
 
+// Olay-sonrası takip — tick 30 sn'de bir yazar; panel dakikada bir yeter.
+export const useEventOutcomes = () => {
+  const policy = usePanelQueryPolicy(60_000);
+  return useQuery({
+    queryKey: qk.eventOutcomes,
+    queryFn: api.eventOutcomes,
+    staleTime: 30_000,
+    ...policy,
+  });
+};
+
 export const useRegimeReport = () => {
   const policy = usePanelQueryPolicy(60_000);
   return useQuery({

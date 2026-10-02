@@ -6,9 +6,15 @@ import { EmptyState } from "@/components/shell/EmptyState";
 import { LoadingState } from "@/components/shell/LoadingState";
 import { PanelFrame } from "@/components/shell/PanelFrame";
 import { PanelHeader } from "@/components/shell/PanelHeader";
-import { useRegimeReport } from "@/lib/queries/hooks";
+import { useEventOutcomes, useRegimeReport } from "@/lib/queries/hooks";
+import {
+  EVENT_OUTCOME_STATUS_LABEL,
+  selectNextEvent,
+  selectOutcomeRows,
+  selectRecentEventOutcomes,
+} from "@/lib/selectors/event-outcomes";
 import { selectCatalysts, selectEventRisk } from "@/lib/selectors/regime";
-import type { Catalyst } from "@/types/generated/api";
+import type { Catalyst, EventOutcomeRecord, EventOutcomesView } from "@/types/generated/api";
 
 const TONE: Record<string, { label: string; color: string; bg: string; text: string; weight: number }> = {
   critical: { label: "CRITICAL", color: "#f87171", bg: "rgba(248,113,113,0.18)", text: "text-red-300", weight: 4 },
@@ -129,6 +135,7 @@ export function EventCalendarPanel() {
           ) : undefined
         }
       />
+      <EventOutcomesStrip />
       {isLoading ? (
         <LoadingState />
       ) : !sorted.length || !active ? (
@@ -285,4 +292,117 @@ function eventRiskText(event: Catalyst) {
   if (event.event_level === "NO_POSITION_INCREASE") return "New position increase is restricted around this event.";
   if (event.event_level === "WATCH") return "Watch window active; context can tighten risk posture.";
   return null;
+}
+
+const HORIZON_LABEL: Record<string, string> = { "15m": "15dk", "1h": "1sa", "4h": "4sa", "1d": "1g" };
+
+function localTime(iso: string) {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "--";
+  return d.toLocaleString("tr-TR", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" });
+}
+
+function untilLabel(minutes: number) {
+  if (minutes < 60) return `${Math.max(0, Math.round(minutes))}dk`;
+  if (minutes < 48 * 60) return `${Math.floor(minutes / 60)}sa ${Math.round(minutes % 60)}dk`;
+  return `${Math.round(minutes / 1440)}g`;
+}
+
+/** Olay-sonrası takip: ne açıklandı, ne bekledik, ne oldu (salt-gözlem). */
+function EventOutcomesStrip() {
+  const { data } = useEventOutcomes();
+  const recent = selectRecentEventOutcomes(data, Date.now());
+  const next = selectNextEvent(data);
+  if (!data || (!recent.length && !next)) return null;
+  return (
+    <div className="mb-3 space-y-2">
+      {recent.map((rec) => (
+        <OutcomeCard key={rec.id} rec={rec} horizons={data.horizons} />
+      ))}
+      {next ? (
+        <div className="flex flex-wrap items-center gap-2 rounded border border-white/8 bg-white/[0.03] px-2 py-1.5 text-[11px] text-white/60">
+          <span className="text-[9px] uppercase tracking-[0.2em] text-accent-cyan/60">sıradaki</span>
+          <span className="text-white/80">{next.title}</span>
+          <span>· {localTime(next.release_ts)}</span>
+          <span className="text-accent-cyan/80">· {untilLabel(next.minutes_until)} sonra</span>
+          {next.time_source === "default_noon" ? <span className="text-amber-300/70">(saat yaklaşık)</span> : null}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function OutcomeCard({ rec, horizons }: { rec: EventOutcomeRecord; horizons: EventOutcomesView["horizons"] }) {
+  const tone = toneOf(rec.importance ?? undefined);
+  const oc = rec.outcome;
+  const decided = oc.direction === "low" || oc.direction === "high";
+  const votes = decided ? oc.votes[oc.direction] ?? 0 : 0;
+  const rows = selectOutcomeRows(rec, horizons);
+  return (
+    <div className="rounded-lg border bg-[#03101b]/92 p-3" style={{ borderColor: `${tone.color}55` }}>
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="text-[9px] uppercase tracking-[0.2em] text-accent-cyan/60">açıklandı</span>
+        <span className="font-display text-sm text-white/90">{rec.title ?? rec.id}</span>
+        <span className="text-[11px] text-white/45">{localTime(rec.release_ts)}</span>
+        <span className="ml-auto rounded border border-white/10 px-1.5 py-0.5 text-[9px] uppercase tracking-widest text-white/50">
+          {EVENT_OUTCOME_STATUS_LABEL[rec.status]}
+        </span>
+      </div>
+      <div className="mt-2 text-xs text-white/75">
+        Sonuç:{" "}
+        <span className={decided ? "font-semibold text-accent-cyan" : "text-white/50"}>
+          {oc.label ?? "henüz sonuç başlığı yok"}
+        </span>
+        {decided ? <span className="text-white/40"> · {votes} doğrulanmış başlık</span> : null}
+      </div>
+      {oc.headlines.length ? (
+        <ul className="mt-1 space-y-0.5">
+          {oc.headlines
+            .filter((h) => h.vote !== "none")
+            .slice(0, 2)
+            .map((h, i) => (
+              <li key={i} className="truncate text-[11px] text-white/45">› {h.title}</li>
+            ))}
+        </ul>
+      ) : null}
+      {rows.length ? (
+        <div className="mt-2 overflow-x-auto">
+          <table className="w-full text-[11px]">
+            <thead>
+              <tr className="text-[9px] uppercase tracking-widest text-white/35">
+                <th className="py-1 text-left font-normal">varlık</th>
+                <th className="py-1 text-left font-normal">beklenen</th>
+                {horizons.map((h) => (
+                  <th key={h} className="py-1 text-right font-normal">{HORIZON_LABEL[h] ?? h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((row) => (
+                <tr key={row.symbol} className="border-t border-white/5">
+                  <td className="py-1 text-white/75">{row.symbol}</td>
+                  <td className="py-1 text-white/50">{row.expected > 0 ? "↑" : row.expected < 0 ? "↓" : "—"}</td>
+                  {row.cells.map((c) => (
+                    <td
+                      key={c.horizon}
+                      className={`py-1 text-right tabular-nums ${
+                        c.mark === "hit" ? "text-emerald-300" : c.mark === "miss" ? "text-red-300" : "text-white/45"
+                      }`}
+                    >
+                      {typeof c.move === "number" ? `${c.move > 0 ? "+" : ""}${c.move.toFixed(2)}%` : "·"}
+                      {c.mark === "hit" ? " ✓" : c.mark === "miss" ? " ✗" : ""}
+                    </td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <div className="mt-1 text-[10px] text-white/35">
+            Beklenen yön faiz kanalı varsayımı (salt-gözlem; karar zincirini değiştirmez).
+            {rec.baseline_source === "snapshot_store" ? " Taban fiyat kayıtlı snapshot'tan." : ""}
+          </div>
+        </div>
+      ) : null}
+    </div>
+  );
 }

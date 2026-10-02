@@ -47,7 +47,21 @@ listeler. Temizlik boyunca yeni özellik, yeni flag, yeni veri kaynağı eklenme
 
 ## Açık owner kararları
 
-- (şu an açık owner kararı yok)
+Olay-sonrası takipten çıkanlar (2026-10-02 NFP vakası; ayrıntı panelde):
+
+- **E1 Event kapısı saati:** kapı olay saatini 12:00 UTC varsayıyor → ABD 08:30 ET
+  verilerinde kapı açıklamadan 30 dk ÖNCE, FOMC kararında (14:00 ET) ~6 saat önce
+  açılıyor. Öneri: kapı `event_outcomes`'un okuduğu gerçek saati kullansın +
+  açıklama sonrası kısa soğuma (ör. 30 dk). Yalnız kısıtlar; canlı davranış değişir.
+- **E2 Makro başlık yön hatası:** `news/classify.py` makro veri başlıklarında
+  duygu ile asset yönünü karıştırıyor ("Dollar falls after soft jobs" → DXY +1,
+  "stock futures jump" → SP500 −1). `news_symbol_filter` açık olduğu için haber
+  oyu ters işaret alıyor. Düzeltme karar girdisini değiştirir.
+- **E3 Beklenen tepki haritası:** takvim metni "zayıf istihdam → risk-off" diyor;
+  takip faiz kanalını (zayıf → dolar↓, altın/kripto/hisse↑) varsayıyor ve NFP'de
+  15dk/1sa tuttu, 4sa'te metaller/kripto döndü. Hangisi esas alınsın?
+- **E4 Olay sonucunu karara bağlamak:** CP5 kırmızı çizgi — yeterli olay birikip
+  kanıt çıkmadan yapılmaz; yalnız owner onayıyla.
 
 ## Temizlikten sonra (ölçüm işleri)
 

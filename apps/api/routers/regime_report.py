@@ -1,4 +1,4 @@
-"""GET /api/v1/regime-report/current"""
+"""GET /api/v1/regime-report/current + GET /api/v1/calendar/event-outcomes"""
 from __future__ import annotations
 
 from fastapi import APIRouter
@@ -7,6 +7,7 @@ from packages.consensus.engine import build as build_consensus
 from packages.data.ingestion.pipeline import get_cached_snapshot
 from packages.data.provenance import data_provenance
 from packages.data.registry import assets as asset_registry
+from packages.learning import event_outcomes
 from packages.regime.classifier import classify
 from packages.risk import event_risk
 
@@ -122,3 +123,13 @@ def get_regime_report_current() -> dict:
             "restrictive": ev.restrictive,
         },
     }
+
+
+@router.get("/calendar/event-outcomes")
+def get_event_outcomes() -> dict:
+    """Olay-sonrası takip (salt-gözlem): yaklaşan olaylar (kesin saat), son
+    açıklananların sonucu ve beklenen vs gerçekleşen asset tepkisi.
+
+    Tick yazar (`event_outcomes.track`), bu uç yalnız okur. Karar zinciri değişmez.
+    """
+    return event_outcomes.viewmodel()

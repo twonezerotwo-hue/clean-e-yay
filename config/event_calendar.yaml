@@ -56,6 +56,7 @@ events:
 
   - id: "fomc_minutes_2026_06"
     date: "2026-07-08"
+    time: "14:00 ET"  # tutanaklar 14:00 ET yayımlanır (olay-sonrası takip saati)
     name: "FOMC Tutanakları (Haziran 2026 kararı)"
     category: "FED"
     importance: "MEDIUM"
@@ -114,6 +115,7 @@ events:
 
   - id: "fomc_minutes_2026_07"
     date: "2026-08-19"
+    time: "14:00 ET"  # tutanaklar 14:00 ET yayımlanır (olay-sonrası takip saati)
     name: "FOMC Tutanakları (Temmuz 2026 kararı)"
     category: "FED"
     importance: "MEDIUM"
@@ -182,6 +184,7 @@ events:
 
   - id: "fomc_minutes_2026_09"
     date: "2026-10-07"
+    time: "14:00 ET"  # tutanaklar 14:00 ET yayımlanır (olay-sonrası takip saati)
     name: "FOMC Tutanakları (Eylül 2026 kararı)"
     category: "FED"
     importance: "MEDIUM"

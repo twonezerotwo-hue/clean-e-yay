@@ -39,6 +39,7 @@ from packages.decision import (
 from packages.decision.engine import decide_matrix, matrix_view
 from packages.learning import (
     calibration_audit,
+    event_outcomes,
     missed_opportunity,
     tf_calibration,
     tf_weight_trainer,
@@ -365,6 +366,16 @@ async def run_once() -> None:
             _PREV_STATE["dqs"] = snap.quality.score if snap.quality else None
         except Exception:
             log.exception("gözlem yüzeyi (ticket/recheck/bildirim) üretimi başarısız — tick devam ediyor")
+
+        # Olay-sonrası takip (salt-gözlem): takvim olayı açıklanınca sonucu
+        # başlıklardan çıkarır, beklenen vs gerçekleşen asset tepkisini ölçer,
+        # bildirim üretir. Karar zincirine ve event-risk kapısına dokunmaz.
+        try:
+            event_notifs = event_outcomes.track(prices=prices, headlines=snap.headlines, now=now)
+            if event_notifs:
+                append_many(event_notifs)
+        except Exception:
+            log.exception("olay-sonrası takip başarısız — tick devam ediyor")
 
         # Faz 8 — Conflict Gate: eski sistemin önerisini yeni Conflict Resolver'ın
         # verdict'iyle, trade_profile bazlı kademeli sıkılıkla süzer. enabled=false

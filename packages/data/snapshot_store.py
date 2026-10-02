@@ -22,6 +22,7 @@ from __future__ import annotations
 import json
 import os
 import re
+from datetime import UTC, datetime
 from pathlib import Path
 
 from packages.ops.store import write_text_atomic
@@ -165,6 +166,31 @@ def all_docs() -> list[dict]:
     return out
 
 
+def _file_ts(path: Path) -> datetime | None:
+    """Dosya adındaki zaman anahtarı ("2026-10-02T102603...") → UTC datetime."""
+    try:
+        return datetime.strptime(path.name[:17], "%Y-%m-%dT%H%M%S").replace(tzinfo=UTC)
+    except ValueError:
+        return None
+
+
+def nearest(target: datetime, *, side: str, max_gap_seconds: float) -> dict | None:
+    """`target`'a en yakın snapshot — `side="before"` (<= target) ya da `"after"`.
+
+    Yalnız seçilen TEK dosyayı okur (all_docs'un aksine ucuz); `max_gap_seconds`
+    dışındaysa None. Olay-sonrası takibin geriye dönük ölçümü için.
+    """
+    best: tuple[float, Path] | None = None
+    for p in _files():
+        ts = _file_ts(p)
+        if ts is None:
+            continue
+        gap = (target - ts).total_seconds() if side == "before" else (ts - target).total_seconds()
+        if 0 <= gap <= max_gap_seconds and (best is None or gap < best[0]):
+            best = (gap, p)
+    return _read(best[1]) if best else None
+
+
 def list_ids() -> list[str]:
     ids: list[str] = []
     for p in _files():
@@ -193,6 +219,7 @@ __all__ = [
     "get",
     "latest",
     "list_ids",
+    "nearest",
     "record",
     "status",
 ]

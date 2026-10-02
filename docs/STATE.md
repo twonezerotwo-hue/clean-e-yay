@@ -59,6 +59,19 @@ default'u (`= False`) çoğu zaman config'te ezilir.
 | DQS < 55 | KILL_SWITCH (karar yok) | DQS düzelince |
 | Açık pozisyon ≥ limit | NO_POSITION_INCREASE | Pozisyon azalınca |
 
+## Takvim olayları
+
+- **Önce:** `config/event_calendar.yaml` (elle tutulur) → `packages/risk/event_risk.py`:
+  yüksek etkili olaydan 24 saat önce yeni pozisyon durur (`event_risk` eşikleri).
+  Kapı olay saatini bilmez; olay günü 12:00 UTC varsayılır.
+- **Sonra (salt-gözlem):** `packages/learning/event_outcomes.py` her tick'te olayı
+  izler: açıklama öncesi fiyat tabanı, açıklamadan sonra doğrulanmış başlıklardan
+  sonuç (zayıf/güçlü, soğuk/sıcak, güvercin/şahin), beklenen yön (`event_outcomes.
+  expected_low`, faiz kanalı varsayımı) ve 15dk/1sa/4sa/1g gerçekleşen hareket.
+  Gerçek açıklama saati takvimdeki `time` / `expectation` ("08:30 ET") alanından
+  okunur. Bildirim, Olay Takvimi paneli, Brain brifingi ve sohbet bağlamı buradan
+  beslenir (`GET /api/v1/calendar/event-outcomes`). Karara dokunmaz.
+
 ## Stop davranışı
 
 - SL bar **kapanışıyla** tetiklenir (fitil avına karşı). Bar pozisyondan önce

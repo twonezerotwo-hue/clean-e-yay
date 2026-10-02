@@ -143,6 +143,7 @@ REGISTRY: dict[str, str] = {
     "DISCOVERY_SCAN_PATH": "path",
     "DISCOVERY_SHADOW_PATH": "path",
     "EMPIRICAL_PWIN_PATH": "path",
+    "EVENT_OUTCOMES_PATH": "path",
     "EXIT_BACKTEST_PATH": "path",
     "EXIT_FORENSICS_OUT_PATH": "path",
     "GOVERNOR_PROPOSALS_PATH": "path",

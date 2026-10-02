@@ -16,6 +16,7 @@ from packages.data.ingestion.pipeline import get_cached_snapshot
 from packages.data.registry import assets as asset_registry
 from packages.decision import paper_policy
 from packages.decision.engine import decide_matrix, matrix_view
+from packages.learning import event_outcomes
 from packages.notifications import list_recent as list_notifications
 from packages.ops import heartbeat
 from packages.paper import state as paper_state
@@ -247,8 +248,33 @@ def _risk_headlines(snap) -> list[Headline]:
     return out
 
 
-def _event_headlines(snap) -> list[Headline]:
+_HORIZON_TR = {"15m": "15dk", "1h": "1sa", "4h": "4sa", "1d": "1g"}
+
+
+def _release_headlines() -> list[Headline]:
+    """Son 24 saatte açıklanan takvim olayı: sonuç + beklenen yönde tutan oran."""
+    try:
+        recent = event_outcomes.compact_for_chat(hours=24)["recent_releases"]
+    except Exception:
+        return []
     out: list[Headline] = []
+    for rec in recent[:1]:
+        parts = [
+            f"{_HORIZON_TR.get(h, h)} {v['in_expected_direction']}"
+            for h, v in rec["reaction"].items()
+            if not str(v["in_expected_direction"]).endswith("/0")
+        ]
+        detail = ("Beklenen yönde: " + " · ".join(parts)) if parts else "Tepki ölçümü sürüyor."
+        out.append(Headline(
+            "info", "events",
+            f"Açıklandı: {rec['title']} → {rec['outcome'] or 'sonuç henüz belirsiz'}.",
+            detail,
+        ))
+    return out
+
+
+def _event_headlines(snap) -> list[Headline]:
+    out: list[Headline] = _release_headlines()
     cats = list(getattr(snap, "catalysts", None) or [])
     if not cats:
         out.append(Headline("info", "events", "Yaklaşan takvim olayı yok."))
@@ -267,7 +293,7 @@ def _event_headlines(snap) -> list[Headline]:
             hours = delta.total_seconds() / 3600
             if hours < -1:
                 continue
-            upcoming.append((hours, getattr(c, "label", None) or getattr(c, "id", "?"),
+            upcoming.append((hours, getattr(c, "title", None) or getattr(c, "label", None) or getattr(c, "id", "?"),
                              getattr(c, "importance", None) or getattr(c, "level", None)))
         except Exception:
             continue

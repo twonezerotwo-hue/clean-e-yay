@@ -55,6 +55,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/calendar/event-outcomes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Olay-sonrası takip — ne açıklandı, beklenen vs gerçekleşen asset tepkisi (salt-gözlem) */
+        get: operations["getEventOutcomes"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/dashboard/state": {
         parameters: {
             query?: never;
@@ -1568,6 +1585,100 @@ export interface components {
             /** @description Asset class (risk/commodity/hedge/safe/cash/macro) for risk-on/off bucketing. */
             kind?: string | null;
         };
+        /** @description Takvim olayı açıklandıktan sonra sonucu (doğrulanmış başlıklardan) ve beklenen vs gerçekleşen asset tepkisini izler. Salt-gözlem: karar, boyut ve event-risk kapısı değişmez. */
+        EventOutcomesView: {
+            generated_at: string;
+            /** @enum {string} */
+            mode: "observe_only";
+            horizons: string[];
+            upcoming: components["schemas"]["EventOutcomeUpcoming"][];
+            recent: components["schemas"]["EventOutcomeRecord"][];
+            summary: {
+                buckets: components["schemas"]["EventOutcomeBucket"][];
+                note: string;
+            };
+            assumption: {
+                expected_low: {
+                    [key: string]: number;
+                };
+                note: string;
+            };
+        };
+        EventOutcomeUpcoming: {
+            id: string;
+            title: string;
+            importance?: string | null;
+            release_ts: string;
+            /** @enum {string} */
+            time_source: "time" | "expectation" | "default_noon";
+            minutes_until: number;
+        };
+        EventOutcomeRecord: {
+            id: string;
+            title?: string | null;
+            /** @enum {string} */
+            family?: "jobs" | "inflation" | "central_bank" | "other";
+            importance?: string | null;
+            release_ts: string;
+            time_source?: string | null;
+            /** @enum {string} */
+            status: "UPCOMING" | "AWAITING_RESULT" | "MEASURING" | "DONE";
+            market_impact?: string | null;
+            outcome: {
+                /** @enum {string} */
+                direction: "low" | "high" | "mixed" | "unknown";
+                label?: string | null;
+                votes: {
+                    [key: string]: number;
+                };
+                decided_at?: string | null;
+                headlines: {
+                    ts: string;
+                    title: string;
+                    source?: string;
+                    /** @enum {string} */
+                    vote: "low" | "high" | "none";
+                }[];
+            };
+            /** @description sembol → beklenen yön (+1 yukarı / -1 aşağı); sonuç belirsizse boş */
+            expected: {
+                [key: string]: number;
+            };
+            baseline_source?: string | null;
+            /** @description ufuk (15m/1h/4h/1d) → ölçüm */
+            realized: {
+                [key: string]: components["schemas"]["EventOutcomeHorizon"];
+            };
+        };
+        EventOutcomeHorizon: {
+            ts?: string | null;
+            source?: string | null;
+            missing: boolean;
+            /** @description sembol → açıklama öncesine göre yüzde değişim */
+            moves: {
+                [key: string]: number;
+            };
+            hits?: {
+                per_asset: {
+                    [key: string]: "hit" | "miss" | "flat";
+                };
+                hit: number;
+                scored: number;
+            } | null;
+        };
+        EventOutcomeBucket: {
+            family: string;
+            /** @enum {string} */
+            direction: "low" | "high";
+            events: number;
+            horizons: {
+                [key: string]: {
+                    hit: number;
+                    scored: number;
+                    hit_rate?: number | null;
+                };
+            };
+        };
         RegimeReport: {
             meta: components["schemas"]["SnapshotMeta"];
             /** @enum {string} */
@@ -1969,7 +2080,7 @@ export interface components {
             id: string;
             ts: string;
             /** @enum {string} */
-            type: "ticket_created" | "ticket_expiring" | "ticket_expired" | "ticket_blocked" | "recheck_exit_recommend" | "recheck_reduce" | "risk_gate_changed" | "risk_kill_switch" | "catalyst_imminent" | "dqs_dropped" | "position_near_sl" | "position_near_tp" | "zone_candidate";
+            type: "ticket_created" | "ticket_expiring" | "ticket_expired" | "ticket_blocked" | "recheck_exit_recommend" | "recheck_reduce" | "risk_gate_changed" | "risk_kill_switch" | "catalyst_imminent" | "dqs_dropped" | "position_near_sl" | "position_near_tp" | "zone_candidate" | "event_outcome";
             /** @enum {string} */
             priority: "critical" | "high" | "medium" | "low";
             title: string;
@@ -4061,6 +4172,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RegimeReport"];
+                };
+            };
+        };
+    };
+    getEventOutcomes: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EventOutcomesView"];
                 };
             };
         };

@@ -45,6 +45,18 @@ paths:
               schema:
                 $ref: "#/components/schemas/RegimeReport"
 
+  /api/v1/calendar/event-outcomes:
+    get:
+      operationId: getEventOutcomes
+      summary: Olay-sonrası takip — ne açıklandı, beklenen vs gerçekleşen asset tepkisi (salt-gözlem)
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EventOutcomesView"
+
   /api/v1/dashboard/state:
     get:
       operationId: getDashboardState
@@ -1440,6 +1452,134 @@ components:
           nullable: true
           description: Asset class (risk/commodity/hedge/safe/cash/macro) for risk-on/off bucketing.
 
+    EventOutcomesView:
+      type: object
+      description: >
+        Takvim olayı açıklandıktan sonra sonucu (doğrulanmış başlıklardan) ve
+        beklenen vs gerçekleşen asset tepkisini izler. Salt-gözlem: karar,
+        boyut ve event-risk kapısı değişmez.
+      required: [generated_at, mode, horizons, upcoming, recent, summary, assumption]
+      properties:
+        generated_at: { type: string }
+        mode: { type: string, enum: [observe_only] }
+        horizons:
+          type: array
+          items: { type: string }
+        upcoming:
+          type: array
+          items: { $ref: "#/components/schemas/EventOutcomeUpcoming" }
+        recent:
+          type: array
+          items: { $ref: "#/components/schemas/EventOutcomeRecord" }
+        summary:
+          type: object
+          required: [buckets, note]
+          properties:
+            buckets:
+              type: array
+              items: { $ref: "#/components/schemas/EventOutcomeBucket" }
+            note: { type: string }
+        assumption:
+          type: object
+          required: [expected_low, note]
+          properties:
+            expected_low:
+              type: object
+              additionalProperties: { type: integer }
+            note: { type: string }
+
+    EventOutcomeUpcoming:
+      type: object
+      required: [id, title, release_ts, time_source, minutes_until]
+      properties:
+        id: { type: string }
+        title: { type: string }
+        importance: { type: string, nullable: true }
+        release_ts: { type: string }
+        time_source: { type: string, enum: [time, expectation, default_noon] }
+        minutes_until: { type: number }
+
+    EventOutcomeRecord:
+      type: object
+      required: [id, release_ts, status, outcome, expected, realized]
+      properties:
+        id: { type: string }
+        title: { type: string, nullable: true }
+        family: { type: string, enum: [jobs, inflation, central_bank, other] }
+        importance: { type: string, nullable: true }
+        release_ts: { type: string }
+        time_source: { type: string, nullable: true }
+        status: { type: string, enum: [UPCOMING, AWAITING_RESULT, MEASURING, DONE] }
+        market_impact: { type: string, nullable: true }
+        outcome:
+          type: object
+          required: [direction, votes, headlines]
+          properties:
+            direction: { type: string, enum: [low, high, mixed, unknown] }
+            label: { type: string, nullable: true }
+            votes:
+              type: object
+              additionalProperties: { type: integer }
+            decided_at: { type: string, nullable: true }
+            headlines:
+              type: array
+              items:
+                type: object
+                required: [ts, title, vote]
+                properties:
+                  ts: { type: string }
+                  title: { type: string }
+                  source: { type: string }
+                  vote: { type: string, enum: [low, high, none] }
+        expected:
+          type: object
+          description: sembol → beklenen yön (+1 yukarı / -1 aşağı); sonuç belirsizse boş
+          additionalProperties: { type: integer }
+        baseline_source: { type: string, nullable: true }
+        realized:
+          type: object
+          description: ufuk (15m/1h/4h/1d) → ölçüm
+          additionalProperties: { $ref: "#/components/schemas/EventOutcomeHorizon" }
+
+    EventOutcomeHorizon:
+      type: object
+      required: [missing, moves]
+      properties:
+        ts: { type: string, nullable: true }
+        source: { type: string, nullable: true }
+        missing: { type: boolean }
+        moves:
+          type: object
+          description: sembol → açıklama öncesine göre yüzde değişim
+          additionalProperties: { type: number }
+        hits:
+          type: object
+          nullable: true
+          required: [per_asset, hit, scored]
+          properties:
+            per_asset:
+              type: object
+              additionalProperties: { type: string, enum: [hit, miss, flat] }
+            hit: { type: integer }
+            scored: { type: integer }
+
+    EventOutcomeBucket:
+      type: object
+      required: [family, direction, events, horizons]
+      properties:
+        family: { type: string }
+        direction: { type: string, enum: [low, high] }
+        events: { type: integer }
+        horizons:
+          type: object
+          additionalProperties:
+            type: object
+            required: [hit, scored]
+            properties:
+              hit: { type: integer }
+              scored: { type: integer }
+              hit_rate: { type: number, nullable: true }
+
     RegimeReport:
       type: object
       required: [meta, regime_label, layers, assets]
@@ -2016,6 +2156,8 @@ components:
             # ama enum güncellenmemişti — lokal worker restart'ında kontrat
             # testi yakaladı (makine ADAY bölge önerisi bildirimi).
             - zone_candidate
+            # Olay-sonrası takip: takvim olayı açıklandı / 1 saatlik tepki ölçüldü.
+            - event_outcome
         priority:
           type: string
           enum: [critical, high, medium, low]
