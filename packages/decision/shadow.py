@@ -37,7 +37,6 @@ from packages.liquidity import sweep as liquidity_sweep_engine
 from packages.mode import config as mode_config
 from packages.mode import filter as mode_filter
 from packages.mode import profile_selector
-from packages.risk import strategy_shaping
 from packages.risk.trade_economics import (
     compute_adaptive_targets,
     compute_fixed_targets,
@@ -342,24 +341,11 @@ def _setup_and_conflict_for_symbol(
             )
             target_comparison = {}
 
-        # Faz 4 — strateji-farkında şekillendirme GÖZLEMİ (shadow-first). Flag OFF iken
-        # nötr (hepsi 1.0); açıkken bu setup'ın TABAN geometriye uygulanacak çarpanları.
-        # Yalnız kaydedilir — canlı işlemi ETKİLEMEZ (aktivasyon Slice 2, open_position).
-        _shaping = strategy_shaping.shape(setup_result.setup_type)
-
         return {
             "setup_type": setup_result.setup_type,
             "setup_reason": setup_result.reason,
             "setup_direction": setup_result.direction,
             "trade_profile": trade_profile,
-            "strategy_shaping": {
-                "family": _shaping.family,
-                "stop_mult": _shaping.stop_mult,
-                "tp_rr_mult": _shaping.tp_rr_mult,
-                "trail_mult": _shaping.trail_mult,
-                "size_mult": _shaping.size_mult,
-                "active": _shaping.active,
-            },
             "mode_filter_passed": mode_result.passed,
             "mode_filter_blocked_reason": mode_result.blocked_reason,
             "conflict_final_action": resolution.final_action,
@@ -381,7 +367,7 @@ def evaluate_symbol(
     view: Any, *, fingerprint: str | None, risk_action: str | None, dqs_status: str
 ) -> dict:
     """Public giriş noktası — Setup Classifier + Conflict Resolver'ı tek bir sembol
-    view'i için değerlendirir (Faz 7 — `conflict_resolver_activation.py` bunu kullanır).
+    view'i için değerlendirir (tick worker'ın conflict gate'i bunu kullanır).
 
     `build_comparison()`'ın her satır için zaten yaptığı hesabın aynısıdır; burada
     sadece dışarıdan çağrılabilir hale getirilmiştir. Read-only, paper'a dokunmaz.

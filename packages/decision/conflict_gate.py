@@ -2,11 +2,10 @@
 verdict'i ile birleştirir. Saf fonksiyon, I/O yok. Varsayılan: enabled=false
 (inert) — owner ayrı onay verene kadar mevcut paper-açma davranışı değişmez.
 
-`conflict_resolver_activation.py`'dan FARKLI bir köprü: o yeni sistemin
-CANDIDATE_OPEN dediği YENİ girişleri manual_ready'e ekler (eski sistem hiç
-önermemiş olsa bile). Bu modül ise ESKİ sistemin zaten önerdiği açılışı,
-trade_profile bazlı kademeli sıkılıkla süzer/küçültür/bloklar — iki köprü
-birbirini eski sistemi bozmadan tamamlar.
+Bu modül ESKİ sistemin zaten önerdiği açılışı trade_profile bazlı kademeli
+sıkılıkla süzer/küçültür/bloklar. (Yeni sistemin kendi girişlerini manual_ready'e
+ekleyen ikinci köprü — conflict_resolver_activation — hiç açılmadığı için
+temizlikte söküldü.)
 
 Trade profile bazlı kademeli sıkılık (owner onaylı tasarım):
   SCALP       OFF         — Conflict Resolver'a bakılmaz, eski sistem tek başına açar.

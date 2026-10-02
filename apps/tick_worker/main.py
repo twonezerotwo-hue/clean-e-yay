@@ -30,7 +30,6 @@ from packages.data.registry import assets as asset_registry
 from packages.decision import (
     agent_pipeline,
     conflict_gate,
-    conflict_resolver_activation,
     gates,
     paper_policy,
     shadow,
@@ -536,31 +535,6 @@ async def run_once() -> None:
                         )
         except Exception:
             log.exception("shadow observe failed (tick devam ediyor)")
-
-        # Faz 7 — Conflict Resolver'ın kontrollü aktivasyonu. `shadow.affect_decision`'dan
-        # TAMAMEN BAĞIMSIZ ayrı bir kapı (conflict_resolver_activation.enabled).
-        # Varsayılan kapalı: cfg.enabled=false olduğu sürece activate() her zaman
-        # boş liste döner — manual_ready'e hiçbir şey eklenmez, davranış değişmez.
-        try:
-            cr_cfg = conflict_resolver_activation.load_config()
-            if cr_cfg.enabled:
-                # T3 — ana commit SONRASI: kendi kısa transaction'ında taze state.
-                with paper_state.transaction("tick:conflict_resolver") as ps_cr:
-                    cr_queued = conflict_resolver_activation.activate(
-                        ps_cr,
-                        MATRIX_SYMBOLS,
-                        risk_action=_risk.action,
-                        dqs_status=snap.quality.status,
-                        prices=prices,
-                        snapshot_id=snap.snapshot_id,
-                        cfg=cr_cfg,
-                    )
-                if cr_queued:
-                    log.info(
-                        "conflict resolver activation: %d entry → manual_ready", len(cr_queued)
-                    )
-        except Exception:
-            log.exception("conflict resolver activation failed (tick devam ediyor)")
 
         # R1 — kararı disk snapshot store'a kaydet (replay temeli). Store yazımı
         # ASLA tick'i patlatmaz; başarısızsa loglanır ve döngü devam eder.

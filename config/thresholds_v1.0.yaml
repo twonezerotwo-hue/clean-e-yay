@@ -245,12 +245,7 @@ calibration:
 # sahte p uydurulmaz). Hiyerarşi: tf|rejim → tf. Tabloyu learning worker yazar
 # (data/runtime/empirical_pwin.json). min_samples: hücrenin sayılması için
 # gereken kazanç+kayıp adedi (başabaş paydaya girmez, F1-2).
-# F5-1 — blend_counterfactual: false (DEFAULT) → yalnız gerçek outcome'lar
-# (bayt-aynı); counterfactual'lar tabloda AYRI kanalda gözlem olarak durur
-# (cf_by_tf + /learning/missed-opportunities by_timeframe). true → gerçek
-# kanıtı YETERSİZ TF'lerde son-çare fallback: gerçek+counterfactual sayımları
-# harmanlanır (kaynak "tf_blend_cf"). Gerekçe: bloklanan TF gerçek outcome
-# üretmez (geri-besleme kör noktası); counterfactual o TF'i ölçmeye devam eder.
+# Counterfactual'lar tabloda AYRI kanalda (cf_by_tf) yalnız gözlem olarak durur.
 empirical_pwin:
   # AKTİF (2026-07-04, owner kararı — Paket 2/(2), S3-1). Kanıt: 15m|NEUTRAL
   # gerçekleşen isabet p=0.449 (n=49) iken kalibre güven ~0.58 tabanla EV hep
@@ -259,7 +254,6 @@ empirical_pwin:
   # güvene düşer (sahte p uydurulmaz). Tek-flag revert. Watchdog izliyor.
   enabled: true
   min_samples: 20
-  blend_counterfactual: false
 
 # F4-3 partial_tp KALDIRILDI (2026-07-12, owner kararı): exit_backtest (4302
 # giriş, iki bağımsız örneklem) hipotezi ÇÜRÜTTÜ — partial_tp zararlı, asıl
@@ -603,24 +597,6 @@ paper_trading:
   tp_rr_ratio: 2.0
   trailing_stop_enabled: true
 
-# Strateji-farkında işlem şekillendirme (Faz 4) — her setup tipi (TREND/REVERSAL/
-# RANGE/BREAKOUT/PULLBACK/SCALP) kendi risk profiliyle açılsın: TREND geniş trailing'le
-# kazananı sürsün, REVERSAL yakın stopla (S/R belli), RANGE dar hedefle, SCALP hızlı
-# gir-çık. Çarpanlar TABAN geometriye (TF-bazlı) uygulanır → birleşir. size_mult ≤ 1.0
-# (no-boost invariant: yalnız küçültür). enabled:false → şekillendirme YOK (bayt-aynı);
-# setup_type bilinmiyorsa da nötr (hepsi 1.0). Guardrail: tüm çarpanlar [0.5, 1.5].
-strategy_shaping:
-  enabled: false
-  profiles:
-    #                    stop_mult  tp_rr_mult  trail_mult  size_mult
-    TREND:              { stop: 1.0,  tp_rr: 1.15, trail: 1.25, size: 1.0 }   # trendi sür: geniş trailing + yüksek TP
-    BREAKOUT:           { stop: 1.0,  tp_rr: 1.15, trail: 1.10, size: 1.0 }   # teyitli hareket, koş
-    REVERSAL_CONFIRMED: { stop: 0.85, tp_rr: 1.0,  trail: 1.0,  size: 1.0 }   # dönüş noktası belli → yakın stop
-    REVERSAL_WATCH:     { stop: 0.85, tp_rr: 0.9,  trail: 0.85, size: 0.7 }   # onaysız → temkinli, küçük
-    RANGE:              { stop: 0.85, tp_rr: 0.8,  trail: 0.8,  size: 0.7 }   # yatay → dar hedef, küçük
-    PULLBACK:           { stop: 0.9,  tp_rr: 1.0,  trail: 1.0,  size: 1.0 }   # trende dönüş, kontrollü
-    SCALP:              { stop: 0.75, tp_rr: 0.8,  trail: 0.75, size: 0.7 }   # hızlı gir-çık, çok sıkı
-
 # Y-5 — Meta-label kapısı (mlfinlab meta-labeling), SALT-GÖLGE: her açılış adayına
 # "GİR/GİRME" hükmü damgalanır (mevcut kanıtlardan: EV + ampirik p + mistake_memory
 # + Y-2 bariyer tarihçesi + Y-1 rejim freni), karar/boyut DEĞİŞMEZ. Uygulama flag'i
@@ -796,17 +772,6 @@ correlation_veto:
   enabled: true           # 2026-07-10 CANLI (owner kararı): akraba çelişkisinde işlem açma (yalnız engeller)
   min_abs_rho: 0.5        # akraba yalnız |korelasyon| bu eşiği aşarsa dikkate alınır
   corr_window_days: 90    # korelasyon penceresi (o anki ilişki; kayan korelasyon)
-
-# P3 parça-2 — quantum boyut-kısma (2026-07-10). Quantum INVERSE (ölçüm −0.141) +
-# backtest (katkı≥8 → 21 işlem −$749; düşükken +$144). Quantum consensus katkısı
-# contrib_threshold'u aşarsa o işlemde boyut × factor. Yön DEĞİŞMEZ (consensus
-# ağırlığına/auto-weight trainer'a dokunmaz — kaynak kısma trainer'la çelişirdi).
-# Kanıt İNCE (n=21) → owner gölgede izleyip açar. enabled default FALSE (boyut
-# bayt-aynı). YALNIZ KISAR (no-boost). Yanlışsa false ile geri.
-quantum_dampen:
-  enabled: false
-  contrib_threshold: 8.0   # quantum consensus katkısı bunu aşarsa boyut kısılır
-  factor: 0.5              # kısma çarpanı (yarı boy)
 
 # P2 — KAPANIŞ-BAZLI STOP (2026-07-10). Mevcut stop tick/FİTİL ile tetikleniyordu
 # (execution_sim.triggered_exit: price<=sl) → stop-avına yem (SL_HIT %64, canlı
@@ -1269,14 +1234,6 @@ causal_world:
     energy: { energy_supply_risk: 0.9, shipping_risk: 0.5, growth_pressure: 0.3, usd_pressure: -0.2 }
     other: { liquidity: 0.7, risk_aversion: -0.5, usd_pressure: -0.3 }
 
-# Faz 7 — Conflict Resolver'ın kontrollü aktivasyonu (spec v2.3 §28).
-# `shadow.affect_decision`'dan TAMAMEN BAĞIMSIZ, ayrı bir aktivasyon kapısı.
-# enabled=false (varsayılan) → packages/decision/conflict_resolver_activation.py
-# her çağrıda boş liste döner, manual_ready'e HİÇBİR ŞEY eklenmez. Owner'ın
-# açık onayı (bu config'i elle true yapması) olmadan davranış DEĞİŞMEZ.
-conflict_resolver_activation:
-  enabled: false
-
 # Missed Opportunity motoru (learning yakıtı; spec v2.3). Açılmayan valid
 # setup'ları (conflict_final_action=CANDIDATE_OPEN ama canlı açmadı) TTL boyunca
 # izler: fiyat önce TP'ye mi (missed_win) SL'e mi (avoided_loss) değdi?
@@ -1294,8 +1251,7 @@ missed_opportunity:
 
 # Faz 8 — Conflict Gate (spec v2.3 §28 devamı): eski decide_matrix önerisini
 # yeni Conflict Resolver'ın verdict'iyle, trade_profile bazlı KADEMELİ sıkılıkla
-# süzer (conflict_resolver_activation'dan FARKLI — bkz. packages/decision/conflict_gate.py
-# docstring). enabled=false (varsayılan) → her zaman fail-open, eski sistemin
+# süzer (bkz. packages/decision/conflict_gate.py docstring). enabled=false (varsayılan) → her zaman fail-open, eski sistemin
 # açılış davranışı DEĞİŞMEZ. Owner'ın açık onayı olmadan etkisizdir.
 # 2026-06-26: POSITION pilotu başlatıldı (owner onayı, ARCHITECTURE.md §7.5).
 # HARD_MANUAL hiçbir zaman otomatik açmaz — yalnızca manual_ready'e kuyruklar,

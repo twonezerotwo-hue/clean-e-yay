@@ -265,38 +265,3 @@ def _force_pass_with_quantum(monkeypatch, *, q_contrib):
     return dec, snap, regime
 
 
-def test_quantum_dampen_shadow_default(fresh_env, monkeypatch):
-    """Default (flag kapalı): quantum katkısı yüksek olsa da boyut DEĞİŞMEZ (shadow)."""
-    from packages.risk.engine import RiskDecision
-    dec, snap, regime = _force_pass_with_quantum(monkeypatch, q_contrib=12.0)
-    hold_risk = RiskDecision(action="HOLD", reason="ok", evidence=[])
-    d = dec.decide_for_symbol("BTCUSD", snap, regime, hold_risk, equity_usd=100_000)
-    assert d.action == "open_long"
-    assert d.quantum_dampen_report["dampened"] is True       # gözlem: kısardı
-    assert d.quantum_dampen_report["active"] is False        # ama pasif
-    assert "quantum_dampen" not in d.blocked_by
-
-
-def test_quantum_dampen_on_reduces_size(fresh_env, monkeypatch):
-    """Flag açık + quantum katkısı eşik üstü → boyut kısılır (yön korunur)."""
-    from packages.risk.engine import RiskDecision
-    dec, snap, regime = _force_pass_with_quantum(monkeypatch, q_contrib=12.0)
-    monkeypatch.setattr(dec, "_quantum_dampen_cfg", lambda: {
-        "enabled": True, "contrib_threshold": 8.0, "factor": 0.5})
-    hold_risk = RiskDecision(action="HOLD", reason="ok", evidence=[])
-    d = dec.decide_for_symbol("BTCUSD", snap, regime, hold_risk, equity_usd=100_000)
-    assert d.action == "open_long"
-    assert "quantum_dampen" in d.blocked_by
-    assert d.size_multiplier > 0.0                           # kısar ama sıfırlamaz
-
-
-def test_quantum_dampen_below_threshold_no_effect(fresh_env, monkeypatch):
-    """Flag açık ama quantum katkısı eşik ALTI → boyut değişmez (kısma yok)."""
-    from packages.risk.engine import RiskDecision
-    dec, snap, regime = _force_pass_with_quantum(monkeypatch, q_contrib=3.0)
-    monkeypatch.setattr(dec, "_quantum_dampen_cfg", lambda: {
-        "enabled": True, "contrib_threshold": 8.0, "factor": 0.5})
-    hold_risk = RiskDecision(action="HOLD", reason="ok", evidence=[])
-    d = dec.decide_for_symbol("BTCUSD", snap, regime, hold_risk, equity_usd=100_000)
-    assert d.quantum_dampen_report["dampened"] is False
-    assert "quantum_dampen" not in d.blocked_by

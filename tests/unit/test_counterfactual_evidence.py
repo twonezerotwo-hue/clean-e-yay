@@ -3,9 +3,7 @@
 - resolutions(): yalnız resolve event'leri.
 - build_table: counterfactual'lar AYRI kanalda (cf_by_tf); expired paydaya
   girmez; gerçek hücreler (cells/by_tf) counterfactual'la KİRLENMEZ.
-- lookup: blend flag KAPALI (default) → bayt-aynı (cf verisi yok sayılır);
-  AÇIK → yalnız gerçek kanıt yetersizken son-çare harman ("tf_blend_cf");
-  gerçek kanıt yeterliyse harman devreye GİRMEZ.
+- lookup: counterfactual verisi p(win)'e harmanlanmaz (yalnız gözlem kanalı).
 - summary_viewmodel: by_timeframe cf_win_rate kanıtı.
 """
 from __future__ import annotations
@@ -19,8 +17,7 @@ from packages.data.registry.loader import threshold_override
 from packages.learning import empirical_pwin as ep
 from packages.learning import missed_opportunity as mo
 
-_BLEND_ON = {"empirical_pwin": {"enabled": False, "min_samples": 5, "blend_counterfactual": True}}
-_BLEND_OFF = {"empirical_pwin": {"enabled": False, "min_samples": 5, "blend_counterfactual": False}}
+_CFG = {"empirical_pwin": {"enabled": False, "min_samples": 5}}
 
 
 def _o(tf: str, regime: str, pnl: float):
@@ -80,43 +77,11 @@ def _write_table(ep_env, outcomes, cfs) -> None:
     )
 
 
-def test_blend_off_ignores_cf(ep_env) -> None:
-    """Default: gerçek kanıt yetersiz + bol cf → yine None (bayt-aynı)."""
-    with threshold_override(_BLEND_OFF):
+def test_lookup_ignores_cf(ep_env) -> None:
+    """Gerçek kanıt yetersiz + bol cf → yine None (cf yalnız gözlem)."""
+    with threshold_override(_CFG):
         _write_table(ep_env, [_o("1h", "NEUTRAL", +1)], [_cf("1h", "missed_win")] * 10)
         assert ep.lookup("1h", "NEUTRAL") is None
-
-
-def test_blend_on_last_resort_fallback(ep_env) -> None:
-    with threshold_override(_BLEND_ON):
-        # gerçek: 2 örnek (yetersiz, 1W/1L); cf: 4 örnek (3W/1L) → harman 6 ≥ 5
-        _write_table(
-            ep_env,
-            [_o("1h", "NEUTRAL", +1), _o("1h", "NEUTRAL", -1)],
-            [_cf("1h", "missed_win")] * 3 + [_cf("1h", "avoided_loss")],
-        )
-        hit = ep.lookup("1h", "NEUTRAL")
-        assert hit is not None and hit.source == "tf_blend_cf"
-        assert (hit.wins, hit.losses, hit.n) == (4, 2, 6)
-        assert hit.p_win == pytest.approx(4 / 6, abs=1e-3)
-
-
-def test_blend_on_prefers_actual_when_sufficient(ep_env) -> None:
-    """Gerçek kanıt yeterliyse harman HİÇ devreye girmez (cf farklı olsa da)."""
-    with threshold_override(_BLEND_ON):
-        _write_table(
-            ep_env,
-            [_o("1h", "NEUTRAL", +1)] * 4 + [_o("1h", "NEUTRAL", -1)],  # 5 örnek, p=0.8
-            [_cf("1h", "avoided_loss")] * 20,                            # cf tersini söylüyor
-        )
-        hit = ep.lookup("1h", "NEUTRAL")
-        assert hit.source == "tf_regime" and hit.p_win == pytest.approx(0.8)
-
-
-def test_blend_on_still_none_when_combined_insufficient(ep_env) -> None:
-    with threshold_override(_BLEND_ON):
-        _write_table(ep_env, [_o("1h", "NEUTRAL", +1)], [_cf("1h", "missed_win")])
-        assert ep.lookup("1h", "NEUTRAL") is None  # 2 < 5 — sahte p yok
 
 
 # ---------------------------- summary_viewmodel ------------------------------

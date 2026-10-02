@@ -44,21 +44,19 @@ def _path() -> Path:
 def cfg() -> dict:
     """`empirical_pwin` config'i (enabled default False, min_samples default 20).
 
-    F5-1 — blend_counterfactual (default False): AÇIKKEN gerçek outcome'u
-    yetersiz TF'lerde missed-opportunity counterfactual sayımları SON ÇARE
-    fallback olarak harmanlanır (gerçek kanıt her zaman önceliklidir)."""
+    Counterfactual (missed-opportunity) sayımları tabloda AYRI kanalda (cf_by_tf)
+    yalnız gözlem olarak durur; p(win)'e harmanlanmaz (F5-1 harman flag'i hiç
+    açılmadı — temizlikte söküldü)."""
     try:
         raw = load_thresholds().get("empirical_pwin") or {}
         return {
             "enabled": bool(raw.get("enabled", False)),
             "min_samples": max(1, int(raw.get("min_samples", DEFAULT_MIN_SAMPLES))),
-            "blend_counterfactual": bool(raw.get("blend_counterfactual", False)),
         }
     except (OSError, KeyError, ValueError, TypeError):
         return {
             "enabled": False,
             "min_samples": DEFAULT_MIN_SAMPLES,
-            "blend_counterfactual": False,
         }
 
 
@@ -72,7 +70,7 @@ class EmpiricalPwin:
     wins: int
     losses: int
     n: int          # wins + losses (başabaş hariç — F1-2 standardı)
-    source: str     # "tf_regime" | "tf" | "tf_blend_cf"
+    source: str     # "tf_regime" | "tf"
     # F5-3 — ödül-ağırlıklı EV girdisi: GERÇEKLEŞEN ortalama kazanç-R ve kayıp-R
     # (r_multiple = getiri% / açılış risk mesafesi). Sabit hedef-RR yerine bunlar
     # kullanılınca "adet kazanıyor ama trailing/time-stop erken çıkıyor → kazanç
@@ -221,12 +219,7 @@ def _load_cached() -> dict:
 def lookup(timeframe: str, regime: str) -> EmpiricalPwin | None:
     """(tf|rejim) hücresi; yetersizse tf geneli; o da yetersizse None.
 
-    F5-1 — `blend_counterfactual` AÇIKSA son çare: gerçek tf sayımları +
-    counterfactual tf sayımları HARMANLANIR (kaynak "tf_blend_cf"). Gerekçe:
-    bir TF bloklanınca gerçek outcome ÜRETMEZ (geri-besleme kör noktası);
-    counterfactual'lar o TF'i ölçmeye devam eder. Gerçek kanıt yeterliyse
-    harman HİÇ devreye girmez. None = kanıt yok — çağıran kalibre güvene
-    düşer (sahte p yok)."""
+    None = kanıt yok — çağıran kalibre güvene düşer (sahte p yok)."""
     data = _load_cached()
     if not data:
         return None
@@ -258,23 +251,7 @@ def lookup(timeframe: str, regime: str) -> EmpiricalPwin | None:
             )
         except (TypeError, ValueError, KeyError):
             continue
-    if not c["blend_counterfactual"]:
-        return None
-    # Son çare harman: gerçek(tf) + counterfactual(tf) sayımları.
-    try:
-        actual = (data.get("by_tf") or {}).get(timeframe) or {}
-        cf = (data.get("cf_by_tf") or {}).get(timeframe) or {}
-        wins = int(actual.get("wins", 0)) + int(cf.get("wins", 0))
-        losses = int(actual.get("losses", 0)) + int(cf.get("losses", 0))
-        n = wins + losses
-        if n < min_samples:
-            return None
-        return EmpiricalPwin(
-            p_win=round(wins / n, 4), wins=wins, losses=losses, n=n,
-            source="tf_blend_cf",
-        )
-    except (TypeError, ValueError):
-        return None
+    return None
 
 
 def payoff_readiness() -> dict:
