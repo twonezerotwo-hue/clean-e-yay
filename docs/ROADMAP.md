@@ -35,14 +35,15 @@ listeler. Temizlik boyunca yeni özellik, yeni flag, yeni veri kaynağı eklenme
 - **K4** 0-2 karnesi silindi, 0-2 stratejisi donduruldu; bölge önerici kalır;
   governor görev üreticisi silindi, öneri/onay defteri kalır.
 - **K6** Tek çalışma şekli: her yerde `apps.supervisor` (tick/learning thread'de, API donmaz).
+- **K7** Telefon erişimi (ngrok, şifresiz) olduğu gibi kalır.
+- **K8** Ekran sadeleşir: ana ekranda yalnız owner'ın karar verdiği/her gün baktığı
+  paneller; diğer state'ler tek "Detaylar" sayfasında (docs/DASHBOARD_RULES.md).
 - **K5** Ağırlıklar git'te (`config/weights_active.json`), owner onayıyla değişir;
   oto-uygulama kapalı.
 
 ## Açık owner kararları
 
-1. Telefon erişimi: ngrok'a kimlik doğrulama mı, yalnız LAN/VPN mi?
-2. Dashboard kuralı: "backend yeni state üretirse panel eklenir" kuralı çok panele yol açtı;
-   yalnız owner'ın karar verdiği konular panel alsın mı?
+1. Ana ekranda kalacak panellerin listesi (K8'in uygulaması, Faz 4).
 
 ## Temizlikten sonra (ölçüm işleri)
 
