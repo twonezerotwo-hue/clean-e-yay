@@ -1,7 +1,7 @@
 """I3 — Kaynak Seçici (Source Selector): canlı kanıt ince olduğunda, GEREKTİĞİNDE
 shadow/backtest kanıtını AYRI DAMGALI kanalda dahil eder.
 
-Amaç (owner talebi 2026-07-05, `docs/LEARNING_INTEGRATION_REPORT.md`): bir
+Amaç (owner talebi 2026-07-05, `docs/archive/LEARNING_INTEGRATION_REPORT.md`): bir
 öğrenici "bu rejim için canlı kanıt yok/ince" dediğinde, elde biriken shadow ve
 backtest kanıtı ATIL kalmasın — ama gerçek canlı hücreye KARIŞMADAN, kaynak
 damgalı olarak. İlk tüketici: FAZ-4 sinyal-kalitesi boş rejimlerini (canlı

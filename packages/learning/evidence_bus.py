@@ -1,7 +1,7 @@
 """I1 — Kanıt Otobüsü (Evidence Bus): tüm öğrenme ölçümlerini TEK normalize
 şemaya toplar (salt-gözlem).
 
-Amaç (owner talebi 2026-07-05, `docs/LEARNING_INTEGRATION_REPORT.md`): 40+
+Amaç (owner talebi 2026-07-05, `docs/archive/LEARNING_INTEGRATION_REPORT.md`): 40+
 öğrenici bugün ayrı dosya/panele yazıyor → "sistem şu an neyi biliyor?" sorusu
 dağınık. Bu otobüs mevcut ölçümleri (signal_quality/edge/quantum karnesi/keşif
 gölge karnesi/tf-kalibrasyon) TEK `EvidenceRecord` listesine indirger. Böylece

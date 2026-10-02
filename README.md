@@ -2,11 +2,10 @@
 
 Clean rewrite of **E_YAY CODEX** — a paper-trading decision-support system that prepares trading-data agents for real execution through paper trading + calibrated heuristic learning.
 
-> **Nihai mimari için → [ARCHITECTURE.md](ARCHITECTURE.md).** Yeni iş başlamadan önce o belge okunur.
-> **Süregelen ilerleme için → [docs/TECHNICAL_ARCHITECTURE_PROGRESS.md](docs/TECHNICAL_ARCHITECTURE_PROGRESS.md).**
+> **Bugün nasıl çalışıyor → [docs/STATE.md](docs/STATE.md).** Sıradaki iş ve açık kararlar →
+> [docs/ROADMAP.md](docs/ROADMAP.md). Mimari derinlik → [ARCHITECTURE.md](ARCHITECTURE.md).
 >
-> Status: **BACKEND HAZIR** — spec adım 1–9 + §4.5 tam (per-TF contribution attribution +
-> live tf_weights resolver dahil); 714 test, ruff/codegen/tsc temiz. Sıradaki: frontend cilası.
+> Status (2026-10): büyük temizlik dönemi — yeni özellik yok, davranış golden replay ile korunuyor.
 
 ## Fresh-clone setup (TEK komut)
 
@@ -40,7 +39,8 @@ Gerekli: Python **3.11+** PATH'te. Web tarafı için ayrıca Node 20+ + pnpm.
 - **Karar-destek**, otonom işlem motoru değil. `PAPER_ONLY`, `REPLAY_ONLY`, `NO_EXECUTION`.
 - AI açıklar; deterministic kod karar verir.
 - Sözleşme-önce: `contracts/openapi.yaml` tek doğruluk kaynağı; tipler ve client codegen.
-- Üç süreç: HTTP API, tick worker, learning worker — biri çökerse diğerleri etkilenmez.
+- Ayrı süreçler: HTTP API, tick worker, learning worker, governor worker — biri çökerse
+  diğerleri etkilenmez. (AWS bugün hepsini tek supervisor sürecinde koşuyor; bkz. docs/STATE.md.)
 
 ## Mimari
 
@@ -196,8 +196,8 @@ make codegen   # OpenAPI → Pydantic + TS (TODO: codegen pipeline)
 
 ## Deployment / 7-24 readiness (DEP1)
 
-Backend Release Candidate — gerçek 7/24 local/production-like çalıştırma için
-checklist. (Backend FREEZE: yalnızca P0 hotfix; yeni feature/data source yok.)
+Gerçek 7/24 local/production-like çalıştırma için checklist. Güncel topoloji
+(lokal keeper vs AWS supervisor) için bkz. [docs/STATE.md](docs/STATE.md).
 
 ### Local production runbook (REL1)
 
@@ -328,15 +328,14 @@ Deploy etmeden önce doğrula (hepsi kodda yapısal — env ile gevşetilemez):
 
 Yeni bir göreve başlamadan önce şunları oku:
 
-- [docs/AGENT_CONTEXT.md](docs/AGENT_CONTEXT.md)
+- [CLAUDE.md](CLAUDE.md) (Codex için [AGENTS.md](AGENTS.md)) — değişmez çalışma kuralları
 - [docs/SAFETY_RULES.md](docs/SAFETY_RULES.md)
-- [docs/CURRENT_STATE.md](docs/CURRENT_STATE.md)
-- [docs/ROADMAP.md](docs/ROADMAP.md)
+- [docs/STATE.md](docs/STATE.md) — bugün nasıl çalışıyor
+- [docs/ROADMAP.md](docs/ROADMAP.md) — sıradaki iş + açık owner kararları
 - [docs/DASHBOARD_RULES.md](docs/DASHBOARD_RULES.md) (frontend dokunuluyorsa)
-- [.tasks/NEXT_TASK.md](.tasks/NEXT_TASK.md)
 
-Uzun mimari promptları tekrar tekrar yapıştırma. Her görev sonunda
-`CURRENT_STATE.md` ve `TASK_RESULT.md` güncellenir.
+Uzun mimari promptları tekrar tekrar yapıştırma. Durum değişince `docs/STATE.md`
+ve `docs/ROADMAP.md` güncellenir; tarihli devir notu açılmaz.
 
 ## Lisans
 

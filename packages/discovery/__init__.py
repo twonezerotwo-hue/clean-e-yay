@@ -4,7 +4,7 @@ Geniş evrende (sektör ETF'leri, ileride kripto top-50) mevcut analiz zinciri
 GÖLGEDE koşulur; işlem AÇILMAZ, canlı karar zinciri / RiskGate / tik süresi
 DOKUNULMAZ. Tek giriş kapısı `DISCOVERY_SCAN_ENABLED` env flag'idir
 (DEFAULT OFF): kapalıyken hiçbir modül ağa çıkmaz, hiçbir dosya yazmaz —
-learning koşusu bayt-eşdeğer kalır. Plan: docs/AUDIT_ROADMAP.md K serisi.
+learning koşusu bayt-eşdeğer kalır. Plan: docs/archive/AUDIT_ROADMAP.md K serisi.
 """
 from __future__ import annotations
 

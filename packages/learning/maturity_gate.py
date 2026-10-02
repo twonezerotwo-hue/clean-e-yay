@@ -1,7 +1,7 @@
 """I2 — Olgunluk Kapısı (Maturity Gate): "bu kanıta güvenilir mi?" sorusunun
 TEK ortak cevabı.
 
-Amaç (owner talebi 2026-07-05, `docs/LEARNING_INTEGRATION_REPORT.md`): bugün her
+Amaç (owner talebi 2026-07-05, `docs/archive/LEARNING_INTEGRATION_REPORT.md`): bugün her
 öğrenici "güvenilir mi?" kapısını KENDİ içinde taşıyor (kimi edge_report'a, kimi
 Wilson'a, kimi min-örnek'e bakıyor) → tutarsız + her yeni öğrenicide tekrar. Bu
 modül üç parçayı tek fonksiyonda birleştirir:

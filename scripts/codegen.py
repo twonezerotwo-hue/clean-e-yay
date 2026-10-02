@@ -12,7 +12,7 @@ Usage:
 Why no Pydantic yet: the backend hand-writes its response models and does not
 import generated ones, so per "generate Python models *if used by backend*" we
 defer Pydantic emission until a package actually consumes it. See
-docs/MIGRATION_MAP_EYAY_CODEX_TO_CLEAN.md.
+docs/archive/MIGRATION_MAP_EYAY_CODEX_TO_CLEAN.md.
 """
 from __future__ import annotations
 

@@ -1,6 +1,6 @@
 """I4 — Terfi Hattı (Promotion Rail): üç terfi modülünün ORTAK omurgası.
 
-Amaç (owner talebi 2026-07-05, `docs/LEARNING_INTEGRATION_REPORT.md`): bugün üç
+Amaç (owner talebi 2026-07-05, `docs/archive/LEARNING_INTEGRATION_REPORT.md`): bugün üç
 terfi modülü (`promotion_criteria` shadow-pipeline / `challenger_promotion`
 ağırlık / `discovery.promotion` aday) AYNI iskeleti kopyalıyor —
   kanıt → "sayı ≥ eşik" kapısı → Wilson %95 alt-sınır kapısı → READY/NOT_READY →

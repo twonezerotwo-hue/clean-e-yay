@@ -5,7 +5,7 @@
 > `packages/technical` monoliti **kurulmaz**. Teknik analiz var olan paketlere
 > yeniden yerleştirilir. Felsefe: *eski sistemin zekasını taşı, dağınıklığını taşıma.*
 
-İlerleme durumu için bkz. [`TECHNICAL_ARCHITECTURE_PROGRESS.md`](TECHNICAL_ARCHITECTURE_PROGRESS.md).
+İlerleme durumu için bkz. [`TECHNICAL_ARCHITECTURE_PROGRESS.md`](archive/TECHNICAL_ARCHITECTURE_PROGRESS.md).
 
 ---
 

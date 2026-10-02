@@ -1,4 +1,4 @@
-"""F1 — ölçüm standardı slice testleri (bkz. docs/AUDIT_ROADMAP.md).
+"""F1 — ölçüm standardı slice testleri (bkz. docs/archive/AUDIT_ROADMAP.md).
 
 F1-1: R-multiple (risk_pct → r_multiple; EXPECTANCY_R_MODE flag'i default OFF)
 F1-2: başabaş (pnl==0) kayıp değildir — bucketize + mistake_memory

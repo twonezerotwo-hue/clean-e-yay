@@ -1,7 +1,9 @@
 # CLAUDE.md — Clean E-yAy çalışma rehberi
 
 Bu dosya, bu repoda çalışan Claude oturumları için kalıcı rehberdir (makine/hesap değişse bile geçerli).
-Mimari için `ARCHITECTURE.md` + `README.md`; süregelen işlerin TEK kaynağı `docs/AUDIT_ROADMAP.md`.
+Bugün sistem nasıl çalışıyor: `docs/STATE.md`. Sıradaki iş ve açık owner kararları: `docs/ROADMAP.md`
+(tek ileriye dönük plan). Mimari derinlik: `ARCHITECTURE.md`. Eski yol haritaları ve görev kayıtları
+`docs/archive/` altında — yalnız tarihçe, talimat değil.
 
 ## Proje ne yapar
 
@@ -29,11 +31,16 @@ LLM yalnız anlatır. `PAPER_ONLY` / `NO_EXECUTION` kodda yapısal olarak zorlan
 9. **Yeni env-flag eklerken:** conftest'e `delenv` + `scripts/flag-sync-check.sh` SYNC_FLAGS listesine ekle.
    YAML flag ise flag-sync-check gerekmez (git taşır).
 10. **PowerShell script'lerine ASCII dışı karakter YAZMA** (keep-alive zinciri kırılıyor).
+11. **Dokümana eskiyen durum kopyalama.** Flag değeri, test sayısı, "X canlı" iddiası dokümana
+    yazılmaz; `docs/STATE.md` nereden okunacağını söyler. Durum değişince STATE/ROADMAP güncellenir,
+    tarihli "devir notu" bölümü açılmaz.
+12. **Temizlik dönemi (2026-10):** yeni özellik/flag/veri kaynağı yok; her PR tek tema; golden
+    replay bayt-aynı (bilinçli mantık düzeltmesi hariç). Ayrıntı: `docs/ROADMAP.md`.
 
 ## Test / ortam notları
 
 - pytest `--basetemp=.pytest_tmp` (pyproject'te sabit) kullanır; başka basetemp VERME — C:\dev
-  köküne `pytest-*` klasörü saçılıyordu. Baseline: 2100+ test yeşil; CI-kapsamı ruff temiz.
+  köküne `pytest-*` klasörü saçılıyordu. Tüm testler yeşil olmalı; CI-kapsamı ruff temiz.
 - **Golden replay (temizlik güvenlik ağı):** `python -m tests.golden.golden_replay --check`.
   Canlı config ile karar matrisini dondurulmuş çıktıyla karşılaştırır (pytest'te de koşar).
   Davranış değiştirmemesi gereken PR'da fark = hata. Bilinçli mantık düzeltmesinde farkı PR
@@ -54,40 +61,3 @@ LLM yalnız anlatır. `PAPER_ONLY` / `NO_EXECUTION` kodda yapısal olarak zorlan
 - Lokal ↔ AWS runtime state AYRI (`data/runtime/` gitignored) — state git ile taşınmaz.
 - LLM: lokalde `LLM_MODE=ollama` + qwen2.5:7b (Ollama kuruluysa); AWS'te remote fallback.
   Anahtar/Ollama yoksa sistem deterministik fallback ile sorunsuz çalışır.
-
-## Güncel durum — 2026-07-11 devir anı (tarihli; eskiyebilir, güncelini roadmap'te ara)
-
-- **2026-07-19 — T serisi tamir hattı BİTTİ (owner talimatı: "random ilerleme yok,
-  önem sırasına göre tamir").** 17 Temmuz dış denetiminin P0/P1'leri kapatıldı
-  (roadmap "T serisi" tablosu): T0 test zemini (2027→2048 test, 0 kırmızı) →
-  T1 yan kapı söküldü (tek tick yolu worker; ticket/recheck/bildirim worker'a
-  taşındı — prod'da fiilen ölüydü) → T2 kimlik kilidi (API Bearer + Worker parola;
-  AKTİVASYON owner secret'larına bağlı) → T3 defter transaction'ı (süreçler-arası
-  kilit + revision; lost-update bitti) → T4 pending dolum tazeliği (halt/anomali/
-  duplicate beklemesi) → T5 fırtına kuralı tamiri (gates'te, flag default KAPALI =
-  izleme; aktivasyon owner'da). Sonraki tur sırası roadmap'te sabit: masraf
-  muhasebesi → anons taşınımı → sinyal kimliği → tek karne.
-- **reentry_guard** (`packages/paper/reentry_guard.py`, commit `5f0ebde`): owner'ın en büyük
-  problemi — kârda kapatınca 30 sn'de aynı bayat sinyalle geri girme — için tekrar-giriş kilidi.
-  SHADOW'da (`reentry_guard.enabled: false`), tick log'unda kanıt birikiyor; yeter kanıtta owner
-  `true` yapar (iki ortam + tick_worker restart). Owner manuel açılışları MUAF.
-- **Denetim yol haritası 2026-07 BİTTİ** (PR #49–#53 merge). Aktif: Paket 1, tf_platt,
-  TF_CALIBRATION_AUTO_ONLY, TF_TARGET_AUTO_ONLY (watchdog ARM), E-9 trailing_tf_aware.
-  `EDGE_GATE=0` KALIR (owner kararı).
-- **Teknik oy = tf_scoring_v4 CANLI (2026-07-12 owner kararı, sürüm çorbası bitirildi).**
-  Kademe: `consensus.touche_v4=true` → v4 owner formülü BİRİNCİL; v4 çekimserse
-  **touche_backup** (tf_scoring_v2 rejim-anahtarlı, yalnız EDGE-kanıtlı — 06-12 Tem arası canlı
-  motordu) konuşur; ikisi de yoksa zemin teknik motor (snapshot). Üretici
-  `tf_scoring_shadow.py` (env-flag `TF_SCORING_V2_SHADOW` tarihsel ad) artifact'ı 3 saatten
-  bayatsa otomatik zemine düşülür. Her hücrede `touche_observe:base=..:backup=..:v4=..:used=..`.
-  Geri-alma tek satır: `touche_v4: false`. NOT: v4 kanıtı backtest-only (kural #3'e owner'ın
-  gözü-açık istisnası) → `tf_scoring_race` DOĞRULAMA KARNESİ canlı ölçer (v4 vs backup vs
-  al-tut; COLLECTING/V4_AHEAD/V4_BEHIND — otomatik aksiyon YOK, karar owner'ın). v3 + eski
-  yarış/terfi tasarımları söküldü. Sinyal defteri (`packages/signals`, 8 sinyal) + bar arşivi +
-  D4 per-TF trust + karne otomasyonu AKTİF (backup'ın ağırlık kaynağı).
-- **Öğrenme katmanı** (I serisi) CANLI; LEARNING_INCLUDE_SHADOW aktif. learning_advisor GÖLGE
-  (`LEARNING_ADVISOR_APPLY` default OFF). Sıra: context.py'ye bağlama + Şerit A.
-- **Conflict gate:** POSITION HARD_MANUAL; INTRADAY/TACTICAL HARD; SCALP/SWING OFF.
-  self_conflict_guard CANLI. Ağırlık auto-apply (G3) dar bantta AÇIK (outcome-rollback'li).
-- **Çürütülen fikirler** (tekrar deneme): SMC setup dedektörü + yön yeniden-ağırlık — 5Y derin
-  backtestte negatif, söküldü. Ham yön skoru yazı-tura; owner edge'i sabit formüle sığmıyor.

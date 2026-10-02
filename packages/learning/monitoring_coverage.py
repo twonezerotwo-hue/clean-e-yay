@@ -1,7 +1,7 @@
 """I5 — İzleme kapsama sözleşmesi: "canlıya dokunan HER davranış flag'i nasıl
 izleniyor?" sorusunun TEK açık cevabı + guard.
 
-Amaç (owner talebi 2026-07-05, `docs/LEARNING_INTEGRATION_REPORT.md`): sistemde
+Amaç (owner talebi 2026-07-05, `docs/archive/LEARNING_INTEGRATION_REPORT.md`): sistemde
 otomatik-ayar / aktivasyon dağınık izleniyor — kimi `activation_watchdog`
 baseline-expectancy'siyle, kimi kendi outcome-rollback'iyle, kimi de canlı karara
 hiç dokunmadığı için izlemesiz (shadow). "İzlemesiz canlı-dokunuş" gözden kaçarsa
