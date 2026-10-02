@@ -22,7 +22,11 @@ from collections import defaultdict
 from pathlib import Path
 
 from packages.decision import conflict_gate
-from packages.learning.outcomes import CanonicalOutcome, outcomes_from_state
+from packages.learning.outcomes import (
+    CanonicalOutcome,
+    drop_execution_anomalies,
+    outcomes_from_state,
+)
 from packages.mode import profile_selector
 
 DEFAULT_SHADOW_PATH = Path("data/runtime/shadow_decisions.jsonl")
@@ -69,7 +73,7 @@ def validation_report(
     gerçek win-rate/avg_pnl dağılımı. `_unmatched_no_shadow_data`: o trade'in
     açılış anında shadow gözlem kaydı yoktu (örn. Faz 6'dan önceki trade'ler).
     """
-    rows = outcomes if outcomes is not None else outcomes_from_state()
+    rows = outcomes if outcomes is not None else drop_execution_anomalies(outcomes_from_state())
     index = _load_setup_conflict_index(shadow_path or DEFAULT_SHADOW_PATH)
     base_modes = profile_modes or conflict_gate.load_config().profile_modes
     cfg = conflict_gate.ConflictGateConfig(enabled=True, profile_modes=dict(base_modes))

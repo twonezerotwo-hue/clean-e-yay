@@ -23,7 +23,11 @@ from dataclasses import asdict, dataclass, field
 
 from packages.data.registry.loader import load_thresholds
 from packages.learning import fingerprint as fp
-from packages.learning.outcomes import CanonicalOutcome, outcomes_from_state
+from packages.learning.outcomes import (
+    CanonicalOutcome,
+    drop_execution_anomalies,
+    outcomes_from_state,
+)
 
 # Defaults — `config/thresholds_v1.0.yaml::historical_edge` bunları override eder.
 # Config eksik/bozuksa bu sabitlere düşülür (crash yok — diğer load_thresholds
@@ -135,7 +139,7 @@ def compute_edge(
     sim_min = similarity_min if similarity_min is not None else _similarity_similar_min()
     strong_min = _similarity_strong_min()
 
-    rows = outcomes if outcomes is not None else outcomes_from_state()
+    rows = outcomes if outcomes is not None else drop_execution_anomalies(outcomes_from_state())
     matched: list[CanonicalOutcome] = []
     strong_count = 0
     for o in rows:

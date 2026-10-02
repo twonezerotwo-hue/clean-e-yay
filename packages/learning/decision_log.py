@@ -95,6 +95,8 @@ def entry_for(trade: Trade) -> dict:
         "exit": {
             "reason": trade.close_reason,
             "lifecycle_status": trade.lifecycle_status,
+            # H7 — çıkış mantığı sürümü (legacy kayıtlarda yok → 0).
+            "policy": int(getattr(trade, "exit_policy", 0) or 0),
         },
         "outcome": {
             "entry_price": trade.entry_price,

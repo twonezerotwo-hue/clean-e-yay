@@ -736,6 +736,8 @@ export type LearningCohorts = {
   excluded: CohortStats;
   /** K1 — paper keşif açılışları (AUTO'ya karışmaz). */
   exploration?: CohortStats;
+  /** H7 — temizlik öncesi çıkış hatası kayıpları (öğrenmeye girmez). */
+  execution_anomaly?: CohortStats;
 };
 
 export type OutcomeBucket = {

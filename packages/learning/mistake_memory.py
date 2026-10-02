@@ -169,7 +169,7 @@ def summary() -> list[Mistake]:
     if not _v2_enabled():
         return _aggregate(s.recent_trades)
     # F3-3 — kalıcı kaynak (decision_log + recent_trades) + hiyerarşik kovalar.
-    records = outcomes_mod.outcomes_from_state(s)
+    records = outcomes_mod.drop_execution_anomalies(outcomes_mod.outcomes_from_state(s))
     out = _aggregate(records)
     out.extend(_aggregate_by(records, _l1_key))
     out.extend(_aggregate_by(records, _l2_key))

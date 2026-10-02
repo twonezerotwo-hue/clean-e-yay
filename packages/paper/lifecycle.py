@@ -148,6 +148,11 @@ def _last_closed_close(
 EXPLORATION_PREFIX = "paper_exploration:"
 
 
+# H7 — Trade.exit_policy damgası: bu sürümle kapanan işlemler H1–H3 düzeltmeli
+# çıkış mantığından geçti. Öğrenme, eski (0) kapanışlardaki hata kayıplarını ayırır.
+EXIT_POLICY_VERSION = 2
+
+
 def is_exploration(blocked_by: list[str] | None) -> bool:
     """K1 — karar paper keşif politikasıyla mı açıldı? (`paper_exploration:<kapı>`)."""
     return any(str(b).startswith(EXPLORATION_PREFIX) for b in (blocked_by or []))
@@ -554,6 +559,7 @@ def close_position(
         open_risk_action=pos.open_risk_action,
         open_blocked_by=getattr(pos, "open_blocked_by", None),
         exploration=bool(getattr(pos, "exploration", False)),
+        exit_policy=EXIT_POLICY_VERSION,
         open_config_provenance=getattr(pos, "open_config_provenance", None),
         open_session_action=pos.open_session_action,
         open_session_phase=pos.open_session_phase,

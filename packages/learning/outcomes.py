@@ -72,6 +72,9 @@ class CanonicalOutcome:
     # K1 — paper keşif açılışı mı (yumuşak güven/EV kapısı esnetildi). Kohort
     # ayrımı için açıkça taşınır; legacy kayıtlar False.
     exploration: bool = False
+    # H7 — kapanışı yapan çıkış mantığı sürümü (0 = temizlik öncesi; bkz.
+    # lifecycle.EXIT_POLICY_VERSION). is_execution_anomaly bunu okur.
+    exit_policy: int = 0
 
 
 def _duration_seconds(opened_at: str | None, closed_at: str | None) -> float | None:
@@ -177,6 +180,7 @@ def build_outcome(t: Trade) -> CanonicalOutcome:
             getattr(t, "open_module_contributions", None)
         ),
         exploration=bool(getattr(t, "exploration", False)),
+        exit_policy=int(getattr(t, "exit_policy", 0) or 0),
     )
 
 
@@ -247,6 +251,7 @@ def build_outcome_from_log_entry(entry: dict) -> CanonicalOutcome:
         size_usd=_opt_float(outcome.get("size_usd")),
         module_contributions=_module_contributions(opening.get("module_contributions")),
         exploration=bool(opening.get("exploration", False)),
+        exit_policy=int(exit_.get("policy") or 0),
     )
 
 
@@ -305,14 +310,40 @@ def learning_grade(
     # güven kalibrasyonuna girer (include_exploration=True: calibration_trainer,
     # tf_calibration). Ağırlık/eşik/hedef/fren/ampirik p(win) gibi diğer öğrenenler
     # onları görmez — bilinçli zayıf sinyal "normal işlem" sanılmasın.
+    #
+    # H7: temizlik öncesi çıkış hatalarının ürettiği kayıplar (execution_anomaly)
+    # hiçbir öğreniciye girmez.
     return [o for o in outcomes
             if getattr(o, "regime", None) not in LEGACY_REGIMES
-            and (include_exploration or not is_exploration(o))]
+            and (include_exploration or not is_exploration(o))
+            and not is_execution_anomaly(o)]
 
 
 def is_exploration(o: object) -> bool:
     """K1 — paper keşif açılışından gelen outcome/trade mi? (legacy: False)."""
     return bool(getattr(o, "exploration", False))
+
+
+# H7 — eski çıkış mantığında SL kaybı ~1R'de kalmalıydı; -1.5R'den kötüsü H1 (önceki
+# /bayat bar kapanışıyla stop), H2 (acil fren yok, -4R/-8R) veya H3 (bozuk tick) hatası.
+# Yerel geçmişte 9 işlem, toplam -26.5R. Düzeltilmiş mantıkla (exit_policy ≥ 2)
+# kapanan işlemler asla bu sınıfa girmez: onların büyük kaybı gerçek piyasa riskidir.
+EXECUTION_ANOMALY_R = -1.5
+_FIXED_EXIT_POLICY = 2
+
+
+def is_execution_anomaly(o: object) -> bool:
+    """Temizlik öncesi çıkış hatasının ürettiği kayıp mı? (öğrenmeden ayrılır)."""
+    if int(getattr(o, "exit_policy", 0) or 0) >= _FIXED_EXIT_POLICY:
+        return False
+    reason = str(getattr(o, "close_reason", "") or "").upper()
+    r = getattr(o, "r_multiple", None)
+    return reason == "SL_HIT" and r is not None and float(r) < EXECUTION_ANOMALY_R
+
+
+def drop_execution_anomalies(outcomes: list) -> list:
+    """H7 — learning_grade kullanmayan öğrenici/frenler için aynı süzgeç."""
+    return [o for o in outcomes if not is_execution_anomaly(o)]
 
 
 # --------------------------------------------------------------------------

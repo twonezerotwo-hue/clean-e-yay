@@ -117,6 +117,7 @@ def pre_apply_expectancy(window: int | None = None) -> tuple[int, float]:
         o
         for o in outcomes_mod.outcomes_from_state()
         if o.data_verified and not outcomes_mod.is_exploration(o)
+        and not outcomes_mod.is_execution_anomaly(o)
         and o.opened_at and _outcome_value(o) is not None
     ]
     outs.sort(key=lambda o: o.opened_at or "", reverse=True)
@@ -137,6 +138,7 @@ def post_open_expectancy(since: str) -> tuple[int, float]:
         o
         for o in outcomes_mod.outcomes_from_state()
         if o.data_verified and not outcomes_mod.is_exploration(o)
+        and not outcomes_mod.is_execution_anomaly(o)
         and _after(o.opened_at, since) and _outcome_value(o) is not None
     ]
     n = len(outs)

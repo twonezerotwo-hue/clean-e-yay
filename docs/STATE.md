@@ -74,6 +74,14 @@ kapılarında kalan aday küçük boyutla açılabilir. Bu pozisyonlar
 `exploration=true` damgalanır ve `decision_log`'a kapı listesiyle (`blocked_by`)
 yazılır ve EXPLORATION kohortuna düşer: yalnız güven kalibrasyonu (`calibration_trainer`, `tf_calibration`) bunları kullanır, diğer öğreniciler dışarıda bırakır.
 
+## Öğrenme verisi hijyeni
+
+- `outcomes.learning_grade()` öğrenicilerin tek süzgeci: legacy (regime=UNKNOWN),
+  keşif (yalnız güven kalibrasyonuna girer) ve **execution_anomaly** dışarıda kalır.
+- execution_anomaly (H7): temizlik öncesi çıkış mantığıyla (`Trade.exit_policy` < 2)
+  kapanmış, -1.5R'den kötü SL kaybı. Düzeltilmiş mantıkla kapanan işlemler bu sınıfa
+  hiç girmez. Kohort raporunda ayrı kolon; P3 son-performans freni de bunları saymaz.
+
 ## Doğrulama (her değişiklikte)
 
 ```

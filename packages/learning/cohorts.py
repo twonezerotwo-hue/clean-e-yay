@@ -12,18 +12,21 @@ outcome'u üç kohorta ayırır ve kohort-bazlı istatistik üretir:
             hiçbir başarı metriğine girmemeli, sadece şeffaflık için sayılır.
 - EXPLORATION: paper keşif açılışları (K1, 2026-10-02) — bilinçli zayıf sinyal;
             AUTO performansına karışmaz, ayrı kolonda raporlanır.
+- EXECUTION_ANOMALY: temizlik öncesi çıkış hatalarının (H1–H3) ürettiği kayıplar
+            (H7, 2026-10-02) — hiçbir öğreniciye girmez, şeffaflık için sayılır.
 
 Salt gözlem (read-only): karar/ağırlık yoluna dokunmaz; summary.py additive
 olarak gömer, dashboard ayrı kolonlarda gösterir.
 """
 from __future__ import annotations
 
-from packages.learning.outcomes import CanonicalOutcome
+from packages.learning.outcomes import CanonicalOutcome, is_execution_anomaly
 
 AUTO = "auto"
 MANUAL = "manual"
 EXCLUDED = "excluded"
 EXPLORATION = "exploration"
+EXECUTION_ANOMALY = "execution_anomaly"
 
 # Owner-kaynaklı open_reason önekleri (packages/paper/manual_order.py,
 # position_ops.py). pending_stop_limit: owner'ın koyduğu bekleyen emir dolmuş.
@@ -32,6 +35,8 @@ _MANUAL_OPEN_PREFIXES = ("owner", "pending", "manual")
 
 def classify(o: CanonicalOutcome) -> str:
     """Tek outcome → kohort. Deterministik; trainer filtresiyle hizalı."""
+    if is_execution_anomaly(o):
+        return EXECUTION_ANOMALY
     if getattr(o, "exploration", False):
         return EXPLORATION
     if o.fingerprint and o.data_verified:
@@ -80,7 +85,7 @@ def cohort_summary(outcomes: list[CanonicalOutcome]) -> dict:
     """
     per: dict[str, dict] = {
         AUTO: _empty_stats(), MANUAL: _empty_stats(), EXCLUDED: _empty_stats(),
-        EXPLORATION: _empty_stats(),
+        EXPLORATION: _empty_stats(), EXECUTION_ANOMALY: _empty_stats(),
     }
     auto_by_tf: dict[str, dict] = {}
     auto_manual_closed = 0

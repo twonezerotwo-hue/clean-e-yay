@@ -2144,6 +2144,13 @@ components:
             AUTO performansına karışmaz; yalnız güven kalibrasyonuna veri olur.
           allOf:
             - $ref: "#/components/schemas/CohortStats"
+        execution_anomaly:
+          description: >
+            H7 (2026-10-02) — temizlik öncesi çıkış hatalarının (bayat bar stopu, acil
+            fren yok, bozuk tick) ürettiği -1.5R'den kötü SL kayıpları. Hiçbir öğreniciye
+            girmez; yalnız şeffaflık için sayılır.
+          allOf:
+            - $ref: "#/components/schemas/CohortStats"
 
     CohortStats:
       type: object

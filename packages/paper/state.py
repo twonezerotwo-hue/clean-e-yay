@@ -167,6 +167,9 @@ class Trade:
     # H6 / K1 — pozisyondan miras: açılış kapı atfı + keşif damgası.
     open_blocked_by: list[str] | None = None
     exploration: bool = False
+    # H7 — kapanışı hangi çıkış mantığı yaptı. 0 = temizlik öncesi (H1–H3 hataları
+    # açık: önceki/bayat bar stopu, acil fren yok, tick bekçisi zayıf); 2 = düzeltilmiş.
+    exit_policy: int = 0
     # Exit-forensics — kapanan dilimin $ büyüklüğü (kısmi kapanışta realized_size).
     # Kötü çıkışın $ maliyetini kesin hesaplamak için; legacy kayıtlar None.
     size_usd: float | None = None

@@ -142,7 +142,7 @@ def build_digest(outcomes=None, *, cross: int = _DEFAULT_CROSS,
     çapraz-sembol son dersler + son görülen semboller için per-sembol hafıza."""
     if outcomes is None:
         try:
-            outcomes = outcomes_mod.outcomes_from_state()
+            outcomes = outcomes_mod.drop_execution_anomalies(outcomes_mod.outcomes_from_state())
         except Exception:
             outcomes = []
     all_recent = _sorted_lessons(outcomes)

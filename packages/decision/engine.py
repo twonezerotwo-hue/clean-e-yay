@@ -227,7 +227,8 @@ def _recent_edge(lookback: int) -> float | None:
     <10 örnek → None (yetersiz kanıt, fren yok — uydurma yok). Saf/defansif."""
     try:
         from packages.learning import outcomes as om
-        outs = om.outcomes_from_state()
+        # H7 — temizlik öncesi çıkış hatası kayıpları freni tetiklemesin.
+        outs = om.drop_execution_anomalies(om.outcomes_from_state())
     except Exception:
         return None
     rs = [float(o.r_multiple) for o in outs[-lookback:] if o.r_multiple is not None]

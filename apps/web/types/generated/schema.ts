@@ -2043,6 +2043,8 @@ export interface components {
             excluded: components["schemas"]["CohortStats"];
             /** @description K1 (2026-10-02) — paper keşif açılışları (yumuşak güven/EV kapısı esnetildi). AUTO performansına karışmaz; yalnız güven kalibrasyonuna veri olur. */
             exploration?: components["schemas"]["CohortStats"];
+            /** @description H7 (2026-10-02) — temizlik öncesi çıkış hatalarının (bayat bar stopu, acil fren yok, bozuk tick) ürettiği -1.5R'den kötü SL kayıpları. Hiçbir öğreniciye girmez; yalnız şeffaflık için sayılır. */
+            execution_anomaly?: components["schemas"]["CohortStats"];
         };
         /** @description Kohort başına outcome özeti (win_rate paydası kararlı işlemler — breakeven ayrı sayılır; F1-2 deseniyle hizalı). */
         CohortStats: {
