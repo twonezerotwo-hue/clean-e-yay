@@ -36,6 +36,10 @@ data/state/
 # Kurtarma/gecis yedekleri (data/runtime.bak-YYYYMMDD/) - runtime kadar hassas,
 # ayni sekilde commit edilmez. Desen yoksa "git add -A" sessizce defteri commit eder.
 data/runtime.bak-*/
+# Runtime arsivi (sikistirilmis gunlukler) ve yerel kitap OCR korpusu + raporlari:
+# lokal veri, git ile tasinmaz (korpus yoksa kitap kaniti UNAVAILABLE doner).
+data/archive/
+data/knowledge/
 *.log
 
 # OS
@@ -56,6 +60,7 @@ contracts/codegen/typescript/
 # Misc
 .cache/
 .pytest_tmp/
+.tmp/
 
 # Cloudflare Worker tooling (account-scoped caches, generated)
 infra/worker-proxy/.wrangler/
