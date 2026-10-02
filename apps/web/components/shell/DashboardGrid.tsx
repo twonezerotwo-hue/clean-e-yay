@@ -60,7 +60,6 @@ const PANEL_ID_BY_COMPONENT: Record<string, string> = {
   CalibrationJumpsPanel: "calibration_jumps",
   AgentModePanel: "agent_mode",
   GovernorPanel: "governor",
-  TaskQueuePanel: "governor_tasks",
   TimeframeMatrixPanel: "timeframe_matrix",
   TradeTicketPanel: "trade_ticket",
   TradingPanel: "trading",

@@ -639,38 +639,6 @@ export const useGovernorProposals = () => {
   });
 };
 
-export const useGovernorTasks = () => {
-  const policy = usePanelQueryPolicy(60_000);
-  return useQuery({
-    queryKey: qk.governorTasks,
-    queryFn: api.governorTasks,
-    staleTime: 30_000,
-    ...policy,
-  });
-};
-
-export const useGenerateGovernorTasks = () => {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: api.governorTasksGenerate,
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: qk.governorTasks });
-      void queryClient.invalidateQueries({ queryKey: qk.governorReport });
-    },
-  });
-};
-
-export const useRunGovernorTask = () => {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: (taskId: string) => api.governorTaskRun(taskId),
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: qk.governorTasks });
-      void queryClient.invalidateQueries({ queryKey: qk.governorReport });
-    },
-  });
-};
-
 export const useApproveGovernorProposal = () => {
   const queryClient = useQueryClient();
   return useMutation({

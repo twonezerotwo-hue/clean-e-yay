@@ -1474,58 +1474,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/governor/tasks": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Görev kuyruğu (observe-only) */
-        get: operations["getGovernorTasks"];
-        put?: never;
-        /** Manuel görev ekle (can_change_policy daima false) */
-        post: operations["postGovernorTask"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/governor/tasks/generate": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Observe-only görev üret (dedup'lu) */
-        post: operations["generateGovernorTasks"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/governor/tasks/{task_id}/run": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Görevi koş → read-only rapor üret */
-        post: operations["runGovernorTask"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -3956,42 +3904,6 @@ export interface components {
             history: components["schemas"]["GovernorProposal"][];
             note?: string;
         };
-        /** @enum {string} */
-        GovernorTaskPriority: "P0" | "P1" | "P2" | "P3" | "P4";
-        /** @enum {string} */
-        GovernorTaskStatus: "PENDING" | "DONE" | "FAILED";
-        /** @enum {string} */
-        GovernorTaskType: "DATA_QUALITY_REVIEW" | "RISK_REVIEW" | "MISSED_OPPORTUNITY_REVIEW" | "TRADE_REVIEW" | "MODE_REVIEW" | "SYSTEM_HEALTH_REVIEW";
-        GovernorTask: {
-            task_id: string;
-            task_type: components["schemas"]["GovernorTaskType"];
-            priority: components["schemas"]["GovernorTaskPriority"];
-            subject?: string;
-            params?: {
-                [key: string]: unknown;
-            };
-            status: components["schemas"]["GovernorTaskStatus"];
-            auto_execute?: boolean;
-            can_change_policy: boolean;
-            source?: string;
-            created_at?: string;
-            executed_at?: string | null;
-            result?: {
-                [key: string]: unknown;
-            } | null;
-        };
-        GovernorTasksView: {
-            task_types?: {
-                [key: string]: string;
-            };
-            queue: components["schemas"]["GovernorTask"][];
-            queue_count: number;
-            queue_by_priority?: {
-                [key: string]: number;
-            };
-            history: components["schemas"]["GovernorTask"][];
-            note?: string;
-        };
         GovernorReportSection: {
             available: boolean;
             data?: unknown;
@@ -4003,11 +3915,9 @@ export interface components {
             no_execution: boolean;
             learned?: components["schemas"]["GovernorReportSection"];
             found_missed_opportunities?: components["schemas"]["GovernorReportSection"];
-            tasks?: components["schemas"]["GovernorReportSection"];
             proposals?: components["schemas"]["GovernorReportSection"];
             other_pending_approvals?: components["schemas"]["GovernorReportSection"];
             data_trust?: components["schemas"]["GovernorReportSection"];
-            worker_last_run?: components["schemas"]["GovernorReportSection"];
             note?: string;
         };
     };
@@ -5966,99 +5876,6 @@ export interface operations {
             header?: never;
             path: {
                 proposal_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": Record<string, never>;
-                };
-            };
-            /** @description not found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    getGovernorTasks: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["GovernorTasksView"];
-                };
-            };
-        };
-    };
-    postGovernorTask: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": Record<string, never>;
-            };
-        };
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": Record<string, never>;
-                };
-            };
-        };
-    };
-    generateGovernorTasks: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": Record<string, never>;
-                };
-            };
-        };
-    };
-    runGovernorTask: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                task_id: string;
             };
             cookie?: never;
         };

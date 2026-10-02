@@ -7,7 +7,6 @@
 #   API             plain uvicorn         http://127.0.0.1:9000
 #   tick_worker     long-lived daemon     (30s loop, live data/positions)
 #   learning_worker self-paced loop       (calibration/proposals)
-#   governor_worker self-paced loop       (observe-only tasks)
 #   Ollama          local LLM             http://127.0.0.1:11434 (if installed)
 #   web             next start .next-prod http://127.0.0.1:4000
 #
@@ -196,7 +195,6 @@ while ($true) {
     # workers - process presence is the health signal
     Ensure-Worker "worker"   "apps.tick_worker.main"
     Ensure-Worker "learning" "apps.learning_worker.loop"
-    Ensure-Worker "governor" "apps.governor_worker.loop"
 
     # Ollama - local LLM for chat/persona narration (dead process => robotic chat)
     $ollama = "$env:LOCALAPPDATA\Programs\Ollama\ollama.exe"

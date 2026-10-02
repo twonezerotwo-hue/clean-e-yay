@@ -31,7 +31,6 @@ import { NewsPanel } from "@/components/panels/NewsPanel";
 import { ScenarioPanel } from "@/components/panels/ScenarioPanel";
 import { WorldBriefPanel } from "@/components/panels/WorldBriefPanel";
 import { GovernorPanel } from "@/components/panels/GovernorPanel";
-import { TaskQueuePanel } from "@/components/panels/TaskQueuePanel";
 import { LearningPanel } from "@/components/panels/LearningPanel";
 import { OutcomeLedgerPanel } from "@/components/panels/OutcomeLedgerPanel";
 import { LearningWorkerPanel } from "@/components/panels/LearningWorkerPanel";
@@ -1353,14 +1352,13 @@ export function CockpitView() {
           <Layer2DetailGroup
             index="02"
             title="Sistem Yonetimi"
-            detail="Owner kontrolu modlar: governor ozeti, agent modu ve gorev kuyrugu."
+            detail="Owner kontrolu modlar: governor ozeti ve agent modu."
             badge="owner kontrolu"
             badgeTone="border-emerald-400/30 bg-emerald-400/10 text-emerald-200"
           >
             <div className="grid gap-3 lg:grid-cols-2">
               <div className="lg:col-span-2"><GovernorPanel /></div>
               <div className="lg:col-span-2"><AgentModePanel /></div>
-              <div className="lg:col-span-2"><TaskQueuePanel /></div>
             </div>
           </Layer2DetailGroup>
 

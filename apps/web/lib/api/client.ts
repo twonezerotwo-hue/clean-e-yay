@@ -52,7 +52,6 @@ import type {
   AgentModeConfigUpdate,
   GovernorReport,
   GovernorProposalsView,
-  GovernorTasksView,
   TradeTicketList,
   AgentBriefing,
   VoiceSpeakRequest,
@@ -719,17 +718,6 @@ export const api = {
     fetchJSON<Record<string, unknown>>(
       `/api/v1/governor/proposals/${encodeURIComponent(proposalId)}/reject`,
       { method: "POST", body: JSON.stringify({ reason: reason ?? "owner_reject" }) },
-    ),
-  governorTasks: () =>
-    fetchJSON<GovernorTasksView>("/api/v1/governor/tasks"),
-  governorTasksGenerate: () =>
-    fetchJSON<Record<string, unknown>>("/api/v1/governor/tasks/generate", {
-      method: "POST",
-    }),
-  governorTaskRun: (taskId: string) =>
-    fetchJSON<Record<string, unknown>>(
-      `/api/v1/governor/tasks/${encodeURIComponent(taskId)}/run`,
-      { method: "POST" },
     ),
   mistakes: () => fetchJSON<MistakesState>("/api/v1/learning/mistakes"),
   riskCorrelation: () =>

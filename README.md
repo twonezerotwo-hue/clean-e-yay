@@ -39,7 +39,7 @@ Gerekli: Python **3.11+** PATH'te. Web tarafı için ayrıca Node 20+ + pnpm.
 - **Karar-destek**, otonom işlem motoru değil. `PAPER_ONLY`, `REPLAY_ONLY`, `NO_EXECUTION`.
 - AI açıklar; deterministic kod karar verir.
 - Sözleşme-önce: `contracts/openapi.yaml` tek doğruluk kaynağı; tipler ve client codegen.
-- Ayrı süreçler: HTTP API, tick worker, learning worker, governor worker — biri çökerse
+- Ayrı süreçler: HTTP API, tick worker, learning worker — biri çökerse
   diğerleri etkilenmez. (AWS bugün hepsini tek supervisor sürecinde koşuyor; bkz. docs/STATE.md.)
 
 ## Mimari

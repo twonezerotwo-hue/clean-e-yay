@@ -27,7 +27,7 @@ snapshot (fiyat + OHLCV + makro + haber, DQS)
 
 | Ortam | Nasıl kalkar | Süreçler |
 | --- | --- | --- |
-| Lokal (Windows) | `scripts/local-autostart.ps1` keeper (20 sn'de bir sağlık) | API (uvicorn :9000), web (`next start` :4000), tick worker, learning worker (kendi döngüsü), governor worker, Ollama; ngrok tüneli varsa |
+| Lokal (Windows) | `scripts/local-autostart.ps1` keeper (20 sn'de bir sağlık) | API (uvicorn :9000), web (`next start` :4000), tick worker, learning worker (kendi döngüsü), Ollama; ngrok tüneli varsa |
 | AWS (EC2) | `main`'e merge → GitHub Actions → `scripts/deploy-from-github.sh` | `eyay-supervisor.service`: API + worker'lar **tek süreçte** (`apps/supervisor`) |
 
 İki ortam aynı kodu koşar ama topolojileri farklı (temizlik B2 maddesi).

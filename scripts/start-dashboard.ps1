@@ -79,20 +79,6 @@ if (-not $learningRunning) {
         -RedirectStandardOutput "$logs\learning.out.log" -RedirectStandardError "$logs\learning.err.log"
 }
 
-# 1b3) governor_worker — AYRI süreç (observe-only: 15 dk'da bir görev üretir +
-# read-only koşar; owner butona basmadan sonuçlar birikir). AWS'te supervisor
-# aynı döngüyü kendi içinde çalıştırır; bu blok yalnız lokal üç-süreç deseni için.
-$governorRunning = Get-CimInstance Win32_Process -Filter "name='python.exe'" -ErrorAction SilentlyContinue |
-    Where-Object {
-        $_.CommandLine -like '*governor_worker.loop*' -and
-        $_.ExecutablePath -eq ([IO.Path]::GetFullPath($py))
-    }
-if (-not $governorRunning) {
-    Start-Process -WindowStyle Hidden -FilePath $py `
-        -ArgumentList "-m","apps.governor_worker.loop" -WorkingDirectory $root `
-        -RedirectStandardOutput "$logs\governor.out.log" -RedirectStandardError "$logs\governor.err.log"
-}
-
 # 1b4) Ollama — lokal LLM (chat/persona anlatımı). Süreç ölünce chat sessizce
 # deterministik şablon moduna düşüyordu ("robotik cevap" şikayetinin kök nedeni).
 # Startup'taki tray kısayolu yeniden başlatmaz; keeper döngüsü buradan kaldırır.

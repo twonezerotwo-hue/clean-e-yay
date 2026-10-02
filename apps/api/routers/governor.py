@@ -18,7 +18,6 @@ from fastapi import APIRouter, HTTPException
 
 from packages.governor import proposals as proposals_store
 from packages.governor import report as governor_report
-from packages.governor import tasks as task_queue
 
 router = APIRouter(tags=["governor"])
 
@@ -75,54 +74,3 @@ def post_reject_proposal(proposal_id: str, payload: dict | None = None) -> dict:
             detail={"status": "not_found", "proposal_id": proposal_id},
         )
     return {"rejected": True, "proposal": rec}
-
-
-# ── Görev Kuyruğu (observe-only) ─────────────────────────────────────────────
-
-
-@router.get("/governor/tasks")
-def get_governor_tasks() -> dict:
-    """Görev kuyruğu görünümü: bekleyen (öncelikli) + son geçmiş + sayaçlar."""
-    return task_queue.summary_viewmodel()
-
-
-@router.post("/governor/tasks")
-def post_governor_task(payload: dict) -> dict:
-    """Manuel görev ekle (sanitize; bilinmeyen tip reddedilir). `can_change_policy`
-    girdiden okunmaz — daima False."""
-    p = payload or {}
-    task = task_queue.enqueue(
-        str(p.get("task_type") or ""),
-        subject=str(p.get("subject") or ""),
-        params=p.get("params") if isinstance(p.get("params"), dict) else {},
-        priority=p.get("priority"),
-        source=str(p.get("source") or "owner"),
-    )
-    if task is None:
-        raise HTTPException(
-            status_code=422,
-            detail={
-                "status": "invalid_task",
-                "allowed_types": list(task_queue.TASK_TYPES),
-            },
-        )
-    return {"enqueued": True, "task": task}
-
-
-@router.post("/governor/tasks/generate")
-def post_generate_tasks() -> dict:
-    """Mevcut store'lara bakıp gereken observe-only görevleri üret (dedup'lu)."""
-    created = task_queue.generate()
-    return {"generated": len(created), "tasks": created}
-
-
-@router.post("/governor/tasks/{task_id}/run")
-def post_run_task(task_id: str) -> dict:
-    """Görevi koş → read-only rapor üret. Bulunamazsa 404."""
-    rec = task_queue.execute(task_id)
-    if rec is None:
-        raise HTTPException(
-            status_code=404,
-            detail={"status": "not_found", "task_id": task_id},
-        )
-    return {"executed": True, "task": rec}

@@ -59,18 +59,6 @@ def _proposals() -> dict:
     return proposals.summary_viewmodel()
 
 
-def _tasks() -> dict:
-    from packages.governor import tasks
-
-    return tasks.summary_viewmodel()
-
-
-def _worker_last_run() -> dict | None:
-    from packages.governor import run_store
-
-    return run_store.load()
-
-
 def _other_pending_approvals() -> dict:
     """Governor defteri DIŞINDA, sistemde halihazırda owner onayı bekleyen
     mevcut owner-gated mekanizmalar (tek bakışta görünürlük)."""
@@ -119,11 +107,9 @@ def build_report() -> dict:
         "no_execution": True,
         "learned": _safe(_learned),
         "found_missed_opportunities": _safe(_missed),
-        "tasks": _safe(_tasks),
         "proposals": _safe(_proposals),
         "other_pending_approvals": _safe(_other_pending_approvals),
         "data_trust": _safe(_data_trust),
-        "worker_last_run": _safe(_worker_last_run),
         "note": (
             "Read-only özet. Governor işlem açmaz, ayar değiştirmez; yalnızca "
             "var olan store'lardan derler. Öneriler owner onayı bekler."

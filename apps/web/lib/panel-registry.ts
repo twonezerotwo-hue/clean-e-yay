@@ -79,8 +79,7 @@ export type PanelKey =
   | "missed_opportunities"
   | "calibration_jumps"
   | "agent_mode"
-  | "governor"
-  | "governor_tasks";
+  | "governor";
 
 export type PanelGroupId =
   // ana tier
@@ -179,7 +178,6 @@ export const PANEL_REGISTRY: PanelMeta[] = [
 
   // ── DETAY — Governor (öz-yönetim) ────────────────────────────────────────
   { id: "governor",            title: "Governor",          defaultVisible: true, span: "full", group: "governor",       tier: "detay" },
-  { id: "governor_tasks",      title: "Görev Kuyruğu",     defaultVisible: true, span: "2",    group: "governor",       tier: "detay" },
 
   // ── OPS — Sistem / Veri (default kapalı) ─────────────────────────────────
   { id: "data_quality",     title: "Veri Kalitesi",        defaultVisible: false, span: "2",    group: "ops",             tier: "ops" },

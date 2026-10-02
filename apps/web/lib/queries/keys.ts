@@ -67,7 +67,6 @@ export const qk = {
   agentModeConfig: ["agent-mode", "config"] as const,
   governorReport: ["governor", "report"] as const,
   governorProposals: ["governor", "proposals"] as const,
-  governorTasks: ["governor", "tasks"] as const,
   mistakes: ["learning", "mistakes"] as const,
   riskCorrelation: ["risk", "correlation"] as const,
   riskHalts: ["risk", "halts"] as const,

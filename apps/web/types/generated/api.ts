@@ -734,6 +734,8 @@ export type LearningCohorts = {
   };
   manual: CohortStats;
   excluded: CohortStats;
+  /** K1 — paper keşif açılışları (AUTO'ya karışmaz). */
+  exploration?: CohortStats;
 };
 
 export type OutcomeBucket = {
@@ -2638,42 +2640,6 @@ export type GovernorProposalsView = {
   note?: string;
 };
 
-export type GovernorTaskPriority = "P0" | "P1" | "P2" | "P3" | "P4";
-
-export type GovernorTaskStatus = "PENDING" | "DONE" | "FAILED";
-
-export type GovernorTaskType =
-  | "DATA_QUALITY_REVIEW"
-  | "RISK_REVIEW"
-  | "MISSED_OPPORTUNITY_REVIEW"
-  | "TRADE_REVIEW"
-  | "MODE_REVIEW"
-  | "SYSTEM_HEALTH_REVIEW";
-
-export type GovernorTask = {
-  task_id: string;
-  task_type: GovernorTaskType;
-  priority: GovernorTaskPriority;
-  subject?: string;
-  params?: Record<string, unknown>;
-  status: GovernorTaskStatus;
-  auto_execute?: boolean;
-  can_change_policy: boolean;
-  source?: string;
-  created_at?: string;
-  executed_at?: string | null;
-  result?: Record<string, unknown> | null;
-};
-
-export type GovernorTasksView = {
-  task_types?: Record<string, string>;
-  queue: GovernorTask[];
-  queue_count: number;
-  queue_by_priority?: Record<string, number>;
-  history: GovernorTask[];
-  note?: string;
-};
-
 export type GovernorReportSection = {
   available: boolean;
   data?: unknown;
@@ -2686,10 +2652,8 @@ export type GovernorReport = {
   no_execution: boolean;
   learned?: GovernorReportSection;
   found_missed_opportunities?: GovernorReportSection;
-  tasks?: GovernorReportSection;
   proposals?: GovernorReportSection;
   other_pending_approvals?: GovernorReportSection;
   data_trust?: GovernorReportSection;
-  worker_last_run?: GovernorReportSection;
   note?: string;
 };
