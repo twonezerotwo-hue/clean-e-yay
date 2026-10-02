@@ -41,4 +41,6 @@ ignore = ["E501", "RUF001", "RUF002", "RUF003", "RUF012"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 python_files = ["test_*.py"]
-addopts = "-ra --strict-markers"
+# Sabit basetemp: test artıkları repo içindeki gitignored .pytest_tmp/'a gider
+# (C:\\dev köküne pytest-* klasörü saçılmaz; Windows Temp kilidi de aşılır).
+addopts = "-ra --strict-markers --basetemp=.pytest_tmp"

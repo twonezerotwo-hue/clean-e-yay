@@ -30,5 +30,12 @@ jobs:
           node-version: "20"
       - name: Install
         run: pnpm install --no-frozen-lockfile
+      # Sözleşme-önce (Iron Law #4): openapi.yaml -> TS tipleri senkron olmalı.
+      # Python job'unda node olmadığı için bu kontrol orada skip ediliyordu.
+      - name: Contract drift (openapi -> TS)
+        working-directory: .
+        run: python3 scripts/codegen.py --check
+      - name: Typecheck
+        run: pnpm exec tsc --noEmit
       - name: Build
         run: pnpm build

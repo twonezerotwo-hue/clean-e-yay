@@ -32,8 +32,14 @@ LLM yalnız anlatır. `PAPER_ONLY` / `NO_EXECUTION` kodda yapısal olarak zorlan
 
 ## Test / ortam notları
 
-- pytest Windows'ta Temp kilidine takılırsa (WinError 5): `--basetemp` ile yazılabilir dizin ver
-  (örn. `.pytest_tmp/`). Baseline: ~939 test yeşil; ruff'ta 40 ESKİ hata var — yenisini ekleme.
+- pytest `--basetemp=.pytest_tmp` (pyproject'te sabit) kullanır; başka basetemp VERME — C:\dev
+  köküne `pytest-*` klasörü saçılıyordu. Baseline: 2100+ test yeşil; CI-kapsamı ruff temiz.
+- **Golden replay (temizlik güvenlik ağı):** `python -m tests.golden.golden_replay --check`.
+  Canlı config ile karar matrisini dondurulmuş çıktıyla karşılaştırır (pytest'te de koşar).
+  Davranış değiştirmemesi gereken PR'da fark = hata. Bilinçli mantık düzeltmesinde farkı PR
+  açıklamasına yaz, sonra `--write` ile golden'ı güncelle.
+- **Sözleşme ratchet'i:** yeni route önce `contracts/openapi.yaml`'a eklenir (+ `make codegen`);
+  `tests/contract/contractless_routes.txt` yalnız küçülebilir.
 - Fresh clone: `.\scripts\bootstrap.ps1` (Win) veya `./scripts/bootstrap.sh` — venv + bağımlılık + smoke.
 - Dashboard prod: port 4000'de `next start` (`.next-prod`). FE değişince `.next-prod` rebuild +
   `scripts/start-dashboard.ps1`. Aynı portta `next dev` çalıştırma — çakışma beyaz ekran yapar.
