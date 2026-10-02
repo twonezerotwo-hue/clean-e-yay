@@ -1156,14 +1156,18 @@ def decide_matrix(
     open_positions: list | None = None,
     timeframes: list[str] | None = None,
     paper_exploration: bool = False,
+    persist_regime: bool = False,
 ) -> tuple[RegimeOutput, RiskDecision, list[TradeDecision]]:
     """T2 — (symbol, timeframe) karar matrisi.
+
+    `persist_regime=True` yalnız tick worker'dan: rejim hysteresis hafızasını
+    yalnız karar turu günceller; API okumaları yazmaz (H10).
 
     Her hücre decide_for_symbol'dan geçer (RiskGate önce, timeframe sonra).
     Üst-TF bias kuralı: 1w consensus yönü alt TF open kararının TERSİYSE
     boyut ×0.5 (asla artırma yok; 1w zaten kendi başına trade açamaz).
     """
-    regime = classify(snap)
+    regime = classify(snap, persist=persist_regime)
     # P0 — olay riski yalnızca kısıtlayıcı ek candidate; DQS/halt'ı ezemez.
     risk = evaluate_risk(
         paper_state_input,

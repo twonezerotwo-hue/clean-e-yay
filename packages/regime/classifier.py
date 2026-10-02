@@ -274,9 +274,18 @@ def _rotation_layer(snap: MarketSnapshot, drop_missing: bool) -> RegimeLayer | N
     )
 
 
-def classify(snap: MarketSnapshot, *, stateful: bool = True) -> RegimeOutput:
+def classify(
+    snap: MarketSnapshot, *, stateful: bool = True, persist: bool = False
+) -> RegimeOutput:
     """Rejim etiketi. `stateful=False` → hysteresis durum dosyasına DOKUNMAZ
-    (backtest/replay çağrıları canlı rejim hafızasını kirletmesin)."""
+    (backtest/replay çağrıları canlı rejim hafızasını kirletmesin).
+
+    `persist=True` yalnız tick worker'ın karar turunda verilir: hysteresis
+    hafızasının TEK yazarı odur. API/rapor okumaları (persist=False) önceki
+    etiketi okuyup aynı sabitlenmiş etiketi gösterir ama dosyaya YAZMAZ.
+    Eskiden her GET (cockpit, matris, rapor) kendi önbellek snapshot'ıyla
+    etiketi yazıyordu → canlı rejim etiketi (ve modül ağırlıkları) worker'ın
+    kendi sırası yerine dashboard isteklerine göre oynayabiliyordu (H10)."""
     drop = _drop_unavailable_enabled()
     names = ("Likidite", "Risk İştahı", "Kripto Momentum", "Sermaye Rotasyonu")
     candidates = (
@@ -308,7 +317,8 @@ def classify(snap: MarketSnapshot, *, stateful: bool = True) -> RegimeOutput:
     if band > 0.0 and stateful:
         raw = label
         stable = _stabilize(_read_prev_label(), raw, avg, band)
-        _write_label(stable)
+        if persist:
+            _write_label(stable)
         return RegimeOutput(
             label=stable, layers=layers, dropped=dropped,
             raw_label=raw, stabilized=(stable != raw),

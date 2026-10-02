@@ -73,7 +73,7 @@ def test_classify_band_holds_previous_label(tmp_path, monkeypatch):
     monkeypatch.setenv("REGIME_STATE_PATH", str(p))
     p.write_text('{"label": "OFFENSIVE"}', encoding="utf-8")
     with threshold_override({"regime": {"hysteresis_band": 3.0}}):
-        out = rc.classify(_snap_regime())
+        out = rc.classify(_snap_regime(), persist=True)  # yazar yalnız tick (H10)
     # Ham etiket sınıra yakınsa önceki OFFENSIVE tutulur (raw != label).
     if out.raw_label != "OFFENSIVE":
         assert out.label == "OFFENSIVE" or out.stabilized is False

@@ -328,6 +328,7 @@ async def run_once() -> None:
             risk_in,
             open_positions=ps.open_positions,
             paper_exploration=paper_policy.enabled(),
+            persist_regime=True,  # H10 — rejim hafızasının tek yazarı tick
         )
         decisions_generated = len(decisions)
         now = datetime.now(UTC)
