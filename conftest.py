@@ -31,6 +31,12 @@ os.environ.setdefault(
     "NOTIFICATIONS_PATH",
     os.path.join(tempfile.mkdtemp(prefix="eyay-test-notif-"), "notifications.jsonl"),
 )
+# H17 — packages.paper.state STATE_PATH'i de import anında okur; collection'da
+# import eden test modülleri canlı data/runtime/paper_state.json'a dokunmasın.
+os.environ.setdefault(
+    "PAPER_STATE_PATH",
+    os.path.join(tempfile.mkdtemp(prefix="eyay-test-paper-"), "paper_state.json"),
+)
 
 
 @pytest.fixture(autouse=True)
@@ -178,6 +184,30 @@ def _isolate_runtime_stores(tmp_path_factory: pytest.TempPathFactory) -> None:
     runtime = tmp_path_factory.mktemp("runtime")
     os.environ["DECISION_LOG_PATH"] = str(runtime / "decision_log.jsonl")
     os.environ["RISK_HALT_PATH"] = str(runtime / "risk_halts.json")
+    # H17 (temizlik, 2026-10-02) — suite canlı data/runtime'a YAZIYORDU (lokal
+    # çalışma dizini = canlı sistem): öğrenme özeti, kalibrasyon, LLM cache, rejim
+    # freni vb. Aşağıdakiler de session tmp'ye yönlendirilir; sessionfinish guard'ı
+    # (aşağıda) yeni bir sızıntıyı suite'i kırarak yakalar.
+    for _env, _name in (
+        ("LLM_CACHE_PATH", "llm_cache.json"),
+        ("ZONE_PROPOSER_PATH", "zone_proposer.json"),
+        ("REGIME_RISK_BRAKE_PATH", "regime_risk_brake.json"),
+        ("NEWS_EVENT_STUDY_PATH", "news_event_study.json"),
+        ("GUARD_MONITOR_STORE_PATH", "guard_monitor.json"),
+        ("COUNCIL_SCORECARD_PATH", "council_scorecard.json"),
+        ("CAUSAL_EVENT_STUDY_PATH", "causal_event_study.json"),
+        ("CAUSAL_EVENT_LEDGER_PATH", "causal_event_ledger.jsonl"),
+        ("TF_WEIGHT_PROPOSAL_OUT_PATH", "tf_weight_proposal.json"),
+        ("TF_CALIBRATION_OUT_PATH", "tf_calibration.json"),
+        ("ZONE_PLAN_SHADOW_PATH", "zone_plan_shadow.json"),
+        ("ZERO_TWO_STRATEGY_PATH", "zero_two_strategy.json"),
+        ("TF_TARGET_TRIGGER_PATH", "tf_target_trigger.json"),
+        ("PAPER_STATE_PATH", "paper_state.json"),
+        ("LEARNING_OUT_PATH", "learning_summary.json"),
+        ("LEARNING_RUN_PATH", "learning_run.json"),
+        ("EXIT_BACKTEST_PATH", "exit_backtest.json"),
+    ):
+        os.environ.setdefault(_env, str(runtime / _name))
     # F4-2 — karar motoru her decide çağrısında bu artifact'ı okur; suite gerçek
     # diskteki tabloyu görmesin (bayt-aynılık assertion'ları deterministik kalsın).
     os.environ["EMPIRICAL_PWIN_PATH"] = str(runtime / "empirical_pwin.json")
@@ -273,3 +303,42 @@ def seed_ohlcv_reference() -> None:
                     )
                 ],
             )
+
+
+# ── H17 guard: suite canlı data/runtime'a dokunamaz ─────────────────────────────
+# Lokal çalışma dizini canlı sistemin kendisi; test koşusu oradaki state'i
+# değiştirirse (öğrenme özeti, ağırlık işaretçisi, kalibrasyon...) canlı davranış
+# bozulur. Session başında/sonunda mtime karşılaştırılır; fark → suite kırmızı.
+_RUNTIME_DIR = ROOT / "data" / "runtime"
+_RUNTIME_SNAPSHOT: dict[str, int] = {}
+
+
+def _runtime_mtimes() -> dict[str, int]:
+    out: dict[str, int] = {}
+    if _RUNTIME_DIR.exists():
+        for p in _RUNTIME_DIR.rglob("*"):
+            try:
+                if p.is_file():
+                    out[str(p.relative_to(_RUNTIME_DIR))] = p.stat().st_mtime_ns
+            except OSError:
+                continue
+    return out
+
+
+def pytest_sessionstart(session: pytest.Session) -> None:
+    _RUNTIME_SNAPSHOT.clear()
+    _RUNTIME_SNAPSHOT.update(_runtime_mtimes())
+
+
+def pytest_sessionfinish(session: pytest.Session, exitstatus: int) -> None:
+    after = _runtime_mtimes()
+    changed = sorted(k for k, v in after.items() if _RUNTIME_SNAPSHOT.get(k) != v)
+    if changed:
+        import sys
+
+        print(
+            "\n[H17] Test koşusu canlı data/runtime'a yazdı: " + ", ".join(changed[:20])
+            + "\nİlgili *_PATH env'ini conftest._isolate_runtime_stores'a ekle.",
+            file=sys.stderr,
+        )
+        session.exitstatus = 1
