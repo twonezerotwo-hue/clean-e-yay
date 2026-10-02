@@ -7,6 +7,8 @@ diğer endpoint'lerle aynıdır; bu router sadece özet üretir. PAPER_SAFE.
 """
 from __future__ import annotations
 
+from dataclasses import asdict
+
 from fastapi import APIRouter
 
 from packages.agent.llm.world_report import build_world_brief
@@ -106,4 +108,7 @@ def get_cockpit_brief() -> dict:
         "world_brief": world_brief,
         "causal_shadow": causal_shadow.to_dict(),
         "portfolio_risk": portfolio_risk.to_dict(),
+        # Haber kaynaklı hazırlıklar emir değildir; frontend'e durum, kanıt,
+        # geçerlilik ve bekleyen kapıyı birlikte gösterir.
+        "news_prepared_setups": [asdict(item) for item in ps.news_prepared_setups[-32:]],
     }

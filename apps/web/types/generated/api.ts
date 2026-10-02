@@ -538,6 +538,32 @@ export type PositionRecheck = {
   checked_at: string;
 };
 
+export type NewsPreparedSetup = {
+  id: string;
+  symbol: string;
+  timeframe: string;
+  side: "long" | "short";
+  created_at: string;
+  valid_until: string;
+  status: "WAITING_RISK" | "ARMED" | "ACTIVATED" | "EXPIRED" | "STALE" | string;
+  world_direction?: string | null;
+  world_score?: number | null;
+  confidence?: number | null;
+  technical_confirmation?: number | null;
+  confluence_state?: string | null;
+  current_price?: number | null;
+  point_estimate?: number | null;
+  p10?: number | null;
+  p50?: number | null;
+  p90?: number | null;
+  event_type?: string | null;
+  news_title?: string | null;
+  evidence?: string[];
+  snapshot_id?: string | null;
+  last_checked_at?: string | null;
+  last_blocker?: string | null;
+};
+
 export type PaperTradingState = {
   equity_usd: number;
   realized_pnl_usd: number;
@@ -553,6 +579,8 @@ export type PaperTradingState = {
   recent_audit_events?: PaperAuditEvent[];
   // P2 — owner onayı bekleyen aday sayısı (queue listesi ayrı endpoint'ten gelir).
   manual_ready_count?: number;
+  news_prepared_setups_count?: number;
+  news_prepared_setups?: NewsPreparedSetup[];
   // UX-A14 — açık pozisyonların fresh karara karşı verdict'i (read-only).
   position_rechecks?: PositionRecheck[];
   last_recheck_at?: string | null;
@@ -1580,6 +1608,7 @@ export type CockpitBrief = {
   world_state?: WorldStateEvidence;
   world_brief?: WorldBrief;
   causal_shadow?: Record<string, unknown>;
+  news_prepared_setups?: NewsPreparedSetup[];
 };
 
 // ── Market sessions (read-only, paper-safe) — backend owns session meaning ────
@@ -1948,10 +1977,16 @@ export type AgentTimeframeCell = {
 
 export type AgentMatrixRow = {
   symbol: string;
+  decision_id?: string;
   stance: TechnicalStance;
   consensus: ConsensusSnapshot;
   decision: AgentDecision;
+  confidence_breakdown?: Record<string, unknown>;
   economics?: TradeEconomics | null;
+  technical_knowledge?: Record<string, unknown> | null;
+  book_evidence?: Record<string, unknown>;
+  formation_playbook?: Record<string, unknown> | null;
+  book_feature_shadow?: Record<string, unknown> | null;
   reversal_bias?: TechnicalBias | null;
   pattern?: string | null;
   per_timeframe?: AgentTimeframeCell[];

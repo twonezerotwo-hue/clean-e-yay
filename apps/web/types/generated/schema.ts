@@ -858,6 +858,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/learning/technical-books-replay": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Teknik kitap kanıtı × gerçekleşmiş snapshot replay (shadow-only, read-only) */
+        get: operations["getLearningTechnicalBooksReplay"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/learning/discovery": {
         parameters: {
             query?: never;
@@ -1823,6 +1840,37 @@ export interface components {
             /** @description P1 — learning handoff; kaynak snapshot. */
             snapshot_id?: string | null;
         };
+        /** @description Haber/dünya kanıtından üretilen, süreli paper setup niyeti. Emir değildir; mevcut teknik, seans ve RiskGate zinciri izin verirse sonraki tick'te canonical paper açılışıyla eşleşir. */
+        NewsPreparedSetup: {
+            id: string;
+            symbol: string;
+            timeframe: string;
+            /** @enum {string} */
+            side: "long" | "short";
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            valid_until: string;
+            /** @enum {string} */
+            status: "WAITING_RISK" | "ARMED" | "ACTIVATED" | "EXPIRED" | "STALE";
+            world_direction?: string | null;
+            world_score?: number | null;
+            confidence?: number | null;
+            technical_confirmation?: number | null;
+            confluence_state?: string | null;
+            current_price?: number | null;
+            point_estimate?: number | null;
+            p10?: number | null;
+            p50?: number | null;
+            p90?: number | null;
+            event_type?: string | null;
+            news_title?: string | null;
+            evidence?: string[];
+            snapshot_id?: string | null;
+            /** Format: date-time */
+            last_checked_at?: string | null;
+            last_blocker?: string | null;
+        };
         PaperTradingState: {
             equity_usd: number;
             realized_pnl_usd: number;
@@ -1844,6 +1892,9 @@ export interface components {
             recent_audit_events?: components["schemas"]["PaperAuditEvent"][];
             /** @description P2 — owner onayı bekleyen aday sayısı (DEFENSIVE/CRISIS). */
             manual_ready_count?: number;
+            /** @description Doğrulanmış haber kanıtına bağlı, aktif ve süresi dolmamış hazırlık sayısı. */
+            news_prepared_setups_count?: number;
+            news_prepared_setups?: components["schemas"]["NewsPreparedSetup"][];
             /**
              * @description UX-A14 — tick yan ürünü, her açık pozisyon için fresh karara karşı
              *     verdict (OK/WATCH/REDUCE/EXIT_RECOMMEND). Read-only öneri; otomatik
@@ -2922,6 +2973,7 @@ export interface components {
             causal_shadow?: {
                 [key: string]: unknown;
             };
+            news_prepared_setups?: components["schemas"]["NewsPreparedSetup"][];
         };
         /** @description R1 — replay store durumu. status=active (kayıt var) / empty (kayıt yok). mode=active_snapshot_replay / insufficient_snapshots / reserved_not_active. Rolling backtest motoru aktif değil. */
         ReplayStatus: {
@@ -3451,11 +3503,33 @@ export interface components {
         };
         AgentMatrixRow: {
             symbol: string;
+            /** @description Deterministic trace id for the closed-bar decision inputs and final gates. */
+            decision_id?: string;
             /** @enum {string} */
             stance: "ALLOW" | "CAUTION" | "ABSTAIN" | "DEGRADED";
             consensus: components["schemas"]["ConsensusSnapshot"];
             decision: components["schemas"]["AgentDecision"];
+            /** @description Explains matrix confidence; not a win probability and never book-promoted. */
+            confidence_breakdown?: {
+                [key: string]: unknown;
+            };
             economics?: components["schemas"]["TradeEconomics"] | null;
+            /** @description Evidence-only references from the user-provided technical-analysis corpus. */
+            technical_knowledge?: {
+                [key: string]: unknown;
+            } | null;
+            /** @description Explicit evidence-only boundary for the technical-book corpus. */
+            book_evidence?: {
+                [key: string]: unknown;
+            };
+            /** @description Evidence-only formation entry/management/exit plan; never an action. */
+            formation_playbook?: {
+                [key: string]: unknown;
+            } | null;
+            /** @description Replay-ready technical book features; shadow-only until labelled promotion. */
+            book_feature_shadow?: {
+                [key: string]: unknown;
+            } | null;
             /** @enum {string|null} */
             reversal_bias?: "BULLISH" | "BEARISH" | "NEUTRAL" | null;
             pattern?: string | null;
@@ -5046,6 +5120,28 @@ export interface operations {
         requestBody?: never;
         responses: {
             /** @description OK (tablo yoksa status=NO_TABLE) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+    };
+    getLearningTechnicalBooksReplay: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK (yeterli snapshot yoksa status=insufficient_snapshots) */
             200: {
                 headers: {
                     [name: string]: unknown;

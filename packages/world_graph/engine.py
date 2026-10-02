@@ -74,10 +74,10 @@ def load_graph() -> WorldGraph:
 
 def _event_text(event: Any) -> str:
     if isinstance(event, Mapping):
-        values = [event.get(key) for key in ("event_id", "event_type", "region", "location", "title", "text")]
+        values = [event.get(key) for key in ("event_id", "event_type", "region", "location", "title", "text", "evidence")]
         values.append(" ".join(str(x) for x in (event.get("actors") or ()) ))
     else:
-        values = [getattr(event, key, None) for key in ("event_id", "event_type", "region", "location", "title", "text", "actors")]
+        values = [getattr(event, key, None) for key in ("event_id", "event_type", "region", "location", "title", "text", "evidence", "actors")]
     return " ".join(str(value or "") for value in values).casefold()
 
 

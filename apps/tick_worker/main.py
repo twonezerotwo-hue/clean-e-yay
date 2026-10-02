@@ -23,6 +23,7 @@ from pathlib import Path
 
 # httpx üzerinden API'yi çağırmak yerine paketleri doğrudan çağırıyoruz —
 # böylece worker API'ye bağımlı değil.
+from packages.causal.engine import build_shadow
 from packages.data import snapshot_store
 from packages.data.ingestion.pipeline import build_snapshot
 from packages.data.provenance import data_provenance
@@ -45,13 +46,14 @@ from packages.learning import (
 from packages.notifications import append_many
 from packages.notifications import detector as notif_detector
 from packages.ops import heartbeat
-from packages.paper import manual_queue, ticket
+from packages.paper import manual_queue, news_setup, ticket
 from packages.paper import state as paper_state
 from packages.paper.lifecycle import attempt_open, flatten_all
 from packages.paper.lifecycle import tick as price_tick
 from packages.paper.recheck import compute_rechecks
 from packages.risk import halt as halt_store
 from packages.risk.engine import RiskInput
+from packages.world_state.engine import build as build_world_state
 
 WORKER_NAME = "tick_worker"
 LOCK_PATH = Path(os.environ.get("TICK_WORKER_LOCK_PATH", "data/runtime/tick_worker.lock"))
@@ -469,6 +471,43 @@ async def run_once() -> None:
                 )
 
         txn.commit()  # T3 — defter mutasyon bölümü biter: revision +1, kilit bırakılır
+
+        # Haber/causal hazırlık kuyruğu: dünya kanıtını ayrı bir gözlem katmanı
+        # olarak saklar. Bu çağrı emir açmaz; sonraki tick'te mevcut karar,
+        # seans ve RiskGate zinciri izin verirse normal attempt_open yolu pozisyon
+        # açar ve kuyruk girdisi ACTIVATED olarak işaretlenir.
+        try:
+            news_world = build_world_state(snap)
+            news_legacy = {
+                f"{d.symbol}|{d.timeframe}": {
+                    "score": d.consensus.score,
+                    "direction": d.consensus.direction,
+                    "timeframe": d.timeframe,
+                }
+                for d in decisions
+            }
+            news_shadow = build_shadow(
+                news_world,
+                MATRIX_SYMBOLS,
+                technicals=snap.technicals_by_tf or snap.technicals,
+                prices={quote.symbol: quote for quote in snap.prices},
+                volatility=snap.volatility,
+                legacy_scores=news_legacy,
+            )
+            with paper_state.transaction("tick:news_prepared_setups") as ps_news:
+                news_setup.sync(
+                    ps_news,
+                    causal_shadow=news_shadow.to_dict(),
+                    world_state=news_world.to_dict(),
+                    prices=prices,
+                    decisions=decisions,
+                    risk_action=_risk.action,
+                    snapshot_id=snap.snapshot_id,
+                    headlines=snap.headlines,
+                    now=now,
+                )
+        except Exception:
+            log.exception("news prepared setup refresh failed (tick devam ediyor)")
 
         # Step 9 — controlled activation (OBSERVATION mode). Run the NEW agent
         # pipeline in shadow and persist a comparison vs. the live engine. Runs

@@ -338,6 +338,35 @@ def classify_asset_impact(title: str, sentiment: Sentiment) -> dict[str, float]:
                                   "rusya", "ukrayna")):
         impacts["XAUUSD"] = 1.0 if sentiment == "bearish" else d
 
+    # Runtime/custom assets must not be invisible to the news layer.  The
+    # registry is the single source for user-added symbols; resolve only a
+    # bounded set of explicit label/symbol/class terms and never invent a
+    # ticker from arbitrary text.  Provider identity and RiskGate checks still
+    # decide whether the symbol can be traded later in the pipeline.
+    try:
+        from packages.data.registry import assets as asset_registry
+
+        class_terms = {
+            "energy": ("oil", "crude", "brent", "petrol", "petroleum", "natural gas", "lng", "doğalgaz"),
+            "precious_metal": ("gold", "silver", "altın", "gümüş", "xau", "xag"),
+            "crypto": ("bitcoin", "btc", "ethereum", "eth", "crypto", "kripto"),
+            "equity": ("stock", "stocks", "equity", "shares", "hisse", "borsa"),
+        }
+        for asset in asset_registry.all_assets():
+            symbol = str(getattr(asset, "symbol", "") or "").upper().strip()
+            if not symbol or symbol in impacts:
+                continue
+            label = str(getattr(asset, "label", "") or "").casefold()
+            asset_class = str(getattr(asset, "asset_class", "") or "").casefold()
+            terms = {symbol.casefold(), label}
+            terms.update(class_terms.get(asset_class, ()))
+            if any(term and len(term) >= 3 and term in lower for term in terms):
+                impacts[symbol] = d
+    except Exception:
+        # A registry/configuration failure must not take down RSS ingestion;
+        # the built-in deterministic mappings above remain available.
+        pass
+
     # Max 4 etki — geo hikayeler daha çok sinyal taşır (legacy parity)
     return dict(list(impacts.items())[:4])
 

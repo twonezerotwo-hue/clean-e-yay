@@ -171,6 +171,7 @@ REGISTRY: dict[str, str] = {
     "SECTOR_ROTATION_PATH": "path",
     "SHADOW_LOG_PATH": "path",
     "SNAPSHOT_STORE_PATH": "path",
+    "TECHNICAL_BOOK_CORPUS_PATH": "path",
     "TF_CALIBRATION_OUT_PATH": "path",
     "TF_SCORING_RACE_LEDGER": "path",
     "TF_SCORING_RACE_REPORT": "path",

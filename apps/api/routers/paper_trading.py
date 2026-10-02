@@ -93,6 +93,10 @@ def _serialize_state(ps: paper_state.PaperState) -> dict:
         "audit_summary": paper_audit.summary(),
         "recent_audit_events": paper_audit.read_recent(20),
         "manual_ready_count": len(ps.manual_ready),
+        "news_prepared_setups_count": len(
+            [s for s in ps.news_prepared_setups if s.status in {"WAITING_RISK", "ARMED"}]
+        ),
+        "news_prepared_setups": [asdict(s) for s in ps.news_prepared_setups[-32:]],
         # Recheck (UX-A14): her tick'te decide_matrix yan ürünü. Boşsa henüz tick
         # atılmamış. Sadece öneri — otomatik kapatma YOK; çıkış SL/TP veya manuel.
         "position_rechecks": list(ps.last_rechecks),

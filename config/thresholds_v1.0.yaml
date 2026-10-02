@@ -1223,6 +1223,17 @@ causal_world:
     energy: { energy_supply_risk: 0.9, shipping_risk: 0.5, growth_pressure: 0.3, usd_pressure: -0.2 }
     other: { liquidity: 0.7, risk_aversion: -0.5, usd_pressure: -0.3 }
 
+# Haber kaynaklı pozisyon hazırlığı. Bu katman yalnızca doğrulanmış dünya
+# kanıtından süreli bir intent üretir; emir açmaz ve hiçbir hard gate'i bypass
+# etmez. Risk/teknik/seans kapıları açıldığında mevcut tick yolu aynı intenti
+# yeniden değerlendirir.
+news_prepared_setups:
+  enabled: true
+  min_confidence: 0.55
+  min_abs_world_score: 0.15
+  ttl_hours: 72
+  max_active: 16
+
 # Missed Opportunity motoru (learning yakıtı; spec v2.3). Açılmayan valid
 # setup'ları (conflict_final_action=CANDIDATE_OPEN ama canlı açmadı) TTL boyunca
 # izler: fiyat önce TP'ye mi (missed_win) SL'e mi (avoided_loss) değdi?

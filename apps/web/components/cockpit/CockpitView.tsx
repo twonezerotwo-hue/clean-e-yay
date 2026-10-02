@@ -30,6 +30,7 @@ import { OrderTicketPanel } from "@/components/panels/OrderTicketPanel";
 import { NewsPanel } from "@/components/panels/NewsPanel";
 import { ScenarioPanel } from "@/components/panels/ScenarioPanel";
 import { WorldBriefPanel } from "@/components/panels/WorldBriefPanel";
+import { NewsPreparedSetupsPanel } from "@/components/panels/NewsPreparedSetupsPanel";
 import { GovernorPanel } from "@/components/panels/GovernorPanel";
 import { LearningPanel } from "@/components/panels/LearningPanel";
 import { OutcomeLedgerPanel } from "@/components/panels/OutcomeLedgerPanel";
@@ -1184,6 +1185,7 @@ export function CockpitView() {
       { key: "holographic_signals", label: "Sinyal Kartlari", node: <HolographicSignalDeck brief={brief} /> },
       { key: "news", label: "Haberler", node: <NewsPanel defaultView="radar" /> },
       { key: "world_brief", label: "Dünya Özeti", node: <WorldBriefPanel /> },
+      { key: "news_prepared_setups", label: "Haber Hazırlığı", node: <NewsPreparedSetupsPanel /> },
       { key: "execution_readiness", label: "Checklist", node: <ExecutionReadinessPanel /> },
       { key: "event_calendar", label: "Olay Takvimi", node: <EventCalendarPanel /> },
       { key: "scenario", label: "Senaryo", node: <ScenarioPanel /> },
