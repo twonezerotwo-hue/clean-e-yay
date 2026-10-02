@@ -94,6 +94,9 @@ cd apps/web && pnpm exec tsc --noEmit && pnpm build
 make smoke                                     # çalışan API gerekir
 ```
 
+Test koşusu ağa çıkamaz (H14) ve canlı `data/runtime/`'a yazamaz (H17); ikisi de
+conftest'teki audit hook ile zorlanır.
+
 Golden replay farkı = davranış değişti. Bilinçli bir mantık düzeltmesiyse fark
 PR açıklamasına yazılır ve `--write` ile golden güncellenir.
 

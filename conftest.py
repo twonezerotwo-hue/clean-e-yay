@@ -309,36 +309,61 @@ def seed_ohlcv_reference() -> None:
 # ── H17 guard: suite canlı data/runtime'a dokunamaz ─────────────────────────────
 # Lokal çalışma dizini canlı sistemin kendisi; test koşusu oradaki state'i
 # değiştirirse (öğrenme özeti, ağırlık işaretçisi, kalibrasyon...) canlı davranış
-# bozulur. Session başında/sonunda mtime karşılaştırılır; fark → suite kırmızı.
-_RUNTIME_DIR = ROOT / "data" / "runtime"
-_RUNTIME_SNAPSHOT: dict[str, int] = {}
+# bozulur. Python audit hook'u bu süreçteki her yazma/taşıma/silme çağrısını görür;
+# hedef data/runtime altındaysa kaydedilir ve suite kırmızı biter. (mtime kıyası
+# kullanılmaz: canlı worker aynı klasöre yazarken yanlış alarm verirdi.)
+#
+# ── H14 guard: testler gerçek ağa çıkamaz ──────────────────────────────────────
+# Yerel olmayan adrese socket bağlantısı OSError ile reddedilir; sağlayıcılar bunu
+# normal "veri yok" yolu olarak işler. Sonuç ağa bağlı olmaz, koşu ağ beklemez.
+_RUNTIME_DIR = os.path.normcase(str((ROOT / "data" / "runtime").resolve()))
+_RUNTIME_WRITES: set[str] = set()
+_LOCAL_HOSTS = {"127.0.0.1", "::1", "localhost", "0.0.0.0", "testserver"}
+_WRITE_FLAGS = os.O_WRONLY | os.O_RDWR | os.O_CREAT | os.O_APPEND | os.O_TRUNC
 
 
-def _runtime_mtimes() -> dict[str, int]:
-    out: dict[str, int] = {}
-    if _RUNTIME_DIR.exists():
-        for p in _RUNTIME_DIR.rglob("*"):
-            try:
-                if p.is_file():
-                    out[str(p.relative_to(_RUNTIME_DIR))] = p.stat().st_mtime_ns
-            except OSError:
-                continue
-    return out
+def _under_runtime(path) -> bool:
+    try:
+        p = os.path.normcase(os.path.abspath(os.fsdecode(path)))
+    except (TypeError, ValueError):
+        return False
+    return p == _RUNTIME_DIR or p.startswith(_RUNTIME_DIR + os.sep)
 
 
-def pytest_sessionstart(session: pytest.Session) -> None:
-    _RUNTIME_SNAPSHOT.clear()
-    _RUNTIME_SNAPSHOT.update(_runtime_mtimes())
+def _guard_hook(event: str, args: tuple) -> None:
+    if event == "open":
+        path, mode, flags = args
+        if path is None or isinstance(path, int):
+            return
+        writes = (isinstance(mode, str) and any(c in mode for c in "wax+")) or (
+            mode is None and isinstance(flags, int) and flags & _WRITE_FLAGS
+        )
+        if writes and _under_runtime(path):
+            _RUNTIME_WRITES.add(os.fsdecode(path))
+    elif event in ("os.replace", "os.rename"):
+        if _under_runtime(args[1]):
+            _RUNTIME_WRITES.add(os.fsdecode(args[1]))
+    elif event == "os.remove":
+        if _under_runtime(args[0]):
+            _RUNTIME_WRITES.add(os.fsdecode(args[0]))
+    elif event == "socket.connect":
+        addr = args[1]
+        if isinstance(addr, tuple) and addr and str(addr[0]) not in _LOCAL_HOSTS:
+            raise OSError(f"[H14] testlerde ağ erişimi kapalı: {addr[0]}")
+
+
+sys.addaudithook(_guard_hook)
+# Proxy üzerinden dolaşmayı da kapat (proxy yerel adres olduğundan hook'u aşardı).
+for _proxy_var in ("HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "http_proxy", "https_proxy", "all_proxy"):
+    os.environ.pop(_proxy_var, None)
+os.environ["NO_PROXY"] = "*"
 
 
 def pytest_sessionfinish(session: pytest.Session, exitstatus: int) -> None:
-    after = _runtime_mtimes()
-    changed = sorted(k for k, v in after.items() if _RUNTIME_SNAPSHOT.get(k) != v)
-    if changed:
-        import sys
-
+    if _RUNTIME_WRITES:
         print(
-            "\n[H17] Test koşusu canlı data/runtime'a yazdı: " + ", ".join(changed[:20])
+            "\n[H17] Test koşusu canlı data/runtime'a yazdı: "
+            + ", ".join(sorted(_RUNTIME_WRITES)[:20])
             + "\nİlgili *_PATH env'ini conftest._isolate_runtime_stores'a ekle.",
             file=sys.stderr,
         )
