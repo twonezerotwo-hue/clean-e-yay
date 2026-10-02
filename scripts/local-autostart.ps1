@@ -80,7 +80,10 @@ function Get-Procs([string]$exe, [string]$match) {
             return $true
         })
 }
-function Proc-Running([string]$exe, [string]$match) { return ((Get-Procs $exe $match).Count -gt 0) }
+# @() is required: a single match is unrolled to one CimInstance, and on Windows
+# PowerShell 5.1 (what the Startup VBS runs) its .Count is $null -> always "not
+# running". pwsh 7 hid this: no migration, duplicate starts during boot.
+function Proc-Running([string]$exe, [string]$match) { return (@(Get-Procs $exe $match).Count -gt 0) }
 function Kill-Procs([string]$exe, [string]$match) {
     Get-Procs $exe $match | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
 }
