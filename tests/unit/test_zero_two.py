@@ -13,7 +13,6 @@ from datetime import UTC, datetime, timedelta
 
 from packages.data.types import OHLCVBar
 from packages.elliott import zero_two
-from packages.learning import zero_two_scorecard
 
 _T0 = datetime(2026, 1, 1, tzinfo=UTC)
 
@@ -131,84 +130,3 @@ def test_wick_touch_needs_wave3_extension_first():
     assert touches == []
 
 
-def test_t2_break_retest_trade_hits_fib_target():
-    """T2: kapanış-geçiş → baktest → giriş; hedef 1.618, stop 0 noktası.
-
-    Aşağı setup'ın (düşen çizgi) yukarı kırılımı → LONG (owner semantiği:
-    işlem kırılım yönüne). Baktest sonrası fiyat 1.618 hedefine yürür.
-    """
-    up = _up_setup_path()
-    down_path = [210 - p for p in up] + [101, 99, 97, 96, 97, 98]  # dalga 3 aşağı (96 < P1=100)
-    bars = _walk(down_path)
-    s = next(x for x in zero_two.find_setups(bars) if x.direction == "down")
-    n = len(bars)
-    # kapanışla yukarı geçiş (CLOSE_BREAK)
-    lv = _line_at(s, n)
-    bars.append(_bar(n, 99, lv + 1.0, 98.8, lv + 0.8))
-    # baktest: çizgiye değ + üstünde kapan
-    lv2 = _line_at(s, n + 1)
-    bars.append(_bar(n + 1, lv2 + 0.5, lv2 + 0.7, lv2 - 0.1, lv2 + 0.6))
-    # rally: hedefe yürü (bolca yukarı bar)
-    for k in range(2, 12):
-        base = lv2 + 0.6 + k * 1.5
-        bars.append(_bar(n + k, base, base + 1.0, base - 0.5, base + 0.8))
-    events = [e for e in zero_two.analyze(bars) if e.setup == s]
-    assert events and events[0].status == zero_two.STATUS_VALID
-    trade = zero_two_scorecard.t2_trade(bars, events[0])
-    assert trade is not None
-    assert trade["hit"] == "hedef"
-    assert trade["r"] > 0
-
-
-def test_t1_wick_trade_break_direction():
-    """T1: fitil değmesi → kırılım yönüne, fitil-ucu tetikli işlem üretir."""
-    bars, s = _extended_bars()
-    n = len(bars)
-    lv1 = _line_at(s, n)
-    bars.append(_bar(n, 111, 111.3, lv1 - 0.05, 111))  # fitil değmesi
-    # sonraki bar fitil barının ALTINI kırar (yukarı setup → short tetiği)...
-    touch_low = lv1 - 0.05
-    bars.append(_bar(n + 1, 110.8, 110.9, touch_low - 0.3, touch_low - 0.2))
-    # ...ve aşağı yürüyüş (1R+ hedefleri doldursun)
-    for k in range(2, 10):
-        base = touch_low - 0.2 - k * 1.2
-        bars.append(_bar(n + k, base + 0.3, base + 0.5, base - 0.5, base))
-    events = [e for e in zero_two.analyze(bars) if e.setup == s]
-    assert events and events[0].status == zero_two.STATUS_VALID
-    trades = zero_two_scorecard.t1_trades(bars, events[0])
-    assert trades, "fitil işlemi üretilmeliydi"
-    assert trades[0]["results"][1.0] >= 1.0  # 1R hedefi doldu
-
-
-def test_elliott_flags_on_t2_setup():
-    """Elliott teyit bayrakları: dalga1/dalga3 oranları + P2 fib uyumu.
-
-    Sentetik aşağı setup: dalga1 = 10 (110→100), dalga3 ucu 95.6 → |dalga3| =
-    9.4 < dalga1 → en-kısa-değil kuralı TUTMAZ; P2 geri çekilmesi %50 → fib
-    uyumlu (0.5'e sapma 0.014).
-    """
-    up = _up_setup_path()
-    down_path = [210 - p for p in up] + [101, 99, 97, 96, 97, 98]
-    bars = _walk(down_path)
-    s = next(x for x in zero_two.find_setups(bars) if x.direction == "down")
-    n = len(bars)
-    lv = _line_at(s, n)
-    bars.append(_bar(n, 99, lv + 1.0, 98.8, lv + 0.8))
-    ev = next(e for e in zero_two.analyze(bars) if e.setup == s)
-    assert ev.status == zero_two.STATUS_VALID
-    flags = zero_two_scorecard.elliott_flags(ev)
-    assert flags["dalga3_en_kisa_degil"] is False  # 9.4 < 10
-    assert flags["dalga3_uzatmali"] is False
-    assert flags["p2_fib_uyumlu"] is True  # retrace 0.5, sapma 0.014 ≤ 0.05
-
-
-def test_run_if_due_skip_fresh(tmp_path, monkeypatch):
-    """Taze artifact varken yeniden ölçmez (interval kapısı)."""
-    art = tmp_path / "zero_two_scorecard.json"
-    monkeypatch.setenv("ZERO_TWO_SCORECARD_PATH", str(art))
-    art.write_text(
-        f'{{"generated_at": "{datetime.now(UTC).isoformat()}", "engine": "{zero_two_scorecard._ENGINE}"}}',
-        encoding="utf-8",
-    )
-    out = zero_two_scorecard.run_if_due()
-    assert out["status"] == "SKIP_FRESH"

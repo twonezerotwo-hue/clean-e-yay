@@ -1,8 +1,9 @@
 """0-2 tam-strateji gölge karnesi (SALT-ANALİZ / read-only; canlıya dokunmaz).
 
 Owner'ın 0-2 yönteminin BÜTÜN kural setini (kalibrasyon 2026-07-08, BTC 4h/1h/1d
-üzerinden) mekanik ölçer — `zero_two_scorecard.py` fitil/kırılım işlemlerini
-ölçüyordu; bu modül owner'ın nihai LONG akışını uçtan uca simüle eder:
+üzerinden) mekanik ölçer; owner'ın nihai LONG akışını uçtan uca simüle eder
+(eski fitil/kırılım karnesi zero_two_scorecard temizlikte söküldü, K4 2026-10-02).
+DONDURULDU: ölçmeye devam eder, üzerinde geliştirme yapılmaz (owner kararı K4).
 
 - **Giriş:** geçerli up-setup'ta (0=dip,1=tepe,2=dip; dalga-1 çizgiye değmemiş)
   nokta 2 sonrası fiyat dalga-1'in 0.618 geri çekilmesinin ÜSTÜNE kapanır → long.
