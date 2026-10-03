@@ -11,6 +11,7 @@
 const STORAGE_KEY = "eyay.write_token";
 const MUTATING = new Set(["POST", "PUT", "PATCH", "DELETE"]);
 let lastSetAt = 0;
+let declinedAt = 0;
 
 export function isMutating(method?: string): boolean {
   return MUTATING.has((method ?? "GET").toUpperCase());
@@ -47,12 +48,17 @@ export function applyWriteAuth(headers: Headers, method?: string): void {
 export function requestWriteToken(): boolean {
   if (typeof window === "undefined") return false;
   if (Date.now() - lastSetAt < 5_000 && readToken()) return true;
+  // Az önce vazgeçildiyse aynı eylemin diğer istekleri (yedek sohbet, ses) yeniden sormaz.
+  if (Date.now() - declinedAt < 10_000) return false;
   const value = window.prompt(
     "Yazma anahtarı gerekli (sohbet, ses ve işlem butonları için).\n" +
       "Bu bilgisayarda C:\\dev\\clean-e-yay\\.env dosyasındaki API_AUTH_TOKEN değerini yapıştır.\n" +
       "Bu tarayıcıda saklanır; bir kez sorulur.",
   );
-  if (!value || !value.trim()) return false;
+  if (!value || !value.trim()) {
+    declinedAt = Date.now();
+    return false;
+  }
   writeToken(value.trim());
   lastSetAt = Date.now();
   return true;
