@@ -1,6 +1,8 @@
 # ---------------------------------------------------------------------------
 # Clean E-yAy — Olay Takvimi (Catalyst Calendar)
 # Eski Codex'ten port (P0 legacy parity). Son senkron: 2026-06-12.
+# market_impact metinleri faiz kanalı varsayımıyla (owner kararı E3, 2026-10-03):
+# zayıf veri / düşük enflasyon / güvercin Fed → dolar ve faiz ↓, altın-kripto-hisse ↑.
 # Tarihler resmi takvimlerden HARDCODED:
 #   BLS (NFP/CPI/PPI): bls.gov/schedule/2026/
 #   FOMC: federalreserve.gov/monetarypolicy/fomccalendars.htm
@@ -18,7 +20,7 @@ events:
     category: "MACRO"
     importance: "HIGH"
     expectation: "08:30 ET — BLS resmi takvim"
-    market_impact: "Güçlü → Fed kesmez DXY↑ | Zayıf → resesyon korkusu risk-off"
+    market_impact: "Güçlü → Fed şahin: DXY↑ faiz↑, altın/kripto/hisse↓ | Zayıf → Fed güvercin: DXY↓ faiz↓, altın/kripto/hisse↑"
 
   - id: "cpi_2026_06"
     date: "2026-06-10"
@@ -34,7 +36,7 @@ events:
     category: "MACRO"
     importance: "MEDIUM"
     expectation: "08:30 ET — BLS resmi takvim"
-    market_impact: "Yüksek gelirse enflasyon beklentileri yükselir"
+    market_impact: "Yüksek → enflasyon beklentisi↑: DXY↑ faiz↑, altın/kripto↓ | Düşük → DXY↓ faiz↓, altın/kripto↑"
 
   - id: "fomc_2026_06"
     date: "2026-06-17"
@@ -52,7 +54,7 @@ events:
     category: "MACRO"
     importance: "HIGH"
     expectation: "08:30 ET — BLS resmi takvim"
-    market_impact: "Güçlü → Fed kesmez DXY↑ | Zayıf → resesyon korkusu risk-off"
+    market_impact: "Güçlü → Fed şahin: DXY↑ faiz↑, altın/kripto/hisse↓ | Zayıf → Fed güvercin: DXY↓ faiz↓, altın/kripto/hisse↑"
 
   - id: "fomc_minutes_2026_06"
     date: "2026-07-08"
@@ -77,7 +79,7 @@ events:
     category: "MACRO"
     importance: "MEDIUM"
     expectation: "08:30 ET — BLS resmi takvim"
-    market_impact: "Yüksek gelirse enflasyon beklentileri yükselir"
+    market_impact: "Yüksek → enflasyon beklentisi↑: DXY↑ faiz↑, altın/kripto↓ | Düşük → DXY↓ faiz↓, altın/kripto↑"
 
   - id: "fomc_2026_07"
     date: "2026-07-29"
@@ -95,7 +97,7 @@ events:
     category: "MACRO"
     importance: "HIGH"
     expectation: "08:30 ET — BLS resmi takvim"
-    market_impact: "Güçlü → Fed kesmez DXY↑ | Zayıf → resesyon korkusu risk-off"
+    market_impact: "Güçlü → Fed şahin: DXY↑ faiz↑, altın/kripto/hisse↓ | Zayıf → Fed güvercin: DXY↓ faiz↓, altın/kripto/hisse↑"
 
   - id: "cpi_2026_08"
     date: "2026-08-12"
@@ -111,7 +113,7 @@ events:
     category: "MACRO"
     importance: "MEDIUM"
     expectation: "08:30 ET — BLS resmi takvim"
-    market_impact: "Yüksek gelirse enflasyon beklentileri yükselir"
+    market_impact: "Yüksek → enflasyon beklentisi↑: DXY↑ faiz↑, altın/kripto↓ | Düşük → DXY↓ faiz↓, altın/kripto↑"
 
   - id: "fomc_minutes_2026_07"
     date: "2026-08-19"
@@ -138,7 +140,7 @@ events:
     category: "MACRO"
     importance: "HIGH"
     expectation: "08:30 ET — BLS resmi takvim"
-    market_impact: "Güçlü → Fed kesmez DXY↑ | Zayıf → resesyon korkusu risk-off"
+    market_impact: "Güçlü → Fed şahin: DXY↑ faiz↑, altın/kripto/hisse↓ | Zayıf → Fed güvercin: DXY↓ faiz↓, altın/kripto/hisse↑"
 
   - id: "ppi_2026_09"
     date: "2026-09-10"
@@ -146,7 +148,7 @@ events:
     category: "MACRO"
     importance: "MEDIUM"
     expectation: "08:30 ET — BLS resmi takvim"
-    market_impact: "Yüksek gelirse enflasyon beklentileri yükselir"
+    market_impact: "Yüksek → enflasyon beklentisi↑: DXY↑ faiz↑, altın/kripto↓ | Düşük → DXY↓ faiz↓, altın/kripto↑"
 
   - id: "cpi_2026_09"
     date: "2026-09-11"
@@ -172,7 +174,7 @@ events:
     category: "MACRO"
     importance: "HIGH"
     expectation: "08:30 ET — BLS resmi takvim"
-    market_impact: "Güçlü → Fed kesmez DXY↑ | Zayıf → resesyon korkusu risk-off"
+    market_impact: "Güçlü → Fed şahin: DXY↑ faiz↑, altın/kripto/hisse↓ | Zayıf → Fed güvercin: DXY↓ faiz↓, altın/kripto/hisse↑"
 
   - id: "cpi_2026_10"
     date: "2026-10-07"
@@ -197,7 +199,7 @@ events:
     category: "MACRO"
     importance: "MEDIUM"
     expectation: "08:30 ET — BLS resmi takvim"
-    market_impact: "Yüksek gelirse enflasyon beklentileri yükselir"
+    market_impact: "Yüksek → enflasyon beklentisi↑: DXY↑ faiz↑, altın/kripto↓ | Düşük → DXY↓ faiz↓, altın/kripto↑"
 
   # ─── 2026-11 ──────────────────────────────────────────────────
 
@@ -207,7 +209,7 @@ events:
     category: "MACRO"
     importance: "HIGH"
     expectation: "08:30 ET — BLS resmi takvim"
-    market_impact: "Güçlü → Fed kesmez DXY↑ | Zayıf → resesyon korkusu risk-off"
+    market_impact: "Güçlü → Fed şahin: DXY↑ faiz↑, altın/kripto/hisse↓ | Zayıf → Fed güvercin: DXY↓ faiz↓, altın/kripto/hisse↑"
 
   - id: "cpi_2026_11"
     date: "2026-11-12"
@@ -223,7 +225,7 @@ events:
     category: "MACRO"
     importance: "MEDIUM"
     expectation: "08:30 ET — BLS resmi takvim"
-    market_impact: "Yüksek gelirse enflasyon beklentileri yükselir"
+    market_impact: "Yüksek → enflasyon beklentisi↑: DXY↑ faiz↑, altın/kripto↓ | Düşük → DXY↓ faiz↓, altın/kripto↑"
 
   # ─── 2026-12 ──────────────────────────────────────────────────
 
@@ -233,7 +235,7 @@ events:
     category: "MACRO"
     importance: "HIGH"
     expectation: "08:30 ET — BLS resmi takvim"
-    market_impact: "Güçlü → Fed kesmez DXY↑ | Zayıf → resesyon korkusu risk-off"
+    market_impact: "Güçlü → Fed şahin: DXY↑ faiz↑, altın/kripto/hisse↓ | Zayıf → Fed güvercin: DXY↓ faiz↓, altın/kripto/hisse↑"
 
   # ─── 2027-08 ──────────────────────────────────────────────────
 

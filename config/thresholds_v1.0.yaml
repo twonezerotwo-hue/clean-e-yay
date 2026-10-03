@@ -473,7 +473,8 @@ event_risk:
 # (15dk/1sa/4sa/1g). Karara, boyuta, event-risk kapısına DOKUNMAZ; flag yok
 # (news_event_study gibi sürekli gözlem). expected_low: "low" sonuçta (zayıf
 # istihdam / düşük enflasyon / güvercin Fed) faiz kanalı varsayımı; "high"
-# sonuçta işaretler tersine döner. Owner düzenleyebilir — kanıt panelde birikir.
+# sonuçta işaretler tersine döner. Owner kararı E3 (2026-10-03): faiz kanalı esas;
+# takvim market_impact metinleri de buna göre. Kanıt panelde birikir.
 event_outcomes:
   baseline_lead_min: 30
   headline_window_min: 180
