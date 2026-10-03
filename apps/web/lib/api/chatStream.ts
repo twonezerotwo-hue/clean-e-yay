@@ -15,6 +15,7 @@
 import type { ChatResponse, ChatTurn } from "@/types/generated/api";
 
 import { API_BASE } from "./client";
+import { applyWriteAuth, rejectWriteToken, requestWriteToken } from "./writeAuth";
 
 export type ChatStreamStatus = {
   stage?: "context" | "grounded" | "llm" | string;
@@ -74,17 +75,27 @@ export async function streamChat(
   handlers: ChatStreamHandlers,
   signal?: AbortSignal,
 ): Promise<ChatResponse | null> {
-  const res = await fetch(`${API_BASE}/api/v1/chat/stream`, {
-    method: "POST",
-    cache: "no-store",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify(
-      payload.history?.length
-        ? { message: payload.message, history: payload.history }
-        : { message: payload.message },
-    ),
-    signal,
-  });
+  const send = () => {
+    const headers = new Headers({ "content-type": "application/json" });
+    applyWriteAuth(headers, "POST");
+    return fetch(`${API_BASE}/api/v1/chat/stream`, {
+      method: "POST",
+      cache: "no-store",
+      headers,
+      body: JSON.stringify(
+        payload.history?.length
+          ? { message: payload.message, history: payload.history }
+          : { message: payload.message },
+      ),
+      signal,
+    });
+  };
+  let res = await send();
+  // Yazma anahtarı yoksa/yanlışsa bir kez sor ve tekrarla (bkz. writeAuth).
+  if (res.status === 401 && requestWriteToken()) {
+    res = await send();
+    if (res.status === 401) rejectWriteToken();
+  }
   if (!res.ok || !res.body) {
     throw new Error(`API ${res.status} /api/v1/chat/stream`);
   }

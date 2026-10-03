@@ -2,6 +2,7 @@
  * HTTP client. Tek `fetchJSON` helper'ı, fetch'in ince sarmalayıcısı.
  * Tüm tipler `types/generated/api.ts`'den gelir.
  */
+import { applyWriteAuth, isMutating, rejectWriteToken, requestWriteToken } from "./writeAuth";
 import type {
   AgentMatrix,
   AIReport,
@@ -415,16 +416,25 @@ export type MarketSessionAsset = {
   no_execution?: boolean;
 };
 
+/** Yazma anahtarıyla fetch; 401'de anahtarı bir kez sorup isteği bir kez tekrarlar. */
+async function authedFetch(path: string, init?: RequestInit): Promise<Response> {
+  const send = () => {
+    const headers = new Headers(init?.headers);
+    if (init?.body && !headers.has("content-type")) {
+      headers.set("content-type", "application/json");
+    }
+    applyWriteAuth(headers, init?.method);
+    return fetch(`${BASE}${path}`, { cache: "no-store", ...init, headers });
+  };
+  const res = await send();
+  if (res.status !== 401 || !isMutating(init?.method) || !requestWriteToken()) return res;
+  const retry = await send();
+  if (retry.status === 401) rejectWriteToken();
+  return retry;
+}
+
 async function fetchJSON<T>(path: string, init?: RequestInit): Promise<T> {
-  const headers = new Headers(init?.headers);
-  if (init?.body && !headers.has("content-type")) {
-    headers.set("content-type", "application/json");
-  }
-  const res = await fetch(`${BASE}${path}`, {
-    cache: "no-store",
-    ...init,
-    headers,
-  });
+  const res = await authedFetch(path, init);
   if (!res.ok) {
     const raw = await res.text().catch(() => "");
     let reason: string | null = null;
@@ -456,15 +466,7 @@ async function fetchJSON<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 async function fetchAudio(path: string, init?: RequestInit): Promise<Blob> {
-  const headers = new Headers(init?.headers);
-  if (init?.body && !headers.has("content-type")) {
-    headers.set("content-type", "application/json");
-  }
-  const res = await fetch(`${BASE}${path}`, {
-    cache: "no-store",
-    ...init,
-    headers,
-  });
+  const res = await authedFetch(path, init);
   if (!res.ok) {
     throw new Error(`API ${res.status} ${path}: ${await res.text().catch(() => "")}`);
   }
