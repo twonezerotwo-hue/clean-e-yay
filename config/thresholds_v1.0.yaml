@@ -461,6 +461,10 @@ timeframe_targets:
 event_risk:
   block_window_hours: 24
   watch_window_hours: 72
+  # Owner kararı E1 (2026-10-03): kapı olayın GERÇEK saatini kullanır (takvim
+  # `time`/`expectation`, "08:30 ET") ve yüksek etkili veri açıklandıktan
+  # sonra bu kadar dakika daha yeni pozisyon açılmaz. 0 = soğuma yok.
+  post_release_cooldown_minutes: 30
   high_importance: [high, critical]
 
 # Olay-sonrası takip (packages/learning/event_outcomes.py) — SALT-GÖZLEM.

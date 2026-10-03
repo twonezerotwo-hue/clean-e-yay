@@ -167,9 +167,11 @@ def list_catalysts(
         days_until = (ev_date - today).days
         if days_until < 0 or days_until > horizon_days:
             continue
-        # Event saat bilgisi taşımaz — gün ortası (12:00 UTC) kabul edilir;
-        # hours_until risk penceresi için yaklaşık değerdir.
-        ev_ts = datetime.combine(ev_date, dt_time(12, 0), tzinfo=UTC)
+        # Açıklanma anı: takvimdeki `time` / `expectation` ("08:30 ET", yaz saati
+        # dahil); saat yoksa gün ortası 12:00 UTC (yaklaşık). Owner kararı E1
+        # (2026-10-03): event-risk kapısı gerçek saate göre açılır/kapanır.
+        rel = release_time_utc(ev)
+        ev_ts = rel[0] if rel else datetime.combine(ev_date, dt_time(12, 0), tzinfo=UTC)
         hours_until = round((ev_ts - now).total_seconds() / 3600, 1)
         importance = _IMPORTANCE_MAP.get(str(ev.get("importance", "")).upper(), "medium")
         out.append(

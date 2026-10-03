@@ -53,6 +53,22 @@ def test_high_impact_near_blocks_position_increase() -> None:
     assert res.triggers and res.triggers[0].title == "US CPI"
 
 
+def test_post_release_cooldown_keeps_block_briefly(monkeypatch) -> None:
+    """E1 (owner 2026-10-03): yüksek etkili veri açıklandıktan sonra soğuma
+    süresince yeni pozisyon açılmaz; soğuma bitince kapı kalkar."""
+    monkeypatch.setattr(event_risk, "load_thresholds", lambda: {"event_risk": {"post_release_cooldown_minutes": 30}})
+    just_released = event_risk.assess([_cat("US CPI", "critical", -0.3)])
+    assert just_released.level == "NO_POSITION_INCREASE"
+    assert "önce açıklandı" in just_released.reason
+    assert event_risk.assess([_cat("US CPI", "critical", -0.7)]).level == "NONE"
+    assert event_risk.assess([_cat("ECB Speech", "medium", -0.2)]).level == "NONE"
+
+
+def test_no_cooldown_configured_means_gate_lifts_at_release(monkeypatch) -> None:
+    monkeypatch.setattr(event_risk, "load_thresholds", lambda: {"event_risk": {}})
+    assert event_risk.assess([_cat("US CPI", "critical", -0.1)]).level == "NONE"
+
+
 def test_high_impact_mid_window_is_watch_only() -> None:
     # 48h: block penceresinin (24h) dışında ama watch (72h) içinde → WATCH
     res = event_risk.assess([_cat("FOMC", "high", 48)])

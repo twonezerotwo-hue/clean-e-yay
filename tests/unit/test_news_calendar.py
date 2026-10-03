@@ -174,6 +174,23 @@ def test_calendar_loads_upcoming_event(tmp_path) -> None:
     assert cal_provider.get_provider_status()["calendar"]["status"] == "ok"
 
 
+def test_calendar_uses_real_release_time(tmp_path) -> None:
+    """E1: kapı olay gününün 12:00 UTC'sini değil gerçek açıklama saatini kullanır."""
+    ref = datetime(2026, 6, 12, 9, 0, tzinfo=UTC)
+    p = _write_cal(
+        tmp_path,
+        'events:\n'
+        '  - id: "cpi_test"\n'
+        '    date: "2026-06-12"\n'
+        '    name: "ABD CPI"\n'
+        '    importance: "CRITICAL"\n'
+        '    expectation: "08:30 ET — BLS resmi takvim"\n',
+    )
+    cat = cal_provider.list_catalysts(yaml_path=p, reference=ref)[0]
+    assert cat.ts == datetime(2026, 6, 12, 12, 30, tzinfo=UTC)
+    assert cat.hours_until == 3.5
+
+
 def test_calendar_filters_past_events(tmp_path) -> None:
     ref = datetime(2026, 6, 12, 9, 0, tzinfo=UTC)
     p = _write_cal(
