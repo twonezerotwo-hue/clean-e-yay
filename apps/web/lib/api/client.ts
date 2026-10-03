@@ -416,8 +416,11 @@ export type MarketSessionAsset = {
   no_execution?: boolean;
 };
 
-/** Yazma anahtarıyla fetch; 401'de anahtarı bir kez sorup isteği bir kez tekrarlar. */
-async function authedFetch(path: string, init?: RequestInit): Promise<Response> {
+/**
+ * Yazma anahtarıyla fetch; 401'de anahtarı edinip isteği bir kez tekrarlar.
+ * `interactive=false` (sesli okuma gibi arka plan) hiçbir zaman soru açmaz.
+ */
+async function authedFetch(path: string, init?: RequestInit, interactive = true): Promise<Response> {
   const send = () => {
     const headers = new Headers(init?.headers);
     if (init?.body && !headers.has("content-type")) {
@@ -427,7 +430,7 @@ async function authedFetch(path: string, init?: RequestInit): Promise<Response> 
     return fetch(`${BASE}${path}`, { cache: "no-store", ...init, headers });
   };
   const res = await send();
-  if (res.status !== 401 || !isMutating(init?.method) || !requestWriteToken()) return res;
+  if (res.status !== 401 || !isMutating(init?.method) || !(await requestWriteToken(interactive))) return res;
   const retry = await send();
   if (retry.status === 401) rejectWriteToken();
   return retry;
@@ -466,7 +469,8 @@ async function fetchJSON<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 async function fetchAudio(path: string, init?: RequestInit): Promise<Blob> {
-  const res = await authedFetch(path, init);
+  // Sesli okuma otomatik tetiklenir (bildirim, cevap) — anahtar sorusu açmaz.
+  const res = await authedFetch(path, init, false);
   if (!res.ok) {
     throw new Error(`API ${res.status} ${path}: ${await res.text().catch(() => "")}`);
   }

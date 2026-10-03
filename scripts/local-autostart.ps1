@@ -170,6 +170,10 @@ $env:PATH       = "C:\Program Files\nodejs;" + $env:PATH
 # certifi -> SSL_CERT_FILE so live providers do not fail CERTIFICATE_VERIFY_FAILED
 if (Test-Path $py) { $cert = & $py -m certifi 2>$null; if ($cert) { $env:SSL_CERT_FILE = $cert } }
 $env:NEXT_DIST_DIR = ".next-prod"
+# Local-only: the web server hands API_AUTH_TOKEN to the dashboard on THIS machine
+# (same-origin, loopback, localhost:4000 only - see apps/web/app/api/local-auth).
+# ngrok/phone requests do not get it; AWS never sets this flag.
+$env:WEB_LOCAL_WRITE_AUTH = "1"
 # supervisor binds 0.0.0.0 by default (AWS); local stays on loopback only.
 $env:API_HOST = "127.0.0.1"
 $env:API_PORT = "9000"

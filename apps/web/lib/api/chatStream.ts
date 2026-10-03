@@ -92,7 +92,7 @@ export async function streamChat(
   };
   let res = await send();
   // Yazma anahtarı yoksa/yanlışsa bir kez sor ve tekrarla (bkz. writeAuth).
-  if (res.status === 401 && requestWriteToken()) {
+  if (res.status === 401 && (await requestWriteToken(true))) {
     res = await send();
     if (res.status === 401) rejectWriteToken();
   }

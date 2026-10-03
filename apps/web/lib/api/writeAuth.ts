@@ -2,10 +2,11 @@
  * Yazma anahtarı (owner kararı 2a, 2026-10-03).
  *
  * API_AUTH_TOKEN tanımlıyken API tüm yazma isteklerini (POST/PUT/PATCH/DELETE —
- * sohbet ve ses dahil) `Authorization: Bearer <token>` ister. Panel anahtarı bir
- * kez sorar, bu tarayıcıda saklar ve yazma isteklerine ekler. Okuma (GET)
- * etkilenmez. AWS'teki Cloudflare Worker kendi anahtarını ekler (bu başlığı ezer),
- * orada soru hiç çıkmaz.
+ * sohbet ve ses dahil) `Authorization: Bearer <token>` ister. Panel anahtarı bu
+ * tarayıcıda saklar ve yazma isteklerine ekler. Ana bilgisayarda anahtar panelin
+ * kendi sunucusundan sessizce alınır (`app/api/local-auth`); telefonda/ngrok'ta
+ * yalnız kullanıcı eyleminde bir kez sorulur. Okuma (GET) etkilenmez. AWS'teki
+ * Cloudflare Worker kendi anahtarını ekler (bu başlığı ezer), orada soru çıkmaz.
  */
 
 const STORAGE_KEY = "eyay.write_token";
@@ -41,18 +42,44 @@ export function applyWriteAuth(headers: Headers, method?: string): void {
   if (token) headers.set("authorization", `Bearer ${token}`);
 }
 
+let localFailedAt = 0;
+
+/** Bu bilgisayardaki panel: anahtarı panelin kendi sunucusundan sessizce al.
+ *  Yalnız başarısız deneme 30 sn hatırlanır (telefonda her 401'de boşuna sorgu olmasın). */
+async function fetchLocalToken(): Promise<string | null> {
+  if (Date.now() - localFailedAt < 30_000) return null;
+  try {
+    const res = await fetch("/api/local-auth", { cache: "no-store" });
+    const body = res.ok ? ((await res.json()) as { token?: unknown }) : {};
+    if (typeof body.token === "string" && body.token) return body.token;
+  } catch {
+    // ağ hatası: başarısız say
+  }
+  localFailedAt = Date.now();
+  return null;
+}
+
 /**
- * 401 sonrası: anahtarı sor ve sakla. `true` → çağıran isteği bir kez tekrarlar.
- * Aynı anda düşen birkaç 401 için (sohbet + ses) yalnız bir kez sorulur.
+ * 401 sonrası anahtar edinme. `true` → çağıran isteği bir kez tekrarlar.
+ * 1) Bu bilgisayardaysa sunucudan sessizce alınır (soru yok).
+ * 2) Değilse (telefon/ngrok) yalnız kullanıcı eyleminde (`interactive`) bir kez
+ *    sorulur; sesli okuma gibi arka plan istekleri asla soru açmaz.
  */
-export function requestWriteToken(): boolean {
+export async function requestWriteToken(interactive: boolean): Promise<boolean> {
   if (typeof window === "undefined") return false;
   if (Date.now() - lastSetAt < 5_000 && readToken()) return true;
-  // Az önce vazgeçildiyse aynı eylemin diğer istekleri (yedek sohbet, ses) yeniden sormaz.
+  const local = await fetchLocalToken();
+  if (local) {
+    writeToken(local);
+    lastSetAt = Date.now();
+    return true;
+  }
+  if (!interactive) return false;
+  // Az önce vazgeçildiyse aynı eylemin diğer istekleri (yedek sohbet) yeniden sormaz.
   if (Date.now() - declinedAt < 10_000) return false;
   const value = window.prompt(
     "Yazma anahtarı gerekli (sohbet, ses ve işlem butonları için).\n" +
-      "Bu bilgisayarda C:\\dev\\clean-e-yay\\.env dosyasındaki API_AUTH_TOKEN değerini yapıştır.\n" +
+      "Ana bilgisayardaki C:\\dev\\clean-e-yay\\.env dosyasındaki API_AUTH_TOKEN değerini yapıştır.\n" +
       "Bu tarayıcıda saklanır; bir kez sorulur.",
   );
   if (!value || !value.trim()) {
@@ -68,4 +95,5 @@ export function requestWriteToken(): boolean {
 export function rejectWriteToken(): void {
   writeToken(null);
   lastSetAt = 0;
+  localFailedAt = 0; // anahtar değişmiş olabilir: yerel sunucudan bir kez daha denensin
 }
