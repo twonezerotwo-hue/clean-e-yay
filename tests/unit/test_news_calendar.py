@@ -137,6 +137,51 @@ def test_asset_impact_directions() -> None:
     assert war.get("BRENT") == 1.0
 
 
+@pytest.mark.parametrize(
+    ("title", "sentiment", "expected"),
+    [
+        # E2 (owner 2026-10-03) — 2026-10-02 NFP sonrası gerçek başlıklar: eskiden
+        # "bearish + Fed" → DXY +1 okunuyordu (dolar düşerken).
+        ("Dollar Falls as Traders Pare Fed-Hike Bets After Soft Jobs Data", "bearish", {"DXY": -1.0}),
+        ("Gold, silver rise as weak payrolls cut Fed-hike odds", "bullish",
+         {"XAUUSD": 1.0, "XAGUSD": 1.0, "DXY": -1.0}),
+        ("Bond Traders Pull Back on Fed Hike Bets After Soft Jobs Data", "bearish", {"DXY": -1.0}),
+        # Şahin sürpriz → dolar yukarı (eski kuralla aynı sonuç).
+        ("Fed signals it could keep hiking rates as inflation runs hot", "bearish", {"DXY": 1.0}),
+        # Geri dönüş: "reverse early gains" düşüş demek.
+        ("Gold futures reverse early gains as high Treasury yields pressure market", "neutral",
+         {"XAUUSD": -1.0}),
+    ],
+)
+def test_macro_headline_direction_follows_surprise_and_stated_move(
+    monkeypatch, title, sentiment, expected
+) -> None:
+    monkeypatch.setattr("packages.data.registry.assets.all_assets", lambda: [])
+    impact = classify.classify_asset_impact(title, sentiment)
+    for symbol, direction in expected.items():
+        assert impact.get(symbol) == direction, (symbol, impact)
+
+
+def test_registry_equity_direction_uses_stated_move(monkeypatch) -> None:
+    from types import SimpleNamespace
+
+    monkeypatch.setattr(
+        "packages.data.registry.assets.all_assets",
+        lambda: [SimpleNamespace(symbol="SP500", label="S&P 500", asset_class="equity")],
+    )
+    impact = classify.classify_asset_impact(
+        "U.S. stock futures jump 1% as traders pare Fed rate hike bets after jobs report", "bearish"
+    )
+    assert impact["SP500"] == 1.0
+    assert impact["DXY"] == -1.0
+
+
+def test_macro_surprise_reads_data_direction_not_sentiment() -> None:
+    assert classify.macro_surprise("Bitcoin up on pared Fed rate hike bets") == "low"
+    assert classify.macro_surprise("Hotter-than-expected CPI lifts Fed hike odds") == "high"
+    assert classify.macro_surprise("Fed holds rates steady") is None
+
+
 def test_asset_impact_resolves_registry_label_for_runtime_asset(monkeypatch) -> None:
     from types import SimpleNamespace
 

@@ -5,6 +5,7 @@ asset_impact sembol → yön (-1.0 / 0.0 / +1.0) olarak üretilir.
 """
 from __future__ import annotations
 
+import re
 from datetime import UTC, datetime
 from typing import Final
 
@@ -288,6 +289,95 @@ def _dir(sentiment: Sentiment) -> float:
     return {"bullish": 1.0, "bearish": -1.0, "neutral": 0.0}[sentiment]
 
 
+# ---------------------------------------------------------------------------
+# Makro sürpriz yönü (owner kararı E2, 2026-10-03) — veri/Fed başlığının
+# "beklenti altı / güvercin" (low) mu "beklenti üstü / şahin" (high) mı olduğunu
+# söyler. Duygu (sentiment) ile karıştırılmaz: "soft jobs data" bearish duygudur
+# ama dolar için aşağı (Fed artırmaz) demektir. learning/event_outcomes da aynı
+# sözlüğü kullanır (tek kaynak).
+# ---------------------------------------------------------------------------
+
+_HIKE_BETS = r"(fed[- ])?(rate[- ])?hike (bets|odds|expectations)"
+MACRO_LOW_RE: Final[re.Pattern[str]] = re.compile(r"\b(" + "|".join((
+    r"weak(er)?", r"soft(er)?", r"cool(er|s|ing)?", r"miss(es|ed)?", r"disappoint\w*",
+    r"below (expectations|forecasts?|estimates?)", r"(lower|weaker|softer|cooler)[- ]than[- ]expected",
+    r"slow(s|ed|ing)?", r"dovish", r"cuts? (interest )?rates?", r"lowers? (interest )?rates?",
+    r"pare[sd]? " + _HIKE_BETS, r"(cut|curb|trim|dampen)s? " + _HIKE_BETS,
+    _HIKE_BETS + r" (wane|fade|ease|recede)s?",
+)) + r")\b")
+MACRO_HIGH_RE: Final[re.Pattern[str]] = re.compile(r"\b(" + "|".join((
+    r"strong(er)?", r"hot(ter)?", r"beats?", r"tops? (expectations|forecasts?|estimates?)",
+    r"above (expectations|forecasts?|estimates?)", r"(higher|stronger|hotter)[- ]than[- ]expected",
+    r"robust", r"blowout", r"hawkish", r"rais(e|es|ing) (interest )?rates?", r"hik(e|es|ing) (interest )?rates?",
+    r"(boost|lift|raise)s? " + _HIKE_BETS,
+)) + r")\b")
+
+
+def macro_surprise(text: str) -> str | None:
+    """"low" (zayıf/soğuk/güvercin), "high" (güçlü/sıcak/şahin) ya da None (belirsiz)."""
+    lower = text.lower()
+    low, high = bool(MACRO_LOW_RE.search(lower)), bool(MACRO_HIGH_RE.search(lower))
+    if low == high:
+        return None
+    return "low" if low else "high"
+
+
+# Başlık bir asset'in hareketini açıkça söylüyorsa ("Dollar falls", "Gold,
+# silver rise", "stock futures jump") yön oradan alınır — duygudan güçlü kanıt.
+_UP_WORDS: Final[frozenset[str]] = frozenset({
+    "rise", "rises", "rose", "rising", "gain", "gains", "gained", "climb", "climbs", "climbed",
+    "jump", "jumps", "jumped", "rally", "rallies", "rallied", "surge", "surges", "surged",
+    "soar", "soars", "soared", "advance", "advances", "advanced", "rebound", "rebounds",
+    "rebounded", "strengthen", "strengthens", "strengthened", "firms", "firmed", "higher",
+    "spike", "spikes", "spiked", "highest", "up",
+})
+_DOWN_WORDS: Final[frozenset[str]] = frozenset({
+    "fall", "falls", "fell", "falling", "drop", "drops", "dropped", "slip", "slips", "slipped",
+    "slide", "slides", "slid", "decline", "declines", "declined", "tumble", "tumbles", "tumbled",
+    "sink", "sinks", "sank", "plunge", "plunges", "plunged", "weaken", "weakens", "weakened",
+    "retreat", "retreats", "retreated", "lower", "dip", "dips", "dipped", "slump", "slumps",
+    "slumped", "lowest", "down", "losses",
+})
+# "reverse early gains" / "pares losses": geri dönüş kelimesi kazanç/kayıp isminden
+# önce gelirse yön tersine döner ("higher"/"lower" gibi yön zarflarında dönmez).
+_REVERSAL_WORDS: Final[frozenset[str]] = frozenset({
+    "reverse", "reverses", "reversed", "pare", "pares", "pared", "erase", "erases", "erased",
+    "trim", "trims", "trimmed", "recover", "recovers", "recovered",
+})
+_MOVE_NOUNS: Final[frozenset[str]] = frozenset({"gains", "gain", "rally", "advance", "losses", "decline", "slide", "drop"})
+_ASSET_TERMS: Final[dict[str, tuple[str, ...]]] = {
+    "XAUUSD": ("gold", "xau"),
+    "XAGUSD": ("silver", "xag"),
+    "BRENT": ("oil", "brent", "crude"),
+    "BTCUSD": ("bitcoin", "btc"),
+    "ETHUSD": ("ethereum", "ether", "eth"),
+    "DXY": ("dollar", "dxy", "greenback", "usd index"),
+    "VIX": ("vix", "volatility index", "fear gauge"),
+}
+_TOKEN_RE = re.compile(r"[\w$&.\-]+")
+_MOVE_WINDOW = 4
+
+
+def _stated_move(tokens: list[str], terms: tuple[str, ...] | list[str]) -> float | None:
+    """Terimden sonraki birkaç kelimede açık hareket fiili → +1 / -1; yok/çelişik → None."""
+    found: set[float] = set()
+    for term in terms:
+        tt = term.split()
+        for i in range(len(tokens) - len(tt) + 1):
+            if tokens[i:i + len(tt)] != tt:
+                continue
+            reversal = False
+            for w in tokens[i + len(tt): i + len(tt) + _MOVE_WINDOW]:
+                if w in _REVERSAL_WORDS:
+                    reversal = True
+                    continue
+                if w in _UP_WORDS or w in _DOWN_WORDS:
+                    sign = 1.0 if w in _UP_WORDS else -1.0
+                    found.add(-sign if reversal and w in _MOVE_NOUNS else sign)
+                    break
+    return found.pop() if len(found) == 1 else None
+
+
 def classify_asset_impact(title: str, sentiment: Sentiment) -> dict[str, float]:
     """Başlıktan etkilenen sembolleri ve yönlerini çıkarır (eski Codex kural
     setinin Clean sembol evrenine indirgenmiş portu)."""
@@ -308,11 +398,18 @@ def classify_asset_impact(title: str, sentiment: Sentiment) -> dict[str, float]:
     if any(kw in lower for kw in ("dollar", "dxy", "usd index")):
         impacts["DXY"] = d
 
-    # Fed / makro: hawkish (bearish haber) → DXY pozitif
+    # Fed / makro: yön sürprizden (E2): zayıf/güvercin → DXY ↓, güçlü/şahin → DXY ↑.
+    # Sürpriz okunamazsa eski kural: hawkish (bearish haber) → DXY pozitif.
     if any(kw in lower for kw in ("fed", "federal reserve", "inflation", "cpi",
                                   "ppi", "fomc", "rate hike", "rate cut",
                                   "enflasyon", "faiz")):
-        impacts["DXY"] = 1.0 if sentiment == "bearish" else d
+        surprise = macro_surprise(lower)
+        if surprise == "low":
+            impacts["DXY"] = -1.0
+        elif surprise == "high":
+            impacts["DXY"] = 1.0
+        else:
+            impacts["DXY"] = 1.0 if sentiment == "bearish" else d
 
     # Jeopolitik korku → VIX yukarı
     if any(kw in lower for kw in ("war", "geopolit", "iran", "ukraine", "russia",
@@ -338,6 +435,7 @@ def classify_asset_impact(title: str, sentiment: Sentiment) -> dict[str, float]:
                                   "rusya", "ukrayna")):
         impacts["XAUUSD"] = 1.0 if sentiment == "bearish" else d
 
+    registry_terms: dict[str, list[str]] = {}
     # Runtime/custom assets must not be invisible to the news layer.  The
     # registry is the single source for user-added symbols; resolve only a
     # bounded set of explicit label/symbol/class terms and never invent a
@@ -360,12 +458,22 @@ def classify_asset_impact(title: str, sentiment: Sentiment) -> dict[str, float]:
             asset_class = str(getattr(asset, "asset_class", "") or "").casefold()
             terms = {symbol.casefold(), label}
             terms.update(class_terms.get(asset_class, ()))
-            if any(term and len(term) >= 3 and term in lower for term in terms):
+            hits = sorted(term for term in terms if term and len(term) >= 3 and term in lower)
+            if hits:
                 impacts[symbol] = d
+                registry_terms[symbol] = hits
     except Exception:
         # A registry/configuration failure must not take down RSS ingestion;
         # the built-in deterministic mappings above remain available.
         pass
+
+    # E2 — başlık hareketi açıkça söylüyorsa yön oradan (yalnız mevcut eşlemeler;
+    # yeni sembol EKLENMEZ).
+    tokens = [t.removesuffix("'s") for t in _TOKEN_RE.findall(lower)]
+    for symbol in impacts:
+        stated = _stated_move(tokens, (*_ASSET_TERMS.get(symbol, ()), *registry_terms.get(symbol, ())))
+        if stated is not None:
+            impacts[symbol] = stated
 
     # Max 4 etki — geo hikayeler daha çok sinyal taşır (legacy parity)
     return dict(list(impacts.items())[:4])

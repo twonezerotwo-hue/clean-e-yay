@@ -21,7 +21,6 @@ from __future__ import annotations
 
 import json
 import os
-import re
 from collections.abc import Iterable, Mapping
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -29,6 +28,7 @@ from typing import Any
 
 from packages.data import snapshot_store
 from packages.data.providers import calendar as calendar_provider
+from packages.data.providers.news import classify
 from packages.data.registry.loader import load_thresholds
 from packages.notifications import Notification, make_id
 from packages.ops.store import write_text_atomic
@@ -63,19 +63,9 @@ _FOREIGN_MARKERS = ("eurozone", "euro zone", "euro area", "ecb", "britain", "bri
                     "korea", "brazil", "mexico")
 _PREVIEW_WORDS = ("ahead of", "await", "preview", "what to expect", "before the", "expected to show")
 
-# Sürpriz yönü — kelime sınırıyla aranır. "low" = beklenti altı/zayıf/soğuk/güvercin.
-_LOW_PATTERNS = (
-    r"weak(er)?", r"soft(er)?", r"cool(er|s|ing)?", r"miss(es|ed)?", r"disappoint\w*",
-    r"below (expectations|forecasts?|estimates?)", r"(lower|weaker|softer|cooler)[- ]than[- ]expected",
-    r"slow(s|ed|ing)?", r"dovish", r"cuts? (interest )?rates?", r"lowers? (interest )?rates?",
-)
-_HIGH_PATTERNS = (
-    r"strong(er)?", r"hot(ter)?", r"beats?", r"tops? (expectations|forecasts?|estimates?)",
-    r"above (expectations|forecasts?|estimates?)", r"(higher|stronger|hotter)[- ]than[- ]expected",
-    r"robust", r"blowout", r"hawkish", r"raises? (interest )?rates?", r"hikes? (interest )?rates?",
-)
-_LOW_RE = re.compile(r"\b(" + "|".join(_LOW_PATTERNS) + r")\b")
-_HIGH_RE = re.compile(r"\b(" + "|".join(_HIGH_PATTERNS) + r")\b")
+# Sürpriz yönü sözlüğü tek kaynak: news/classify (haber yönü de aynısını kullanır).
+_LOW_RE = classify.MACRO_LOW_RE
+_HIGH_RE = classify.MACRO_HIGH_RE
 
 _OUTCOME_LABEL = {
     ("jobs", "low"): "ZAYIF (beklenti altı)",
