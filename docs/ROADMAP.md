@@ -45,23 +45,23 @@ listeler. Temizlik boyunca yeni özellik, yeni flag, yeni veri kaynağı eklenme
 - **K5** Ağırlıklar git'te (`config/weights_active.json`), owner onayıyla değişir;
   oto-uygulama kapalı.
 
+## Verilmiş owner kararları (2026-10-03, olay-sonrası takipten)
+
+- **E1** Event kapısı olayın gerçek saatini kullanır (takvim `time`/`expectation`)
+  ve yüksek etkili veri açıklandıktan sonra 30 dk daha yeni pozisyon açılmaz
+  (`event_risk.post_release_cooldown_minutes`).
+- **E2** Makro başlıkta yön duygudan değil sürprizden (zayıf/güvercin → DXY↓) ve
+  başlığın açıkça söylediği hareketten ("Dollar falls", "stock futures jump") gelir.
+- **E3** Beklenen tepki faiz kanalıyla okunur; takvim etki metinleri buna göre.
+- **2a** Lokal yazma anahtarı panelde bir kez sorulur (tarayıcıda saklanır).
+
 ## Açık owner kararları
 
-Olay-sonrası takipten çıkanlar (2026-10-02 NFP vakası; ayrıntı panelde):
-
-- **E1 Event kapısı saati:** kapı olay saatini 12:00 UTC varsayıyor → ABD 08:30 ET
-  verilerinde kapı açıklamadan 30 dk ÖNCE, FOMC kararında (14:00 ET) ~6 saat önce
-  açılıyor. Öneri: kapı `event_outcomes`'un okuduğu gerçek saati kullansın +
-  açıklama sonrası kısa soğuma (ör. 30 dk). Yalnız kısıtlar; canlı davranış değişir.
-- **E2 Makro başlık yön hatası:** `news/classify.py` makro veri başlıklarında
-  duygu ile asset yönünü karıştırıyor ("Dollar falls after soft jobs" → DXY +1,
-  "stock futures jump" → SP500 −1). `news_symbol_filter` açık olduğu için haber
-  oyu ters işaret alıyor. Düzeltme karar girdisini değiştirir.
-- **E3 Beklenen tepki haritası:** takvim metni "zayıf istihdam → risk-off" diyor;
-  takip faiz kanalını (zayıf → dolar↓, altın/kripto/hisse↑) varsayıyor ve NFP'de
-  15dk/1sa tuttu, 4sa'te metaller/kripto döndü. Hangisi esas alınsın?
 - **E4 Olay sonucunu karara bağlamak:** CP5 kırmızı çizgi — yeterli olay birikip
-  kanıt çıkmadan yapılmaz; yalnız owner onayıyla.
+  kanıt çıkmadan yapılmaz; yalnız owner onayıyla. Kanıt: Olay Takvimi paneli /
+  `GET /api/v1/calendar/event-outcomes` (aile × sonuç × ufuk isabet oranı).
+- Haber eşlemesinde kayıt defteri terimleri alt-dize olarak aranıyor ("Sep**tem**ber"
+  → TEM, "N**eth**ermind" → ETHUSD); kelime-sınırı düzeltmesi owner onayı bekliyor.
 
 ## Temizlikten sonra (ölçüm işleri)
 

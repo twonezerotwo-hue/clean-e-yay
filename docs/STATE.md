@@ -62,8 +62,9 @@ default'u (`= False`) çoğu zaman config'te ezilir.
 ## Takvim olayları
 
 - **Önce:** `config/event_calendar.yaml` (elle tutulur) → `packages/risk/event_risk.py`:
-  yüksek etkili olaydan 24 saat önce yeni pozisyon durur (`event_risk` eşikleri).
-  Kapı olay saatini bilmez; olay günü 12:00 UTC varsayılır.
+  yüksek etkili olaydan 24 saat önce yeni pozisyon durur; açıklandıktan sonra
+  `event_risk.post_release_cooldown_minutes` kadar daha durur. Saat takvimin
+  `time` / `expectation` alanından ("08:30 ET"); yoksa 12:00 UTC varsayılır.
 - **Sonra (salt-gözlem):** `packages/learning/event_outcomes.py` her tick'te olayı
   izler: açıklama öncesi fiyat tabanı, açıklamadan sonra doğrulanmış başlıklardan
   sonuç (zayıf/güçlü, soğuk/sıcak, güvercin/şahin), beklenen yön (`event_outcomes.
@@ -71,6 +72,13 @@ default'u (`= False`) çoğu zaman config'te ezilir.
   Gerçek açıklama saati takvimdeki `time` / `expectation` ("08:30 ET") alanından
   okunur. Bildirim, Olay Takvimi paneli, Brain brifingi ve sohbet bağlamı buradan
   beslenir (`GET /api/v1/calendar/event-outcomes`). Karara dokunmaz.
+
+## Yazma anahtarı
+
+`API_AUTH_TOKEN` tanımlıysa API tüm yazma isteklerini (sohbet, ses, işlem
+butonları) Bearer token ister. Lokal panel anahtarı ilk 401'de bir kez sorar ve
+tarayıcıda saklar (`apps/web/lib/api/writeAuth.ts`); AWS'te Cloudflare Worker
+parola kapısından geçen isteğe anahtarı kendisi ekler.
 
 ## Stop davranışı
 
