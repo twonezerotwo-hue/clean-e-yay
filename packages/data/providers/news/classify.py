@@ -378,6 +378,21 @@ def _stated_move(tokens: list[str], terms: tuple[str, ...] | list[str]) -> float
     return found.pop() if len(found) == 1 else None
 
 
+def stated_move(title: str, terms: tuple[str, ...] | list[str]) -> float | None:
+    """Başlık, verilen terimlerden birinin hareketini açıkça söylüyor mu? (+1/-1/None).
+
+    Keşif adayları (kayıt defterinde olmayan varlıklar) için E2 kuralının aynısı:
+    "Copper rallies" → +1, "Bitway slides" → -1, "reverse early gains" → -1.
+    """
+    tokens = [t.removesuffix("'s") for t in _TOKEN_RE.findall(title.lower())]
+    return _stated_move(tokens, [t.lower() for t in terms])
+
+
+def direction_of(sentiment: Sentiment | None) -> float:
+    """Duygu → yön (+1 / -1 / 0); bilinmeyen duygu nötr."""
+    return _dir(sentiment) if sentiment in ("bullish", "bearish", "neutral") else 0.0
+
+
 def classify_asset_impact(title: str, sentiment: Sentiment) -> dict[str, float]:
     """Başlıktan etkilenen sembolleri ve yönlerini çıkarır (eski Codex kural
     setinin Clean sembol evrenine indirgenmiş portu)."""

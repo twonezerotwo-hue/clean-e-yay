@@ -79,6 +79,35 @@ commodities:
     URANIUM:   { ticker: "URA",  label: "Uranyum (ETF)",  keywords: ["uranium", "uranyum"] }
     LITHIUM:   { ticker: "LIT",  label: "Lityum (ETF)",   keywords: ["lithium", "lityum"] }
 
+# Haber öngörüsü (owner kararı 2026-10-05) — packages/discovery/news_forecast.py.
+# SALT-GÖZLEM: karar/boyut/RiskGate'e girmez; fikir panosu + öngörü karnesi besler.
+# Başlıklar: son snapshot'ların doğrulanmış RSS başlıkları + sınırlı web araması
+# (Tavily; en güçlü adaylar, aday başına min_interval_hours'da bir).
+# Ağırlık: kaynak güvenilirliği (news_event_study kova isabeti) × tazelik (yarı-ömür).
+news_forecast:
+  window_hours: 72
+  half_life_hours: 24
+  snapshots_per_run: 12
+  min_track_strength: 25      # karneye yazılacak en zayıf yönlü öngörü (0-100)
+  resolve_hours: [4, 24, 72]
+  web_search:
+    max_assets_per_run: 5
+    min_interval_hours: 6
+    max_results: 5
+  sector_keywords:
+    XLK:  ["tech stocks", "technology stocks", "chipmakers", "semiconductor stocks", "chip stocks"]
+    XLE:  ["energy stocks", "oil stocks", "oil majors"]
+    XLF:  ["bank stocks", "banking stocks", "financial stocks", "lenders"]
+    XLV:  ["healthcare stocks", "pharma stocks", "drugmakers", "biotech stocks"]
+    XLI:  ["industrial stocks", "industrials", "manufacturing activity"]
+    XLY:  ["consumer discretionary", "retail stocks", "retailers"]
+    XLP:  ["consumer staples", "staples stocks"]
+    XLU:  ["utility stocks", "utilities stocks"]
+    XLB:  ["materials stocks", "chemical stocks", "miners"]
+    XLRE: ["real estate stocks", "reits", "property stocks"]
+    XLC:  ["communication services", "media stocks", "telecom stocks"]
+    IYT:  ["transport stocks", "airlines", "railroads", "trucking stocks"]
+
 sector_rotation:
   # Göreli güç kıyas çıpası (assets.yaml'daki S&P 500 — OHLCV'de zaten var).
   benchmark: SP500

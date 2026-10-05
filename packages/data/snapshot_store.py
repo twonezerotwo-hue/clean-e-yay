@@ -191,6 +191,18 @@ def nearest(target: datetime, *, side: str, max_gap_seconds: float) -> dict | No
     return _read(best[1]) if best else None
 
 
+def recent(n: int) -> list[dict]:
+    """En yeni `n` okunabilir snapshot (yeniden eskiye) — yalnız o dosyalar okunur."""
+    out: list[dict] = []
+    for p in reversed(_files()):
+        if len(out) >= n:
+            break
+        data = _read(p)
+        if data is not None:
+            out.append(data)
+    return out
+
+
 def list_ids() -> list[str]:
     ids: list[str] = []
     for p in _files():
@@ -220,6 +232,7 @@ __all__ = [
     "latest",
     "list_ids",
     "nearest",
+    "recent",
     "record",
     "status",
 ]

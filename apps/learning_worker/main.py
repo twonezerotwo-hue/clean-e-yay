@@ -477,6 +477,26 @@ def run_once() -> dict:
         discovery_scan_status = f"ERROR:{type(exc).__name__}"
         errors.append(f"discovery_scan:{type(exc).__name__}")
 
+    # Haber öngörüsü (owner kararı 2026-10-05, aynı kapı): RSS + sınırlı web
+    # araması → varlık başına yön/güç + öngörü karnesi. SALT-GÖZLEM: karar/
+    # boyut/RiskGate/evren değişmez; fikir panosunu besler.
+    news_forecast_status = "DISABLED"
+    try:
+        if discovery.scan_enabled():
+            from packages.discovery import news_forecast
+            nf = news_forecast.run()
+            news_forecast_status = str(nf.get("status", "UNKNOWN"))
+            log.info(
+                "news_forecast: headlines=%s +rss=%s +web=%s forecasts=%s directional=%s "
+                "karne(created=%s resolved=%s open=%s) web_errors=%s",
+                nf.get("headlines"), nf.get("added_rss"), nf.get("added_web"), nf.get("forecasts"),
+                nf.get("directional"), nf.get("created"), nf.get("resolved"), nf.get("open"),
+                nf.get("web_errors"),
+            )
+    except Exception as exc:  # defensive — worker patlamamalı
+        news_forecast_status = f"ERROR:{type(exc).__name__}"
+        errors.append(f"news_forecast:{type(exc).__name__}")
+
     # K-4 — keşif adayı TERFİ kriteri (aynı DISCOVERY_SCAN_ENABLED kapısı):
     # tarayıcı+defter tazelendikten SONRA aday gölge karnesini üç eşiğe (≥20
     # çözüm + ≥2 TF + Wilson alt sınırı > 0.5) vurur; geçen aday için governor
@@ -875,6 +895,7 @@ def run_once() -> dict:
         "exit_forensics_status": exit_forensics_status,  # Çıkış Otopsisi (2026-07-03)
         "discovery_status": discovery_status,  # K-0b sektör rotasyonu (DISABLED=flag OFF)
         "discovery_scan_status": discovery_scan_status,  # K-1 tarayıcı
+        "news_forecast_status": news_forecast_status,  # haber öngörüsü (2026-10-05)
         "discovery_promotion_status": discovery_promotion_status,  # K-4 terfi kriteri (DISABLED=flag OFF)
         "backtest_recon_status": backtest_recon_status,  # B-1 fidelity (DISABLED=flag OFF)
         "backtest_challenger_status": backtest_challenger_status,  # B-2 üretim (DISABLED=flag OFF)
