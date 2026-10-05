@@ -40,7 +40,9 @@ function AssetChip({ asset }: { asset: NewsDiscoveryAsset }) {
   return (
     <span
       className={`inline-flex items-center gap-1 rounded border bg-black/20 px-1.5 py-0.5 text-[10px] ${tone}`}
-      title={`${asset.name ?? ""} · güven ${CONFIDENCE_LABEL[asset.confidence ?? ""] ?? "?"}`}
+      title={`${asset.name ?? ""} · güven ${CONFIDENCE_LABEL[asset.confidence ?? ""] ?? "?"}${
+        asset.mechanism ? ` · ${asset.mechanism}` : ""
+      }`}
     >
       {newsArrow(asset.direction ?? undefined)} {asset.symbol}
       {typeLabel ? <span className="text-white/35">{typeLabel}</span> : null}

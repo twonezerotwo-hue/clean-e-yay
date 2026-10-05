@@ -4993,6 +4993,7 @@ components:
         status: { type: string, enum: [valid, registry, rejected, deferred] }
         reason: { type: string, nullable: true }
         proposed_ticker: { type: string, nullable: true }
+        mechanism: { type: string, nullable: true }
 
     NewsDiscoveryCandidate:
       type: object
@@ -5022,6 +5023,7 @@ components:
         consequence: { type: string, nullable: true }
         direction: { type: string, nullable: true }
         confidence: { type: string, nullable: true }
+        mechanism: { type: string, nullable: true }
 
     Idea:
       type: object

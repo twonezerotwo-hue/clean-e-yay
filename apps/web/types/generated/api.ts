@@ -2344,6 +2344,7 @@ export type IdeaChainLink = {
   consequence?: string | null;
   direction?: string | null;
   confidence?: string | null;
+  mechanism?: string | null;
 };
 
 export type Idea = {
@@ -2417,6 +2418,7 @@ export type NewsDiscoveryAsset = {
   status: NewsDiscoveryAssetStatus;
   reason?: string | null;
   proposed_ticker?: string | null;
+  mechanism?: string | null;
 };
 
 export type NewsDiscoveryEvent = {

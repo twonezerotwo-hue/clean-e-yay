@@ -91,7 +91,7 @@ def config(discovery_cfg: Mapping[str, Any] | None = None) -> dict[str, Any]:
         "max_output_tokens": int(raw.get("max_output_tokens", 700)),
         "max_events_per_call": int(raw.get("max_events_per_call", 4)),
         "max_assets_per_event": int(raw.get("max_assets_per_event", 3)),
-        "max_new_resolutions_per_run": int(raw.get("max_new_resolutions_per_run", 8)),
+        "max_new_resolutions_per_run": int(raw.get("max_new_resolutions_per_run", 12)),
         "candidate_ttl_hours": float(raw.get("candidate_ttl_hours", 72)),
         "half_life_hours": float(raw.get("half_life_hours", 24)),
         "max_candidates": int(raw.get("max_candidates", 15)),
@@ -199,19 +199,31 @@ def _pending(state: Mapping[str, Any], cfg: Mapping[str, Any], now: datetime) ->
 # ---------------------------------------------------------------------------
 
 SYSTEM = (
-    "Sen bir piyasa etki analistisin. Haber başlıklarından olayın doğuracağı somut sonucu ve bu sonuçtan "
-    "fiyatı etkilenecek İŞLEM GÖREN varlıkları çıkarırsın. Uydurma yapma; emin değilsen o başlığı atla. "
-    "Bu bir işlem emri değildir; yalnız keşif adayı önerirsin."
+    "Sen temkinli bir piyasa etki analistisin. Haber başlığından yalnız DOĞRUDAN ve BİRİNCİ DERECE fiyat "
+    "etkisini çıkarırsın: haber bir varlığın arzını, talebini, maliyetini, düzenlemesini ya da kârını açıkça "
+    "değiştirmeli. Uydurma yapma; mekanizma net değilse o başlığı atla. Bu bir işlem emri değildir; yalnız "
+    "keşif adayı önerirsin."
 )
 
+# 2026-10-05 ölçümü (qwen3:8b, aynı 30 başlık): kuralsız istem suç/şiddet haberlerinden
+# alakasız hisseler ve kriptodan kriptoya bulaşma üretiyordu; kurallı + mekanizmalı istem
+# bunları atlıyor. Yön örnekleri "alım = talep artışı" gibi temel hataları azaltmak için.
 _PROMPT = (
     "Başlıklar:\n{titles}\n\n"
-    "Görev: Yalnız fiyatları GERÇEKTEN etkileyebilecek en önemli en fazla {max_events} başlığı seç. "
-    "Her biri için en fazla {max_assets} varlık ver. Endeks değil işlem gören araç ver (S&P 500 yerine SPY). "
-    "Yönü sonucun varlığın FİYATINA etkisine göre ver (ör. getiriler yükselirse tahvil fonu düşer). "
-    "Sembol Yahoo Finance biçiminde: vadeli 'KC=F', ETF 'COPX', hisse 'FCX', kripto 'SOL-USD', döviz 'EURUSD=X'. "
-    "Sonucu Türkçe ve kısa yaz (en fazla 14 kelime). Yalnız JSON:\n"
-    '{{"e":[{{"h":<başlık no>,"c":"<sonuç>","a":[{{"t":"<sembol>","n":"<varlık adı>","d":"up|down","k":"low|med|high"}}]}}]}}'
+    "Kurallar:\n"
+    "- Suç, kaza, yerel siyaset, insani olay, spor, magazin, görüş/yorum ve fiyat tahmini yazılarını ATLA.\n"
+    "- Başlık bir varlığın zaten yükseldiğini/düştüğünü söylüyorsa bu yeni bilgi değildir; ATLA.\n"
+    "- Bir kripto haberinden başka kripto paralara etki çıkarma; yalnız haberde adı geçen varlık.\n"
+    "- Haberde adı geçen şirket/emtia ilk adaydır; dolaylı etki yalnız mekanizma çok netse.\n"
+    "- Yön = sonucun varlığın FİYATINA etkisi. Örnekler: büyük alıcı varlığı satın alıyor → talep artar → up; "
+    "arz kesintisi/grev/yasak → up; üretim/ihracat artışı → down; satın alınan (hedef) şirket → up; "
+    "getiriler yükselir → tahvil fonu down.\n"
+    "- Endeks değil işlem gören araç ver (S&P 500 yerine SPY).\n"
+    "- Sembol Yahoo Finance biçiminde: vadeli 'KC=F', ETF 'COPX', hisse 'FCX', kripto 'SOL-USD', döviz 'EURUSD=X'.\n"
+    "Yalnız en önemli en fazla {max_events} başlık, her biri için en fazla {max_assets} varlık. "
+    "Sonucu ve mekanizmayı Türkçe ve kısa yaz. Yalnız JSON:\n"
+    '{{"e":[{{"h":<başlık no>,"c":"<sonuç, ≤14 kelime>","a":[{{"t":"<sembol>","n":"<varlık adı>",'
+    '"m":"<mekanizma, ≤10 kelime>","d":"up|down","k":"low|med|high"}}]}}]}}'
 )
 
 
@@ -273,7 +285,7 @@ def parse_extraction(text: str, n_titles: int, *, max_events: int = 4, max_asset
             if not t or len(t) > 15 or d not in ("up", "down"):
                 continue
             assets.append({"t": t, "n": str(a.get("n") or "").strip()[:80], "d": d,
-                           "k": k if k in _CONF_W else "med"})
+                           "k": k if k in _CONF_W else "med", "m": str(a.get("m") or "").strip()[:100]})
         if not assets:
             continue
         used.add(h)
@@ -417,10 +429,41 @@ def resolve(proposal: Mapping[str, Any], state: dict, cfg: Mapping[str, Any], no
 # 4) Aday defteri
 # ---------------------------------------------------------------------------
 
+_CRYPTO_ALIASES = {"btc": {"bitcoin"}, "eth": {"ether", "ethereum"}, "sol": {"solana"}, "xrp": {"ripple"}}
+_STORY_COMMON = {
+    "this", "that", "with", "after", "amid", "over", "from", "into", "says", "said", "report", "reports",
+    "news", "update", "stocks", "stock", "shares", "price", "prices", "market", "markets", "world", "global",
+    "latest", "breaking", "exclusive", "analysis", "opinion", "week", "year", "today", "daily", "more",
+    "supply", "demand", "output", "deal", "talks", "data", "rate", "rates", "record", "plans", "buys", "sells",
+    "first", "new", "could", "will", "what", "when", "here", "there", "they", "their", "about",
+}
+
+
+def _is_crypto(res: Mapping[str, Any]) -> bool:
+    return res.get("asset_type") == "crypto" or str(res.get("ticker") or "").upper().endswith("-USD")
+
+
+def mentioned_in(title: str, res: Mapping[str, Any], llm_name: str) -> bool:
+    """Varlık başlıkta adıyla/sembolüyle geçiyor mu (kriptodan kriptoya bulaşmayı eler)."""
+    words = set(re.findall(r"[a-z0-9]+", title.lower()))
+    base = re.split(r"[=\-.^]", str(res.get("ticker") or "").upper())[0].lower()
+    names = _tokens(str(res.get("name") or "")) | _tokens(llm_name) | {base} | _CRYPTO_ALIASES.get(base, set())
+    return bool(words & {n for n in names if n})
+
+
+def _story_tokens(title: str, exclude: set[str]) -> set[str]:
+    """Hikâyeyi tanıtan büyük harfli kelimeler (aynı haberin farklı kaynaklardaki tekrarını bulmak için)."""
+    toks = {w.lower().removesuffix("'s") for w in re.findall(r"[A-Z][A-Za-z0-9'&\-]{3,}", title)}
+    return toks - _STORY_COMMON - exclude
+
+
 def candidates(state: Mapping[str, Any], cfg: Mapping[str, Any], now: datetime) -> list[dict]:
-    """Olaylardan doğrulanmış (kayıt dışı) adaylar; güce göre sıralı."""
+    """Olaylardan doğrulanmış (kayıt dışı) adaylar; güce göre sıralı. Aynı hikâyenin 24 saat
+    içindeki tekrarları (ör. üç kaynakta "Bitmine ETH aldı") ağırlığa bir kez girer."""
     agg: dict[str, dict] = {}
-    for ev in state.get("events") or []:
+    counted: dict[tuple[str, str], list[tuple[datetime, set[str]]]] = {}
+    events = sorted(state.get("events") or [], key=lambda e: str(e.get("ts") or e.get("analyzed_at") or ""))
+    for ev in events:
         t = _parse(ev.get("ts")) or _parse(ev.get("analyzed_at")) or now
         decay = math.exp(-math.log(2) * max(0.0, (now - t).total_seconds() / 3600.0) / cfg["half_life_hours"])
         for a in ev.get("assets") or []:
@@ -432,10 +475,16 @@ def candidates(state: Mapping[str, Any], cfg: Mapping[str, Any], now: datetime) 
                 "first_seen": ev.get("analyzed_at"), "price": a.get("price"),
                 "chg_7d_pct": a.get("chg_7d_pct"), "chg_30d_pct": a.get("chg_30d_pct"),
             })
-            w = _CONF_W.get(a.get("confidence") or "med", 1.0) * decay
-            c["up_w" if a.get("direction") == "up" else "down_w"] += w
             c["events"].append(ev["id"])
             c["last_seen"] = ev.get("analyzed_at")
+            exclude = _tokens(str(a.get("name") or "")) | {str(a.get("symbol") or "").lower()}
+            story = _story_tokens(str(ev.get("title") or ""), exclude)
+            seen = counted.setdefault((a["symbol"], str(a.get("direction"))), [])
+            if any(abs((t - t0).total_seconds()) <= 86400 and story & s0 for t0, s0 in seen):
+                continue  # aynı hikâye → ağırlık bir kez
+            seen.append((t, story))
+            w = _CONF_W.get(a.get("confidence") or "med", 1.0) * decay
+            c["up_w" if a.get("direction") == "up" else "down_w"] += w
     out = []
     for c in agg.values():
         score = c["up_w"] - c["down_w"]
@@ -501,6 +550,34 @@ def run(
         registry = registry if registry is not None else registry_ticker_map()
         commodity_by_ticker = _commodity_by_ticker(discovery_cfg)
         budget = [cfg["max_new_resolutions_per_run"]]
+
+        def _resolve(prop: Mapping[str, Any], title: str) -> dict:
+            res = resolve(prop, state, cfg, now, registry=registry, commodity_by_ticker=commodity_by_ticker,
+                          fetch_chart=fetch_chart, search=search, budget=budget)
+            if res["status"] in ("valid", "registry") and _is_crypto(res) and not mentioned_in(title, res, prop["n"]):
+                res = {"status": "rejected", "ticker": res.get("ticker"), "name": prop["n"],
+                       "reason": "haberde_gecmiyor"}  # kriptodan kriptoya bulaşma çıkarımı
+            return res
+
+        def _count(res: Mapping[str, Any]) -> None:
+            stats["proposed"] += 1
+            if res["status"] in ("valid", "registry"):
+                stats[res["status"]] += 1
+            elif res["status"] == "rejected":
+                r = str(res.get("reason") or "?").split(":")[0]
+                stats["rejected"][r] = stats["rejected"].get(r, 0) + 1
+
+        # Önceki turlarda doğrulama kotasına takılan öneriler önce (en yeni olaydan başlayarak).
+        for ev in reversed(state.get("events") or []):
+            for i_a, a in enumerate(ev.get("assets") or []):
+                if a.get("status") != "deferred" or budget[0] <= 0:
+                    continue
+                prop = {"t": a.get("proposed_ticker") or a.get("ticker"), "n": a.get("name") or ""}
+                res = _resolve(prop, ev["title"])
+                if res["status"] != "deferred":
+                    _count(res)
+                    ev["assets"][i_a] = {**res, **{k: a.get(k) for k in
+                                                   ("proposed_ticker", "direction", "confidence", "mechanism")}}
         pending = _pending(state, cfg, now)
         per_call = cfg["headlines_per_call"]
         for i in range(cfg["calls_per_run"]):
@@ -533,16 +610,11 @@ def run(
                 head = batch[ev["h"] - 1]
                 assets = []
                 for prop in ev["a"]:
-                    res = resolve(prop, state, cfg, now, registry=registry, commodity_by_ticker=commodity_by_ticker,
-                                  fetch_chart=fetch_chart, search=search, budget=budget)
-                    stats["proposed"] += 1
-                    if res["status"] in ("valid", "registry"):
-                        stats[res["status"]] += 1
-                    elif res["status"] == "rejected":
-                        r = str(res.get("reason") or "?").split(":")[0]
-                        stats["rejected"][r] = stats["rejected"].get(r, 0) + 1
+                    res = _resolve(prop, head["title"])
+                    if res["status"] != "deferred":
+                        _count(res)
                     assets.append({**res, "proposed_ticker": prop["t"], "direction": prop["d"],
-                                   "confidence": prop["k"]})
+                                   "confidence": prop["k"], "mechanism": prop.get("m") or None})
                 state["events"].append({
                     "id": head["key"], "title": head["title"], "source": head["source"], "ts": head["ts"],
                     "consequence": ev["c"], "assets": assets, "analyzed_at": _iso(now),
@@ -605,7 +677,7 @@ def chains_for(symbols: Iterable[str], limit: int = 3) -> dict[str, list[dict]]:
             if len(rows) < limit and all(r["title"] != ev["title"] for r in rows):
                 rows.append({"title": ev["title"], "source": ev.get("source"), "ts": ev.get("ts"),
                              "consequence": ev.get("consequence"), "direction": a.get("direction"),
-                             "confidence": a.get("confidence")})
+                             "confidence": a.get("confidence"), "mechanism": a.get("mechanism")})
     return out
 
 
@@ -619,7 +691,7 @@ def viewmodel(limit_events: int = 12) -> dict:
     for ev in reversed(state.get("events") or []):
         shown = [
             {k: a.get(k) for k in ("symbol", "ticker", "name", "asset_type", "direction", "confidence", "status",
-                                   "reason", "proposed_ticker")}
+                                   "reason", "proposed_ticker", "mechanism")}
             for a in ev.get("assets") or []
         ]
         if not any(a["status"] in ("valid", "registry") for a in shown):

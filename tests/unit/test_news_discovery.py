@@ -105,7 +105,7 @@ def test_parse_extraction_filters_and_salvages_truncated_json():
             '{"h":2,"c":"bad dir","a":[{"t":"KC=F","n":"Coffee","d":"sideways","k":"high"}]},'
             '{"h":3,"c":"kesik","a":[{"t":"ZW=F","n":"Wh')  # kesik
     out = nd.parse_extraction(text, 3)
-    assert out == [{"h": 1, "c": "x", "a": [{"t": "FCX", "n": "Freeport", "d": "up", "k": "med"}]}]
+    assert out == [{"h": 1, "c": "x", "a": [{"t": "FCX", "n": "Freeport", "d": "up", "k": "med", "m": ""}]}]
     assert nd.parse_extraction("model cevap veremedi", 3) is None
 
 
@@ -206,3 +206,58 @@ def test_candidates_decay_and_expire(store):
     assert later["COFFEE"]["strength"] < fresh                               # yarı-ömürle zayıflar
     _run(FakeClient(text='{"e":[]}'), Net(heads=["Third"]), now=NOW + timedelta(hours=80))
     assert nd.all_candidates() == []                                        # 72 saatlik defter
+
+
+# ---------------- kalite süzgeçleri (canlı kuru deneme bulguları, 2026-10-05) ----------------
+
+CRYPTO_CHARTS = {
+    "XRP-USD": ({"symbol": "XRP-USD", "instrumentType": "CRYPTOCURRENCY", "shortName": "XRP USD"},
+                _bars(close=2.5, volume=9e8)),
+    "ETH-USD": None,
+}
+
+
+def test_crypto_contagion_is_rejected_but_named_crypto_kept(store):
+    net = Net(heads=["Strive buys 2,000 Bitcoin as treasury push grows", "XRP treasury firm files for listing"])
+    net.charts_map = {**CHARTS, **CRYPTO_CHARTS}
+    net.chart = lambda t: net.charts_map.get(t)
+    text = json.dumps({"e": [
+        {"h": 1, "c": "Kurumsal BTC talebi", "a": [{"t": "BTC-USD", "n": "Bitcoin", "d": "up", "k": "high"},
+                                                   {"t": "XRP-USD", "n": "XRP", "d": "up", "k": "high"}]},
+        {"h": 2, "c": "XRP talebi", "a": [{"t": "XRP-USD", "n": "XRP", "d": "up", "k": "med", "m": "kurumsal alım"}]},
+    ]})
+    out = _run(FakeClient(text=text), net)
+    assert out["rejected"] == {"haberde_gecmiyor": 1}                    # BTC haberinden XRP çıkarımı
+    ev = {e["title"]: e for e in nd.viewmodel()["events"]}
+    btc_ev = ev["Strive buys 2,000 Bitcoin as treasury push grows"]
+    assert [a["status"] for a in btc_ev["assets"]] == ["registry", "rejected"]
+    xrp = ev["XRP treasury firm files for listing"]["assets"][0]
+    assert xrp["status"] == "valid" and xrp["mechanism"] == "kurumsal alım"
+
+
+def test_same_story_from_several_sources_counts_once(store):
+    heads = ["Bitmine buys $41M more Freeport stock", "Tom Lee's Bitmine nears 5% of Freeport float",
+             "Freeport wins new Indonesia export permit"]
+    text = json.dumps({"e": [
+        {"h": i, "c": "x", "a": [{"t": "FCX", "n": "Freeport-McMoRan", "d": "up", "k": "high"}]} for i in (1, 2, 3)
+    ]})
+    _run(FakeClient(text=text), Net(heads=heads))
+    fcx = nd.all_candidates()[0]
+    assert fcx["n_events"] == 3
+    assert fcx["up_w"] < 3 * 1.5 * 0.99 and fcx["up_w"] > 2 * 1.5 * 0.98   # 2 hikâye (Bitmine ×2 tek sayıldı)
+
+
+def test_deferred_proposals_are_retried_next_run(store):
+    cfg = {**CFG, "news_discovery": {**CFG["news_discovery"], "max_new_resolutions_per_run": 1}}
+    net, text = Net(), json.dumps({"e": [{"h": 1, "c": "x", "a": [
+        {"t": "FCX", "n": "Freeport-McMoRan", "d": "up", "k": "high"},
+        {"t": "COPX", "n": "Copper Miners", "d": "up", "k": "med"}]}]})
+    nd.run(NOW, discovery_cfg=cfg, client_factory=lambda: FakeClient(text=text), fetch_group=net.group,
+           fetch_chart=net.chart, search=net.search, registry=REGISTRY)
+    statuses = [a["status"] for a in nd.viewmodel()["events"][0]["assets"]]
+    assert statuses == ["valid", "deferred"]
+    nd.run(NOW + timedelta(minutes=5), discovery_cfg=cfg, client_factory=lambda: FakeClient(text='{"e":[]}'),
+           fetch_group=net.group, fetch_chart=net.chart, search=net.search, registry=REGISTRY)
+    copx = nd.viewmodel()["events"][0]["assets"][1]
+    assert copx["status"] == "valid" and copx["symbol"] == "COPX"          # yeniden denendi, doğrulandı
+    assert copx["direction"] == "up" and copx["confidence"] == "med" and copx["proposed_ticker"] == "COPX"

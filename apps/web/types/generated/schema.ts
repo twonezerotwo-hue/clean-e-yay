@@ -4011,6 +4011,7 @@ export interface components {
             status: "valid" | "registry" | "rejected" | "deferred";
             reason?: string | null;
             proposed_ticker?: string | null;
+            mechanism?: string | null;
         };
         NewsDiscoveryCandidate: {
             symbol: string;
@@ -4035,6 +4036,7 @@ export interface components {
             consequence?: string | null;
             direction?: string | null;
             confidence?: string | null;
+            mechanism?: string | null;
         };
         Idea: {
             symbol: string;

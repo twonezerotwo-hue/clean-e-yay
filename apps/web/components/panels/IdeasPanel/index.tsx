@@ -131,6 +131,7 @@ function IdeaCard({ idea }: { idea: Idea }) {
               <span className="text-white/80">{link.title}</span>
               {link.consequence ? <span className="text-white/50"> → {link.consequence}</span> : null}
               <span className="text-white/50"> → {newsArrow(link.direction ?? undefined)} {idea.symbol}</span>
+              {link.mechanism ? <span className="text-white/35"> ({link.mechanism})</span> : null}
             </div>
           ))}
         </div>
