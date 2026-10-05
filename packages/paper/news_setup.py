@@ -9,6 +9,7 @@ position.
 from __future__ import annotations
 
 import hashlib
+import re
 from collections.abc import Iterable, Mapping
 from datetime import UTC, datetime, timedelta
 from typing import Any
@@ -18,6 +19,7 @@ from packages.data.registry.loader import load_thresholds
 from packages.paper.state import NewsPreparedSetup, PaperState
 
 _RISK_BLOCKS = {"KILL_SWITCH", "RISK_REDUCE", "NO_POSITION_INCREASE"}
+_EVIDENCE_TAG = re.compile(r"^[A-Za-z_]+:\S")  # "causal:BTCUSD/1d" gibi etiketler başlık değildir
 
 
 def _iso(value: datetime) -> str:
@@ -58,18 +60,15 @@ def _setup_id(symbol: str, timeframe: str, side: str, event_id: str) -> str:
     return "news::" + hashlib.sha1(raw.encode("utf-8")).hexdigest()[:12]
 
 
-def _event_context(world_state: Mapping[str, Any], headlines: Iterable[Any] | None) -> tuple[str, str, str, datetime | None, list[str]]:
+def _event_context(world_state: Mapping[str, Any]) -> tuple[str, str, str, datetime | None, list[str]]:
     events = [item for item in (world_state.get("geopolitical_events") or ()) if isinstance(item, Mapping)]
     event = events[0] if events else {}
     event_id = str(event.get("event_id") or event.get("id") or "world-event")
     event_type = str(event.get("event_type") or "WORLD_EVENT")
     evidence = [str(item) for item in (event.get("evidence") or ()) if item]
-    title = ""
-    for headline in headlines or ():
-        raw = headline if isinstance(headline, Mapping) else getattr(headline, "__dict__", {})
-        title = str((raw or {}).get("title") or "").strip()
-        if title:
-            break
+    # Etiket olayın KENDİ kanıt başlığıdır. Eskiden snapshot'ın ilk başlığı (olayla
+    # ilgisiz olabilir: "BNY–Kraken" başlığı TEM/NVDA kayıtlarına yapışıyordu) kullanılıyordu.
+    title = next((e.strip() for e in evidence if e.strip() and not _EVIDENCE_TAG.match(e)), "")
     title = title or event_type.replace("_", " ").title()
     valid_until = _parse_time(event.get("valid_until"))
     return event_id, event_type, title[:240], valid_until, evidence[:8]
@@ -110,7 +109,6 @@ def sync(
     decisions: Iterable[Any],
     risk_action: str,
     snapshot_id: str | None,
-    headlines: Iterable[Any] | None = None,
     now: datetime | None = None,
 ) -> dict[str, int]:
     """Refresh the expiring news setup queue and mark canonical activations.
@@ -125,7 +123,7 @@ def sync(
     if not cfg["enabled"]:
         return {"created": 0, "updated": 0, "expired": 0, "activated": 0}
 
-    event_id, event_type, title, event_valid_until, event_evidence = _event_context(world_state, headlines)
+    event_id, event_type, title, event_valid_until, event_evidence = _event_context(world_state)
     events = world_state.get("geopolitical_events") or ()
     if not events:
         return {"created": 0, "updated": 0, "expired": 0, "activated": 0}

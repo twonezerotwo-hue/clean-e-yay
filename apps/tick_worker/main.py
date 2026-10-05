@@ -514,7 +514,6 @@ async def run_once() -> None:
                     decisions=decisions,
                     risk_action=_risk.action,
                     snapshot_id=snap.snapshot_id,
-                    headlines=snap.headlines,
                     now=now,
                 )
         except Exception:

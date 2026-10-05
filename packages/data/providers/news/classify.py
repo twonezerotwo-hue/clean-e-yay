@@ -393,6 +393,12 @@ def direction_of(sentiment: Sentiment | None) -> float:
     return _dir(sentiment) if sentiment in ("bullish", "bearish", "neutral") else 0.0
 
 
+def _has_term(lower: str, term: str) -> bool:
+    """Kayıt defteri terimi kelime olarak geçiyor mu (alt-dize değil: "sys·tem" ≠ TEM,
+    "n·eth·ermind" ≠ ETH). Sağda yalnız Türkçe ek harfine izin verilir ("altın·ı")."""
+    return re.search(r"(?<!\w)" + re.escape(term) + r"(?![a-z0-9])", lower) is not None
+
+
 def classify_asset_impact(title: str, sentiment: Sentiment) -> dict[str, float]:
     """Başlıktan etkilenen sembolleri ve yönlerini çıkarır (eski Codex kural
     setinin Clean sembol evrenine indirgenmiş portu)."""
@@ -473,7 +479,7 @@ def classify_asset_impact(title: str, sentiment: Sentiment) -> dict[str, float]:
             asset_class = str(getattr(asset, "asset_class", "") or "").casefold()
             terms = {symbol.casefold(), label}
             terms.update(class_terms.get(asset_class, ()))
-            hits = sorted(term for term in terms if term and len(term) >= 3 and term in lower)
+            hits = sorted(term for term in terms if term and len(term) >= 3 and _has_term(lower, term))
             if hits:
                 impacts[symbol] = d
                 registry_terms[symbol] = hits

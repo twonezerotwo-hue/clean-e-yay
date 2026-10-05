@@ -193,6 +193,42 @@ def test_asset_impact_resolves_registry_label_for_runtime_asset(monkeypatch) -> 
     assert impact.get("NATGAS") == -1.0
 
 
+@pytest.mark.parametrize(
+    "title",
+    [
+        "BNY in talks with Kraken parent Payward over new settlement system",  # sys·tem
+        "Nethermind ships client upgrade",                                     # n·eth·ermind
+        "Traders temper expectations ahead of payrolls",                       # tem·per
+    ],
+)
+def test_registry_terms_match_whole_words_only(monkeypatch, title) -> None:
+    from types import SimpleNamespace
+
+    monkeypatch.setattr(
+        "packages.data.registry.assets.all_assets",
+        lambda: [
+            SimpleNamespace(symbol="TEM", label="tem", asset_class="risk"),
+            SimpleNamespace(symbol="ETHUSD", label="Ethereum", asset_class="crypto"),
+        ],
+    )
+    impact = classify.classify_asset_impact(title, "bearish")
+    assert "TEM" not in impact and "ETHUSD" not in impact, impact
+
+
+def test_registry_terms_still_match_words_and_turkish_suffix(monkeypatch) -> None:
+    from types import SimpleNamespace
+
+    monkeypatch.setattr(
+        "packages.data.registry.assets.all_assets",
+        lambda: [
+            SimpleNamespace(symbol="TEM", label="tem", asset_class="risk"),
+            SimpleNamespace(symbol="XAUTRY", label="altın", asset_class="other"),
+        ],
+    )
+    assert "TEM" in classify.classify_asset_impact("Tempus AI (TEM) shares jump 8%", "bullish")
+    assert "XAUTRY" in classify.classify_asset_impact("Gram altını rekor kırdı", "bullish")
+
+
 # ---------------- calendar YAML load ----------------
 
 def _write_cal(tmp_path, body: str):

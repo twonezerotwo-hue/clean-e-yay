@@ -90,3 +90,28 @@ def test_news_setup_marks_canonical_activation_only_after_position_exists():
         now=now + timedelta(minutes=1),
     )
     assert state.news_prepared_setups[0].status == "ACTIVATED"
+
+
+def test_news_setup_title_is_the_events_own_headline_not_first_snapshot_headline():
+    state = PaperState(100_000, 100_000)
+    world = _evidence()
+    world["geopolitical_events"][0]["evidence"] = ["causal:BTCUSD/1d", "Pentagon raises combat pay amid Iran war"]
+    sync(
+        state,
+        causal_shadow=_shadow(),
+        world_state=world,
+        prices={"BTCUSD": 85_000},
+        decisions=[],
+        risk_action="HOLD",
+        snapshot_id="snap-1",
+    )
+    assert state.news_prepared_setups[0].news_title == "Pentagon raises combat pay amid Iran war"
+
+
+def test_news_setup_title_falls_back_to_event_type_without_headline_evidence():
+    state = PaperState(100_000, 100_000)
+    world = _evidence()
+    world["geopolitical_events"][0]["evidence"] = []
+    sync(state, causal_shadow=_shadow(), world_state=world, prices={"BTCUSD": 85_000},
+         decisions=[], risk_action="HOLD", snapshot_id="snap-1")
+    assert state.news_prepared_setups[0].news_title == "Missile Attack"
