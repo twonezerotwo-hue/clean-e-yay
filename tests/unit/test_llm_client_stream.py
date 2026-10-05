@@ -115,6 +115,25 @@ def test_ollama_stream_parses_ndjson(llm_env, monkeypatch) -> None:
     assert dones[0].source == "ollama"
 
 
+def test_ollama_requests_disable_thinking(llm_env, monkeypatch) -> None:
+    """qwen3 düşünme metni num_predict'i yiyip cevabı kesiyordu → think=false."""
+    from packages.agent.llm import client as llm_client
+
+    sent: list[dict] = []
+
+    def _capture(req, timeout=None):
+        sent.append(json.loads(req.data.decode("utf-8")))
+        if sent[-1].get("stream"):
+            return io.BytesIO(json.dumps({"done": True}).encode() + b"\n")
+        return io.BytesIO(json.dumps({"message": {"content": "tamam"}}).encode())
+
+    monkeypatch.setattr(urllib.request, "urlopen", _capture)
+    client = llm_client.OllamaClient()
+    assert client.complete("s", "u", 10) is not None
+    list(client.stream(_MESSAGES, 10))
+    assert [b.get("think") for b in sent] == [False, False]
+
+
 # ---------- Mock stream ----------
 
 def test_mock_stream_delta_concat_equals_done_text(llm_env) -> None:

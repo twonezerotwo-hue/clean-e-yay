@@ -414,6 +414,9 @@ class OllamaClient:
                 "model": self.model,
                 "stream": False,
                 "keep_alive": self.keep_alive,
+                # qwen3 gibi düşünen modellerde düşünme metni num_predict'i yiyip
+                # cevabı kesiyordu (2026-10-05 ölçümü); anlatı için gerekmez.
+                "think": False,
                 "messages": [
                     {"role": "system", "content": system},
                     {"role": "user", "content": user},
@@ -460,6 +463,7 @@ class OllamaClient:
                 "model": self.model,
                 "stream": True,
                 "keep_alive": self.keep_alive,
+                "think": False,
                 "messages": messages,
                 "options": {
                     "temperature": float(temperature),
