@@ -40,6 +40,8 @@ data/runtime.bak-*/
 # lokal veri, git ile tasinmaz (korpus yoksa kitap kaniti UNAVAILABLE doner).
 data/archive/
 data/knowledge/
+# Yerel egitilen modeller/adaptorler (yuzlerce MB, telifli veriden turetilmis).
+data/models/
 *.log
 
 # OS
