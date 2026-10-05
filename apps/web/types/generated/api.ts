@@ -2272,6 +2272,7 @@ export type DiscoveryUniverse = {
   results_n: number;
   crypto: { status: string; count: number; fetched_at?: string | null };
   sectors: { rising_n: number; symbols: string[] };
+  commodities?: { status: string; count: number; fetched_at?: string | null; symbols: string[] };
 };
 
 export type DiscoveryScan = {

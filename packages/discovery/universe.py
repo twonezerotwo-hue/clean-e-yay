@@ -1,9 +1,10 @@
 """Keşif evreni (K-1) — aday kaynakları.
 
-İki kaynak: (1) kripto top-50 (CoinGecko markets tek liste çağrısı —
+Üç kaynak: (1) kripto top-50 (CoinGecko markets tek liste çağrısı —
 ön-süzgeç + momentum kısa listesi; 50 coin'e kör OHLCV çekilmez, API bütçesi
 discovery.yaml'da belgeli), (2) sıcak sektörler (K-0b sektör rotasyon
-artifact'ından RISING ETF'ler). Veri gelmezse boş liste — mock aday YOK
+artifact'ından RISING ETF'ler), (3) emtia (Yahoo vadeli/ETF; momentum kısa
+listesi, owner kararı 2026-10-05). Veri gelmezse boş liste — mock aday YOK
 (DATA_POLICY). İşlem açmaz; yalnız tarayıcıya (scanner) aday listesi verir.
 """
 from __future__ import annotations
@@ -117,6 +118,71 @@ def crypto_shortlist(cfg: dict, fetch_json: FetchJson | None = None) -> dict:
         "status": "OK",
         "fetched_at": fetched_at,
         "universe_n": len(rows),
+        "eligible_n": len(eligible),
+        "candidates": eligible[:shortlist_n],
+    }
+
+
+TickerBarsFn = Callable[[str, str, str], list | None]  # (ticker, symbol, tf)
+
+
+def _pct_change(closes: list[float], n: int) -> float | None:
+    if len(closes) <= n or not closes[-1 - n]:
+        return None
+    return (closes[-1] / closes[-1 - n] - 1.0) * 100.0
+
+
+def commodity_shortlist(
+    cfg: dict, fetch_bars: TickerBarsFn | None = None, now: datetime | None = None
+) -> dict:
+    """Emtia listesinden momentum kısa listesi (owner kararı 2026-10-05).
+
+    Her emtia için TEK günlük bar çağrısı (Yahoo ticker); 30g/7g momentum harmanı
+    kripto kısa listesiyle aynı (`_W_30D/_W_7D`, yalnız pozitif → LONG-only).
+    Veri gelmeyen emtia atlanır; hiçbiri gelmezse status=UNAVAILABLE (mock yok).
+    """
+    from packages.data.providers.ohlcv import yfinance  # yalnız emtia dalında gerekir
+
+    items = dict(cfg.get("items") or {})
+    shortlist_n = int(cfg.get("shortlist_n", 4))
+    fetched_at = (now or datetime.now(UTC)).isoformat()
+    fetch = fetch_bars or yfinance.fetch_by_ticker
+
+    eligible: list[dict] = []
+    fetched = 0
+    for symbol, meta in items.items():
+        meta = dict(meta or {})
+        ticker = str(meta.get("ticker") or "")
+        if not ticker:
+            continue
+        bars = [b for b in (fetch(ticker, str(symbol), "1d") or []) if getattr(b, "verified", True)]
+        closes = [float(b.close) for b in bars if b.close]
+        if len(closes) < 31:
+            continue  # 30g momentum ölçülemiyor → aday değil (uydurma yok)
+        fetched += 1
+        chg7, chg30 = _pct_change(closes, 7), _pct_change(closes, 30)
+        if chg7 is None or chg30 is None:
+            continue
+        momentum = _W_30D * chg30 + _W_7D * chg7
+        if momentum <= 0:
+            continue
+        eligible.append({
+            "symbol": str(symbol),
+            "ticker": ticker,
+            "name": str(meta.get("label") or symbol),
+            "chg_7d_pct": round(chg7, 2),
+            "chg_30d_pct": round(chg30, 2),
+            "momentum": round(momentum, 4),
+        })
+
+    if not fetched:
+        return {"status": "UNAVAILABLE", "fetched_at": fetched_at,
+                "universe_n": len(items), "eligible_n": 0, "candidates": []}
+    eligible.sort(key=lambda x: -x["momentum"])
+    return {
+        "status": "OK",
+        "fetched_at": fetched_at,
+        "universe_n": len(items),
         "eligible_n": len(eligible),
         "candidates": eligible[:shortlist_n],
     }

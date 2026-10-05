@@ -4948,6 +4948,15 @@ components:
           properties:
             rising_n: { type: integer }
             symbols: { type: array, items: { type: string } }
+        commodities:
+          type: object
+          description: Emtia kısa listesi (Yahoo vadeli/ETF; momentum; owner kararı 2026-10-05)
+          required: [status, count, symbols]
+          properties:
+            status: { type: string }
+            count: { type: integer }
+            fetched_at: { type: string, nullable: true }
+            symbols: { type: array, items: { type: string } }
 
     DiscoveryScan:
       type: object

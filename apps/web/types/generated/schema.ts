@@ -3966,6 +3966,13 @@ export interface components {
                 rising_n: number;
                 symbols: string[];
             };
+            /** @description Emtia kısa listesi (Yahoo vadeli/ETF; momentum; owner kararı 2026-10-05) */
+            commodities?: {
+                status: string;
+                count: number;
+                fetched_at?: string | null;
+                symbols: string[];
+            };
         };
         DiscoveryScan: {
             cursor: number;

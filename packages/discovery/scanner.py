@@ -31,7 +31,7 @@ import yaml
 from packages.data import snapshot_store
 from packages.data.providers import ohlcv
 from packages.data.providers.ohlcv import coingecko as cg_ohlcv
-from packages.data.providers.ohlcv import resample
+from packages.data.providers.ohlcv import resample, yfinance
 from packages.data.providers.technical.timeframe import build_timeframe_result
 from packages.data.registry.loader import CONFIG_DIR, load_thresholds
 from packages.data.types import OHLCVBar
@@ -54,6 +54,7 @@ _RESULTS_CAP = 100
 
 BarsFn = Callable[[str, str], list[OHLCVBar]]
 CryptoBarsFn = Callable[[str, str, str], list[OHLCVBar] | None]  # (cg_id, symbol, tf)
+TickerBarsFn = Callable[[str, str, str], list[OHLCVBar] | None]  # (yahoo ticker, symbol, tf)
 
 
 def _out_path() -> Path:
@@ -90,10 +91,12 @@ def _regime_label() -> str:
 
 
 def _candidate_bars(
-    cand: dict, tf: str, *, get_bars: BarsFn, fetch_crypto: CryptoBarsFn
+    cand: dict, tf: str, *, get_bars: BarsFn, fetch_crypto: CryptoBarsFn,
+    fetch_ticker: TickerBarsFn | None = None,
 ) -> list[OHLCVBar]:
     """ETF → OHLCV orchestrator (cache'li); kripto → fetch_by_ticker (TTL
-    throttle'lı; 4h yerelde 1h'ten resample — ek çağrı yok)."""
+    throttle'lı; 4h yerelde 1h'ten resample — ek çağrı yok); emtia → Yahoo
+    ticker (`ohlcv.yfinance.fetch_by_ticker`; 4h aynı şekilde 1h'ten)."""
     if cand.get("kind") == "crypto":
         cg_id, sym = str(cand.get("cg_id") or ""), str(cand["symbol"])
         if not cg_id:
@@ -102,6 +105,14 @@ def _candidate_bars(
             base = fetch_crypto(cg_id, sym, "1h") or []
             return resample.resample(base, "4h")
         return fetch_crypto(cg_id, sym, tf) or []
+    if cand.get("kind") == "commodity":
+        ticker, sym = str(cand.get("ticker") or ""), str(cand["symbol"])
+        fetch = fetch_ticker or yfinance.fetch_by_ticker
+        if not ticker:
+            return []
+        if tf == "4h":
+            return resample.resample(fetch(ticker, sym, "1h") or [], "4h")
+        return fetch(ticker, sym, tf) or []
     return get_bars(cand["symbol"], tf)
 
 
@@ -113,6 +124,7 @@ def _analyze(
     get_bars: BarsFn,
     fetch_crypto: CryptoBarsFn,
     now: datetime,
+    fetch_ticker: TickerBarsFn | None = None,
 ) -> dict:
     symbol = str(cand["symbol"])
     th = load_thresholds()
@@ -122,7 +134,11 @@ def _analyze(
 
     per_tf: dict[str, dict] = {}
     for tf in TFS:
-        bars = [b for b in _candidate_bars(cand, tf, get_bars=get_bars, fetch_crypto=fetch_crypto) if b.verified]
+        bars = [
+            b for b in _candidate_bars(cand, tf, get_bars=get_bars, fetch_crypto=fetch_crypto,
+                                       fetch_ticker=fetch_ticker)
+            if b.verified
+        ]
         if len(bars) < min_bars:
             per_tf[tf] = {"status": "NO_DATA", "bars": len(bars)}
             continue
@@ -210,6 +226,7 @@ def run_if_due(
     fetch_json=None,
     get_bars: BarsFn | None = None,
     fetch_crypto_bars: CryptoBarsFn | None = None,
+    fetch_ticker_bars: TickerBarsFn | None = None,
 ) -> dict:
     """Learning worker adımı: interval dolmadıysa CACHED; dolduysa kota kadar
     adayı round-robin analiz edip artifact'ı günceller."""
@@ -247,11 +264,32 @@ def run_if_due(
     if not reuse:
         crypto_uni = universe.crypto_shortlist(crypto_cfg, fetch_json=fetch_json)
 
+    # Emtia kısa listesi (owner kararı 2026-10-05): kripto gibi TTL içinde yeniden
+    # kullanılır (emtia başına bir günlük bar çağrısı / ranking_ttl_sec).
+    commodity_cfg = dict(cfg.get("commodities") or {})
+    commodity_uni = dict(prev.get("commodity_universe") or {})
+    if commodity_cfg.get("items"):
+        c_ttl = int(commodity_cfg.get("ranking_ttl_sec", 3600))
+        c_fetched = str(commodity_uni.get("fetched_at") or "")
+        c_reuse = False
+        if c_fetched and commodity_uni.get("status") == "OK":
+            try:
+                c_reuse = 0 <= (now - datetime.fromisoformat(c_fetched)).total_seconds() < c_ttl
+            except ValueError:
+                c_reuse = False
+        if not c_reuse:
+            commodity_uni = universe.commodity_shortlist(commodity_cfg, fetch_bars=fetch_ticker_bars, now=now)
+    else:
+        commodity_uni = {}
+
     sector_cands = universe.sector_candidates()
     crypto_cands = [
         {**c, "kind": "crypto"} for c in (crypto_uni.get("candidates") or [])
     ]
-    candidates = sector_cands + crypto_cands
+    commodity_cands = [
+        {**c, "kind": "commodity"} for c in (commodity_uni.get("candidates") or [])
+    ]
+    candidates = sector_cands + crypto_cands + commodity_cands
 
     regime_label = _regime_label()
     results = dict(prev.get("results") or {})
@@ -286,6 +324,7 @@ def run_if_due(
             res = _analyze(
                 cand, regime_label=regime_label, min_bars=min_bars,
                 get_bars=bars_fn, fetch_crypto=fetch_crypto, now=now,
+                fetch_ticker=fetch_ticker_bars,
             )
             results[sym] = res
             scanned.append(sym)
@@ -312,9 +351,11 @@ def run_if_due(
             if kind != "sector_etf":
                 return None
             cand = {"symbol": sym, "kind": "sector_etf"}
-        if cand.get("kind") == "crypto" and sym not in scanned_set:
+        # Kripto ve emtia barı yalnız bu koşuda zaten taranan sembol için (API bütçesi).
+        if cand.get("kind") in ("crypto", "commodity") and sym not in scanned_set:
             return None
-        bars = _candidate_bars(cand, tf, get_bars=bars_fn, fetch_crypto=fetch_crypto)
+        bars = _candidate_bars(cand, tf, get_bars=bars_fn, fetch_crypto=fetch_crypto,
+                               fetch_ticker=fetch_ticker_bars)
         return [b for b in bars if b.verified]
 
     ledger_run = shadow_ledger.process_run(
@@ -330,6 +371,7 @@ def run_if_due(
         "regime": regime_label,
         "cursor": cursor,
         "crypto_universe": crypto_uni,
+        "commodity_universe": commodity_uni,
         "rising_sectors": sector_cands,
         "results": results,
         "signal_symbols": sorted(str(s["symbol"]) for s in signals),
@@ -420,6 +462,7 @@ def viewmodel() -> dict:
     )
 
     crypto_uni = dict(art.get("crypto_universe") or {})
+    commodity_uni = dict(art.get("commodity_universe") or {})
     rising = list(art.get("rising_sectors") or [])
     signal_symbols = list(art.get("signal_symbols") or [])
 
@@ -439,6 +482,12 @@ def viewmodel() -> dict:
             "sectors": {
                 "rising_n": len(rising),
                 "symbols": [str(c.get("symbol")) for c in rising if c.get("symbol")],
+            },
+            "commodities": {
+                "status": str(commodity_uni.get("status") or "UNKNOWN"),
+                "count": len(commodity_uni.get("candidates") or []),
+                "fetched_at": commodity_uni.get("fetched_at"),
+                "symbols": [str(c.get("symbol")) for c in (commodity_uni.get("candidates") or [])],
             },
         },
         "scan": {

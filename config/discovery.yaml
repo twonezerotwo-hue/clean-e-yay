@@ -54,6 +54,31 @@ promotion:
   min_resolved_decisive: 20   # ≥20 çözülmüş kararlı sinyal (missed_win+avoided_loss; expired hariç)
   min_timeframes: 2           # ≥2 farklı TF'de sinyal (tek-TF şansı elenir)
 
+# Emtia evreni (owner kararı 2026-10-05). Yahoo vadeli kontrat/ETF ticker'ları
+# (mevcut ohlcv/yfinance.fetch_by_ticker). Sıralama: günlük barlardan 30g/7g
+# momentum harmanı (kripto kısa listesiyle aynı mantık; yalnız pozitif → LONG-only).
+# API bütçesi: ranking_ttl_sec içinde liste yeniden kullanılır (saatte ~14 çağrı).
+# Canlı evrendeki XAU/XAG/BRENT burada TEKRAR EDİLMEZ. keywords: haber eşlemesi
+# (kelime sınırıyla aranır; "mısır" Türkçede ülke adı da olduğu için kullanılmaz).
+commodities:
+  shortlist_n: 4
+  ranking_ttl_sec: 3600
+  items:
+    COPPER:    { ticker: "HG=F", label: "Bakır",          keywords: ["copper", "bakır"] }
+    NATGAS:    { ticker: "NG=F", label: "Doğalgaz",       keywords: ["natural gas", "lng", "henry hub", "doğalgaz"] }
+    WTI:       { ticker: "CL=F", label: "WTI petrol",     keywords: ["wti", "crude oil", "oil prices", "ham petrol"] }
+    PLATINUM:  { ticker: "PL=F", label: "Platin",         keywords: ["platinum", "platin"] }
+    PALLADIUM: { ticker: "PA=F", label: "Paladyum",       keywords: ["palladium", "paladyum"] }
+    WHEAT:     { ticker: "ZW=F", label: "Buğday",         keywords: ["wheat", "buğday"] }
+    CORN:      { ticker: "ZC=F", label: "Mısır (tahıl)",  keywords: ["corn"] }
+    SOYBEAN:   { ticker: "ZS=F", label: "Soya",           keywords: ["soybean", "soybeans", "soya"] }
+    COFFEE:    { ticker: "KC=F", label: "Kahve",          keywords: ["coffee", "arabica", "kahve"] }
+    SUGAR:     { ticker: "SB=F", label: "Şeker",          keywords: ["sugar prices", "raw sugar", "şeker fiyat"] }
+    COCOA:     { ticker: "CC=F", label: "Kakao",          keywords: ["cocoa", "kakao"] }
+    COTTON:    { ticker: "CT=F", label: "Pamuk",          keywords: ["cotton", "pamuk"] }
+    URANIUM:   { ticker: "URA",  label: "Uranyum (ETF)",  keywords: ["uranium", "uranyum"] }
+    LITHIUM:   { ticker: "LIT",  label: "Lityum (ETF)",   keywords: ["lithium", "lityum"] }
+
 sector_rotation:
   # Göreli güç kıyas çıpası (assets.yaml'daki S&P 500 — OHLCV'de zaten var).
   benchmark: SP500
