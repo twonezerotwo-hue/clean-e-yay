@@ -231,9 +231,7 @@ def _default_client() -> Any:
     """Yalnız yerel Ollama — uzak sağlayıcıya düşmez (kota/ücret yemez)."""
     from packages.agent.llm import client as llm
 
-    if llm.get_mode() != "ollama":
-        return None
-    return llm.OllamaClient()
+    return llm.get_local_client()
 
 
 def _loads_salvage(text: str) -> dict | None:

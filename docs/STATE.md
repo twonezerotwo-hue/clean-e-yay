@@ -135,10 +135,11 @@ hiçbiri işlem açmaz, işlem evrenine varlık eklemez, RiskGate'e dokunmaz:
    `NEWS_FORECAST_LEDGER_PATH`'e yazılır ve 4sa/1g/3g sonra çözülür (öngörü karnesi).
 3. **Fikirler** (`packages/discovery/ideas.py`): teknik sinyal veren veya güçlü yukarı
    haber öngörüsü olan keşif adayları şeffaf skorla (teknik ≤40 + karne ≤25 + haber
-   ± − risk cezası) sıralanır. İlk 5 fikir yerel LLM'e (`get_client()`, Ollama
-   `OLLAMA_MODEL`) "fikir eleştirmeni" olarak sorulur: HÜKÜM (GÜÇLÜ/İZLE/ZAYIF), tez,
-   lehte/aleyhte, riskler. Turda en çok 2 çağrı; dosya değişmedikçe 12 saat önbellek;
-   LLM yoksa deterministik değerlendirme. Sonuç `IDEA_BOARD_PATH`
+   ± − risk cezası) sıralanır. İlk 5 fikir yalnız yerel modele (`get_local_client()`,
+   Ollama `OLLAMA_MODEL`; uzak sağlayıcıya düşmez, ortak LLM bütçesine yazılmaz)
+   "fikir eleştirmeni" olarak sorulur: HÜKÜM (GÜÇLÜ/İZLE/ZAYIF), tez, lehte/aleyhte,
+   riskler. Turda en çok 2 çağrı; dosya değişmedikçe 12 saat önbellek; yerel model
+   yoksa (AWS) deterministik değerlendirme. Sonuç `IDEA_BOARD_PATH`
    (`data/runtime/idea_board.json`).
 
 Haber öngörüsü YZ'nin bir varlığa bağladığı başlığı o varlık için doğrudan kanıt sayar

@@ -575,6 +575,13 @@ def _remote_fallback_clients() -> list[OpenRouterClient | GroqClient]:
     return clients
 
 
+def get_local_client() -> OllamaClient | None:
+    """Yalnız yerel model (Ollama modu); uzak sağlayıcıya DÜŞMEZ. Arka plan keşif işleri
+    (haber keşfi, fikir değerlendirmesi) için: ücretsizdir, ortak LLM bütçesine yazılmaz ve
+    uzak kotayı yemez. Yerel model yoksa (ör. AWS) None → çağıran kurallı yoldan devam eder."""
+    return OllamaClient() if get_mode() == "ollama" else None
+
+
 def get_client() -> MockLLMClient | GroqClient | OpenRouterClient | OllamaClient | FallbackLLMClient | None:
     """Aktif mod için client; off (veya anahtarsız remote) → None."""
     mode = get_mode()

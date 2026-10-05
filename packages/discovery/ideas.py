@@ -29,6 +29,7 @@ MAX_IDEAS = 12
 AI_TOP_N = 5
 AI_CALLS_PER_RUN = 2
 AI_MAX_AGE = timedelta(hours=12)
+AI_MAX_OUTPUT_TOKENS = 600
 STRONG_NEWS = 40
 _VERDICTS = {"GÜÇLÜ": "STRONG", "GUCLU": "STRONG", "İZLE": "WATCH", "IZLE": "WATCH",
              "ZAYIF": "WEAK", "STRONG": "STRONG", "WATCH": "WATCH", "WEAK": "WEAK"}
@@ -308,18 +309,15 @@ def fallback_evaluation(idea: Mapping[str, Any]) -> dict:
 
 
 def _llm_evaluate(idea: Mapping[str, Any], client: Any) -> tuple[dict | None, dict]:
-    from packages.agent.llm import budget
+    """Yalnız yerel modelle (get_local_client) çağrılır: ücretsizdir, ortak LLM bütçesine
+    YAZILMAZ. (İlk sürüm yerel tokenları ortak bütçeye yazıyordu; turda 2 çağrıyla günlük
+    bütçeyi doldurup sohbet/rapor gibi uzak-sağlayıcı işlerini durdurabiliyordu.)"""
     from packages.agent.llm.guard import SYSTEM_RULES
 
     user = _PROMPT.format(dossier=json.dumps(dossier(idea), ensure_ascii=False, default=str))
-    max_out = min(600, budget.max_tokens_per_request())
-    est = (len(SYSTEM_RULES) + len(user)) // 4 + max_out
-    if not budget.can_spend(est):
-        return None, {"error": "budget"}
-    comp = client.complete(SYSTEM_RULES, user, max_out)
+    comp = client.complete(SYSTEM_RULES, user, AI_MAX_OUTPUT_TOKENS)
     if comp is None:
         return None, {"error": "llm_unavailable"}
-    budget.record((comp.input_tokens + comp.output_tokens) or est)
     parsed = parse_evaluation(comp.text)
     return parsed, {"source": comp.source, "model": comp.model, "error": None if parsed else "unparsed"}
 
@@ -375,7 +373,7 @@ def run(
             if client is None:
                 from packages.agent.llm import client as llm_client
 
-                client = (client_factory or llm_client.get_client)() or False
+                client = (client_factory or llm_client.get_local_client)() or False
             if client:
                 llm_calls += 1
                 ev, meta = _llm_evaluate(idea, client)

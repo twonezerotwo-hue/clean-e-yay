@@ -147,3 +147,17 @@ def test_compact_for_chat_lists_top_ideas(board):
     assert top[0]["ai_verdict"] == "GÜÇLÜ" and top[0]["ai_source"] == "ollama"
     assert top[0]["status"] in ideas.STATUS_LABEL.values()
     assert top[1]["news"] == "up:55"
+
+
+def test_ai_evaluation_is_local_only_and_never_charges_shared_budget(board, monkeypatch):
+    from packages.agent.llm import budget
+    from packages.agent.llm import client as llm_client
+
+    _run(FakeClient())
+    assert budget.used_tokens() == 0                                   # yerel çağrı ortak bütçeye yazılmaz
+    monkeypatch.setattr(llm_client, "get_mode", lambda: "groq")        # AWS gibi: yerel model yok
+    out = ideas.run(NOW + timedelta(hours=13), scan_artifact=ART, shadow_cands=SHADOW, forecasts=FORECASTS,
+                    pending={})
+    assert out["llm_calls"] == 0                                       # uzak sağlayıcıya düşmez
+    monkeypatch.setattr(llm_client, "get_mode", lambda: "ollama")
+    assert isinstance(llm_client.get_local_client(), llm_client.OllamaClient)
