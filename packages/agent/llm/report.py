@@ -46,7 +46,11 @@ _PERSONA_BRIEFS = {
         "değerlendir. `technical_gate` ham verisini (momentum_lean = gate öncesi "
         "ham yön, gated_bias, direction_score, location_gate, location_evidence) "
         "ilgiliyse kendi cümlelerinle yorumla; location_gate <1 konum cezası, >1 "
-        "teyit anlamına gelir ve yalnızca güveni şekillendirir, trade açmaz."
+        "teyit anlamına gelir ve yalnızca güveni şekillendirir, trade açmaz. "
+        "`news_intel.decision_check`: canlı aday işlemi haber öngörüsü teyit mi ediyor, "
+        "çelişiyor mu — bunu değerlendirmene kat; `shadow_scorecard` örneği azsa bunu söyle. "
+        "`review_recommendations` / `top_ideas` keşif adaylarıdır; incelemeye değer olanı an, "
+        "işlem önerme (haber girdisi karara yalnız gölge olarak bağlı)."
     ),
     "risk_officer": (
         "Risk Officer olarak RiskGate, halt, korelasyon cluster'ları ve "
@@ -54,13 +58,17 @@ _PERSONA_BRIEFS = {
         "engellediğini açıkla. deep_data içindeki options stresi (IV/skew/"
         "term structure), realized volatilite rejimi, türev funding/squeeze "
         "ve catalyst half-life kapılarını da itiraz gerekçesi olarak kullan "
-        "— bunlar yalnızca kısıtlayıcıdır, asla pozisyon büyütmez."
+        "— bunlar yalnızca kısıtlayıcıdır, asla pozisyon büyütmez. "
+        "`news_intel.decision_check` içinde relation=conflict olan (haber öngörüsü adayın "
+        "tersine) satırları itiraz gerekçesi olarak değerlendir."
     ),
     "macro_strategist": (
         "Macro Strategist olarak rejimi, haber/katalizör bağlamını ve "
         "1w/1d üst-timeframe bias'ının alt timeframe'lere etkisini "
         "değerlendir. deep_data içindeki volatilite rejimi, options IV/skew "
-        "stresi, sermaye rotasyonu ve catalyst half-life'ı senaryona kat."
+        "stresi, sermaye rotasyonu ve catalyst half-life'ı senaryona kat. "
+        "`news_intel.discovery_chains` (olay → sonuç → etkilenen varlık) ve "
+        "`registry_forecasts` (kayıtlı varlıkların haber öngörüsü) senaryonun parçasıdır."
     ),
 }
 
@@ -139,6 +147,27 @@ def _evidence_for(persona: str, ctx: dict) -> list[str]:
         ev += [f"news:{t}" for t in ctx["news"][:2]]
         ev += [f"catalyst:{c['title']}" for c in ctx["catalysts"][:2]]
     ev += _deep_evidence(persona, ctx)
+    ev += _news_evidence(persona, ctx)
+    return ev
+
+
+def _news_evidence(persona: str, ctx: dict) -> list[str]:
+    """Haber istihbaratı kanıtı (koddan; LLM uyduramaz). Owner kararı 2026-10-05."""
+    ni = ctx.get("news_intel") or {}
+    checks = ni.get("decision_check") or []
+    ev: list[str] = []
+    if persona == "analyst":
+        ev += [f"news_check:{c['symbol']}:{c['timeframe']} {c['side']} × haber {c['forecast']}"
+               f"({c['strength']}) {c['relation']}" for c in checks[:2]]
+        ev += [f"review:{r['symbol']} — {r['chain']}" for r in (ni.get("review_recommendations") or [])[:2]]
+    elif persona == "risk_officer":
+        ev += [f"news_conflict:{c['symbol']}:{c['timeframe']} {c['side']} × haber {c['forecast']}({c['strength']})"
+               for c in checks if c["relation"] == "conflict"][:2]
+    else:
+        ev += [f"news_forecast:{f['symbol']} {f['direction']}({f['strength']})"
+               for f in (ni.get("registry_forecasts") or [])[:2]]
+        ev += [f"news_chain:{d['headline'][:60]} → {', '.join(d['assets'][:3])}"
+               for d in (ni.get("discovery_chains") or [])[:2]]
     return ev
 
 
@@ -259,6 +288,11 @@ def _fallback_concerns(persona: str, ctx: dict) -> list[str]:
         if ctx["paper"]["daily_pnl_usd"] < 0:
             concerns.append(f"günlük PnL negatif: {ctx['paper']['daily_pnl_usd']}")
         concerns += _deep_concerns("risk_officer", ctx)
+        for c in ((ctx.get("news_intel") or {}).get("decision_check") or []):
+            if c["relation"] == "conflict":
+                concerns.append(f"haber öngörüsü {c['symbol']} {c['timeframe']} {c['side']} adayıyla çelişiyor "
+                                f"({c['forecast']}, güç {c['strength']}) — gölge, karar değişmedi")
+                break
     else:
         if m["suspended"]:
             concerns.append("Matrix SUSPENDED — makro görüş aksiyona çevrilemez.")

@@ -75,6 +75,15 @@ listeler. Temizlik boyunca yeni özellik, yeni flag, yeni veri kaynağı eklenme
 - Dünya Özeti ve Haber Kaynaklı Hazır Pozisyonlar Fikirler'de birleşir, Heart'tan kalkar.
 - Kayıtlı varlık eşlemesi kelime sınırıyla (alt-dize hatası düzeltildi).
 
+## Verilmiş owner kararları (2026-10-05, üçüncü tur — haber istihbaratı)
+
+- Fikirler paneli Heart'tan tamamen kalkar (Dünya Özeti ve hazır pozisyon bölümüyle
+  birlikte); haber keşfi ve fikirler YZ yorumlarının (persona raporları, sohbet, Brain)
+  kanıtı olur.
+- Kayıtlı varlıklarda haber öngörüsü karar matrisine **gölge** girdi: teyit/çelişki
+  ölçülür, karar değişmez.
+- Bulunan varlıklar "inceleme tavsiyesi" bildirimiyle gelir (güçlü haber + teknik teyit).
+
 ## Açık owner kararları
 
 - **E4 Olay sonucunu karara bağlamak:** CP5 kırmızı çizgi — yeterli olay birikip
@@ -85,9 +94,10 @@ listeler. Temizlik boyunca yeni özellik, yeni flag, yeni veri kaynağı eklenme
   "**Gold**man" → XAUUSD; 2026-10-05 doğrulandı);
   düzeltmesi karar zincirine dokunur (golden farkı olabilir), owner onayı bekliyor.
 
-- **Fikir → paper işlem bağlantısı:** CP5 kırmızı çizgi — fikir skoru ve haber
-  öngörü karnesi (Fikirler sekmesi alt satırı) kanıt biriktirmeden karar yoluna
-  bağlanmaz; yalnız owner onayıyla.
+- **Haber girdisini karara bağlamak (gölge → aktif):** CP5 kırmızı çizgi. Kanıt:
+  `news_decision_shadow.scorecard()` — haber çelişen adayların isabeti teyit edilenlerden
+  belirgin düşükse (yeterli örnekle) owner onayına sunulur. Fikir → paper işlem
+  bağlantısı da aynı kurala tabi.
 
 ## Temizlikten sonra (ölçüm işleri)
 

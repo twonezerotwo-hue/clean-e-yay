@@ -208,6 +208,7 @@ def _isolate_runtime_stores(tmp_path_factory: pytest.TempPathFactory) -> None:
         ("NEWS_FORECAST_LEDGER_PATH", "news_forecast_ledger.jsonl"),
         ("IDEA_BOARD_PATH", "idea_board.json"),
         ("NEWS_DISCOVERY_PATH", "news_discovery.json"),
+        ("NEWS_DECISION_SHADOW_PATH", "news_decision_shadow.jsonl"),
     ):
         os.environ.setdefault(_env, str(runtime / _name))
     # K5 — git'teki config/weights_active.json suite'e sızmasın: testler baseline

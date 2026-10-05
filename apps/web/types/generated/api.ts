@@ -710,6 +710,7 @@ export type NotificationType =
   | "ticket_blocked"
   | "zone_candidate"
   | "event_outcome"
+  | "review_recommendation"
   | "recheck_exit_recommend"
   | "recheck_reduce"
   | "risk_gate_changed"
@@ -2386,6 +2387,7 @@ export type Idea = {
   market?: { chg_7d_pct?: number | null; chg_30d_pct?: number | null };
   risk_notes: string[];
   news_chain?: IdeaChainLink[];
+  review?: boolean;
   ai?: IdeaEvaluation;
 };
 

@@ -146,9 +146,22 @@ Haber öngörüsü YZ'nin bir varlığa bağladığı başlığı o varlık içi
 (güvenle ağırlıklı); fikir kartı ve YZ değerlendirme dosyası "başlık → sonuç → yön"
 zincirini taşır.
 
-Okuma: `GET /api/v1/ideas` → Heart "Fikirler" sekmesi (başta Dünya Özeti satırı ve
-"Haber akışından keşif", altta katlanır "Haber kaynaklı hazır pozisyonlar"; Dünya
-Özeti'nin detayı Soul katmanında); sohbet bağlamında ilk 3 fikir.
+Okuma (owner kararı 2026-10-05, üçüncü tur — ayrı panel YOK):
+- **YZ yorumları:** sıkıştırılmış durum bağlamındaki `news_intel` bölümü
+  (`packages/discovery/intel.py`: kayıtlı varlık haber öngörüleri, haber zincirleri,
+  inceleme tavsiyeleri, canlı aday × haber teyit/çelişki, gölge karnesi, ilk 3 fikir;
+  güç 10'luk kovalarla). Persona raporları (Analist teyit/çelişkiyi ve inceleme
+  tavsiyelerini, Risk Officer çelişkiyi itiraz olarak, Makro zincirleri senaryoya
+  katar; kanıt satırları koddan), sohbet ve Brain brifingi aynı bölümü görür.
+- **İnceleme tavsiyesi bildirimi:** haberden bulunmuş fikir + haber öngörüsü yukarı
+  (güç ≥ `review.min_news_strength`) + teknik `WOULD_OPEN_LONG` → `review_recommendation`
+  (zil + anlık uyarı; varlık başına 24 saatte bir; işlem önerisi değildir).
+- **Gölge karar girdisi** (`packages/discovery/news_decision_shadow.py`): canlı matrisin
+  aday işlemleri (open_long/open_short) × haber öngörüsü teyit/çelişki
+  `NEWS_DECISION_SHADOW_PATH`'e yazılır, 4sa/1g sonra adayın yönü tuttu mu diye çözülür.
+  Etkisiz (`affect_decision` kodda sabit false); canlı matriste haber modülü zaten
+  `analytics_only`.
+- Ham veri: `GET /api/v1/ideas`. Dünya Özeti'nin detayı Soul katmanında.
 YZ hükmü governor terfi paketine yalnız **kanıt** olarak eklenir; terfi kriterleri
 deterministik kalır ve owner onayı şarttır (CP5).
 

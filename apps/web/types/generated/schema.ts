@@ -2097,7 +2097,7 @@ export interface components {
             id: string;
             ts: string;
             /** @enum {string} */
-            type: "ticket_created" | "ticket_expiring" | "ticket_expired" | "ticket_blocked" | "recheck_exit_recommend" | "recheck_reduce" | "risk_gate_changed" | "risk_kill_switch" | "catalyst_imminent" | "dqs_dropped" | "position_near_sl" | "position_near_tp" | "zone_candidate" | "event_outcome";
+            type: "ticket_created" | "ticket_expiring" | "ticket_expired" | "ticket_blocked" | "recheck_exit_recommend" | "recheck_reduce" | "risk_gate_changed" | "risk_kill_switch" | "catalyst_imminent" | "dqs_dropped" | "position_near_sl" | "position_near_tp" | "zone_candidate" | "event_outcome" | "review_recommendation";
             /** @enum {string} */
             priority: "critical" | "high" | "medium" | "low";
             title: string;
@@ -4087,6 +4087,8 @@ export interface components {
             };
             risk_notes: string[];
             news_chain?: components["schemas"]["IdeaChainLink"][];
+            /** @description İnceleme tavsiyesi koşulunu sağlıyor (bildirim gitti/gidecek) */
+            review?: boolean;
             ai?: components["schemas"]["IdeaEvaluation"];
         };
         /** @description Keşif taramasının TF başına kompakt teknik analiz özeti (yeni hesap yok). */

@@ -392,11 +392,98 @@ def run(
         idea["ai"] = record
     keep = {i["symbol"] for i in ideas}
     evals = {s: e for s, e in evals.items() if s in keep}
+    review_cfg = dict(scanner.load_config().get("review") or {})
+    reviewed = _notify_reviews(ideas, state, now, min_news=int(review_cfg.get("min_news_strength", 40)),
+                               cooldown=timedelta(hours=float(review_cfg.get("cooldown_hours", 24))))
     state.update({"schema_version": SCHEMA_VERSION, "generated_at": _iso(now), "ideas": ideas,
                   "evaluations": evals})
     write_text_atomic(_path(), json.dumps(state, ensure_ascii=False, default=str))
     return {"status": "OK", "ideas": len(ideas), "llm_calls": llm_calls, "llm_errors": llm_errors[:3],
-            "top": [f"{i['symbol']}:{i['score']}:{i['ai']['verdict']}" for i in ideas[:3]]}
+            "top": [f"{i['symbol']}:{i['score']}:{i['ai']['verdict']}" for i in ideas[:3]], "reviews": reviewed}
+
+
+# ---------------------------------------------------------------------------
+# İnceleme tavsiyesi (owner kararı 2026-10-05, üçüncü tur)
+# ---------------------------------------------------------------------------
+
+def is_review_candidate(idea: Mapping[str, Any], min_news: int = 40) -> bool:
+    """Haberden bulunmuş (haber zinciri var) + haber öngörüsü yukarı ve güçlü + teknik sinyal."""
+    news = idea.get("news") or {}
+    return (bool(idea.get("news_chain")) and news.get("direction") == "up"
+            and int(news.get("strength") or 0) >= min_news
+            and (idea.get("technical") or {}).get("verdict") == "WOULD_OPEN_LONG")
+
+
+def _fmt_price(v: Any) -> str:
+    return f"{float(v):.4g}" if isinstance(v, int | float) else "—"
+
+
+def review_notification(idea: Mapping[str, Any], now: datetime):
+    from packages.notifications import Notification, make_id
+
+    t, news, ai = idea["technical"], idea.get("news") or {}, idea.get("ai") or {}
+    link = (idea.get("news_chain") or [{}])[0]
+    mech = f" ({link['mechanism']})" if link.get("mechanism") else ""
+    chain = f"{link.get('title')} → {link.get('consequence') or 'sonuç'} → {idea['symbol']} ↑{mech}"
+    tech = (f"{t.get('entry_timeframe') or '?'} sinyal · giriş {_fmt_price(t.get('entry'))} · stop "
+            f"{_fmt_price(t.get('sl'))} · hedef {_fmt_price(t.get('tp'))} · R/Ö {_fmt_price(t.get('rr'))}")
+    return Notification(
+        id=make_id("review_recommendation"), ts=_iso(now), type="review_recommendation", priority="medium",
+        title=f"İnceleme tavsiyesi: {idea['symbol']} ({idea['name']})",
+        body_short=f"{(link.get('title') or '')[:90]} → {link.get('consequence') or ''} · teknik {t.get('entry_timeframe')} "
+                   f"sinyal · YZ {ai.get('verdict_label') or '—'}",
+        body_long=(f"Haber zinciri: {chain}. Haber öngörüsü yukarı, güç {news.get('strength')}. Teknik: {tech}. "
+                   f"Yapay zekâ: {ai.get('verdict_label') or '—'} — {ai.get('thesis') or ''} "
+                   f"Fikir skoru {idea['score']}/100. İşlem önerisi DEĞİLDİR: varlık işlem evreninde değil, "
+                   "yalnız incelemen için keşif adayıdır."),
+    )
+
+
+def _notify_reviews(ideas: list[dict], state: dict, now: datetime, *, min_news: int,
+                    cooldown: timedelta) -> list[str]:
+    """Koşulu sağlayan fikir için bildirim (varlık başına cooldown'da bir). Hata turu düşürmez."""
+    notified = {s: ts for s, ts in dict(state.get("review_notified") or {}).items()
+                if (p := _parse(ts)) and now - p < timedelta(days=7)}
+    out: list[str] = []
+    fresh = []
+    for idea in ideas:
+        if not is_review_candidate(idea, min_news):
+            continue
+        last = _parse(notified.get(idea["symbol"]))
+        idea["review"] = True
+        if last is not None and now - last < cooldown:
+            continue
+        fresh.append(review_notification(idea, now))
+        notified[idea["symbol"]] = _iso(now)
+        out.append(idea["symbol"])
+    if fresh:
+        try:
+            from packages.notifications import append_many
+
+            append_many(fresh)
+        except Exception:  # bildirim yazılamazsa fikir turu yine tamamlanır
+            out = [f"{s}:notify_error" for s in out]
+    state["review_notified"] = notified
+    return out
+
+
+def review_recommendations(max_age: timedelta = timedelta(hours=24)) -> list[dict]:
+    """Son inceleme tavsiyeleri (YZ bağlamı + brifing için kısa)."""
+    state, now = _load(), datetime.now(UTC)
+    rows = []
+    for idea in state.get("ideas") or []:
+        if not idea.get("review"):
+            continue
+        last = _parse((state.get("review_notified") or {}).get(idea["symbol"]))
+        if last is None or now - last > max_age:
+            continue
+        t, link = idea.get("technical") or {}, (idea.get("news_chain") or [{}])[0]
+        rows.append({"symbol": idea["symbol"], "name": idea.get("name"), "score": idea.get("score"),
+                     "chain": f"{link.get('title')} → {link.get('consequence')}", "mechanism": link.get("mechanism"),
+                     "news_strength": (idea.get("news") or {}).get("strength"),
+                     "technical": f"{t.get('entry_timeframe')} sinyal, R/Ö {t.get('rr')}",
+                     "ai_verdict": (idea.get("ai") or {}).get("verdict_label"), "notified_at": _iso(last)})
+    return rows
 
 
 def evaluation_for(symbol: str) -> dict | None:
@@ -438,4 +525,5 @@ def compact_for_chat(limit: int = 3) -> dict[str, Any]:
 
 
 __all__ = ["build_ideas", "compact_for_chat", "dossier", "evaluation_for", "fallback_evaluation",
-           "parse_evaluation", "run", "score_idea", "viewmodel"]
+           "is_review_candidate", "parse_evaluation", "review_notification", "review_recommendations", "run",
+           "score_idea", "viewmodel"]

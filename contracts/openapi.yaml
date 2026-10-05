@@ -2169,6 +2169,8 @@ components:
             - zone_candidate
             # Olay-sonrası takip: takvim olayı açıklandı / 1 saatlik tepki ölçüldü.
             - event_outcome
+            # Haber güdümlü keşif: haber zinciri + teknik teyitli varlık (2026-10-05; işlem önerisi değil).
+            - review_recommendation
         priority:
           type: string
           enum: [critical, high, medium, low]
@@ -5084,6 +5086,7 @@ components:
         news_chain:
           type: array
           items: { $ref: "#/components/schemas/IdeaChainLink" }
+        review: { type: boolean, description: "İnceleme tavsiyesi koşulunu sağlıyor (bildirim gitti/gidecek)" }
         ai: { $ref: "#/components/schemas/IdeaEvaluation" }
 
     IdeaTaSummary:

@@ -517,6 +517,21 @@ def run_once() -> dict:
         news_forecast_status = f"ERROR:{type(exc).__name__}"
         errors.append(f"news_forecast:{type(exc).__name__}")
 
+    # Haber → karar GÖLGE girdisi (owner kararı 2026-10-05, üçüncü tur; aynı kapı): canlı
+    # aday işlemler × haber öngörüsü teyit/çelişki → fiyatla çözülür. ETKİSİZ: karar,
+    # boyut, RiskGate, paper değişmez; bağlanması owner onayı ister (CP5).
+    news_decision_shadow_status = "DISABLED"
+    try:
+        if discovery.scan_enabled():
+            from packages.discovery import news_decision_shadow
+            nds = news_decision_shadow.run()
+            news_decision_shadow_status = str(nds.get("status", "UNKNOWN"))
+            log.info("news_decision_shadow: created=%s resolved=%s rows=%s",
+                     nds.get("created"), nds.get("resolved"), nds.get("rows"))
+    except Exception as exc:  # defensive — worker patlamamalı
+        news_decision_shadow_status = f"ERROR:{type(exc).__name__}"
+        errors.append(f"news_decision_shadow:{type(exc).__name__}")
+
     # Fikir Panosu (owner kararı 2026-10-05, aynı kapı): keşif + haber + teknik →
     # şeffaf fikir skoru + YZ değerlendirmesi (yerel model; turda en çok 2 çağrı,
     # yoksa kurallı yedek). Terfiden ÖNCE koşar: YZ hükmü pakete kanıt olur.
@@ -526,8 +541,9 @@ def run_once() -> dict:
             from packages.discovery import ideas
             ib = ideas.run()
             ideas_status = str(ib.get("status", "UNKNOWN"))
-            log.info("ideas: n=%s llm_calls=%s top=%s errors=%s",
-                     ib.get("ideas"), ib.get("llm_calls"), ib.get("top"), ib.get("llm_errors"))
+            log.info("ideas: n=%s llm_calls=%s top=%s reviews=%s errors=%s",
+                     ib.get("ideas"), ib.get("llm_calls"), ib.get("top"), ib.get("reviews"),
+                     ib.get("llm_errors"))
     except Exception as exc:  # defensive — worker patlamamalı
         ideas_status = f"ERROR:{type(exc).__name__}"
         errors.append(f"ideas:{type(exc).__name__}")
@@ -932,6 +948,7 @@ def run_once() -> dict:
         "discovery_scan_status": discovery_scan_status,  # K-1 tarayıcı
         "news_discovery_status": news_discovery_status,  # haber güdümlü keşif (2026-10-05)
         "news_forecast_status": news_forecast_status,  # haber öngörüsü (2026-10-05)
+        "news_decision_shadow_status": news_decision_shadow_status,  # haber → karar gölgesi (2026-10-05)
         "ideas_status": ideas_status,  # fikir panosu + YZ değerlendirmesi (2026-10-05)
         "discovery_promotion_status": discovery_promotion_status,  # K-4 terfi kriteri (DISABLED=flag OFF)
         "backtest_recon_status": backtest_recon_status,  # B-1 fidelity (DISABLED=flag OFF)

@@ -339,6 +339,36 @@ def _news_headlines(snap) -> list[Headline]:
     return out
 
 
+def _intel_headlines(cells) -> list[Headline]:
+    """Haber istihbaratı (owner kararı 2026-10-05): inceleme tavsiyeleri + canlı aday ile
+    çelişen güçlü haber öngörüsü. Kanıttır; karar değişmez (haber girdisi gölge)."""
+    out: list[Headline] = []
+    try:
+        from packages.discovery import ideas, news_decision_shadow, news_forecast
+
+        for r in ideas.review_recommendations()[:2]:
+            out.append(Headline(
+                "info", "news",
+                f"İnceleme tavsiyesi: {r['symbol']} ({r['name']}) — haber zinciri + teknik sinyal.",
+                f"{r['chain']} · {r['technical']} · YZ {r['ai_verdict'] or '—'}. İşlem önerisi değildir.",
+            ))
+        cfg = news_decision_shadow.config()
+        conflicts = [c for c in news_decision_shadow.checks(cells, news_forecast.load_forecasts(),
+                                                            cfg["min_strength"])
+                     if c["relation"] == "conflict" and c["strength"] >= 40]
+        for c in conflicts[:1]:
+            arrow = "↑" if c["forecast"] == "up" else "↓"
+            out.append(Headline(
+                "warn", "news",
+                f"Haber öngörüsü {_symbol_tr(c['symbol'])} {_tf_tr(c['timeframe'])} "
+                f"{'long' if c['side'] == 'long' else 'short'} adayıyla çelişiyor ({arrow}, güç {c['strength']}).",
+                f"{(c.get('evidence') or '')[:100]} — gölge ölçüm; karar değişmedi.",
+            ))
+    except Exception:  # brifing asla düşmesin
+        return []
+    return out
+
+
 def _provider_headlines(snap) -> list[Headline]:
     out: list[Headline] = []
     ps = getattr(snap, "provider_status", None) or {}
@@ -622,6 +652,7 @@ def build() -> dict[str, Any]:
     sections.extend(_risk_headlines(snap))
     sections.extend(_event_headlines(snap))
     sections.extend(_news_headlines(snap))
+    sections.extend(_intel_headlines(cells))
     sections.extend(_provider_headlines(snap))
     sections.extend(_notification_headlines())
 

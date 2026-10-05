@@ -7,7 +7,6 @@ import type {
   AgentMatrix,
   AIReport,
   EventOutcomesView,
-  IdeaBoardView,
   ChatResponse,
   ChatTurn,
   CockpitBrief,
@@ -483,7 +482,6 @@ export const api = {
   systemHealth: () => fetchJSON<SystemHealth>("/api/v1/system/health"),
   regimeReport: () => fetchJSON<RegimeReport>("/api/v1/regime-report/current"),
   eventOutcomes: () => fetchJSON<EventOutcomesView>("/api/v1/calendar/event-outcomes"),
-  ideas: () => fetchJSON<IdeaBoardView>("/api/v1/ideas"),
   dashboardState: () => fetchJSON<DashboardState>("/api/v1/dashboard/state"),
   aiReport: () => fetchJSON<AIReport>("/api/v1/ai-report/current"),
   paperTradingState: () =>

@@ -112,6 +112,24 @@ news_discovery:
     - { source: "Ticaret politikası", url: "https://news.google.com/rss/search?q=when:1d+(tariff+OR+sanctions+OR+%22export+ban%22)&hl=en-US&gl=US&ceid=US:en" }
     - { source: "Google Business", url: "https://news.google.com/rss/headlines/section/topic/BUSINESS?hl=en-US&gl=US&ceid=US:en" }
 
+# Haber → karar GÖLGE girdisi (owner kararı 2026-10-05, üçüncü tur) —
+# packages/discovery/news_decision_shadow.py. Canlı aday işlem × haber öngörüsü
+# teyit/çelişki fiyatla çözülür. ETKİSİZ: affect_decision kodda sabit false; karara
+# bağlanması karne + owner onayı ister (CP5).
+news_decision_shadow:
+  enabled: true
+  min_strength: 20        # bu güçten zayıf haber öngörüsü sayılmaz
+  horizons_hours: [4, 24]
+  dedupe_hours: 4         # aynı sembol/TF/yön/ilişki için tekrar damgalama aralığı
+  flat_pct: 0.1
+
+# İnceleme tavsiyesi bildirimi (owner kararı 2026-10-05, üçüncü tur) — packages/discovery/ideas.py.
+# Haberden bulunmuş fikir + haber öngörüsü yukarı (güç ≥ min_news_strength) + teknik
+# WOULD_OPEN_LONG → zil + anlık uyarı; varlık başına cooldown_hours'ta bir. İşlem önerisi değildir.
+review:
+  min_news_strength: 40
+  cooldown_hours: 24
+
 # Haber öngörüsü (owner kararı 2026-10-05) — packages/discovery/news_forecast.py.
 # SALT-GÖZLEM: karar/boyut/RiskGate'e girmez; fikir panosu + öngörü karnesi besler.
 # Başlıklar: son snapshot'ların doğrulanmış RSS başlıkları + sınırlı web araması

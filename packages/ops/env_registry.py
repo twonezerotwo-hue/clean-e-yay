@@ -156,6 +156,7 @@ REGISTRY: dict[str, str] = {
     "IDEA_BOARD_PATH": "path",
     "MACRO_BACKTEST_PATH": "path",
     "MISSED_OPP_LOG_PATH": "path",
+    "NEWS_DECISION_SHADOW_PATH": "path",
     "NEWS_DISCOVERY_PATH": "path",
     "NEWS_FORECAST_LEDGER_PATH": "path",
     "NEWS_FORECAST_PATH": "path",

@@ -376,8 +376,10 @@ def build_compact_context() -> dict:
         ],
         # Olay-sonrası takip: ne açıklandı, beklenen vs gerçekleşen tepki (salt-gözlem).
         "event_outcomes": _event_outcomes_summary(),
-        # Fikir Panosu: keşif + haber öngörüsü + teknik + YZ değerlendirmesi (salt-gözlem).
-        "ideas": _ideas_summary(),
+        # Haber istihbaratı (owner kararı 2026-10-05): kayıtlı varlık haber öngörüsü, haber
+        # zincirleri, inceleme tavsiyeleri, canlı aday × haber teyit/çelişki (gölge) + fikirler.
+        # YZ yorumları bunu KANIT olarak tartar; karar değildir.
+        "news_intel": _news_intel(view.get("cells") or []),
     }
 
 
@@ -388,13 +390,13 @@ def _event_outcomes_summary() -> dict:
         return {"recent_releases": [], "next_event": None}
 
 
-def _ideas_summary() -> dict:
-    try:
-        from packages.discovery import ideas
+def _news_intel(cells: list) -> dict:
+    from packages.discovery import intel
 
-        return ideas.compact_for_chat()
+    try:
+        return intel.compact_for_context(cells)
     except Exception:  # bağlam üretimi asla düşmesin
-        return {"generated_at": None, "top": []}
+        return intel.empty()
 
 
 # Digest'e GİRMEYEN volatil alanlar — snapshot_id her 30sn değişir; cache
