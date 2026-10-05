@@ -211,6 +211,21 @@ def _ingest_web(store: dict[str, dict], asset: Mapping[str, Any], hits: Iterable
     return added
 
 
+def _reclassify(store: dict[str, dict]) -> int:
+    """Kayıtlı varlık etkisini GÜNCEL sınıflandırıcıyla yeniden hesaplar. Sınıflandırıcı
+    düzeltmeleri 72 saatlik defterde geriye dönük geçerli olsun diye (2026-10-05: alt-dize →
+    kelime sınırı düzeltmesinden önce gelen "September" başlıkları TEM'e yazılı kalmıştı)."""
+    changed = 0
+    for h in store.values():
+        if h.get("origin") != "rss":
+            continue
+        new = classify.classify_asset_impact(h["title"], h.get("sentiment") or "neutral")
+        if new != dict(h.get("impact") or {}):
+            h["impact"] = new
+            changed += 1
+    return changed
+
+
 def _ingest_llm(store: dict[str, dict], rows: Iterable[Mapping[str, Any]], now: datetime) -> int:
     """Haber keşfinin YZ çıkarımı: başlığın hangi varlığı hangi yönde etkileyeceği.
     Aynı başlık defterde varsa etki ona eklenir; yoksa (ham akıştan) yeni kayıt açılır."""
@@ -486,6 +501,7 @@ def run(
 
     docs = (recent_snapshots or snapshot_store.recent)(cfg["snapshots_per_run"])
     added_rss = _ingest_snapshot_headlines(store, docs, now)
+    reclassified = _reclassify(store)
     if llm_headlines is None:
         from packages.discovery import news_discovery
 
@@ -530,7 +546,7 @@ def run(
                   "web": web_state, "forecasts": forecasts})
     write_text_atomic(_state_path(), json.dumps(state, ensure_ascii=False, default=str))
     return {"status": "OK", "headlines": len(store), "added_rss": added_rss, "added_web": added_web,
-            "added_llm": added_llm,
+            "added_llm": added_llm, "reclassified": reclassified,
             "web_errors": web_errors[:3], "forecasts": len(forecasts),
             "directional": sum(1 for f in forecasts.values() if f["direction"] != "neutral"), **tracking}
 

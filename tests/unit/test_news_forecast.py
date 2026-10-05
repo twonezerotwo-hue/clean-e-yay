@@ -149,3 +149,16 @@ def test_scorecard_resolves_tracked_forecasts(paths):
     card = nf.scorecard()
     assert card["horizons"]["4h"]["all"]["hits"] >= 1
     assert card["horizons"]["4h"]["by_kind"]["crypto"]["hit_rate"] == 1.0
+
+
+def test_stale_registry_impacts_are_reclassified_with_current_classifier(paths, monkeypatch):
+    monkeypatch.setattr("packages.data.registry.assets.all_assets",
+                        lambda: [SimpleNamespace(symbol="TEM", label="tem", asset_class="risk")])
+    stale = {"title": "Gold prices rise after weak September jobs report", "source": "Gold Wire", "origin": "rss",
+             "ts": NOW.isoformat(), "sentiment": "bearish", "impact": {"TEM": -1.0}}   # eski alt-dize etiketi
+    (paths / "nf.json").write_text(json.dumps({"headlines": {"k1": stale}}), encoding="utf-8")
+    out = nf.run(NOW, scan_artifact={}, discovery_cfg=DISC_CFG, source_table={}, recent_snapshots=lambda n: [],
+                 web_search=lambda *a, **k: SimpleNamespace(error="missing_api_key", results=[]),
+                 llm_headlines=lambda: [])
+    assert out["reclassified"] == 1
+    assert "TEM" not in nf.load_forecasts()                            # "Sep·tem·ber" artık TEM değil

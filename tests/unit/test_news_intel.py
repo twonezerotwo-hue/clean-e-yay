@@ -83,3 +83,13 @@ def test_context_degrades_safely(monkeypatch):
 
     assert context._news_intel(CELLS) == intel.empty()
     assert briefing._intel_headlines(CELLS) == []
+
+
+def test_briefing_does_not_repeat_review_notifications(monkeypatch):
+    from types import SimpleNamespace
+
+    items = [SimpleNamespace(type="review_recommendation", priority="medium", title="İnceleme tavsiyesi: X",
+                             body_short="..."),
+             SimpleNamespace(type="risk_gate_changed", priority="high", title="Risk kapısı değişti", body_short="")]
+    monkeypatch.setattr(briefing, "list_notifications", lambda **kw: items)
+    assert [h.title for h in briefing._notification_headlines()] == ["Risk kapısı değişti"]
