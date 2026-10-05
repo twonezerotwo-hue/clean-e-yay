@@ -4000,12 +4000,8 @@ export interface components {
                 confidence?: number | null;
                 bullish_tfs?: string[];
                 checked_at?: string | null;
-                ta?: {
-                    [key: string]: unknown;
-                } | null;
-                ta_1d?: {
-                    [key: string]: unknown;
-                } | null;
+                ta?: components["schemas"]["IdeaTaSummary"];
+                ta_1d?: components["schemas"]["IdeaTaSummary"];
                 reasons?: string[];
             };
             scorecard: {
@@ -4026,6 +4022,26 @@ export interface components {
             risk_notes: string[];
             ai?: components["schemas"]["IdeaEvaluation"];
         };
+        /** @description Keşif taramasının TF başına kompakt teknik analiz özeti (yeni hesap yok). */
+        IdeaTaSummary: ({
+            bias?: string | null;
+            trend?: string | null;
+            adx?: number | null;
+            support?: number | null;
+            resistance?: number | null;
+            stop_reference?: number | null;
+            target_reference?: number | null;
+            patterns?: string[];
+            confirmations?: string[];
+            fib?: {
+                validity?: string | null;
+                zone?: string | null;
+                nearest?: string | null;
+                nearest_distance_pct?: number | null;
+            } | null;
+        } & {
+            [key: string]: unknown;
+        }) | null;
         IdeaNews: {
             /** @enum {string} */
             direction: "up" | "down" | "neutral";

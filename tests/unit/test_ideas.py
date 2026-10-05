@@ -58,7 +58,7 @@ class FakeClient:
 
     def complete(self, system, user, max_tokens, temperature=0.2):
         self.calls += 1
-        assert "işlem emri DEĞİLDİR" in user and "Bitway" in user or "Bakır" in user or "Quant" in user
+        assert "işlem emri DEĞİLDİR" in user and any(n in user for n in ("Bitway", "Bakır", "Quant"))
         if self.text is None:
             return None
         return SimpleNamespace(text=self.text, source="ollama", model="qwen3:8b", input_tokens=100, output_tokens=50)

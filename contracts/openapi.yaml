@@ -4975,8 +4975,8 @@ components:
             confidence: { type: number, nullable: true }
             bullish_tfs: { type: array, items: { type: string } }
             checked_at: { type: string, nullable: true }
-            ta: { type: object, nullable: true, additionalProperties: true }
-            ta_1d: { type: object, nullable: true, additionalProperties: true }
+            ta: { $ref: "#/components/schemas/IdeaTaSummary" }
+            ta_1d: { $ref: "#/components/schemas/IdeaTaSummary" }
             reasons: { type: array, items: { type: string } }
         scorecard:
           type: object
@@ -4998,6 +4998,30 @@ components:
             chg_30d_pct: { type: number, nullable: true }
         risk_notes: { type: array, items: { type: string } }
         ai: { $ref: "#/components/schemas/IdeaEvaluation" }
+
+    IdeaTaSummary:
+      type: object
+      nullable: true
+      description: Keşif taramasının TF başına kompakt teknik analiz özeti (yeni hesap yok).
+      additionalProperties: true
+      properties:
+        bias: { type: string, nullable: true }
+        trend: { type: string, nullable: true }
+        adx: { type: number, nullable: true }
+        support: { type: number, nullable: true }
+        resistance: { type: number, nullable: true }
+        stop_reference: { type: number, nullable: true }
+        target_reference: { type: number, nullable: true }
+        patterns: { type: array, items: { type: string } }
+        confirmations: { type: array, items: { type: string } }
+        fib:
+          type: object
+          nullable: true
+          properties:
+            validity: { type: string, nullable: true }
+            zone: { type: string, nullable: true }
+            nearest: { type: string, nullable: true }
+            nearest_distance_pct: { type: number, nullable: true }
 
     IdeaNews:
       type: object
