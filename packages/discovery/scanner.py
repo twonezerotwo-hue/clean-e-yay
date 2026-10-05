@@ -116,6 +116,53 @@ def _candidate_bars(
     return get_bars(cand["symbol"], tf)
 
 
+def _num(value, digits: int = 6):
+    try:
+        return round(float(value), digits) if value is not None else None
+    except (TypeError, ValueError):
+        return None
+
+
+def _ta_summary(tr) -> dict:
+    """Teknik motor sonucunun kompakt özeti — fikir panosu / YZ dosyası için.
+
+    Yeni hesap YOK: `build_timeframe_result` zaten ürettiği alanları saklar
+    (önceden yalnız direction_score/atr tutuluyordu). Eksik alan → None.
+    """
+    def g(obj, name, default=None):
+        return getattr(obj, name, default) if obj is not None else default
+
+    kl = g(tr, "key_levels")
+    summary = g(tr, "timeframe_summary")
+    trend = g(tr, "trend_strength")
+    patterns = g(g(tr, "chart_pattern_analysis"), "active_patterns") or []
+    fib = g(tr, "fibonacci_analysis")
+    reversals = g(g(tr, "reversal_signals"), "signals") or []
+    return {
+        "bias": g(summary, "bias"),
+        "strength_score": _num(g(g(tr, "score_overview"), "strength_score"), 2),
+        "trend": g(trend, "label"),
+        "adx": _num(g(trend, "adx"), 1),
+        "volatility": g(tr, "volatility_regime"),
+        "support": _num(g(kl, "support")),
+        "resistance": _num(g(kl, "resistance")),
+        "stop_reference": _num(g(kl, "stop_reference")),
+        "target_reference": _num(g(kl, "target_reference")),
+        "atr_percent": _num(g(kl, "atr_percent"), 3),
+        "patterns": [str(g(p, "name")) for p in patterns][:4],
+        "confirmations": [str(g(c, "name")) for c in (g(tr, "confirmation_signals") or []) if g(c, "fired")][:6],
+        "reversals": [str(g(r, "type")) for r in reversals if g(r, "detected", True)][:4],
+        "fib": None if fib is None else {
+            "validity": g(fib, "validity"),
+            "zone": g(fib, "zone"),
+            "nearest": g(g(fib, "nearest_level"), "label"),
+            "nearest_distance_pct": _num(g(fib, "nearest_distance_pct"), 2),
+        },
+        "evidence": [str(e) for e in (g(summary, "evidence") or [])][:4],
+        "warnings": [str(w) for w in (g(summary, "warnings") or [])][:4],
+    }
+
+
 def _analyze(
     cand: dict,
     *,
@@ -149,6 +196,7 @@ def _analyze(
             "direction_score": tr.score_overview.direction_score,
             "atr": tr.key_levels.atr,
             "last_close": bars[-1].close,
+            "ta": _ta_summary(tr),
         }
 
     result = {
