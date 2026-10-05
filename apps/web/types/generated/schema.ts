@@ -3972,12 +3972,76 @@ export interface components {
                 headlines: number;
                 scorecard?: components["schemas"]["NewsForecastScorecard"];
             };
+            discovery?: components["schemas"]["NewsDiscoveryView"];
+        };
+        /** @description Haber güdümlü keşif (owner kararı 2026-10-05, ikinci tur): tüm haber akışından yerel YZ'nin çıkardığı olay → sonuç → etkilenen varlık zincirleri ve Yahoo'da doğrulanmış adaylar. Salt-gözlem; işlem evrenine eklemez. */
+        NewsDiscoveryView: {
+            generated_at?: string | null;
+            status: string;
+            events: components["schemas"]["NewsDiscoveryEvent"][];
+            candidates: components["schemas"]["NewsDiscoveryCandidate"][];
+            stats: {
+                calls_today?: number;
+                screened?: number;
+                pool?: number | null;
+                rejected?: {
+                    [key: string]: number;
+                };
+            };
+        };
+        NewsDiscoveryEvent: {
+            title: string;
+            source?: string | null;
+            ts?: string | null;
+            consequence?: string | null;
+            analyzed_at?: string | null;
+            assets: components["schemas"]["NewsDiscoveryAsset"][];
+        };
+        NewsDiscoveryAsset: {
+            symbol?: string | null;
+            ticker?: string | null;
+            name?: string | null;
+            /** @enum {string|null} */
+            asset_type?: "equity" | "etf" | "future" | "crypto" | "fx" | null;
+            /** @enum {string|null} */
+            direction?: "up" | "down" | null;
+            /** @enum {string|null} */
+            confidence?: "low" | "med" | "high" | null;
+            /** @enum {string} */
+            status: "valid" | "registry" | "rejected" | "deferred";
+            reason?: string | null;
+            proposed_ticker?: string | null;
+        };
+        NewsDiscoveryCandidate: {
+            symbol: string;
+            ticker: string;
+            name?: string | null;
+            asset_type?: string | null;
+            /** @enum {string} */
+            direction: "up" | "down" | "mixed";
+            strength: number;
+            n_events: number;
+            price?: number | null;
+            chg_7d_pct?: number | null;
+            chg_30d_pct?: number | null;
+            first_seen?: string | null;
+            last_seen?: string | null;
+        };
+        /** @description Haber zinciri halkası — başlık → sonuç → bu varlık için yön. */
+        IdeaChainLink: {
+            title: string;
+            source?: string | null;
+            ts?: string | null;
+            consequence?: string | null;
+            direction?: string | null;
+            confidence?: string | null;
         };
         Idea: {
             symbol: string;
             /** @enum {string} */
-            kind: "crypto" | "commodity" | "sector_etf";
+            kind: "crypto" | "commodity" | "sector_etf" | "news";
             name: string;
+            asset_type?: string | null;
             score: number;
             components: {
                 technical: number;
@@ -4020,6 +4084,7 @@ export interface components {
                 chg_30d_pct?: number | null;
             };
             risk_notes: string[];
+            news_chain?: components["schemas"]["IdeaChainLink"][];
             ai?: components["schemas"]["IdeaEvaluation"];
         };
         /** @description Keşif taramasının TF başına kompakt teknik analiz özeti (yeni hesap yok). */
@@ -4107,6 +4172,12 @@ export interface components {
                 status: string;
                 count: number;
                 fetched_at?: string | null;
+                symbols: string[];
+            };
+            /** @description Haber güdümlü keşif adayları (doğrulanmış, yukarı yönlü; owner kararı 2026-10-05) */
+            news?: {
+                status: string;
+                count: number;
                 symbols: string[];
             };
         };

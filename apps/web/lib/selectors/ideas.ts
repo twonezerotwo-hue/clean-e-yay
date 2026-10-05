@@ -1,10 +1,61 @@
-import type { Idea, IdeaBoardView, IdeaKind, IdeaVerdict } from "@/types/generated/api";
+import type {
+  Idea,
+  IdeaBoardView,
+  IdeaKind,
+  IdeaVerdict,
+  NewsDiscoveryEvent,
+  NewsDiscoveryView,
+} from "@/types/generated/api";
 
 /** Fikir Panosu seçicileri — skor/değerlendirme backend'de hesaplanır; burada yalnız sunum. */
 export const IDEA_KIND_LABEL: Record<IdeaKind, string> = {
   crypto: "Kripto",
   commodity: "Emtia",
   sector_etf: "Sektör fonu",
+  news: "Haber keşfi",
+};
+
+/** Haber keşfinin doğruladığı varlık türü. */
+export const ASSET_TYPE_LABEL: Record<string, string> = {
+  equity: "Hisse",
+  etf: "Fon (ETF)",
+  future: "Vadeli",
+  crypto: "Kripto",
+  fx: "Döviz",
+};
+
+export const ideaKindLabel = (idea: Pick<Idea, "kind" | "asset_type">) =>
+  idea.kind === "news" && idea.asset_type
+    ? `${IDEA_KIND_LABEL.news} · ${ASSET_TYPE_LABEL[idea.asset_type] ?? idea.asset_type}`
+    : IDEA_KIND_LABEL[idea.kind] ?? idea.kind;
+
+export const CONFIDENCE_LABEL: Record<string, string> = { low: "düşük", med: "orta", high: "yüksek" };
+
+/** Doğrulamada elenen önerilerin nedenleri (YZ uydurması / yanlış eşleme şeffaf görünür). */
+const REJECT_LABEL: Record<string, string> = {
+  sembol_yok: "sembol yok",
+  ad_uyusmuyor: "ad tutmuyor",
+  likidite_dusuk: "likidite düşük",
+  tur_uygun_degil: "tür uygun değil",
+  gecmis_yetersiz: "geçmiş yetersiz",
+};
+
+export const discoveryRejectSummary = (vm: NewsDiscoveryView | undefined) =>
+  Object.entries(vm?.stats?.rejected ?? {})
+    .filter(([, n]) => n > 0)
+    .map(([k, n]) => `${REJECT_LABEL[k] ?? k} ${n}`)
+    .join(" · ");
+
+/** Olayın gösterilecek varlıkları: doğrulanmış keşif adayı ya da takipteki (kayıtlı) varlık. */
+export const shownAssets = (ev: NewsDiscoveryEvent) =>
+  ev.assets.filter((a) => a.status === "valid" || a.status === "registry");
+
+export const DISCOVERY_STATUS_LABEL: Record<string, string> = {
+  OK: "çalışıyor",
+  LOCAL_LLM_OFF: "yerel YZ kapalı",
+  DAILY_CAP: "günlük sınır doldu",
+  DISABLED: "kapalı",
+  UNKNOWN: "henüz çalışmadı",
 };
 
 export const IDEA_VERDICT_TONE: Record<IdeaVerdict, string> = {

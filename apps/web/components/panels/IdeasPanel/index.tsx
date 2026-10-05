@@ -6,34 +6,41 @@ import { EmptyState } from "@/components/shell/EmptyState";
 import { LoadingState } from "@/components/shell/LoadingState";
 import { PanelFrame } from "@/components/shell/PanelFrame";
 import { PanelHeader } from "@/components/shell/PanelHeader";
+import { NewsPreparedSetupsSection } from "@/components/panels/NewsPreparedSetupsPanel";
 import { useIdeas } from "@/lib/queries/hooks";
 import {
-  IDEA_KIND_LABEL,
   IDEA_VERDICT_TONE,
   aiSourceLabel,
   biasLabel,
+  ideaKindLabel,
   newsArrow,
   selectForecastHitRate,
   selectIdeas,
 } from "@/lib/selectors/ideas";
 import type { Idea } from "@/types/generated/api";
 
+import { NewsDiscoverySection, WorldBriefLine } from "./NewsDiscovery";
+
 function fmt(value?: number | null, digits = 2) {
   return typeof value === "number" && Number.isFinite(value) ? value.toFixed(digits) : "—";
 }
 
-/** Fikir Panosu — keşif + haber öngörüsü + teknik analiz + yapay zekâ değerlendirmesi (salt-gözlem). */
+/** Fikir Panosu — haber akışı → sonuç → keşif → teknik analiz → yapay zekâ değerlendirmesi (salt-gözlem).
+ *  Dünya Özeti ve Haber Kaynaklı Hazır Pozisyonlar da burada (owner kararı 2026-10-05, ikinci tur). */
 export function IdeasPanel() {
   const { data, isLoading } = useIdeas();
   const ideas = selectIdeas(data);
   const hit = selectForecastHitRate(data);
+  const [setupsOpen, setSetupsOpen] = useState(false);
 
   return (
     <PanelFrame id="ideas" className="border-accent-cyan/20">
       <PanelHeader
         title="Fikirler"
-        subtitle="keşif · haber öngörüsü · teknik analiz · yapay zekâ değerlendirmesi"
+        subtitle="haber akışı → sonuç → keşif · teknik analiz · yapay zekâ değerlendirmesi"
       />
+      <WorldBriefLine />
+      <NewsDiscoverySection vm={data?.discovery} />
       {isLoading ? (
         <LoadingState />
       ) : !ideas.length ? (
@@ -45,6 +52,20 @@ export function IdeasPanel() {
           ))}
         </div>
       )}
+      <div className="mt-3">
+        <button
+          type="button"
+          onClick={() => setSetupsOpen((v) => !v)}
+          className="text-[10px] uppercase tracking-widest text-accent-cyan/70 hover:text-accent-cyan"
+        >
+          {setupsOpen ? "▾" : "▸"} Haber kaynaklı hazır pozisyonlar
+        </button>
+        {setupsOpen ? (
+          <div className="mt-2">
+            <NewsPreparedSetupsSection />
+          </div>
+        ) : null}
+      </div>
       <div className="mt-3 border-t border-white/8 pt-2 text-[10px] leading-4 text-white/38">
         {data?.honesty}
         {data?.news ? (
@@ -72,7 +93,7 @@ function IdeaCard({ idea }: { idea: Idea }) {
         <span className="font-display text-sm text-white/90">{idea.symbol}</span>
         <span className="text-[11px] text-white/50">{idea.name}</span>
         <span className="rounded border border-white/10 px-1.5 py-0.5 text-[9px] uppercase tracking-widest text-white/45">
-          {IDEA_KIND_LABEL[idea.kind] ?? idea.kind}
+          {ideaKindLabel(idea)}
         </span>
         {idea.status === "AWAITING_APPROVAL" ? (
           <a
@@ -99,6 +120,19 @@ function IdeaCard({ idea }: { idea: Idea }) {
           </span>
           <span className="min-w-0 flex-1 text-white/75">{ai.thesis}</span>
           <span className="text-[9px] text-white/35">{aiSourceLabel(ai.source)}</span>
+        </div>
+      ) : null}
+
+      {idea.news_chain?.length ? (
+        <div className="mt-2 space-y-0.5 rounded border border-white/8 bg-black/20 px-2 py-1.5 text-[11px] leading-5">
+          <div className="text-[9px] uppercase tracking-widest text-white/35">Haber zinciri</div>
+          {idea.news_chain.slice(0, 2).map((link) => (
+            <div key={link.title} className="text-white/65">
+              <span className="text-white/80">{link.title}</span>
+              {link.consequence ? <span className="text-white/50"> → {link.consequence}</span> : null}
+              <span className="text-white/50"> → {newsArrow(link.direction ?? undefined)} {idea.symbol}</span>
+            </div>
+          ))}
         </div>
       ) : null}
 

@@ -62,16 +62,28 @@ listeler. Temizlik boyunca yeni özellik, yeni flag, yeni veri kaynağı eklenme
 - YZ = yerel `qwen3:8b` (Ollama, düşünme kapalı). AWS'te yerel model yok →
   deterministik değerlendirme.
 - Evrene emtia eklenir (bakır, doğalgaz, WTI, platin, paladyum, tarım, uranyum,
-  lityum); haberden ayrıca aday üretilmez.
+  lityum).
 - Fikirler Heart'ta "Fikirler" sekmesinde; adaya özel web haber araması sınırlı.
+
+## Verilmiş owner kararları (2026-10-05, ikinci tur — haber güdümlü keşif)
+
+- Keşif kayıtlı/listelenmiş varlıklarla sınırlı kalmaz: tüm haber akışından olayın
+  doğuracağı sonuçlar ve etkilenecek varlıklar bulunur (ilk turdaki "haberden aday
+  üretilmez" kararının yerine geçer).
+- Kapsam her şey: emtia vadelisi, ETF, hisse, kripto, döviz (Yahoo'da doğrulanan).
+- Çıkarım yerel YZ + deterministik doğrulama.
+- Dünya Özeti ve Haber Kaynaklı Hazır Pozisyonlar Fikirler'de birleşir, Heart'tan kalkar.
+- Kayıtlı varlık eşlemesi kelime sınırıyla (alt-dize hatası düzeltildi).
 
 ## Açık owner kararları
 
 - **E4 Olay sonucunu karara bağlamak:** CP5 kırmızı çizgi — yeterli olay birikip
   kanıt çıkmadan yapılmaz; yalnız owner onayıyla. Kanıt: Olay Takvimi paneli /
   `GET /api/v1/calendar/event-outcomes` (aile × sonuç × ufuk isabet oranı).
-- Haber eşlemesinde kayıt defteri terimleri alt-dize olarak aranıyor ("Sep**tem**ber"
-  → TEM, "N**eth**ermind" → ETHUSD); kelime-sınırı düzeltmesi owner onayı bekliyor.
+- Haber eşlemesinin yerleşik anahtar kelime kuralları (`classify_asset_impact`) hâlâ
+  alt-dize arıyor ("tur**moil**" → BRENT, "soft**war**e" → VIX, "**Fed**Ex" → DXY,
+  "**Gold**man" → XAUUSD; 2026-10-05 doğrulandı);
+  düzeltmesi karar zincirine dokunur (golden farkı olabilir), owner onayı bekliyor.
 
 - **Fikir → paper işlem bağlantısı:** CP5 kırmızı çizgi — fikir skoru ve haber
   öngörü karnesi (Fikirler sekmesi alt satırı) kanıt biriktirmeden karar yoluna

@@ -407,7 +407,7 @@ def evaluation_for(symbol: str) -> dict | None:
 
 
 def viewmodel() -> dict:
-    from packages.discovery import news_forecast
+    from packages.discovery import news_discovery, news_forecast
 
     state = _load()
     nf = news_forecast.viewmodel()
@@ -418,6 +418,7 @@ def viewmodel() -> dict:
         "ideas": list(state.get("ideas") or []),
         "news": {"generated_at": nf.get("generated_at"), "headlines": nf.get("headlines", 0),
                  "scorecard": nf.get("scorecard")},
+        "discovery": news_discovery.viewmodel(),
     }
 
 

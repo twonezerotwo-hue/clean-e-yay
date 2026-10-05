@@ -108,9 +108,21 @@ yazılır ve EXPLORATION kohortuna düşer: yalnız güven kalibrasyonu (`calibr
 
 ## Keşif & Fikir Panosu (salt-gözlem)
 
-Learning worker her keşif taramasında (`discovery.scan_enabled()`) üç adım koşar;
-hiçbiri işlem açmaz, evrene varlık eklemez, RiskGate'e dokunmaz:
+Learning worker her turda (`discovery.scan_enabled()`) dört adım koşar;
+hiçbiri işlem açmaz, işlem evrenine varlık eklemez, RiskGate'e dokunmaz:
 
+0. **Haber güdümlü keşif** (`packages/discovery/news_discovery.py`): tüm RSS akışı
+   (piyasa + jeopolitik + `news_discovery.extra_feeds` konu kaynakları; 15 dk'da bir,
+   kaynak başına 15 başlık) her turda 15'lik gruplar halinde yerel YZ'ye (yalnız Ollama,
+   JSON modu; ortak LLM bütçesini harcamaz, günde en çok 300 çağrı) sorulur: fiyatı
+   gerçekten etkileyecek olay → sonuç → etkilenen işlem gören varlıklar (hisse, ETF,
+   vadeli, kripto, döviz; yön + güven). Önerilen sembol Yahoo'da doğrulanır (var mı, tür,
+   ad örtüşmesi, ≥31 günlük geçmiş, hisse/ETF/kripto ≥5 M$ günlük hacim; tutmazsa adla
+   aranır); elenenler nedeniyle sayılır. Kayıtlı varlığa denk gelen sonuç aday olmaz, o
+   varlığın haber öngörüsüne kanıt olur. Doğrulanan adaylar 72 saatlik deftere
+   (`NEWS_DISCOVERY_PATH`) yazılır; yukarı yönlüler tarayıcının `news` evrenine girer
+   (taze sonucu olmayan turda 2'ye kadar öncelikli). Yerel model yoksa (AWS)
+   `LOCAL_LLM_OFF`.
 1. **Keşif + teknik analiz** (`packages/discovery/scanner.py`): kripto momentum kısa
    listesi, yükselen sektör ETF'leri ve emtia kısa listesi (`config/discovery.yaml`
    `commodities`, Yahoo vadeli/ETF; 30g/7g momentum) aynı teknik motordan geçer.
@@ -129,7 +141,13 @@ hiçbiri işlem açmaz, evrene varlık eklemez, RiskGate'e dokunmaz:
    LLM yoksa deterministik değerlendirme. Sonuç `IDEA_BOARD_PATH`
    (`data/runtime/idea_board.json`).
 
-Okuma: `GET /api/v1/ideas` → Heart "Fikirler" sekmesi; sohbet bağlamında ilk 3 fikir.
+Haber öngörüsü YZ'nin bir varlığa bağladığı başlığı o varlık için doğrudan kanıt sayar
+(güvenle ağırlıklı); fikir kartı ve YZ değerlendirme dosyası "başlık → sonuç → yön"
+zincirini taşır.
+
+Okuma: `GET /api/v1/ideas` → Heart "Fikirler" sekmesi (başta Dünya Özeti satırı ve
+"Haber akışından keşif", altta katlanır "Haber kaynaklı hazır pozisyonlar"; Dünya
+Özeti'nin detayı Soul katmanında); sohbet bağlamında ilk 3 fikir.
 YZ hükmü governor terfi paketine yalnız **kanıt** olarak eklenir; terfi kriterleri
 deterministik kalır ve owner onayı şarttır (CP5).
 

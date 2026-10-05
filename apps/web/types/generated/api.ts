@@ -2273,6 +2273,7 @@ export type DiscoveryUniverse = {
   crypto: { status: string; count: number; fetched_at?: string | null };
   sectors: { rising_n: number; symbols: string[] };
   commodities?: { status: string; count: number; fetched_at?: string | null; symbols: string[] };
+  news?: { status: string; count: number; symbols: string[] };
 };
 
 export type DiscoveryScan = {
@@ -2289,7 +2290,7 @@ export type DiscoveryShadowSummary = {
 };
 
 // Fikir Panosu (owner kararı 2026-10-05) — salt-gözlem; YZ hükmü anlatıdır.
-export type IdeaKind = "crypto" | "commodity" | "sector_etf";
+export type IdeaKind = "crypto" | "commodity" | "sector_etf" | "news";
 export type IdeaStatus = "WATCHING" | "PROMOTION_READY" | "AWAITING_APPROVAL";
 export type IdeaVerdict = "STRONG" | "WATCH" | "WEAK";
 export type IdeaNewsDirection = "up" | "down" | "neutral";
@@ -2336,10 +2337,20 @@ export type IdeaEvaluation = {
   fingerprint?: string;
 };
 
+export type IdeaChainLink = {
+  title: string;
+  source?: string | null;
+  ts?: string | null;
+  consequence?: string | null;
+  direction?: string | null;
+  confidence?: string | null;
+};
+
 export type Idea = {
   symbol: string;
   kind: IdeaKind;
   name: string;
+  asset_type?: string | null;
   score: number;
   components: { technical: number; scorecard: number; news: number; risk: number };
   status: IdeaStatus;
@@ -2373,6 +2384,7 @@ export type Idea = {
   news?: IdeaNews | null;
   market?: { chg_7d_pct?: number | null; chg_30d_pct?: number | null };
   risk_notes: string[];
+  news_chain?: IdeaChainLink[];
   ai?: IdeaEvaluation;
 };
 
@@ -2388,6 +2400,55 @@ export type IdeaBoardView = {
   honesty: string;
   ideas: Idea[];
   news: { generated_at?: string | null; headlines: number; scorecard?: NewsForecastScorecard };
+  discovery?: NewsDiscoveryView;
+};
+
+// Haber güdümlü keşif (owner kararı 2026-10-05, ikinci tur) — olay → sonuç → varlık.
+export type NewsDiscoveryAssetType = "equity" | "etf" | "future" | "crypto" | "fx";
+export type NewsDiscoveryAssetStatus = "valid" | "registry" | "rejected" | "deferred";
+
+export type NewsDiscoveryAsset = {
+  symbol?: string | null;
+  ticker?: string | null;
+  name?: string | null;
+  asset_type?: NewsDiscoveryAssetType | null;
+  direction?: "up" | "down" | null;
+  confidence?: "low" | "med" | "high" | null;
+  status: NewsDiscoveryAssetStatus;
+  reason?: string | null;
+  proposed_ticker?: string | null;
+};
+
+export type NewsDiscoveryEvent = {
+  title: string;
+  source?: string | null;
+  ts?: string | null;
+  consequence?: string | null;
+  analyzed_at?: string | null;
+  assets: NewsDiscoveryAsset[];
+};
+
+export type NewsDiscoveryCandidate = {
+  symbol: string;
+  ticker: string;
+  name?: string | null;
+  asset_type?: string | null;
+  direction: "up" | "down" | "mixed";
+  strength: number;
+  n_events: number;
+  price?: number | null;
+  chg_7d_pct?: number | null;
+  chg_30d_pct?: number | null;
+  first_seen?: string | null;
+  last_seen?: string | null;
+};
+
+export type NewsDiscoveryView = {
+  generated_at?: string | null;
+  status: string;
+  events: NewsDiscoveryEvent[];
+  candidates: NewsDiscoveryCandidate[];
+  stats: { calls_today?: number; screened?: number; pool?: number | null; rejected?: Record<string, number> };
 };
 
 export type DiscoveryView = {

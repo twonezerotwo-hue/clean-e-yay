@@ -4941,14 +4941,96 @@ components:
             generated_at: { type: string, nullable: true }
             headlines: { type: integer }
             scorecard: { $ref: "#/components/schemas/NewsForecastScorecard" }
+        discovery: { $ref: "#/components/schemas/NewsDiscoveryView" }
+
+    NewsDiscoveryView:
+      type: object
+      description: >
+        Haber güdümlü keşif (owner kararı 2026-10-05, ikinci tur): tüm haber akışından yerel
+        YZ'nin çıkardığı olay → sonuç → etkilenen varlık zincirleri ve Yahoo'da doğrulanmış
+        adaylar. Salt-gözlem; işlem evrenine eklemez.
+      required: [status, events, candidates, stats]
+      properties:
+        generated_at: { type: string, nullable: true }
+        status: { type: string }
+        events:
+          type: array
+          items: { $ref: "#/components/schemas/NewsDiscoveryEvent" }
+        candidates:
+          type: array
+          items: { $ref: "#/components/schemas/NewsDiscoveryCandidate" }
+        stats:
+          type: object
+          properties:
+            calls_today: { type: integer }
+            screened: { type: integer }
+            pool: { type: integer, nullable: true }
+            rejected: { type: object, additionalProperties: { type: integer } }
+
+    NewsDiscoveryEvent:
+      type: object
+      required: [title, assets]
+      properties:
+        title: { type: string }
+        source: { type: string, nullable: true }
+        ts: { type: string, nullable: true }
+        consequence: { type: string, nullable: true }
+        analyzed_at: { type: string, nullable: true }
+        assets:
+          type: array
+          items: { $ref: "#/components/schemas/NewsDiscoveryAsset" }
+
+    NewsDiscoveryAsset:
+      type: object
+      required: [status]
+      properties:
+        symbol: { type: string, nullable: true }
+        ticker: { type: string, nullable: true }
+        name: { type: string, nullable: true }
+        asset_type: { type: string, nullable: true, enum: [equity, etf, future, crypto, fx] }
+        direction: { type: string, nullable: true, enum: [up, down] }
+        confidence: { type: string, nullable: true, enum: [low, med, high] }
+        status: { type: string, enum: [valid, registry, rejected, deferred] }
+        reason: { type: string, nullable: true }
+        proposed_ticker: { type: string, nullable: true }
+
+    NewsDiscoveryCandidate:
+      type: object
+      required: [symbol, ticker, direction, strength, n_events]
+      properties:
+        symbol: { type: string }
+        ticker: { type: string }
+        name: { type: string, nullable: true }
+        asset_type: { type: string, nullable: true }
+        direction: { type: string, enum: [up, down, mixed] }
+        strength: { type: integer }
+        n_events: { type: integer }
+        price: { type: number, nullable: true }
+        chg_7d_pct: { type: number, nullable: true }
+        chg_30d_pct: { type: number, nullable: true }
+        first_seen: { type: string, nullable: true }
+        last_seen: { type: string, nullable: true }
+
+    IdeaChainLink:
+      type: object
+      description: Haber zinciri halkası — başlık → sonuç → bu varlık için yön.
+      required: [title]
+      properties:
+        title: { type: string }
+        source: { type: string, nullable: true }
+        ts: { type: string, nullable: true }
+        consequence: { type: string, nullable: true }
+        direction: { type: string, nullable: true }
+        confidence: { type: string, nullable: true }
 
     Idea:
       type: object
       required: [symbol, kind, name, score, components, status, status_label, technical, scorecard, risk_notes]
       properties:
         symbol: { type: string }
-        kind: { type: string, enum: [crypto, commodity, sector_etf] }
+        kind: { type: string, enum: [crypto, commodity, sector_etf, news] }
         name: { type: string }
+        asset_type: { type: string, nullable: true }
         score: { type: integer }
         components:
           type: object
@@ -4997,6 +5079,9 @@ components:
             chg_7d_pct: { type: number, nullable: true }
             chg_30d_pct: { type: number, nullable: true }
         risk_notes: { type: array, items: { type: string } }
+        news_chain:
+          type: array
+          items: { $ref: "#/components/schemas/IdeaChainLink" }
         ai: { $ref: "#/components/schemas/IdeaEvaluation" }
 
     IdeaTaSummary:
@@ -5116,6 +5201,14 @@ components:
             status: { type: string }
             count: { type: integer }
             fetched_at: { type: string, nullable: true }
+            symbols: { type: array, items: { type: string } }
+        news:
+          type: object
+          description: Haber güdümlü keşif adayları (doğrulanmış, yukarı yönlü; owner kararı 2026-10-05)
+          required: [status, count, symbols]
+          properties:
+            status: { type: string }
+            count: { type: integer }
             symbols: { type: array, items: { type: string } }
 
     DiscoveryScan:
