@@ -175,14 +175,32 @@ def _refresh_pool(state: dict, cfg: Mapping[str, Any], now: datetime, fetch_grou
     return {"status": "FETCHED", "items": len(items), "feeds_ok": ok}
 
 
+# Olay değil yorum/tahmin olan başlıklar YZ'ye hiç gitmez (2026-10-05 canlı bulgu: "XRP Is
+# Coiling for a Big Move: Analysts Point to Breakout Levels" inceleme tavsiyesi üretti).
+_SPECULATIVE_RE = re.compile(
+    r"price prediction|predictions?\b|predicts?\b|price analysis|technical analysis|here'?s what|"
+    r"what (?:that|this|it) means|analysts? (?:point|say|see|eye)|breakout level|coiling|golden cross|"
+    r"death cross|should you (?:buy|sell)|is it time to|could (?:hit|reach|soar|explode)|\?\s*(?:-.*)?$",
+    re.IGNORECASE,
+)
+
+
+def is_speculative(title: str) -> bool:
+    return bool(_SPECULATIVE_RE.search(title or ""))
+
+
 def _pending(state: Mapping[str, Any], cfg: Mapping[str, Any], now: datetime) -> list[dict]:
-    """İşlenmemiş taze başlıklar: en yeni önce, kaynaklar arasında sırayla (tek kaynak boğmasın)."""
-    seen = dict(state.get("seen") or {})
+    """İşlenmemiş taze başlıklar: en yeni önce, kaynaklar arasında sırayla (tek kaynak boğmasın).
+    Yorum/tahmin başlıkları 'görüldü' sayılıp atlanır."""
+    seen = state.setdefault("seen", {})
     max_age = timedelta(hours=cfg["max_headline_age_hours"])
     by_source: dict[str, list[dict]] = {}
     for it in (state.get("pool") or {}).get("items") or []:
         ts = _parse(it.get("ts"))
         if it["key"] in seen or ts is None or now - ts > max_age:
+            continue
+        if is_speculative(it.get("title") or ""):
+            seen[it["key"]] = _iso(now)
             continue
         by_source.setdefault(it.get("source") or "", []).append(it)
     queues = [sorted(v, key=lambda x: x["ts"], reverse=True) for _, v in sorted(by_source.items())]

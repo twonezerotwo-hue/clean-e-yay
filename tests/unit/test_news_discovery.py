@@ -261,3 +261,21 @@ def test_deferred_proposals_are_retried_next_run(store):
     copx = nd.viewmodel()["events"][0]["assets"][1]
     assert copx["status"] == "valid" and copx["symbol"] == "COPX"          # yeniden denendi, doğrulandı
     assert copx["direction"] == "up" and copx["confidence"] == "med" and copx["proposed_ticker"] == "COPX"
+
+
+@pytest.mark.parametrize("title,spec", [
+    ("XRP Is Coiling for a Big Move: Analysts Point to Breakout Levels and Rising Bullish Momentum", True),
+    ("Aave Price Prediction: $305K Drain Should Not Stop AAVE From Reaching $300 Soon", True),
+    ("Watch A Gold Relief Rally on the Horizon? - Bloomberg.com", True),
+    ("Bitcoin Just Flashed a Second, Stronger Golden Cross: Here's What That Means", True),
+    ("Chile copper mine strike halts output at Escondida", False),
+    ("OPEC+ agrees to cut output by 500,000 barrels a day", False),
+])
+def test_speculative_headlines_never_reach_the_model(title, spec):
+    assert nd.is_speculative(title) is spec
+
+
+def test_speculative_headlines_are_marked_seen_and_skipped(store):
+    client = FakeClient(text='{"e":[]}')
+    _run(client, Net(heads=["Aave Price Prediction: AAVE to $300?", "Chile copper mine strike halts output"]))
+    assert "Aave" not in client.prompts[0] and "Chile copper" in client.prompts[0]
