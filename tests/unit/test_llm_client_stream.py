@@ -132,6 +132,9 @@ def test_ollama_requests_disable_thinking(llm_env, monkeypatch) -> None:
     assert client.complete("s", "u", 10) is not None
     list(client.stream(_MESSAGES, 10))
     assert [b.get("think") for b in sent] == [False, False]
+    assert "format" not in sent[0]                       # varsayılan: serbest metin
+    client.complete("s", "u", 10, json_mode=True)
+    assert sent[-1]["format"] == "json"                  # haber keşfi: zorunlu JSON
 
 
 # ---------- Mock stream ----------

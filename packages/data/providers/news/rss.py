@@ -177,6 +177,7 @@ def parse_feed(
     *,
     geo: bool = False,
     now: datetime | None = None,
+    max_items: int = MAX_PER_FEED,
 ) -> list[NewsHeadline]:
     """Tek feed'in XML'ini NewsHeadline listesine çevirir.
 
@@ -246,7 +247,7 @@ def parse_feed(
         )
 
     raw_items.sort(key=lambda x: x[0], reverse=True)
-    return [h for _, h in raw_items[:MAX_PER_FEED]]
+    return [h for _, h in raw_items[:max_items]]
 
 
 def fetch_feed_group(
@@ -254,6 +255,7 @@ def fetch_feed_group(
     *,
     geo: bool = False,
     fetch_fn: FetchFn | None = None,
+    max_items: int = MAX_PER_FEED,
 ) -> tuple[list[NewsHeadline], int, str | None]:
     """Feed grubunu paralel çeker. Döner: (headlines, ok_feed_count, last_error)."""
     from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -266,7 +268,7 @@ def fetch_feed_group(
     def _one(feed: dict[str, str]) -> tuple[list[NewsHeadline], str | None]:
         try:
             xml_text = fetch(feed["url"])
-            return parse_feed(xml_text, feed["source"], geo=geo), None
+            return parse_feed(xml_text, feed["source"], geo=geo, max_items=max_items), None
         except Exception as exc:
             return [], f"{feed['source']}: {str(exc)[:120]}"
 

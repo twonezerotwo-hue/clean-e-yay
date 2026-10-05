@@ -79,6 +79,39 @@ commodities:
     URANIUM:   { ticker: "URA",  label: "Uranyum (ETF)",  keywords: ["uranium", "uranyum"] }
     LITHIUM:   { ticker: "LIT",  label: "Lityum (ETF)",   keywords: ["lithium", "lityum"] }
 
+# Haber güdümlü keşif (owner kararı 2026-10-05, ikinci tur) — packages/discovery/news_discovery.py.
+# SALT-GÖZLEM: tüm haber akışından yerel YZ (Ollama) olay → sonuç → etkilenen varlık
+# çıkarır; sembol Yahoo'da doğrulanır (var mı, tür, ad, likidite). İşlem evrenine girmez.
+# YZ yalnız yerelde koşar, ortak LLM bütçesini harcamaz; yerel model yoksa adım atlanır.
+news_discovery:
+  enabled: true
+  feed_refresh_min: 15          # ham akış yenileme (tüm RSS + konu kaynakları)
+  per_feed: 15                  # kaynak başına başlık
+  max_headline_age_hours: 12
+  headlines_per_call: 15        # bir YZ çağrısında taranan başlık (ölçüm: ~12 sn)
+  calls_per_run: 1              # öğrenme turu başına (5 dk) → saatte ~180 başlık
+  max_calls_per_day: 300
+  max_output_tokens: 700
+  max_events_per_call: 4
+  max_assets_per_event: 3
+  max_new_resolutions_per_run: 8  # Yahoo doğrulama çağrısı sınırı (önbellekli)
+  candidate_ttl_hours: 72
+  half_life_hours: 24
+  max_candidates: 15
+  min_scan_strength: 20         # teknik analize girmek için en düşük haber gücü (yukarı yön)
+  min_dollar_volume: 5000000    # hisse/ETF/kripto günlük işlem hacmi alt sınırı ($)
+  # Konu kaynakları — 2026-10-05'te repo'nun kendi fetch+parse'ıyla canlı test edildi
+  # (hepsi taze başlık döndürdü; DATA_POLICY: çalışmayan eklenmez).
+  extra_feeds:
+    - { source: "Tarım", url: "https://news.google.com/rss/search?q=when:1d+(drought+OR+harvest+OR+crop+OR+frost)+(wheat+OR+corn+OR+coffee+OR+cocoa+OR+sugar+OR+soybean)&hl=en-US&gl=US&ceid=US:en" }
+    - { source: "Madencilik", url: "https://news.google.com/rss/search?q=when:1d+(mine+OR+mining+OR+smelter+OR+strike)+(copper+OR+lithium+OR+nickel+OR+cobalt+OR+aluminum+OR+uranium)&hl=en-US&gl=US&ceid=US:en" }
+    - { source: "Enerji arzı", url: "https://news.google.com/rss/search?q=when:1d+(OPEC+OR+refinery+OR+pipeline+OR+LNG)+(outage+OR+supply+OR+output)&hl=en-US&gl=US&ceid=US:en" }
+    - { source: "Nakliye", url: "https://news.google.com/rss/search?q=when:1d+(shipping+OR+freight+OR+port+OR+%22supply+chain%22)+(disruption+OR+strike+OR+closure)&hl=en-US&gl=US&ceid=US:en" }
+    - { source: "Yarı iletken", url: "https://news.google.com/rss/search?q=when:1d+(semiconductor+OR+chip)+(export+OR+ban+OR+shortage+OR+tariff)&hl=en-US&gl=US&ceid=US:en" }
+    - { source: "İlaç", url: "https://news.google.com/rss/search?q=when:1d+(FDA+approval+OR+drug+trial+OR+outbreak)&hl=en-US&gl=US&ceid=US:en" }
+    - { source: "Ticaret politikası", url: "https://news.google.com/rss/search?q=when:1d+(tariff+OR+sanctions+OR+%22export+ban%22)&hl=en-US&gl=US&ceid=US:en" }
+    - { source: "Google Business", url: "https://news.google.com/rss/headlines/section/topic/BUSINESS?hl=en-US&gl=US&ceid=US:en" }
+
 # Haber öngörüsü (owner kararı 2026-10-05) — packages/discovery/news_forecast.py.
 # SALT-GÖZLEM: karar/boyut/RiskGate'e girmez; fikir panosu + öngörü karnesi besler.
 # Başlıklar: son snapshot'ların doğrulanmış RSS başlıkları + sınırlı web araması

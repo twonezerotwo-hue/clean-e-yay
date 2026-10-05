@@ -407,26 +407,29 @@ class OllamaClient:
         self.keep_alive = os.environ.get("OLLAMA_KEEP_ALIVE", "30m").strip()
 
     def complete(
-        self, system: str, user: str, max_tokens: int, temperature: float = 0.2
+        self, system: str, user: str, max_tokens: int, temperature: float = 0.2,
+        *, json_mode: bool = False,
     ) -> LLMCompletion | None:
-        body = json.dumps(
-            {
-                "model": self.model,
-                "stream": False,
-                "keep_alive": self.keep_alive,
-                # qwen3 gibi düşünen modellerde düşünme metni num_predict'i yiyip
-                # cevabı kesiyordu (2026-10-05 ölçümü); anlatı için gerekmez.
-                "think": False,
-                "messages": [
-                    {"role": "system", "content": system},
-                    {"role": "user", "content": user},
-                ],
-                "options": {
-                    "temperature": float(temperature),
-                    "num_predict": int(max_tokens),
-                },
-            }
-        ).encode("utf-8")
+        payload: dict = {
+            "model": self.model,
+            "stream": False,
+            "keep_alive": self.keep_alive,
+            # qwen3 gibi düşünen modellerde düşünme metni num_predict'i yiyip
+            # cevabı kesiyordu (2026-10-05 ölçümü); anlatı için gerekmez.
+            "think": False,
+            "messages": [
+                {"role": "system", "content": system},
+                {"role": "user", "content": user},
+            ],
+            "options": {
+                "temperature": float(temperature),
+                "num_predict": int(max_tokens),
+            },
+        }
+        if json_mode:
+            # Ollama yapılandırılmış çıktı: geçerli JSON üretimi zorlanır (haber keşfi).
+            payload["format"] = "json"
+        body = json.dumps(payload).encode("utf-8")
         req = urllib.request.Request(
             self.api_url,
             data=body,

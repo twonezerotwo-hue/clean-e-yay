@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json
 import urllib.error
+import urllib.parse
 import urllib.request
 from datetime import UTC, datetime
 
@@ -17,6 +18,7 @@ from packages.data.registry import custom_assets
 from packages.data.types import OHLCVBar, Timeframe
 
 API = "https://query1.finance.yahoo.com/v8/finance/chart"
+SEARCH_API = "https://query2.finance.yahoo.com/v1/finance/search"
 TIMEOUT_SEC = 6.0
 
 _SYMBOL_MAP = {
@@ -70,29 +72,21 @@ def get_bars(symbol: str, timeframe: Timeframe) -> list[OHLCVBar] | None:
     return fetch_by_ticker(ticker, symbol, timeframe)
 
 
-def fetch_by_ticker(ticker: str, symbol: str, timeframe: Timeframe) -> list[OHLCVBar] | None:
-    """`_SYMBOL_MAP`'i atlayıp doğrudan Yahoo ticker'ı ile çeker — yeni asset
-    eklenmeden önce ticker'ı doğrulamak (probe) için kullanılır."""
-    plan = _TF_PLAN.get(timeframe)
-    if plan is None:
-        return None
-    interval, rng = plan
-    url = f"{API}/{ticker}?interval={interval}&range={rng}"
-    req = urllib.request.Request(
-        url,
-        headers={"User-Agent": "Mozilla/5.0 clean-e-yay/0.1"},
-    )
+def _get_json(url: str) -> dict | None:
+    req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0 clean-e-yay/0.1"})
     try:
         with urllib.request.urlopen(req, timeout=TIMEOUT_SEC) as resp:
-            data = json.loads(resp.read().decode("utf-8"))
+            return json.loads(resp.read().decode("utf-8"))
     except (urllib.error.URLError, TimeoutError, OSError, json.JSONDecodeError):
         return None
+
+
+def _parse_bars(result: dict, symbol: str, timeframe: Timeframe) -> list[OHLCVBar]:
     try:
-        result = data["chart"]["result"][0]
         timestamps = result["timestamp"]
         quote = result["indicators"]["quote"][0]
     except (KeyError, IndexError, TypeError):
-        return None
+        return []
     bars: list[OHLCVBar] = []
     for i, ts in enumerate(timestamps):
         try:
@@ -126,4 +120,50 @@ def fetch_by_ticker(ticker: str, symbol: str, timeframe: Timeframe) -> list[OHLC
                 verified=True,
             )
         )
-    return bars or None
+    return bars
+
+
+def fetch_by_ticker(ticker: str, symbol: str, timeframe: Timeframe) -> list[OHLCVBar] | None:
+    """`_SYMBOL_MAP`'i atlayıp doğrudan Yahoo ticker'ı ile çeker — yeni asset
+    eklenmeden önce ticker'ı doğrulamak (probe) için kullanılır."""
+    plan = _TF_PLAN.get(timeframe)
+    if plan is None:
+        return None
+    interval, rng = plan
+    data = _get_json(f"{API}/{ticker}?interval={interval}&range={rng}")
+    try:
+        result = data["chart"]["result"][0]
+    except (KeyError, IndexError, TypeError):
+        return None
+    return _parse_bars(result, symbol, timeframe) or None
+
+
+def fetch_chart(ticker: str, rng: str = "3mo") -> tuple[dict, list[OHLCVBar]] | None:
+    """Ticker'ın kimliği (meta: instrumentType, longName/shortName, borsa) + günlük
+    barları. Haber güdümlü keşifte sembol doğrulaması için; yoksa/hatalıysa None."""
+    data = _get_json(f"{API}/{ticker}?interval=1d&range={rng}")
+    try:
+        result = data["chart"]["result"][0]
+        meta = dict(result.get("meta") or {})
+    except (KeyError, IndexError, TypeError, AttributeError):
+        return None
+    return meta, _parse_bars(result, ticker, "1d")
+
+
+def search(query: str, count: int = 6) -> list[dict] | None:
+    """Yahoo sembol araması (ad → ticker adayları). Hata → None."""
+    q = urllib.parse.quote(query.strip()[:80])
+    data = _get_json(f"{SEARCH_API}?q={q}&quotesCount={int(count)}&newsCount=0")
+    if not isinstance(data, dict):
+        return None
+    out = []
+    for item in data.get("quotes") or []:
+        if not isinstance(item, dict) or not item.get("symbol"):
+            continue
+        out.append({
+            "symbol": str(item["symbol"]),
+            "type": str(item.get("quoteType") or ""),
+            "exchange": str(item.get("exchange") or ""),
+            "name": str(item.get("longname") or item.get("shortname") or ""),
+        })
+    return out
