@@ -2288,6 +2288,108 @@ export type DiscoveryShadowSummary = {
   active: number;
 };
 
+// Fikir Panosu (owner kararı 2026-10-05) — salt-gözlem; YZ hükmü anlatıdır.
+export type IdeaKind = "crypto" | "commodity" | "sector_etf";
+export type IdeaStatus = "WATCHING" | "PROMOTION_READY" | "AWAITING_APPROVAL";
+export type IdeaVerdict = "STRONG" | "WATCH" | "WEAK";
+export type IdeaNewsDirection = "up" | "down" | "neutral";
+
+export type IdeaTaSummary = {
+  bias?: string | null;
+  trend?: string | null;
+  adx?: number | null;
+  support?: number | null;
+  resistance?: number | null;
+  stop_reference?: number | null;
+  target_reference?: number | null;
+  patterns?: string[];
+  confirmations?: string[];
+  fib?: { validity?: string | null; zone?: string | null; nearest?: string | null; nearest_distance_pct?: number | null } | null;
+  [key: string]: unknown;
+};
+
+export type IdeaNews = {
+  direction: IdeaNewsDirection;
+  strength: number;
+  n_headlines?: number;
+  evidence?: {
+    title?: string;
+    source?: string | null;
+    ts?: string | null;
+    direction?: number;
+    origin?: string | null;
+    url?: string | null;
+  }[];
+};
+
+export type IdeaEvaluation = {
+  verdict: IdeaVerdict;
+  verdict_label: string;
+  thesis: string;
+  pros: string[];
+  cons: string[];
+  risks: string[];
+  change_mind?: string;
+  source: string;
+  model?: string | null;
+  evaluated_at?: string;
+  fingerprint?: string;
+};
+
+export type Idea = {
+  symbol: string;
+  kind: IdeaKind;
+  name: string;
+  score: number;
+  components: { technical: number; scorecard: number; news: number; risk: number };
+  status: IdeaStatus;
+  status_label: string;
+  proposal_id?: string | null;
+  technical: {
+    verdict: string;
+    entry_timeframe?: string | null;
+    entry?: number | null;
+    sl?: number | null;
+    tp?: number | null;
+    rr?: number | null;
+    expected_value?: number | null;
+    confidence?: number | null;
+    bullish_tfs?: string[];
+    checked_at?: string | null;
+    ta?: IdeaTaSummary | null;
+    ta_1d?: IdeaTaSummary | null;
+    reasons?: string[];
+  };
+  scorecard: {
+    signals: number;
+    resolved: number;
+    missed_win?: number;
+    avoided_loss?: number;
+    decisive: number;
+    win_rate?: number | null;
+    wilson_low?: number | null;
+    avg_r?: number | null;
+  };
+  news?: IdeaNews | null;
+  market?: { chg_7d_pct?: number | null; chg_30d_pct?: number | null };
+  risk_notes: string[];
+  ai?: IdeaEvaluation;
+};
+
+export type NewsForecastScorecard = {
+  resolved_total: number;
+  horizons: Record<string, unknown>;
+  note?: string;
+};
+
+export type IdeaBoardView = {
+  generated_at?: string | null;
+  mode: "observe_only";
+  honesty: string;
+  ideas: Idea[];
+  news: { generated_at?: string | null; headlines: number; scorecard?: NewsForecastScorecard };
+};
+
 export type DiscoveryView = {
   enabled: boolean;
   generated_at?: string | null;

@@ -111,6 +111,18 @@ def evaluate(*, candidates: dict | None = None) -> dict:
     }
 
 
+def _ai_evaluation(symbol: str) -> dict | None:
+    try:
+        from packages.discovery import ideas
+
+        ev = ideas.evaluation_for(symbol)
+    except Exception:
+        return None
+    if not ev:
+        return None
+    return {k: ev.get(k) for k in ("verdict_label", "thesis", "pros", "cons", "risks", "source", "evaluated_at")}
+
+
 def run() -> dict:
     """learning_worker giriş noktası: değerlendir; READY adaylar için governor
     defterine owner-onay paketi sun (aday başına submit dedupe'lu — tek PENDING)."""
@@ -130,7 +142,9 @@ def run() -> dict:
                     "custom_assets'e ekleme ÖNERİSİ — otomatik EKLENMEZ; sen "
                     "onaylasan bile canlı evren değişmez (elle iş). KIRMIZI ÇİZGİ."
                 ),
-                evidence=ev,
+                # Fikir panosunun YZ değerlendirmesi (varsa) yalnız KANIT olarak eklenir;
+                # terfi kriterleri deterministik kalır (owner kararı 2026-10-05, CP5).
+                evidence={**ev, "ai_evaluation": _ai_evaluation(sym)},
                 # Aday başına SABİT anahtar → dedupe (sembol başına tek PENDING);
                 # promotion_criteria/challenger_promotion anahtarlarından FARKLI.
                 requested_change={"add_custom_asset": sym},

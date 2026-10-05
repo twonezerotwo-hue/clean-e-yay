@@ -457,6 +457,17 @@ def get_discovery() -> dict:
     return discovery_scanner.viewmodel()
 
 
+@router.get("/ideas")
+def get_idea_board() -> dict:
+    """Fikir Panosu (owner kararı 2026-10-05) — salt-okuma.
+
+    Learning worker'ın yazdığı artifact'ı sunar: keşif + haber öngörüsü + teknik
+    özet + gölge karne + YZ değerlendirmesi. İşlem açmaz, evrene eklemez."""
+    from packages.discovery import ideas
+
+    return ideas.viewmodel()
+
+
 @router.get("/learning/subsignal-scorecard")
 def get_subsignal_scorecard() -> dict:
     """D5 — Sinyal karnesi (v2 sert cetvel, read-only). Worker'ın haftalık

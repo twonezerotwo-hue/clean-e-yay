@@ -497,6 +497,21 @@ def run_once() -> dict:
         news_forecast_status = f"ERROR:{type(exc).__name__}"
         errors.append(f"news_forecast:{type(exc).__name__}")
 
+    # Fikir Panosu (owner kararı 2026-10-05, aynı kapı): keşif + haber + teknik →
+    # şeffaf fikir skoru + YZ değerlendirmesi (yerel model; turda en çok 2 çağrı,
+    # yoksa kurallı yedek). Terfiden ÖNCE koşar: YZ hükmü pakete kanıt olur.
+    ideas_status = "DISABLED"
+    try:
+        if discovery.scan_enabled():
+            from packages.discovery import ideas
+            ib = ideas.run()
+            ideas_status = str(ib.get("status", "UNKNOWN"))
+            log.info("ideas: n=%s llm_calls=%s top=%s errors=%s",
+                     ib.get("ideas"), ib.get("llm_calls"), ib.get("top"), ib.get("llm_errors"))
+    except Exception as exc:  # defensive — worker patlamamalı
+        ideas_status = f"ERROR:{type(exc).__name__}"
+        errors.append(f"ideas:{type(exc).__name__}")
+
     # K-4 — keşif adayı TERFİ kriteri (aynı DISCOVERY_SCAN_ENABLED kapısı):
     # tarayıcı+defter tazelendikten SONRA aday gölge karnesini üç eşiğe (≥20
     # çözüm + ≥2 TF + Wilson alt sınırı > 0.5) vurur; geçen aday için governor
@@ -896,6 +911,7 @@ def run_once() -> dict:
         "discovery_status": discovery_status,  # K-0b sektör rotasyonu (DISABLED=flag OFF)
         "discovery_scan_status": discovery_scan_status,  # K-1 tarayıcı
         "news_forecast_status": news_forecast_status,  # haber öngörüsü (2026-10-05)
+        "ideas_status": ideas_status,  # fikir panosu + YZ değerlendirmesi (2026-10-05)
         "discovery_promotion_status": discovery_promotion_status,  # K-4 terfi kriteri (DISABLED=flag OFF)
         "backtest_recon_status": backtest_recon_status,  # B-1 fidelity (DISABLED=flag OFF)
         "backtest_challenger_status": backtest_challenger_status,  # B-2 üretim (DISABLED=flag OFF)

@@ -909,6 +909,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/ideas": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Fikir Panosu — keşif + haber öngörüsü + teknik analiz + YZ değerlendirmesi (salt-gözlem) */
+        get: operations["getIdeaBoard"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/learning/subsignal-scorecard": {
         parameters: {
             query?: never;
@@ -3943,6 +3960,109 @@ export interface components {
             cost_usd_est?: number | null;
             label: string;
         };
+        /** @description Fikir Panosu (owner kararı 2026-10-05): keşif evreninden teknik sinyali olan ya da haber öngörüsü güçlü yukarı olan varlıklar; şeffaf fikir skoru + yapay zekâ değerlendirmesi. Salt-gözlem: işlem açmaz, evrene eklemez. */
+        IdeaBoardView: {
+            generated_at?: string | null;
+            /** @enum {string} */
+            mode: "observe_only";
+            honesty: string;
+            ideas: components["schemas"]["Idea"][];
+            news: {
+                generated_at?: string | null;
+                headlines: number;
+                scorecard?: components["schemas"]["NewsForecastScorecard"];
+            };
+        };
+        Idea: {
+            symbol: string;
+            /** @enum {string} */
+            kind: "crypto" | "commodity" | "sector_etf";
+            name: string;
+            score: number;
+            components: {
+                technical: number;
+                scorecard: number;
+                news: number;
+                risk: number;
+            };
+            /** @enum {string} */
+            status: "WATCHING" | "PROMOTION_READY" | "AWAITING_APPROVAL";
+            status_label: string;
+            proposal_id?: string | null;
+            technical: {
+                verdict: string;
+                entry_timeframe?: string | null;
+                entry?: number | null;
+                sl?: number | null;
+                tp?: number | null;
+                rr?: number | null;
+                expected_value?: number | null;
+                confidence?: number | null;
+                bullish_tfs?: string[];
+                checked_at?: string | null;
+                ta?: {
+                    [key: string]: unknown;
+                } | null;
+                ta_1d?: {
+                    [key: string]: unknown;
+                } | null;
+                reasons?: string[];
+            };
+            scorecard: {
+                signals: number;
+                resolved: number;
+                missed_win?: number;
+                avoided_loss?: number;
+                decisive: number;
+                win_rate?: number | null;
+                wilson_low?: number | null;
+                avg_r?: number | null;
+            };
+            news?: components["schemas"]["IdeaNews"];
+            market?: {
+                chg_7d_pct?: number | null;
+                chg_30d_pct?: number | null;
+            };
+            risk_notes: string[];
+            ai?: components["schemas"]["IdeaEvaluation"];
+        };
+        IdeaNews: {
+            /** @enum {string} */
+            direction: "up" | "down" | "neutral";
+            strength: number;
+            n_headlines?: number;
+            evidence?: {
+                title?: string;
+                source?: string | null;
+                ts?: string | null;
+                direction?: number;
+                origin?: string | null;
+                url?: string | null;
+            }[];
+        } | null;
+        /** @description Yapay zekâ fikir değerlendirmesi — anlatı; karar/terfi kriteri değildir. */
+        IdeaEvaluation: {
+            /** @enum {string} */
+            verdict: "STRONG" | "WATCH" | "WEAK";
+            verdict_label: string;
+            thesis: string;
+            pros: string[];
+            cons: string[];
+            risks: string[];
+            change_mind?: string;
+            source: string;
+            model?: string | null;
+            evaluated_at?: string;
+            fingerprint?: string;
+        };
+        /** @description Haber öngörüsü karnesi — ufuk × tür × güç kovası isabeti (çözülmüş öngörüler). */
+        NewsForecastScorecard: {
+            resolved_total: number;
+            horizons: {
+                [key: string]: unknown;
+            };
+            note?: string;
+        };
         /** @description Keşif tarayıcısı (K serisi) — "analiz sabit, varlık değişken". Geniş evren (yükselen sektör ETF'leri + kripto top-50) canlı analiz çekirdeğinden geçer ama işlem AÇILMAZ; tüm hükümler hipotetik. flag DISCOVERY_SCAN_ENABLED kapalıysa enabled=false + boş tablo döner. */
         DiscoveryView: {
             enabled: boolean;
@@ -5308,6 +5428,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DiscoveryView"];
+                };
+            };
+        };
+    };
+    getIdeaBoard: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IdeaBoardView"];
                 };
             };
         };

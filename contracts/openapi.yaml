@@ -753,6 +753,17 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/DiscoveryView" }
 
+  /api/v1/ideas:
+    get:
+      operationId: getIdeaBoard
+      summary: Fikir Panosu — keşif + haber öngörüsü + teknik analiz + YZ değerlendirmesi (salt-gözlem)
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/IdeaBoardView" }
+
   /api/v1/learning/subsignal-scorecard:
     get:
       operationId: getLearningSubsignalScorecard
@@ -4908,6 +4919,131 @@ components:
         n: { type: integer }
         cost_usd_est: { type: number, nullable: true }
         label: { type: string }
+
+    IdeaBoardView:
+      type: object
+      description: >
+        Fikir Panosu (owner kararı 2026-10-05): keşif evreninden teknik sinyali olan
+        ya da haber öngörüsü güçlü yukarı olan varlıklar; şeffaf fikir skoru +
+        yapay zekâ değerlendirmesi. Salt-gözlem: işlem açmaz, evrene eklemez.
+      required: [mode, honesty, ideas, news]
+      properties:
+        generated_at: { type: string, nullable: true }
+        mode: { type: string, enum: [observe_only] }
+        honesty: { type: string }
+        ideas:
+          type: array
+          items: { $ref: "#/components/schemas/Idea" }
+        news:
+          type: object
+          required: [headlines]
+          properties:
+            generated_at: { type: string, nullable: true }
+            headlines: { type: integer }
+            scorecard: { $ref: "#/components/schemas/NewsForecastScorecard" }
+
+    Idea:
+      type: object
+      required: [symbol, kind, name, score, components, status, status_label, technical, scorecard, risk_notes]
+      properties:
+        symbol: { type: string }
+        kind: { type: string, enum: [crypto, commodity, sector_etf] }
+        name: { type: string }
+        score: { type: integer }
+        components:
+          type: object
+          required: [technical, scorecard, news, risk]
+          properties:
+            technical: { type: number }
+            scorecard: { type: number }
+            news: { type: number }
+            risk: { type: number }
+        status: { type: string, enum: [WATCHING, PROMOTION_READY, AWAITING_APPROVAL] }
+        status_label: { type: string }
+        proposal_id: { type: string, nullable: true }
+        technical:
+          type: object
+          required: [verdict]
+          properties:
+            verdict: { type: string }
+            entry_timeframe: { type: string, nullable: true }
+            entry: { type: number, nullable: true }
+            sl: { type: number, nullable: true }
+            tp: { type: number, nullable: true }
+            rr: { type: number, nullable: true }
+            expected_value: { type: number, nullable: true }
+            confidence: { type: number, nullable: true }
+            bullish_tfs: { type: array, items: { type: string } }
+            checked_at: { type: string, nullable: true }
+            ta: { type: object, nullable: true, additionalProperties: true }
+            ta_1d: { type: object, nullable: true, additionalProperties: true }
+            reasons: { type: array, items: { type: string } }
+        scorecard:
+          type: object
+          required: [signals, resolved, decisive]
+          properties:
+            signals: { type: integer }
+            resolved: { type: integer }
+            missed_win: { type: integer }
+            avoided_loss: { type: integer }
+            decisive: { type: integer }
+            win_rate: { type: number, nullable: true }
+            wilson_low: { type: number, nullable: true }
+            avg_r: { type: number, nullable: true }
+        news: { $ref: "#/components/schemas/IdeaNews" }
+        market:
+          type: object
+          properties:
+            chg_7d_pct: { type: number, nullable: true }
+            chg_30d_pct: { type: number, nullable: true }
+        risk_notes: { type: array, items: { type: string } }
+        ai: { $ref: "#/components/schemas/IdeaEvaluation" }
+
+    IdeaNews:
+      type: object
+      nullable: true
+      required: [direction, strength]
+      properties:
+        direction: { type: string, enum: [up, down, neutral] }
+        strength: { type: integer }
+        n_headlines: { type: integer }
+        evidence:
+          type: array
+          items:
+            type: object
+            properties:
+              title: { type: string }
+              source: { type: string, nullable: true }
+              ts: { type: string, nullable: true }
+              direction: { type: number }
+              origin: { type: string, nullable: true }
+              url: { type: string, nullable: true }
+
+    IdeaEvaluation:
+      type: object
+      description: Yapay zekâ fikir değerlendirmesi — anlatı; karar/terfi kriteri değildir.
+      required: [verdict, verdict_label, thesis, pros, cons, risks, source]
+      properties:
+        verdict: { type: string, enum: [STRONG, WATCH, WEAK] }
+        verdict_label: { type: string }
+        thesis: { type: string }
+        pros: { type: array, items: { type: string } }
+        cons: { type: array, items: { type: string } }
+        risks: { type: array, items: { type: string } }
+        change_mind: { type: string }
+        source: { type: string }
+        model: { type: string, nullable: true }
+        evaluated_at: { type: string }
+        fingerprint: { type: string }
+
+    NewsForecastScorecard:
+      type: object
+      description: Haber öngörüsü karnesi — ufuk × tür × güç kovası isabeti (çözülmüş öngörüler).
+      required: [resolved_total, horizons]
+      properties:
+        resolved_total: { type: integer }
+        horizons: { type: object, additionalProperties: true }
+        note: { type: string }
 
     DiscoveryView:
       type: object
