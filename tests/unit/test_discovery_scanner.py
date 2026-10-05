@@ -345,6 +345,8 @@ def test_viewmodel_rows_merge_signal_and_shadow(monkeypatch, tmp_path):
         "sectors": {"rising_n": 2, "symbols": ["XLV", "XLF"]},
         # Emtia evreni (2026-10-05, additive): artifact'ta yoksa UNKNOWN/boş.
         "commodities": {"status": "UNKNOWN", "count": 0, "fetched_at": None, "symbols": []},
+        # Haber güdümlü keşif evreni (2026-10-05, ikinci tur, additive).
+        "news": {"status": "UNKNOWN", "count": 0, "symbols": []},
     }
     assert vm["scan"] == {"cursor": 7, "signals_n": 1, "signal_symbols": ["XLV"]}
     assert vm["shadow"] == {"active_n": 3, "tracked_new": 1, "resolved": 2, "active": 3}

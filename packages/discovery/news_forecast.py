@@ -45,6 +45,7 @@ _STOP_TICKERS = frozenset({
     "NEAR", "ONE", "ALL", "ANY", "FUN", "GAS", "KEY", "NOW", "TOP", "BIG", "NEW", "OPEN",
     "SUN", "CAT", "DOG", "PUMP", "LAB", "HYPE", "RAIN", "MOVE", "AI", "IT", "US", "UK",
 })
+_LLM_CONF_W = {"low": 0.6, "med": 0.9, "high": 1.2}  # YZ güveni → başlık ağırlığı çarpanı
 _STOP_NAMES = frozenset({"near", "pump", "hype", "rain", "move", "open", "one"})
 
 
@@ -108,7 +109,8 @@ def _asset(symbol: str, kind: str, name: str, ci_terms: Iterable[str] = (), cs_t
     }
 
 
-def build_assets(scan_artifact: Mapping[str, Any], discovery_cfg: Mapping[str, Any], cfg: Mapping[str, Any]) -> dict[str, dict]:
+def build_assets(scan_artifact: Mapping[str, Any], discovery_cfg: Mapping[str, Any], cfg: Mapping[str, Any],
+                 news_candidates: list[dict] | None = None) -> dict[str, dict]:
     """İşlem evreni + keşif evreni (kripto kısa listesi, tüm emtia, sektörler)."""
     out: dict[str, dict] = {}
     for a in asset_registry.all_assets():
@@ -132,7 +134,24 @@ def build_assets(scan_artifact: Mapping[str, Any], discovery_cfg: Mapping[str, A
     for sym, terms in dict(cfg.get("sector_keywords") or {}).items():
         label = str(dict(sectors.get(sym) or {}).get("label") or sym)
         out[sym] = _asset(sym, "sector_etf", label, terms, [sym])
+    # Haber güdümlü keşif adayları (2026-10-05, ikinci tur): YZ'nin bulduğu, doğrulanmış varlıklar.
+    for c in news_candidates if news_candidates is not None else _news_candidates():
+        sym = str(c.get("symbol") or "")
+        if not sym or sym in out:
+            continue
+        name = str(c.get("name") or sym)
+        base = re.split(r"[=\-.^]", str(c.get("ticker") or sym))[0]
+        out[sym] = _asset(sym, "news", name, [name] if name.lower() not in _STOP_NAMES else [], [base])
     return out
+
+
+def _news_candidates() -> list[dict]:
+    try:
+        from packages.discovery import news_discovery
+
+        return news_discovery.all_candidates()
+    except Exception:  # keşif defteri okunamazsa öngörü yine koşar
+        return []
 
 
 def _matches(asset: Mapping[str, Any], title: str) -> list[str]:
@@ -192,6 +211,24 @@ def _ingest_web(store: dict[str, dict], asset: Mapping[str, Any], hits: Iterable
     return added
 
 
+def _ingest_llm(store: dict[str, dict], rows: Iterable[Mapping[str, Any]], now: datetime) -> int:
+    """Haber keşfinin YZ çıkarımı: başlığın hangi varlığı hangi yönde etkileyeceği.
+    Aynı başlık defterde varsa etki ona eklenir; yoksa (ham akıştan) yeni kayıt açılır."""
+    added = 0
+    for row in rows:
+        title = str(row.get("title") or "").strip()
+        if not title or not row.get("impacts"):
+            continue
+        k = _key(title)
+        if k not in store:
+            store[k] = {"title": title[:240], "source": str(row.get("source") or ""), "origin": "rss",
+                        "ts": _iso(_parse(row.get("ts")) or now), "sentiment": "neutral", "impact": {}}
+            added += 1
+        store[k]["llm_impacts"] = dict(row["impacts"])
+        store[k]["consequence"] = row.get("consequence")
+    return added
+
+
 def _web_query(asset: Mapping[str, Any]) -> str:
     if asset["kind"] == "crypto":
         return f"{asset['name']} crypto price news"
@@ -228,6 +265,9 @@ def source_weight(table: Mapping[str, Any], source: str, sentiment: str, origin:
 
 def _headline_direction(asset: Mapping[str, Any], h: Mapping[str, Any], terms: list[str]) -> float | None:
     """Başlığın bu varlık için yönü; ilgisizse None."""
+    llm = (h.get("llm_impacts") or {}).get(asset["symbol"])
+    if llm is not None:  # YZ sonuç zinciri bu varlığı açıkça bağladı → önce o
+        return float(llm["d"])
     if asset.get("registry"):
         impact = h.get("impact") or {}
         if asset["symbol"] not in impact:
@@ -252,6 +292,9 @@ def forecast_for(asset: Mapping[str, Any], headlines: Iterable[Mapping[str, Any]
         age_h = max(0.0, (now - (_parse(h.get("ts")) or now)).total_seconds() / 3600.0)
         w = source_weight(table, h.get("source", ""), h.get("sentiment") or "neutral", h.get("origin", "rss"))
         w *= math.exp(-math.log(2) * age_h / half_life_hours)
+        llm = (h.get("llm_impacts") or {}).get(asset["symbol"])
+        if llm is not None:
+            w *= _LLM_CONF_W.get(str(llm.get("k") or "med"), 0.9)
         contribs.append((d, w, h))
     if not contribs:
         return None
@@ -270,7 +313,8 @@ def forecast_for(asset: Mapping[str, Any], headlines: Iterable[Mapping[str, Any]
         "n_headlines": len(contribs),
         "weight_sum": round(wsum, 3),
         "evidence": [{"title": h["title"], "source": h.get("source"), "ts": h.get("ts"),
-                      "direction": d, "origin": h.get("origin"), "url": h.get("url")} for d, _, h in top],
+                      "direction": d, "origin": "llm" if asset["symbol"] in (h.get("llm_impacts") or {})
+                      else h.get("origin"), "url": h.get("url")} for d, _, h in top],
     }
 
 
@@ -428,6 +472,7 @@ def run(
     recent_snapshots: Callable[[int], list[dict]] | None = None,
     web_search: Callable[..., Any] | None = None,
     source_table: Mapping[str, Any] | None = None,
+    llm_headlines: Callable[[], list[dict]] | None = None,
 ) -> dict:
     """Learning worker adımı. Durumu yazar; özet döner (hata turu düşürmez — çağıran yakalar)."""
     from packages.discovery import scanner
@@ -441,6 +486,11 @@ def run(
 
     docs = (recent_snapshots or snapshot_store.recent)(cfg["snapshots_per_run"])
     added_rss = _ingest_snapshot_headlines(store, docs, now)
+    if llm_headlines is None:
+        from packages.discovery import news_discovery
+
+        llm_headlines = news_discovery.llm_headlines
+    added_llm = _ingest_llm(store, llm_headlines(), now)
 
     assets = build_assets(art, discovery_cfg, cfg)
     web_state = dict(state.get("web") or {})
@@ -480,6 +530,7 @@ def run(
                   "web": web_state, "forecasts": forecasts})
     write_text_atomic(_state_path(), json.dumps(state, ensure_ascii=False, default=str))
     return {"status": "OK", "headlines": len(store), "added_rss": added_rss, "added_web": added_web,
+            "added_llm": added_llm,
             "web_errors": web_errors[:3], "forecasts": len(forecasts),
             "directional": sum(1 for f in forecasts.values() if f["direction"] != "neutral"), **tracking}
 

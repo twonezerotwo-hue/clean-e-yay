@@ -25,7 +25,7 @@ import json
 import math
 import os
 import re
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Iterable, Mapping
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
@@ -592,19 +592,25 @@ def llm_headlines() -> list[dict]:
     return out
 
 
-def chain_for(symbol: str, limit: int = 3) -> list[dict]:
-    """Bir varlığın haber zinciri: başlık → sonuç → yön (en yeni önce)."""
-    rows = []
+def chains_for(symbols: Iterable[str], limit: int = 3) -> dict[str, list[dict]]:
+    """Varlıkların haber zinciri: başlık → sonuç → yön (en yeni önce; defter bir kez okunur)."""
+    wanted = set(symbols)
+    out: dict[str, list[dict]] = {}
     for ev in reversed(_load().get("events") or []):
         for a in ev.get("assets") or []:
-            if a.get("symbol") == symbol and a.get("status") in ("valid", "registry"):
+            sym = a.get("symbol")
+            if sym not in wanted or a.get("status") not in ("valid", "registry"):
+                continue
+            rows = out.setdefault(sym, [])
+            if len(rows) < limit and all(r["title"] != ev["title"] for r in rows):
                 rows.append({"title": ev["title"], "source": ev.get("source"), "ts": ev.get("ts"),
                              "consequence": ev.get("consequence"), "direction": a.get("direction"),
                              "confidence": a.get("confidence")})
-                break
-        if len(rows) >= limit:
-            break
-    return rows
+    return out
+
+
+def chain_for(symbol: str, limit: int = 3) -> list[dict]:
+    return chains_for([symbol], limit).get(symbol, [])
 
 
 def viewmodel(limit_events: int = 12) -> dict:
@@ -633,6 +639,6 @@ def viewmodel(limit_events: int = 12) -> dict:
     }
 
 
-__all__ = ["all_candidates", "candidates", "chain_for", "config", "llm_headlines", "name_matches",
+__all__ = ["all_candidates", "candidates", "chain_for", "chains_for", "config", "llm_headlines", "name_matches",
            "parse_extraction", "registry_ticker_map", "resolve", "run", "scanner_candidates", "symbol_for",
            "viewmodel"]

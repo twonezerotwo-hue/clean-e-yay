@@ -96,7 +96,8 @@ def _candidate_bars(
 ) -> list[OHLCVBar]:
     """ETF → OHLCV orchestrator (cache'li); kripto → fetch_by_ticker (TTL
     throttle'lı; 4h yerelde 1h'ten resample — ek çağrı yok); emtia → Yahoo
-    ticker (`ohlcv.yfinance.fetch_by_ticker`; 4h aynı şekilde 1h'ten)."""
+    ticker (`ohlcv.yfinance.fetch_by_ticker`; 4h aynı şekilde 1h'ten); haber keşfi
+    (hisse/ETF/vadeli/kripto/döviz) → doğrulanmış Yahoo ticker, emtiayla aynı yol."""
     if cand.get("kind") == "crypto":
         cg_id, sym = str(cand.get("cg_id") or ""), str(cand["symbol"])
         if not cg_id:
@@ -105,7 +106,7 @@ def _candidate_bars(
             base = fetch_crypto(cg_id, sym, "1h") or []
             return resample.resample(base, "4h")
         return fetch_crypto(cg_id, sym, tf) or []
-    if cand.get("kind") == "commodity":
+    if cand.get("kind") in ("commodity", "news"):
         ticker, sym = str(cand.get("ticker") or ""), str(cand["symbol"])
         fetch = fetch_ticker or yfinance.fetch_by_ticker
         if not ticker:
@@ -337,7 +338,18 @@ def run_if_due(
     commodity_cands = [
         {**c, "kind": "commodity"} for c in (commodity_uni.get("candidates") or [])
     ]
-    candidates = sector_cands + crypto_cands + commodity_cands
+    # Haber güdümlü keşif (2026-10-05, ikinci tur): doğrulanmış, yukarı yönlü haber
+    # adayları (artifact'tan, ağsız). Zaten başka evrende taranan sembol tekrar eklenmez.
+    from packages.discovery import news_discovery
+
+    taken = {str(c["symbol"]) for c in sector_cands + crypto_cands + commodity_cands}
+    news_cands = [
+        {**c, "kind": "news"} for c in news_discovery.scanner_candidates(cfg)
+        if str(c["symbol"]) not in taken
+    ]
+    news_uni = {"status": "OK" if news_cands else "EMPTY", "generated_at": now.isoformat(),
+                "candidates": news_cands}
+    candidates = sector_cands + crypto_cands + commodity_cands + news_cands
 
     regime_label = _regime_label()
     results = dict(prev.get("results") or {})
@@ -358,6 +370,16 @@ def run_if_due(
 
     fetch_crypto = fetch_crypto_bars or cg_ohlcv.fetch_by_ticker
     bars_fn = get_bars or ohlcv.get_bars
+    # Haber adayları zamana duyarlı: taze sonucu olmayanlar sırayı beklemeden taranır.
+    news_priority = int(scan_cfg.get("news_priority_per_run", 2))
+    for cand in [c for c in news_cands if not _is_fresh(str(c["symbol"]))][:min(news_priority, per_run)]:
+        sym = str(cand["symbol"])
+        results[sym] = _analyze(
+            cand, regime_label=regime_label, min_bars=min_bars,
+            get_bars=bars_fn, fetch_crypto=fetch_crypto, now=now,
+            fetch_ticker=fetch_ticker_bars,
+        )
+        scanned.append(sym)
     if candidates:
         cursor = int(prev.get("cursor") or 0) % len(candidates)
         advanced = 0
@@ -400,7 +422,7 @@ def run_if_due(
                 return None
             cand = {"symbol": sym, "kind": "sector_etf"}
         # Kripto ve emtia barı yalnız bu koşuda zaten taranan sembol için (API bütçesi).
-        if cand.get("kind") in ("crypto", "commodity") and sym not in scanned_set:
+        if cand.get("kind") in ("crypto", "commodity", "news") and sym not in scanned_set:
             return None
         bars = _candidate_bars(cand, tf, get_bars=bars_fn, fetch_crypto=fetch_crypto,
                                fetch_ticker=fetch_ticker_bars)
@@ -420,6 +442,7 @@ def run_if_due(
         "cursor": cursor,
         "crypto_universe": crypto_uni,
         "commodity_universe": commodity_uni,
+        "news_universe": news_uni,
         "rising_sectors": sector_cands,
         "results": results,
         "signal_symbols": sorted(str(s["symbol"]) for s in signals),
@@ -511,6 +534,7 @@ def viewmodel() -> dict:
 
     crypto_uni = dict(art.get("crypto_universe") or {})
     commodity_uni = dict(art.get("commodity_universe") or {})
+    news_uni = dict(art.get("news_universe") or {})
     rising = list(art.get("rising_sectors") or [])
     signal_symbols = list(art.get("signal_symbols") or [])
 
@@ -536,6 +560,11 @@ def viewmodel() -> dict:
                 "count": len(commodity_uni.get("candidates") or []),
                 "fetched_at": commodity_uni.get("fetched_at"),
                 "symbols": [str(c.get("symbol")) for c in (commodity_uni.get("candidates") or [])],
+            },
+            "news": {
+                "status": str(news_uni.get("status") or "UNKNOWN"),
+                "count": len(news_uni.get("candidates") or []),
+                "symbols": [str(c.get("symbol")) for c in (news_uni.get("candidates") or [])],
             },
         },
         "scan": {

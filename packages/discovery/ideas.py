@@ -68,7 +68,21 @@ def _market_info(art: Mapping[str, Any]) -> dict[str, dict]:
     for s in art.get("rising_sectors") or []:
         out[str(s["symbol"])] = {"kind": "sector_etf", "name": s.get("label") or s["symbol"],
                                  "chg_7d_pct": None, "chg_30d_pct": None}
+    # Haber güdümlü keşif: tüm haber akışından YZ'nin bulup doğruladığı varlıklar.
+    for c in (art.get("news_universe") or {}).get("candidates") or []:
+        out.setdefault(str(c["symbol"]), {"kind": "news", "name": c.get("name") or c["symbol"],
+                                          "asset_type": c.get("asset_type"), "chg_7d_pct": c.get("chg_7d_pct"),
+                                          "chg_30d_pct": c.get("chg_30d_pct")})
     return out
+
+
+def _chains(symbols: set[str]) -> dict[str, list[dict]]:
+    try:
+        from packages.discovery import news_discovery
+
+        return news_discovery.chains_for(symbols)
+    except Exception:  # zincir okunamazsa fikirler yine kurulur
+        return {}
 
 
 def _scorecard(sc: Mapping[str, Any]) -> dict:
@@ -135,12 +149,14 @@ def _pending_proposals() -> dict[str, str]:
 
 
 def build_ideas(art: Mapping[str, Any], shadow_cands: Mapping[str, Any], forecasts: Mapping[str, Any],
-                pending: Mapping[str, str], promotion_min: int = 20) -> list[dict]:
+                pending: Mapping[str, str], promotion_min: int = 20,
+                chains: Mapping[str, list[dict]] | None = None) -> list[dict]:
     market = _market_info(art)
     results = dict(art.get("results") or {})
     keys = {s for s, r in results.items() if r.get("verdict") == "WOULD_OPEN_LONG" and s in market}
     keys |= {s for s, f in forecasts.items()
              if s in market and f.get("direction") == "up" and f.get("strength", 0) >= STRONG_NEWS}
+    chains = chains if chains is not None else _chains(keys)
     ideas: list[dict] = []
     for sym in keys:
         res = dict(results.get(sym) or {})
@@ -154,7 +170,7 @@ def build_ideas(art: Mapping[str, Any], shadow_cands: Mapping[str, Any], forecas
                   else "PROMOTION_READY" if card["decisive"] >= promotion_min and (card["wilson_low"] or 0) > 0.5
                   else "WATCHING")
         ideas.append({
-            "symbol": sym, "kind": info["kind"], "name": str(info["name"]),
+            "symbol": sym, "kind": info["kind"], "name": str(info["name"]), "asset_type": info.get("asset_type"),
             "score": score, "components": comps, "status": status, "status_label": STATUS_LABEL[status],
             "proposal_id": pending.get(sym),
             "technical": {
@@ -168,6 +184,7 @@ def build_ideas(art: Mapping[str, Any], shadow_cands: Mapping[str, Any], forecas
             "scorecard": card,
             "news": None if not news else {k: news.get(k) for k in ("direction", "strength", "n_headlines", "evidence")},
             "market": {"chg_7d_pct": info.get("chg_7d_pct"), "chg_30d_pct": info.get("chg_30d_pct")},
+            "news_chain": list(chains.get(sym) or []),
             "risk_notes": notes,
         })
     ideas.sort(key=lambda i: (-i["score"], i["symbol"]))
@@ -183,7 +200,8 @@ def _fingerprint(idea: Mapping[str, Any]) -> str:
     t, n, c = idea["technical"], idea.get("news") or {}, idea["scorecard"]
     key = [idea["symbol"], t.get("verdict"), t.get("entry_timeframe"),
            round(float(t.get("expected_value") or 0), 1), n.get("direction"), int((n.get("strength") or 0) // 20),
-           c.get("decisive", 0) // 5, idea["score"] // 10]
+           c.get("decisive", 0) // 5, idea["score"] // 10,
+           [r.get("title") for r in (idea.get("news_chain") or [])[:1]]]
     return hashlib.sha1(json.dumps(key).encode()).hexdigest()[:12]
 
 
@@ -194,7 +212,9 @@ def dossier(idea: Mapping[str, Any]) -> dict:
     ta1d = t.get("ta_1d") or {}
     news = idea.get("news") or {}
     return {
-        "varlik": {"sembol": idea["symbol"], "ad": idea["name"], "tur": idea["kind"]},
+        "varlik": {"sembol": idea["symbol"], "ad": idea["name"], "tur": idea.get("asset_type") or idea["kind"]},
+        "haber_zinciri": [f"{r.get('source')}: {r.get('title')} → {r.get('consequence')} → {r.get('direction')}"
+                          for r in (idea.get("news_chain") or [])],
         "piyasa": idea.get("market"),
         "teknik": {"hukum": t.get("verdict"), "giris_tf": t.get("entry_timeframe"), "giris": t.get("entry"),
                    "stop": t.get("sl"), "hedef": t.get("tp"), "risk_odul": t.get("rr"),

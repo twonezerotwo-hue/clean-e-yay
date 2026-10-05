@@ -457,6 +457,26 @@ def run_once() -> dict:
         discovery_status = f"ERROR:{type(exc).__name__}"
         errors.append(f"sector_rotation:{type(exc).__name__}")
 
+    # Haber güdümlü keşif (owner kararı 2026-10-05, ikinci tur; aynı kapı): tüm haber
+    # akışından yerel YZ olay → sonuç → etkilenen varlık çıkarır, sembol Yahoo'da
+    # doğrulanır. Tarayıcıdan ÖNCE koşar: doğrulanan adaylar aynı turda taranabilir.
+    # SALT-GÖZLEM; yerel model yoksa (AWS) LOCAL_LLM_OFF, ortak LLM bütçesini harcamaz.
+    news_discovery_status = "DISABLED"
+    try:
+        if discovery.scan_enabled():
+            from packages.discovery import news_discovery
+            nd = news_discovery.run()
+            news_discovery_status = str(nd.get("status", "UNKNOWN"))
+            log.info(
+                "news_discovery: status=%s screened=%s events=%s proposed=%s valid=%s registry=%s "
+                "rejected=%s candidates=%s errors=%s",
+                news_discovery_status, nd.get("screened"), nd.get("events"), nd.get("proposed"),
+                nd.get("valid"), nd.get("registry"), nd.get("rejected"), nd.get("candidates"), nd.get("errors"),
+            )
+    except Exception as exc:  # defensive — worker patlamamalı
+        news_discovery_status = f"ERROR:{type(exc).__name__}"
+        errors.append(f"news_discovery:{type(exc).__name__}")
+
     # K-1 — keşif tarayıcısı (aynı flag): kota kadar adayı (sıcak sektör ETF'leri
     # + kripto kısa listesi) gölge analiz eder, yalnız artifact yazar. İşlem
     # AÇMAZ; RiskGate'e girmez. Import lazy — flag kapalıyken decision-engine
@@ -910,6 +930,7 @@ def run_once() -> dict:
         "exit_forensics_status": exit_forensics_status,  # Çıkış Otopsisi (2026-07-03)
         "discovery_status": discovery_status,  # K-0b sektör rotasyonu (DISABLED=flag OFF)
         "discovery_scan_status": discovery_scan_status,  # K-1 tarayıcı
+        "news_discovery_status": news_discovery_status,  # haber güdümlü keşif (2026-10-05)
         "news_forecast_status": news_forecast_status,  # haber öngörüsü (2026-10-05)
         "ideas_status": ideas_status,  # fikir panosu + YZ değerlendirmesi (2026-10-05)
         "discovery_promotion_status": discovery_promotion_status,  # K-4 terfi kriteri (DISABLED=flag OFF)
