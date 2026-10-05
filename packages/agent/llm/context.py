@@ -376,6 +376,8 @@ def build_compact_context() -> dict:
         ],
         # Olay-sonrası takip: ne açıklandı, beklenen vs gerçekleşen tepki (salt-gözlem).
         "event_outcomes": _event_outcomes_summary(),
+        # Fikir Panosu: keşif + haber öngörüsü + teknik + YZ değerlendirmesi (salt-gözlem).
+        "ideas": _ideas_summary(),
     }
 
 
@@ -384,6 +386,15 @@ def _event_outcomes_summary() -> dict:
         return event_outcomes.compact_for_chat()
     except Exception:  # bağlam üretimi asla düşmesin
         return {"recent_releases": [], "next_event": None}
+
+
+def _ideas_summary() -> dict:
+    try:
+        from packages.discovery import ideas
+
+        return ideas.compact_for_chat()
+    except Exception:  # bağlam üretimi asla düşmesin
+        return {"generated_at": None, "top": []}
 
 
 # Digest'e GİRMEYEN volatil alanlar — snapshot_id her 30sn değişir; cache

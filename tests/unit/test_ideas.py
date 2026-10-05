@@ -137,3 +137,13 @@ def test_promotion_evidence_carries_ai_evaluation(board):
     ev = promotion._ai_evaluation("BTWUSD")
     assert ev["verdict_label"] == "GÜÇLÜ" and ev["source"] == "ollama"
     assert promotion._ai_evaluation("YOKUSD") is None
+
+
+def test_compact_for_chat_lists_top_ideas(board):
+    assert ideas.compact_for_chat()["top"] == []
+    _run(FakeClient())
+    top = ideas.compact_for_chat()["top"]
+    assert [t["symbol"] for t in top] == ["BTWUSD", "COPPER"]
+    assert top[0]["ai_verdict"] == "GÜÇLÜ" and top[0]["ai_source"] == "ollama"
+    assert top[0]["status"] in ideas.STATUS_LABEL.values()
+    assert top[1]["news"] == "up:55"

@@ -76,9 +76,11 @@ default'u (`= False`) çoğu zaman config'te ezilir.
 ## Yazma anahtarı
 
 `API_AUTH_TOKEN` tanımlıysa API tüm yazma isteklerini (sohbet, ses, işlem
-butonları) Bearer token ister. Lokal panel anahtarı ilk 401'de bir kez sorar ve
-tarayıcıda saklar (`apps/web/lib/api/writeAuth.ts`); AWS'te Cloudflare Worker
-parola kapısından geçen isteğe anahtarı kendisi ekler.
+butonları) Bearer token ister. Bu bilgisayarda (`localhost:4000`) panel anahtarı
+sunucudan alır (`/api/local-auth`, keeper `WEB_LOCAL_WRITE_AUTH=1` verir); başka
+yerden açılınca ilk 401'de bir kez sorar ve tarayıcıda saklar
+(`apps/web/lib/api/writeAuth.ts`). AWS'te Cloudflare Worker parola kapısından
+geçen isteğe anahtarı kendisi ekler.
 
 ## Stop davranışı
 
@@ -103,6 +105,33 @@ yazılır ve EXPLORATION kohortuna düşer: yalnız güven kalibrasyonu (`calibr
 - execution_anomaly (H7): temizlik öncesi çıkış mantığıyla (`Trade.exit_policy` < 2)
   kapanmış, -1.5R'den kötü SL kaybı. Düzeltilmiş mantıkla kapanan işlemler bu sınıfa
   hiç girmez. Kohort raporunda ayrı kolon; P3 son-performans freni de bunları saymaz.
+
+## Keşif & Fikir Panosu (salt-gözlem)
+
+Learning worker her keşif taramasında (`discovery.scan_enabled()`) üç adım koşar;
+hiçbiri işlem açmaz, evrene varlık eklemez, RiskGate'e dokunmaz:
+
+1. **Keşif + teknik analiz** (`packages/discovery/scanner.py`): kripto momentum kısa
+   listesi, yükselen sektör ETF'leri ve emtia kısa listesi (`config/discovery.yaml`
+   `commodities`, Yahoo vadeli/ETF; 30g/7g momentum) aynı teknik motordan geçer.
+   TF başına kompakt teknik özet (`ta`: eğilim, trend/ADX, destek/direnç, formasyon,
+   teyit, Fibonacci) artifact'a yazılır; gölge karne `shadow_ledger`'da.
+2. **Haber öngörüsü** (`packages/discovery/news_forecast.py`): son snapshot başlıkları
+   + sınırlı Tavily araması (turda en çok 5 varlık, varlık başına 6 saatte bir)
+   72 saatlik deftere girer; kelime-sınırıyla eşlenir, yön E2 mantığıyla okunur,
+   kaynak isabet karnesi ve tazelikle ağırlıklanır. Her öngörü fiyatıyla
+   `NEWS_FORECAST_LEDGER_PATH`'e yazılır ve 4sa/1g/3g sonra çözülür (öngörü karnesi).
+3. **Fikirler** (`packages/discovery/ideas.py`): teknik sinyal veren veya güçlü yukarı
+   haber öngörüsü olan keşif adayları şeffaf skorla (teknik ≤40 + karne ≤25 + haber
+   ± − risk cezası) sıralanır. İlk 5 fikir yerel LLM'e (`get_client()`, Ollama
+   `OLLAMA_MODEL`) "fikir eleştirmeni" olarak sorulur: HÜKÜM (GÜÇLÜ/İZLE/ZAYIF), tez,
+   lehte/aleyhte, riskler. Turda en çok 2 çağrı; dosya değişmedikçe 12 saat önbellek;
+   LLM yoksa deterministik değerlendirme. Sonuç `IDEA_BOARD_PATH`
+   (`data/runtime/idea_board.json`).
+
+Okuma: `GET /api/v1/ideas` → Heart "Fikirler" sekmesi; sohbet bağlamında ilk 3 fikir.
+YZ hükmü governor terfi paketine yalnız **kanıt** olarak eklenir; terfi kriterleri
+deterministik kalır ve owner onayı şarttır (CP5).
 
 ## Doğrulama (her değişiklikte)
 

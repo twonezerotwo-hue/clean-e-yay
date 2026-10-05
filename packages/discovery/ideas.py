@@ -401,5 +401,22 @@ def viewmodel() -> dict:
     }
 
 
-__all__ = ["build_ideas", "dossier", "evaluation_for", "fallback_evaluation", "parse_evaluation", "run",
-           "score_idea", "viewmodel"]
+def compact_for_chat(limit: int = 3) -> dict[str, Any]:
+    """Sohbet bağlamı: en yüksek skorlu fikirlerin kısa özeti (salt-gözlem)."""
+    state = _load()
+    rows = []
+    for idea in list(state.get("ideas") or [])[:limit]:
+        ai = idea.get("ai") or {}
+        news = idea.get("news") or {}
+        rows.append({
+            "symbol": idea.get("symbol"), "kind": idea.get("kind"), "score": idea.get("score"),
+            "status": idea.get("status_label"), "technical": (idea.get("technical") or {}).get("verdict"),
+            "news": f"{news['direction']}:{news.get('strength')}" if news.get("direction") else None,
+            "ai_verdict": ai.get("verdict_label"), "ai_source": ai.get("source"), "thesis": ai.get("thesis"),
+        })
+    return {"generated_at": state.get("generated_at"), "top": rows,
+            "note": "fikirler hipotetiktir; işlem emri değildir"}
+
+
+__all__ = ["build_ideas", "compact_for_chat", "dossier", "evaluation_for", "fallback_evaluation",
+           "parse_evaluation", "run", "score_idea", "viewmodel"]

@@ -55,6 +55,16 @@ listeler. Temizlik boyunca yeni özellik, yeni flag, yeni veri kaynağı eklenme
 - **E3** Beklenen tepki faiz kanalıyla okunur; takvim etki metinleri buna göre.
 - **2a** Lokal yazma anahtarı panelde bir kez sorulur (tarayıcıda saklanır).
 
+## Verilmiş owner kararları (2026-10-05, Fikir Panosu)
+
+- Keşif makinesi haber öngörüsü + teknik analiz + YZ değerlendirmesiyle birleşir
+  (docs/STATE.md "Keşif & Fikir Panosu"); her şey salt-gözlem.
+- YZ = yerel `qwen3:8b` (Ollama, düşünme kapalı). AWS'te yerel model yok →
+  deterministik değerlendirme.
+- Evrene emtia eklenir (bakır, doğalgaz, WTI, platin, paladyum, tarım, uranyum,
+  lityum); haberden ayrıca aday üretilmez.
+- Fikirler Heart'ta "Fikirler" sekmesinde; adaya özel web haber araması sınırlı.
+
 ## Açık owner kararları
 
 - **E4 Olay sonucunu karara bağlamak:** CP5 kırmızı çizgi — yeterli olay birikip
@@ -62,6 +72,10 @@ listeler. Temizlik boyunca yeni özellik, yeni flag, yeni veri kaynağı eklenme
   `GET /api/v1/calendar/event-outcomes` (aile × sonuç × ufuk isabet oranı).
 - Haber eşlemesinde kayıt defteri terimleri alt-dize olarak aranıyor ("Sep**tem**ber"
   → TEM, "N**eth**ermind" → ETHUSD); kelime-sınırı düzeltmesi owner onayı bekliyor.
+
+- **Fikir → paper işlem bağlantısı:** CP5 kırmızı çizgi — fikir skoru ve haber
+  öngörü karnesi (Fikirler sekmesi alt satırı) kanıt biriktirmeden karar yoluna
+  bağlanmaz; yalnız owner onayıyla.
 
 ## Temizlikten sonra (ölçüm işleri)
 

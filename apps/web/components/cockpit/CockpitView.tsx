@@ -60,6 +60,7 @@ import { ExitBacktestPanel } from "@/components/panels/ExitBacktestPanel";
 import { ZeroTwoStrategyPanel } from "@/components/panels/ZeroTwoStrategyPanel";
 import { ZoneProposerPanel } from "@/components/panels/ZoneProposerPanel";
 import { DiscoveryPanel } from "@/components/panels/DiscoveryPanel";
+import { IdeasPanel } from "@/components/panels/IdeasPanel";
 import { BacktestChallengerPanel } from "@/components/panels/BacktestChallengerPanel";
 import { ThresholdAutotunePanel } from "@/components/panels/ThresholdAutotunePanel";
 import { ThresholdAbPanel } from "@/components/panels/ThresholdAbPanel";
@@ -1186,6 +1187,7 @@ export function CockpitView() {
       { key: "news", label: "Haberler", node: <NewsPanel defaultView="radar" /> },
       { key: "world_brief", label: "Dünya Özeti", node: <WorldBriefPanel /> },
       { key: "news_prepared_setups", label: "Haber Hazırlığı", node: <NewsPreparedSetupsPanel /> },
+      { key: "ideas", label: "Fikirler", node: <IdeasPanel /> },
       { key: "execution_readiness", label: "Checklist", node: <ExecutionReadinessPanel /> },
       { key: "event_calendar", label: "Olay Takvimi", node: <EventCalendarPanel /> },
       { key: "scenario", label: "Senaryo", node: <ScenarioPanel /> },

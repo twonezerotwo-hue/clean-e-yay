@@ -33,6 +33,17 @@ export const useEventOutcomes = () => {
   });
 };
 
+// Fikir Panosu — learning worker ~6 dk'da bir yazar; panel dakikada bir yeter.
+export const useIdeas = () => {
+  const policy = usePanelQueryPolicy(60_000);
+  return useQuery({
+    queryKey: qk.ideas,
+    queryFn: api.ideas,
+    staleTime: 60_000,
+    ...policy,
+  });
+};
+
 export const useRegimeReport = () => {
   const policy = usePanelQueryPolicy(60_000);
   return useQuery({
