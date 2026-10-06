@@ -391,17 +391,18 @@ def _estimate_tokens(system: str, user: str, max_out: int) -> int:
     return (len(system) + len(user)) // 4 + max_out
 
 
-def _llm_section(persona: str, ctx: dict, client, mode: str) -> tuple[PersonaSection | None, int]:
+def _llm_section(persona: str, ctx: dict, client) -> tuple[PersonaSection | None, int]:
     """(section, kullanılan_token). Başarısızsa (None, 0) → fallback."""
     system, user = _llm_prompt(persona, ctx)
     max_out = budget.max_tokens_per_request()
-    if not budget.can_spend(_estimate_tokens(system, user, max_out), mode):
+    client = budget.gate(client, _estimate_tokens(system, user, max_out))  # dolu bütçede yalnız yerel
+    if client is None:
         return None, 0
     comp = client.complete(system, user, max_out)
     if comp is None:
         return None, 0
     used = comp.input_tokens + comp.output_tokens
-    budget.record(used, mode)
+    budget.record(used, comp.source)
     parsed = _parse_llm_text(comp.text)
     if parsed is None:
         return None, used
@@ -452,14 +453,14 @@ def build_persona_sections(ctx: dict | None = None) -> tuple[list[dict], dict]:
     for persona in PERSONAS:
         section = None
         if client is not None:
-            section, used = _llm_section(persona, ctx, client, mode)
+            section, used = _llm_section(persona, ctx, client)
             tokens_used += used
             if section is not None:
                 any_llm = True
             elif fallback_reason is None:
                 fallback_reason = (
                     "budget_exceeded"
-                    if not budget.can_spend(budget.max_tokens_per_request(), mode)
+                    if budget.gate(client, budget.max_tokens_per_request()) is None
                     else "llm_error"
                 )
         sections.append(section or _fallback_section(persona, ctx))

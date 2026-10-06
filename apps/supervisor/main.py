@@ -58,17 +58,24 @@ def _run_tick_once_blocking() -> None:
     asyncio.run(tick.run_once())
 
 
-async def _tick_loop(stop: asyncio.Event, interval: int) -> None:
+def _rest_seconds(interval: float, elapsed: float, min_rest: float) -> float:
+    """Tick sonrası bekleme: döngü hedefine kalan süre, ama en az `min_rest`."""
+    return max(min_rest, interval - elapsed)
+
+
+async def _tick_loop(stop: asyncio.Event, interval: int, min_rest: float = 10.0) -> None:
     """Tick döngüsü — iş thread'de, bekleme loop'ta (API hiç bloke olmaz).
 
     `interval` DÖNGÜ aralığıdır: iş süresi beklemeye EKLENMEZ (hedef = cycle
     başı + interval). Aksi halde ~34 sn iş + 30 sn bekleme ≈ 65 sn'de bir taze
-    karar olurdu. Öğrenme turuyla çakışan ağır tick'ler bu hesap sayesinde
-    ortalamada ayarlı aralığa yaklaşır, sapma birikmez.
+    karar olurdu. Ama tick aralıktan uzun sürerse tick'ler beklemesiz arka arkaya
+    koşup iş parçacığını (ve aynı süreçteki API/öğrenmeyi) boğmasın diye her
+    tick'ten sonra en az `min_rest` saniye dinlenilir (owner kararı 2026-10-06:
+    en az 10 sn → ~34 sn tick ile kararlar ~44 sn'de bir).
     """
     from apps.tick_worker import main as tick
 
-    _log.info("tick loop started, interval=%ds", interval)
+    _log.info("tick loop started, interval=%ds min_rest=%.0fs", interval, min_rest)
     locked = False
     try:
         while not stop.is_set():
@@ -86,8 +93,9 @@ async def _tick_loop(stop: asyncio.Event, interval: int) -> None:
                     await asyncio.to_thread(_run_tick_once_blocking)
                 except Exception:
                     _log.exception("tick run_once failed")
-            # Döngü aralığı: iş süresini beklemeden düşerek hedefe hizala.
-            remaining = max(0.0, interval - (time.monotonic() - cycle_start))
+            # Döngü aralığı: iş süresini beklemeden düşerek hedefe hizala; ama en az
+            # min_rest dinlen (uzun tick'ler arka arkaya koşmasın).
+            remaining = _rest_seconds(interval, time.monotonic() - cycle_start, min_rest)
             try:
                 await asyncio.wait_for(stop.wait(), timeout=remaining)
             except TimeoutError:

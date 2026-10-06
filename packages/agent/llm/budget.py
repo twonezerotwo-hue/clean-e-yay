@@ -9,6 +9,7 @@ import json
 import os
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Any
 
 DEFAULT_PATH = "data/runtime/llm_budget.json"
 DEFAULT_DAILY_TOKEN_BUDGET = 100_000
@@ -65,27 +66,52 @@ def used_tokens() -> int:
     return int(_load().get("used_tokens") or 0)
 
 
-# Ücretsiz/yerel modlar ortak ÜCRETLİ bütçeyi harcamaz (LLM_MODE=off|ollama).
-# Yalnız gerçek yerel sağlayıcı (Ollama, lokalde ücretsiz) bütçe dışıdır; `mock`
-# bir test çiftidir (ücretli sağlayıcıyı taklit eder) — bütçe mantığını sınamak
-# için sayılır, bu yüzden listede YOKTUR.
-FREE_MODES: frozenset[str] = frozenset({"off", "ollama"})
+# Ortak bütçe yalnız ÜCRETLİ sağlayıcıları sınırlar. Karar MODA göre değil, isteği
+# GERÇEKTEN kimin karşıladığına göre verilir: Ollama modunda bile sohbet önce Groq/
+# OpenRouter'a gider (get_chat_client), o kullanım sayılmalı ve kilitlenmelidir.
+# `mock` test çifti ücretli sağlayıcıyı taklit eder → sayılır (listede yok).
+LOCAL_SOURCES: frozenset[str] = frozenset({"ollama"})
 
 
-def is_free_mode(mode: str | None) -> bool:
-    """Yerel/mock provider mi? (ör. Ollama ücretsiz) — bütçe dışı sayılır."""
-    return (mode or "").strip().lower() in FREE_MODES
+def is_local(source: str | None) -> bool:
+    """Bu sağlayıcı (LLMCompletion.source / client.name) yerel ve ücretsiz mi?"""
+    return (source or "").strip().lower() in LOCAL_SOURCES
 
 
-def can_spend(estimated_tokens: int, mode: str | None = None) -> bool:
-    if is_free_mode(mode):
-        return True  # yerel model ücretsiz — ücretli bütçe kilidi uygulanmaz
+def _chain(client: Any) -> list[Any]:
+    inner = getattr(client, "clients", None)
+    return list(inner) if inner else [client]
+
+
+def gate(client: Any, estimated_tokens: int) -> Any:
+    """Bütçe kapısı istemci zincirine uygulanır (bütçe dolunca kilit yalnız ücretlilere).
+
+    Zincirde ücretli sağlayıcı yoksa ya da bütçe yetiyorsa zincir aynen döner. Bütçe
+    dolduysa ücretli sağlayıcılar çıkarılır: geriye yerel model kalırsa onunla devam
+    edilir (sohbet kilitlenmez), hiç kalmazsa None (bütçe aşıldı)."""
+    if client is None:
+        return None
+    chain = _chain(client)
+    if all(is_local(getattr(c, "name", None)) for c in chain) or can_spend(estimated_tokens):
+        return client
+    local = [c for c in chain if is_local(getattr(c, "name", None))]
+    if not local:
+        return None
+    if len(local) == 1:
+        return local[0]
+    from packages.agent.llm.client import FallbackLLMClient
+
+    return FallbackLLMClient(local)
+
+
+def can_spend(estimated_tokens: int) -> bool:
     return used_tokens() + max(0, int(estimated_tokens)) <= daily_budget()
 
 
-def record(used: int, mode: str | None = None) -> None:
-    if is_free_mode(mode):
-        return  # ücretsiz yerel tokenlar ortak ücretli bütçeye YAZILMAZ
+def record(used: int, source: str | None = None) -> None:
+    """Kullanımı ortak bütçeye yaz — cevabı yerel model verdiyse YAZILMAZ (ücretsiz)."""
+    if is_local(source):
+        return
     data = _load()
     data["date"] = _today()
     data["used_tokens"] = int(data.get("used_tokens") or 0) + max(0, int(used))

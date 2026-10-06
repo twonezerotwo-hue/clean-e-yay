@@ -10,7 +10,7 @@ Paper-trading **karar-destek** sistemi. Gerçek emir yok, broker yok
 (`PAPER_ONLY` / `NO_EXECUTION` yapısal). Karar deterministik koddur; LLM yalnız
 anlatır. Ayrıntılı kurallar: [SAFETY_RULES](SAFETY_RULES.md), [DATA_POLICY](DATA_POLICY.md).
 
-## Karar akışı (tek tick, ~30 sn)
+## Karar akışı (tek tick)
 
 ```
 snapshot (fiyat + OHLCV + makro + haber, DQS)
@@ -35,6 +35,15 @@ snapshot (fiyat + OHLCV + makro + haber, DQS)
 yalnız HTTP'ye kalır. Tick, `tick_worker.lock` tekil-süreç kilidini alır: başka
 bir tick yazarı canlıysa tick atlanır (log'da "tick atlandı"), API sürer.
 Runtime durumu (`data/runtime/`) ortamlar arasında **paylaşılmaz**.
+
+Tick zamanlaması (owner kararı 2026-10-06): `TICK_INTERVAL_SEC` (30) döngü
+hedefidir; tick ondan uzun sürerse ardından yine en az 10 sn dinlenilir (tick ~34 sn
+→ kararlar ~44 sn'de bir). Aşama süreleri her tick'te loglanır ("tick aşama süreleri").
+
+YZ bütçesi (`LLM_DAILY_TOKEN_BUDGET`) yalnız ÜCRETLİ sağlayıcıları sınırlar: cevabı
+yerel Ollama verdiyse sayılmaz. Bütçe dolunca zincirden yalnız ücretli sağlayıcılar
+çıkar; yerel model varsa sohbet ve raporlar onunla sürer (Ollama modunda sohbet önce
+Groq/OpenRouter'a gider — o kullanım sayılır).
 
 ## Konfigürasyon — tek kaynaklar
 

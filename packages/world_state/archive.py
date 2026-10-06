@@ -52,6 +52,10 @@ def _read() -> list[dict[str, Any]]:
         return []
 
 
+# Tavan aşılınca kompaksiyon tavanın bu oranına kırpar → sonraki kompaksiyon
+# ~%10 tavan kadar yazım sonra (5000 satırda ~500 yazım), her turda değil.
+_COMPACT_KEEP = 0.9
+
 # Satır sayısı (süreç-içi): ilk kullanımda bir kez tam okuma, sonra sayaç.
 _ROW_COUNT: dict[str, int] = {}
 
@@ -447,7 +451,9 @@ def record(
         except (TypeError, ValueError):
             max_rows = 5000
         if before + 1 > max_rows:
-            _compact(path, max_rows, cfg.get("retention_days"))
+            # Tavanın ALTINA kırp (histerezis): tam tavana kırpılsa sonraki her yazım
+            # yine tavanı aşar ve tam oku+yaz her turda geri gelirdi.
+            _compact(path, max(1, int(max_rows * _COMPACT_KEEP)), cfg.get("retention_days"))
     return row
 
 

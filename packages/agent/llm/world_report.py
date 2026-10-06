@@ -445,7 +445,8 @@ def build_world_brief(
     system, user = _prompt(payload)
     max_tokens = min(budget.max_tokens_per_request(), 500)
     estimated = (len(system) + len(user)) // 4 + max_tokens
-    if not budget.can_spend(estimated, mode):
+    client = budget.gate(client, estimated)  # dolu bütçede yalnız yerel sağlayıcı kalır
+    if client is None:
         fallback["llm"]["fallback_reason"] = "budget_exceeded"
         cache.put(cache_key, fallback)
         return fallback
@@ -458,7 +459,7 @@ def build_world_brief(
         cache.put(cache_key, fallback)
         return fallback
     used = completion.input_tokens + completion.output_tokens
-    budget.record(used, mode)
+    budget.record(used, completion.source)
     parsed = _parse(completion.text)
     if parsed is None:
         fallback["llm"]["fallback_reason"] = "invalid_format"

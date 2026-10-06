@@ -1346,15 +1346,13 @@ def answer(message: str, history: list[dict] | None = None) -> dict:
     system, user = _flatten_messages(messages)
     max_out = budget.max_tokens_per_request()
     est = (len(system) + len(user)) // 4 + max_out
-    comp = (
-        client.complete(system, user, max_out, _CHAT_TEMPERATURE)
-        if budget.can_spend(est, prep["mode"])
-        else None
-    )
+    # Bütçe dolduysa ücretli sağlayıcılar zincirden çıkar; yerel model varsa onunla sürer.
+    gated = budget.gate(client, est)
+    comp = gated.complete(system, user, max_out, _CHAT_TEMPERATURE) if gated is not None else None
     if comp is None:
-        reason = "budget_exceeded" if not budget.can_spend(est, prep["mode"]) else "llm_error"
+        reason = "budget_exceeded" if gated is None else "llm_error"
         return _fallback_response(prep, reason)
-    budget.record(comp.input_tokens + comp.output_tokens, prep["mode"])
+    budget.record(comp.input_tokens + comp.output_tokens, comp.source)
     return _clean_llm_result(prep, comp)
 
 
@@ -1405,7 +1403,8 @@ def stream_answer(message: str, history: list[dict] | None = None):
     messages = _chat_messages(prep, message)
     max_out = budget.max_tokens_per_request()
     est = sum(len(m["content"]) for m in messages) // 4 + max_out
-    if not budget.can_spend(est, prep["mode"]):
+    client = budget.gate(client, est)  # dolu bütçede yalnız yerel sağlayıcı kalır
+    if client is None:
         yield ("done", _fallback_response(prep, "budget_exceeded"))
         return
 
@@ -1426,5 +1425,5 @@ def stream_answer(message: str, history: list[dict] | None = None):
         ))
         return
     used = comp.input_tokens + comp.output_tokens
-    budget.record(used if used > 0 else est, prep["mode"])
+    budget.record(used if used > 0 else est, comp.source)
     yield ("done", _clean_llm_result(prep, comp))
