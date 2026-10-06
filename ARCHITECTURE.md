@@ -833,7 +833,6 @@ apps/web/
 │  │  ├─ DashboardGrid.tsx
 │  │  ├─ PanelFrame.tsx
 │  │  ├─ PanelHeader.tsx
-│  │  ├─ PanelToggle.tsx
 │  │  ├─ EmptyState.tsx
 │  │  ├─ LoadingState.tsx
 │  │  └─ DataQualityBadge.tsx
@@ -873,10 +872,8 @@ apps/web/
 │  ├─ useDashboardState.ts
 │  ├─ useAgentRun.ts
 │  ├─ usePanelAudit.ts
-│  ├─ useOwnerFeedback.ts
 │  ├─ useReplayStatus.ts
-│  ├─ useRealtimeRefresh.ts
-│  └─ usePanelVisibility.ts
+│  └─ useRealtimeRefresh.ts
 │
 ├─ providers/
 │  ├─ QueryProvider.tsx

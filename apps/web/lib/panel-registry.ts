@@ -17,8 +17,8 @@
  *     ops             → Data Quality · Provider · System Health · Replay · Audit
  *
  * Not: `group`/`tier` IA metadata'sıdır; layout `app/page.tsx`'te bu IA'ya göre
- * elle render edilir (yalnızca `defaultVisible` `usePanelVisibility` tarafından
- * okunur). Frontend hesap yapmaz — paneller mevcut selector/brief'i sunar.
+ * elle render edilir (yalnızca `defaultVisible` okunur). Frontend hesap yapmaz —
+ * paneller mevcut selector/brief'i sunar.
  */
 export type PanelKey =
   | "risk_durumu"

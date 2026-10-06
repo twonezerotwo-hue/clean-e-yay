@@ -17,4 +17,5 @@
   `DashboardGrid` / `GridCell` ile yerleştirilir.
 - Veri kalitesi gösterilen yerlerde `DataQualityBadge` kullanılır.
 - 3D / R3F (`@react-three/fiber`, `@react-three/drei`) ve Framer Motion
-  ruhu korunur — `HeroScene` ve neon cyan/magenta tema değiştirilmez.
+  ruhu korunur — canlı 3D sahneler (`SpaceBrainScene`, `HoloHeadScene`,
+  `QuantumBackplaneScene`) ve neon cyan/magenta tema değiştirilmez.
