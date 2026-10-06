@@ -6,6 +6,8 @@ network fail asla crash etmez, mock'a asla düşülmez (DATA_POLICY).
 from __future__ import annotations
 
 import hashlib
+import threading
+import time
 import urllib.request
 import xml.etree.ElementTree as ET
 from collections.abc import Callable
@@ -109,6 +111,35 @@ def default_fetch(url: str) -> str:
     )
     with urllib.request.urlopen(req, timeout=TIMEOUT_SEC) as resp:
         return resp.read().decode("utf-8", errors="replace")
+
+
+# B4 — ham feed GÖVDESİ (URL-bazlı) önbelleği. Tick (news.list_headlines) ve
+# haber keşfi (discovery.news_discovery) aynı RSS kaynaklarını ayrı ayrı
+# çekiyordu; aynı URL kısa TTL içinde bir kez indirilmişse yeniden indirilmez
+# (tick ~120 sn'de bir tazelediği için keşfin 15 dk'lık turu genelde önbellek
+# vurur → mükerrer ağ isteği kalkar). Yalnız VARSAYILAN ağ yolu önbelleklenir;
+# enjekte edilen `fetch_fn` (testler) etkilenmez.
+_FEED_CACHE_TTL_SEC = 120.0
+_FEED_CACHE: dict[str, tuple[float, str]] = {}
+_FEED_CACHE_LOCK = threading.Lock()
+
+
+def reset_cache() -> None:
+    """Feed önbelleğini boşalt (test izolasyonu / manuel yenileme)."""
+    with _FEED_CACHE_LOCK:
+        _FEED_CACHE.clear()
+
+
+def _cached_fetch(url: str) -> str:
+    now = time.monotonic()
+    with _FEED_CACHE_LOCK:
+        hit = _FEED_CACHE.get(url)
+        if hit is not None and (now - hit[0]) < _FEED_CACHE_TTL_SEC:
+            return hit[1]
+    text = default_fetch(url)
+    with _FEED_CACHE_LOCK:
+        _FEED_CACHE[url] = (now, text)
+    return text
 
 
 # ---------------------------------------------------------------------------
@@ -260,7 +291,7 @@ def fetch_feed_group(
     """Feed grubunu paralel çeker. Döner: (headlines, ok_feed_count, last_error)."""
     from concurrent.futures import ThreadPoolExecutor, as_completed
 
-    fetch = fetch_fn or default_fetch
+    fetch = fetch_fn if fetch_fn is not None else _cached_fetch
     headlines: list[NewsHeadline] = []
     ok = 0
     last_error: str | None = None

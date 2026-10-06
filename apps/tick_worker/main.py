@@ -695,10 +695,9 @@ async def run() -> None:
 
 
 if __name__ == "__main__":
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s %(levelname)s %(name)s %(message)s",
-    )
+    from packages.ops.logsetup import configure_logging
+
+    configure_logging()
     _acquire_single_instance()
     try:
         asyncio.run(run())

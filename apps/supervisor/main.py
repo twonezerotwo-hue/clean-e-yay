@@ -150,10 +150,9 @@ async def _serve() -> None:
 
 
 def main() -> None:
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s %(levelname)s %(name)s %(message)s",
-    )
+    from packages.ops.logsetup import configure_logging
+
+    configure_logging()  # UTF-8 akışlar + standart şema (Türkçe log bozulmasın)
     if sys.platform == "win32":
         asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
     asyncio.run(_serve())

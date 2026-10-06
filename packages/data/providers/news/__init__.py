@@ -82,6 +82,7 @@ def reset_provider_status() -> None:
                 fallbacks=0,
             )
     _CACHE = None
+    rss.reset_cache()  # B4 — paylaşılan ham-feed önbelleği de temizlenir
 
 
 def _dedup(headlines: list[NewsHeadline]) -> list[NewsHeadline]:
