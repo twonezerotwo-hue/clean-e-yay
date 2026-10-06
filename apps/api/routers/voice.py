@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import asyncio
 import os
+import time
 from typing import Protocol
 
 import httpx
@@ -19,6 +20,23 @@ MAX_TTS_CHARS = 4000
 DEFAULT_ELEVENLABS_VOICE_ID = "21m00Tcm4TlvDq8ikWAM"
 DEFAULT_ELEVENLABS_MODEL_ID = "eleven_multilingual_v2"
 DEFAULT_EDGE_TTS_VOICE = "tr-TR-EmelNeural"
+
+# Ücretli sağlayıcı kota/faturalama hatası (ör. ElevenLabs 402 kredi bitti)
+# alınca bu süre boyunca onu hiç denemeyiz — her okumada önce deneyip Edge'e
+# düşmek 4 sn gecikme ekliyordu. Süre sonunda yeniden denenir (kredi yenilenebilir).
+_QUOTA_COOLDOWN_SEC = 3600.0
+_elevenlabs_skip_until = 0.0
+
+
+class TTSQuotaError(HTTPException):
+    """Ücretli TTS sağlayıcı kota/faturalama hatası (upstream 401/402/429)."""
+
+    def __init__(self, upstream_status: int) -> None:
+        super().__init__(
+            status_code=503,
+            detail=f"TTS provider quota exhausted: HTTP {upstream_status}",
+        )
+        self.upstream_status = upstream_status
 
 
 class VoiceSpeakRequest(BaseModel):
@@ -87,6 +105,10 @@ class ElevenLabsTTSProvider:
             ) from exc
 
         if response.status_code >= 400:
+            # Kota/faturalama hataları (401/402/429) devre kesiciye girer: ücretsiz
+            # Edge'e düşülür ve bir süre ücretli sağlayıcı hiç denenmez.
+            if response.status_code in (401, 402, 429):
+                raise TTSQuotaError(response.status_code)
             raise HTTPException(
                 status_code=503,
                 detail=f"TTS provider rejected request: HTTP {response.status_code}",
@@ -136,19 +158,35 @@ def get_tts_provider(name: str | None) -> TTSProvider:
 
 @router.post("/voice/speak")
 def speak(req: VoiceSpeakRequest) -> Response:
+    global _elevenlabs_skip_until
     text = req.text.strip()
     if not text:
         raise HTTPException(status_code=400, detail="text is required.")
 
     primary = req.provider or os.environ.get("TTS_PROVIDER") or "elevenlabs"
+    primary_name = primary.strip().lower()
+    # Kota devre kesici: kredi bitmişse (402) ücretli sağlayıcıyı hiç denemeden
+    # doğrudan ücretsiz Edge'e git — her okumada +4 sn gecikme olmasın.
+    if primary_name != "edge" and time.monotonic() < _elevenlabs_skip_until:
+        return _as_response(EdgeTTSProvider().speak(text=text, voice=None))
     try:
         audio = get_tts_provider(primary).speak(text=text, voice=req.voice)
+    except TTSQuotaError:
+        # Ücretli sağlayıcı kota/faturalama hatası → ücretsiz Edge'e düş +
+        # sağlayıcıyı cooldown boyunca atla (kalıcı 402 fırtınasını önler).
+        if primary_name != "edge":
+            _elevenlabs_skip_until = time.monotonic() + _QUOTA_COOLDOWN_SEC
+        audio = EdgeTTSProvider().speak(text=text, voice=None)
     except HTTPException:
-        # Ücretli sağlayıcı kota/hata verirse, ücretsiz Edge TTS'e otomatik düş —
+        # Diğer sağlayıcı hataları/kota dışı: ücretsiz Edge TTS'e otomatik düş —
         # kullanıcı tarayıcı sesine düşmeden önce hâlâ kaliteli bir ses alır.
-        if primary.strip().lower() == "edge":
+        if primary_name == "edge":
             raise
         audio = EdgeTTSProvider().speak(text=text, voice=None)
+    return _as_response(audio)
+
+
+def _as_response(audio: bytes) -> Response:
     return Response(
         content=audio,
         media_type="audio/mpeg",

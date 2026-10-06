@@ -399,6 +399,22 @@ def _has_term(lower: str, term: str) -> bool:
     return re.search(r"(?<!\w)" + re.escape(term) + r"(?![a-z0-9])", lower) is not None
 
 
+def _hits(lower: str, terms: tuple[str, ...]) -> bool:
+    """Başlık terimlerden birini içeriyor mu?
+
+    İngilizce (ASCII) terimler KELİME sınırıyla eşleşir — alt-dize yanlış
+    eşleşmeleri engellenir ("turmoil" ≠ oil, "FedEx" ≠ fed, "software" ≠ war,
+    "Goldman" ≠ gold). Türkçe terimler (ASCII dışı harf içeren) ek alabildiği
+    için alt-dize eşleşir ("altını" ⊇ "altın", "faizler" ⊇ "faiz")."""
+    for term in terms:
+        if not term.isascii():
+            if term in lower:
+                return True
+        elif _has_term(lower, term):
+            return True
+    return False
+
+
 def classify_asset_impact(title: str, sentiment: Sentiment) -> dict[str, float]:
     """Başlıktan etkilenen sembolleri ve yönlerini çıkarır (eski Codex kural
     setinin Clean sembol evrenine indirgenmiş portu)."""
@@ -406,24 +422,24 @@ def classify_asset_impact(title: str, sentiment: Sentiment) -> dict[str, float]:
     d = _dir(sentiment)
     impacts: dict[str, float] = {}
 
-    if any(kw in lower for kw in ("gold", "xau", "altın")):
+    if _hits(lower, ("gold", "xau", "altın")):
         impacts["XAUUSD"] = d
-    if any(kw in lower for kw in ("silver", "xag", "gümüş")):
+    if _hits(lower, ("silver", "xag", "gümüş")):
         impacts["XAGUSD"] = d
-    if any(kw in lower for kw in ("oil", "brent", "crude", "opec", "petrol")):
+    if _hits(lower, ("oil", "brent", "crude", "opec", "petrol", "petroleum")):
         impacts["BRENT"] = d
-    if any(kw in lower for kw in ("bitcoin", "btc", "crypto", "kripto")):
+    if _hits(lower, ("bitcoin", "btc", "crypto", "cryptocurrency", "kripto")):
         impacts["BTCUSD"] = d
-    if any(kw in lower for kw in ("ethereum", " eth ", "eth price")):
+    if _hits(lower, ("ethereum", "ether", "eth")):
         impacts["ETHUSD"] = d
-    if any(kw in lower for kw in ("dollar", "dxy", "usd index")):
+    if _hits(lower, ("dollar", "dollars", "dxy", "usd index", "greenback")):
         impacts["DXY"] = d
 
     # Fed / makro: yön sürprizden (E2): zayıf/güvercin → DXY ↓, güçlü/şahin → DXY ↑.
     # Sürpriz okunamazsa eski kural: hawkish (bearish haber) → DXY pozitif.
-    if any(kw in lower for kw in ("fed", "federal reserve", "inflation", "cpi",
-                                  "ppi", "fomc", "rate hike", "rate cut",
-                                  "enflasyon", "faiz")):
+    if _hits(lower, ("fed", "federal reserve", "inflation", "cpi",
+                     "ppi", "fomc", "rate hike", "rate hikes", "rate cut", "rate cuts",
+                     "enflasyon", "faiz")):
         surprise = macro_surprise(lower)
         if surprise == "low":
             impacts["DXY"] = -1.0
@@ -433,17 +449,18 @@ def classify_asset_impact(title: str, sentiment: Sentiment) -> dict[str, float]:
             impacts["DXY"] = 1.0 if sentiment == "bearish" else d
 
     # Jeopolitik korku → VIX yukarı
-    if any(kw in lower for kw in ("war", "geopolit", "iran", "ukraine", "russia",
-                                  "airstrike", "missile", "drone strike", "vix",
-                                  "fear", "panic", "volatility",
-                                  "savaş", "çatışma", "gerilim")):
+    if _hits(lower, ("war", "wars", "geopolitical", "geopolitics", "iran",
+                     "iranian", "ukraine", "ukrainian", "russia", "russian",
+                     "airstrike", "airstrikes", "missile", "missiles",
+                     "drone strike", "vix", "fear", "fears", "panic", "volatility",
+                     "savaş", "çatışma", "gerilim")):
         impacts["VIX"] = 1.0 if sentiment == "bearish" else 0.0
 
     # Orta Doğu eskalasyonu → enerji risk primi (sentiment'ten bağımsız)
-    if any(kw in lower for kw in ("israel", "gaza", "hamas", "hezbollah",
-                                  "netanyahu", "idf", "strait of hormuz",
-                                  "hormuz", "red sea", "houthi",
-                                  "israil", "gazze")):
+    if _hits(lower, ("israel", "israeli", "gaza", "hamas", "hezbollah",
+                     "netanyahu", "idf", "strait of hormuz",
+                     "hormuz", "red sea", "houthi",
+                     "israil", "gazze")):
         if any(kw in lower for kw in _ESCALATION_WORDS):
             impacts["BRENT"] = 1.0
         elif any(kw in lower for kw in _DEESCALATION_WORDS):

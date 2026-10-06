@@ -187,6 +187,7 @@ def _isolate_runtime_stores(tmp_path_factory: pytest.TempPathFactory) -> None:
     # (aşağıda) yeni bir sızıntıyı suite'i kırarak yakalar.
     for _env, _name in (
         ("LLM_CACHE_PATH", "llm_cache.json"),
+        ("LLM_BUDGET_PATH", "llm_budget.json"),
         ("ZONE_PROPOSER_PATH", "zone_proposer.json"),
         ("REGIME_RISK_BRAKE_PATH", "regime_risk_brake.json"),
         ("NEWS_EVENT_STUDY_PATH", "news_event_study.json"),

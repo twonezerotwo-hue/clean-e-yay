@@ -52,6 +52,100 @@ def _read() -> list[dict[str, Any]]:
         return []
 
 
+# Satır sayısı (süreç-içi): ilk kullanımda bir kez tam okuma, sonra sayaç.
+_ROW_COUNT: dict[str, int] = {}
+
+
+def _read_last() -> dict[str, Any] | None:
+    """Dosyanın SON satırı — 40MB+ arşivin tamamını okumadan (sondan chunk).
+
+    `record()` kadence/material karşılaştırması için yalnız son satıra ihtiyaç
+    duyar; tüm dosyayı her yazımda okumak asıl maliyetti."""
+    path = _path()
+    try:
+        size = path.stat().st_size
+    except OSError:
+        return None
+    if size == 0:
+        return None
+    chunks: list[bytes] = []
+    newlines = 0
+    try:
+        with path.open("rb") as fh:
+            pos = size
+            while pos > 0 and newlines < 2:
+                step = min(1_048_576, pos)
+                pos -= step
+                fh.seek(pos)
+                chunk = fh.read(step)
+                chunks.append(chunk)
+                newlines += chunk.count(b"\n")
+    except OSError:
+        return None
+    data = b"".join(reversed(chunks)).decode("utf-8", errors="replace")
+    lines = [ln for ln in data.splitlines() if ln.strip()]
+    if not lines:
+        return None
+    try:
+        value = json.loads(lines[-1])
+    except ValueError:
+        return None
+    return value if isinstance(value, dict) else None
+
+
+def _ensure_row_count(path: Path) -> int:
+    """Dosyadaki satır sayısı (süreç başına BİR kez tam okuma; sonra sayaç)."""
+    key = str(path)
+    cached = _ROW_COUNT.get(key)
+    if cached is not None:
+        return cached
+    n = 0
+    try:
+        if path.exists():
+            with path.open("r", encoding="utf-8") as fh:
+                for _ in fh:
+                    n += 1
+    except OSError:
+        n = 0
+    _ROW_COUNT[key] = n
+    return n
+
+
+def _append_row(path: Path, row: dict[str, Any]) -> None:
+    """Tek satırı APPEND et (tüm arşivi yeniden yazma)."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("a", encoding="utf-8") as fh:
+        fh.write(json.dumps(row, ensure_ascii=False, separators=(",", ":")) + "\n")
+
+
+def _compact(path: Path, max_rows: int, cutoff_days: Any) -> None:
+    """Retention + satır-tavanı uygula — YALNIZ tavan aşılınca (tam oku+yaz).
+
+    Append-only büyümenin sınır bekçisi; her yazımda değil, seyrek çalışır."""
+    rows = _read()
+    if cutoff_days is not None:
+        try:
+            cutoff = datetime.now(UTC) - timedelta(days=float(cutoff_days))
+        except (TypeError, ValueError):
+            cutoff = None
+        if cutoff is not None:
+            kept: list[dict[str, Any]] = []
+            for item in rows:
+                ts = _dt(item.get("generated_at"))
+                if ts is None or ts >= cutoff:
+                    kept.append(item)
+            rows = kept
+    rows = rows[-max_rows:]
+    try:
+        write_text_atomic(
+            path,
+            "\n".join(json.dumps(item, ensure_ascii=False, separators=(",", ":")) for item in rows) + "\n",
+        )
+    except OSError:
+        return
+    _ROW_COUNT[str(path)] = len(rows)
+
+
 def _fingerprint(record: dict[str, Any]) -> str:
     material = {
         "factors": record.get("factors"),
@@ -299,8 +393,10 @@ def record(
 
     The writer remains observation-only.  A material factor/event/regime
     change bypasses cadence; an unchanged state writes only a periodic
-    checkpoint.  The bounded on-disk archive remains the restart-safe source
-    of truth and is only rewritten when one of those rules permits a row.
+    checkpoint.  Yazım APPEND-ONLY'dir: her yazımda 40MB+ dosyanın tamamını
+    okuyup yeniden yazmak yerine yalnız yeni satır eklenir; retention/row-cap
+    temizliği YALNIZ satır tavanı aşılınca kompaksiyonla uygulanır.  Kadence/
+    material karşılaştırması için de tüm dosya değil yalnız son satır okunur.
     """
     row = compact_record(
         world, snapshot_id=snapshot_id, asset_impacts=asset_impacts,
@@ -310,7 +406,6 @@ def record(
     archived_at = now or datetime.now(UTC)
     row["archived_at"] = archived_at.isoformat()
     with _LOCK:
-        rows = _read()
         cfg = _cfg()
         try:
             cadence = max(0.0, float(cfg.get("cadence_seconds", 300)))
@@ -320,7 +415,7 @@ def record(
             epsilon = max(0.0, float(cfg.get("material_change_epsilon", 0.02)))
         except (TypeError, ValueError):
             epsilon = 0.02
-        previous = rows[-1] if rows else None
+        previous = _read_last()
         changes = _material_changes(previous, row, epsilon)
         previous_time = _dt((previous or {}).get("archived_at"))
         elapsed = (archived_at.astimezone(UTC) - previous_time).total_seconds() if previous_time else None
@@ -333,8 +428,6 @@ def record(
                 reason = "REGIME_CHANGE"
             elif any(item.startswith("NEW_") for item in changes):
                 reason = "NEW_EVIDENCE"
-            elif any(item.startswith("FACTOR:") for item in changes):
-                reason = "MATERIAL_CHANGE"
             else:
                 reason = "MATERIAL_CHANGE"
         else:
@@ -342,31 +435,19 @@ def record(
         row["archive_write_reason"] = reason
         row["material_changes"] = changes
         row["checkpoint"] = reason == "CADENCE_CHECKPOINT"
-        rows.append(row)
+        path = _path()
+        before = _ensure_row_count(path)
+        try:
+            _append_row(path, row)
+        except OSError:
+            return None
+        _ROW_COUNT[str(path)] = before + 1
         try:
             max_rows = max(1, int(cfg.get("max_snapshots", os.environ.get("WORLD_STATE_ARCHIVE_MAX", 5000))))
         except (TypeError, ValueError):
             max_rows = 5000
-        cutoff_days = cfg.get("retention_days")
-        if cutoff_days is not None:
-            cutoff = datetime.now(UTC) - timedelta(days=float(cutoff_days))
-            keep: list[dict[str, Any]] = []
-            for item in rows:
-                try:
-                    ts = datetime.fromisoformat(str(item.get("generated_at", "")).replace("Z", "+00:00"))
-                    if ts.tzinfo is None:
-                        ts = ts.replace(tzinfo=UTC)
-                    if ts >= cutoff:
-                        keep.append(item)
-                except (TypeError, ValueError):
-                    keep.append(item)
-            rows = keep
-        rows = rows[-max_rows:]
-        path = _path()
-        try:
-            write_text_atomic(path, "\n".join(json.dumps(item, ensure_ascii=False, separators=(",", ":")) for item in rows) + "\n")
-        except OSError:
-            return None
+        if before + 1 > max_rows:
+            _compact(path, max_rows, cfg.get("retention_days"))
     return row
 
 

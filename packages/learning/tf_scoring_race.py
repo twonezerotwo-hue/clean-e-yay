@@ -27,6 +27,7 @@ from __future__ import annotations
 import json
 import os
 from datetime import UTC, datetime
+from functools import lru_cache
 from pathlib import Path
 
 from packages.data.registry.loader import load_thresholds
@@ -188,21 +189,36 @@ def _load_producer_artifact() -> dict:
 
 # ── çözümleme + puanlama ─────────────────────────────────────────────────────
 
+@lru_cache(maxsize=512)
+def _bars(symbol: str, tf: str) -> tuple[list, dict[str, int]]:
+    """Sembol+TF barlarını BİR KEZ yükle (tur-içi memo).
+
+    Defter binlerce satır olsa da aynı (sembol, tf) için tek okuma yapılır —
+    satır-başına `get_bars` çağrısı (her çağrıda arşiv okuma/yazma) 68 sn
+    sürüyordu. `ts→indeks` eşlemesiyle de satır çözümü O(1) olur (doğrusal
+    tarama yok). `evaluate()` başında cache temizlenir (taze veri)."""
+    from packages.data.providers.ohlcv import get_bars, history
+
+    try:
+        bars = history.merged(history.load(symbol, tf), get_bars(symbol, tf) or [])
+    except Exception:
+        bars = []
+    return bars, {b.ts.isoformat(): i for i, b in enumerate(bars)}
+
+
 def _forward_pct(row: dict) -> float | None:
     """Defter satırının konuşan-bar'ından `H` bar sonraki gerçekleşen ileri-getiri
     (%). Arşivde yeterli ileri bar yoksa None (henüz ÇÖZÜLMEDİ — dürüst)."""
-    from packages.data.providers.ohlcv import get_bars, history
-
     tf = row.get("speaker_tf")
     horizon = _HORIZON.get(tf or "")
     base = row.get("price_at")
     if horizon is None or not base:
         return None
     try:
-        bars = history.merged(history.load(row["symbol"], tf), get_bars(row["symbol"], tf) or [])
+        bars, index = _bars(row["symbol"], tf)
     except Exception:
         return None
-    idx = next((i for i, b in enumerate(bars) if b.ts.isoformat() == row.get("bar_ts")), None)
+    idx = index.get(row.get("bar_ts"))
     if idx is None or idx + horizon >= len(bars):
         return None
     fwd = bars[idx + horizon].close
@@ -276,6 +292,7 @@ def evaluate() -> dict:
     tabanı geçiyor) | V4_BEHIND (en az birinin gerisinde — owner touche_v4=false
     ile geri almayı değerlendirir). Otomatik aksiyon YOK."""
     c = cfg()
+    _bars.cache_clear()  # tur-içi memo: bu koşu için taze barlar
     rows = read_ledger()
     scored = _score(rows, c["neutral_band_pct"])
     designs = scored["designs"]

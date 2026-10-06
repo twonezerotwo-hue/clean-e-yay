@@ -33,6 +33,43 @@ _MAX_EVENTS = 5
 _MAX_ASSETS = 12
 _MAX_FORECASTS = 16
 
+# Dünya olay-tipi kodları → kullanıcıya dönük Türkçe etiket. Ham kod (ör.
+# GEOPOLITICAL_ESCALATION / MILITARY_ESCALATION) panelde GÖSTERİLMEZ; bilinmeyen
+# kod için insan-okur bir yedeğe düşülür (kod hiçbir zaman olduğu gibi basılmaz).
+_EVENT_TYPE_LABELS: dict[str, str] = {
+    "NUCLEAR_ESCALATION": "Nükleer tırmanma",
+    "CEASEFIRE": "Ateşkes",
+    "PEACE_TALKS": "Barış görüşmeleri",
+    "SANCTIONS": "Yaptırım",
+    "SANCTIONS_RELIEF": "Yaptırım hafiflemesi",
+    "CHOKEPOINT_THREAT": "Boğaz tehdidi",
+    "CHOKEPOINT_DISRUPTION": "Boğaz kesintisi",
+    "SHIPPING_ATTACK": "Gemi saldırısı",
+    "PORT_DISRUPTION": "Liman kesintisi",
+    "PIPELINE_DISRUPTION": "Boru hattı kesintisi",
+    "AIRSTRIKE": "Hava saldırısı",
+    "MISSILE_ATTACK": "Füze saldırısı",
+    "ENERGY_INFRASTRUCTURE_ATTACK": "Enerji altyapısı saldırısı",
+    "DRONE_ATTACK": "İHA saldırısı",
+    "GROUND_OFFENSIVE": "Kara harekâtı",
+    "TRADE_RESTRICTION": "Ticaret kısıtlaması",
+    "MILITARY_DEESCALATION": "Askeri gerilim azalması",
+    "MILITARY_ESCALATION": "Askeri tırmanma",
+    "GEOPOLITICAL_ESCALATION": "Jeopolitik tırmanma",
+    "rumor_unverified": "Söylenti (doğrulanmamış)",
+    "WORLD_STATE": "Dünya durumu",
+    "UNKNOWN": "Bilinmeyen olay",
+}
+
+
+def _event_type_label(code: Any) -> str:
+    """Olay-tipi kodunu kullanıcıya dönük Türkçe etikete çevir; bilinmeyeni
+    olduğu gibi basma, boşluklu başlık biçimine indir."""
+    key = str(code or "").strip()
+    if key in _EVENT_TYPE_LABELS:
+        return _EVENT_TYPE_LABELS[key]
+    return key.replace("_", " ").strip().title() or "Bilinmeyen olay"
+
 
 def _jsonable(value: Any) -> Any:
     if isinstance(value, datetime):
@@ -219,7 +256,7 @@ def _event_title(payload: Mapping[str, Any]) -> str:
     events = payload.get("world", {}).get("events") or []
     if events:
         first = _row(events[0])
-        return str(first.get("event_type") or "Yeni dünya olayı")
+        return _event_type_label(first.get("event_type"))
     headlines = payload.get("headlines") or []
     return "Yeni haber akışı" if headlines else "Yeni doğrulanmış dünya olayı yok"
 
@@ -247,7 +284,7 @@ def _evidence_used(payload: Mapping[str, Any]) -> list[str]:
         used.append(f"headline:{str(_row(headline).get('title') or '')[:80]}")
     for event in _row(payload.get("world")).get("events") or ():
         row = _row(event)
-        used.append(f"event:{row.get('event_id') or row.get('event_type')}")
+        used.append(f"event:{row.get('event_id') or _event_type_label(row.get('event_type'))}")
     graph = _row(_row(payload.get("world")).get("graph"))
     if graph.get("version"):
         used.append(f"world_graph:{graph['version']}")
@@ -282,7 +319,7 @@ def _fallback(payload: Mapping[str, Any], *, reason: str) -> dict[str, Any]:
     if events:
         first = _row(events[0])
         summary = (
-            f"{first.get('event_type', 'Dünya olayı')} için doğrulanmış kanıt bulundu. "
+            f"{_event_type_label(first.get('event_type'))} için doğrulanmış kanıt bulundu. "
             f"Kaynak güveni {first.get('source_confidence') if first.get('source_confidence') is not None else 'belirsiz'}; "
             f"etkilenen adaylar: {', '.join(assets) if assets else 'henüz eşleşmedi'}."
         )
@@ -408,7 +445,7 @@ def build_world_brief(
     system, user = _prompt(payload)
     max_tokens = min(budget.max_tokens_per_request(), 500)
     estimated = (len(system) + len(user)) // 4 + max_tokens
-    if not budget.can_spend(estimated):
+    if not budget.can_spend(estimated, mode):
         fallback["llm"]["fallback_reason"] = "budget_exceeded"
         cache.put(cache_key, fallback)
         return fallback
@@ -421,7 +458,7 @@ def build_world_brief(
         cache.put(cache_key, fallback)
         return fallback
     used = completion.input_tokens + completion.output_tokens
-    budget.record(used)
+    budget.record(used, mode)
     parsed = _parse(completion.text)
     if parsed is None:
         fallback["llm"]["fallback_reason"] = "invalid_format"

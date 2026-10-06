@@ -1348,13 +1348,13 @@ def answer(message: str, history: list[dict] | None = None) -> dict:
     est = (len(system) + len(user)) // 4 + max_out
     comp = (
         client.complete(system, user, max_out, _CHAT_TEMPERATURE)
-        if budget.can_spend(est)
+        if budget.can_spend(est, prep["mode"])
         else None
     )
     if comp is None:
-        reason = "budget_exceeded" if not budget.can_spend(est) else "llm_error"
+        reason = "budget_exceeded" if not budget.can_spend(est, prep["mode"]) else "llm_error"
         return _fallback_response(prep, reason)
-    budget.record(comp.input_tokens + comp.output_tokens)
+    budget.record(comp.input_tokens + comp.output_tokens, prep["mode"])
     return _clean_llm_result(prep, comp)
 
 
@@ -1405,7 +1405,7 @@ def stream_answer(message: str, history: list[dict] | None = None):
     messages = _chat_messages(prep, message)
     max_out = budget.max_tokens_per_request()
     est = sum(len(m["content"]) for m in messages) // 4 + max_out
-    if not budget.can_spend(est):
+    if not budget.can_spend(est, prep["mode"]):
         yield ("done", _fallback_response(prep, "budget_exceeded"))
         return
 
@@ -1426,5 +1426,5 @@ def stream_answer(message: str, history: list[dict] | None = None):
         ))
         return
     used = comp.input_tokens + comp.output_tokens
-    budget.record(used if used > 0 else est)
+    budget.record(used if used > 0 else est, prep["mode"])
     yield ("done", _clean_llm_result(prep, comp))

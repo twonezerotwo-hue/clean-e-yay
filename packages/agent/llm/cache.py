@@ -46,7 +46,7 @@ def get(key: str) -> dict | None:
     entry = _load().get(key)
     if not isinstance(entry, dict):
         return None
-    if time.time() - float(entry.get("at") or 0) > ttl_sec():
+    if time.time() - float(entry.get("at") or 0) >= ttl_sec():
         return None
     value = entry.get("value")
     return value if isinstance(value, dict) else None
@@ -59,7 +59,7 @@ def put(key: str, value: dict) -> None:
     data = {
         k: v
         for k, v in data.items()
-        if isinstance(v, dict) and now - float(v.get("at") or 0) <= ttl_sec()
+        if isinstance(v, dict) and now - float(v.get("at") or 0) < ttl_sec()
     }
     data[key] = {"at": now, "value": value}
     _save(data)

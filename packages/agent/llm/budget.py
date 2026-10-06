@@ -65,11 +65,27 @@ def used_tokens() -> int:
     return int(_load().get("used_tokens") or 0)
 
 
-def can_spend(estimated_tokens: int) -> bool:
+# Ücretsiz/yerel modlar ortak ÜCRETLİ bütçeyi harcamaz (LLM_MODE=off|ollama).
+# Yalnız gerçek yerel sağlayıcı (Ollama, lokalde ücretsiz) bütçe dışıdır; `mock`
+# bir test çiftidir (ücretli sağlayıcıyı taklit eder) — bütçe mantığını sınamak
+# için sayılır, bu yüzden listede YOKTUR.
+FREE_MODES: frozenset[str] = frozenset({"off", "ollama"})
+
+
+def is_free_mode(mode: str | None) -> bool:
+    """Yerel/mock provider mi? (ör. Ollama ücretsiz) — bütçe dışı sayılır."""
+    return (mode or "").strip().lower() in FREE_MODES
+
+
+def can_spend(estimated_tokens: int, mode: str | None = None) -> bool:
+    if is_free_mode(mode):
+        return True  # yerel model ücretsiz — ücretli bütçe kilidi uygulanmaz
     return used_tokens() + max(0, int(estimated_tokens)) <= daily_budget()
 
 
-def record(used: int) -> None:
+def record(used: int, mode: str | None = None) -> None:
+    if is_free_mode(mode):
+        return  # ücretsiz yerel tokenlar ortak ücretli bütçeye YAZILMAZ
     data = _load()
     data["date"] = _today()
     data["used_tokens"] = int(data.get("used_tokens") or 0) + max(0, int(used))

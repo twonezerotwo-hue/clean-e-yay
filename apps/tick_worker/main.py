@@ -252,6 +252,17 @@ INTERVAL = int(os.environ.get("TICK_INTERVAL_SEC", "30"))
 _STOP = asyncio.Event()
 
 
+def _log_stage_timings(
+    t0: float, t_snap: float, t_decide: float, t_commit: float, t_end: float
+) -> None:
+    """B5 — tick aşama süreleri (hiç ölçülmüyordu; hangi fazın zaman yediği
+    görünsün). SALT-GÖZLEM: yalnız log — karar/zamanlamayı etkilemez."""
+    log.info(
+        "tick aşama süreleri: snapshot=%.1fs karar=%.1fs paper=%.1fs gözlem=%.1fs toplam=%.1fs",
+        t_snap - t0, t_decide - t_snap, t_commit - t_decide, t_end - t_commit, t_end - t0,
+    )
+
+
 def _install_signals() -> None:
     # When embedded in another process (e.g. FastAPI lifespan), the host owns
     # signals. Set TICK_SKIP_SIGNAL_HANDLERS=1 to opt out cleanly.
@@ -281,6 +292,7 @@ async def run_once() -> None:
     txn = None  # T3 — istisna yolunda abort için görünür olmalı
     try:
         snap = build_snapshot()
+        t_snap = time.monotonic()  # B5 — aşama süresi görünürlüğü
         # T3 — defter mutasyon bölümü (oku→kapat/aç→yaz) süreçler-arası kilit
         # altında: API'nin owner mutasyonlarıyla yarışta kayıt kaybolmaz.
         # Snapshot (ağ) kilitten ÖNCE alınır; commit ilk save noktasında.
@@ -334,6 +346,7 @@ async def run_once() -> None:
             persist_regime=True,  # H10 — rejim hafızasının tek yazarı tick
         )
         decisions_generated = len(decisions)
+        t_decide = time.monotonic()  # B5 — aşama süresi görünürlüğü
         now = datetime.now(UTC)
 
         # T1 — kokpit gözlem yüzeyi (recheck önerisi + Trade Ticket kartları +
@@ -482,6 +495,7 @@ async def run_once() -> None:
                 )
 
         txn.commit()  # T3 — defter mutasyon bölümü biter: revision +1, kilit bırakılır
+        t_commit = time.monotonic()  # B5 — aşama süresi görünürlüğü
 
         # Haber/causal hazırlık kuyruğu: dünya kanıtını ayrı bir gözlem katmanı
         # olarak saklar. Bu çağrı emir açmaz; sonraki tick'te mevcut karar,
@@ -613,6 +627,7 @@ async def run_once() -> None:
             or bool(halts)
             or bool(crit_providers)
         )
+        _log_stage_timings(t0, t_snap, t_decide, t_commit, time.monotonic())
         heartbeat.record(
             WORKER_NAME,
             status="DEGRADED" if degraded else "OK",

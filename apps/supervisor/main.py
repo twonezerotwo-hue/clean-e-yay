@@ -25,6 +25,7 @@ import asyncio
 import logging
 import os
 import sys
+import time
 
 _log = logging.getLogger("apps.supervisor")
 
@@ -58,13 +59,20 @@ def _run_tick_once_blocking() -> None:
 
 
 async def _tick_loop(stop: asyncio.Event, interval: int) -> None:
-    """Tick döngüsü — iş thread'de, bekleme loop'ta (API hiç bloke olmaz)."""
+    """Tick döngüsü — iş thread'de, bekleme loop'ta (API hiç bloke olmaz).
+
+    `interval` DÖNGÜ aralığıdır: iş süresi beklemeye EKLENMEZ (hedef = cycle
+    başı + interval). Aksi halde ~34 sn iş + 30 sn bekleme ≈ 65 sn'de bir taze
+    karar olurdu. Öğrenme turuyla çakışan ağır tick'ler bu hesap sayesinde
+    ortalamada ayarlı aralığa yaklaşır, sapma birikmez.
+    """
     from apps.tick_worker import main as tick
 
     _log.info("tick loop started, interval=%ds", interval)
     locked = False
     try:
         while not stop.is_set():
+            cycle_start = time.monotonic()
             if not locked:
                 try:
                     tick._acquire_single_instance()
@@ -78,8 +86,10 @@ async def _tick_loop(stop: asyncio.Event, interval: int) -> None:
                     await asyncio.to_thread(_run_tick_once_blocking)
                 except Exception:
                     _log.exception("tick run_once failed")
+            # Döngü aralığı: iş süresini beklemeden düşerek hedefe hizala.
+            remaining = max(0.0, interval - (time.monotonic() - cycle_start))
             try:
-                await asyncio.wait_for(stop.wait(), timeout=interval)
+                await asyncio.wait_for(stop.wait(), timeout=remaining)
             except TimeoutError:
                 pass
     finally:
