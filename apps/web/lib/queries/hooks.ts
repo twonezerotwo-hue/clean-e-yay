@@ -555,6 +555,18 @@ export const useDiscovery = () => {
   });
 };
 
+// Fikir Panosu (mevcut /api/v1/ideas) — Heart "Yeni Asset Fırsatları" paneli tüketir.
+// Yeni polling/SSE yok; useDiscovery ile aynı TanStack deseni.
+export const useIdeas = () => {
+  const policy = usePanelQueryPolicy(5 * 60_000);
+  return useQuery({
+    queryKey: qk.ideas,
+    queryFn: api.ideas,
+    staleTime: 60_000,
+    ...policy,
+  });
+};
+
 export const useBacktestChallenger = () => {
   const policy = usePanelQueryPolicy(5 * 60_000);
   return useQuery({

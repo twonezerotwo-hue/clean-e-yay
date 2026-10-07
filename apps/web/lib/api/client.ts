@@ -47,6 +47,7 @@ import type {
   EntryExitQualityView,
   ExitForensicsView,
   DiscoveryView,
+  IdeaBoardView,
   BacktestChallengerView,
   GuardSafetyView,
   CalibrationJumpsView,
@@ -686,6 +687,7 @@ export const api = {
   newsEventStudy: () =>
     fetchJSON<NewsEventStudyView>("/api/v1/learning/news-event-study"),
   discovery: () => fetchJSON<DiscoveryView>("/api/v1/learning/discovery"),
+  ideas: () => fetchJSON<IdeaBoardView>("/api/v1/ideas"),
   evidenceBus: () => fetchJSON<EvidenceBusView>("/api/v1/learning/evidence-bus"),
   backtestChallenger: () =>
     fetchJSON<BacktestChallengerView>("/api/v1/learning/backtest-challenger"),

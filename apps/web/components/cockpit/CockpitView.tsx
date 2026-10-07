@@ -23,6 +23,7 @@ import {
   selectAgentBrief,
 } from "@/lib/selectors/cockpit";
 
+import { AssetOpportunitiesPanel } from "@/components/panels/AssetOpportunitiesPanel";
 import { CapitalRotationPanel } from "@/components/panels/CapitalRotationPanel";
 import { EventCalendarPanel } from "@/components/panels/EventCalendarPanel";
 import { ExecutionReadinessPanel } from "@/components/panels/ExecutionReadinessPanel";
@@ -1182,6 +1183,21 @@ export function CockpitView() {
   } else if (activeLayer === 1) {
     const layer1Items: Layer1StackItem[] = [
       { key: "holographic_signals", label: "Sinyal Kartlari", node: <HolographicSignalDeck brief={brief} /> },
+      {
+        // Heart — mevcut Asset Card'in HEMEN ardına "Yeni Asset Fırsatları".
+        // Veri: mevcut /api/v1/ideas. Detay → mevcut Soul asset incelemesi
+        // (paralel detay sistemi yok; yalnız katman+seçim değişir).
+        key: "asset_opportunities",
+        label: "Yeni Asset",
+        node: (
+          <AssetOpportunitiesPanel
+            onOpenSymbol={(symbol) => {
+              setSelectedLayer2Symbol(symbol);
+              activateLayer(2);
+            }}
+          />
+        ),
+      },
       { key: "news", label: "Haberler", node: <NewsPanel defaultView="radar" /> },
       { key: "execution_readiness", label: "Checklist", node: <ExecutionReadinessPanel /> },
       { key: "event_calendar", label: "Olay Takvimi", node: <EventCalendarPanel /> },

@@ -84,6 +84,7 @@ export const qk = {
     ["replay", "decision-trace", snapshotId] as const,
   tradeTickets: ["paper-trading", "tickets"] as const,
   notifications: ["notifications"] as const,
+  ideas: ["ideas"] as const,
   agentBriefing: ["agent", "briefing"] as const,
   liquidityRotation: ["liquidity", "rotation"] as const,
   pendingOrders: ["paper-trading", "orders"] as const,
