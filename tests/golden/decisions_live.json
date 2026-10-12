@@ -1611,7 +1611,7 @@
     {
      "action": "hold",
      "blocked_by": [
-      "entry_quality_v2:entry_quality"
+      "timeframe_policy:no_paper_execution"
      ],
      "candidate_action": "open_long",
      "confidence": 0.608,
@@ -1620,7 +1620,7 @@
      "expected_value": null,
      "fingerprint": "ETHUSD|v2|1w|NEUTRAL|bullish|S80|X|touche",
      "raw_confidence": 0.608,
-     "reason": "Giriş kalitesi: ETHUSD 1w open_long yönü korunuyor ama şimdi girilmez (kalite 0.2965, dönüş riski 0.0) — WAIT",
+     "reason": "timeframe 1w (strategic): paper execution kapalı — sadece bias",
      "risk_action": "HOLD",
      "size_multiplier": 0.0,
      "symbol": "ETHUSD",
@@ -2066,7 +2066,7 @@
     {
      "action": "hold",
      "blocked_by": [
-      "entry_quality_v2:entry_quality"
+      "concentration_guard"
      ],
      "candidate_action": "open_long",
      "confidence": 0.608,
@@ -2075,7 +2075,7 @@
      "expected_value": null,
      "fingerprint": "ETHUSD|v2|1w|NEUTRAL|bullish|S80|X|touche",
      "raw_confidence": 0.608,
-     "reason": "Giriş kalitesi: ETHUSD 1w open_long yönü korunuyor ama şimdi girilmez (kalite 0.2965, dönüş riski 0.0) — WAIT",
+     "reason": "concentration: ETHUSD üzerinde zaten 1 LONG açık (1% equity) — aynı-yön yığını engellendi",
      "risk_action": "HOLD",
      "size_multiplier": 0.0,
      "symbol": "ETHUSD",

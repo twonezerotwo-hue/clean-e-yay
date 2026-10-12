@@ -59,6 +59,11 @@ sayacı ve seyrek (sebep sınıfı başına ≤ 10 dk'da bir) WARNING log yazıl
 karşılaştırması yalnız yeni motor müdahale ettiğinde (wait/reduce) ikinci kez koşar; hata
 verirse kararı düşürmez.
 
+**Bias-only TF (1w):** `paper_execution=false` olan TF'lerde kapı HİÇ çalışmaz (o hücre pozisyon
+açamaz; giriş zamanlaması anlamsız). Genç sembollerin kısa haftalık geçmişi (< `MIN_BARS`)
+böylece kalıcı `missing_context` fallback'i üretmez; fallback sayacı yalnız gerçek (açabilen TF)
+teknik sorunları sayar ve normalde 0'dır.
+
 **Bilinen davranış (kardeş-TF devri):** `decide_matrix` aynı turda açılması önerilen
 pozisyonları sonraki hücrelere "bekleyen" olarak gösterir (concentration guard). Yeni motor bir
 hücreyi WAIT yaparsa o hücre yuvayı tutmaz; aynı sembolün başka TF kardeşi yuvayı devralıp

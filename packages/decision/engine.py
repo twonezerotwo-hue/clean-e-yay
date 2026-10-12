@@ -530,9 +530,12 @@ def _decide_core(
     # Yeni motor TEKNİK olarak başarısızsa (fallback_reason dolu) kısıt uygulanmaz → karar
     # legacy zincirden aynen sürer. Geçerli `wait` teknik hata DEĞİLDİR: bilinçli karardır,
     # legacy'nin LONG/SHORT'u ona karşı zorlanmaz.
+    # Kapı yalnız pozisyon AÇABİLEN TF'lerde çalışır: paper_execution=false (1w = sadece bias)
+    # hücresinde giriş zamanlaması anlamsızdır ve genç sembollerin kısa haftalık geçmişi
+    # (<MIN_BARS) kalıcı "missing_context" fallback'i üretip izlemeyi gürültüye boğar.
     eq_size_factor = 1.0
     eq_reduce_tag = False
-    if eq_mode != "off":
+    if eq_mode != "off" and pol["paper_execution"]:
         eq_report.update(entry_engine.gate(snap, symbol, timeframe, action, eq_mode))
         if eq_mode == "active" and not eq_report.get("fallback_reason"):
             if eq_report["verdict"] == "wait":

@@ -481,3 +481,40 @@ def test_execution_capability_long_and_short_still_reach_paper_open(
     )
     assert pos is not None, decision                            # paper emri KABUL edildi
     assert pos.side == side and pos.symbol == "BTCUSD" and state.open_positions == [pos]
+
+
+# ------------------------------------------------------------------ bias-only TF (1w): kapı çalışmaz
+
+def _decide_tf(dec, snap, regime, tf: str):
+    return dec.decide_for_symbol("BTCUSD", snap, regime, _risk(), equity_usd=100_000, timeframe=tf)
+
+
+@pytest.mark.parametrize("ctx_kind", ["missing", "bad_short", "nan"])
+def test_bias_only_timeframe_never_runs_the_gate_nor_counts_a_fallback(fresh_env, monkeypatch, ctx_kind):
+    """1w paper_execution=false (hiç pozisyon açamaz): genç sembolün kısa haftalık geçmişi
+    ('missing_context') kalıcı fallback sayacı/log üretmemeli; WAIT de uydurmamalı."""
+    ctx = {"missing": None, "bad_short": _bad_short_ctx(),
+           "nan": _bad_short_ctx() | {"rsi": float("nan")}}[ctx_kind]
+    dec, snap, regime = _force(monkeypatch, ctx=None, **SHORT)
+    snap.entry_contexts = {"BTCUSD": {"1w": ctx}} if ctx else {}
+    _set_mode(monkeypatch, "active")
+    d = _decide_tf(dec, snap, regime, "1w")
+    assert d.entry_quality_report == {}                       # kapı hiç çalışmadı
+    assert d.blocked_by == ["timeframe_policy:no_paper_execution"] or d.action == "hold"
+    assert d.action == "hold" and d.size_multiplier == 0.0
+    assert entry_engine.stats()["fallback_total"] == 0
+    # legacy ile birebir aynı karar (off): bias hücresi motorlar arasında farklılaşmaz
+    _set_mode(monkeypatch, "off")
+    off = _decide_tf(dec, snap, regime, "1w")
+    assert (d.action, d.reason, d.blocked_by, d.size_multiplier) == \
+           (off.action, off.reason, off.blocked_by, off.size_multiplier)
+
+
+def test_executable_timeframe_still_falls_back_on_missing_context(fresh_env, monkeypatch):
+    """Düzeltme yalnız bias-only TF'yi kapsar: pozisyon açabilen TF'de eksik bağlam hâlâ fallback."""
+    dec, snap, regime = _force(monkeypatch, ctx=None, **SHORT)
+    _set_mode(monkeypatch, "active")
+    d = _decide_tf(dec, snap, regime, "1d")
+    assert d.action == "open_short"
+    assert d.entry_quality_report["fallback_reason"] == "missing_context"
+    assert entry_engine.stats()["fallback_total"] == 1
