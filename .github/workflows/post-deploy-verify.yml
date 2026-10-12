@@ -1,0 +1,102 @@
+# GEÇİCİ — MERGE EDİLMEZ. Deploy sonrası SALT-OKUR doğrulama (CLAUDE.md: EC2'de komut
+# gerekiyorsa pull_request tetiklemeli draft PR workflow'u). Hiçbir şey yazmaz/yeniden
+# başlatmaz/silmez; secret kullanmaz ve yazdırmaz (env/.env okunmaz).
+name: post-deploy-verify (gecici)
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/post-deploy-verify.yml"
+
+jobs:
+  verify:
+    name: EC2 salt-okur dogrulama
+    runs-on: [self-hosted, clean-e-yay-ec2]
+    timeout-minutes: 10
+    steps:
+      - name: Dogrula
+        shell: bash
+        run: |
+          set -uo pipefail
+          APP=/opt/clean-e-yay
+          API=http://127.0.0.1:9000/api/v1
+          redact() { sed -E 's/((api[_-]?key|token|secret|password|authorization|bearer)[=: ]+)[^ "&]+/\1***/Ig' | cut -c1-220; }
+
+          echo "== 1. KUTUDAKI KOD (git) =="
+          hostname
+          git -C "$APP" rev-parse HEAD
+          git -C "$APP" log -1 --format='%H | %s'
+          echo "izlenen dosya degisikligi sayisi: $(git -C "$APP" status --porcelain --untracked-files=no | wc -l)"
+
+          echo "== 2. SERVISLER =="
+          systemctl is-active eyay-supervisor.service eyay-web.service
+          systemctl show eyay-supervisor.service -p ActiveState -p SubState -p ActiveEnterTimestamp -p NRestarts -p MainPID
+          MPID=$(systemctl show -p MainPID --value eyay-supervisor.service)
+          echo "supervisor sureci yasi (sn): $(ps -o etimes= -p "$MPID" 2>/dev/null | tr -d ' ')"
+          date -u +"simdi (UTC): %Y-%m-%dT%H:%M:%SZ"
+
+          echo "== 3. API HEALTH =="
+          curl -fsS --max-time 20 "$API/health"; echo
+          echo "web HTTP: $(curl -s -o /dev/null -w '%{http_code}' --max-time 20 http://127.0.0.1:3000/)"
+
+          echo "== 4. SYSTEM HEALTH (workers / providers / DQS / halt / paper_safe) =="
+          curl -fsS --max-time 30 "$API/system/health" -o /tmp/pdv_sys.json && python3 - <<'PY'
+          import json
+          h = json.load(open("/tmp/pdv_sys.json"))
+          print({k: h.get(k) for k in ("api_status", "paper_safe", "no_execution", "stale_workers",
+                                       "last_successful_tick", "last_learning_run", "dqs_status", "warnings")})
+          for n, v in (h.get("workers") or {}).items():
+              print(n, v)
+          print("provider_summary", h.get("provider_summary"))
+          print("risk_halt_status", h.get("risk_halt_status"))
+          print("snapshot_store_status", h.get("snapshot_store_status"))
+          PY
+
+          echo "== 5. KARAR MATRISI (calisan servis; shadow dogrulama) =="
+          curl -fsS --max-time 90 "$API/decision/matrix" -o /tmp/pdv_matrix.json && python3 - <<'PY'
+          import json
+          from collections import Counter
+          m = json.load(open("/tmp/pdv_matrix.json"))
+          cells = m.get("cells", [])
+          eq = [c for c in cells if "entry_quality" in c]
+          print("hucre:", len(cells), "| entry_quality anahtarli (YENI kod calisiyor):", len(eq))
+          print("mode:", dict(Counter(c["entry_quality"].get("mode") for c in eq)))
+          print("verdict:", dict(Counter(c["entry_quality"].get("verdict") for c in eq)))
+          print("applied=True hucre sayisi (0 olmali):", sum(1 for c in eq if c["entry_quality"].get("applied")))
+          print("blocked_by entry_quality_v2* (0 olmali):",
+                sum(1 for c in cells if any(str(b).startswith("entry_quality_v2") for b in c.get("blocked_by", []))))
+          print("gercek action:", dict(Counter(c.get("action") for c in cells)))
+          print("aday action:", dict(Counter(c.get("candidate_action") for c in cells)))
+          print("golgede WAIT diyen ama gercek action DEGISMEYEN:",
+                sum(1 for c in eq if c["entry_quality"].get("new_action") == "hold"
+                    and c["entry_quality"].get("old_action") in ("open_long", "open_short")
+                    and c.get("action") in ("open_long", "open_short")))
+          print("risk_gate:", (m.get("risk_gate") or {}).get("action"), "| dqs:", m.get("dqs_status"),
+                "| rejim:", m.get("regime"), "| suspended:", m.get("suspended"))
+          PY
+
+          echo "== 6. SMOKE (repo scripts/smoke.sh, salt-okur GET) =="
+          API_BASE=http://127.0.0.1:9000 WEB_BASE=http://127.0.0.1:3000 bash "$APP/scripts/smoke.sh" 2>&1 | tail -20
+
+          echo "== 7. CALISMA ZAMANI DOSYALARI (isim + zaman, icerik YOK) =="
+          for f in tick_worker.lock learning_summary.json tf_scoring_v2_shadow.json paper_state.json regime_state.json; do
+            p="$APP/data/runtime/$f"; [ -e "$p" ] && stat -c '%y  %n' "$p" || echo "yok: $f"
+          done
+          LATEST=$(ls -t "$APP"/data/runtime/snapshots/*.json 2>/dev/null | head -1)
+          echo "en yeni snapshot: $(basename "${LATEST:-yok}") | entry_contexts anahtari: $( [ -n "${LATEST:-}" ] && grep -c '"entry_contexts"' "$LATEST" || echo 0 )"
+
+          echo "== 8. HATA LOGLARI (supervisor, son baslangictan beri; secret maskeli) =="
+          SINCE=$(systemctl show -p ActiveEnterTimestamp --value eyay-supervisor.service)
+          JOUT=$(journalctl -u eyay-supervisor.service --since "$SINCE" --no-pager 2>&1 || true)
+          if echo "$JOUT" | grep -qiE "insufficient permissions|not seeing messages|no journal files"; then
+            echo "journal erisimi yok (runner kullanicisi okuyamiyor)"
+          else
+            echo "toplam log satiri: $(echo "$JOUT" | wc -l)"
+            echo "traceback/exception/critical satiri: $(echo "$JOUT" | grep -ciE 'traceback|exception|critical' || true)"
+            echo "ERROR seviyesi satiri: $(echo "$JOUT" | grep -cE ' ERROR ' || true)"
+            echo "--- son 15 ERROR/Traceback/Exception satiri (maskeli) ---"
+            echo "$JOUT" | grep -iE ' ERROR |traceback|exception|critical' | tail -15 | redact
+            echo "--- baslangic satirlari ---"
+            echo "$JOUT" | grep -iE 'tick|learning|supervisor|startup|started' | head -6 | redact
+          fi
+          echo "== BITTI =="
