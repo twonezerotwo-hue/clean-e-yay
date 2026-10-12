@@ -17,7 +17,7 @@ jobs:
       - name: Dogrula
         shell: bash
         run: |
-          set -uo pipefail
+          set +e; set -u   # runner bash -e ile gelir; ls|head SIGPIPE'ı betiği öldürmesin
           APP=/opt/clean-e-yay
           API=http://127.0.0.1:9000/api/v1
           redact() { sed -E 's/((api[_-]?key|token|secret|password|authorization|bearer)[=: ]+)[^ "&]+/\1***/Ig' | cut -c1-220; }
@@ -82,7 +82,7 @@ jobs:
           for f in tick_worker.lock learning_summary.json tf_scoring_v2_shadow.json paper_state.json regime_state.json; do
             p="$APP/data/runtime/$f"; [ -e "$p" ] && stat -c '%y  %n' "$p" || echo "yok: $f"
           done
-          LATEST=$(ls -t "$APP"/data/runtime/snapshots/*.json 2>/dev/null | head -1)
+          LATEST=$(find "$APP/data/runtime/snapshots" -maxdepth 1 -name "*.json" -printf "%T@ %p\n" 2>/dev/null | sort -rn | sed -n 1p | cut -d" " -f2-)
           echo "en yeni snapshot: $(basename "${LATEST:-yok}") | entry_contexts anahtari: $( [ -n "${LATEST:-}" ] && grep -c '"entry_contexts"' "$LATEST" || echo 0 )"
 
           echo "== 8. HATA LOGLARI (supervisor, son baslangictan beri; secret maskeli) =="
