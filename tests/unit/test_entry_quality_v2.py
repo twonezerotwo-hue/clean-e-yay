@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import importlib
 import random
+from contextlib import contextmanager
 from datetime import UTC, datetime, timedelta
 
 import pytest
@@ -59,16 +60,32 @@ def _bad_long_ctx() -> dict:
 CFG = entry_quality.EntryQualityConfig(mode="active")
 
 
+@contextmanager
+def mode_ctx(monkeypatch, m: str, canonical: bool = False):
+    """conftest mode()/zero_two_canonical() pin'ini kapsamlı olarak aşar."""
+    with monkeypatch.context() as mp:
+        mp.setattr(entry_quality, "mode", lambda: m)
+        mp.setattr(entry_quality, "zero_two_canonical", lambda: canonical)
+        yield
+
+
 # ------------------------------------------------------------------ config
 
-def test_default_mode_is_off_and_invalid_mode_falls_back_to_off():
-    assert entry_quality.mode() == "off"
-    assert entry_quality.zero_two_canonical() is False
+def test_default_is_off_and_config_parsing_is_safe():
+    assert entry_quality.EntryQualityConfig().mode == "off"
+    assert entry_quality.EntryQualityConfig().zero_two_canonical is False
     with threshold_override({"entry_quality_v2": {"mode": "bogus"}}):
-        assert entry_quality.mode() == "off"
+        assert entry_quality.config().mode == "off"          # geçersiz mod → güvenli varsayılan
     with threshold_override({"entry_quality_v2": {"mode": "shadow", "q_wait": 0.3}}):
-        assert entry_quality.mode() == "shadow"
+        assert entry_quality.config().mode == "shadow"
         assert entry_quality.config().q_wait == 0.3
+    with threshold_override({"entry_quality_v2": {"mode": "active", "ema20": [2.0, 4.0], "range_weights": {"60": 1.0}}}):
+        c = entry_quality.config()
+        assert c.ema20 == (2.0, 4.0) and c.range_weights["60"] == 1.0   # sözlükler derin birleşir
+
+
+def test_conftest_pins_runtime_readers_off():
+    assert entry_quality.mode() == "off" and entry_quality.zero_two_canonical() is False
 
 
 # ------------------------------------------------------------------ assess
@@ -418,7 +435,7 @@ def test_engine_off_is_inert_even_with_bad_context(fresh_env, monkeypatch):
 
 def test_engine_shadow_reports_both_decisions_but_does_not_change_action(fresh_env, monkeypatch):
     dec, snap, regime = _force(monkeypatch, score=15.0, direction="bearish", ctx=_bad_short_ctx())
-    with threshold_override({"entry_quality_v2": {"mode": "shadow"}}):
+    with mode_ctx(monkeypatch, "shadow"):
         d = _decide(dec, snap, regime)
     rep = d.entry_quality_report
     assert d.action == "open_short"                               # KARAR DEĞİŞMEZ
@@ -428,7 +445,7 @@ def test_engine_shadow_reports_both_decisions_but_does_not_change_action(fresh_e
 
 def test_engine_active_waits_bad_short_and_never_opens_the_opposite_side(fresh_env, monkeypatch):
     dec, snap, regime = _force(monkeypatch, score=15.0, direction="bearish", ctx=_bad_short_ctx())
-    with threshold_override({"entry_quality_v2": {"mode": "active"}}):
+    with mode_ctx(monkeypatch, "active"):
         d = _decide(dec, snap, regime)
     assert d.action == "hold" and d.action not in ("open_long", "open_short")
     assert d.candidate_action == "open_short"                     # yön korunur (cockpit candidate vs final)
@@ -439,16 +456,16 @@ def test_engine_active_waits_bad_short_and_never_opens_the_opposite_side(fresh_e
 def test_engine_active_good_entry_unchanged_and_reduce_only_shrinks(fresh_env, monkeypatch):
     good = _ctx(range_pos={"20": 0.5, "60": 0.5, "120": 0.5}, ext_ema20=-0.4, rsi=44.0)
     dec, snap, regime = _force(monkeypatch, score=15.0, direction="bearish", ctx=good)
-    with threshold_override({"entry_quality_v2": {"mode": "off"}}):
+    with mode_ctx(monkeypatch, "off"):
         base = _decide(dec, snap, regime)
-    with threshold_override({"entry_quality_v2": {"mode": "active"}}):
+    with mode_ctx(monkeypatch, "active"):
         act = _decide(dec, snap, regime)
     assert act.action == base.action == "open_short"
     assert act.size_multiplier == base.size_multiplier            # kaliteli giriş: değişmez
     # orta kalite → azaltma: boyut ASLA artmaz
     mid = _ctx(range_pos={"20": 0.04, "60": 0.04, "120": 0.04}, ext_ema20=-2.6, ext_ema50=-3.5, rsi=33.0)
     dec, snap, regime = _force(monkeypatch, score=15.0, direction="bearish", ctx=mid)
-    with threshold_override({"entry_quality_v2": {"mode": "active"}}):
+    with mode_ctx(monkeypatch, "active"):
         red = _decide(dec, snap, regime)
     assert red.action == "open_short" and red.size_multiplier <= base.size_multiplier
     assert red.size_multiplier < base.size_multiplier and "entry_quality_v2:reduce" in red.blocked_by
@@ -463,7 +480,7 @@ def test_engine_never_flips_side_for_any_context(fresh_env, monkeypatch, score, 
                    bb_pctb=rng.uniform(-0.3, 1.3), move5_atr=rng.uniform(-8, 8),
                    run_dir=rng.choice((-1, 0, 1)), run_len=rng.randint(0, 6))
         dec, snap, regime = _force(monkeypatch, score=score, direction=direction, ctx=ctx)
-        with threshold_override({"entry_quality_v2": {"mode": "active"}}):
+        with mode_ctx(monkeypatch, "active"):
             d = _decide(dec, snap, regime)
         assert d.action in (cand, "hold")
 
@@ -471,7 +488,7 @@ def test_engine_never_flips_side_for_any_context(fresh_env, monkeypatch, score, 
 def test_engine_active_riskgate_still_comes_first(fresh_env, monkeypatch):
     from packages.risk.engine import RiskDecision
     dec, snap, regime = _force(monkeypatch, score=15.0, direction="bearish", ctx=_bad_short_ctx())
-    with threshold_override({"entry_quality_v2": {"mode": "active"}}):
+    with mode_ctx(monkeypatch, "active"):
         d = dec.decide_for_symbol("BTCUSD", snap, regime,
                                   RiskDecision(action="KILL_SWITCH", reason="x", evidence=[]),
                                   equity_usd=100_000, timeframe="1d")
@@ -483,7 +500,7 @@ def test_engine_active_riskgate_still_comes_first(fresh_env, monkeypatch):
 def test_pipeline_builds_no_contexts_when_off(monkeypatch):
     from packages.data.ingestion import pipeline
     assert pipeline._build_entry_contexts(["BTCUSD"]) == {}
-    with threshold_override({"entry_quality_v2": {"mode": "shadow"}}):
+    with mode_ctx(monkeypatch, "shadow"):
         out = pipeline._build_entry_contexts(["BTCUSD"])
     assert isinstance(out, dict)     # fixture barlarıyla bağlam üretilebilir ya da hücre boş kalır; çökmez
 
@@ -541,7 +558,7 @@ def test_matrix_cell_has_entry_quality_key_only_when_mode_is_not_off(fresh_env, 
     d_off = _decide(dec, snap, regime)
     cell_off = dec.matrix_view(regime, risk, [d_off], snap, ["BTCUSD"])["cells"][0]
     assert "entry_quality" not in cell_off                       # kapalıyken hücre bayt-aynı
-    with threshold_override({"entry_quality_v2": {"mode": "shadow"}}):
+    with mode_ctx(monkeypatch, "shadow"):
         d_sh = _decide(dec, snap, regime)
     cell_sh = dec.matrix_view(regime, risk, [d_sh], snap, ["BTCUSD"])["cells"][0]
     assert cell_sh["entry_quality"]["old_action"] == "open_short"

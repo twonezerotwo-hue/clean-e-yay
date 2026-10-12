@@ -40,6 +40,17 @@ os.environ.setdefault(
 
 
 @pytest.fixture(autouse=True)
+def _entry_quality_off_by_default(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Giriş kalitesi v2 canlı config'te SHADOW; unit testlerin çoğu bağlam üretimi/ek rapor
+    olmadan baseline'ı varsayar. Default KAPAT (yalnız mode()/zero_two_canonical() okuyucuları);
+    v2 davranışını doğrulayan testler kendi monkeypatch'iyle açar. `config()` ve YAML
+    ayrıştırması etkilenmez (ayrıştırma testi gerçek config'i okur)."""
+    from packages.scoring import entry_quality
+    monkeypatch.setattr(entry_quality, "mode", lambda: "off")
+    monkeypatch.setattr(entry_quality, "zero_two_canonical", lambda: False)
+
+
+@pytest.fixture(autouse=True)
 def _f5_disabled_by_default(monkeypatch: pytest.MonkeyPatch) -> None:
     """F5 (EV kapısı + Kelly sizing) canlı config'te AÇIK, ama çoğu unit test pre-F5
     sizing/açılış davranışını varsayar (relatif size karşılaştırmaları, açık sayısı).

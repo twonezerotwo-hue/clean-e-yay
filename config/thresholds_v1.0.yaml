@@ -465,7 +465,11 @@ timeframe_targets:
 #                  hesapla; false → eski find_setups(...)[-1] (geçerlilik kontrolsüz).
 # Aktivasyon (shadow→active) CP5 kırmızı çizgisidir: owner onayı + 5y çok-rejim kanıtı.
 entry_quality_v2:
-  mode: "off"
+  # 2026-10-12: SHADOW. 5y-benzeri çok-rejim ölçüm (docs/evidence/entry_quality_v2): kabul
+  # ölçütlerinin 3/9'u KALDI (sinyal z'si, trend-yakalama korunumu, enstrüman tutarlılığı)
+  # → ACTIVE'e terfi YOK (CP5: owner onayı + canlı gölge kanıtı). Gölge karar DEĞİŞTİRMEZ;
+  # eski/yeni karar matrix hücresinde "entry_quality" altında yan yana birikir. Geri alma: "off".
+  mode: "shadow"
   zero_two_canonical: false
   range_extreme: 0.20
   range_weights: { "20": 0.2, "60": 0.5, "120": 0.3 }
