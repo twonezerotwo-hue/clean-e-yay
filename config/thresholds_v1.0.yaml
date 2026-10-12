@@ -456,14 +456,17 @@ timeframe_targets:
 # ASLA zıt yöne çevrilmez, boyut ≤ 1.0, RiskGate'e dokunmaz. Girdi: pipeline'ın
 # anlık görüntüye gömdüğü entry_context (aralık konumu 20/60/120, ATR-normalize EMA/VWAP
 # mesafesi, RSI bandı, Bollinger, impulsive mum serisi, yaşa göre sönümlü dönüş olayları).
-#   mode: off    → hiçbir şey hesaplanmaz, karar BAYT-AYNI (varsayılan, rollback = off)
-#         shadow → her kararda entry_quality_report yazılır (eski/yeni karar yan yana),
-#                  karar DEĞİŞMEZ
-#         active → verdict=wait → hold (blocked_by entry_quality / reversal_risk),
-#                  verdict=reduce → boyut küçülür
+#   mode: off    → hiçbir şey hesaplanmaz, karar BAYT-AYNI (hızlı rollback = off)
+#         shadow → LEGACY uygulanır; yeni motor hesaplanıp matrix hücresinde "entry_quality"
+#                  altında yan yana yazılır, karar DEĞİŞMEZ (güvenli geri dönüş = shadow)
+#         active → YENİ motor birincil: verdict=wait → hold (blocked_by entry_quality /
+#                  reversal_risk), verdict=reduce → boyut küçülür; LEGACY aynı turda gölge
+#                  karşılaştırma + TEKNİK fallback (istisna, NaN/inf, bozuk karar, eksik
+#                  bağlam, geçersiz eylem, gecikme aşımı). Geçerli WAIT hata değildir.
 #   zero_two_canonical: v4 0-2 merceğini zero_two.analyze() (geçerlilik + bayatlama) ile
 #                  hesapla; false → eski find_setups(...)[-1] (geçerlilik kontrolsüz).
-# Aktivasyon (shadow→active) CP5 kırmızı çizgisidir: owner onayı + 5y çok-rejim kanıtı.
+#                  AYRI terfi: active ile birlikte AÇILMAZ (canlı yön girdisini değiştirir).
+# Aktivasyon (shadow→active) CP5 kırmızı çizgisidir: owner onayı gerekir.
 entry_quality_v2:
   # 2026-10-12: SHADOW. 5y-benzeri çok-rejim ölçüm (docs/evidence/entry_quality_v2): kabul
   # ölçütlerinin 3/9'u KALDI (sinyal z'si, trend-yakalama korunumu, enstrüman tutarlılığı)
@@ -471,6 +474,8 @@ entry_quality_v2:
   # eski/yeni karar matrix hücresinde "entry_quality" altında yan yana birikir. Geri alma: "off".
   mode: "shadow"
   zero_two_canonical: false
+  # Yeni motor değerlendirmesi bu süreyi (ms) aşarsa teknik "timeout" sayılıp legacy'ye düşülür.
+  fallback_max_latency_ms: 1000
   range_extreme: 0.20
   range_weights: { "20": 0.2, "60": 0.5, "120": 0.3 }
   loc_floor: 0.4
