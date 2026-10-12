@@ -17,7 +17,8 @@ snapshot (fiyat + OHLCV + makro + haber, DQS)
   → rejim → 5 modül konsensüs (touche, fundamental, news, sentinel, quantum)
   → decide_matrix: sembol × TF hücreleri (15m, 1h, 4h, 1d, 1w)
       RiskGate ÖNCE (KILL_SWITCH / RISK_REDUCE / NO_POSITION_INCREASE)
-      → giriş kalitesi v2 (yön ≠ giriş zamanlaması; yalnız kısıtlar: WAIT / boyut ↓)
+      → giriş kalitesi v2 (yön ≠ giriş zamanlaması; yalnız kısıtlar: WAIT / boyut ↓;
+        `active`'de birincil motor, teknik hatada legacy zincire düşer)
       → güven tabanı → EV kapısı → boyut katmanları → korelasyon/konsantrasyon
   → gates (seans, conflict gate) → attempt_open (fiyat bekçisi, duplicate, reentry)
   → paper lifecycle (SL/TP, kapanış-bazlı stop + acil fren, trailing, time-stop)
@@ -29,9 +30,21 @@ snapshot (fiyat + OHLCV + makro + haber, DQS)
 Konsensüs yönü korunur; "şimdi girmek mantıklı mı" ayrıca ölçülür (aralık konumu, ATR-normalize
 uzama, RSI bandı, Bollinger, yaşa göre sönümlü dönüş olayları). Kötü giriş WAIT olur, **asla**
 zıt yöne çevrilmez; boyut artmaz. Modu nereden okuyacağın: `config/thresholds_v1.0.yaml →
-entry_quality_v2.mode` (`off` | `shadow` | `active`); `shadow` karar değiştirmez, eski/yeni karar
-matrix hücresinde `entry_quality` altında yan yana birikir. Tasarım, ölçüm ve geri alma:
-[ENTRY_QUALITY_V2](ENTRY_QUALITY_V2.md); kanıt: `docs/evidence/entry_quality_v2/`.
+entry_quality_v2.mode`:
+
+- `off` — hiçbir şey hesaplanmaz, karar bayt-aynı.
+- `shadow` — eski (legacy) motor uygulanır; yeni motor yan yana yazılır, karar değişmez.
+- `active` — **yeni motor birincil**; eski motor aynı turda gölge karşılaştırma + **teknik
+  fallback**. LONG / SHORT / WAIT üçü de geçerli karardır: yeni motorun WAIT'i fallback
+  değildir, legacy'nin LONG/SHORT'uyla ezilmez. Yalnız teknik başarısızlıkta (istisna, NaN/inf,
+  bozuk karar, eksik bağlam, geçersiz eylem, gecikme aşımı) legacy karar uygulanır; RiskGate
+  iki yolda da İLK sırada.
+
+Canlı izleme: `GET /api/v1/decision/matrix` → üst düzey `engine` bloğu (yeni/legacy LONG-SHORT-WAIT
+sayıları, uyuşmazlık %, giriş-kalitesi / dönüş-riski veto sayıları, fallback sayısı + sebepleri,
+gate gecikmesi) ve hücre başına `entry_quality` (`applied_engine`, `fallback_reason`,
+`legacy_*` / `new_*`, `agreement`). Normal şartlarda fallback sayısı 0'dır. Tasarım, ölçüm ve
+geri alma: [ENTRY_QUALITY_V2](ENTRY_QUALITY_V2.md); kanıt: `docs/evidence/entry_quality_v2/`.
 
 ## Süreçler (gerçek topoloji)
 
