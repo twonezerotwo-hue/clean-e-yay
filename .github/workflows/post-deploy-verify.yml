@@ -27,6 +27,8 @@ jobs:
           git -C "$APP" rev-parse HEAD
           git -C "$APP" log -1 --format='%H | %s'
           echo "izlenen dosya degisikligi sayisi: $(git -C "$APP" status --porcelain --untracked-files=no | wc -l)"
+          EXPECT=eba72a4730a42c7741521ea934cde897f7277c20
+          [ "$(git -C "$APP" rev-parse HEAD)" = "$EXPECT" ] && echo "SHA ESLESTI: kutu == $EXPECT" || echo "SHA ESLESMEDI (beklenen $EXPECT)"
           echo "--- efektif config (YAML, entry_quality_v2 blogu; secret yok) ---"
           awk '/^entry_quality_v2:/{f=1;next} f&&/^[a-z_]+:/{f=0} f&&/^  (mode|zero_two_canonical|fallback_max_latency_ms):/' "$APP/config/thresholds_v1.0.yaml"
 
@@ -103,6 +105,8 @@ jobs:
                         "| aday:", c.get("candidate_action"), "| nihai:", c.get("action"), "| blocked_by:", c.get("blocked_by"))
           print("entry_quality'li hucreler TF dagilimi:", dict(Counter(c["timeframe"] for c in cells if c.get("entry_quality"))))
           print("aday acik (open_*) hucreler TF dagilimi:", dict(Counter(c["timeframe"] for c in cells if c.get("candidate_action") in ("open_long","open_short"))))
+          w1 = [c for c in cells if c["timeframe"] == "1w"]
+          print("1w hucre:", len(w1), "| 1w'de entry_quality anahtari (0 olmali):", sum(1 for c in w1 if c.get("entry_quality")))
           print("verdict wait/reduce hucreler:", [(c["symbol"], c["timeframe"], c["entry_quality"]["verdict"], c["entry_quality"].get("entry_quality"), c["entry_quality"].get("reversal_risk"), c.get("action")) for c in cells if (c.get("entry_quality") or {}).get("verdict") in ("wait","reduce")])
           PY
 
