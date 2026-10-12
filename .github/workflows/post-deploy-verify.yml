@@ -89,6 +89,23 @@ jobs:
                 "| rejim:", m.get("regime"), "| suspended:", m.get("suspended"))
           PY
 
+          echo "== 5b. FALLBACK HUCRELERI (tani; yalniz sembol/tf/sebep) =="
+          python3 - <<'PY'
+          import json
+          from collections import Counter
+          m = json.load(open("/tmp/pdv_matrix.json"))
+          cells = m.get("cells", [])
+          print("semboller:", sorted({c["symbol"] for c in cells}), "| tf'ler:", sorted({c["timeframe"] for c in cells}))
+          for c in cells:
+              q = c.get("entry_quality") or {}
+              if q.get("fallback_reason"):
+                  print("FALLBACK hucre:", c["symbol"], c["timeframe"], "| sebep:", q.get("fallback_reason"),
+                        "| aday:", c.get("candidate_action"), "| nihai:", c.get("action"), "| blocked_by:", c.get("blocked_by"))
+          print("entry_quality'li hucreler TF dagilimi:", dict(Counter(c["timeframe"] for c in cells if c.get("entry_quality"))))
+          print("aday acik (open_*) hucreler TF dagilimi:", dict(Counter(c["timeframe"] for c in cells if c.get("candidate_action") in ("open_long","open_short"))))
+          print("verdict wait/reduce hucreler:", [(c["symbol"], c["timeframe"], c["entry_quality"]["verdict"], c["entry_quality"].get("entry_quality"), c["entry_quality"].get("reversal_risk"), c.get("action")) for c in cells if (c.get("entry_quality") or {}).get("verdict") in ("wait","reduce")])
+          PY
+
           echo "== 6. SMOKE (repo scripts/smoke.sh, salt-okur GET) =="
           API_BASE=http://127.0.0.1:9000 WEB_BASE=http://127.0.0.1:3000 bash "$APP/scripts/smoke.sh" 2>&1 | tail -20
 
