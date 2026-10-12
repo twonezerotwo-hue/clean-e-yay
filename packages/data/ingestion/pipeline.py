@@ -78,6 +78,10 @@ class MarketSnapshot:
     # v2.7 D5 — haber → catalyst half-life zekâsı (deterministik, LLM yok).
     # Karar zincirinde yalnızca kısıtlayıcı (verified + yarı-ömrü dolmamış).
     catalyst_impacts: list[CatalystImpact] = field(default_factory=list)
+    # Giriş kalitesi v2 — yön-bağımsız giriş bağlamı (aralık konumu, ATR-normalize uzama,
+    # yaşa göre sönümlü dönüş olayları). Anahtar: symbol → timeframe → entry_context.
+    # `entry_quality_v2.mode == "off"` iken HİÇ hesaplanmaz ({}), karar bayt-aynıdır.
+    entry_contexts: dict[str, dict[str, dict]] = field(default_factory=dict)
     # Optional provider-neutral published capital-flow observations.  Existing
     # providers may leave this empty; rotation remains an explicit proxy.
     flow_observations: list[dict] = field(default_factory=list)
@@ -93,6 +97,29 @@ class MarketSnapshot:
     # Explicit replay semantics: AVAILABLE has a real watermark, UNAVAILABLE
     # means the domain supplied no evidence, UNKNOWN is a provenance blocker.
     provenance_domains: dict[str, dict] = field(default_factory=dict)
+
+
+def _build_entry_contexts(symbols: list[str]) -> dict[str, dict[str, dict]]:
+    """symbol → tf → entry_context (yalnız `entry_quality_v2.mode != off`).
+
+    Barlar OHLCV önbelleğinden gelir (ağ yok, `get_snapshot` ile aynı pencere).
+    Tek hücrenin hatası yalnız o hücreyi boş bırakır — karar zinciri etkilenmez."""
+    from packages.scoring import entry_context, entry_quality
+
+    if entry_quality.mode() == "off":
+        return {}
+    from packages.data.providers import ohlcv as _ohlcv
+
+    out: dict[str, dict[str, dict]] = {}
+    for s in symbols:
+        for tf in TIMEFRAMES:
+            try:
+                ctx = entry_context.build(_ohlcv.get_bars(s, tf), tf)
+            except Exception:  # bağlam üretilemedi → o hücre kısıtsız (uydurma yok)
+                ctx = None
+            if ctx:
+                out.setdefault(s, {})[tf] = ctx
+    return out
 
 
 def _make_id(now: datetime) -> str:
@@ -211,6 +238,9 @@ def build_snapshot(symbols: list[str] | None = None) -> MarketSnapshot:
         )
         for s in syms
     }
+    # Giriş kalitesi v2: mode=off → atlanır (sıfır maliyet, bayt-aynı). shadow/active →
+    # aynı önbellekli barlardan yön-bağımsız bağlam; hücre hatası kararı düşürmez.
+    entry_contexts = _build_entry_contexts(tf_syms)
     # Bağımlı adımlar: catalyst_impacts←headlines, options←volatility (aşağıda).
     # v2.7 D5 — başlıkları deterministik catalyst etkilerine çevir (network yok).
     catalyst_impacts = catalyst_engine.build_impacts(headlines, now=now)
@@ -372,6 +402,7 @@ def build_snapshot(symbols: list[str] | None = None) -> MarketSnapshot:
         volatility=volatility,
         options=options,
         catalyst_impacts=catalyst_impacts,
+        entry_contexts=entry_contexts,
         market_data_as_of=market_data_as_of,
         events_available_as_of=events_available_as_of,
         statements_available_as_of=statements_available_as_of,

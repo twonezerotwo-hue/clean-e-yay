@@ -1,0 +1,77 @@
+{
+ "config": {
+  "bb_long": [
+   0.9,
+   1.1
+  ],
+  "bb_short": [
+   0.1,
+   -0.1
+  ],
+  "ema20": [
+   1.5,
+   3.5
+  ],
+  "ema50": [
+   2.5,
+   6.0
+  ],
+  "loc_floor": 0.4,
+  "min_size_factor": 0.5,
+  "mode": "shadow",
+  "move5": [
+   3.0,
+   6.0
+  ],
+  "pullback_bonus": 0.1,
+  "pullback_max_age": 5,
+  "q_full": 0.75,
+  "q_wait": 0.45,
+  "range_extreme": 0.2,
+  "range_weights": {
+   "120": 0.3,
+   "20": 0.2,
+   "60": 0.5
+  },
+  "reversal_reduce_start": 0.35,
+  "reversal_wait": 0.6,
+  "rsi_long": [
+   65.0,
+   80.0
+  ],
+  "rsi_short": [
+   35.0,
+   20.0
+  ],
+  "run": [
+   1,
+   4
+  ],
+  "term_weights": {
+   "bb": 0.4,
+   "ema20": 0.5,
+   "ema50": 0.3,
+   "move5": 0.4,
+   "rsi": 0.5,
+   "run": 0.4,
+   "vwap": 0.3
+  },
+  "vwap": [
+   1.5,
+   3.5
+  ],
+  "zero_two_canonical": false
+ },
+ "meta": {
+  "note": "Izgara taramasinda VALIDATION'da J'>0 olan aday cikmadi -> ayarli config YOK. Tasarim varsayilanlari (ayarlanmamis) dondurulur.",
+  "pre_declared_plan": {
+   "primary": "9 kabul olcutu, havuzlanmis (compare.acceptance); gecmezse YENI sistem active olmaz.",
+   "rule": "Siniflar secilmeden raporlanir; TEST tek sefer; sonuc sonrasi parametre degisikligi yok.",
+   "secondary_hypotheses_from_train_val_only": [
+    "H_index: index_etf'te uzama kotu sonuc (IC<0) -> YENI iyilesir",
+    "H_oil: oil_etf'te uzama devam eder (IC>0) -> YENI kotulesir",
+    "H_gold: gold'da YENI iyilesir (VAL J'>0, 3/3 grup)"
+   ]
+  }
+ }
+}

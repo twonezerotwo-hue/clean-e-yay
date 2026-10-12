@@ -55,6 +55,7 @@ from packages.risk import (
 )
 from packages.risk.engine import RiskDecision, RiskInput
 from packages.risk.engine import evaluate as evaluate_risk
+from packages.scoring import entry_quality
 
 Action = Literal["open_long", "open_short", "hold", "blocked"]
 
@@ -120,6 +121,10 @@ class TradeDecision:
     # ilişkiyi çürütüyorsa engel. VARSAYILAN GÖLGE (correlation_veto.enabled=false →
     # rapor dolu, karar değişmez); açıkken YALNIZ ENGELLER. Boş = güçlü akraba yok.
     correlation_veto_report: dict = field(default_factory=dict)
+    # Giriş kalitesi v2 (2026-10-12): YÖN ≠ GİRİŞ ZAMANLAMASI. `entry_quality_v2.mode` off
+    # iken boş; shadow'da eski/yeni karar yan yana (karar DEĞİŞMEZ); active'de YALNIZ
+    # kısıtlar (wait → hold, reduce → boyut ≤ 1.0), asla zıt yöne çevirmez.
+    entry_quality_report: dict = field(default_factory=dict)
     # P0 trace identity and confidence provenance. Additive telemetry only: these
     # fields never participate in action, size, or RiskGate decisions.
     decision_id: str = ""
@@ -343,6 +348,23 @@ def _kelly_fraction(p_win: float, rr: float) -> float:
     return max(0.0, (p_win * rr - (1.0 - p_win)) / rr)
 
 
+def _entry_quality_gate(snap: MarketSnapshot, symbol: str, timeframe: str,
+                        action: Action, mode: str) -> dict:
+    """Aday için giriş kalitesi + dönüş riski raporu. ASLA raise etmez (karar düşmez).
+    Boş sözlük = hesaplanamadı → kısıt yok."""
+    try:
+        ctx = ((getattr(snap, "entry_contexts", None) or {}).get(symbol) or {}).get(timeframe)
+        side = "long" if action == "open_long" else "short"
+        rep = entry_quality.assess(side, ctx)
+        rep["mode"] = mode
+        rep["old_action"] = action
+        rep["new_action"] = "hold" if rep["verdict"] == "wait" else action
+        rep["applied"] = mode == "active"
+        return rep
+    except Exception:
+        return {}
+
+
 def decide_for_symbol(
     symbol: str,
     snap: MarketSnapshot,
@@ -384,6 +406,8 @@ def decide_for_symbol(
         timeframe=timeframe,
     )
 
+    eq_report: dict = {}   # giriş kalitesi raporu (aşağıda doldurulur; _hold closure okur)
+
     def _hold(**fields) -> TradeDecision:
         """Kapı bloğu → "hold" kararı. Ortak alanlar tek yerde; her kapı yalnız
         kendi gerekçesini, blocked_by'ını ve raporlarını verir (B11). Değişkenler
@@ -400,6 +424,7 @@ def decide_for_symbol(
             fingerprint=fp,
             timeframe=timeframe,
             candidate_action=candidate,
+            **({"entry_quality_report": eq_report} if eq_report and "entry_quality_report" not in fields else {}),
             **fields,
         )
 
@@ -502,6 +527,34 @@ def decide_for_symbol(
             reason="Consensus eşiği aşılmadı",
         )
 
+    # ----- Giriş kalitesi v2 — YÖN ≠ GİRİŞ ZAMANLAMASI (YALNIZ KISITLAYICI) -----
+    # Konsensüs yönü korunur; "şimdi girmek mantıklı mı" ayrıca ölçülür. Kötü giriş →
+    # WAIT (hold), ASLA zıt yön; boyut ≤ 1.0; RiskGate'i gevşetmez (bu noktaya yalnız risk
+    # açıkken gelinir). mode=off → hiçbir hesap yok, davranış bayt-aynı.
+    eq_mode = entry_quality.mode()
+    eq_size_factor = 1.0
+    eq_reduce_tag = False
+    if eq_mode != "off":
+        eq_report.update(_entry_quality_gate(snap, symbol, timeframe, action, eq_mode))
+        if eq_mode == "active" and eq_report:
+            if eq_report["verdict"] == "wait":
+                tags = [
+                    "reversal_risk" if r.startswith("reversal_risk") else "entry_quality"
+                    for r in eq_report["reasons"]
+                    if r.startswith(("reversal_risk", "entry_quality"))
+                ]
+                return _hold(
+                    reason=(
+                        f"Giriş kalitesi: {symbol} {timeframe} {action} yönü korunuyor ama "
+                        f"şimdi girilmez (kalite {eq_report['entry_quality']}, dönüş riski "
+                        f"{eq_report['reversal_risk']}) — WAIT"
+                    ),
+                    blocked_by=[f"entry_quality_v2:{t}" for t in dict.fromkeys(tags)],
+                )
+            if eq_report["verdict"] == "reduce":
+                eq_size_factor = min(1.0, float(eq_report["size_factor"]))
+                eq_reduce_tag = True
+
     # ----- Minimum güven tabanı: skor eşiği geçse de kalibre p(win) düşükse açma -----
     # (Nötr/düşük-güvenli sinyallerle pozisyon açılmasını engeller. RiskGate'i
     #  bypass etmez; yalnızca ek kısıt. Owner config'ten ayarlanır.)
@@ -576,6 +629,7 @@ def decide_for_symbol(
     if not cons.confluence_aligned:
         size *= 0.5
     size *= _regime_multiplier(regime.label)
+    size *= eq_size_factor   # ≤ 1.0 (giriş kalitesi azaltması; off/shadow → 1.0)
 
     # ----- G3: Mistake memory gate (RiskGate'i ASLA bypass etmez) -----
     verdict = mistake_memory.evaluate(fp, mistakes)
@@ -804,6 +858,8 @@ def decide_for_symbol(
 
     # ----- T2: timeframe politikası EN SON (RiskGate'ten sonra; sadece azaltır) -----
     blocked_by: list[str] = []
+    if eq_reduce_tag:
+        blocked_by.append("entry_quality_v2:reduce")
     if not pol["paper_execution"]:
         # 1w strategic view — doğrudan paper trade açmaz; yön bilgisi
         # matrix'te bias olarak görünür.
@@ -981,6 +1037,7 @@ def decide_for_symbol(
         learning_advice=learning_advice,
         sizing_layers_report=sizing_layers_report,
         correlation_veto_report=correlation_veto_report,
+        entry_quality_report=eq_report,
     )
 
 
@@ -1282,6 +1339,10 @@ def matrix_view(
                 # birleşik fikri. VARSAYILAN GÖLGE (applied=False); owner
                 # LEARNING_ADVISOR_APPLY ile canlıya alır. Boş = aday değil.
                 "learning_advice": dict(d.learning_advice),
+                # Giriş kalitesi v2 (YÖN ≠ GİRİŞ ZAMANLAMASI): eski/yeni karar yan yana.
+                # Yalnız `entry_quality_v2.mode` off DEĞİLKEN doludur → kapalıyken hücre
+                # bayt-aynı (anahtar hiç yazılmaz). Shadow kanıtı snapshot_store'a bu yoldan düşer.
+                **({"entry_quality": dict(d.entry_quality_report)} if d.entry_quality_report else {}),
             }
         )
     return {

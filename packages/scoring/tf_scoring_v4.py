@@ -74,15 +74,17 @@ def _pivots(vals: list[float], kind: str, left: int = 2, right: int = 2) -> list
             idx.append(i)
     return idx
 
-def rsi_divergence_lean(closes: list[float]) -> float:
-    """RSI uyumsuzluğu: fiyat düşen dip + RSI yükselen dip → boğa (2'li +0.7,
-    3'lü +1.0); tepe tarafı ayna (eksi). Son pivot DIV_RECENT'ten eskiyse 0.
-    NOT: tek başına KULLANILMAZ — yalnız bölge kapısıyla (gated_divergence)."""
+def rsi_divergence_events(closes: list[float]) -> list[tuple[float, int]]:
+    """RSI uyumsuzluğu OLAYLARI: [(işaretli güç, son pivot indeksi)] — fiyat düşen dip +
+    RSI yükselen dip → boğa (+; 2'li 0.7, 3'lü 1.0); tepe tarafı ayna (−). Son pivot
+    DIV_RECENT'ten eskiyse olay yok. Pivot indeksi, olay yaşı hesaplansın diye döner
+    (pivot ``right``=2 bar sonra teyit olur → olay o barda bilinir). Dip ve tepe
+    tarafı birbirinden bağımsız raporlanır (öncelik kararı ``rsi_divergence_lean``'de)."""
     rs = rsi_series(closes)
     if rs is None:
-        return 0.0
+        return []
     n = len(closes)
-    best = 0.0
+    out: list[tuple[float, int]] = []
     for kind, sign in (("low", 1.0), ("high", -1.0)):
         piv = [i for i in _pivots(closes, kind) if rs[i] is not None]
         if len(piv) < 2 or n - 1 - piv[-1] > DIV_RECENT:
@@ -97,9 +99,22 @@ def rsi_divergence_lean(closes: list[float]) -> float:
             three = (len(p) == 3 and two and closes[p[-2]] > closes[p[-3]]
                      and rs[p[-2]] < rs[p[-3]])
         if three:
-            best = sign * 1.0
-        elif two and best == 0.0:
-            best = sign * 0.7
+            out.append((sign * 1.0, p[-1]))
+        elif two:
+            out.append((sign * 0.7, p[-1]))
+    return out
+
+def rsi_divergence_lean(closes: list[float]) -> float:
+    """RSI uyumsuzluğu: fiyat düşen dip + RSI yükselen dip → boğa (2'li +0.7,
+    3'lü +1.0); tepe tarafı ayna (eksi). Son pivot DIV_RECENT'ten eskiyse 0.
+    NOT: tek başına KULLANILMAZ — yalnız bölge kapısıyla (gated_divergence).
+    Öncelik (eski davranış, bayt-aynı): tepe-3'lü > dip-3'lü > dip-2'li > tepe-2'li."""
+    best = 0.0
+    for strength, _ in rsi_divergence_events(closes):
+        if abs(strength) == 1.0:
+            best = strength
+        elif best == 0.0:
+            best = strength
     return best
 
 def zone_lean(zones: list[dict], px: float, timeframe: str) -> float:
@@ -133,7 +148,13 @@ def gated_divergence(closes: list[float], zone_lean_value: float) -> float:
 
 def elliott_lean(bars: list) -> float:
     """0-2 merceği: penceredeki en taze geçerli setup — up + fiyat 0-2 çizgisi
-    üstünde → +1; down + altında → −1; yoksa/çizgisizse 0 (uydurma yok)."""
+    üstünde → +1; down + altında → −1; yoksa/çizgisizse 0 (uydurma yok).
+
+    UYARI (bilinen kusur, 2026-10 denetimi): ``find_setups(...)[-1]`` GEÇERLİLİĞİ
+    (wave1_clean / IPTAL_DALGA1 / IPTAL_DALGA3) KONTROL ETMEZ — docstring "geçerli"
+    der, kod geometrik adayı alır. Canlı davranış değişmesin diye bu fonksiyon
+    aynen kalır; düzeltilmişi ``elliott_lean_canonical`` (flag: ``entry_quality_v2.
+    zero_two_canonical``)."""
     try:
         setups = zero_two.find_setups(bars, left=2, right=2)
     except Exception:
@@ -149,11 +170,49 @@ def elliott_lean(bars: list) -> float:
         return -1.0
     return 0.0
 
+ZERO_TWO_MAX_AGE = 60   # P2'den bu kadar bar sonra setup bayat: etkisi sıfır
+
+
+def elliott_lean_canonical(bars: list, *, max_age: int = ZERO_TWO_MAX_AGE) -> float:
+    """0-2 merceği — owner'ın geçerlilik kuralıyla (TEK kaynak: ``zero_two.analyze``).
+
+    - Yalnız ``STATUS_VALID`` setup skor üretir (IPTAL_DALGA1 / IPTAL_DALGA3 → 0).
+    - Çizgi kapanışla kırıldıysa (son etkileşim ``CLOSE_BREAK``) devam sinyali YOK:
+      trend lensi artık geçerli değil (kırılım ters-yön kanıtıdır; skoru değil, giriş
+      kalitesi/dönüş riski katmanını besler).
+    - Bayatlama: etki P2'den itibaren doğrusal sönümlenir, ``max_age`` barda 0.
+    Aynı geometri/yön kuralı: up + fiyat çizgi üstü → +; down + çizgi altı → −."""
+    if not bars:
+        return 0.0
+    try:
+        events = zero_two.analyze(bars, left=2, right=2)
+    except Exception:
+        return 0.0
+    valid = [e for e in events if e.status == zero_two.STATUS_VALID]
+    if not valid:
+        return 0.0
+    e = valid[-1]
+    if e.touches and e.touches[-1].kind == "CLOSE_BREAK":
+        return 0.0
+    n = len(bars)
+    age = (n - 1) - e.setup.p2.bar_index
+    if age < 0 or age >= max_age:
+        return 0.0
+    lv = zero_two.line_value(e.setup, n - 1)
+    px = bars[-1].close
+    decay = 1.0 - age / max_age
+    if e.setup.direction == "up" and lv > 0 and px > lv:
+        return decay
+    if e.setup.direction == "down" and lv > 0 and px < lv:
+        return -decay
+    return 0.0
+
 
 # ------------------------------- skorlama ---------------------------------
 
 def compute_leans(timeframe: str, bars: list, zones: list[dict],
-                  base_leans: dict[str, float]) -> dict[str, float]:
+                  base_leans: dict[str, float],
+                  *, canonical_zero_two: bool = False) -> dict[str, float]:
     """v4 lens sözlüğü. `base_leans` = v2.collect_leans çıktısı (trend/rsi/
     structure REUSE — yeniden hesaplanmaz); elliott yalnız 4h'de hesaplanır
     (formülde yalnız orada ağırlığı var — boşa hesap yok)."""
@@ -168,7 +227,7 @@ def compute_leans(timeframe: str, bars: list, zones: list[dict],
         "uyumsuzluk": gated_divergence(closes, zl),
     }
     if timeframe in WEIGHTS and "elliott" in WEIGHTS[timeframe]:
-        out["elliott"] = elliott_lean(bars)
+        out["elliott"] = elliott_lean_canonical(bars) if canonical_zero_two else elliott_lean(bars)
     return out
 
 def tf_direction(timeframe: str, leans: dict[str, float]) -> float | None:
@@ -194,7 +253,9 @@ __all__ = [
     "compute_leans",
     "direction",
     "elliott_lean",
+    "elliott_lean_canonical",
     "gated_divergence",
+    "rsi_divergence_events",
     "rsi_divergence_lean",
     "rsi_series",
     "tf_direction",

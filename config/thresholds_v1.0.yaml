@@ -450,6 +450,36 @@ timeframe_targets:
   "4h":  { sl_atr_mult: 1.5, rr: 2.0, sl_pct_floor: 0.015, sl_pct_cap: 0.050 }
   "1d":  { sl_atr_mult: 1.5, rr: 2.5, sl_pct_floor: 0.020, sl_pct_cap: 0.080 }
 
+# Giriş kalitesi v2 — YÖN ≠ GİRİŞ ZAMANLAMASI (2026-10-12, owner talebi). Konsensüs
+# skoru yalnızca "hangi yön tercih ediliyor"u söyler; bu katman "yön doğru olsa bile
+# ŞİMDİ girmek mantıklı mı"yı ölçer ve YALNIZ KISITLAR: kötü giriş → WAIT (hold),
+# ASLA zıt yöne çevrilmez, boyut ≤ 1.0, RiskGate'e dokunmaz. Girdi: pipeline'ın
+# anlık görüntüye gömdüğü entry_context (aralık konumu 20/60/120, ATR-normalize EMA/VWAP
+# mesafesi, RSI bandı, Bollinger, impulsive mum serisi, yaşa göre sönümlü dönüş olayları).
+#   mode: off    → hiçbir şey hesaplanmaz, karar BAYT-AYNI (varsayılan, rollback = off)
+#         shadow → her kararda entry_quality_report yazılır (eski/yeni karar yan yana),
+#                  karar DEĞİŞMEZ
+#         active → verdict=wait → hold (blocked_by entry_quality / reversal_risk),
+#                  verdict=reduce → boyut küçülür
+#   zero_two_canonical: v4 0-2 merceğini zero_two.analyze() (geçerlilik + bayatlama) ile
+#                  hesapla; false → eski find_setups(...)[-1] (geçerlilik kontrolsüz).
+# Aktivasyon (shadow→active) CP5 kırmızı çizgisidir: owner onayı + 5y çok-rejim kanıtı.
+entry_quality_v2:
+  # 2026-10-12: SHADOW. 5y-benzeri çok-rejim ölçüm (docs/evidence/entry_quality_v2): kabul
+  # ölçütlerinin 3/9'u KALDI (sinyal z'si, trend-yakalama korunumu, enstrüman tutarlılığı)
+  # → ACTIVE'e terfi YOK (CP5: owner onayı + canlı gölge kanıtı). Gölge karar DEĞİŞTİRMEZ;
+  # eski/yeni karar matrix hücresinde "entry_quality" altında yan yana birikir. Geri alma: "off".
+  mode: "shadow"
+  zero_two_canonical: false
+  range_extreme: 0.20
+  range_weights: { "20": 0.2, "60": 0.5, "120": 0.3 }
+  loc_floor: 0.4
+  q_wait: 0.45
+  q_full: 0.75
+  reversal_wait: 0.60
+  reversal_reduce_start: 0.35
+  min_size_factor: 0.5
+
 # P0 — Olay riski (event risk) yalnızca KISITLAYICIDIR. Yaklaşan, doğrulanmış
 # (verified) yüksek etkili takvim olayı varsa yeni pozisyon açılışını kısar;
 # ASLA size artırmaz, ASLA RiskGate/DQS/KillSwitch/halt gate'lerini gevşetmez.

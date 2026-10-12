@@ -1,0 +1,47 @@
+[
+ {
+  "ad": "1 Beklenti (ort. R net/işlem) kötüleşmedi",
+  "gecti": true,
+  "deger": "ESKİ -0.073 → YENİ -0.056"
+ },
+ {
+  "ad": "2 Maks. drawdown (R) %5'ten fazla kötüleşmedi",
+  "gecti": true,
+  "deger": "ESKİ 664.0 → YENİ 454.3"
+ },
+ {
+  "ad": "3 Korunan sinyallerin z'si ≥ tüm ESKİ sinyaller",
+  "gecti": false,
+  "deger": "-0.009 → -0.012"
+ },
+ {
+  "ad": "4 Trend yönündeki 'iyi' sinyallerin ≥%85'i korundu",
+  "gecti": false,
+  "deger": "0.778"
+ },
+ {
+  "ad": "5 İşlem sayısı ESKİ'nin ≥%60'ı (yürütme)",
+  "gecti": true,
+  "deger": "7775/8564"
+ },
+ {
+  "ad": "6 Zıt yön üretilmedi",
+  "gecti": true,
+  "deger": "yapısal"
+ },
+ {
+  "ad": "7 Uçta açılan short/long payı azaldı",
+  "gecti": true,
+  "deger": "short alt20 0.456→0.434; long üst20 0.530→0.510"
+ },
+ {
+  "ad": "8 Bloklama kesinliği > %50 (bloklananlar kaybeden)",
+  "gecti": true,
+  "deger": "0.501"
+ },
+ {
+  "ad": "9 Grupların ≥%60'ında Δ ≥ 0 (tutarlılık)",
+  "gecti": false,
+  "deger": "11/31"
+ }
+]

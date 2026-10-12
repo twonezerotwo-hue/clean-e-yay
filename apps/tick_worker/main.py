@@ -109,6 +109,9 @@ def _causal_reconstruction_payload(snap) -> dict:
         "volatility": _model_json(getattr(snap, "volatility", {})),
         "options": _model_json(getattr(snap, "options", {})),
         "catalyst_impacts": _model_json(getattr(snap, "catalyst_impacts", [])),
+        # Giriş kalitesi v2 (mode != off): tekrar oynatma aynı bağlamla karar üretebilsin.
+        # Kapalıyken anahtar HİÇ yazılmaz (payload bayt-aynı).
+        **({"entry_contexts": snap.entry_contexts} if getattr(snap, "entry_contexts", None) else {}),
         "market_data_as_of": snap.market_data_as_of,
         "events_available_as_of": snap.events_available_as_of,
         "statements_available_as_of": snap.statements_available_as_of,

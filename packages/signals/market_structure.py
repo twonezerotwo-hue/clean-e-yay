@@ -164,4 +164,96 @@ def lean(bars: list[OHLCVBar], *, left: int = 2, right: int = 2) -> float | None
     return ms.lean if ms is not None else None
 
 
-__all__ = ["MarketStructure", "analyze", "lean"]
+@dataclass(frozen=True)
+class StructureBreak:
+    """Tek bir yapı kırılımının OLAY hâli (``analyze`` yalnız anlık durumu verir).
+
+    ``bar_index``: kırılımın SİSTEM TARAFINDAN bilindiği bar = max(ilk kapanış-ötesi
+    bar, referans pivotun teyit barı). Pivot teyidi ``right`` bar gecikmelidir; bu
+    yüzden olay hiçbir zaman henüz bilinemeyecek bir pivota dayanmaz (look-ahead yok).
+    """
+
+    kind: str            # choch | bos
+    direction: str       # bullish | bearish (kırılımın yönü)
+    bar_index: int       # olayın bilindiği bar
+    level: float         # kırılan swing seviyesi
+    margin: float        # kırılış barı kapanışının seviyeyi aşma mesafesi (fiyat)
+    prior_streak: int    # kırılımdan önceki trendin ardışık HH/HL (LH/LL) serisi
+    still_beyond: bool   # son kapanış hâlâ kırılan seviyenin ötesinde mi
+
+
+def swing_levels(
+    bars: list[OHLCVBar], *, left: int = 2, right: int = 2
+) -> tuple[list[tuple[int, float]], list[tuple[int, float]]]:
+    """Temizlenmiş zigzag'daki TEYİTLİ (index, fiyat) tepeleri ve dipleri.
+    ``analyze`` ile aynı pivot/zigzag kuralı — tek tanım."""
+    seq = _zigzag(_pivots(bars, left, right))
+    return (
+        [(i, p) for i, p, k in seq if k == "H"],
+        [(i, p) for i, p, k in seq if k == "L"],
+    )
+
+
+def _first_close_beyond(bars: list[OHLCVBar], start: int, level: float, above: bool) -> int | None:
+    for j in range(start + 1, len(bars)):
+        c = bars[j].close
+        if (c > level) if above else (c < level):
+            return j
+    return None
+
+
+def break_events(
+    bars: list[OHLCVBar], *, left: int = 2, right: int = 2
+) -> list[StructureBreak]:
+    """CHoCH / BOS OLAYLARI (en son referans swing'e göre) — yaş hesaplanabilsin diye.
+
+    ``analyze`` ile aynı trend tanımı: BULLISH (HH+HL) → tepe üstü kapanış = BOS,
+    dip altı kapanış = CHoCH; BEARISH (LH+LL) → ayna; RANGING → iki yönde de CHoCH.
+    Fark: ``analyze`` yalnız SON kapanışın durumuna bakar; burada kırılışın ilk
+    kapanış barı bulunur (kırılım sonradan geri alınmış olsa da olay kayıtlıdır,
+    ``still_beyond`` bunu söyler). Yetersiz veri → boş liste."""
+    if len(bars) < _MIN_BARS:
+        return []
+    hs, ls = swing_levels(bars, left=left, right=right)
+    if len(hs) < 2 or len(ls) < 2:
+        return []
+    highs = [p for _, p in hs]
+    lows = [p for _, p in ls]
+    hh, hl = highs[-1] > highs[-2], lows[-1] > lows[-2]
+    lh, ll = highs[-1] < highs[-2], lows[-1] < lows[-2]
+    trend = "BULLISH" if (hh and hl) else ("BEARISH" if (lh and ll) else "RANGING")
+    streak = _streak(highs, lows, bullish=(trend == "BULLISH")) if trend != "RANGING" else 0
+    price = bars[-1].close
+    (hi_idx, hi_lvl), (lo_idx, lo_lvl) = hs[-1], ls[-1]
+
+    out: list[StructureBreak] = []
+
+    def _add(kind: str, direction: str, ref_idx: int, level: float, above: bool) -> None:
+        j = _first_close_beyond(bars, ref_idx, level, above)
+        if j is None:
+            return
+        known = max(j, ref_idx + right)
+        margin = abs(bars[j].close - level)
+        beyond = (price > level) if above else (price < level)
+        out.append(StructureBreak(kind, direction, known, level, margin, streak, beyond))
+
+    if trend == "BULLISH":
+        _add("bos", "bullish", hi_idx, hi_lvl, True)
+        _add("choch", "bearish", lo_idx, lo_lvl, False)
+    elif trend == "BEARISH":
+        _add("bos", "bearish", lo_idx, lo_lvl, False)
+        _add("choch", "bullish", hi_idx, hi_lvl, True)
+    else:
+        _add("choch", "bullish", hi_idx, hi_lvl, True)
+        _add("choch", "bearish", lo_idx, lo_lvl, False)
+    return out
+
+
+__all__ = [
+    "MarketStructure",
+    "StructureBreak",
+    "analyze",
+    "break_events",
+    "lean",
+    "swing_levels",
+]

@@ -32,6 +32,9 @@ tmp/
 
 # Runtime data
 data/runtime/
+# Skor tanılama düzeneği: indirilen geçmiş veri (tools/score_diag) git ile taşınmaz
+data/score_diag_cache
+data/score_diag_cache/
 data/state/
 # Kurtarma/gecis yedekleri (data/runtime.bak-YYYYMMDD/) - runtime kadar hassas,
 # ayni sekilde commit edilmez. Desen yoksa "git add -A" sessizce defteri commit eder.

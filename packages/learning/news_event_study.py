@@ -698,6 +698,7 @@ def _snapshot_from_reconstruction(row: dict, payload: dict, as_of: datetime):
         volatility=_decode_nested_map(payload.get("volatility"), VolatilitySnapshot),
         options=_decode_map(payload.get("options"), OptionsSnapshot),
         catalyst_impacts=catalyst_impacts,
+        entry_contexts=dict(payload.get("entry_contexts") or {}),
         flow_observations=_before(payload.get("flow_observations") or [], field="timestamp"),
         market_data_as_of=row.get("market_data_as_of"),
         events_available_as_of=row.get("events_available_as_of"),
