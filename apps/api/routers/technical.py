@@ -196,6 +196,7 @@ def get_agent_matrix() -> dict:
             peak_equity_usd=ps.peak_equity_usd,
             daily_pnl_usd=ps.daily_pnl_usd,
             open_position_count=len(ps.open_positions),
+            daily_anchor_date=ps.daily_anchor_date,
         )
     )
     # Trust-gated live tf_weights: None when calibration hasn't validated yet

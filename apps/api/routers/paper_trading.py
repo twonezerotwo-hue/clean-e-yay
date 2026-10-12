@@ -316,10 +316,9 @@ class ManualOrderRequest(BaseModel):
 def open_position_manual(req: ManualOrderRequest) -> dict:
     """Owner manuel emir — PATRON doğrudan pozisyon açar (AI değil, insan kararı).
 
-    RiskGate (NO_POSITION_INCREASE), sinyal motoru ve duplicate kontrolü BAYPAS
-    edilir — owner yetkisi. KORUNAN güvenlik (data integrity, owner bunları aşamaz):
-    gerçek fiyat şart (uydurma/mock YOK), price-sanity (geçersiz fiyat reddedilir),
-    bakiye sınırı. Paper-safe — GERÇEK broker emri YOK; sadece kâğıt pozisyon."""
+    Sinyal motoru ve duplicate kontrolü owner akışında aranmaz; son RiskGate ve
+    veri bütünlüğü güvenlikleri owner tarafından aşılamaz. Paper-safe — GERÇEK
+    broker emri YOK; sadece kâğıt pozisyon."""
     try:
         res = manual_order.place(
             symbol=req.symbol, side=req.side, size_usd=req.size_usd,
@@ -374,6 +373,7 @@ def approve_manual_ready(manual_id: str) -> dict:
             peak_equity_usd=ps.peak_equity_usd,
             daily_pnl_usd=ps.daily_pnl_usd,
             open_position_count=len(ps.open_positions),
+            daily_anchor_date=ps.daily_anchor_date,
         )
         entry = next((m for m in ps.manual_ready if m.id == manual_id), None)
         result = manual_queue.approve(

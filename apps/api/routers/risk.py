@@ -26,6 +26,7 @@ def _risk_input(ps: paper_state.PaperState) -> RiskInput:
         peak_equity_usd=ps.peak_equity_usd,
         daily_pnl_usd=ps.daily_pnl_usd,
         open_position_count=len(ps.open_positions),
+        daily_anchor_date=ps.daily_anchor_date,
     )
 
 
@@ -35,13 +36,19 @@ def get_halts() -> dict:
     state = halt_store.load()
     events = [asdict(e) for e in state.events][-halt_store.MAX_HISTORY:]
     events.reverse()  # en yeni önce
-    active = [e for e in events if e["active"]]
+    # DAILY_LOSS önceki UTC günün kaydı olarak diskte aktif kalsa bile artık
+    # bugünün kapısı değildir; aynı filtreyi RiskEngine ile paylaş.
+    active_ids = {e.id for e in halt_store.active_halts(state)}
+    active = [e for e in events if e["active"] and e["id"] in active_ids]
     return {
         "halt_active": bool(active),
         "active": active,
         "timeline": events,
         "metrics": halt_store.metrics(_risk_input(ps)),
-        "reset_hint": "POST /api/v1/risk/halts/reset (owner) — otomatik reset yok",
+        "reset_hint": (
+            "DAILY_LOSS UTC gün dönümünde kapanır; MAX_DRAWDOWN için "
+            "POST /api/v1/risk/halts/reset (owner) gerekir"
+        ),
     }
 
 

@@ -39,6 +39,7 @@ def get_cockpit_brief() -> dict:
         peak_equity_usd=ps.peak_equity_usd,
         daily_pnl_usd=ps.daily_pnl_usd,
         open_position_count=len(ps.open_positions),
+        daily_anchor_date=ps.daily_anchor_date,
     )
     regime, risk, decisions = decide_matrix(
         matrix_symbols,
@@ -96,6 +97,10 @@ def get_cockpit_brief() -> dict:
         portfolio_risk=portfolio_risk.to_dict(),
         risk_gate={"action": risk.action, "reason": risk.reason},
         dqs={"status": snap.quality.status, "score": snap.quality.score},
+        # Cockpit ilk ekranı yerel LLM üretimini beklemez. Yapısal dünya kanıtı
+        # ve deterministik fallback hemen döner; ayrıntılı World Brief paneli
+        # kendi isteğinde tam anlatıyı üretmeye devam eder.
+        allow_llm=False,
     )
     return {
         "generated_at": view["generated_at"],

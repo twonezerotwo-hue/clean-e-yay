@@ -1,8 +1,9 @@
 """Owner manuel emir — paylaşılan iş mantığı (REST endpoint + chat aynı yoldan).
 
-PATRON doğrudan pozisyon açar (AI değil, insan kararı). RiskGate / sinyal motoru /
-duplicate BAYPAS edilir — owner yetkisi. KORUNAN güvenlik (data integrity, owner
-bunları aşamaz): gerçek fiyat şart (uydurma/mock YOK), price-sanity, bakiye.
+PATRON doğrudan pozisyon açar (AI değil, insan kararı). Sinyal motoru ve
+duplicate filtreleri owner akışında aranmaz; ancak son RiskGate ve KORUNAN
+güvenlikler (data integrity, gerçek fiyat şartı, price-sanity, bakiye) owner
+tarafından aşılamaz.
 Paper-safe — GERÇEK broker emri YOK.
 """
 from __future__ import annotations
@@ -14,8 +15,10 @@ from packages.data.ingestion.pipeline import build_snapshot
 from packages.paper import audit as paper_audit
 from packages.paper import state as paper_state
 from packages.paper.guards import price_sanity
-from packages.paper.lifecycle import open_position
+from packages.paper.lifecycle import _ensure_daily_anchor, open_position
 from packages.paper.state import PendingOrder
+from packages.risk.engine import RiskInput
+from packages.risk.engine import evaluate as evaluate_risk
 
 _SIDE = {
     "al": "long", "buy": "long", "long": "long", "uzun": "long",
@@ -28,6 +31,9 @@ class ManualOrderError(Exception):
     def __init__(self, message: str, code: int = 409) -> None:
         super().__init__(message)
         self.code = code
+
+
+_RISK_BLOCKS_NEW_OPEN = {"KILL_SWITCH", "RISK_REDUCE", "NO_POSITION_INCREASE"}
 
 
 def normalize_side(side: str | None) -> str | None:
@@ -76,6 +82,26 @@ def place(
         raise ManualOrderError(f"{sym} guncel fiyati tutarsiz: {market_sane}")
 
     with paper_state.transaction("manual_order:place") as ps:
+        # Owner komutu bile son ve tek RiskGate'den geçer. Bu kontrol hem
+        # market açılışını hem bekleyen emri kapsar; API/chat arasında bypass
+        # farkı oluşmasını engeller. Gün çapasını burada da yenilemek, tick
+        # henüz çalışmamışsa eski günlük zararın yeni güne taşınmasını önler.
+        _ensure_daily_anchor(ps)
+        risk = evaluate_risk(
+            RiskInput(
+                dqs_score=snap.quality.score,
+                equity_usd=ps.equity_usd,
+                peak_equity_usd=ps.peak_equity_usd,
+                daily_pnl_usd=ps.daily_pnl_usd,
+                open_position_count=len(ps.open_positions),
+                daily_anchor_date=ps.daily_anchor_date,
+                mtm_equity_usd=ps.mtm_equity_usd,
+            )
+        )
+        if risk.action in _RISK_BLOCKS_NEW_OPEN:
+            raise ManualOrderError(
+                f"RiskGate engelledi: {risk.action} — {risk.reason}", 409
+            )
         if size_usd > ps.equity_usd:
             raise ManualOrderError(
                 f"yetersiz bakiye: {size_usd:.0f} dolar > {ps.equity_usd:.0f} dolar"

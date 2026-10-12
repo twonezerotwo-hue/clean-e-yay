@@ -48,6 +48,9 @@ class RiskInput:
     # Yalnız tick_worker doldurur; flag `risk_gates.mtm_equity_enabled` AÇIKKEN
     # drawdown kontrolü min(realized, mtm) ile SIKILAŞIR (asla gevşemez).
     mtm_equity_usd: float | None = None
+    # Gerçek PaperState yolları UTC gün çapası taşır. Boş bırakılması legacy
+    # çağrıların davranışını korur.
+    daily_anchor_date: str | None = None
 
 
 @dataclass
@@ -80,13 +83,14 @@ def evaluate(
     # 2) Günlük zarar — H11 (owner kararı 2026-10-02, dokümana uyum): yeni pozisyon
     #    YOK, açık pozisyonlar kalır; halt UTC gün dönümünde kendiliğinden kalkar.
     #    (Önceden KILL_SWITCH'ti: küçük kayıpta sert, büyük kayıpta yumuşak.)
+    daily_pnl_usd = halt_store.effective_daily_pnl(inp)
     daily_limit = -th["max_daily_loss_pct"] * inp.equity_usd
-    if inp.daily_pnl_usd <= daily_limit:
+    if daily_pnl_usd <= daily_limit:
         candidates.append(
             (
                 "RISK_REDUCE",
                 "Günlük zarar limiti aşıldı — bugün yeni pozisyon yok",
-                [f"daily pnl {inp.daily_pnl_usd:.0f} ≤ {daily_limit:.0f}"],
+                [f"daily pnl {daily_pnl_usd:.0f} ≤ {daily_limit:.0f}"],
             )
         )
 

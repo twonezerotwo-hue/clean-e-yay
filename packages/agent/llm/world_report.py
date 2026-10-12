@@ -405,6 +405,7 @@ def build_world_brief(
     portfolio_risk: Any = None,
     risk_gate: Mapping[str, Any] | None = None,
     dqs: Mapping[str, Any] | None = None,
+    allow_llm: bool = True,
 ) -> dict[str, Any]:
     """Return one cached narrative view over verified world evidence.
 
@@ -420,7 +421,10 @@ def build_world_brief(
         dqs=dqs,
     )
     digest = _stable_digest(payload)
-    cache_key = f"world-brief|{digest}"
+    # The first-screen cockpit must not wait for local LLM inference. Keep a
+    # separate cache namespace so a deferred fallback never masks a later
+    # full narrative request from the detailed world-brief panel.
+    cache_key = f"world-brief|{digest}|{'llm' if allow_llm else 'fallback'}"
     cached = cache.get(cache_key)
     if cached is not None:
         cached = dict(cached)
@@ -431,6 +435,11 @@ def build_world_brief(
 
     fallback = _fallback(payload, reason="llm_off")
     if not payload["headlines"] and not _row(payload["world"]).get("events"):
+        cache.put(cache_key, fallback)
+        return fallback
+
+    if not allow_llm:
+        fallback["llm"]["fallback_reason"] = "llm_deferred"
         cache.put(cache_key, fallback)
         return fallback
 
