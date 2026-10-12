@@ -1391,7 +1391,7 @@
     {
      "action": "hold",
      "blocked_by": [
-      "concentration_guard"
+      "entry_quality_v2:entry_quality"
      ],
      "candidate_action": "open_long",
      "confidence": 0.596,
@@ -1400,7 +1400,7 @@
      "expected_value": null,
      "fingerprint": "BRENT|v2|1d|NEUTRAL|bullish|S65|X|touche",
      "raw_confidence": 0.596,
-     "reason": "concentration: BRENT üzerinde zaten 1 LONG açık (3% equity) — aynı-yön yığını engellendi",
+     "reason": "Giriş kalitesi: BRENT 1d open_long yönü korunuyor ama şimdi girilmez (kalite 0.1564, dönüş riski 0.0) — WAIT",
      "risk_action": "HOLD",
      "size_multiplier": 0.0,
      "symbol": "BRENT",
@@ -1409,6 +1409,7 @@
     {
      "action": "open_long",
      "blocked_by": [
+      "entry_quality_v2:reduce",
       "kelly_cap",
       "sizing_layers"
      ],
@@ -1500,6 +1501,7 @@
     {
      "action": "open_long",
      "blocked_by": [
+      "entry_quality_v2:reduce",
       "kelly_cap",
       "sizing_layers"
      ],
@@ -1571,20 +1573,20 @@
      "timeframe": "15m"
     },
     {
-     "action": "open_long",
+     "action": "hold",
      "blocked_by": [
-      "kelly_cap"
+      "entry_quality_v2:entry_quality"
      ],
      "candidate_action": "open_long",
      "confidence": 0.604,
      "confidence_source": "identity",
      "consensus_score": 80.2,
-     "expected_value": 1.014,
+     "expected_value": null,
      "fingerprint": "ETHUSD|v2|1d|NEUTRAL|bullish|S80|X|touche",
      "raw_confidence": 0.604,
-     "reason": "bullish signal · dominant=touche",
+     "reason": "Giriş kalitesi: ETHUSD 1d open_long yönü korunuyor ama şimdi girilmez (kalite 0.4479, dönüş riski 0.0) — WAIT",
      "risk_action": "HOLD",
-     "size_multiplier": 0.446,
+     "size_multiplier": 0.0,
      "symbol": "ETHUSD",
      "timeframe": "1d"
     },
@@ -1609,7 +1611,7 @@
     {
      "action": "hold",
      "blocked_by": [
-      "concentration_guard"
+      "entry_quality_v2:entry_quality"
      ],
      "candidate_action": "open_long",
      "confidence": 0.608,
@@ -1618,7 +1620,7 @@
      "expected_value": null,
      "fingerprint": "ETHUSD|v2|1w|NEUTRAL|bullish|S80|X|touche",
      "raw_confidence": 0.608,
-     "reason": "concentration: ETHUSD üzerinde zaten 1 LONG açık (11% equity) — aynı-yön yığını engellendi",
+     "reason": "Giriş kalitesi: ETHUSD 1w open_long yönü korunuyor ama şimdi girilmez (kalite 0.2965, dönüş riski 0.0) — WAIT",
      "risk_action": "HOLD",
      "size_multiplier": 0.0,
      "symbol": "ETHUSD",
@@ -1641,27 +1643,27 @@
      "timeframe": "4h"
     },
     {
-     "action": "open_long",
+     "action": "hold",
      "blocked_by": [
-      "sizing_layers"
+      "entry_quality_v2:entry_quality"
      ],
      "candidate_action": "open_long",
      "confidence": 0.616,
      "confidence_source": "identity",
      "consensus_score": 80.8,
-     "expected_value": 0.44,
+     "expected_value": null,
      "fingerprint": "XAGUSD|v2|15m|NEUTRAL|bullish|S80|X|touche",
      "raw_confidence": 0.616,
-     "reason": "bullish signal · dominant=touche · tf:15m×0.25",
+     "reason": "Giriş kalitesi: XAGUSD 15m open_long yönü korunuyor ama şimdi girilmez (kalite 0.1556, dönüş riski 0.0) — WAIT",
      "risk_action": "HOLD",
-     "size_multiplier": 0.115,
+     "size_multiplier": 0.0,
      "symbol": "XAGUSD",
      "timeframe": "15m"
     },
     {
      "action": "hold",
      "blocked_by": [
-      "concentration_guard"
+      "entry_quality_v2:entry_quality"
      ],
      "candidate_action": "open_long",
      "confidence": 0.526,
@@ -1670,7 +1672,7 @@
      "expected_value": null,
      "fingerprint": "XAGUSD|v2|1d|NEUTRAL|bullish|S65|X|touche",
      "raw_confidence": 0.526,
-     "reason": "concentration: XAGUSD üzerinde zaten 1 LONG açık (3% equity) — aynı-yön yığını engellendi",
+     "reason": "Giriş kalitesi: XAGUSD 1d open_long yönü korunuyor ama şimdi girilmez (kalite 0.1637, dönüş riski 0.0) — WAIT",
      "risk_action": "HOLD",
      "size_multiplier": 0.0,
      "symbol": "XAGUSD",
@@ -1713,20 +1715,22 @@
      "timeframe": "1w"
     },
     {
-     "action": "hold",
+     "action": "open_long",
      "blocked_by": [
-      "concentration_guard"
+      "entry_quality_v2:reduce",
+      "kelly_cap",
+      "sizing_layers"
      ],
      "candidate_action": "open_long",
      "confidence": 0.426,
      "confidence_source": "identity",
      "consensus_score": 71.3,
-     "expected_value": null,
+     "expected_value": 0.178,
      "fingerprint": "XAGUSD|v2|4h|NEUTRAL|bullish|S65|X|touche",
      "raw_confidence": 0.426,
-     "reason": "concentration: XAGUSD üzerinde zaten 1 LONG açık (3% equity) — aynı-yön yığını engellendi",
+     "reason": "bullish signal · dominant=touche",
      "risk_action": "HOLD",
-     "size_multiplier": 0.0,
+     "size_multiplier": 0.126,
      "symbol": "XAGUSD",
      "timeframe": "4h"
     },
@@ -1749,20 +1753,20 @@
      "timeframe": "15m"
     },
     {
-     "action": "open_long",
+     "action": "hold",
      "blocked_by": [
-      "kelly_cap"
+      "entry_quality_v2:entry_quality"
      ],
      "candidate_action": "open_long",
      "confidence": 0.608,
      "confidence_source": "identity",
      "consensus_score": 80.4,
-     "expected_value": 1.028,
+     "expected_value": null,
      "fingerprint": "XAUUSD|v2|1d|NEUTRAL|bullish|S80|X|touche",
      "raw_confidence": 0.608,
-     "reason": "bullish signal · dominant=touche",
+     "reason": "Giriş kalitesi: XAUUSD 1d open_long yönü korunuyor ama şimdi girilmez (kalite 0.1379, dönüş riski 0.0) — WAIT",
      "risk_action": "HOLD",
-     "size_multiplier": 0.451,
+     "size_multiplier": 0.0,
      "symbol": "XAUUSD",
      "timeframe": "1d"
     },
@@ -1839,7 +1843,7 @@
     {
      "action": "hold",
      "blocked_by": [
-      "concentration_guard"
+      "entry_quality_v2:entry_quality"
      ],
      "candidate_action": "open_long",
      "confidence": 0.596,
@@ -1848,7 +1852,7 @@
      "expected_value": null,
      "fingerprint": "BRENT|v2|1d|NEUTRAL|bullish|S65|X|touche",
      "raw_confidence": 0.596,
-     "reason": "concentration: BRENT üzerinde zaten 1 LONG açık (3% equity) — aynı-yön yığını engellendi",
+     "reason": "Giriş kalitesi: BRENT 1d open_long yönü korunuyor ama şimdi girilmez (kalite 0.1564, dönüş riski 0.0) — WAIT",
      "risk_action": "HOLD",
      "size_multiplier": 0.0,
      "symbol": "BRENT",
@@ -1857,6 +1861,7 @@
     {
      "action": "open_long",
      "blocked_by": [
+      "entry_quality_v2:reduce",
       "kelly_cap",
       "sizing_layers"
      ],
@@ -1948,6 +1953,7 @@
     {
      "action": "open_long",
      "blocked_by": [
+      "entry_quality_v2:reduce",
       "kelly_cap",
       "sizing_layers"
      ],
@@ -2003,6 +2009,7 @@
     {
      "action": "open_long",
      "blocked_by": [
+      "entry_quality_v2:reduce",
       "paper_exploration:ev_gate",
       "kelly_cap",
       "sizing_layers"
@@ -2023,7 +2030,7 @@
     {
      "action": "hold",
      "blocked_by": [
-      "concentration_guard"
+      "entry_quality_v2:entry_quality"
      ],
      "candidate_action": "open_long",
      "confidence": 0.604,
@@ -2032,7 +2039,7 @@
      "expected_value": null,
      "fingerprint": "ETHUSD|v2|1d|NEUTRAL|bullish|S80|X|touche",
      "raw_confidence": 0.604,
-     "reason": "concentration: ETHUSD üzerinde zaten 1 LONG açık (1% equity) — aynı-yön yığını engellendi",
+     "reason": "Giriş kalitesi: ETHUSD 1d open_long yönü korunuyor ama şimdi girilmez (kalite 0.4479, dönüş riski 0.0) — WAIT",
      "risk_action": "HOLD",
      "size_multiplier": 0.0,
      "symbol": "ETHUSD",
@@ -2059,7 +2066,7 @@
     {
      "action": "hold",
      "blocked_by": [
-      "concentration_guard"
+      "entry_quality_v2:entry_quality"
      ],
      "candidate_action": "open_long",
      "confidence": 0.608,
@@ -2068,7 +2075,7 @@
      "expected_value": null,
      "fingerprint": "ETHUSD|v2|1w|NEUTRAL|bullish|S80|X|touche",
      "raw_confidence": 0.608,
-     "reason": "concentration: ETHUSD üzerinde zaten 1 LONG açık (1% equity) — aynı-yön yığını engellendi",
+     "reason": "Giriş kalitesi: ETHUSD 1w open_long yönü korunuyor ama şimdi girilmez (kalite 0.2965, dönüş riski 0.0) — WAIT",
      "risk_action": "HOLD",
      "size_multiplier": 0.0,
      "symbol": "ETHUSD",
@@ -2091,27 +2098,27 @@
      "timeframe": "4h"
     },
     {
-     "action": "open_long",
+     "action": "hold",
      "blocked_by": [
-      "sizing_layers"
+      "entry_quality_v2:entry_quality"
      ],
      "candidate_action": "open_long",
      "confidence": 0.616,
      "confidence_source": "identity",
      "consensus_score": 80.8,
-     "expected_value": 0.44,
+     "expected_value": null,
      "fingerprint": "XAGUSD|v2|15m|NEUTRAL|bullish|S80|X|touche",
      "raw_confidence": 0.616,
-     "reason": "bullish signal · dominant=touche · tf:15m×0.25",
+     "reason": "Giriş kalitesi: XAGUSD 15m open_long yönü korunuyor ama şimdi girilmez (kalite 0.1556, dönüş riski 0.0) — WAIT",
      "risk_action": "HOLD",
-     "size_multiplier": 0.115,
+     "size_multiplier": 0.0,
      "symbol": "XAGUSD",
      "timeframe": "15m"
     },
     {
      "action": "hold",
      "blocked_by": [
-      "concentration_guard"
+      "entry_quality_v2:entry_quality"
      ],
      "candidate_action": "open_long",
      "confidence": 0.526,
@@ -2120,25 +2127,26 @@
      "expected_value": null,
      "fingerprint": "XAGUSD|v2|1d|NEUTRAL|bullish|S65|X|touche",
      "raw_confidence": 0.526,
-     "reason": "concentration: XAGUSD üzerinde zaten 1 LONG açık (3% equity) — aynı-yön yığını engellendi",
+     "reason": "Giriş kalitesi: XAGUSD 1d open_long yönü korunuyor ama şimdi girilmez (kalite 0.1637, dönüş riski 0.0) — WAIT",
      "risk_action": "HOLD",
      "size_multiplier": 0.0,
      "symbol": "XAGUSD",
      "timeframe": "1d"
     },
     {
-     "action": "hold",
+     "action": "open_long",
      "blocked_by": [
-      "concentration_guard"
+      "paper_exploration:ev_gate",
+      "kelly_cap"
      ],
      "candidate_action": "open_long",
      "confidence": 0.346,
      "confidence_source": "identity",
      "consensus_score": 67.3,
-     "expected_value": null,
+     "expected_value": -0.1312,
      "fingerprint": "XAGUSD|v2|1h|NEUTRAL|bullish|S65|X|sentinel",
      "raw_confidence": 0.346,
-     "reason": "concentration: XAGUSD üzerinde zaten 1 LONG açık (3% equity) — aynı-yön yığını engellendi",
+     "reason": "bullish signal · dominant=sentinel · tf:1h×0.5",
      "risk_action": "HOLD",
      "size_multiplier": 0.0,
      "symbol": "XAGUSD",
@@ -2163,20 +2171,22 @@
      "timeframe": "1w"
     },
     {
-     "action": "hold",
+     "action": "open_long",
      "blocked_by": [
-      "concentration_guard"
+      "entry_quality_v2:reduce",
+      "kelly_cap",
+      "sizing_layers"
      ],
      "candidate_action": "open_long",
      "confidence": 0.426,
      "confidence_source": "identity",
      "consensus_score": 71.3,
-     "expected_value": null,
+     "expected_value": 0.178,
      "fingerprint": "XAGUSD|v2|4h|NEUTRAL|bullish|S65|X|touche",
      "raw_confidence": 0.426,
-     "reason": "concentration: XAGUSD üzerinde zaten 1 LONG açık (3% equity) — aynı-yön yığını engellendi",
+     "reason": "bullish signal · dominant=touche",
      "risk_action": "HOLD",
-     "size_multiplier": 0.0,
+     "size_multiplier": 0.126,
      "symbol": "XAGUSD",
      "timeframe": "4h"
     },
@@ -2199,20 +2209,20 @@
      "timeframe": "15m"
     },
     {
-     "action": "open_long",
+     "action": "hold",
      "blocked_by": [
-      "kelly_cap"
+      "entry_quality_v2:entry_quality"
      ],
      "candidate_action": "open_long",
      "confidence": 0.608,
      "confidence_source": "identity",
      "consensus_score": 80.4,
-     "expected_value": 1.028,
+     "expected_value": null,
      "fingerprint": "XAUUSD|v2|1d|NEUTRAL|bullish|S80|X|touche",
      "raw_confidence": 0.608,
-     "reason": "bullish signal · dominant=touche",
+     "reason": "Giriş kalitesi: XAUUSD 1d open_long yönü korunuyor ama şimdi girilmez (kalite 0.1379, dönüş riski 0.0) — WAIT",
      "risk_action": "HOLD",
-     "size_multiplier": 0.451,
+     "size_multiplier": 0.0,
      "symbol": "XAUUSD",
      "timeframe": "1d"
     },

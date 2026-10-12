@@ -34,7 +34,13 @@ from packages.data.providers import technical as tech_provider
 from packages.data.registry import guard_overrides
 from packages.data.registry.loader import load_thresholds
 from packages.data.types import TIMEFRAMES
-from packages.decision import correlation_veto, learning_advisor, paper_policy, sizing_layers
+from packages.decision import (
+    correlation_veto,
+    entry_engine,
+    learning_advisor,
+    paper_policy,
+    sizing_layers,
+)
 from packages.decision.trace import stable_decision_id
 from packages.learning import empirical_pwin, mistake_memory, regime_risk_brake
 from packages.learning.calibration_store import (
@@ -121,9 +127,11 @@ class TradeDecision:
     # ilişkiyi çürütüyorsa engel. VARSAYILAN GÖLGE (correlation_veto.enabled=false →
     # rapor dolu, karar değişmez); açıkken YALNIZ ENGELLER. Boş = güçlü akraba yok.
     correlation_veto_report: dict = field(default_factory=dict)
-    # Giriş kalitesi v2 (2026-10-12): YÖN ≠ GİRİŞ ZAMANLAMASI. `entry_quality_v2.mode` off
-    # iken boş; shadow'da eski/yeni karar yan yana (karar DEĞİŞMEZ); active'de YALNIZ
-    # kısıtlar (wait → hold, reduce → boyut ≤ 1.0), asla zıt yöne çevirmez.
+    # Giriş kalitesi v2: YÖN ≠ GİRİŞ ZAMANLAMASI. `entry_quality_v2.mode` off iken boş;
+    # shadow'da eski/yeni karar yan yana (karar DEĞİŞMEZ); active'de YENİ motor uygulanır
+    # (YALNIZ kısıtlar: wait → hold, reduce → boyut ≤ 1.0, asla zıt yön) ve LEGACY gölge/
+    # fallback olarak karşılaştırılır. Alanlar: entry_engine.annotate (applied_engine,
+    # fallback_reason, legacy_*/new_* yön-eylem-skor, agreement).
     entry_quality_report: dict = field(default_factory=dict)
     # P0 trace identity and confidence provenance. Additive telemetry only: these
     # fields never participate in action, size, or RiskGate decisions.
@@ -348,24 +356,7 @@ def _kelly_fraction(p_win: float, rr: float) -> float:
     return max(0.0, (p_win * rr - (1.0 - p_win)) / rr)
 
 
-def _entry_quality_gate(snap: MarketSnapshot, symbol: str, timeframe: str,
-                        action: Action, mode: str) -> dict:
-    """Aday için giriş kalitesi + dönüş riski raporu. ASLA raise etmez (karar düşmez).
-    Boş sözlük = hesaplanamadı → kısıt yok."""
-    try:
-        ctx = ((getattr(snap, "entry_contexts", None) or {}).get(symbol) or {}).get(timeframe)
-        side = "long" if action == "open_long" else "short"
-        rep = entry_quality.assess(side, ctx)
-        rep["mode"] = mode
-        rep["old_action"] = action
-        rep["new_action"] = "hold" if rep["verdict"] == "wait" else action
-        rep["applied"] = mode == "active"
-        return rep
-    except Exception:
-        return {}
-
-
-def decide_for_symbol(
+def _decide_core(
     symbol: str,
     snap: MarketSnapshot,
     regime: RegimeOutput,
@@ -377,7 +368,12 @@ def decide_for_symbol(
     timeframe: str = "1d",
     recent_edge: float | None = None,
     paper_exploration: bool = False,
+    eq_mode: str = "off",
 ) -> TradeDecision:
+    """Tek-motor karar zinciri (RiskGate İLK). ``eq_mode`` giriş-kalitesi kapısını seçer:
+    "off" = LEGACY zincir (kapı yok), "shadow" = kapı hesaplanır ama uygulanmaz,
+    "active" = kapı uygulanır. Hangi motorun uygulanacağını ``decide_for_symbol`` seçer;
+    burada RiskGate/data-policy/EV/mistake/korelasyon/boyut kapıları iki motor için AYNIDIR."""
     th = load_thresholds()["consensus"]
     cons = build_consensus(symbol, snap, regime, timeframe)
     pol = _timeframe_policy(timeframe)
@@ -531,25 +527,22 @@ def decide_for_symbol(
     # Konsensüs yönü korunur; "şimdi girmek mantıklı mı" ayrıca ölçülür. Kötü giriş →
     # WAIT (hold), ASLA zıt yön; boyut ≤ 1.0; RiskGate'i gevşetmez (bu noktaya yalnız risk
     # açıkken gelinir). mode=off → hiçbir hesap yok, davranış bayt-aynı.
-    eq_mode = entry_quality.mode()
+    # Yeni motor TEKNİK olarak başarısızsa (fallback_reason dolu) kısıt uygulanmaz → karar
+    # legacy zincirden aynen sürer. Geçerli `wait` teknik hata DEĞİLDİR: bilinçli karardır,
+    # legacy'nin LONG/SHORT'u ona karşı zorlanmaz.
     eq_size_factor = 1.0
     eq_reduce_tag = False
     if eq_mode != "off":
-        eq_report.update(_entry_quality_gate(snap, symbol, timeframe, action, eq_mode))
-        if eq_mode == "active" and eq_report:
+        eq_report.update(entry_engine.gate(snap, symbol, timeframe, action, eq_mode))
+        if eq_mode == "active" and not eq_report.get("fallback_reason"):
             if eq_report["verdict"] == "wait":
-                tags = [
-                    "reversal_risk" if r.startswith("reversal_risk") else "entry_quality"
-                    for r in eq_report["reasons"]
-                    if r.startswith(("reversal_risk", "entry_quality"))
-                ]
                 return _hold(
                     reason=(
                         f"Giriş kalitesi: {symbol} {timeframe} {action} yönü korunuyor ama "
                         f"şimdi girilmez (kalite {eq_report['entry_quality']}, dönüş riski "
                         f"{eq_report['reversal_risk']}) — WAIT"
                     ),
-                    blocked_by=[f"entry_quality_v2:{t}" for t in dict.fromkeys(tags)],
+                    blocked_by=entry_engine.wait_tags(eq_report),
                 )
             if eq_report["verdict"] == "reduce":
                 eq_size_factor = min(1.0, float(eq_report["size_factor"]))
@@ -1041,6 +1034,102 @@ def decide_for_symbol(
     )
 
 
+def decide_for_symbol(
+    symbol: str,
+    snap: MarketSnapshot,
+    regime: RegimeOutput,
+    risk: RiskDecision,
+    mistakes: list | None = None,
+    open_positions: list | None = None,
+    equity_usd: float = 0.0,
+    corr_entries: list | None = None,
+    timeframe: str = "1d",
+    recent_edge: float | None = None,
+    paper_exploration: bool = False,
+) -> TradeDecision:
+    """(symbol, timeframe) kararı — YÖN ≠ GİRİŞ ZAMANLAMASI.
+
+    ``entry_quality_v2.mode``:
+      off    → LEGACY zincir, hiçbir ek hesap yok (bayt-aynı; rollback).
+      shadow → LEGACY uygulanır; yeni motor hesaplanıp yan yana yazılır.
+      active → NEW (yön + giriş kalitesi + dönüş riski) uygulanır; LEGACY aynı turda gölge
+               olarak koşar (karşılaştırma + acil durum fallback'i). LONG / SHORT / WAIT üçü de
+               geçerli üretim kararıdır; yeni motorun WAIT'i legacy'nin LONG/SHORT'uyla
+               ezilmez. Yalnız TEKNİK başarısızlıkta (istisna, NaN/inf, bozuk karar/rapor,
+               eksik bağlam, geçersiz eylem, gecikme aşımı) legacy karar uygulanır.
+
+    Her iki motor da aynı çekirdekten geçer: RiskGate İLK sırada, fallback onu atlayamaz;
+    sonrasındaki session/conflict kapıları ve ``attempt_open`` (tick worker) değişmez."""
+    kw = {
+        "mistakes": mistakes, "open_positions": open_positions, "equity_usd": equity_usd,
+        "corr_entries": corr_entries, "timeframe": timeframe, "recent_edge": recent_edge,
+        "paper_exploration": paper_exploration,
+    }
+    mode = entry_quality.mode()
+    if mode == "off":
+        return _decide_core(symbol, snap, regime, risk, eq_mode="off", **kw)
+    if mode == "shadow":
+        d = _decide_core(symbol, snap, regime, risk, eq_mode="shadow", **kw)
+        rep = d.entry_quality_report
+        if rep:  # kapıya ulaşıldı (aday açık, RiskGate/data-policy geçildi)
+            failed = rep.get("fallback_reason")
+            entry_engine.annotate(
+                d, mode="shadow", applied_engine=entry_engine.ENGINE_LEGACY,
+                fallback_reason=failed, legacy=entry_engine.view(d),
+                new=None if failed else entry_engine.view(
+                    d, entry_engine.shadow_new_action(d.action, rep)
+                ),
+            )
+        return d
+    return _decide_active(symbol, snap, regime, risk, kw)
+
+
+def _decide_active(
+    symbol: str, snap: MarketSnapshot, regime: RegimeOutput, risk: RiskDecision, kw: dict,
+) -> TradeDecision:
+    """active mod: NEW uygula, LEGACY'yi gölge/fallback olarak tut (bkz. ``decide_for_symbol``)."""
+    problem: str | None = None
+    new: TradeDecision | None = None
+    try:
+        new = _decide_core(symbol, snap, regime, risk, eq_mode="active", **kw)
+        problem = entry_engine.decision_problem(new)
+    except Exception as exc:  # yeni karar nesnesi üretilemedi → legacy
+        problem = f"exception:{type(exc).__name__}"
+    if problem is not None or new is None:
+        # TEKNİK HATA → LEGACY karar zinciri. Aynı çekirdek: RiskGate yine İLK sırada.
+        problem = problem or "no_decision"
+        entry_engine.count_fallback(problem, symbol, kw["timeframe"])
+        legacy = _decide_core(symbol, snap, regime, risk, eq_mode="off", **kw)
+        entry_engine.annotate(
+            legacy, mode="active", applied_engine=entry_engine.ENGINE_FALLBACK,
+            fallback_reason=problem, legacy=entry_engine.view(legacy), new=None,
+        )
+        return legacy
+    rep = new.entry_quality_report
+    if not rep:
+        return new  # kapıya ulaşılmadı (RiskGate / eşik / data-policy): iki motor aynı
+    failed = rep.get("fallback_reason")
+    if failed:
+        # Kapı teknik olarak çalışmadı → kısıt uygulanmadı → bu karar zaten legacy kararıdır.
+        entry_engine.annotate(
+            new, mode="active", applied_engine=entry_engine.ENGINE_FALLBACK,
+            fallback_reason=failed, legacy=entry_engine.view(new), new=None,
+        )
+        return new
+    legacy: TradeDecision | None = new   # verdict=ok → iki motor aynı karar
+    if rep.get("verdict") in ("wait", "reduce"):
+        try:
+            legacy = _decide_core(symbol, snap, regime, risk, eq_mode="off", **kw)
+        except Exception:  # gölge karşılaştırma kararı asla düşürmez
+            legacy = None
+    entry_engine.annotate(
+        new, mode="active", applied_engine=entry_engine.ENGINE_NEW, fallback_reason=None,
+        legacy=entry_engine.view(legacy) if legacy is not None else None,
+        new=entry_engine.view(new),
+    )
+    return new
+
+
 def decide_all(
     symbols: list[str],
     snap: MarketSnapshot,
@@ -1345,6 +1434,12 @@ def matrix_view(
                 **({"entry_quality": dict(d.entry_quality_report)} if d.entry_quality_report else {}),
             }
         )
+    # Giriş motoru karşılaştırması (new vs legacy): yalnız mode != off iken eklenir →
+    # kapalıyken matrix BAYT-AYNI. Tek-tur özet + süreç ömrü fallback sayacı.
+    eq_mode = entry_quality.mode()
+    engine_block = (
+        {"engine": entry_engine.summarize(cells, eq_mode)} if eq_mode != "off" else {}
+    )
     return {
         "generated_at": datetime.now(UTC).isoformat(),
         "symbols": list(symbols),
@@ -1380,4 +1475,5 @@ def matrix_view(
         "catalysts": catalyst_summary,
         "options": options_summary,
         "cells": cells,
+        **engine_block,
     }

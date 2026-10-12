@@ -28,12 +28,14 @@ Dönüş riski ``reversal_events.risk_against`` (CHoCH, süpürme, uyumsuzluk, r
 """
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass, field
 
 from packages.data.registry.loader import load_thresholds
 from packages.scoring import reversal_events
 
 MODES = ("off", "shadow", "active")
+VERDICTS = ("ok", "reduce", "wait")
 
 
 @dataclass(frozen=True)
@@ -67,6 +69,10 @@ class EntryQualityConfig:
     min_size_factor: float = 0.5
     pullback_bonus: float = 0.10
     pullback_max_age: int = 5
+    # Teknik-fallback gecikme bütçesi (ms): değerlendirme bunu aşarsa yeni motor "timeout"
+    # sayılır ve legacy zincire düşülür. Saf CPU işi (hazır bağlam) mikrosaniyeler sürer;
+    # bütçe yalnız patolojik takılmaları yakalar. Önleyici (preemptive) değil, ölçüm sonrası.
+    fallback_max_latency_ms: float = 1000.0
 
 
 def _clamp01(x: float) -> float:
@@ -122,6 +128,56 @@ def mode() -> str:
 
 def zero_two_canonical() -> bool:
     return config().zero_two_canonical
+
+
+def _has_non_finite(obj: object) -> bool:
+    """Sözlük/liste içinde NaN/±inf var mı? (`_clamp01(NaN)` sessizce 1.0 verir → NaN bir
+    bağlam "azami uzama" sayılıp sahte WAIT üretirdi; teknik hata olarak ayrıştırılır.)"""
+    if isinstance(obj, bool):
+        return False
+    if isinstance(obj, float):
+        return not math.isfinite(obj)
+    if isinstance(obj, dict):
+        return any(_has_non_finite(v) for v in obj.values())
+    if isinstance(obj, (list, tuple)):
+        return any(_has_non_finite(v) for v in obj)
+    return False
+
+
+def context_problem(ctx: object) -> str | None:
+    """Yeni motorun GİRDİSİ teknik olarak kullanılamıyorsa sebep (aksi None).
+
+    Bu bir *piyasa* görüşü değildir: eksik/bozuk veri ``WAIT`` değil, legacy'ye düşme
+    (teknik fallback) sebebidir. Sebepler: ``missing_context`` | ``malformed_context`` |
+    ``non_finite_context``."""
+    if not isinstance(ctx, dict) or not ctx:
+        return "missing_context"
+    rp = ctx.get("range_pos")
+    if not isinstance(rp, dict) or not any(isinstance(v, (int, float)) for v in rp.values()):
+        return "missing_context"
+    if not isinstance(ctx.get("events", []), list):
+        return "malformed_context"
+    if _has_non_finite(ctx):
+        return "non_finite_context"
+    return None
+
+
+def report_problem(rep: object) -> str | None:
+    """``assess`` çıktısı teknik olarak geçersizse sebep (aksi None). Geçerli ``wait`` /
+    ``reduce`` burada HATA DEĞİLDİR. Sebepler: ``malformed_report`` | ``invalid_verdict`` |
+    ``invalid_<alan>``."""
+    if not isinstance(rep, dict):
+        return "malformed_report"
+    if rep.get("verdict") not in VERDICTS:
+        return "invalid_verdict"
+    for key in ("entry_quality", "reversal_risk", "size_factor"):
+        v = rep.get(key)
+        if isinstance(v, bool) or not isinstance(v, (int, float)) or not math.isfinite(v) \
+                or v < 0.0 or v > 1.0:
+            return f"invalid_{key}"
+    if rep["verdict"] == "reduce" and not 0.0 < rep["size_factor"] <= 1.0:
+        return "invalid_size_factor"
+    return None
 
 
 def _location(side: str, rp: dict, cfg: EntryQualityConfig) -> tuple[float, dict]:
@@ -229,9 +285,12 @@ def assess(side: str, ctx: dict | None, cfg: EntryQualityConfig | None = None) -
 
 __all__ = [
     "MODES",
+    "VERDICTS",
     "EntryQualityConfig",
     "assess",
     "config",
+    "context_problem",
     "mode",
+    "report_problem",
     "zero_two_canonical",
 ]

@@ -4,6 +4,12 @@ Bu dosya kalıcı rehberdir (kod nasıl çalışır, nasıl okunur, nasıl yenid
 bayrak değeri burada **yazılmaz**: `config/thresholds_v1.0.yaml → entry_quality_v2.mode`
 (`off` | `shadow` | `active`). Ölçüm kanıtı: `docs/evidence/entry_quality_v2/`.
 
+| Mod | Üretimde uygulanan | Yeni motor | Legacy (eski) motor |
+| --- | --- | --- | --- |
+| `off` | legacy | hesaplanmaz | uygulanır (bayt-aynı) |
+| `shadow` | legacy | hesaplanır, yan yana yazılır | uygulanır |
+| `active` | **yeni** | **birincil** | gölge karşılaştırma + teknik fallback |
+
 ## Düz dille: ne işe yarıyor
 
 Konsensüs skoru "hangi yön tercih ediliyor"u söyler (ör. SHORT). Bu **hemen aç** demek
@@ -28,7 +34,36 @@ decide_for_symbol:
 Çıktı `TradeDecision.entry_quality_report` ve decision-matrix hücresinde `entry_quality`
 (yalnız mode != off iken; kapalıyken hücre bayt-aynı). Alanlar: `entry_quality` (0–1),
 `reversal_risk` (0–1), `verdict` (ok/reduce/wait), `size_factor` (≤ 1), `reasons`, `terms`,
-`events`, `old_action`, `new_action`, `applied`.
+`events`, `gate_ms`, ve motor karşılaştırması: `applied_engine` (`new` | `legacy_fallback` |
+`legacy`), `fallback_reason` (null ya da neden), `legacy_direction/action/score`,
+`new_direction/action/score`, `agreement`, `applied`. Yön ve skor iki motorda aynıdır (yön
+katmanı değişmez; yeni motor zamanlama ekseni ekler); fark `action` ve `entry_quality` /
+`reversal_risk`'tedir.
+
+### Yeni motor birincil (active) — fallback kuralı
+
+```
+decide_for_symbol (mode=active)
+  ├─ _decide_core(eq_mode=active)      ← RiskGate İLK; sonra kapı; sonra ortak kapılar
+  │     verdict=wait   → hold   (BİLİNÇLİ karar; fallback DEĞİL)
+  │     verdict=reduce → boyut ↓ (≤ 1.0)
+  │     verdict=ok     → aday korunur
+  └─ TEKNİK başarısızlık → _decide_core(eq_mode=off) = LEGACY (RiskGate yine İLK)
+```
+
+Teknik başarısızlık = istisna, NaN/inf (bağlam ya da çıktıda), bozuk/geçersiz rapor ya da
+karar nesnesi, zorunlu bağlamın (`range_pos`) yokluğu, geçersiz eylem, **zıt yöne çevirme**
+(`side_flip`), gecikme bütçesi aşımı (`fallback_max_latency_ms`; ölçüm sonrası, önleyici
+değil). Bu durumda `applied_engine=legacy_fallback`, sebep `fallback_reason`'da; süreç
+sayacı ve seyrek (sebep sınıfı başına ≤ 10 dk'da bir) WARNING log yazılır. Gölge legacy
+karşılaştırması yalnız yeni motor müdahale ettiğinde (wait/reduce) ikinci kez koşar; hata
+verirse kararı düşürmez.
+
+**Bilinen davranış (kardeş-TF devri):** `decide_matrix` aynı turda açılması önerilen
+pozisyonları sonraki hücrelere "bekleyen" olarak gösterir (concentration guard). Yeni motor bir
+hücreyi WAIT yaparsa o hücre yuvayı tutmaz; aynı sembolün başka TF kardeşi yuvayı devralıp
+açılabilir (golden'da 3 hücre). Toplam aynı-yön maruziyet sınırı korunur; hücre başına yeni motor
+yine yalnız kısıtlar.
 
 ## Modüller
 
@@ -36,7 +71,8 @@ decide_for_symbol:
 | --- | --- |
 | `packages/scoring/entry_context.py` | Yön-bağımsız bağlam: aralık konumu (20/60/120), ATR-normalize EMA20/EMA50/VWAP uzaklığı, RSI, Bollinger %b, 5-bar hareket, yönlü mum serisi, hacim/ATR genişlemesi, olaylar |
 | `packages/scoring/reversal_events.py` | Dönüş **olayları** (durum değil): CHoCH, süpürme/BOS başarısızlığı, RSI uyumsuzluğu, red mumu, geçerli 0-2 kırılımı, climax. Olay başına yön, bar, ts, güç, güven, yaş; yarı-ömürle deterministik sönüm, 3 yarı-ömürde ölür |
-| `packages/scoring/entry_quality.py` | Saf değerlendirme: `kalite = 1 − chase × (loc_floor + (1−loc_floor) × loc)`; dönüş riski = tür başına en güçlü sönümlü olay, noisy-OR |
+| `packages/scoring/entry_quality.py` | Saf değerlendirme: `kalite = 1 − chase × (loc_floor + (1−loc_floor) × loc)`; dönüş riski = tür başına en güçlü sönümlü olay, noisy-OR. `context_problem` / `report_problem`: girdi/çıktı teknik geçerlilik denetimi |
+| `packages/decision/entry_engine.py` | Karar akışındaki kapı (`gate`), teknik-hata sınıflaması, yeni karar nesnesi doğrulaması (`decision_problem`), eski/yeni telemetri (`annotate`), tur özeti (`summarize`) ve fallback sayaçları |
 | `packages/signals/market_structure.py` | `break_events` / `swing_levels`: CHoCH/BOS'u olaya çevirir (look-ahead yok: olay, referans pivot teyit edilmeden damgalanmaz) |
 | `packages/scoring/tf_scoring_v4.py` | `rsi_divergence_events` (+ lean eşdeğer), `elliott_lean_canonical` |
 
@@ -76,24 +112,35 @@ config ile **tek sefer** okundu (`test_run.lock`).
 | YENİ vs ESKİ (test, yürütme: SL/TP/zaman stopu/ücret) | İşlem başına net R −0.073 → −0.056, maks. DD 664R → 454R, işlem 8564 → 7775; sinyal düzeyi z −0.009 → −0.012 |
 | Kabul ölçütleri (9) | **6 geçti, 3 kaldı:** sinyal z'si, trend yönündeki iyi sinyallerin korunumu (%78 < %85), enstrüman tutarlılığı (11/31 < %60) |
 
-**Karar:** pooled kanıt `active` için yetmiyor → **terfi yok**; katman `shadow`'da çalışır
-(karar değişmez, eski/yeni yan yana birikir). Canlı evren (BTC, ETH, XAU, XAG, BRENT) için
-doğrudan kanıt yok (örnekte ETH/gümüş/Brent/kripto gün-içi yok) — gerçek kanıt shadow'dan ve
-sahibin arşivinden gelir. `active`'e terfi CP5 kırmızı çizgisidir: owner onayı + canlı gölge
-kanıtı.
+**Karar (ölçüm):** pooled kanıt `active` için yetmiyor (9 ölçütten 3'ü kaldı). Canlı evren (BTC,
+ETH, XAU, XAG, BRENT) için doğrudan kanıt yok (örnekte ETH/gümüş/Brent/kripto gün-içi yok).
+**Owner kararı (CP5, ROADMAP EQ4):** buna rağmen yeni motor birincil yapıldı; eski motor gölge +
+teknik fallback olarak durur. Bu kanıt eşiğinden değil owner talebinden gelen bir terfidir →
+canlı izleme zorunlu (aşağıda) ve geri alma tek satırdır. `zero_two_canonical` bu karara dahil
+değil; ayrı terfi.
 
 Dürüst sınırlar: teknik oy tek başına simüle edildi (fundamental/haber/sentinel/quantum
 modülleri geçmiş veri olmadığı için yok); v4'ün bölge merceği S/R vekiliyle; trailing stop
 modellenmedi; maliyetler varsayım; satırlar örtüşüyor (t-istatistiği verilmedi); 4h hisse
 çubukları seans başına 2 kutu.
 
-## Shadow çıktısını okuma
+## Canlı çıktıyı okuma (new vs legacy)
 
-`GET /api/v1/decision/matrix` hücrelerinde `entry_quality`; ayrıca her tick snapshot'ı
-`causal_reconstruction.entry_contexts` taşır (tekrar oynatılabilir). Örn. "gölgede WAIT diyen
-ama ESKİ'nin açtığı işlemler ileride kaybetti mi?" sorusu `decision_log` + snapshot'lardan
-cevaplanır. Aktivasyondan önce önerilen kanıt: ≥ 30 gün, sembol × TF başına yeterli örnek,
-bloklanan işlemlerin kapanış-R'si ile korunanların kıyası.
+`GET /api/v1/decision/matrix`:
+
+- üst düzey `engine` bloğu (yalnız mode != off): `new` / `legacy` LONG-SHORT-WAIT sayıları,
+  `evaluated` (kapıya ulaşan hücre), `disagreements` / `disagreement_pct`, `entry_quality_veto`,
+  `reversal_risk_veto`, `reduced`, `fallback{count, reasons, fallback_total}`,
+  `new_unavailable`, `gate_ms{avg,max}`;
+- hücre başına `entry_quality` (yukarıdaki alanlar).
+
+Her tick snapshot'ı ayrıca `causal_reconstruction.entry_contexts` taşır (tekrar oynatılabilir).
+"Yeni WAIT dedi ama legacy açacaktı; o işlem ileride kaybeder miydi?" sorusu `decision_log` +
+snapshot'lardan cevaplanır. Beklenen sağlık: `fallback.count == 0`, `fallback_total` artmıyor,
+`gate_ms.max` milisaniyeler. Yeni motor farklı görüş bildirdi diye (uyuşmazlık %) geri alma
+yapılmaz; geri alma teknik sorunlar içindir (crash döngüsü, bozuk karar, sürekli istisna,
+icra/RiskGate regresyonu, gecikme kaynaklı kaçan turlar). Kanıt önerisi: ≥ 30 gün, sembol × TF
+başına yeterli örnek, bloklanan işlemlerin kapanış-R'si ile korunanların kıyası.
 
 ## Yeniden ölçme (kendi arşivinde)
 
@@ -110,5 +157,11 @@ dondurulmuş config varken çalışır ve `test_run.lock` yazar; ikinci kez çal
 
 ## Geri alma
 
-`entry_quality_v2.mode: "off"` (tek satır, git iki ortama taşır; supervisor yeniden başlar):
-hiçbir bağlam hesaplanmaz, matrix hücresi ve karar bayt-aynıdır (golden replay korur).
+Sıra (hızlıdan geniş kapsamlıya), hepsi tek satır + normal deploy hattı (git iki ortama taşır;
+supervisor yeniden başlar):
+
+1. `entry_quality_v2.mode: "shadow"` — karar legacy'ye döner, yeni motor hesaplanıp yan yana
+   yazılmaya devam eder (karşılaştırma verisi kaybolmaz). **Önerilen güvenli dönüş.**
+2. `entry_quality_v2.mode: "off"` — hiçbir bağlam hesaplanmaz, matrix hücresi ve karar
+   bayt-aynıdır (golden replay korur).
+3. Önceki doğrulanmış SHA'ya revert (ROADMAP/PR'da yazılı).

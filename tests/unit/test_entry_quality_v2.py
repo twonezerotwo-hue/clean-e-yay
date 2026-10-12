@@ -439,8 +439,9 @@ def test_engine_shadow_reports_both_decisions_but_does_not_change_action(fresh_e
         d = _decide(dec, snap, regime)
     rep = d.entry_quality_report
     assert d.action == "open_short"                               # KARAR DEĞİŞMEZ
-    assert rep["old_action"] == "open_short" and rep["new_action"] == "hold"
+    assert rep["legacy_action"] == "open_short" and rep["new_action"] == "hold"
     assert rep["verdict"] == "wait" and rep["applied"] is False and rep["mode"] == "shadow"
+    assert rep["applied_engine"] == "legacy" and rep["agreement"] is False
 
 
 def test_engine_active_waits_bad_short_and_never_opens_the_opposite_side(fresh_env, monkeypatch):
@@ -561,6 +562,6 @@ def test_matrix_cell_has_entry_quality_key_only_when_mode_is_not_off(fresh_env, 
     with mode_ctx(monkeypatch, "shadow"):
         d_sh = _decide(dec, snap, regime)
     cell_sh = dec.matrix_view(regime, risk, [d_sh], snap, ["BTCUSD"])["cells"][0]
-    assert cell_sh["entry_quality"]["old_action"] == "open_short"
+    assert cell_sh["entry_quality"]["legacy_action"] == "open_short"
     assert cell_sh["entry_quality"]["new_action"] == "hold"
     assert cell_sh["action"] == "open_short"                     # shadow: nihai eylem değişmez
