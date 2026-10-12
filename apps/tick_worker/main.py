@@ -49,7 +49,7 @@ from packages.notifications import detector as notif_detector
 from packages.ops import heartbeat
 from packages.paper import manual_queue, news_setup, ticket
 from packages.paper import state as paper_state
-from packages.paper.lifecycle import attempt_open, flatten_all
+from packages.paper.lifecycle import _ensure_daily_anchor, attempt_open, flatten_all
 from packages.paper.lifecycle import tick as price_tick
 from packages.paper.recheck import compute_rechecks
 from packages.risk import halt as halt_store
@@ -298,6 +298,10 @@ async def run_once() -> None:
         # Snapshot (ağ) kilitten ÖNCE alınır; commit ilk save noktasında.
         txn = paper_state.begin("tick")
         ps = txn.state
+        # Gün dönümünü risk değerlendirmesinden önce uygula; eski günün PnL'i
+        # yeni günün açılışlarını kilitlememeli ve dashboard'a da sıfır olarak
+        # yansımalıdır.
+        _ensure_daily_anchor(ps)
         prices = {q.symbol: q.price for q in snap.prices if q.price is not None}
         verified_flags = {q.symbol: q.verified for q in snap.prices}
         closed = price_tick(ps, prices)
@@ -310,6 +314,7 @@ async def run_once() -> None:
             peak_equity_usd=ps.peak_equity_usd,
             daily_pnl_usd=ps.daily_pnl_usd,
             open_position_count=len(ps.open_positions),
+            daily_anchor_date=ps.daily_anchor_date,
             # S2-1 — MTM gate girdisi (flag risk_gates.mtm_equity_enabled
             # KAPALIYKEN engine bunu okumaz → davranış birebir eski).
             mtm_equity_usd=ps.mtm_equity_usd,
@@ -330,6 +335,7 @@ async def run_once() -> None:
                 peak_equity_usd=ps.peak_equity_usd,
                 daily_pnl_usd=ps.daily_pnl_usd,
                 open_position_count=len(ps.open_positions),
+                daily_anchor_date=ps.daily_anchor_date,
                 mtm_equity_usd=ps.mtm_equity_usd,
             )
         if halts:

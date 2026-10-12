@@ -114,6 +114,7 @@ def _safe_cells(snap):
             peak_equity_usd=ps.peak_equity_usd,
             daily_pnl_usd=ps.daily_pnl_usd,
             open_position_count=len(ps.open_positions),
+            daily_anchor_date=ps.daily_anchor_date,
         )
         symbols = asset_registry.trade_symbols()
         regime, risk, decisions = decide_matrix(

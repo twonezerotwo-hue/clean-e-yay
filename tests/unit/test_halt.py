@@ -5,8 +5,8 @@
 - Halt aktif → risk engine escalate eder, yeni paper pozisyon açılmaz.
 - KILL_SWITCH halt → flatten_all (KILL_SWITCH_EXIT) — paper-safe; fiyatı
   olmayan pozisyon kapatılmaz (mock fiyat yok).
-- **Otomatik reset yok**: breach geçse / gün dönse de halt aktif kalır;
-  yalnızca owner reset endpoint'i kapatır.
+- DAILY_LOSS UTC gün dönümünde otomatik kapanır; MAX_DRAWDOWN yalnızca owner
+  reset endpoint'i ile kapanır.
 - DQS BLOCKED → trade yok (halt'ten bağımsız). Hepsi offline.
 """
 from __future__ import annotations
@@ -163,7 +163,8 @@ def test_halt_active_no_new_positions_via_tick(fresh_env) -> None:
     ps = fresh_env
     state = ps.load()
     state.daily_pnl_usd = -5000.0  # %2 limitin çok üstünde
-    state.daily_anchor_date = "2099-12-31"  # tick'te gün sıfırlamasın
+    from datetime import UTC, datetime
+    state.daily_anchor_date = datetime.now(UTC).date().isoformat()
     # entry/current fiyat mock provider'ın BTCUSD taban fiyatıyla (68000,
     # packages/data/providers/price/mock.py) UYUMLU olmalı — testler
     # TEST_USE_MOCK=true ile çalışır (bkz. kök conftest.py) ve price_sanity
@@ -231,6 +232,15 @@ def test_daily_halt_clears_on_utc_day_rollover(fresh_env) -> None:
     assert [h.type for h in active] == ["MAX_DRAWDOWN"]
     daily = next(e for e in halt.load().events if e.type == "DAILY_LOSS")
     assert daily.active is False and daily.cleared_by == "day_rollover"
+
+
+def test_stale_daily_pnl_cannot_rebreach_after_utc_rollover(fresh_env) -> None:
+    """Eski günün negatif PnL'i yeni güne RiskGate/halt olarak taşınmaz."""
+    from packages.risk import halt
+    inp = _risk_input(daily_pnl=-5000)
+    inp.daily_anchor_date = "2020-01-01"
+    assert halt.sync(inp) == []
+    assert halt.metrics(inp)["daily_pnl_usd"] == 0.0
 
 
 def test_legacy_halt_levels_are_normalized(fresh_env) -> None:

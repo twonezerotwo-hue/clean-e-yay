@@ -69,6 +69,21 @@ def test_world_brief_without_evidence_does_not_call_llm(monkeypatch, tmp_path):
     assert called is False
 
 
+def test_world_brief_can_defer_llm_for_first_screen(monkeypatch, tmp_path):
+    monkeypatch.setenv("LLM_MODE", "mock")
+    monkeypatch.setenv("LLM_CACHE_PATH", str(tmp_path / "cache.json"))
+    monkeypatch.setenv("LLM_BUDGET_PATH", str(tmp_path / "budget.json"))
+
+    def fail(*args, **kwargs):
+        raise AssertionError("deferred cockpit brief must not call the LLM")
+
+    monkeypatch.setattr(MockLLMClient, "complete", fail)
+    result = build_world_brief(**_evidence(), allow_llm=False)
+    assert result["source"] == "fallback"
+    assert result["llm"]["fallback_reason"] == "llm_deferred"
+    assert result["execution"] == "NO_EXECUTION"
+
+
 def test_world_brief_llm_text_only_rewrites_narrative(monkeypatch, tmp_path):
     monkeypatch.setenv("LLM_MODE", "mock")
     monkeypatch.setenv("LLM_CACHE_PATH", str(tmp_path / "cache.json"))

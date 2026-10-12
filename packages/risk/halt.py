@@ -95,6 +95,19 @@ def _today_utc() -> str:
     return datetime.now(UTC).date().isoformat()
 
 
+def effective_daily_pnl(inp) -> float:
+    """Risk için yalnızca güncel UTC gününün PnL'ini kullan.
+
+    Gün dönümünde PaperState henüz bir yazma döngüsünden geçmemiş olabilir;
+    önceki günün kaybını yeni güne taşımak yeni açılışları yanlışlıkla kilitler.
+    Çapa verilmemiş legacy RiskInput'lar eski davranışı korur.
+    """
+    anchor = str(getattr(inp, "daily_anchor_date", None) or "")
+    if anchor and anchor != _today_utc():
+        return 0.0
+    return float(getattr(inp, "daily_pnl_usd", 0.0) or 0.0)
+
+
 def _is_stale_daily(e: HaltEvent, today: str) -> bool:
     """H11 — önceki UTC günün DAILY_LOSS halt'i artık geçerli değil."""
     return e.type == "DAILY_LOSS" and (e.started_at or "")[:10] < today
@@ -110,7 +123,8 @@ def metrics(inp) -> dict:
     """Gauge metrikleri — frontend hesap yapmaz, oranlar burada üretilir."""
     th = load_thresholds()["risk_gates"]
     daily_limit_usd = float(th["max_daily_loss_pct"]) * inp.equity_usd
-    daily_loss_usd = max(0.0, -inp.daily_pnl_usd)
+    daily_pnl_usd = effective_daily_pnl(inp)
+    daily_loss_usd = max(0.0, -daily_pnl_usd)
     dd = 0.0
     if inp.peak_equity_usd > 0:
         dd = max(0.0, (inp.peak_equity_usd - inp.equity_usd) / inp.peak_equity_usd)
@@ -118,7 +132,7 @@ def metrics(inp) -> dict:
     return {
         "equity_usd": round(inp.equity_usd, 2),
         "peak_equity_usd": round(inp.peak_equity_usd, 2),
-        "daily_pnl_usd": round(inp.daily_pnl_usd, 2),
+        "daily_pnl_usd": round(daily_pnl_usd, 2),
         "daily_loss_limit_usd": round(daily_limit_usd, 2),
         "daily_loss_ratio": round(daily_loss_usd / daily_limit_usd, 4)
         if daily_limit_usd > 0
@@ -134,12 +148,13 @@ def _breaches(inp) -> list[tuple[str, str, list[str]]]:
     th = load_thresholds()["risk_gates"]
     out: list[tuple[str, str, list[str]]] = []
     daily_limit = -float(th["max_daily_loss_pct"]) * inp.equity_usd
-    if inp.daily_pnl_usd <= daily_limit:
+    daily_pnl_usd = effective_daily_pnl(inp)
+    if daily_pnl_usd <= daily_limit:
         out.append(
             (
                 "DAILY_LOSS",
                 "Günlük zarar limiti aşıldı — halt",
-                [f"daily pnl {inp.daily_pnl_usd:.0f} ≤ {daily_limit:.0f}"],
+                [f"daily pnl {daily_pnl_usd:.0f} ≤ {daily_limit:.0f}"],
             )
         )
     if inp.peak_equity_usd > 0:

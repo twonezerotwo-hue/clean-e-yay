@@ -825,6 +825,19 @@ def _parse_manual_order(folded: str) -> dict | None:
     """Owner emri mi? (sembol + tutar + emir niyeti). side belirsizse None döner
     (sorulur). entry_price varsa limit/stop, yoksa market. Dönen: {symbol, side,
     size_usd, entry_price}."""
+    # Soru/olasılık cümleleri emir değildir. Özellikle "2000 dolar BTC alsam
+    # ne olur?" gibi bir danışma sorusu, sembol+tutar+"al" eşleşmesiyle canlı
+    # paper pozisyonuna dönüşmemelidir. Emir yalnız açık ve doğrudan bir komut
+    # olarak yazıldığında ayrıştırılır; yönün sonradan sorulması (_PENDING_ORDER)
+    # mevcut kontrollü akışta devam eder.
+    if re.search(
+        r"\b(?:alsam|satsam|açsam|acsam|alsak|satsak|açalım mı|acalim mi|"
+        r"almalı(?:yım|yim|mıyım|miyim)?|satmalı(?:yım|yim|mıyım|miyim)?|"
+        r"açmalı(?:yım|yim|mıyım|miyim)?|acmalı(?:yım|yim|mıyım|miyim)?|"
+        r"olur|olsa|olabilir|gerekir|mı|mi|mu|mü)\b",
+        folded,
+    ) or "?" in folded:
+        return None
     if not re.search(r"\b(al|sat|aç|ac|emir|pozisyon|işlem aç|islem ac|long|short|buy|sell)\b", folded):
         return None
     sym = _detect_analyze_symbol(folded)

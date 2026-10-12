@@ -145,6 +145,17 @@ def test_stream_manual_order_bypasses_llm_and_runs_grounded_once(
     assert calls["n"] == 1, "side-effect'li _grounded_answer TAM 1 kez çalışmalı"
 
 
+def test_manual_order_parser_does_not_turn_hypothetical_question_into_order() -> None:
+    from packages.agent.llm.chat import _parse_manual_order
+
+    assert _parse_manual_order("2000 dolar btc alsam ne olur") is None
+    assert _parse_manual_order("btc almak için 2000 dolar gerekir mi") is None
+    parsed = _parse_manual_order("btc'ye 2000 dolar al")
+    assert parsed is not None
+    assert parsed["symbol"] == "BTCUSD"
+    assert parsed["size_usd"] == 2000.0
+
+
 def test_stream_budget_exceeded_falls_back_without_llm(llm_env, no_network, monkeypatch) -> None:
     monkeypatch.setenv("LLM_MODE", "mock")
     monkeypatch.setenv("LLM_DAILY_TOKEN_BUDGET", "1")
