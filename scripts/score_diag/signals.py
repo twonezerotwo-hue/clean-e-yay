@@ -142,11 +142,17 @@ def extract(name: str, tf: str, bars: list, start: int = WARMUP) -> list[dict]:
     return rows
 
 
-def _job(args):
-    name, tf, cache = args
-    sys.path.insert(0, os.getcwd())
+def _universe(cache: str, bar_history: str | None):
     from scripts.score_diag import data as D
-    uni = D.universe(Path(cache))
+    if bar_history:
+        return D.bar_history_universe(Path(bar_history))
+    return D.universe(Path(cache))
+
+
+def _job(args):
+    name, tf, cache, bar_history = args
+    sys.path.insert(0, os.getcwd())
+    uni = _universe(cache, bar_history)
     s, bars = uni[(name, tf)]
     rows = extract(name, tf, bars)
     for r in rows:
@@ -154,12 +160,12 @@ def _job(args):
     return name, tf, rows
 
 
-def run_all(cache: str, out_dir: str, workers: int = 4, only: list[str] | None = None) -> None:
+def run_all(cache: str, out_dir: str, workers: int = 4, only: list[str] | None = None,
+            bar_history: str | None = None) -> None:
     import pandas as pd
 
-    from scripts.score_diag import data as D
-    uni = D.universe(Path(cache))
-    jobs = [(n, tf, cache) for (n, tf) in uni if tf in WINDOW and (not only or f"{n}_{tf}" in only)]
+    uni = _universe(cache, bar_history)
+    jobs = [(n, tf, cache, bar_history) for (n, tf) in uni if tf in WINDOW and (not only or f"{n}_{tf}" in only)]
     # en uzun işler önce (yük dengesi)
     jobs.sort(key=lambda j: -len(uni[(j[0], j[1])][1]) / STRIDE[j[1]])
     Path(out_dir).mkdir(parents=True, exist_ok=True)
@@ -177,5 +183,6 @@ if __name__ == "__main__":
     ap.add_argument("--out", required=True)
     ap.add_argument("--workers", type=int, default=4)
     ap.add_argument("--only", nargs="*")
+    ap.add_argument("--bar-history", default=None, help="sahibin bar arşivi dizini (data/runtime/bar_history)")
     a = ap.parse_args()
-    run_all(a.cache, a.out, a.workers, a.only)
+    run_all(a.cache, a.out, a.workers, a.only, a.bar_history)

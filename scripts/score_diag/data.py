@@ -294,3 +294,41 @@ def universe(cache: Path = DEFAULT_CACHE) -> dict[tuple[str, str], tuple[Series,
         if s.tf == "1h":
             out[(s.name, "4h")] = (s, resample_4h(bars, s.kind, s.name))
     return out
+
+
+def bar_history_universe(directory: Path) -> dict[tuple[str, str], tuple[Series, list[OHLCVBar]]]:
+    """Sahibin KENDİ bar arşivi (``data/runtime/bar_history/<SEMBOL>_<tf>.jsonl``, BAR_HISTORY_ENABLED)
+    → (sembol, tf) -> (seri, barlar). Yalnız 1h/4h/1d (düzenek pencereleri). Varlık sınıfı
+    ``config/assets.yaml``'dan; bilinmeyen sembol 'other'. Aynı arayüz: ``universe`` yerine kullanılır."""
+    import json
+
+    import yaml
+
+    classes: dict[str, str] = {}
+    try:
+        cfg = yaml.safe_load(Path("config/assets.yaml").read_text(encoding="utf-8")) or {}
+        classes = {k: str(v.get("asset_class", "other")) for k, v in (cfg.get("assets") or {}).items()}
+    except (OSError, ValueError, AttributeError):
+        pass
+    out: dict[tuple[str, str], tuple[Series, list[OHLCVBar]]] = {}
+    for path in sorted(Path(directory).glob("*.jsonl")):
+        name, _, tf = path.stem.rpartition("_")
+        if tf not in ("1h", "4h", "1d") or not name:
+            continue
+        bars: dict[datetime, OHLCVBar] = {}
+        for line in path.read_text(encoding="utf-8").splitlines():
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                b = OHLCVBar.model_validate(json.loads(line))
+            except (ValueError, TypeError):
+                continue  # bozuk satır atlanır
+            bars[b.ts] = b
+        series_bars = [bars[t] for t in sorted(bars)]
+        series_bars, _ = clean(series_bars)
+        series_bars = longest_segment(series_bars, 15.0 if tf == "1d" else 10.0)
+        if len(series_bars) >= 400:
+            ser = Series(name, classes.get(name, "other"), str(path), tf, "crypto")
+            out[(name, tf)] = (ser, series_bars)
+    return out

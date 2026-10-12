@@ -346,6 +346,35 @@ def guard_effect_table(df: pd.DataFrame) -> str:
 
 # --------------------------------------------------------------------- 0-2 / v4
 
+def feature_ic_table(df: pd.DataFrame, cand: pd.Series, h: int = 10) -> str:
+    """Giriş-uzama özelliklerinin (işlem yönünde 'ne kadar zaten gitti') sonuçla Spearman IC'si:
+    varlık sınıfı × bölme. Negatif IC = uzama kötü sonuç (ortalamaya dönüş, sahibin hipotezi);
+    pozitif IC = uzama devam eder (momentum). Sınıflar arası TUTARLILIK tabloda görülür."""
+    d = df[cand.loc[df.index] != 0].copy()
+    side = cand.loc[d.index]
+    d["y"] = side * (d[f"f{h}"] - d[f"drift{h}"]) / (d["atrp"] * math.sqrt(h))
+    d = d[d["y"].notna()]
+    side = side.loc[d.index]
+    f = pd.DataFrame(index=d.index)
+    f["EMA20 uzama"] = side * d["ext_ema20"]
+    f["EMA50 uzama"] = side * d["ext_ema50"]
+    f["5-bar hareket"] = side * d["move5_atr"]
+    f["RSI uzama"] = side * (d["rsi_ctx"] - 50)
+    f["Bollinger uzama"] = side * (d["bb_pctb"] - 0.5)
+    f["aralık ucu (60)"] = -side * (d["rp60"] - 0.5)
+    f["yönlü mum serisi"] = np.where(d["run_dir"] == side, d["run_len"], 0)
+    f["hacim oranı"] = d["vol_ratio"]
+    f["ATR genişlemesi"] = d["atr_ratio"]
+    rows = []
+    for cls in ["TÜMÜ", *sorted(d["asset_class"].unique())]:
+        for sp in [x for x in ("train", "val", "test") if x in set(d["split"])]:
+            m = (d["split"] == sp) if cls == "TÜMÜ" else ((d["split"] == sp) & (d["asset_class"] == cls))
+            if m.sum() < 500:
+                continue
+            rows.append([cls, sp, int(m.sum()), *[spearman(f.loc[m, c], d.loc[m, "y"]) for c in f.columns]])
+    return md(["sınıf", "bölme", "n", *f.columns], rows)
+
+
 def zero_two_table(df: pd.DataFrame, h: int = 10) -> str:
     d = df[df["tf"].isin(["4h", "1d"]) & df["v4"].notna()].copy()
     d4 = d[d["tf"] == "4h"]
@@ -385,7 +414,20 @@ def v4_ablation_table(df: pd.DataFrame, tf: str, h: int = 10) -> str:
 
 
 __all__ = [
-    "ablation_table", "add_components", "add_situation_flags", "correlation_table", "guard_effect_table",
-    "location_by_group", "location_share_summary", "location_table", "md", "prep", "rsi_table",
-    "situations", "use", "v4_ablation_table", "zero_two_table",
+    "ablation_table",
+    "add_components",
+    "add_situation_flags",
+    "correlation_table",
+    "feature_ic_table",
+    "guard_effect_table",
+    "location_by_group",
+    "location_share_summary",
+    "location_table",
+    "md",
+    "prep",
+    "rsi_table",
+    "situations",
+    "use",
+    "v4_ablation_table",
+    "zero_two_table",
 ]

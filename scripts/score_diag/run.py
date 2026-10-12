@@ -2,6 +2,7 @@
 
     python -m scripts.score_diag.run fetch                       # Lean örnek verisini indir
     python -m scripts.score_diag.run extract --out OUT           # bar-bar sinyaller (4 çekirdekte dakikalar-onlarca dakika)
+    python -m scripts.score_diag.run extract --out OUT --bar-history data/runtime/bar_history   # KENDİ arşivinde
     python -m scripts.score_diag.run diagnose --sig OUT --out R  # ESKİ sistem tanılaması (train+val)
     python -m scripts.score_diag.run tune --sig OUT --out R      # ızgara: TRAIN tara, VALIDATION seç, config'i DONDUR
     python -m scripts.score_diag.run validate --sig OUT --out R  # VALIDATION: ESKİ vs YENİ (sinyal + yürütme)
@@ -23,7 +24,7 @@ from packages.scoring import entry_quality
 from scripts.score_diag import compare as cp
 from scripts.score_diag import data as D
 from scripts.score_diag import diagnose as dg
-from scripts.score_diag import prep
+from scripts.score_diag import prep, stress
 
 
 def _write(path: Path, text: str) -> None:
@@ -38,7 +39,13 @@ def cmd_fetch(a) -> None:
 
 def cmd_extract(a) -> None:
     from scripts.score_diag import signals
-    signals.run_all(a.cache, a.out, a.workers, a.only)
+    signals.run_all(a.cache, a.out, a.workers, a.only, a.bar_history)
+
+
+def _uni(a):
+    if a.bar_history:
+        return D.bar_history_universe(Path(a.bar_history))
+    return D.universe(Path(a.cache))
 
 
 def _load(a):
@@ -66,6 +73,9 @@ def cmd_diagnose(a) -> None:
     parts.append("\n### TF kırılımı\n" + dg.location_by_group(d, cand, "tf"))
     parts.append("\n### Varlık sınıfı kırılımı\n" + dg.location_by_group(d, cand, "asset_class"))
     parts.append("\n## Özel durumlar\n" + dg.situations(d, cand))
+    parts.append("\n## Giriş-uzama özelliklerinin sonuçla ilişkisi (IC; varlık sınıfı × bölme)\n" + dg.feature_ic_table(d, cand))
+    parts.append("\n## Sentinel/VIX: stres bağlamı (yönsel eğilimden AYRI)\n"
+                 + stress.stress_table(stress.attach(d, stress.load_vix(Path(a.cache))), cand))
     parts.append("\n## Bileşen korelasyonu\n" + dg.correlation_table(d))
     parts.append("\n## Ablation (leave-one-component-out)\n" + dg.ablation_table(d))
     parts.append("\n## RSI kullanımı\n" + dg.rsi_table(d))
@@ -107,7 +117,7 @@ def cmd_tune(a) -> None:
     _write(out / "02_tuning.md", "\n".join(parts))
 
 
-def _compare_split(df, cfg, uni, splits, label) -> tuple[str, list[dict]]:
+def _compare_split(df, cfg, uni, splits, label, cache=D.DEFAULT_CACHE) -> tuple[str, list[dict]]:
     d = df[df["split"].isin(splits)]
     cand = prep.candidates(d, "base")
     rep = cp.assess_rows(d, cand, cfg)
@@ -122,6 +132,13 @@ def _compare_split(df, cfg, uni, splits, label) -> tuple[str, list[dict]]:
         parts.append(f"\n### Giriş konumu — {nm}\n" + dg.location_table(d, sv, label=nm))
     parts.append("\n### Özel durumlar (ESKİ sinyaller; YENİ'nin kararı)\n" + dg.situations(d, cand, verdict=rep["verdict"]))
     parts.append("\n### Güven kalibrasyonu\n" + cp.confidence_calibration(d, cand, rep))
+    parts.append("\n### YENİ katmanın bileşen katkısı (leave-one-out, J')\n" + cp.new_ablation(d, cand, cfg))
+    parts.append("\n### Giriş-uzama özelliklerinin sonuçla ilişkisi (IC)\n" + dg.feature_ic_table(d, cand))
+    parts.append("\n### Eski sistem tanıları bu bölmede\n#### Ablation\n" + dg.ablation_table(d)
+                 + "\n\n#### RSI\n" + dg.rsi_table(d) + "\n\n#### Koruma etkisi\n" + dg.guard_effect_table(d)
+                 + "\n\n#### 0-2 lensi\n" + dg.zero_two_table(d))
+    parts.append("\n### VIX stres bağlamı\n"
+                 + stress.stress_table(stress.attach(d, stress.load_vix(Path(cache))), cand))
     tp = cp.turning_points(d)
     parts.append("\n### Dönüm noktası tepkisi (hindsight — yalnız tanılama)\n"
                  + cp.reversal_reaction(d, cand, sn, tp))
@@ -143,9 +160,9 @@ def _compare_split(df, cfg, uni, splits, label) -> tuple[str, list[dict]]:
 def cmd_validate(a) -> None:
     out = Path(a.out)
     df = _load(a)
-    uni = D.universe(Path(a.cache))
+    uni = _uni(a)
     cfg = cp.load_frozen(out / "frozen_config.json")
-    text, _ = _compare_split(df, cfg, uni, ("val",), "VALIDATION")
+    text, _ = _compare_split(df, cfg, uni, ("val",), "VALIDATION", a.cache)
     _write(out / "03_validation.md", "# VALIDATION: ESKİ vs YENİ\n\n" + text)
 
 
@@ -161,9 +178,9 @@ def cmd_final(a) -> None:
     h = hashlib.sha256(frozen.read_bytes()).hexdigest()[:16]
     lock.write_text(f"{time.strftime('%Y-%m-%dT%H:%M:%S')} config_sha={h} force={a.force}\n", encoding="utf-8")
     df = _load(a)
-    uni = D.universe(Path(a.cache))
+    uni = _uni(a)
     cfg = cp.load_frozen(frozen)
-    text, acc = _compare_split(df, cfg, uni, ("test",), "TEST (dokunulmamış)")
+    text, acc = _compare_split(df, cfg, uni, ("test",), "TEST (dokunulmamış)", a.cache)
     _write(out / "04_test.md", f"# TEST: ESKİ vs YENİ (config sha256[:16]={h})\n\n" + text)
     (out / "04_test_acceptance.json").write_text(json.dumps(acc, ensure_ascii=False, indent=1), encoding="utf-8")
 
@@ -179,6 +196,7 @@ def main(argv=None) -> None:
         p.add_argument("--out", default="")
         p.add_argument("--workers", type=int, default=4)
         p.add_argument("--only", nargs="*")
+        p.add_argument("--bar-history", default=None, help="extract/validate/final: sahibin bar arşivi (data/runtime/bar_history)")
         p.add_argument("--force", action="store_true")
         p.set_defaults(fn=fn)
     a = ap.parse_args(argv)

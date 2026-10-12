@@ -7,6 +7,7 @@ temel invariantları (zıt yön yok, look-ahead yok, ücret R'yi düşürür) ki
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
 
 import pandas as pd
 import pytest
@@ -174,3 +175,21 @@ def test_frozen_config_roundtrip(tmp_path):
     back = compare.load_frozen(p)
     assert back.q_wait == 0.33 and back.range_weights["60"] == 0.6 and back.mode == "shadow"
     assert back.ema20 == cfg.ema20            # tuple alanlar tuple olarak döner
+
+
+# ------------------------------------------------------------------ sahibin bar arşivi okuyucusu
+
+def test_bar_history_universe_reads_jsonl_cleans_and_classifies(tmp_path, monkeypatch):
+    import json
+
+    monkeypatch.chdir(Path(__file__).resolve().parents[2])      # config/assets.yaml göreli yol
+    bars = [bar(i, 100 + i * 0.1, 100.5 + i * 0.1, 99.5 + i * 0.1, 100 + i * 0.1) for i in range(500)]
+    lines = [json.dumps(b.model_dump(mode="json")) for b in bars]
+    lines.insert(10, "{bozuk satir")                              # bozuk satır atlanır
+    (tmp_path / "BTCUSD_1d.jsonl").write_text("\n".join(lines) + "\n", encoding="utf-8")
+    (tmp_path / "BTCUSD_15m.jsonl").write_text("\n".join(lines) + "\n", encoding="utf-8")   # desteklenmeyen TF
+    (tmp_path / "KISA_1d.jsonl").write_text("\n".join(lines[:50]) + "\n", encoding="utf-8")  # çok kısa
+    uni = data.bar_history_universe(tmp_path)
+    assert list(uni) == [("BTCUSD", "1d")]
+    ser, got = uni[("BTCUSD", "1d")]
+    assert ser.asset_class == "crypto" and len(got) == 500 and got[0].ts < got[-1].ts
