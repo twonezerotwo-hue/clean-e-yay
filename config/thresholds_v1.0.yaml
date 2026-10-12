@@ -468,11 +468,12 @@ timeframe_targets:
 #                  AYRI terfi: active ile birlikte AÇILMAZ (canlı yön girdisini değiştirir).
 # Aktivasyon (shadow→active) CP5 kırmızı çizgisidir: owner onayı gerekir.
 entry_quality_v2:
-  # 2026-10-12: SHADOW. 5y-benzeri çok-rejim ölçüm (docs/evidence/entry_quality_v2): kabul
-  # ölçütlerinin 3/9'u KALDI (sinyal z'si, trend-yakalama korunumu, enstrüman tutarlılığı)
-  # → ACTIVE'e terfi YOK (CP5: owner onayı + canlı gölge kanıtı). Gölge karar DEĞİŞTİRMEZ;
-  # eski/yeni karar matrix hücresinde "entry_quality" altında yan yana birikir. Geri alma: "off".
-  mode: "shadow"
+  # 2026-10-12: ACTIVE — OWNER KARARI (CP5 onayı: owner talebiyle terfi). Dürüst not: 5y-benzeri
+  # çok-rejim ölçümde (docs/evidence/entry_quality_v2) kabul ölçütlerinin 3/9'u KALDI (sinyal
+  # z'si, trend-yakalama korunumu, enstrüman tutarlılığı); terfi kanıt eşiğinden değil owner
+  # kararından gelir. Eski motor silinmedi: gölge karşılaştırma + teknik fallback. Hızlı geri
+  # alma: "shadow" (karar legacy'ye döner, karşılaştırma sürer) veya "off".
+  mode: "active"
   zero_two_canonical: false
   # Yeni motor değerlendirmesi bu süreyi (ms) aşarsa teknik "timeout" sayılıp legacy'ye düşülür.
   fallback_max_latency_ms: 1000
