@@ -9,11 +9,15 @@ from __future__ import annotations
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
-import pandas as pd
 import pytest
 
-from packages.data.types import OHLCVBar
-from scripts.score_diag import compare, data, metrics, prep
+# Düzenek bir DEV aracıdır (pandas/numpy ister); CI'ın yalın bağımlılık setinde (pandas yok)
+# bu testler atlanır, geliştirici ortamında çalışır.
+pd = pytest.importorskip("pandas")
+pytest.importorskip("numpy")
+
+from packages.data.types import OHLCVBar  # noqa: E402
+from scripts.score_diag import compare, data, metrics, prep  # noqa: E402
 
 T0 = datetime(2020, 1, 1, tzinfo=UTC)
 
