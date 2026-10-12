@@ -1,0 +1,119 @@
+# GEÇİCİ — MERGE EDİLMEZ. Deploy sonrası SALT-OKUR doğrulama (CLAUDE.md: EC2'de komut
+# gerekiyorsa pull_request tetiklemeli draft PR workflow'u). Hiçbir şey yazmaz/yeniden
+# başlatmaz/silmez; secret kullanmaz ve yazdırmaz (env/.env okunmaz). Emir/kırılma üretmez.
+name: post-deploy-verify (gecici)
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/post-deploy-verify.yml"
+
+jobs:
+  verify:
+    name: EC2 salt-okur dogrulama
+    runs-on: [self-hosted, clean-e-yay-ec2]
+    timeout-minutes: 10
+    steps:
+      - name: Dogrula
+        shell: bash
+        run: |
+          set +e; set -u   # runner bash -e ile gelir; ls|head SIGPIPE'ı betiği öldürmesin
+          APP=/opt/clean-e-yay
+          API=http://127.0.0.1:9000/api/v1
+          redact() { sed -E 's/((api[_-]?key|token|secret|password|authorization|bearer)[=: ]+)[^ "&]+/\1***/Ig' | cut -c1-220; }
+
+          echo "== 1. KUTUDAKI KOD (git) =="
+          hostname
+          git -C "$APP" rev-parse HEAD
+          git -C "$APP" log -1 --format='%H | %s'
+          echo "izlenen dosya degisikligi sayisi: $(git -C "$APP" status --porcelain --untracked-files=no | wc -l)"
+          echo "--- efektif config (YAML, entry_quality_v2 blogu; secret yok) ---"
+          awk '/^entry_quality_v2:/{f=1;next} f&&/^[a-z_]+:/{f=0} f&&/^  (mode|zero_two_canonical|fallback_max_latency_ms):/' "$APP/config/thresholds_v1.0.yaml"
+
+          echo "== 2. SERVISLER =="
+          systemctl is-active eyay-supervisor.service eyay-web.service
+          systemctl show eyay-supervisor.service -p ActiveState -p SubState -p ActiveEnterTimestamp -p NRestarts -p MainPID
+          MPID=$(systemctl show -p MainPID --value eyay-supervisor.service)
+          echo "supervisor sureci yasi (sn): $(ps -o etimes= -p "$MPID" 2>/dev/null | tr -d ' ')"
+          date -u +"simdi (UTC): %Y-%m-%dT%H:%M:%SZ"
+
+          echo "== 3. API HEALTH =="
+          curl -fsS --max-time 20 "$API/health"; echo
+          echo "web HTTP: $(curl -s -o /dev/null -w '%{http_code}' --max-time 20 http://127.0.0.1:3000/)"
+
+          echo "== 4. SYSTEM HEALTH (workers / providers / DQS / halt / paper_safe) =="
+          curl -fsS --max-time 30 "$API/system/health" -o /tmp/pdv_sys.json && python3 - <<'PY'
+          import json
+          h = json.load(open("/tmp/pdv_sys.json"))
+          print({k: h.get(k) for k in ("api_status", "paper_safe", "no_execution", "stale_workers",
+                                       "last_successful_tick", "last_learning_run", "dqs_status", "warnings")})
+          for n, v in (h.get("workers") or {}).items():
+              print(n, v)
+          print("provider_summary", h.get("provider_summary"))
+          print("risk_halt_status", h.get("risk_halt_status"))
+          print("snapshot_store_status", h.get("snapshot_store_status"))
+          PY
+
+          echo "== 5. KARAR MATRISI — yeni motor birincil mi? (calisan servis) =="
+          curl -fsS --max-time 90 "$API/decision/matrix" -o /tmp/pdv_matrix.json && python3 - <<'PY'
+          import json
+          from collections import Counter
+          m = json.load(open("/tmp/pdv_matrix.json"))
+          cells = m.get("cells", [])
+          eq = [c for c in cells if "entry_quality" in c]
+          e = m.get("engine") or {}
+          print("matrix generated_at:", m.get("generated_at"))
+          print("hucre:", len(cells), "| entry_quality anahtarli:", len(eq), "| engine blogu var mi:", bool(e))
+          print("engine.mode/primary/shadow:", e.get("mode"), e.get("primary"), e.get("shadow"))
+          print("applied_engine:", dict(Counter(c["entry_quality"].get("applied_engine") for c in eq)))
+          print("verdict:", dict(Counter(c["entry_quality"].get("verdict") for c in eq)))
+          print("engine.new (long/short/wait):", e.get("new"), "| engine.legacy:", e.get("legacy"),
+                "| new_unavailable:", e.get("new_unavailable"))
+          print("evaluated/disagreements/pct:", e.get("evaluated"), e.get("disagreements"), e.get("disagreement_pct"))
+          print("entry_quality_veto / reversal_risk_veto / reduced:",
+                e.get("entry_quality_veto"), e.get("reversal_risk_veto"), e.get("reduced"))
+          print("FALLBACK (0 olmali):", e.get("fallback"))
+          print("gate_ms:", e.get("gate_ms"))
+          print("gercek action:", dict(Counter(c.get("action") for c in cells)))
+          print("aday action:", dict(Counter(c.get("candidate_action") for c in cells)))
+          bad_flip = [c for c in cells if c.get("action") in ("open_long", "open_short")
+                      and c.get("action") != c.get("candidate_action")]
+          print("nihai acilis yonu adaydan FARKLI hucre (0 olmali):", len(bad_flip))
+          susp_open = [c for c in cells if m.get("suspended") and c.get("action") in ("open_long", "open_short")]
+          print("RiskGate/DQS askidayken acilis hucresi (0 olmali):", len(susp_open))
+          wait_overridden = [c for c in eq if c["entry_quality"].get("verdict") == "wait"
+                             and c["entry_quality"].get("applied_engine") == "new"
+                             and c.get("action") in ("open_long", "open_short")]
+          print("yeni motor WAIT dedigi halde acilan hucre (0 olmali):", len(wait_overridden))
+          print("risk_gate:", (m.get("risk_gate") or {}).get("action"), "| dqs:", m.get("dqs_status"),
+                "| rejim:", m.get("regime"), "| suspended:", m.get("suspended"))
+          PY
+
+          echo "== 6. SMOKE (repo scripts/smoke.sh, salt-okur GET) =="
+          API_BASE=http://127.0.0.1:9000 WEB_BASE=http://127.0.0.1:3000 bash "$APP/scripts/smoke.sh" 2>&1 | tail -20
+
+          echo "== 7. CALISMA ZAMANI DOSYALARI (isim + zaman, icerik YOK) =="
+          for f in tick_worker.lock learning_summary.json tf_scoring_v2_shadow.json paper_state.json regime_state.json; do
+            p="$APP/data/runtime/$f"; [ -e "$p" ] && stat -c '%y  %n' "$p" || echo "yok: $f"
+          done
+          LATEST=$(find "$APP/data/runtime/snapshots" -maxdepth 1 -name "*.json" -printf "%T@ %p\n" 2>/dev/null | sort -rn | sed -n 1p | cut -d" " -f2-)
+          echo "en yeni snapshot: $(basename "${LATEST:-yok}") | entry_contexts anahtari: $( [ -n "${LATEST:-}" ] && grep -c '"entry_contexts"' "$LATEST" || echo 0 )"
+
+          echo "== 8. HATA LOGLARI (supervisor, son baslangictan beri; secret maskeli) =="
+          SINCE=$(systemctl show -p ActiveEnterTimestamp --value eyay-supervisor.service)
+          JOUT=$(journalctl -u eyay-supervisor.service --since "$SINCE" --no-pager 2>&1 || true)
+          if echo "$JOUT" | grep -qiE "insufficient permissions|not seeing messages|no journal files"; then
+            echo "journal erisimi yok (runner kullanicisi okuyamiyor)"
+          else
+            echo "toplam log satiri: $(echo "$JOUT" | wc -l)"
+            echo "traceback/exception/critical satiri: $(echo "$JOUT" | grep -ciE 'traceback|exception|critical' || true)"
+            echo "ERROR seviyesi satiri: $(echo "$JOUT" | grep -cE ' ERROR ' || true)"
+            echo "entry_quality_v2 teknik fallback uyarisi: $(echo "$JOUT" | grep -c 'teknik fallback' || true)"
+            echo "--- son 15 ERROR/Traceback/Exception satiri (maskeli) ---"
+            echo "$JOUT" | grep -iE ' ERROR |traceback|exception|critical|teknik fallback' | tail -15 | redact
+            echo "--- baslangic satirlari ---"
+            echo "$JOUT" | grep -iE 'tick|learning|supervisor|startup|started' | head -6 | redact
+            echo "--- tick asama sureleri (son 3) ---"
+            echo "$JOUT" | grep 'aşama süreleri' | tail -3 | redact
+          fi
+          echo "== BITTI =="
