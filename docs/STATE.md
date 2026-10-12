@@ -17,11 +17,21 @@ snapshot (fiyat + OHLCV + makro + haber, DQS)
   → rejim → 5 modül konsensüs (touche, fundamental, news, sentinel, quantum)
   → decide_matrix: sembol × TF hücreleri (15m, 1h, 4h, 1d, 1w)
       RiskGate ÖNCE (KILL_SWITCH / RISK_REDUCE / NO_POSITION_INCREASE)
+      → giriş kalitesi v2 (yön ≠ giriş zamanlaması; yalnız kısıtlar: WAIT / boyut ↓)
       → güven tabanı → EV kapısı → boyut katmanları → korelasyon/konsantrasyon
   → gates (seans, conflict gate) → attempt_open (fiyat bekçisi, duplicate, reentry)
   → paper lifecycle (SL/TP, kapanış-bazlı stop + acil fren, trailing, time-stop)
   → kapanış → decision_log → learning worker
 ```
+
+## Giriş kalitesi v2 (yön ≠ giriş zamanlaması)
+
+Konsensüs yönü korunur; "şimdi girmek mantıklı mı" ayrıca ölçülür (aralık konumu, ATR-normalize
+uzama, RSI bandı, Bollinger, yaşa göre sönümlü dönüş olayları). Kötü giriş WAIT olur, **asla**
+zıt yöne çevrilmez; boyut artmaz. Modu nereden okuyacağın: `config/thresholds_v1.0.yaml →
+entry_quality_v2.mode` (`off` | `shadow` | `active`); `shadow` karar değiştirmez, eski/yeni karar
+matrix hücresinde `entry_quality` altında yan yana birikir. Tasarım, ölçüm ve geri alma:
+[ENTRY_QUALITY_V2](ENTRY_QUALITY_V2.md); kanıt: `docs/evidence/entry_quality_v2/`.
 
 ## Süreçler (gerçek topoloji)
 
