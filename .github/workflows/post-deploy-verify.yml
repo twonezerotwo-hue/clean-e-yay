@@ -137,4 +137,12 @@ jobs:
             echo "--- tick asama sureleri (son 3) ---"
             echo "$JOUT" | grep 'aşama süreleri' | tail -3 | redact
           fi
+          echo "== 9. RESTART/STOP GECMISI (salt-okur; SIGKILL tek seferlik mi?) =="
+          systemctl show eyay-supervisor.service -p TimeoutStopUSec -p KillMode -p Restart
+          ALL=$(journalctl -u eyay-supervisor.service --since "-3 days" --no-pager 2>&1 || true)
+          echo "son 3 gunde 'Started eyay-supervisor' (restart) sayisi: $(echo "$ALL" | grep -c 'Started eyay-supervisor' || true)"
+          echo "son 3 gunde 'stop-sigterm timed out' (SIGKILL ile durdurma) sayisi: $(echo "$ALL" | grep -c "stop-sigterm' timed out" || true)"
+          echo "son 3 gunde 'Deactivated successfully' (temiz durdurma) sayisi: $(echo "$ALL" | grep -c 'Deactivated successfully' || true)"
+          echo "--- stop-sigterm timed out zamanlari ---"
+          echo "$ALL" | grep "stop-sigterm' timed out" | cut -c1-60 | tail -10
           echo "== BITTI =="
