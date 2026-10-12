@@ -62,10 +62,14 @@ def analyze(symbols: list[str] | None = None) -> dict:
     Salt-hesap; hiçbir yan etki yok. Rejim-anahtarlı konuşan TF'te ikisini de
     üretir → canlı touche kademesi + doğrulama karnesi (race) buradan beslenir."""
     from packages.data.providers.ohlcv import get_bars, history
+    from packages.scoring import entry_quality
     from packages.scoring import tf_scoring_v2 as v2
     from packages.scoring import tf_scoring_v4 as v4
     from packages.signals import regime_gate
 
+    # 0-2 lensi: false (varsayılan) → eski find_setups(...)[-1] (bayt-aynı);
+    # true → zero_two.analyze() geçerlilik + bayatlama (entry_quality_v2.zero_two_canonical).
+    canonical_zero_two = entry_quality.zero_two_canonical()
     scorecard = _load_scorecard()
     # v4 bölge merceği: zone_proposer artifact'ı REUSE (yeniden hesap yok —
     # "katmanlar birbirinden haberdar"). Artifact yoksa bölge/uyumsuzluk lean=0.
@@ -96,7 +100,8 @@ def analyze(symbols: list[str] | None = None) -> dict:
                 base_leans = v2.collect_leans(tf, bars)
                 # v4: leans REUSE + bölge (artifact) + kapılı-uyumsuzluk
                 s_v4 = v4.tf_direction(tf, v4.compute_leans(
-                    tf, bars, zones_by_symbol.get(sym, []), base_leans))
+                    tf, bars, zones_by_symbol.get(sym, []), base_leans,
+                    canonical_zero_two=canonical_zero_two))
                 if s_v4 is not None:
                     tf_scores_v4[tf] = round(s_v4, 4)
                 # backup: yalnız EDGE-kanıtlılar, karne ağırlıklarıyla
