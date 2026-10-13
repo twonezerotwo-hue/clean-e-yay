@@ -1860,6 +1860,18 @@ html, body {
   padding-right: 0;
 }
 
+/* Geniş ekran: hologram + fikir bannerı + durum özeti dikeyde sığmazsa orta sütun KIRPILMAZ, kaydırılır. */
+@media (min-width: 1280px) {
+  .layer0-center-stack {
+    overflow-y: auto;
+    scrollbar-width: none;
+  }
+
+  .layer0-center-stack::-webkit-scrollbar {
+    display: none;
+  }
+}
+
 .layer0-status-core {
   position: relative;
   overflow: hidden;
@@ -3555,7 +3567,9 @@ html, body {
   }
 
   .layer0-mobile-flow .layer0-center-stack {
-    overflow: hidden;
+    overflow-x: hidden;
+    overflow-y: auto;
+    scrollbar-width: none;
   }
 
   .layer0-mobile-flow .reporter-model-card {
@@ -3566,7 +3580,7 @@ html, body {
 
   .layer0-mobile-flow .layer0-status-core {
     flex: 1 1 auto;
-    min-height: 0;
+    min-height: 8.5rem;
     max-height: none;
     overflow-y: auto;
   }

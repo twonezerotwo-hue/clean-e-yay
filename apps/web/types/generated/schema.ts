@@ -330,6 +330,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/paper-trading/ideas/{symbol}/open": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Fikir Panosu onayı — owner tıklamasıyla paper pozisyon açar (gerçek emir YOK; RiskGate/fiyat/duplicate guard'ları geçerli) */
+        post: operations["postPaperTradingIdeaOpen"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/paper-trading/manual-ready/{manual_id}/reject": {
         parameters: {
             query?: never;
@@ -4090,6 +4107,45 @@ export interface components {
             /** @description İnceleme tavsiyesi koşulunu sağlıyor (bildirim gitti/gidecek) */
             review?: boolean;
             ai?: components["schemas"]["IdeaEvaluation"];
+            paper_open?: components["schemas"]["IdeaPaperOpen"];
+        };
+        /** @description Fikrin owner onayıyla paper pozisyona çevrilebilirliği — backend ön-durumu (ağ çağrısı yok; asıl doğrulama onay anında tekrarlanır). Frontend hesap yapmaz; `reason` gerçek engeldir. */
+        IdeaPaperOpen: {
+            /** @enum {string} */
+            state: "READY" | "NO_IDEA" | "NO_SIGNAL" | "SIGNAL_EXPIRED" | "ALREADY_OPEN" | "RISK_BLOCKED" | "DATA_UNAVAILABLE";
+            can_open: boolean;
+            reason: string;
+            /** @description Fikirden türetilen yön (yalnız long) */
+            side?: string | null;
+            timeframe?: string | null;
+            /** @description Planlanan paper boyut (yalnız READY) */
+            size_usd?: number | null;
+            /** @description Sinyal geçerlilik sonu */
+            expires_at?: string | null;
+            /** @description ALREADY_OPEN ise mevcut pozisyon/emir kimliği */
+            position_id?: string | null;
+            checked_at?: string;
+        };
+        /** @description Fikir onayıyla açılan paper pozisyon özeti (SL/TP sistemin risk planından gelir). */
+        IdeaPaperPosition: {
+            position_id: string;
+            symbol: string;
+            side: string;
+            entry_price: number;
+            size_usd: number;
+            opened_at: string;
+            timeframe?: string | null;
+            sl?: number | null;
+            tp?: number | null;
+        };
+        /** @description Onay sonucu. status=opened → position dolu; blocked → state + gerçek engel nedeni. */
+        IdeaPaperOpenResult: {
+            /** @enum {string} */
+            status: "opened" | "blocked";
+            /** @enum {string} */
+            state: "OPENED" | "NO_IDEA" | "NO_SIGNAL" | "SIGNAL_EXPIRED" | "ALREADY_OPEN" | "RISK_BLOCKED" | "DATA_UNAVAILABLE";
+            reason: string;
+            position?: components["schemas"]["IdeaPaperPosition"];
         };
         /** @description Keşif taramasının TF başına kompakt teknik analiz özeti (yeni hesap yok). */
         IdeaTaSummary: ({
@@ -4780,6 +4836,28 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+        };
+    };
+    postPaperTradingIdeaOpen: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                symbol: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK (status=opened|blocked; engel durumunda state + gerçek reason döner) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IdeaPaperOpenResult"];
+                };
             };
         };
     };

@@ -462,10 +462,13 @@ def get_idea_board() -> dict:
     """Fikir Panosu (owner kararı 2026-10-05) — salt-okuma.
 
     Learning worker'ın yazdığı artifact'ı sunar: keşif + haber öngörüsü + teknik
-    özet + gölge karne + YZ değerlendirmesi. İşlem açmaz, evrene eklemez."""
+    özet + gölge karne + YZ değerlendirmesi. İşlem açmaz, evrene eklemez. Her fikre
+    `paper_open` eklenir: owner onayıyla paper pozisyon açılabilir mi (salt-okuma ön-durum)."""
     from packages.discovery import ideas
+    from packages.paper import idea_order
 
-    return ideas.viewmodel()
+    # Fikir başına `paper_open` ön-durumu (ağ çağrısı yok): onay butonunun pasif/aktif nedeni.
+    return idea_order.annotate_board(ideas.viewmodel())
 
 
 @router.get("/learning/subsignal-scorecard")

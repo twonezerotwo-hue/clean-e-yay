@@ -18,7 +18,7 @@ from pydantic import BaseModel, Field
 from packages.data.ingestion.pipeline import build_snapshot
 from packages.notifications import list_recent, mark_ack, mark_all_ack, unread_count
 from packages.paper import audit as paper_audit
-from packages.paper import maintenance, manual_order, manual_queue, ticket
+from packages.paper import idea_order, maintenance, manual_order, manual_queue, ticket
 from packages.paper import state as paper_state
 from packages.paper.guards import price_sanity, state_anomaly
 from packages.paper.lifecycle import close_position, max_drawdown_pct
@@ -328,6 +328,17 @@ def open_position_manual(req: ManualOrderRequest) -> dict:
     except manual_order.ManualOrderError as exc:
         raise HTTPException(status_code=exc.code, detail=str(exc)) from exc
     return {"status": "ok", **res}
+
+
+@router.post("/paper-trading/ideas/{symbol}/open")
+def open_idea_paper_position(symbol: str) -> dict:
+    """Fikir Panosu onayı → paper pozisyon (owner tıklaması). Gerçek broker emri YOK.
+
+    Mantık `packages/paper/idea_order`'da: fikre özgü ön koşullar + MEVCUT `manual_order.place`
+    (RiskGate / fiyat / price-sanity / bakiye) aynı defter kilidi altında. Doğrulama sonucu
+    HTTP 200 + `status` (opened|blocked) + `state` + gerçek `reason` ile döner (engel bir
+    hata değil, alan sonucudur — `manual-ready/approve` ile aynı desen)."""
+    return idea_order.open_from_idea(symbol)
 
 
 @router.get("/paper-trading/orders")

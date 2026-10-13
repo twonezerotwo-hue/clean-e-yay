@@ -41,6 +41,12 @@ def _primary_for(symbol: str):
         return fred
     return None
 
+def has_live_source(symbol: str) -> bool:
+    """Sembolün birincil canlı fiyat kaynağı tanımlı mı? AĞ ÇAĞRISI YOK (yalnız eşleme).
+    False → `get_quote` DATA_UNAVAILABLE döner; paper emri için fiyat bulunamaz."""
+    return _primary_for(symbol) is not None
+
+
 # Sembol → birincil başarısız olursa sırayla denenecek fallback modülleri.
 # Sadece kripto/değerli metal — birincil sağlayıcı (coingecko/yfinance)
 # rate-limit veya geçici hata verirse devreye girer.

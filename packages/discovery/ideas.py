@@ -507,6 +507,16 @@ def viewmodel() -> dict:
     }
 
 
+def find(symbol: str) -> tuple[dict | None, str | None]:
+    """Panodaki fikir (sembol eşleşmesi) + panonun üretim zamanı. Yoksa (None, zaman).
+    Salt-okuma; viewmodel'in ek yüklerini (haber keşfi) çağırmaz."""
+    state = _load()
+    for idea in state.get("ideas") or []:
+        if idea.get("symbol") == symbol:
+            return idea, state.get("generated_at")
+    return None, state.get("generated_at")
+
+
 def compact_for_chat(limit: int = 3) -> dict[str, Any]:
     """Sohbet bağlamı: en yüksek skorlu fikirlerin kısa özeti (salt-gözlem)."""
     state = _load()
@@ -525,5 +535,5 @@ def compact_for_chat(limit: int = 3) -> dict[str, Any]:
 
 
 __all__ = ["build_ideas", "compact_for_chat", "dossier", "evaluation_for", "fallback_evaluation",
-           "is_review_candidate", "parse_evaluation", "review_notification", "review_recommendations", "run",
+           "find", "is_review_candidate", "parse_evaluation", "review_notification", "review_recommendations", "run",
            "score_idea", "viewmodel"]

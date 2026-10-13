@@ -638,6 +638,9 @@ correlation_baseline:
 paper_trading:
   initial_equity_usd: 100000
   max_position_usd: 25000
+  # Fikir Panosu onayı (ONAYLA ve KAĞIT İŞLEMİ AÇ) için base boyut çarpanı: boyut =
+  # max_position_usd × bu çarpan × seans çarpanı × korelasyon-küme faktörü (yalnız KÜÇÜLÜR).
+  idea_open_size_multiplier: 0.25
   # Paper-only exploration: lets the running simulator collect bounded forward
   # evidence when a candidate is stopped only by confidence/EV soft gates.
   # Risk, stale-data, session, price-sanity, duplicate and position-cap gates
