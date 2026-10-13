@@ -8,6 +8,7 @@
 | Yöntem | Kod okuma + statik analiz (AST import grafiği, referans sayımı, vulture, ruff, tsc) + komut koşuları + **küçük izole deneyler** (aşağıda "Kanıt: ✔ repro") |
 | Değişen dosya | Yalnız bu rapor. Kaynak ağaca dokunulmadı; tüm koşular repo kopyasında (geçici dizin) yapıldı. |
 | İşaret | **BELİRSİZ** = kanıtlayamadım / niyet repodan okunamıyor. Tahmin gerçek gibi yazılmadı. |
+| Durum notu (2026-10-13) | Bu rapor `61ef58c` anının görüntüsüdür. Sonradan main'e giren değişiklikler (ör. PR #58 `fix: close p0 risk and manual order bypasses`) bazı bulguları kapatmış olabilir; raporun bulguları yeniden doğrulanmadı. Güncel durum için `docs/STATE.md` esastır. |
 
 **Önemli okuma notu.** İstenen üç dosya (`docs/AGENT_CONTEXT.md`, `docs/CURRENT_STATE.md`, `.tasks/NEXT_TASK.md`)
 artık kökte yok; `docs/archive/` altına taşınmış ve **2026-07 durumunu** anlatıyor ("Backend FREEZE", "pytest 419/419").
