@@ -2389,6 +2389,48 @@ export type Idea = {
   news_chain?: IdeaChainLink[];
   review?: boolean;
   ai?: IdeaEvaluation;
+  paper_open?: IdeaPaperOpen;
+};
+
+// Fikir onayı → paper pozisyon (owner tıklaması; gerçek emir YOK). Backend ön-durumu + sonuç.
+export type IdeaPaperOpenState =
+  | "READY"
+  | "NO_IDEA"
+  | "NO_SIGNAL"
+  | "SIGNAL_EXPIRED"
+  | "ALREADY_OPEN"
+  | "RISK_BLOCKED"
+  | "DATA_UNAVAILABLE";
+
+export type IdeaPaperOpen = {
+  state: IdeaPaperOpenState;
+  can_open: boolean;
+  reason: string;
+  side?: string | null;
+  timeframe?: string | null;
+  size_usd?: number | null;
+  expires_at?: string | null;
+  position_id?: string | null;
+  checked_at: string;
+};
+
+export type IdeaPaperPosition = {
+  position_id: string;
+  symbol: string;
+  side: string;
+  entry_price: number;
+  size_usd: number;
+  opened_at: string;
+  timeframe?: string | null;
+  sl?: number | null;
+  tp?: number | null;
+};
+
+export type IdeaPaperOpenResult = {
+  status: "opened" | "blocked";
+  state: IdeaPaperOpenState | "OPENED";
+  reason: string;
+  position?: IdeaPaperPosition;
 };
 
 export type NewsForecastScorecard = {

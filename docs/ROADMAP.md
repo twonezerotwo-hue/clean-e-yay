@@ -121,7 +121,8 @@ listeler. Temizlik boyunca yeni özellik, yeni flag, yeni veri kaynağı eklenme
 - **Haber girdisini karara bağlamak (gölge → aktif):** CP5 kırmızı çizgi. Kanıt:
   `news_decision_shadow.scorecard()` — haber çelişen adayların isabeti teyit edilenlerden
   belirgin düşükse (yeterli örnekle) owner onayına sunulur. Fikir → paper işlem
-  bağlantısı da aynı kurala tabi.
+  bağlantısı da aynı kurala tabi (owner'ın Brain bannerından elle onaylayıp paper açması hariç:
+  docs/STATE.md "Keşif & Fikir Panosu"; o yol karar motoruna bağlanmaz).
 
 ## Temizlikten sonra (ölçüm işleri)
 

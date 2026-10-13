@@ -14,6 +14,7 @@ import { api } from "@/lib/api/client";
 import { streamChat, type ChatStreamStatus } from "@/lib/api/chatStream";
 import { selectDqs, selectSnapshotMeta } from "@/lib/selectors/snapshot";
 import type { AgentBriefing, ChatResponse, ChatTurn, Position } from "@/types/generated/api";
+import { HologramAssetIdeaBanner } from "./HologramAssetIdeaBanner";
 import {
   Layer0HumanComputerModel,
   type Layer0DataQualityPulse,
@@ -1421,6 +1422,9 @@ export function Layer0ReporterAgent({
             </div>
           </div>
         </div>
+
+        {/* Hologramın altında: Heart "Yeni Asset" panelinin kompakt görünümü (aynı useIdeas sorgusu). */}
+        <HologramAssetIdeaBanner />
 
         <Layer0StatusCore hero={hero} onNavigate={onNavigate} />
       </div>

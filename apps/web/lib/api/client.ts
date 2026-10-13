@@ -48,6 +48,7 @@ import type {
   ExitForensicsView,
   DiscoveryView,
   IdeaBoardView,
+  IdeaPaperOpenResult,
   BacktestChallengerView,
   GuardSafetyView,
   CalibrationJumpsView,
@@ -688,6 +689,12 @@ export const api = {
     fetchJSON<NewsEventStudyView>("/api/v1/learning/news-event-study"),
   discovery: () => fetchJSON<DiscoveryView>("/api/v1/learning/discovery"),
   ideas: () => fetchJSON<IdeaBoardView>("/api/v1/ideas"),
+  // Fikir onayı → paper pozisyon (gerçek emir YOK). Engel durumu da HTTP 200 + status/state/reason döner.
+  openIdeaPaperPosition: (symbol: string) =>
+    fetchJSON<IdeaPaperOpenResult>(
+      `/api/v1/paper-trading/ideas/${encodeURIComponent(symbol)}/open`,
+      { method: "POST" },
+    ),
   evidenceBus: () => fetchJSON<EvidenceBusView>("/api/v1/learning/evidence-bus"),
   backtestChallenger: () =>
     fetchJSON<BacktestChallengerView>("/api/v1/learning/backtest-challenger"),

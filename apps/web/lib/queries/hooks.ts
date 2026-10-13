@@ -567,6 +567,24 @@ export const useIdeas = () => {
   });
 };
 
+// Fikir onayı → paper pozisyon. Sonuç (açıldı ya da gerçek engel nedeniyle reddedildi) ne olursa olsun
+// ön-durum (ideas) ve açık pozisyonlar yenilenir; açıldıysa Brain özeti (cockpit brief) de.
+export const useOpenIdeaPaperPosition = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (symbol: string) => api.openIdeaPaperPosition(symbol),
+    onSuccess: (result) => {
+      if (result.status === "opened") {
+        void queryClient.invalidateQueries({ queryKey: qk.cockpitBrief });
+      }
+    },
+    onSettled: () => {
+      void queryClient.invalidateQueries({ queryKey: qk.paperTradingState });
+      void queryClient.invalidateQueries({ queryKey: qk.ideas });
+    },
+  });
+};
+
 export const useBacktestChallenger = () => {
   const policy = usePanelQueryPolicy(5 * 60_000);
   return useQuery({

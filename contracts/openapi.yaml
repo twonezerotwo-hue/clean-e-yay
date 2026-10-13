@@ -311,6 +311,23 @@ paths:
         "404":
           description: manual_id kuyrukta yok (not_found)
 
+  /api/v1/paper-trading/ideas/{symbol}/open:
+    post:
+      operationId: postPaperTradingIdeaOpen
+      summary: Fikir Panosu onayı — owner tıklamasıyla paper pozisyon açar (gerçek emir YOK; RiskGate/fiyat/duplicate guard'ları geçerli)
+      parameters:
+        - name: symbol
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: OK (status=opened|blocked; engel durumunda state + gerçek reason döner)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/IdeaPaperOpenResult"
+
   /api/v1/paper-trading/manual-ready/{manual_id}/reject:
     post:
       operationId: postPaperTradingManualReadyReject
@@ -5088,6 +5105,53 @@ components:
           items: { $ref: "#/components/schemas/IdeaChainLink" }
         review: { type: boolean, description: "İnceleme tavsiyesi koşulunu sağlıyor (bildirim gitti/gidecek)" }
         ai: { $ref: "#/components/schemas/IdeaEvaluation" }
+        paper_open: { $ref: "#/components/schemas/IdeaPaperOpen" }
+
+    IdeaPaperOpen:
+      type: object
+      description: >
+        Fikrin owner onayıyla paper pozisyona çevrilebilirliği — backend ön-durumu (ağ çağrısı yok;
+        asıl doğrulama onay anında tekrarlanır). Frontend hesap yapmaz; `reason` gerçek engeldir.
+      required: [state, can_open, reason]
+      properties:
+        state:
+          type: string
+          enum: [READY, NO_IDEA, NO_SIGNAL, SIGNAL_EXPIRED, ALREADY_OPEN, RISK_BLOCKED, DATA_UNAVAILABLE]
+        can_open: { type: boolean }
+        reason: { type: string }
+        side: { type: string, nullable: true, description: "Fikirden türetilen yön (yalnız long)" }
+        timeframe: { type: string, nullable: true }
+        size_usd: { type: number, nullable: true, description: "Planlanan paper boyut (yalnız READY)" }
+        expires_at: { type: string, nullable: true, description: "Sinyal geçerlilik sonu" }
+        position_id: { type: string, nullable: true, description: "ALREADY_OPEN ise mevcut pozisyon/emir kimliği" }
+        checked_at: { type: string }
+
+    IdeaPaperPosition:
+      type: object
+      description: Fikir onayıyla açılan paper pozisyon özeti (SL/TP sistemin risk planından gelir).
+      required: [position_id, symbol, side, entry_price, size_usd, opened_at]
+      properties:
+        position_id: { type: string }
+        symbol: { type: string }
+        side: { type: string }
+        entry_price: { type: number }
+        size_usd: { type: number }
+        opened_at: { type: string }
+        timeframe: { type: string, nullable: true }
+        sl: { type: number, nullable: true }
+        tp: { type: number, nullable: true }
+
+    IdeaPaperOpenResult:
+      type: object
+      description: Onay sonucu. status=opened → position dolu; blocked → state + gerçek engel nedeni.
+      required: [status, state, reason]
+      properties:
+        status: { type: string, enum: [opened, blocked] }
+        state:
+          type: string
+          enum: [OPENED, NO_IDEA, NO_SIGNAL, SIGNAL_EXPIRED, ALREADY_OPEN, RISK_BLOCKED, DATA_UNAVAILABLE]
+        reason: { type: string }
+        position: { $ref: "#/components/schemas/IdeaPaperPosition" }
 
     IdeaTaSummary:
       type: object
