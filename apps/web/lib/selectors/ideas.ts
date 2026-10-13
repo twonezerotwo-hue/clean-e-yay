@@ -27,9 +27,13 @@ export function dedupeIdeas(board: IdeaBoardView | undefined): Idea[] {
   return Array.from(seen.values());
 }
 
-/** Brain bannerının gösterdiği fikir: panonun en yüksek skorlu (ilk) fikri. */
-export function selectBannerIdea(board: IdeaBoardView | undefined): Idea | null {
-  return dedupeIdeas(board)[0] ?? null;
+/** Brain bannerı fikirleri sırayla gösterir: `symbol`'den `delta` adım sonraki fikrin sembolü (başa/sona sarar). */
+export function stepIdea(ideas: Idea[], symbol: string | null | undefined, delta: number): string | null {
+  if (ideas.length === 0) return null;
+  const at = ideas.findIndex((idea) => idea.symbol === (symbol ?? ideas[0].symbol));
+  // Gösterilen sembol panodan kalktıysa başa dön.
+  if (at < 0) return ideas[0].symbol;
+  return ideas[(((at + delta) % ideas.length) + ideas.length) % ideas.length].symbol;
 }
 
 export function ideaDirection(direction: string | null | undefined): { text: string; tone: string } {

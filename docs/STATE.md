@@ -195,7 +195,7 @@ Okuma (owner kararı 2026-10-05, üçüncü tur — ayrı panel YOK):
   `analytics_only`.
 - Ham veri: `GET /api/v1/ideas`. Dünya Özeti'nin detayı Soul katmanında.
 - **Owner onaylı paper açma (Brain bannerı):** Brain'de hologramın altındaki "Yeni Asset Fikri"
-  bannerı Heart panelindeki aynı fikri (`useIdeas()`) özetler; `ONAYLA ve KAĞIT İŞLEMİ AÇ`
+  bannerı Heart panelindeki fikirleri (`useIdeas()`) 3 sn arayla sırayla gösterir (üzerine gelince/eylemden sonra durur); `ONAYLA ve KAĞIT İŞLEMİ AÇ`
   yalnız paper pozisyon açar (`POST /api/v1/paper-trading/ideas/{symbol}/open`,
   `packages/paper/idea_order.py` → `manual_order.place`). RiskGate, günlük zarar, max pozisyon,
   aynı sembolde açık pozisyon ve sinyal süresi kilit içinde yeniden doğrulanır; engel varsa emir

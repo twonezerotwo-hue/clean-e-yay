@@ -1,17 +1,18 @@
 "use client";
 
-import { useMemo, useRef, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 
 import { PanelFrame } from "@/components/shell/PanelFrame";
 import { PanelHeader } from "@/components/shell/PanelHeader";
 import { fmtNum, fmtUSD } from "@/lib/format";
 import { useIdeas, useOpenIdeaPaperPosition, usePaperTradingState } from "@/lib/queries/hooks";
 import {
+  dedupeIdeas,
   fmtIdeaStamp,
-  selectBannerIdea,
   selectIdeaBannerFacts,
   selectOpenedPosition,
   selectPaperOpenView,
+  stepIdea,
   type IdeaOpenPhase,
   type PaperButtonView,
 } from "@/lib/selectors/ideas";
@@ -21,6 +22,12 @@ import type { IdeaPaperOpenResult } from "@/types/generated/api";
 // Veri: MEVCUT useIdeas() (Heart paneliyle aynı sorgu — ikinci fetch/polling YOK). Onay butonu MEVCUT paper
 // emir yoluna bağlıdır (POST /paper-trading/ideas/{symbol}/open → manual_order.place); RiskGate/limit
 // doğrulaması backend'dedir, buton hiçbirini bypass edemez. Gerçek broker emri YOK.
+// Panodaki TÜM fikirler ROTATE_MS arayla sırayla gösterilir (yalnız bir görsel zamanlayıcı — veri çekmez).
+// Üzerine gelince/odaklanınca/tıklayınca ve onay sürerken döngü durur; böylece okunan ya da onaylanan fikir kaymaz.
+// Banner yüksekliği her fikirde SABİT tutulur: yükseklik değişirse hologram kartı her turda yeniden boyutlanır.
+
+const ROTATE_MS = 3000;
+const HOLD_MS = 10000; // kullanıcı eyleminden sonra döngü bu kadar bekler (sonuç okunabilsin)
 
 const BUTTON_TONE: Record<PaperButtonView["tone"], string> = {
   ready: "border-accent-cyan/55 bg-accent-cyan/15 text-accent-cyan hover:bg-accent-cyan/25",
@@ -30,18 +37,31 @@ const BUTTON_TONE: Record<PaperButtonView["tone"], string> = {
   muted: "border-white/15 bg-white/[0.03] text-white/45",
 };
 
+// Onay sonucu/hatası YAZILDIĞI sembole bağlıdır; döngü başka fikre geçince başka fikirde görünmez.
+type Attempt = { symbol: string; outcome?: IdeaPaperOpenResult; error?: string };
+
 function Fact({ label, children, title }: { label: string; children: ReactNode; title?: string }) {
   return (
     <div className="min-w-0" title={title}>
-      <div className="text-[8px] uppercase tracking-widest text-white/35">{label}</div>
+      <div className="text-[8px] uppercase leading-[10px] tracking-widest text-white/35">{label}</div>
       <div className="truncate font-mono text-[11px] text-white/80">{children}</div>
     </div>
   );
 }
 
-function Stat({ label, children, title }: { label: string; children: ReactNode; title?: string }) {
+function Stat({
+  label,
+  children,
+  title,
+  className = "shrink-0",
+}: {
+  label: string;
+  children: ReactNode;
+  title?: string;
+  className?: string;
+}) {
   return (
-    <span className="min-w-0 whitespace-nowrap" title={title}>
+    <span className={`whitespace-nowrap ${className}`} title={title}>
       <span className="text-[9px] uppercase tracking-widest text-white/35">{label} </span>
       <span className="font-mono text-[11px] text-white/80">{children}</span>
     </span>
@@ -61,174 +81,244 @@ export function HologramAssetIdeaBanner() {
   const ideas = useIdeas();
   const paper = usePaperTradingState();
   const open = useOpenIdeaPaperPosition();
-  const idea = useMemo(() => selectBannerIdea(ideas.data), [ideas.data]);
+  const list = useMemo(() => dedupeIdeas(ideas.data), [ideas.data]);
+
+  const [activeSymbol, setActiveSymbol] = useState<string | null>(null);
+  const idea = list.find((item) => item.symbol === activeSymbol) ?? list[0] ?? null;
 
   const [phase, setPhase] = useState<IdeaOpenPhase>("idle");
-  const [outcome, setOutcome] = useState<IdeaPaperOpenResult | null>(null);
-  const [requestError, setRequestError] = useState<string | null>(null);
+  const [attempt, setAttempt] = useState<Attempt | null>(null);
   // setState asenkron: iki hızlı tıklama aynı render'da geçebilir → eşzamanlı kilit ref ile (backend de tekil).
   const inFlight = useRef(false);
+  const pointerInside = useRef(false);
+  const keyboardFocus = useRef(false); // yalnız klavye odağı döngüyü durdurur (fareyle tıklanan düğme odak tutar)
+  const heldUntil = useRef(0);
+  const hold = () => {
+    heldUntil.current = Date.now() + HOLD_MS;
+  };
 
-  // Başka sembole geçildiyse önceki sembolün sonucu bu fikre ait değildir.
-  const outcomeSymbol = outcome?.position?.symbol;
-  const ownOutcome = outcome && (outcomeSymbol == null || outcomeSymbol === idea?.symbol) ? outcome : null;
+  useEffect(() => {
+    if (list.length < 2) return;
+    const timer = setInterval(() => {
+      if (pointerInside.current || keyboardFocus.current || inFlight.current || Date.now() < heldUntil.current) return;
+      setActiveSymbol((prev) => stepIdea(list, prev, 1));
+      setAttempt(null); // önceki turdaki onay sonucu bayatlar
+    }, ROTATE_MS);
+    return () => clearInterval(timer);
+  }, [list]);
+
+  const go = (delta: number) => {
+    hold();
+    setAttempt(null);
+    setActiveSymbol((prev) => stepIdea(list, prev, delta));
+  };
+
+  const own = idea && attempt?.symbol === idea.symbol ? attempt : null;
 
   const confirm = async () => {
     if (!idea || inFlight.current) return;
+    const symbol = idea.symbol;
     inFlight.current = true;
-    setOutcome(null);
-    setRequestError(null);
+    hold();
+    setAttempt(null);
     try {
       // 1) DOĞRULANIYOR — ön-durum backend'den TAZE alınır (aynı sorgunun kullanıcı tetiklemeli yenilemesi).
       setPhase("verifying");
       const fresh = await ideas.refetch();
       if (fresh.isError) {
-        setRequestError(`Fikir verisi yenilenemedi: ${fresh.error instanceof Error ? fresh.error.message : "bilinmeyen hata"}`);
+        setAttempt({
+          symbol,
+          error: `Fikir verisi yenilenemedi: ${fresh.error instanceof Error ? fresh.error.message : "bilinmeyen hata"}`,
+        });
         return;
       }
-      const current = selectBannerIdea(fresh.data);
-      if (!current || current.symbol !== idea.symbol) {
-        setRequestError("Fikir panosu güncellendi, fikir değişti. Yeni fikri inceleyip tekrar onaylayın.");
+      const current = dedupeIdeas(fresh.data).find((item) => item.symbol === symbol);
+      if (!current) {
+        setAttempt({ symbol, error: "Fikir panosu güncellendi, bu fikir artık listede değil." });
         return;
       }
       if (!current.paper_open?.can_open) return; // pasif: gerçek neden bannerda (paper_open.reason) görünür
       // 2) PAPER İŞLEM AÇILIYOR — backend atomik olarak yeniden doğrular ve açar.
       setPhase("opening");
-      setOutcome(await open.mutateAsync(current.symbol));
+      setAttempt({ symbol, outcome: await open.mutateAsync(symbol) });
     } catch (error) {
-      setRequestError(error instanceof Error ? error.message : "Beklenmeyen hata");
+      setAttempt({ symbol, error: error instanceof Error ? error.message : "Beklenmeyen hata" });
     } finally {
       setPhase("idle");
       inFlight.current = false;
+      hold();
     }
   };
 
   const facts = idea ? selectIdeaBannerFacts(idea, ideas.data?.generated_at) : null;
-  const opened = idea ? selectOpenedPosition(idea, ownOutcome, paper.data?.open_positions) : null;
-  const view = idea ? selectPaperOpenView({ idea, phase, outcome: ownOutcome, opened }) : null;
+  const opened = idea ? selectOpenedPosition(idea, own?.outcome ?? null, paper.data?.open_positions) : null;
+  const view = idea ? selectPaperOpenView({ idea, phase, outcome: own?.outcome ?? null, opened }) : null;
+  const position = idea ? list.findIndex((item) => item.symbol === idea.symbol) + 1 : 0;
 
   return (
-    <PanelFrame id="hologram_asset_idea" className="hologram-idea-banner !p-2.5 shrink-0 [&_header]:!mb-1.5">
-      <PanelHeader
-        title="YENİ ASSET FİKRİ"
-        actions={
-          facts ? (
-            <>
-              <span className="text-[9px] uppercase tracking-widest text-white/35">
-                Güncelleme <span className="font-mono text-[10px] normal-case tracking-normal text-white/55">{facts.updatedAt ?? "—"}</span>
-              </span>
-              <span className="rounded bg-white/10 px-1.5 py-0.5 text-[9px] uppercase tracking-widest text-white/55">
-                {facts.kindLabel}
-              </span>
-            </>
-          ) : undefined
-        }
-      />
-
-      {ideas.isLoading ? (
-        <p className="py-2 text-[11px] text-white/40">Fikir verisi yükleniyor…</p>
-      ) : ideas.isError ? (
-        // API hatası — veri yokluğundan AYRI gösterilir.
-        <div className="flex items-center justify-between gap-2 py-1 text-[11px] text-red-200/80">
-          <span>Fikir verisi alınamadı.</span>
-          <button
-            type="button"
-            onClick={() => void ideas.refetch()}
-            className="rounded border border-white/15 bg-white/[0.04] px-2 py-0.5 text-[9px] uppercase tracking-widest text-slate-300 hover:bg-white/[0.08]"
-          >
-            Yenile
-          </button>
-        </div>
-      ) : !idea || !facts || !view ? (
-        <p className="py-2 text-[11px] italic text-white/40">Henüz yeni asset fikri yok.</p>
-      ) : (
-        <div className="space-y-1 leading-4">
-          <div className="flex items-baseline gap-x-2 leading-5">
-            <span className="font-mono text-sm font-bold text-white/90">{facts.symbol}</span>
-            <span className="min-w-0 flex-1 truncate text-[11px] text-white/55">{facts.name}</span>
-            <span className={`text-[11px] font-semibold uppercase ${facts.direction.tone}`}>{facts.direction.text}</span>
-          </div>
-
-          <div className="flex flex-wrap gap-x-3">
-            <Stat label="Skor">{facts.score}</Stat>
-            <Stat label="Güven">{facts.confidencePct != null ? `%${facts.confidencePct}` : "—"}</Stat>
-            <Stat label="Zaman dilimi">{facts.timeframe ?? "—"}</Stat>
-          </div>
-          <p className="truncate text-[10px]" title={facts.techText}>
-            <span className="text-[9px] uppercase tracking-widest text-white/35">Teknik teyit </span>
-            <span className={`font-mono ${facts.techConfirmed ? "text-emerald-300" : "text-amber-200"}`}>{facts.techText}</span>
-          </p>
-
-          <p className="truncate text-[10px] text-white/55" title={facts.impact ?? undefined}>
-            <span className="text-white/35">Haber etkisi: </span>
-            {facts.impact ?? "—"}
-          </p>
-
-          {opened ? (
-            <div
-              className="rounded border border-emerald-400/30 bg-emerald-400/[0.06] p-1.5"
-              data-testid="idea-opened"
-            >
-              <div className="grid grid-cols-2 gap-x-2 gap-y-1 sm:grid-cols-4">
-                <Fact label="Sembol">{opened.symbol}</Fact>
-                <Fact label="Yön">{opened.side === "long" ? "LONG" : "SHORT"}</Fact>
-                <Fact label="Giriş fiyatı">{fmtNum(opened.entry_price, opened.entry_price >= 100 ? 2 : 4)}</Fact>
-                <Fact label="Pozisyon">{fmtUSD(opened.size_usd)}</Fact>
-                <Fact label="Açılış">{fmtIdeaStamp(opened.opened_at) ?? "—"}</Fact>
-                <Fact label="İşlem kimliği" title={opened.position_id}>{opened.position_id}</Fact>
-                <Fact label="Stop-loss">{opened.sl != null ? fmtNum(opened.sl, opened.sl >= 100 ? 2 : 4) : "—"}</Fact>
-                <Fact label="Take-profit">{opened.tp != null ? fmtNum(opened.tp, opened.tp >= 100 ? 2 : 4) : "—"}</Fact>
-              </div>
-            </div>
-          ) : (
-            // "Neden?" tek satır; tıklayınca takip koşulu + haber–varlık ilişkisi açılır (hologram boyu korunur).
-            <details className="group text-[10px]" data-testid="idea-details">
-              <summary
-                className="flex cursor-pointer list-none items-baseline gap-1 text-white/55 marker:content-none [&::-webkit-details-marker]:hidden"
-                title={facts.why ?? undefined}
-              >
-                <span className="text-[8px] text-accent-cyan/70 transition-transform group-open:rotate-90" aria-hidden>▶</span>
-                <span className="min-w-0 flex-1 truncate group-open:whitespace-normal">
-                  <span className="text-white/35">Neden?: </span>
-                  {facts.why ?? "—"}
+    <PanelFrame id="hologram_asset_idea" className="hologram-idea-banner !p-2.5 shrink-0 [&_header]:!mb-1.5 [&_h3]:whitespace-nowrap">
+      <div
+        onPointerEnter={() => {
+          pointerInside.current = true;
+        }}
+        onPointerLeave={() => {
+          pointerInside.current = false;
+        }}
+        onPointerDown={hold}
+        onFocusCapture={(event) => {
+          keyboardFocus.current = event.target.matches(":focus-visible");
+        }}
+        onBlurCapture={() => {
+          keyboardFocus.current = false;
+        }}
+      >
+        <PanelHeader
+          title="YENİ ASSET FİKRİ"
+          actions={
+            facts ? (
+              <>
+                {list.length > 1 ? (
+                  <span className="flex items-center gap-0.5 font-mono text-[10px] text-white/55" data-testid="idea-counter">
+                    <button
+                      type="button"
+                      onClick={() => go(-1)}
+                      disabled={phase !== "idle"}
+                      aria-label="Önceki fikir"
+                      className="px-1 text-accent-cyan/70 hover:text-accent-cyan disabled:opacity-40"
+                    >
+                      ‹
+                    </button>
+                    {position}/{list.length}
+                    <button
+                      type="button"
+                      onClick={() => go(1)}
+                      disabled={phase !== "idle"}
+                      aria-label="Sonraki fikir"
+                      className="px-1 text-accent-cyan/70 hover:text-accent-cyan disabled:opacity-40"
+                    >
+                      ›
+                    </button>
+                  </span>
+                ) : null}
+                <span className="whitespace-nowrap text-[9px] uppercase tracking-widest text-white/35" title="Son güncelleme">
+                  <span className="max-[400px]:hidden">Güncelleme </span>
+                  <span className="font-mono text-[10px] normal-case tracking-normal text-white/55">{facts.updatedAt ?? "—"}</span>
                 </span>
-              </summary>
-              <div className="mt-0.5 space-y-0.5 pl-3">
-                <TextRow label="Takip koşulu" text={facts.followCondition} />
-                <TextRow label="Haber–varlık ilişkisi" text={facts.relation} />
-              </div>
-            </details>
-          )}
+              </>
+            ) : undefined
+          }
+        />
 
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <span
-              className="rounded border border-amber-400/30 bg-amber-400/[0.07] px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-widest text-amber-200/90"
-              title="Gerçek emir gönderilmez; onay yalnızca paper (kâğıt) pozisyon açar."
-            >
-              GÖLGE TAKİP · EMİR YOK
-            </span>
+        {ideas.isLoading ? (
+          <p className="py-2 text-[11px] text-white/40">Fikir verisi yükleniyor…</p>
+        ) : ideas.isError ? (
+          // API hatası — veri yokluğundan AYRI gösterilir.
+          <div className="flex items-center justify-between gap-2 py-1 text-[11px] text-red-200/80">
+            <span>Fikir verisi alınamadı.</span>
             <button
               type="button"
-              onClick={() => void confirm()}
-              disabled={view.button.disabled}
-              aria-busy={phase !== "idle"}
-              className={`rounded border px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-widest transition-colors disabled:cursor-not-allowed ${BUTTON_TONE[view.button.tone]}`}
+              onClick={() => void ideas.refetch()}
+              className="rounded border border-white/15 bg-white/[0.04] px-2 py-0.5 text-[9px] uppercase tracking-widest text-slate-300 hover:bg-white/[0.08]"
             >
-              {view.button.label}
+              Yenile
             </button>
           </div>
+        ) : !idea || !facts || !view ? (
+          <p className="py-2 text-[11px] italic text-white/40">Henüz yeni asset fikri yok.</p>
+        ) : (
+          <div className="space-y-1 leading-4">
+            <div className="flex items-baseline gap-x-2 leading-5">
+              <span className="font-mono text-sm font-bold text-white/90">{facts.symbol}</span>
+              <span className="min-w-0 flex-1 truncate text-[11px] text-white/55">{facts.name}</span>
+              <span className="shrink-0 rounded bg-white/10 px-1.5 text-[9px] uppercase tracking-widest text-white/55">
+                {facts.kindLabel}
+              </span>
+              <span className={`shrink-0 text-[11px] font-semibold uppercase ${facts.direction.tone}`}>{facts.direction.text}</span>
+            </div>
 
-          {/* Gerçek engel nedeni backend'den gelir; sessizce yutulmaz. */}
-          <div aria-live="polite" className="empty:hidden">
-            {view.reason ? (
-              <p className="text-[10px] leading-4 text-white/60" data-testid="idea-reason">{view.reason}</p>
-            ) : null}
-            {requestError ? (
-              <p className="text-[10px] leading-4 text-red-200" role="alert">{requestError}</p>
-            ) : null}
+            {/* Orta bölge SABİT yükseklikte: açılmış pozisyon kartı ile fikir satırları aynı yeri kaplar. */}
+            <div className="min-h-[3.9rem] space-y-1">
+              {opened ? (
+                <div
+                  className="grid grid-cols-4 gap-x-2 gap-y-0.5 rounded border border-emerald-400/30 bg-emerald-400/[0.06] px-1.5 py-0.5"
+                  data-testid="idea-opened"
+                >
+                  <Fact label="Sembol">{opened.symbol}</Fact>
+                  <Fact label="Yön">{opened.side === "long" ? "LONG" : "SHORT"}</Fact>
+                  <Fact label="Giriş fiyatı">{fmtNum(opened.entry_price, opened.entry_price >= 100 ? 2 : 4)}</Fact>
+                  <Fact label="Pozisyon">{fmtUSD(opened.size_usd)}</Fact>
+                  <Fact label="Açılış">{fmtIdeaStamp(opened.opened_at) ?? "—"}</Fact>
+                  <Fact label="İşlem kimliği" title={opened.position_id}>{opened.position_id}</Fact>
+                  <Fact label="Stop-loss">{opened.sl != null ? fmtNum(opened.sl, opened.sl >= 100 ? 2 : 4) : "—"}</Fact>
+                  <Fact label="Take-profit">{opened.tp != null ? fmtNum(opened.tp, opened.tp >= 100 ? 2 : 4) : "—"}</Fact>
+                </div>
+              ) : (
+                <>
+                  <div className="flex gap-x-3 overflow-hidden">
+                    <Stat label="Skor">{facts.score}</Stat>
+                    <Stat label="Güven">{facts.confidencePct != null ? `%${facts.confidencePct}` : "—"}</Stat>
+                    <Stat label="Zaman dilimi">{facts.timeframe ?? "—"}</Stat>
+                    <Stat label="Teknik teyit" title={facts.techText} className="min-w-0 flex-1 truncate">
+                      <span className={facts.techConfirmed ? "text-emerald-300" : "text-amber-200"}>{facts.techText}</span>
+                    </Stat>
+                  </div>
+
+                  <p className="truncate text-[10px] text-white/55" title={facts.impact ?? undefined}>
+                    <span className="text-white/35">Haber etkisi: </span>
+                    {facts.impact ?? "—"}
+                  </p>
+
+                  {/* "Neden?" tek satır; tıklayınca takip koşulu + haber–varlık ilişkisi açılır. */}
+                  <details key={idea.symbol} className="group text-[10px]" data-testid="idea-details">
+                    <summary
+                      className="flex cursor-pointer list-none items-baseline gap-1 text-white/55 marker:content-none [&::-webkit-details-marker]:hidden"
+                      title={facts.why ?? undefined}
+                    >
+                      <span className="text-[8px] text-accent-cyan/70 transition-transform group-open:rotate-90" aria-hidden>▶</span>
+                      <span className="min-w-0 flex-1 truncate group-open:whitespace-normal">
+                        <span className="text-white/35">Neden?: </span>
+                        {facts.why ?? "—"}
+                      </span>
+                    </summary>
+                    <div className="mt-0.5 space-y-0.5 pl-3">
+                      <TextRow label="Takip koşulu" text={facts.followCondition} />
+                      <TextRow label="Haber–varlık ilişkisi" text={facts.relation} />
+                    </div>
+                  </details>
+                </>
+              )}
+            </div>
+
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <span
+                className="rounded border border-amber-400/30 bg-amber-400/[0.07] px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-widest text-amber-200/90"
+                title="Gerçek emir gönderilmez; onay yalnızca paper (kâğıt) pozisyon açar."
+              >
+                GÖLGE TAKİP · EMİR YOK
+              </span>
+              <button
+                type="button"
+                onClick={() => void confirm()}
+                disabled={view.button.disabled}
+                aria-busy={phase !== "idle"}
+                className={`rounded border px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-widest transition-colors disabled:cursor-not-allowed ${BUTTON_TONE[view.button.tone]}`}
+              >
+                {view.button.label}
+              </button>
+            </div>
+
+            {/* Gerçek engel nedeni backend'den gelir; sessizce yutulmaz. Sabit 2 satırlık alan (taşarsa kayar). */}
+            <div aria-live="polite" className="h-8 overflow-y-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+              {view.reason ? (
+                <p className="text-[10px] leading-4 text-white/60" title={view.reason} data-testid="idea-reason">{view.reason}</p>
+              ) : null}
+              {own?.error ? (
+                <p className="text-[10px] leading-4 text-red-200" role="alert">{own.error}</p>
+              ) : null}
+            </div>
           </div>
-        </div>
-      )}
+        )}
+      </div>
     </PanelFrame>
   );
 }
