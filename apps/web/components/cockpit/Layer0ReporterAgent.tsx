@@ -94,6 +94,7 @@ export type Layer0HeroProps = {
   topSymbols: string;
   scans: { veri: ScanItem; risk: ScanItem; sinyal: ScanItem };
   watch: { key: string; label: string }[];
+  entryOverride?: { word: string; tone: string; source: string };
 };
 
 const QUICK_PROMPTS = [
@@ -865,14 +866,15 @@ function Layer0StatusCore({
   const riskState = readState(hero.scans.risk);
   // Giriş izni = veri + risk kapılarının en kötüsü. Sinyal sayısı izin değil,
   // akış bilgisidir — bu yüzden karara dahil edilmez.
-  const entry =
+  const entry = hero.entryOverride ?? (
     veriState === "ENGEL"
       ? { word: "KAPALI", tone: "text-red-200", source: "veri güveni düşük" }
       : riskState === "ENGEL"
         ? { word: "KAPALI", tone: "text-red-200", source: "risk kapısı" }
         : riskState === "IZLE"
           ? { word: "KISITLI", tone: "text-amber-200", source: "risk kapısı" }
-          : { word: "AÇIK", tone: "text-emerald-300", source: "kapılar açık" };
+        : { word: "AÇIK", tone: "text-emerald-300", source: "kapılar açık" }
+  );
   const headline = hero.pnl.value === "flat" ? hero.title : `${hero.title} · ${hero.pnl.value}`;
   const riskTone =
     riskState === "OK" ? "text-emerald-300" : riskState === "IZLE" ? "text-amber-200" : "text-red-200";

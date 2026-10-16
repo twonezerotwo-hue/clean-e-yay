@@ -1208,6 +1208,10 @@ export function CockpitView() {
   const riskClear = brief.main_blocker.code !== "RISK_GATE";
   const dataTrusted = brief.data_mode !== "BLOCKED" && (dqs ?? 0) >= 60;
   const ticketRr = activeTicket?.summary?.rr_ratio;
+  const ticketExecutionState = activeTicket?.display?.execution_state ?? "READY";
+  const ticketExecutionReason = activeTicket?.display?.execution_reason ?? null;
+  const ticketWaiting = ticketExecutionState === "WAITING_MARKET";
+  const ticketOwnerApproval = ticketExecutionState === "OWNER_APPROVAL";
   const unrealizedPnl = paperState?.unrealized_pnl_usd ?? 0;
   const hasOpenPositions = openPaperPositions > 0;
   const newSignalNote = activeTicket
@@ -1224,13 +1228,13 @@ export function CockpitView() {
   const decisionDetail = hasOpenPositions
     ? newSignalNote ?? "Yeni sinyal yok — motor adayları izliyor."
     : activeTicket
-      ? `${activeTicket.timeframe} · ${activeTicket.display.confidence_text}`
+      ? ticketExecutionReason ?? `${activeTicket.timeframe} · ${activeTicket.display.confidence_text}`
       : brief.main_blocker.detail ?? brief.main_blocker.label ?? brief.recommended_stance;
   const decisionTone = hasOpenPositions
     ? unrealizedPnl >= 0
       ? "text-emerald-200"
       : "text-red-200"
-    : activeTicket
+    : activeTicket && !ticketWaiting && !ticketOwnerApproval
       ? "text-emerald-200"
       : brief.status === "BLOCKED" || brief.status === "FROZEN"
         ? "text-red-200"
@@ -1266,9 +1270,13 @@ export function CockpitView() {
     pnl: {
       value: hasOpenPositions
         ? `${unrealizedPnl >= 0 ? "+" : ""}$${Math.round(unrealizedPnl).toLocaleString()}`
-        : activeTicket
+        : activeTicket && !ticketWaiting && !ticketOwnerApproval
           ? `R:R ${ticketRr != null ? ticketRr.toFixed(2) : "--"}`
-          : "flat",
+          : ticketWaiting
+            ? "BEKLE"
+            : ticketOwnerApproval
+              ? "ONAY"
+              : "flat",
       tone: hasOpenPositions
         ? unrealizedPnl >= 0
           ? "text-emerald-200"
@@ -1301,6 +1309,11 @@ export function CockpitView() {
       },
     },
     watch,
+    entryOverride: ticketWaiting
+      ? { word: "BEKLE", tone: "text-amber-200", source: "piyasa kapalı" }
+      : ticketOwnerApproval
+        ? { word: "ONAY", tone: "text-amber-200", source: "owner onayı" }
+        : undefined,
   };
 
   if (activeLayer === 0) {

@@ -681,6 +681,9 @@ export type TradeTicketDisplay = {
   why_bullets: string[];
   safety_lines: { level: "ok" | "warn" | "error"; text: string }[];
   confidence_text: string;
+  /** Paper açılışının seans/owner kapısı: READY | WAITING_MARKET | OWNER_APPROVAL. */
+  execution_state?: "READY" | "WAITING_MARKET" | "OWNER_APPROVAL" | string;
+  execution_reason?: string | null;
 };
 
 export type TradeTicket = {
