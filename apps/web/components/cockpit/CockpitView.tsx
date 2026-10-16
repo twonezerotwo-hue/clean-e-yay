@@ -175,28 +175,6 @@ const RISK_ACTION_LABEL: Record<string, string> = {
   KILL_SWITCH: "Acil fren aktif",
 };
 
-function formatLayer0WatchCondition(item: { key: string; label: string; detail?: string }) {
-  if (item.key === "provider_restored") return null;
-
-  const text = `${item.label} ${item.detail ?? ""}`.toLowerCase();
-  if (item.key === "catalyst_halflife") {
-    if (text.includes("geopolitical_escalation")) return "Jeopolitik risk normalleşsin";
-    if (text.includes("geopolitical_deescalation")) return "Jeopolitik yumuşama netleşsin";
-    if (text.includes("inflation_data")) return "Enflasyon verisi sindirilsin";
-    if (text.includes("jobs_data")) return "İstihdam verisi sindirilsin";
-    if (text.includes("central_bank")) return "Merkez bankası etkisi sindirilsin";
-    if (text.includes("oil_supply") || text.includes("oil_inventory")) {
-      return "Petrol arz etkisi sakinleşsin";
-    }
-    if (text.includes("crypto_etf_flow")) return "ETF akışı netleşsin";
-    if (text.includes("funding_oi_squeeze")) return "Kaldıraç baskısı sönsün";
-    if (text.includes("rumor_unverified")) return "Doğrulanmamış haber netleşsin";
-    return "Catalyst etkisi sakinleşsin";
-  }
-
-  return item.label;
-}
-
 function LayerBadge({ index, label }: { index: string; label: string }) {
   return (
     <div className="inline-flex items-center gap-2 rounded-full border border-white/12 bg-white/[0.04] px-3 py-1 text-[10px] uppercase tracking-widest text-white/58">
@@ -692,9 +670,7 @@ function CockpitDegradedView({
       ? "Ana dünya özeti hazırlanıyor; bağımsız Heart radar ve haber akışı çalışıyor."
       : "Ana cockpit özeti şu anda alınamadı; bağımsız paneller çalışmaya devam ediyor.",
     tone: "text-amber-200",
-    dqs: { value: "--", tone: "text-amber-300" },
     pnl: { value: "flat", tone: "text-slate-300" },
-    topSymbols: "Heart radar açık",
     scans: {
       veri: {
         label: "Veri omurgası",
@@ -708,14 +684,7 @@ function CockpitDegradedView({
         ok: false,
         state: "IZLE",
       },
-      sinyal: {
-        label: "Sinyal adayları",
-        value: "Heart radar açık",
-        ok: false,
-        state: "IZLE",
-      },
     },
-    watch: [{ key: "cockpit_brief", label: "Ana cockpit özeti" }],
   };
 
   const layerContent =
@@ -1194,13 +1163,6 @@ export function CockpitView() {
   const candidates = brief.top_candidates ?? [];
   const activeTicket = ticketList?.tickets?.find((ticket) => ticket.status === "active");
   const dqs = brief.dqs?.score ?? undefined;
-  const watch = (brief.next_watch_conditions ?? [])
-    .map((item) => {
-      const label = formatLayer0WatchCondition(item);
-      return label ? { key: item.key, label } : null;
-    })
-    .filter((item): item is { key: string; label: string } => Boolean(item))
-    .slice(0, 3);
   const openPaperPositions =
     brief.paper_state_summary?.open_positions ?? brief.open_paper_positions ?? 0;
   const actionableCount = candidates.filter((candidate) => candidate.actionable).length;
@@ -1239,13 +1201,6 @@ export function CockpitView() {
       : brief.status === "BLOCKED" || brief.status === "FROZEN"
         ? "text-red-200"
         : "text-amber-200";
-  // Aynı sembol birden çok TF'te aday olabilir — listede tekilleştir.
-  const topSymbols = candidates.length
-    ? [...new Set(candidates.map((candidate) => candidate.symbol ?? "?"))]
-        .slice(0, 4)
-        .join(" / ")
-    : "radar boş";
-
   const currentMeta = LAYERS[activeLayer];
   let layerContent: ReactNode;
   const dqsTone =
@@ -1266,7 +1221,6 @@ export function CockpitView() {
     title: decisionTitle,
     detail: decisionDetail,
     tone: decisionTone,
-    dqs: { value: formatScore(dqs), tone: dqsTone },
     pnl: {
       value: hasOpenPositions
         ? `${unrealizedPnl >= 0 ? "+" : ""}$${Math.round(unrealizedPnl).toLocaleString()}`
@@ -1285,7 +1239,6 @@ export function CockpitView() {
           ? "text-emerald-200"
           : "text-slate-300",
     },
-    topSymbols,
     scans: {
       veri: {
         label: "Veri omurgası",
@@ -1301,14 +1254,7 @@ export function CockpitView() {
         state: riskScanState,
         href: "/dashboard#risk_gate",
       },
-      sinyal: {
-        label: "Sinyal adayları",
-        value: `${actionableCount}/${candidates.length} işleme hazır`,
-        ok: actionableCount > 0,
-        state: actionableCount > 0 ? "OK" : "IZLE",
-      },
     },
-    watch,
     entryOverride: ticketWaiting
       ? { word: "BEKLE", tone: "text-amber-200", source: "piyasa kapalı" }
       : ticketOwnerApproval
