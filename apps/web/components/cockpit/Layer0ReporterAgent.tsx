@@ -89,11 +89,8 @@ export type Layer0HeroProps = {
   title: string;
   detail: string;
   tone: string;
-  dqs: { value: string; tone: string };
   pnl: { value: string; tone: string };
-  topSymbols: string;
-  scans: { veri: ScanItem; risk: ScanItem; sinyal: ScanItem };
-  watch: { key: string; label: string }[];
+  scans: { veri: ScanItem; risk: ScanItem };
   entryOverride?: { word: string; tone: string; source: string };
 };
 
@@ -878,7 +875,6 @@ function Layer0StatusCore({
   const headline = hero.pnl.value === "flat" ? hero.title : `${hero.title} · ${hero.pnl.value}`;
   const riskTone =
     riskState === "OK" ? "text-emerald-300" : riskState === "IZLE" ? "text-amber-200" : "text-red-200";
-  const watchLabel = hero.watch[0]?.label;
 
   return (
     <div className="layer0-status-core layer0-brain-matrix shrink-0">
@@ -902,24 +898,6 @@ function Layer0StatusCore({
           <strong className={riskTone}>{hero.scans.risk.value}</strong>
           {hero.scans.risk.code ? <p>kod: {hero.scans.risk.code}</p> : null}
         </div>
-        <div className="brain-matrix-cell">
-          <span>Veri</span>
-          <strong className={hero.dqs.tone}>DQS {hero.dqs.value}</strong>
-          <p>{hero.scans.veri.value}</p>
-        </div>
-        <div className="brain-matrix-cell brain-matrix-cell--full">
-          <span>Sinyal radarı — işleme en yakın adaylar</span>
-          <strong className={hero.scans.sinyal.ok ? "text-emerald-300" : "text-cyan-100"}>
-            {hero.scans.sinyal.value}
-          </strong>
-          <p>{hero.topSymbols}</p>
-        </div>
-        {watchLabel ? (
-          <div className="brain-matrix-cell brain-matrix-cell--full">
-            <span>Sıradaki takip</span>
-            <p>{watchLabel}</p>
-          </div>
-        ) : null}
       </div>
 
       <div className="brain-matrix-actions">
