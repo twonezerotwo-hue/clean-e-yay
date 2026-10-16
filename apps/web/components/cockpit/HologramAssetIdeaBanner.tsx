@@ -167,6 +167,10 @@ export function HologramAssetIdeaBanner() {
   const opened = idea ? selectOpenedPosition(idea, own?.outcome ?? null, paper.data?.open_positions) : null;
   const view = idea ? selectPaperOpenView({ idea, phase, outcome: own?.outcome ?? null, opened }) : null;
   const position = idea ? list.findIndex((item) => item.symbol === idea.symbol) + 1 : 0;
+  // Pasif ön-durumları (ör. veri bekleniyor) düğme gibi göstermeyiz. Kullanıcı
+  // yalnızca gerçekten onaylayabileceği bir paper işlemi olduğunda aksiyon görür.
+  const showPaperAction = Boolean(view && (view.button.tone === "ready" || phase !== "idle"));
+  const showReason = Boolean(view?.reason && view.button.tone !== "muted");
 
   return (
     <PanelFrame id="hologram_asset_idea" className="hologram-idea-banner shrink-0 !border-accent-cyan/25 !bg-[linear-gradient(135deg,rgba(4,28,38,0.92),rgba(5,12,20,0.96))] !p-3 sm:!p-3.5 [&_header]:!mb-2.5 [&_h3]:whitespace-nowrap">
@@ -308,28 +312,24 @@ export function HologramAssetIdeaBanner() {
               )}
             </div>
 
-            <div className="flex flex-col gap-2 rounded-xl border border-amber-400/25 bg-amber-400/[0.07] p-2.5 sm:flex-row sm:items-center sm:justify-between">
-              <span
-                className="text-[10px] font-semibold uppercase tracking-[0.12em] text-amber-100/90"
-                title="Gerçek emir gönderilmez; onay yalnızca paper (kâğıt) pozisyon açar."
-              >
-                GÖLGE TAKİP <span className="text-amber-200/45">·</span> EMİR YOK
-              </span>
-              <button
-                type="button"
-                onClick={() => void confirm()}
-                disabled={view.button.disabled}
-                aria-busy={phase !== "idle"}
-                className={`min-h-9 rounded-lg border px-3 py-1.5 text-[10px] font-bold uppercase tracking-[0.11em] transition-colors disabled:cursor-not-allowed sm:min-w-[12rem] ${BUTTON_TONE[view.button.tone]}`}
-              >
-                {view.button.label}
-              </button>
-            </div>
+            {showPaperAction ? (
+              <div className="flex justify-end rounded-xl border border-accent-cyan/20 bg-accent-cyan/[0.05] p-2.5">
+                <button
+                  type="button"
+                  onClick={() => void confirm()}
+                  disabled={view.button.disabled}
+                  aria-busy={phase !== "idle"}
+                  className={`min-h-9 rounded-lg border px-3 py-1.5 text-[10px] font-bold uppercase tracking-[0.11em] transition-colors disabled:cursor-not-allowed sm:min-w-[12rem] ${BUTTON_TONE[view.button.tone]}`}
+                >
+                  {view.button.label}
+                </button>
+              </div>
+            ) : null}
 
             {/* Gerçek engel nedeni backend'den gelir; sessizce yutulmaz. Sabit 2 satırlık alan (taşarsa kayar). */}
             <div aria-live="polite" className="max-h-10 overflow-y-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-              {view.reason ? (
-                <p className="text-[10px] leading-4 text-white/60" title={view.reason} data-testid="idea-reason">{view.reason}</p>
+              {showReason ? (
+                <p className="text-[10px] leading-4 text-white/60" title={view.reason ?? undefined} data-testid="idea-reason">{view.reason}</p>
               ) : null}
               {own?.error ? (
                 <p className="text-[10px] leading-4 text-red-200" role="alert">{own.error}</p>
