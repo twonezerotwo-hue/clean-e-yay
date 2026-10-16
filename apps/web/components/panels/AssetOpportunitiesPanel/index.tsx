@@ -32,6 +32,7 @@ function AssetOpportunityCard({ idea, onOpen }: { idea: Idea; onOpen?: (symbol: 
   const updated = fmtIdeaStamp(idea.technical?.checked_at);
   const tone = STATUS_TONE[idea.status] ?? "border-white/15 bg-white/[0.04] text-white/70";
   const statusLabel = idea.status_label || idea.status;
+  const paperReady = idea.paper_open?.can_open === true;
 
   return (
     <article className="rounded border border-white/10 bg-white/[0.02] px-2.5 py-2">
@@ -77,6 +78,13 @@ function AssetOpportunityCard({ idea, onOpen }: { idea: Idea; onOpen?: (symbol: 
         </p>
       ) : null}
 
+      <p
+        className={`mt-1 text-[10px] leading-4 ${paperReady ? "text-emerald-200/75" : "text-amber-200/65"}`}
+        title={idea.paper_open?.reason ?? undefined}
+      >
+        {paperReady ? "Paper onayına hazır" : `Paper bekliyor: ${idea.paper_open?.reason ?? "güncel doğrulama gerekli"}`}
+      </p>
+
       <div className="mt-1.5 flex items-center justify-between gap-2">
         <span className="truncate font-mono text-[9px] text-white/30">
           {updated ? `güncelleme ${updated}` : ""}
@@ -119,9 +127,9 @@ export function AssetOpportunitiesPanel({
         }
       />
 
-      {/* Yalnızca gözlem — her zaman görünür dürüstlük satırı. */}
+      {/* Salt-gözlem paneli: Brain'deki owner onayı ayrı paper akışıdır. */}
       <div className="mb-2 rounded border border-amber-400/20 bg-amber-400/[0.06] px-2 py-1 text-[10px] leading-4 text-amber-200/80">
-        ⚠ Bu alan yalnızca gözlem ve hazırlık bilgisidir. Emir oluşturmaz.
+        ⚠ Bu panel gözlem ve hazırlık içindir. Brain onayı yalnızca paper pozisyonu açabilir; gerçek broker emri gönderilmez.
       </div>
 
       {isLoading ? (

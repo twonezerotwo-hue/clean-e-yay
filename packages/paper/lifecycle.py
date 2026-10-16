@@ -438,6 +438,23 @@ def attempt_open(
             snapshot_id=snapshot_id,
         )
         return None, decision
+    # A zero multiplier is a valid non-entry decision, never a valid paper
+    # position.  Reject it before `open_position` so an old sizing path cannot
+    # create a phantom zero-dollar position that occupies the open-position cap.
+    planned_size = sizing.compute_size_usd(
+        size_multiplier, max_position_usd=_max_pos_usd()
+    )
+    if planned_size <= 0:
+        decision = {"allowed": False, "duplicate": False, "reason": "zero_size"}
+        audit.record(
+            "OPEN_BLOCKED",
+            symbol=symbol,
+            timeframe=timeframe,
+            side=side,
+            reason="zero_size",
+            snapshot_id=snapshot_id,
+        )
+        return None, decision
     # State anomaly: corrupt accounting (equity/realized/daily PnL absurd) blocks
     # NEW opens only — existing position management/close stays possible.
     anomaly = state_anomaly.detect_state(state)
@@ -777,6 +794,31 @@ def tick(
     for pos in list(state.open_positions):
         # P1 — bozuk pozisyon → ERROR_STATE; kapatma denenmez (fake fiyat YOK).
         if not _valid_position(pos):
+            # A zero-sized position has no financial exposure and cannot produce
+            # a meaningful price-based close.  Older sizing paths could leave
+            # one in the open book; keeping it there permanently made the
+            # dashboard report phantom positions and blocked the position cap.
+            # Retire only this deterministic, non-financial corruption case.
+            # Invalid prices/sides remain quarantined in ERROR_STATE so we never
+            # invent a fill price or silently alter an actual position.
+            try:
+                zero_size = pos.size_usd is not None and float(pos.size_usd) <= 0
+            except (TypeError, ValueError):
+                zero_size = False
+            if zero_size and pos.entry_price is not None and pos.entry_price > 0 and pos.side in ("long", "short"):
+                audit.record(
+                    "STATE_REPAIRED",
+                    position_id=pos.id,
+                    symbol=pos.symbol,
+                    timeframe=pos.timeframe,
+                    side=pos.side,
+                    reason="retired_zero_size_position",
+                    size=0.0,
+                    pnl=0.0,
+                    lifecycle_status="FORCE_CLOSED",
+                )
+                state.open_positions = [p for p in state.open_positions if p.id != pos.id]
+                continue
             if pos.lifecycle_status != "ERROR_STATE":
                 _set_status(pos, "ERROR_STATE")
                 audit.record(

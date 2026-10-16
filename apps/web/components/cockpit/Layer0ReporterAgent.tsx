@@ -270,6 +270,23 @@ function positionPnlTone(value: number | null | undefined) {
   return value >= 0 ? "text-emerald-300" : "text-red-300";
 }
 
+/**
+ * A position with no positive size is not an open financial exposure. Older
+ * paper-state records can briefly surface in ERROR_STATE while the worker
+ * retires them; never render those missing values as a believable `$0`.
+ */
+function hasPositionStateError(position: Position) {
+  return (
+    position.lifecycle_status !== undefined &&
+    position.lifecycle_status !== "OPEN"
+  ) || !Number.isFinite(position.size_usd) || position.size_usd <= 0;
+}
+
+function fmtDollarValue(value: number | null | undefined) {
+  if (value == null || !Number.isFinite(value)) return "—";
+  return `$${fmtMoney(value)}`;
+}
+
 function statusText(value: string | null | undefined) {
   return value ? value.replace(/_/g, " ") : "---";
 }
@@ -292,6 +309,11 @@ function Layer0PositionManager({
     () => positions.reduce((sum, position) => sum + (position.size_usd ?? 0), 0),
     [positions],
   );
+  const invalidPositions = useMemo(
+    () => positions.filter(hasPositionStateError),
+    [positions],
+  );
+  const bookDataReady = invalidPositions.length === 0;
   const missingSl = useMemo(
     () => positions.filter((position) => position.sl == null).length,
     [positions],
@@ -339,13 +361,27 @@ function Layer0PositionManager({
       </div>
 
       <div className="relative mt-3 grid grid-cols-2 gap-1.5 sm:grid-cols-5">
-        <PositionMetric label="Açık" value={loading ? "..." : String(positions.length)} />
+        <PositionMetric
+          label="Açık"
+          value={
+            loading
+              ? "..."
+              : bookDataReady
+                ? String(positions.length)
+                : `${positions.length - invalidPositions.length}/${positions.length}`
+          }
+          tone={bookDataReady ? "text-white/88" : "text-amber-200"}
+        />
         <PositionMetric
           label="Açık P&L"
-          value={loading ? "..." : fmtSignedMoney(totalPnl)}
-          tone={positionPnlTone(totalPnl)}
+          value={loading ? "..." : bookDataReady ? fmtSignedMoney(totalPnl) : "VERİ HATASI"}
+          tone={bookDataReady ? positionPnlTone(totalPnl) : "text-amber-200"}
         />
-        <PositionMetric label="Büyüklük" value={loading ? "..." : fmtMoneyCompact(totalSize)} />
+        <PositionMetric
+          label="Büyüklük"
+          value={loading ? "..." : bookDataReady ? fmtMoneyCompact(totalSize) : "VERİ HATASI"}
+          tone={bookDataReady ? "text-white/88" : "text-amber-200"}
+        />
         <PositionMetric
           label="SL Kapsama"
           value={loading ? "..." : positions.length ? `${positions.length - missingSl}/${positions.length}` : "—"}
@@ -357,6 +393,16 @@ function Layer0PositionManager({
           tone={missingTp ? "text-amber-200" : "text-emerald-300"}
         />
       </div>
+
+      {invalidPositions.length ? (
+        <div
+          role="status"
+          className="relative mt-2 rounded-lg border border-amber-400/30 bg-amber-400/[0.08] px-3 py-2 text-[10px] leading-4 text-amber-100/85"
+        >
+          {invalidPositions.length} pozisyon kaydında kullanılabilir büyüklük yok. Bu kayıtlar
+          risk hesabına dahil edilmez; worker güvenli state onarımı yapıyor.
+        </div>
+      ) : null}
 
       <div className="relative mt-3 min-h-0 flex-1 overflow-y-auto pr-1">
         {positions.length ? (
@@ -420,13 +466,18 @@ function PositionCard({
   onToggle: () => void;
   onManage: () => void;
 }) {
-  const pnl = position.unrealized_pnl_usd ?? 0;
+  const stateError = hasPositionStateError(position);
+  const pnl = stateError ? null : position.unrealized_pnl_usd;
   const openedStamp = fmtOpenedStamp(position.opened_at);
   const isLong = position.side === "long";
-  const accentClass = isLong
+  const accentClass = stateError
+    ? "border-amber-300/30 bg-[linear-gradient(135deg,rgba(120,75,10,0.2),rgba(1,7,13,0.94))] shadow-[0_0_22px_rgba(245,158,11,0.08)]"
+    : isLong
     ? "border-emerald-300/25 bg-[radial-gradient(circle_at_0%_0%,rgba(16,185,129,0.13),transparent_36%),linear-gradient(135deg,rgba(4,18,18,0.88),rgba(1,7,13,0.94))] shadow-[0_0_22px_rgba(16,185,129,0.08),inset_0_1px_0_rgba(255,255,255,0.04)]"
     : "border-rose-300/30 bg-[radial-gradient(circle_at_0%_0%,rgba(244,63,94,0.14),transparent_36%),linear-gradient(135deg,rgba(20,6,16,0.88),rgba(1,7,13,0.94))] shadow-[0_0_22px_rgba(244,63,94,0.08),inset_0_1px_0_rgba(255,255,255,0.04)]";
-  const badgeClass = isLong
+  const badgeClass = stateError
+    ? "border-amber-300/35 bg-amber-300/10 text-amber-200"
+    : isLong
     ? "border-emerald-300/35 bg-emerald-300/10 text-emerald-200 shadow-[0_0_16px_rgba(16,185,129,0.14)]"
     : "border-rose-300/35 bg-rose-300/10 text-rose-200 shadow-[0_0_16px_rgba(244,63,94,0.14)]";
 
@@ -442,7 +493,7 @@ function PositionCard({
             <span
               className={`rounded-md border px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-widest ${badgeClass}`}
             >
-              {positionSideLabel(position.side)}
+              {stateError ? "VERİ HATASI" : positionSideLabel(position.side)}
             </span>
             <span className="rounded border border-accent-cyan/30 bg-accent-cyan/10 px-1.5 py-0.5 text-[10px] uppercase tracking-widest text-accent-cyan/80">
               {String(position.timeframe ?? "--").toUpperCase()}
@@ -468,8 +519,8 @@ function PositionCard({
           ) : null}
           <div className="mt-2 grid grid-cols-3 gap-1.5">
             <PositionMiniValue label="Entry" value={fmtPrice(position.entry_price)} />
-            <PositionMiniValue label="Current" value={fmtPrice(position.current_price)} />
-            <PositionMiniValue label="Size" value={`$${fmtMoney(position.size_usd)}`} />
+            <PositionMiniValue label="Current" value={stateError ? "—" : fmtPrice(position.current_price)} />
+            <PositionMiniValue label="Size" value={stateError ? "—" : fmtDollarValue(position.size_usd)} />
           </div>
         </div>
         <div className="text-right">

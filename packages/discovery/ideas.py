@@ -6,9 +6,11 @@ güçlü YUKARI olanlar. Her fikir için deterministik, şeffaf bir FİKİR SKOR
 (teknik + gölge karne + haber − risk) ve ilk birkaç fikir için yapay zekâ
 "fikir eleştirmeni" değerlendirmesi (GÜÇLÜ / İZLE / ZAYIF + tez/lehte/aleyhte/riskler).
 
-Kırmızı çizgiler: hiçbir fikir işlem açmaz, evrene eklenmez, RiskGate'e girmez.
-YZ hükmü anlatıdır; terfi kriterleri deterministik kalır ve owner onayı şarttır
-(CP5). LLM yoksa (AWS'te yerel model yok) kurallı yedek değerlendirme döner.
+Kırmızı çizgiler: fikirler karar motoruna bağlanmaz, evrene otomatik eklenmez ve
+RiskGate'i bypass etmez. Brain'deki açık owner onayı yalnızca mevcut paper akışını
+çağırabilir; gerçek broker emri yoktur. YZ hükmü anlatıdır; terfi kriterleri
+deterministik kalır ve owner onayı şarttır (CP5). LLM yoksa (AWS'te yerel model yok)
+kurallı yedek değerlendirme döner.
 """
 from __future__ import annotations
 
@@ -36,7 +38,9 @@ _VERDICTS = {"GÜÇLÜ": "STRONG", "GUCLU": "STRONG", "İZLE": "WATCH", "IZLE": 
 VERDICT_LABEL = {"STRONG": "GÜÇLÜ", "WATCH": "İZLE", "WEAK": "ZAYIF"}
 STATUS_LABEL = {"WATCHING": "izleniyor", "PROMOTION_READY": "terfi eşiğinde",
                 "AWAITING_APPROVAL": "onayını bekliyor"}
-HONESTY = ("Fikirler hipotetiktir: hiçbiriyle işlem açılmaz, evrene otomatik eklenmez. "
+HONESTY = ("Fikirler gözlem ve hazırlık içindir: güncel fiyat, sinyal geçerliliği ve tüm "
+           "RiskGate kontrolleri geçmeden paper pozisyonu açılmaz; evrene otomatik eklenmez. "
+           "Brain onayı yalnızca paper akışını çağırır, gerçek broker emri gönderilmez. "
            "Yapay zekâ değerlendirmesi anlatıdır; terfi deterministik eşik + owner onayı ister.")
 
 

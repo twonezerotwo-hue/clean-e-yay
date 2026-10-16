@@ -43,8 +43,8 @@ type Attempt = { symbol: string; outcome?: IdeaPaperOpenResult; error?: string }
 function Fact({ label, children, title }: { label: string; children: ReactNode; title?: string }) {
   return (
     <div className="min-w-0" title={title}>
-      <div className="text-[8px] uppercase leading-[10px] tracking-widest text-white/35">{label}</div>
-      <div className="truncate font-mono text-[11px] text-white/80">{children}</div>
+      <div className="text-[9px] uppercase leading-3 tracking-[0.14em] text-white/45">{label}</div>
+      <div className="mt-0.5 truncate font-mono text-[12px] font-semibold text-white/88">{children}</div>
     </div>
   );
 }
@@ -61,17 +61,17 @@ function Stat({
   className?: string;
 }) {
   return (
-    <span className={`whitespace-nowrap ${className}`} title={title}>
-      <span className="text-[9px] uppercase tracking-widest text-white/35">{label} </span>
-      <span className="font-mono text-[11px] text-white/80">{children}</span>
-    </span>
+    <div className={`min-w-0 rounded-lg border border-white/[0.08] bg-black/20 px-2 py-1.5 ${className}`} title={title}>
+      <div className="text-[9px] uppercase tracking-[0.12em] text-white/42">{label}</div>
+      <div className="mt-0.5 truncate font-mono text-[12px] font-semibold text-white/88">{children}</div>
+    </div>
   );
 }
 
 function TextRow({ label, text }: { label: string; text: string | null }) {
   return (
-    <p className="min-w-0 text-[10px] leading-4 text-white/55" title={text ?? undefined}>
-      <span className="text-white/35">{label}: </span>
+    <p className="min-w-0 text-[11px] leading-4 text-white/68" title={text ?? undefined}>
+      <span className="font-semibold text-white/48">{label}: </span>
       <span>{text ?? "—"}</span>
     </p>
   );
@@ -137,7 +137,20 @@ export function HologramAssetIdeaBanner() {
         setAttempt({ symbol, error: "Fikir panosu güncellendi, bu fikir artık listede değil." });
         return;
       }
-      if (!current.paper_open?.can_open) return; // pasif: gerçek neden bannerda (paper_open.reason) görünür
+      if (!current.paper_open?.can_open) {
+        // Kullanıcı tıklaması ile yapılan taze kontrolde fikir artık açılamıyorsa
+        // eski kartı sessizce bırakma; gerçek backend engelini görünür kıl.
+        const pre = current.paper_open;
+        setAttempt({
+          symbol,
+          outcome: {
+            status: "blocked",
+            state: pre?.state ?? "DATA_UNAVAILABLE",
+            reason: pre?.reason ?? "Fikir artık paper işlem için uygun değil.",
+          },
+        });
+        return;
+      }
       // 2) PAPER İŞLEM AÇILIYOR — backend atomik olarak yeniden doğrular ve açar.
       setPhase("opening");
       setAttempt({ symbol, outcome: await open.mutateAsync(symbol) });
@@ -156,7 +169,7 @@ export function HologramAssetIdeaBanner() {
   const position = idea ? list.findIndex((item) => item.symbol === idea.symbol) + 1 : 0;
 
   return (
-    <PanelFrame id="hologram_asset_idea" className="hologram-idea-banner !p-2.5 shrink-0 [&_header]:!mb-1.5 [&_h3]:whitespace-nowrap">
+    <PanelFrame id="hologram_asset_idea" className="hologram-idea-banner shrink-0 !p-3 sm:!p-3.5 [&_header]:!mb-2.5 [&_h3]:whitespace-nowrap">
       <div
         onPointerEnter={() => {
           pointerInside.current = true;
@@ -174,11 +187,12 @@ export function HologramAssetIdeaBanner() {
       >
         <PanelHeader
           title="YENİ ASSET FİKRİ"
+          subtitle="Haber + teknik analizden çıkan izleme fikri"
           actions={
             facts ? (
               <>
                 {list.length > 1 ? (
-                  <span className="flex items-center gap-0.5 font-mono text-[10px] text-white/55" data-testid="idea-counter">
+                  <span className="flex items-center gap-0.5 rounded-md border border-white/[0.08] bg-white/[0.03] px-1 font-mono text-[11px] text-white/65" data-testid="idea-counter">
                     <button
                       type="button"
                       onClick={() => go(-1)}
@@ -200,9 +214,9 @@ export function HologramAssetIdeaBanner() {
                     </button>
                   </span>
                 ) : null}
-                <span className="whitespace-nowrap text-[9px] uppercase tracking-widest text-white/35" title="Son güncelleme">
-                  <span className="max-[400px]:hidden">Güncelleme </span>
-                  <span className="font-mono text-[10px] normal-case tracking-normal text-white/55">{facts.updatedAt ?? "—"}</span>
+                <span className="whitespace-nowrap text-[9px] uppercase tracking-[0.12em] text-white/42" title="Son güncelleme">
+                  <span className="max-[400px]:hidden">GÜNCEL </span>
+                  <span className="font-mono text-[10px] normal-case tracking-normal text-white/65">{facts.updatedAt ?? "—"}</span>
                 </span>
               </>
             ) : undefined
@@ -210,10 +224,10 @@ export function HologramAssetIdeaBanner() {
         />
 
         {ideas.isLoading ? (
-          <p className="py-2 text-[11px] text-white/40">Fikir verisi yükleniyor…</p>
+          <p className="rounded-lg border border-white/[0.08] bg-black/20 px-3 py-3 text-[12px] text-white/55">Fikir verisi yükleniyor…</p>
         ) : ideas.isError ? (
           // API hatası — veri yokluğundan AYRI gösterilir.
-          <div className="flex items-center justify-between gap-2 py-1 text-[11px] text-red-200/80">
+          <div className="flex items-center justify-between gap-2 rounded-lg border border-red-400/20 bg-red-400/[0.06] px-3 py-2 text-[12px] text-red-100/85">
             <span>Fikir verisi alınamadı.</span>
             <button
               type="button"
@@ -224,23 +238,24 @@ export function HologramAssetIdeaBanner() {
             </button>
           </div>
         ) : !idea || !facts || !view ? (
-          <p className="py-2 text-[11px] italic text-white/40">Henüz yeni asset fikri yok.</p>
+          <p className="rounded-lg border border-white/[0.08] bg-black/20 px-3 py-3 text-[12px] italic text-white/50">Henüz yeni asset fikri yok.</p>
         ) : (
-          <div className="space-y-1 leading-4">
-            <div className="flex items-baseline gap-x-2 leading-5">
-              <span className="font-mono text-sm font-bold text-white/90">{facts.symbol}</span>
-              <span className="min-w-0 flex-1 truncate text-[11px] text-white/55">{facts.name}</span>
-              <span className="shrink-0 rounded bg-white/10 px-1.5 text-[9px] uppercase tracking-widest text-white/55">
+          <div className="space-y-2.5 leading-4">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="font-mono text-lg font-black tracking-wide text-white">{facts.symbol}</span>
+              <span className="min-w-0 flex-1 basis-[9rem] truncate text-[12px] text-white/68">{facts.name}</span>
+              <span className="rounded-md border border-white/15 bg-white/[0.06] px-2 py-1 text-[9px] font-semibold uppercase tracking-[0.12em] text-white/65">
                 {facts.kindLabel}
               </span>
-              <span className={`shrink-0 text-[11px] font-semibold uppercase ${facts.direction.tone}`}>{facts.direction.text}</span>
+              <span className={`rounded-md border border-current/25 bg-current/10 px-2 py-1 text-[10px] font-bold uppercase tracking-[0.12em] ${facts.direction.tone}`}>
+                {facts.direction.text}
+              </span>
             </div>
 
-            {/* Orta bölge SABİT yükseklikte: açılmış pozisyon kartı ile fikir satırları aynı yeri kaplar. */}
-            <div className="min-h-[3.9rem] space-y-1">
+            <div className="space-y-2">
               {opened ? (
                 <div
-                  className="grid grid-cols-4 gap-x-2 gap-y-0.5 rounded border border-emerald-400/30 bg-emerald-400/[0.06] px-1.5 py-0.5"
+                  className="grid grid-cols-2 gap-2 rounded-xl border border-emerald-400/30 bg-emerald-400/[0.07] px-3 py-2 sm:grid-cols-4"
                   data-testid="idea-opened"
                 >
                   <Fact label="Sembol">{opened.symbol}</Fact>
@@ -254,33 +269,34 @@ export function HologramAssetIdeaBanner() {
                 </div>
               ) : (
                 <>
-                  <div className="flex gap-x-3 overflow-hidden">
+                  <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
                     <Stat label="Skor">{facts.score}</Stat>
                     <Stat label="Güven">{facts.confidencePct != null ? `%${facts.confidencePct}` : "—"}</Stat>
                     <Stat label="Zaman dilimi">{facts.timeframe ?? "—"}</Stat>
-                    <Stat label="Teknik teyit" title={facts.techText} className="min-w-0 flex-1 truncate">
+                    <Stat label="Teknik teyit" title={facts.techText} className="min-w-0">
                       <span className={facts.techConfirmed ? "text-emerald-300" : "text-amber-200"}>{facts.techText}</span>
                     </Stat>
                   </div>
 
-                  <p className="truncate text-[10px] text-white/55" title={facts.impact ?? undefined}>
-                    <span className="text-white/35">Haber etkisi: </span>
-                    {facts.impact ?? "—"}
-                  </p>
+                  <div className="rounded-xl border border-accent-cyan/15 bg-accent-cyan/[0.05] px-3 py-2">
+                    <div className="text-[9px] font-semibold uppercase tracking-[0.14em] text-accent-cyan/70">Haber etkisi</div>
+                    <p className="mt-1 max-h-10 overflow-hidden text-[11px] leading-4 text-white/72" title={facts.impact ?? undefined}>
+                      {facts.impact ?? "—"}
+                    </p>
+                  </div>
 
-                  {/* "Neden?" tek satır; tıklayınca takip koşulu + haber–varlık ilişkisi açılır. */}
-                  <details key={idea.symbol} className="group text-[10px]" data-testid="idea-details">
+                  <details key={idea.symbol} className="group rounded-xl border border-white/[0.08] bg-black/20 px-3 py-2 text-[11px]" data-testid="idea-details">
                     <summary
-                      className="flex cursor-pointer list-none items-baseline gap-1 text-white/55 marker:content-none [&::-webkit-details-marker]:hidden"
+                      className="flex cursor-pointer list-none items-start gap-2 text-white/72 marker:content-none [&::-webkit-details-marker]:hidden"
                       title={facts.why ?? undefined}
                     >
-                      <span className="text-[8px] text-accent-cyan/70 transition-transform group-open:rotate-90" aria-hidden>▶</span>
-                      <span className="min-w-0 flex-1 truncate group-open:whitespace-normal">
-                        <span className="text-white/35">Neden?: </span>
+                      <span className="mt-0.5 text-[9px] text-accent-cyan/80 transition-transform group-open:rotate-90" aria-hidden>▶</span>
+                      <span className="min-w-0 flex-1 max-h-8 overflow-hidden group-open:max-h-none">
+                        <span className="font-semibold text-white/55">Neden? </span>
                         {facts.why ?? "—"}
                       </span>
                     </summary>
-                    <div className="mt-0.5 space-y-0.5 pl-3">
+                    <div className="mt-2 space-y-1 border-t border-white/[0.08] pt-2">
                       <TextRow label="Takip koşulu" text={facts.followCondition} />
                       <TextRow label="Haber–varlık ilişkisi" text={facts.relation} />
                     </div>
@@ -289,26 +305,26 @@ export function HologramAssetIdeaBanner() {
               )}
             </div>
 
-            <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="flex flex-col gap-2 rounded-xl border border-amber-400/25 bg-amber-400/[0.07] p-2.5 sm:flex-row sm:items-center sm:justify-between">
               <span
-                className="rounded border border-amber-400/30 bg-amber-400/[0.07] px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-widest text-amber-200/90"
+                className="text-[10px] font-semibold uppercase tracking-[0.12em] text-amber-100/90"
                 title="Gerçek emir gönderilmez; onay yalnızca paper (kâğıt) pozisyon açar."
               >
-                GÖLGE TAKİP · EMİR YOK
+                GÖLGE TAKİP <span className="text-amber-200/45">·</span> EMİR YOK
               </span>
               <button
                 type="button"
                 onClick={() => void confirm()}
                 disabled={view.button.disabled}
                 aria-busy={phase !== "idle"}
-                className={`rounded border px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-widest transition-colors disabled:cursor-not-allowed ${BUTTON_TONE[view.button.tone]}`}
+                className={`min-h-9 rounded-lg border px-3 py-1.5 text-[10px] font-bold uppercase tracking-[0.11em] transition-colors disabled:cursor-not-allowed sm:min-w-[12rem] ${BUTTON_TONE[view.button.tone]}`}
               >
                 {view.button.label}
               </button>
             </div>
 
             {/* Gerçek engel nedeni backend'den gelir; sessizce yutulmaz. Sabit 2 satırlık alan (taşarsa kayar). */}
-            <div aria-live="polite" className="h-8 overflow-y-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            <div aria-live="polite" className="max-h-10 overflow-y-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
               {view.reason ? (
                 <p className="text-[10px] leading-4 text-white/60" title={view.reason} data-testid="idea-reason">{view.reason}</p>
               ) : null}
