@@ -27,6 +27,7 @@ from typing import Any
 from packages.data.ingestion.pipeline import MarketSnapshot
 from packages.decision.engine import TradeDecision
 from packages.ops.store import write_text_atomic
+from packages.paper import session_gate
 from packages.paper.guards import price_sanity
 from packages.paper.state import PaperState
 from packages.risk.trade_economics import compute_adaptive_targets
@@ -283,6 +284,8 @@ def _build_display(
     expires_at: datetime,
     safety: list[dict[str, str]],
     why: list[str],
+    execution_state: str = "READY",
+    execution_reason: str | None = None,
 ) -> dict[str, Any]:
     action_label = _direction_action_label(
         decision.consensus.direction if decision.consensus else "neutral",
@@ -316,6 +319,8 @@ def _build_display(
         "why_bullets": why,
         "safety_lines": safety,
         "confidence_text": f"%{int(decision.confidence * 100)} {_confidence_label(decision.confidence)}",
+        "execution_state": execution_state,
+        "execution_reason": execution_reason,
     }
 
 
@@ -404,7 +409,34 @@ def build_ticket(
     technical_detail = _build_technical_detail(decision, snap, targets, paper_state)
     why = _why_bullets(decision)
     safety = _safety_lines(decision, snap.quality.score if snap.quality else None)
-    display = _build_display(decision, targets, summary, expires_at, safety, why)
+    session = session_gate.evaluate_open(
+        decision.symbol,
+        side,
+        decision.timeframe,
+        now_utc=ts,
+        risk_action=decision.risk.action if decision.risk else None,
+    )
+    if session.route == "open":
+        execution_state = "READY"
+        execution_reason = "Piyasa açık; tüm kapılar geçerse paper açılışı denenir."
+    elif session.route == "manual_ready":
+        execution_state = "OWNER_APPROVAL"
+        execution_reason = session.decision.reason or "Owner onayı bekleniyor."
+    else:
+        execution_state = "WAITING_MARKET"
+        execution_reason = session.decision.reason or "İlgili piyasa kapalı; açılışta yeniden değerlendirilecek."
+    if execution_state != "READY":
+        safety.append({"level": "warn", "text": execution_reason})
+    display = _build_display(
+        decision,
+        targets,
+        summary,
+        expires_at,
+        safety,
+        why,
+        execution_state=execution_state,
+        execution_reason=execution_reason,
+    )
 
     if not targets.rr_floor_met or entry <= 0 or atr <= 0:
         status = "insufficient_rr" if (entry > 0 and atr > 0) else "invalid"

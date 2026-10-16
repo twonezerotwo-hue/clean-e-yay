@@ -862,6 +862,10 @@ function TradePlanBlock({ ticket, symbol }: { ticket: TradeTicket | undefined; s
     );
   }
   const s = ticket.summary;
+  const executionState = ticket.display.execution_state ?? "READY";
+  const executionTone = executionState === "READY"
+    ? "border-emerald-400/25 bg-emerald-400/[0.06] text-emerald-200"
+    : "border-amber-400/30 bg-amber-400/[0.07] text-amber-100";
   const sideTone =
     ticket.side === "long" ? "text-emerald-300 border-emerald-500/40"
     : ticket.side === "short" ? "text-rose-300 border-rose-500/40"
@@ -893,6 +897,12 @@ function TradePlanBlock({ ticket, symbol }: { ticket: TradeTicket | undefined; s
       <div className="flex items-center justify-between text-[10px] text-slate-400">
         <span>R:R 1:{(s.rr_ratio ?? 0).toFixed(2)} · {s.rr_source}</span>
         <span className="rounded bg-white/[0.05] px-1.5 py-0.5 uppercase">{ticket.status}</span>
+      </div>
+      <div className={`rounded border px-2 py-1 text-[10px] ${executionTone}`}>
+        <strong className="mr-1 uppercase tracking-wider">
+          {executionState === "WAITING_MARKET" ? "PİYASA BEKLENİYOR" : executionState === "OWNER_APPROVAL" ? "ONAY BEKLENİYOR" : "PAPER HAZIR"}
+        </strong>
+        {ticket.display.execution_reason ?? "Paper açılışı RiskGate ve seans kapısından sonra denenir."}
       </div>
     </div>
   );

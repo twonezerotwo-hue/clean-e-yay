@@ -169,7 +169,7 @@ export function HologramAssetIdeaBanner() {
   const position = idea ? list.findIndex((item) => item.symbol === idea.symbol) + 1 : 0;
 
   return (
-    <PanelFrame id="hologram_asset_idea" className="hologram-idea-banner shrink-0 !p-3 sm:!p-3.5 [&_header]:!mb-2.5 [&_h3]:whitespace-nowrap">
+    <PanelFrame id="hologram_asset_idea" className="hologram-idea-banner shrink-0 !border-accent-cyan/25 !bg-[linear-gradient(135deg,rgba(4,28,38,0.92),rgba(5,12,20,0.96))] !p-3 sm:!p-3.5 [&_header]:!mb-2.5 [&_h3]:whitespace-nowrap">
       <div
         onPointerEnter={() => {
           pointerInside.current = true;
@@ -186,8 +186,8 @@ export function HologramAssetIdeaBanner() {
         }}
       >
         <PanelHeader
-          title="YENİ ASSET FİKRİ"
-          subtitle="Haber + teknik analizden çıkan izleme fikri"
+          title="HOLOGRAM · YENİ ASSET FİKRİ"
+          subtitle="Haber → teknik teyit → takip koşulu"
           actions={
             facts ? (
               <>
@@ -241,7 +241,8 @@ export function HologramAssetIdeaBanner() {
           <p className="rounded-lg border border-white/[0.08] bg-black/20 px-3 py-3 text-[12px] italic text-white/50">Henüz yeni asset fikri yok.</p>
         ) : (
           <div className="space-y-2.5 leading-4">
-            <div className="flex flex-wrap items-center gap-2">
+            <div className="rounded-xl border border-accent-cyan/20 bg-accent-cyan/[0.06] px-3 py-2">
+              <div className="flex flex-wrap items-center gap-2">
               <span className="font-mono text-lg font-black tracking-wide text-white">{facts.symbol}</span>
               <span className="min-w-0 flex-1 basis-[9rem] truncate text-[12px] text-white/68">{facts.name}</span>
               <span className="rounded-md border border-white/15 bg-white/[0.06] px-2 py-1 text-[9px] font-semibold uppercase tracking-[0.12em] text-white/65">
@@ -250,6 +251,8 @@ export function HologramAssetIdeaBanner() {
               <span className={`rounded-md border border-current/25 bg-current/10 px-2 py-1 text-[10px] font-bold uppercase tracking-[0.12em] ${facts.direction.tone}`}>
                 {facts.direction.text}
               </span>
+              </div>
+              <p className="mt-1 text-[10px] uppercase tracking-[0.12em] text-accent-cyan/65">Hologramın izlediği aday · emir değildir</p>
             </div>
 
             <div className="space-y-2">

@@ -418,9 +418,10 @@ def build_comparison(
 ) -> dict:
     """Pure comparison record: per-symbol live-vs-shadow intent + agreement summary.
 
-    No I/O, no paper access. `affected_paper` is stamped from `affects_paper(cfg)`
-    so the record always tells the truth about whether the shadow could have moved
-    paper (false throughout Phase A). `calibration` is an opaque trust verdict
+    No I/O, no paper access. `affected_paper` records whether the shadow actually
+    mutated paper. The shipped Phase-B route is manual-ready-only, so it remains
+    false even when `affect_decision` is enabled: queueing a candidate is not an
+    open position or a paper mutation. `calibration` is an opaque trust verdict
     (computed by the caller, which owns paper state) embedded for the watcher — it
     surfaces whether the consensus tf_weights are still PRIOR/untrusted, so the
     eventual decision to apply them is data-driven, never guessed.
@@ -473,8 +474,9 @@ def build_comparison(
         "snapshot_id": snapshot_id,
         "risk_action": risk_action,
         "affect_decision": cfg.affect_decision,
-        # Phase A invariant: observation never moves paper. Stamped from the one gate.
-        "affected_paper": affects_paper(cfg),
+        # Manual-ready is a review queue, not paper state. Keep this explicit so
+        # the API cannot claim that a queued candidate changed the portfolio.
+        "affected_paper": False,
         # tf_weights trust verdict (PRIOR/untrusted until per-TF calibration validates).
         "calibration": calibration or {},
         # Per-TF score-contribution shares per symbol (sum=1.0 per symbol; empty when
