@@ -89,6 +89,54 @@ def test_pending_closes_when_price_arrives(paper_env) -> None:
     assert not ps.open_positions
 
 
+def test_zero_size_position_is_retired_without_fake_fill(paper_env) -> None:
+    """Eski sizing hatasından kalan sıfır-büyüklük pozisyonu açık kitapta kalmaz.
+
+    Bu bir finansal kapanış değildir: PnL değişmez, fiyat kullanılmaz ve yalnızca
+    audit kaydıyla bozuk kayıt emekliye ayrılır. Geçersiz fiyat/yon kayıtları ise
+    aşağıdaki ERROR_STATE korumasında kalmaya devam eder.
+    """
+    from packages.paper import lifecycle
+
+    ps = paper_env["state"]._initial_state()
+    pos = _open(lifecycle, ps)
+    pos.size_usd = 0.0
+    equity_before = ps.equity_usd
+
+    assert lifecycle.tick(ps, {}) == []
+    assert ps.open_positions == []
+    assert ps.equity_usd == equity_before
+    events = paper_env["audit"].read_recent()
+    assert any(
+        e["action"] == "STATE_REPAIRED"
+        and e.get("reason") == "retired_zero_size_position"
+        and e.get("size") == 0.0
+        for e in events
+    )
+
+
+def test_zero_size_attempt_is_blocked_before_open(paper_env) -> None:
+    """Sıfır multiplier yeni phantom pozisyon üretmemeli."""
+    from packages.paper import lifecycle
+
+    ps = paper_env["state"]._initial_state()
+    pos, decision = lifecycle.attempt_open(
+        ps,
+        symbol="BTCUSD",
+        side="long",
+        entry_price=60_000.0,
+        size_multiplier=0.0,
+        timeframe="1d",
+    )
+    assert pos is None
+    assert decision["reason"] == "zero_size"
+    assert ps.open_positions == []
+    assert any(
+        e["action"] == "OPEN_BLOCKED" and e.get("reason") == "zero_size"
+        for e in paper_env["audit"].read_recent()
+    )
+
+
 # ---------- kill-switch / force close ----------
 
 def test_kill_switch_closes_force(paper_env) -> None:

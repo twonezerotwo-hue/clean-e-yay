@@ -8,6 +8,10 @@ conflict_gate (Faz 8, block > manual_ready > open ile size kısıtla). İlk
 "block" diyen kazanır; ikisi de "open" derse çarpanlar birlikte uygulanır;
 biri "manual_ready" derse o rotaya gidilir (reason kaynağa göre seçilir).
 
+`apply_gates` tek orkestrasyon noktasıdır; her kapı kendi private helper'ına
+çıkarılmıştır (`_apply_session_gate`, `_apply_conflict_gate`,
+`_manual_ready_reason`) — sıra fonksiyon gövdesinde tek bakışta okunur.
+
 `packages/paper/session_gate.py` ile `packages/decision/conflict_gate.py`'ın
 TEK birleşme noktası budur — `attempt_open()` (tick_worker/main.py) hâlâ
 sistemdeki TEK gerçek paper-açma çağrısıdır, bu modül ona giden girdiyi
@@ -67,6 +71,58 @@ def _profile_for_conflict(setup_type: str, timeframe: str | None) -> str | None:
     return profile_selector.select_profile("TREND_LONG", timeframe)
 
 
+def _apply_session_gate(d: Any, *, side: str, now: datetime) -> session_gate.SessionGate:
+    """Seans kapısı (kısıtlayıcı): block / manual_ready / open + size çarpanı."""
+    return session_gate.evaluate_open(
+        d.symbol, side, d.timeframe, now_utc=now, risk_action=d.risk.action,
+    )
+
+
+def _apply_conflict_gate(
+    d: Any,
+    *,
+    gate_cfg: conflict_gate.ConflictGateConfig,
+    conflict_by_symbol: dict[str, dict],
+) -> tuple[str | None, conflict_gate.GateResult]:
+    """Faz 8 çatışma kapısı: profil çöz + verdict'i süz.
+
+    `(cr_profile, cgate)` döner; sembol için çatışma ön-hesabı yoksa `cr_profile`
+    `None` kalır (fail-open — eski davranış değişmez)."""
+    cr_result = conflict_by_symbol.get(d.symbol) or {}
+    cr_profile = (
+        _profile_for_conflict(cr_result.get("setup_type") or "NO_TRADE", d.timeframe)
+        if cr_result and cr_result.get("conflict_final_action") is not None
+        else None
+    )
+    cgate = conflict_gate.evaluate(
+        trade_profile=cr_profile,
+        conflict_final_action=cr_result.get("conflict_final_action"),
+        cfg=gate_cfg,
+    )
+    return cr_profile, cgate
+
+
+def _manual_ready_reason(
+    gate: session_gate.SessionGate,
+    cgate: conflict_gate.GateResult,
+    cr_profile: str | None,
+) -> tuple[bool, str | None]:
+    """İki kapıdan biri manual_ready dediyse reason'ı seç (seans kapısı önce).
+
+    `(is_manual_ready, reason)` döner — `reason` `None` olsa bile rota hâlâ
+    manual_ready olabilir (seans kapısının `reason_code`'u boş olabilir)."""
+    if gate.route == "manual_ready":
+        return True, gate.reason_code
+    if cgate.route == "manual_ready":
+        return True, f"conflict_gate:{cr_profile}"
+    return False, None
+
+
+def _storm_label(regime: Any) -> str:
+    """Rejimin etiketini döner; yoksa/label'sızsa boş string (kural sessiz kalır)."""
+    return str(getattr(regime, "label", "") or "")
+
+
 def apply_gates(
     d: Any,
     *,
@@ -79,29 +135,20 @@ def apply_gates(
     """Bir (symbol, timeframe) kararı için session_gate + Conflict Gate'i sırayla
     uygular ve tek bir rotalama kararı döner. `gate_cfg.enabled=False` ise
     Conflict Gate her zaman inert'tir (fail-open) — eski davranış değişmez."""
-    gate = session_gate.evaluate_open(
-        d.symbol, side, d.timeframe, now_utc=now, risk_action=d.risk.action,
-    )
+    gate = _apply_session_gate(d, side=side, now=now)
     if gate.route == "block":
         return _BLOCK
 
-    cr_result = conflict_by_symbol.get(d.symbol) or {}
-    cr_profile = (
-        _profile_for_conflict(cr_result.get("setup_type") or "NO_TRADE", d.timeframe)
-        if cr_result and cr_result.get("conflict_final_action") is not None
-        else None
-    )
-    cgate = conflict_gate.evaluate(
-        trade_profile=cr_profile,
-        conflict_final_action=cr_result.get("conflict_final_action"),
-        cfg=gate_cfg,
+    cr_profile, cgate = _apply_conflict_gate(
+        d, gate_cfg=gate_cfg, conflict_by_symbol=conflict_by_symbol,
     )
     if cgate.route == "block":
         return _BLOCK
 
     combined_mult = gate.effective_multiplier * cgate.effective_multiplier
-    if gate.route == "manual_ready" or cgate.route == "manual_ready":
-        reason = gate.reason_code if gate.route == "manual_ready" else f"conflict_gate:{cr_profile}"
+
+    is_manual_ready, reason = _manual_ready_reason(gate, cgate, cr_profile)
+    if is_manual_ready:
         return GateDecision(
             route="manual_ready",
             effective_multiplier=combined_mult,
@@ -112,7 +159,7 @@ def apply_gates(
     # T5 — fırtına kuralı: rota "open" olacakken rejim DEFENSIVE/CRISIS ise owner
     # onayına düşür. Flag KAPALIYKEN yalnız gölge kanıt satırı (tick log'unda
     # birikir; owner rakamları görüp açar) — rota bayt-aynı kalır.
-    label = str(getattr(regime, "label", "") or "")
+    label = _storm_label(regime)
     if label in _STORM_LABELS:
         if _regime_manual_ready_enabled():
             return GateDecision(

@@ -666,6 +666,135 @@ function LayerStage({
   );
 }
 
+/**
+ * The cockpit brief contains the narrative world summary and can legitimately
+ * be slower than the read-only Heart discovery feed (for example while the
+ * local LLM is warming up).  Keep the shell and the independent asset panel
+ * usable during that window; this never supplies decision data or opens an
+ * order.
+ */
+function CockpitDegradedView({
+  activeLayer,
+  direction,
+  onSelect,
+  onOpenSymbol,
+  loading,
+}: {
+  activeLayer: LayerIndex;
+  direction: number;
+  onSelect: (layer: LayerIndex) => void;
+  onOpenSymbol: (symbol: string) => void;
+  loading: boolean;
+}) {
+  const fallbackHero: Layer0HeroProps = {
+    title: "Cockpit özeti bekleniyor",
+    detail: loading
+      ? "Ana dünya özeti hazırlanıyor; bağımsız Heart radar ve haber akışı çalışıyor."
+      : "Ana cockpit özeti şu anda alınamadı; bağımsız paneller çalışmaya devam ediyor.",
+    tone: "text-amber-200",
+    dqs: { value: "--", tone: "text-amber-300" },
+    pnl: { value: "flat", tone: "text-slate-300" },
+    topSymbols: "Heart radar açık",
+    scans: {
+      veri: {
+        label: "Veri omurgası",
+        value: "özet bekleniyor",
+        ok: false,
+        state: "IZLE",
+      },
+      risk: {
+        label: "Risk kapısı",
+        value: "ayrı akışta izleniyor",
+        ok: false,
+        state: "IZLE",
+      },
+      sinyal: {
+        label: "Sinyal adayları",
+        value: "Heart radar açık",
+        ok: false,
+        state: "IZLE",
+      },
+    },
+    watch: [{ key: "cockpit_brief", label: "Ana cockpit özeti" }],
+  };
+
+  const layerContent =
+    activeLayer === 0 ? (
+      <div className="h-full snap-y snap-mandatory overflow-y-auto scroll-smooth p-2 sm:p-3 md:p-4 xl:snap-none xl:overflow-hidden">
+        <Layer0ReporterAgent hero={fallbackHero} onNavigate={onSelect} />
+      </div>
+    ) : activeLayer === 1 ? (
+      <Layer1Stack
+        items={[
+          {
+            key: "holographic_signals",
+            label: "Sinyal Kartlari",
+            node: (
+              <PanelFrame id="holographic_signals" className="h-full">
+                <PanelHeader title="SİNYAL KARTLARI" subtitle="Teknik sinyal özeti ana cockpit verisi beklenirken yükleniyor." />
+                <LoadingState label="Sinyal verileri yükleniyor…" />
+              </PanelFrame>
+            ),
+          },
+          {
+            key: "asset_opportunities",
+            label: "Yeni Asset",
+            node: <AssetOpportunitiesPanel onOpenSymbol={onOpenSymbol} />,
+          },
+          { key: "news", label: "Haberler", node: <NewsPanel defaultView="radar" /> },
+          { key: "execution_readiness", label: "Checklist", node: <ExecutionReadinessPanel /> },
+          { key: "event_calendar", label: "Olay Takvimi", node: <EventCalendarPanel /> },
+          { key: "scenario", label: "Senaryo", node: <ScenarioPanel /> },
+          { key: "capital_rotation", label: "Likidite", node: <CapitalRotationPanel /> },
+          { key: "order_ticket", label: "Order Ticket", node: <OrderTicketPanel /> },
+        ]}
+      />
+    ) : (
+      <div className="grid h-full place-items-center p-6">
+        <div className="max-w-md text-center">
+          <LoadingState label={loading ? "Cockpit verileri yükleniyor…" : "Cockpit verisi bekleniyor…"} />
+          <p className="mt-3 text-xs leading-5 text-white/45">
+            Heart katmanı bağımsız keşif akışıyla kullanılabilir. Ana karar özeti
+            hazır olduğunda diğer katmanlar otomatik olarak açılır.
+          </p>
+        </div>
+      </div>
+    );
+
+  return (
+    <main className="cockpit-root relative grid min-w-0 grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden bg-[#02030a] text-white">
+      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_58%_46%,rgba(20,184,166,0.13),transparent_26%),linear-gradient(180deg,rgba(2,3,10,0.2),rgba(2,3,10,0.92))]" />
+      <header className="pointer-events-none relative z-30 min-w-0 overflow-hidden border-b border-white/[0.08] bg-black/24 backdrop-blur-md">
+        <div className="mx-auto flex max-w-7xl items-center justify-between gap-2 px-3 py-1.5 sm:gap-3 sm:px-4 sm:py-2.5 md:px-6 xl:pl-24">
+          <div className="flex min-w-0 items-center gap-2 sm:gap-3">
+            <div className="grid h-8 w-8 shrink-0 place-items-center rounded-xl border border-accent-cyan/35 bg-accent-cyan/10 font-display text-xs text-accent-cyan shadow-[0_0_28px_rgba(34,211,238,0.16)] sm:h-10 sm:w-10 sm:text-sm">EY</div>
+            <div className="min-w-0">
+              <div className="truncate font-display text-xs leading-tight text-white/92 sm:text-sm">E-yAy Brain</div>
+              <div className="hidden text-[10px] uppercase tracking-[0.22em] text-white/42 sm:block">Human-AI Interface</div>
+            </div>
+          </div>
+          <div className="flex shrink-0 items-center gap-1 sm:gap-2">
+            <span className="hidden rounded-full border border-amber-400/20 bg-amber-400/8 px-2.5 py-1 text-[10px] uppercase tracking-widest text-amber-300 sm:inline-flex">Paper Safe</span>
+            <span className="inline-flex items-center gap-1 rounded-full border border-amber-400/20 bg-amber-400/8 px-1.5 py-1 text-[8px] uppercase tracking-normal text-amber-300 sm:px-2.5 sm:text-[10px] sm:tracking-widest">NO_EXECUTION</span>
+          </div>
+        </div>
+      </header>
+
+      <LayerRail activeLayer={activeLayer} onSelect={onSelect} />
+      <LayerStage activeLayer={activeLayer} direction={direction}>
+        {layerContent}
+      </LayerStage>
+
+      <footer className="pointer-events-none relative z-30 min-w-0 overflow-hidden border-t border-white/[0.08] bg-black/30 backdrop-blur-md">
+        <div className="mx-auto flex max-w-7xl items-center justify-center gap-x-6 gap-y-1 px-3 pb-[calc(0.375rem+env(safe-area-inset-bottom))] pt-1.5 md:justify-between md:px-6 md:py-2 xl:pl-24">
+          <LayerControls activeLayer={activeLayer} onSelect={onSelect} />
+          <span className="hidden text-[10px] uppercase tracking-widest text-amber-300/75 md:inline">Cockpit özeti bekleniyor · Heart açık</span>
+        </div>
+      </footer>
+    </main>
+  );
+}
+
 function Layer1Stack({ items }: { items: Layer1StackItem[] }) {
   const scrollerRef = useRef<HTMLDivElement | null>(null);
   const [activeIndex, setActiveIndex] = useState(0);
@@ -954,6 +1083,8 @@ export function CockpitView() {
     setActiveLayer(next);
   };
 
+  const brief = selectAgentBrief(data);
+
   // Katmanlar arası yatay kaydırma geçişi (dokunmatik). Sağdan-sola → bir sonraki
   // (derinleş), soldan-sağa → bir önceki katman. Yalnız BASKIN yatay hareket sayılır
   // (dikey kaydırma/scroll'u bozmaz); input, sohbet kutusu ve yatay-kaydırmalı panel
@@ -1045,20 +1176,18 @@ export function CockpitView() {
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [activeLayer]);
 
-  if (isLoading) {
-    return (
-      <div className="p-6">
-        <LoadingState />
-      </div>
-    );
-  }
-
-  const brief = selectAgentBrief(data);
   if (!brief) {
     return (
-      <div className="p-6">
-        <EmptyState />
-      </div>
+      <CockpitDegradedView
+        activeLayer={activeLayer}
+        direction={direction}
+        onSelect={activateLayer}
+        onOpenSymbol={(symbol) => {
+          setSelectedLayer2Symbol(symbol);
+          activateLayer(2);
+        }}
+        loading={isLoading}
+      />
     );
   }
 
