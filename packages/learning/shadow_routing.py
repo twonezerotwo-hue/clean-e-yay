@@ -232,6 +232,7 @@ def build_report(now: datetime | None = None) -> dict[str, Any]:
     council = _artifact("council_scorecard.json")
     news = _news_evidence()
     assets = _asset_evidence()
+    from packages.learning import shadow_policy
 
     race_status = race.get("race_status")
     performance = {
@@ -286,6 +287,7 @@ def build_report(now: datetime | None = None) -> dict[str, Any]:
             "exit": "PER_TIMEFRAME_CANARY_ONLY",
             "automatic_activation": False,
         },
+        "policy": shadow_policy.evaluate(),
     }
 
 
