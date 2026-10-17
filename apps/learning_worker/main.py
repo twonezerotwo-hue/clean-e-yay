@@ -89,6 +89,40 @@ def _tf_target_edge_gate_on() -> bool:
 # yeni öğrenici eklendikçe sistem sessizce AĞIRLAŞMASIN (ana kural).
 LEARNING_BUDGET_MS = int(os.environ.get("LEARNING_BUDGET_MS", "60000"))
 
+# Salt-gözlem gölgeleri canlı karar döngüsünü beslemez; bu yüzden her learning
+# tick'inde aynı tarihçeyi baştan hesaplamak gereksiz CPU/IO yüküdür.  Artifact
+# yaşını kapı olarak kullanıyoruz: dosya yoksa ilk koşu yapılır, mevcutsa yalnız
+# gözlem aralığı dolduğunda yeniden hesaplanır. Tarihçe silinmez ve karar motoru
+# bu kapılardan etkilenmez.
+NEWS_EVENT_STUDY_PATH = Path(
+    os.environ.get("NEWS_EVENT_STUDY_PATH", "data/runtime/news_event_study.json")
+)
+CAUSAL_CALIBRATION_PATH = Path(
+    os.environ.get("CAUSAL_CALIBRATION_PATH", "data/runtime/causal_calibration.json")
+)
+NEWS_EVENT_STUDY_INTERVAL_SEC = int(
+    os.environ.get("NEWS_EVENT_STUDY_INTERVAL_SEC", "900")
+)
+CAUSAL_OBSERVE_INTERVAL_SEC = int(
+    os.environ.get("CAUSAL_OBSERVE_INTERVAL_SEC", "604800")
+)
+
+
+def _artifact_due(path: Path, interval_sec: int) -> bool:
+    """Return whether a shadow artifact is due for a fresh calculation.
+
+    Missing/unreadable files are treated as due so a damaged observation
+    artifact is self-healed on the next learning run. This helper is deliberately
+    independent of decision/risk code.
+    """
+    if interval_sec <= 0 or not path.exists():
+        return True
+    try:
+        age_sec = datetime.now(UTC).timestamp() - path.stat().st_mtime
+    except OSError:
+        return True
+    return age_sec >= interval_sec
+
 
 def _tf_target_should_run(outcomes_seen: int) -> tuple[bool, int]:
     """Örnek-kapılı tetik: son çalıştırmadan beri ≥TF_TARGET_MIN_NEW yeni outcome
@@ -677,80 +711,87 @@ def run_once() -> dict:
     # Y-6 — haber olay-çalışması (SALT-GÖZLEM). Off-tick: o anki verified haberleri
     # damgala (dedupe) + olgunlaşan olaylar için N-bar ileri-getiri karnesi
     # (ohlcv.history REUSE). Kanıt bar-arşivi gibi haftayla büyür; karara dokunmaz.
-    news_study_status = "ERROR"
-    try:
-        from packages.learning import news_event_study as _nes
-        recorded = _nes.record_events()
-        nt = _nes.compute()
-        # Causal graph observation is deliberately off-tick.  It snapshots the
-        # already-produced market view and appends predictions to the bounded
-        # ledger; it never feeds weights, orders, or the live decision path.
-        causal_recorded = 0
-        calibration_runtime = {"status": "NOT_RUN"}
+    news_study_status = "SKIP_NOT_DUE"
+    if _artifact_due(NEWS_EVENT_STUDY_PATH, NEWS_EVENT_STUDY_INTERVAL_SEC):
         try:
-            from packages.causal.engine import build_event_asset_attribution
-            from packages.causal.engine import build_shadow as _build_shadow
-            from packages.data.ingestion.pipeline import get_cached_snapshot
-            from packages.data.registry import assets as _asset_registry
-            from packages.world_state import archive as _world_archive
-            from packages.world_state.engine import build as _build_world
-            _cached_snapshot = get_cached_snapshot()
-            _world = _build_world(_cached_snapshot)
-            _shadow = _build_shadow(
-                _world,
-                _asset_registry.trade_symbols(),
-                technicals=(getattr(_cached_snapshot, "technicals_by_tf", None) or getattr(_cached_snapshot, "technicals", None)),
-                prices={quote.symbol: quote for quote in getattr(_cached_snapshot, "prices", ())},
-                volatility=getattr(_cached_snapshot, "volatility", None),
-            )
-            _world_archive.record(
-                _world,
-                snapshot_id=getattr(_cached_snapshot, "snapshot_id", None),
-                asset_impacts=_shadow.impacts,
-                causal_consensus=_shadow.causal_consensus,
-                edges=_shadow.edges,
-                forecasts=_shadow.forecasts,
-                reconstruction_inputs={
-                    "snapshot_id": getattr(_cached_snapshot, "snapshot_id", None),
-                    "source": "snapshot_store",
-                },
-            )
-            by_event = []
-            symbols = _asset_registry.trade_symbols()
-            for event in _world.geopolitical_events:
-                item = event.to_dict()
-                item.update(build_event_asset_attribution(item, symbols))
-                by_event.append(item)
-            for event in _world.macro_surprises:
-                item = event.to_dict()
-                channels = {
-                    key: value for key, value in {
-                        "inflation_pressure": event.inflation_contribution,
-                        "growth_pressure": event.growth_contribution,
-                        "rates_pressure": event.rates_contribution,
-                        "oil_pressure": event.oil_contribution,
-                    }.items() if value
-                }
-                item["channels"] = channels
-                item["source_confidence"] = event.numeric_confidence
-                item.update(build_event_asset_attribution(item, symbols))
-                by_event.append(item)
-            causal_recorded = _nes.record_causal_events(by_event)
-            _nes.causal_event_study()
-            # Matured archived factor responses are the sole input to the
-            # causal edge calibration artifact.  This is off-tick and
-            # fail-soft; calibration.apply remains false in production.
-            from packages.learning import causal_calibration as _cc
-            calibration_runtime = _cc.run_if_due()
-        except Exception as causal_exc:
-            errors.append(f"causal_event_ledger:{type(causal_exc).__name__}")
-            calibration_runtime = {"status": "ERROR", "error": type(causal_exc).__name__}
-        news_study_status = "OK"
-        log.info("news_event_study: +%s events, causal=%s, matured=%s verdict=%s calibration=%s",
-                 recorded, causal_recorded, nt.get("matured"), nt.get("global_verdict"), calibration_runtime.get("status"))
-    except Exception as exc:  # defensive — worker patlamamalı
-        news_study_status = f"ERROR:{type(exc).__name__}"
-        errors.append(f"news_event_study:{type(exc).__name__}")
+            from packages.learning import news_event_study as _nes
+            recorded = _nes.record_events()
+            nt = _nes.compute()
+            # Causal graph observation is deliberately off-tick. It is much
+            # heavier than the ordinary news table, so it runs weekly rather
+            # than once per learning tick. It never feeds orders or weights.
+            causal_recorded = 0
+            calibration_runtime = {"status": "SKIPPED_NOT_DUE"}
+            if _artifact_due(CAUSAL_CALIBRATION_PATH, CAUSAL_OBSERVE_INTERVAL_SEC):
+                try:
+                    from packages.causal.engine import build_event_asset_attribution
+                    from packages.causal.engine import build_shadow as _build_shadow
+                    from packages.data.ingestion.pipeline import get_cached_snapshot
+                    from packages.data.registry import assets as _asset_registry
+                    from packages.world_state import archive as _world_archive
+                    from packages.world_state.engine import build as _build_world
+                    _cached_snapshot = get_cached_snapshot()
+                    _world = _build_world(_cached_snapshot)
+                    _shadow = _build_shadow(
+                        _world,
+                        _asset_registry.trade_symbols(),
+                        technicals=(getattr(_cached_snapshot, "technicals_by_tf", None) or getattr(_cached_snapshot, "technicals", None)),
+                        prices={quote.symbol: quote for quote in getattr(_cached_snapshot, "prices", ())},
+                        volatility=getattr(_cached_snapshot, "volatility", None),
+                    )
+                    _world_archive.record(
+                        _world,
+                        snapshot_id=getattr(_cached_snapshot, "snapshot_id", None),
+                        asset_impacts=_shadow.impacts,
+                        causal_consensus=_shadow.causal_consensus,
+                        edges=_shadow.edges,
+                        forecasts=_shadow.forecasts,
+                        reconstruction_inputs={
+                            "snapshot_id": getattr(_cached_snapshot, "snapshot_id", None),
+                            "source": "snapshot_store",
+                        },
+                    )
+                    by_event = []
+                    symbols = _asset_registry.trade_symbols()
+                    for event in _world.geopolitical_events:
+                        item = event.to_dict()
+                        item.update(build_event_asset_attribution(item, symbols))
+                        by_event.append(item)
+                    for event in _world.macro_surprises:
+                        item = event.to_dict()
+                        channels = {
+                            key: value for key, value in {
+                                "inflation_pressure": event.inflation_contribution,
+                                "growth_pressure": event.growth_contribution,
+                                "rates_pressure": event.rates_contribution,
+                                "oil_pressure": event.oil_contribution,
+                            }.items() if value
+                        }
+                        item["channels"] = channels
+                        item["source_confidence"] = event.numeric_confidence
+                        item.update(build_event_asset_attribution(item, symbols))
+                        by_event.append(item)
+                    causal_recorded = _nes.record_causal_events(by_event)
+                    _nes.causal_event_study()
+                    # Matured archived factor responses are the sole input to
+                    # the causal edge calibration artifact. Calibration apply
+                    # remains false in production.
+                    from packages.learning import causal_calibration as _cc
+                    calibration_runtime = _cc.run_if_due()
+                except Exception as causal_exc:
+                    errors.append(f"causal_event_ledger:{type(causal_exc).__name__}")
+                    calibration_runtime = {"status": "ERROR", "error": type(causal_exc).__name__}
+            news_study_status = "OK"
+            log.info("news_event_study: +%s events, causal=%s, matured=%s verdict=%s calibration=%s",
+                     recorded, causal_recorded, nt.get("matured"), nt.get("global_verdict"), calibration_runtime.get("status"))
+        except Exception as exc:  # defensive — worker patlamamalı
+            news_study_status = f"ERROR:{type(exc).__name__}"
+            errors.append(f"news_event_study:{type(exc).__name__}")
+    else:
+        log.info(
+            "news_event_study: skipped (artifact age < %ss; shadow-only)",
+            NEWS_EVENT_STUDY_INTERVAL_SEC,
+        )
 
     # Çıkış stop-verim backtest'i (SALT-ANALİZ). AĞIR (binlerce entry × ızgara) →
     # interval-kapılı (haftalık; durum = artifact yaşı). Sabit+trailing stop için
@@ -906,6 +947,25 @@ def run_once() -> dict:
         tf_scoring_race_status = f"ERROR:{type(exc).__name__}"
         errors.append(f"tf_scoring_race:{type(exc).__name__}")
 
+    # Birleşik gölge kanıtı (ucuz, salt-gözlem). Aday giriş ile final kapı
+    # sonucunu, asset terfi karnesini, haber teyidini, teknik yarışı ve exit
+    # canary'yi tek artifact'ta toplar. Hiçbir kararı/ağırlığı/paper state'i
+    # değiştirmez; worker'ın ağır backtest adımlarını yeniden çalıştırmaz.
+    shadow_routing_status = "ERROR"
+    try:
+        from packages.learning import shadow_routing
+        shadow_route_result = shadow_routing.run()
+        shadow_routing_status = str(shadow_route_result.get("status", "UNKNOWN"))
+        if shadow_routing_status == "OK":
+            log.info(
+                "shadow_routing: candidates=%s candidate_cells=%s",
+                shadow_route_result.get("candidates"),
+                shadow_route_result.get("candidate_cells"),
+            )
+    except Exception as exc:  # defensive — worker patlamamalı
+        shadow_routing_status = f"ERROR:{type(exc).__name__}"
+        errors.append(f"shadow_routing:{type(exc).__name__}")
+
     if errors:
         status = "COMPLETED_WITH_ERRORS"
     elif outcomes_seen == 0:
@@ -966,6 +1026,7 @@ def run_once() -> dict:
         "subsignal_scorecard_status": subsignal_scorecard_status,  # D5 sinyal karnesi (DISABLED=flag OFF)
         "tf_scoring_v2_shadow_status": tf_scoring_v2_shadow_status,  # D6 v2 gölge skoru (DISABLED=flag OFF)
         "tf_scoring_race_status": tf_scoring_race_status,  # R5 yarış defteri (DISABLED=flag OFF)
+        "shadow_routing_status": shadow_routing_status,  # birleşik gölge kanıtı (salt-gözlem)
         "duration_ms": duration_ms,        # CP1 — perf görünürlüğü
         "over_budget": over_budget,        # CP1 — bütçe aşımı bayrağı
         "errors": errors,

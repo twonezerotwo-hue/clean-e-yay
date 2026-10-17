@@ -2226,6 +2226,10 @@ export interface components {
             proposal_status?: string;
             /** @description Denetim 2026-07-03 additive — AUTO/MANUAL/EXCLUDED kohort ayrımı (packages/learning/cohorts.py). Mevcut alanlar tüm outcome'ları saymaya devam eder; auto sistemin gerçek performansı buradadır. */
             cohorts?: components["schemas"]["LearningCohorts"];
+            /** @description Birleşik gölge kanıtı. Aday giriş ile final kapı sonucunu, yeni asset terfisini, haber teyidini ve exit canary önerilerini gösterir; canlı karar/ağırlık/paper state'ine uygulanmaz. */
+            shadow_routing?: {
+                [key: string]: unknown;
+            };
         };
         LearningCohorts: {
             auto: components["schemas"]["CohortStats"] & {
@@ -3727,6 +3731,12 @@ export interface components {
             live_action?: string | null;
             live_direction?: string | null;
             live_timeframe?: string | null;
+            candidate_wants_entry?: boolean;
+            candidate_action?: string | null;
+            candidate_direction?: string | null;
+            candidate_timeframe?: string | null;
+            candidate_entry_cells?: number;
+            candidate_blocked_by?: string[];
             shadow_wants_entry: boolean;
             shadow_action?: string | null;
             shadow_direction?: string | null;
@@ -3748,6 +3758,15 @@ export interface components {
             affect_decision: boolean;
             affected_paper: boolean;
             summary: components["schemas"]["ShadowAgreementSummary"];
+            /** @description Candidate entries and final blockers; observation-only telemetry. */
+            candidate_summary?: {
+                symbols_with_candidate: number;
+                candidate_entry_cells: number;
+                candidate_not_actionable_symbols: number;
+                blocked_by: {
+                    [key: string]: number;
+                };
+            };
             calibration: components["schemas"]["ShadowCalibration"];
             rows: components["schemas"]["ShadowRow"][];
         };
