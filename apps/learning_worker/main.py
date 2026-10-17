@@ -906,6 +906,25 @@ def run_once() -> dict:
         tf_scoring_race_status = f"ERROR:{type(exc).__name__}"
         errors.append(f"tf_scoring_race:{type(exc).__name__}")
 
+    # Birleşik gölge kanıtı (ucuz, salt-gözlem). Aday giriş ile final kapı
+    # sonucunu, asset terfi karnesini, haber teyidini, teknik yarışı ve exit
+    # canary'yi tek artifact'ta toplar. Hiçbir kararı/ağırlığı/paper state'i
+    # değiştirmez; worker'ın ağır backtest adımlarını yeniden çalıştırmaz.
+    shadow_routing_status = "ERROR"
+    try:
+        from packages.learning import shadow_routing
+        shadow_route_result = shadow_routing.run()
+        shadow_routing_status = str(shadow_route_result.get("status", "UNKNOWN"))
+        if shadow_routing_status == "OK":
+            log.info(
+                "shadow_routing: candidates=%s candidate_cells=%s",
+                shadow_route_result.get("candidates"),
+                shadow_route_result.get("candidate_cells"),
+            )
+    except Exception as exc:  # defensive — worker patlamamalı
+        shadow_routing_status = f"ERROR:{type(exc).__name__}"
+        errors.append(f"shadow_routing:{type(exc).__name__}")
+
     if errors:
         status = "COMPLETED_WITH_ERRORS"
     elif outcomes_seen == 0:
@@ -966,6 +985,7 @@ def run_once() -> dict:
         "subsignal_scorecard_status": subsignal_scorecard_status,  # D5 sinyal karnesi (DISABLED=flag OFF)
         "tf_scoring_v2_shadow_status": tf_scoring_v2_shadow_status,  # D6 v2 gölge skoru (DISABLED=flag OFF)
         "tf_scoring_race_status": tf_scoring_race_status,  # R5 yarış defteri (DISABLED=flag OFF)
+        "shadow_routing_status": shadow_routing_status,  # birleşik gölge kanıtı (salt-gözlem)
         "duration_ms": duration_ms,        # CP1 — perf görünürlüğü
         "over_budget": over_budget,        # CP1 — bütçe aşımı bayrağı
         "errors": errors,
