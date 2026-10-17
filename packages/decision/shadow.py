@@ -136,7 +136,29 @@ def _live_for_symbol(symbol: str, live_decisions: Sequence[Any]) -> dict:
         if getattr(d, "action", None) in _LIVE_ENTRY_ACTIONS
         and bool(getattr(d, "actionable", False))
     ]
+    # T2 candidate_action, final RiskGate/quality kapılarından önceki niyettir.
+    # Bunu ayrı tutmak kritik: actionable=False olması sinyalin kötü olduğunu değil,
+    # mevcut risk/teknik kapılardan biri tarafından kesildiğini gösterebilir. Bu alan
+    # yalnızca gölge kanıtıdır; canlı kararın kendisi değişmez.
+    candidate_entries = [
+        d
+        for d in cells
+        if getattr(d, "candidate_action", None) in _LIVE_ENTRY_ACTIONS
+    ]
     top = max(entries, key=lambda d: float(getattr(d, "confidence", 0.0) or 0.0), default=None)
+    candidate_top = max(
+        candidate_entries,
+        key=lambda d: float(getattr(d, "confidence", 0.0) or 0.0),
+        default=None,
+    )
+    candidate_blocked_by = sorted(
+        {
+            str(reason)
+            for d in candidate_entries
+            for reason in (getattr(d, "blocked_by", None) or [])
+            if reason
+        }
+    )
     return {
         "wants_entry": bool(entries),
         "action": getattr(top, "action", None) if top is not None else None,
@@ -148,6 +170,22 @@ def _live_for_symbol(symbol: str, live_decisions: Sequence[Any]) -> dict:
         "evaluated_cells": len(cells),
         # Additive — historical_edge lookup anahtarı (bkz. _evidence_for_symbol).
         "fingerprint": getattr(top, "fingerprint", None) if top is not None else None,
+        # Counterfactual/capacity telemetry. These fields never feed paper.
+        "candidate_wants_entry": bool(candidate_entries),
+        "candidate_action": (
+            getattr(candidate_top, "candidate_action", None)
+            if candidate_top is not None else None
+        ),
+        "candidate_direction": (
+            _live_direction(getattr(candidate_top, "candidate_action", ""))
+            if candidate_top is not None else None
+        ),
+        "candidate_timeframe": (
+            getattr(candidate_top, "timeframe", None)
+            if candidate_top is not None else None
+        ),
+        "candidate_entry_cells": len(candidate_entries),
+        "candidate_blocked_by": candidate_blocked_by,
     }
 
 
@@ -436,12 +474,27 @@ def build_comparison(
         "LIVE_ONLY_ENTRY": 0,
         "SHADOW_ONLY_ENTRY": 0,
     }
+    candidate_counts = {
+        "symbols_with_candidate": 0,
+        "candidate_entry_cells": 0,
+        "candidate_not_actionable_symbols": 0,
+        "blocked_by": {},
+    }
     for view in shadow_views:
         symbol = getattr(view, "symbol", None)
         live = _live_for_symbol(symbol, live_decisions)
         shadow = _shadow_for_symbol(view)
         agreement = _agreement(live, shadow)
         counts[agreement] = counts.get(agreement, 0) + 1
+        candidate_cells = int(live.get("candidate_entry_cells", 0) or 0)
+        if candidate_cells:
+            candidate_counts["symbols_with_candidate"] += 1
+            candidate_counts["candidate_entry_cells"] += candidate_cells
+            if not live.get("wants_entry"):
+                candidate_counts["candidate_not_actionable_symbols"] += 1
+            blocked = candidate_counts["blocked_by"]
+            for reason in live.get("candidate_blocked_by") or []:
+                blocked[reason] = int(blocked.get(reason, 0)) + 1
         # Additive — agreement/wants_entry hesabını etkilemez (bkz. _evidence_for_symbol).
         evidence = _evidence_for_symbol(
             symbol, fingerprint=live.get("fingerprint"), timeframe=live.get("timeframe")
@@ -486,6 +539,9 @@ def build_comparison(
         "tf_weights_applied": bool(tf_weights),
         "symbols": rows,
         "summary": counts,
+        # Aday giriş ile final actionable ayrımını görünür kılar. Bu yalnızca
+        # gölge telemetrisi; RiskGate'in sonucunu gevşetmez ve paper'a yazmaz.
+        "candidate_summary": candidate_counts,
         # Safety contract stamped on every record (audit/replay evidence).
         "execution_mode": EXECUTION_MODE,
         "paper_safe": True,
@@ -581,6 +637,12 @@ def comparison_viewmodel(record: dict | None) -> dict:
             "affect_decision": False,
             "affected_paper": False,
             "summary": {k.lower(): 0 for k in _AGREEMENTS},
+            "candidate_summary": {
+                "symbols_with_candidate": 0,
+                "candidate_entry_cells": 0,
+                "candidate_not_actionable_symbols": 0,
+                "blocked_by": {},
+            },
             "calibration": {
                 "tf_weights_trusted": False,
                 "calibrated_timeframes": [],
@@ -609,6 +671,12 @@ def comparison_viewmodel(record: dict | None) -> dict:
                 "live_action": live.get("action"),
                 "live_direction": live.get("direction"),
                 "live_timeframe": live.get("timeframe"),
+                "candidate_wants_entry": bool(live.get("candidate_wants_entry")),
+                "candidate_action": live.get("candidate_action"),
+                "candidate_direction": live.get("candidate_direction"),
+                "candidate_timeframe": live.get("candidate_timeframe"),
+                "candidate_entry_cells": int(live.get("candidate_entry_cells", 0) or 0),
+                "candidate_blocked_by": list(live.get("candidate_blocked_by") or []),
                 "shadow_wants_entry": bool(shadow_.get("wants_entry")),
                 "shadow_action": shadow_.get("action"),
                 "shadow_direction": shadow_.get("direction"),
@@ -640,6 +708,12 @@ def comparison_viewmodel(record: dict | None) -> dict:
         "affect_decision": bool(record.get("affect_decision")),
         "affected_paper": bool(record.get("affected_paper")),
         "summary": {k.lower(): int(summary_src.get(k, 0)) for k in _AGREEMENTS},
+        "candidate_summary": dict(record.get("candidate_summary") or {
+            "symbols_with_candidate": 0,
+            "candidate_entry_cells": 0,
+            "candidate_not_actionable_symbols": 0,
+            "blocked_by": {},
+        }),
         "calibration": {
             "tf_weights_trusted": bool(cal.get("tf_weights_trusted", False)),
             "calibrated_timeframes": list(cal.get("calibrated_timeframes") or []),

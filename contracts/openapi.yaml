@@ -2345,6 +2345,13 @@ components:
             (packages/learning/cohorts.py). Mevcut alanlar tüm outcome'ları
             saymaya devam eder; auto sistemin gerçek performansı buradadır.
           $ref: "#/components/schemas/LearningCohorts"
+        shadow_routing:
+          description: >
+            Birleşik gölge kanıtı. Aday giriş ile final kapı sonucunu, yeni asset
+            terfisini, haber teyidini ve exit canary önerilerini gösterir; canlı
+            karar/ağırlık/paper state'ine uygulanmaz.
+          type: object
+          additionalProperties: true
 
     LearningCohorts:
       type: object
@@ -4595,6 +4602,16 @@ components:
         live_action: { type: string, nullable: true }
         live_direction: { type: string, nullable: true }
         live_timeframe: { type: string, nullable: true }
+        # Additive candidate telemetry: preserves the distinction between an
+        # entry proposed by the signal cells and the final RiskGate decision.
+        candidate_wants_entry: { type: boolean }
+        candidate_action: { type: string, nullable: true }
+        candidate_direction: { type: string, nullable: true }
+        candidate_timeframe: { type: string, nullable: true }
+        candidate_entry_cells: { type: integer }
+        candidate_blocked_by:
+          type: array
+          items: { type: string }
         shadow_wants_entry: { type: boolean }
         shadow_action: { type: string, nullable: true }
         shadow_direction: { type: string, nullable: true }
@@ -4624,6 +4641,17 @@ components:
         affect_decision: { type: boolean }
         affected_paper: { type: boolean }
         summary: { $ref: "#/components/schemas/ShadowAgreementSummary" }
+        candidate_summary:
+          type: object
+          description: Candidate entries and final blockers; observation-only telemetry.
+          required: [symbols_with_candidate, candidate_entry_cells, candidate_not_actionable_symbols, blocked_by]
+          properties:
+            symbols_with_candidate: { type: integer }
+            candidate_entry_cells: { type: integer }
+            candidate_not_actionable_symbols: { type: integer }
+            blocked_by:
+              type: object
+              additionalProperties: { type: integer }
         calibration: { $ref: "#/components/schemas/ShadowCalibration" }
         rows:
           type: array

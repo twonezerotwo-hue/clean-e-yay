@@ -13,13 +13,14 @@ from types import SimpleNamespace
 
 from packages.decision import shadow
 
-
 # ── stubs (no bars / network) ─────────────────────────────────────────────────
 
-def _live(symbol, action, *, actionable=True, tf="1h", conf=0.6, size=0.5):
+def _live(symbol, action, *, actionable=True, tf="1h", conf=0.6, size=0.5,
+          candidate_action="hold", blocked_by=None):
     return SimpleNamespace(
         symbol=symbol, action=action, actionable=actionable,
         timeframe=tf, confidence=conf, size_multiplier=size,
+        candidate_action=candidate_action, blocked_by=blocked_by or [],
     )
 
 
@@ -154,6 +155,24 @@ def test_top_live_entry_is_highest_confidence():
     live = rec["symbols"][0]["live"]
     assert live["timeframe"] == "1h" and live["confidence"] == 0.80
     assert live["entry_cells"] == 2
+
+
+def test_candidate_entry_is_visible_when_final_gate_blocks():
+    rec = _cmp(
+        [_live(
+            "BTCUSD", "hold", actionable=False, candidate_action="open_long",
+            blocked_by=["risk_gate:NO_POSITION_INCREASE", "trigger_missing"],
+        )],
+        [_view("BTCUSD", action="NO_TRADE")],
+    )
+    live = rec["symbols"][0]["live"]
+    assert live["wants_entry"] is False
+    assert live["candidate_wants_entry"] is True
+    assert live["candidate_action"] == "open_long"
+    assert live["candidate_direction"] == "long"
+    assert live["candidate_entry_cells"] == 1
+    assert rec["candidate_summary"]["candidate_not_actionable_symbols"] == 1
+    assert "risk_gate:NO_POSITION_INCREASE" in rec["candidate_summary"]["blocked_by"]
 
 
 # ── tf_weights trust verdict embedding (PRIOR/untrusted visibility) ───────────

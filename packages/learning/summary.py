@@ -6,7 +6,7 @@ from dataclasses import asdict
 from packages.data.registry.loader import active_weights_version
 from packages.learning import cohorts as cohorts_mod
 from packages.learning import outcomes as outcomes_mod
-from packages.learning import rebalance_store, run_store, signal_quality
+from packages.learning import rebalance_store, run_store, shadow_routing, signal_quality
 from packages.learning.calibration import reliability_bins
 from packages.learning.walkforward import summarize as wf_summarize
 from packages.paper import state as paper_state
@@ -116,4 +116,6 @@ def build_summary() -> dict:
         "cohorts": cohorts_mod.cohort_summary(outcomes),
         "worker_last_run": run_store.load(),
         "proposal_status": _proposal_status(),
+        # Birleşik gölge kanıtı: yalnız gözlem, canlı karar/ağırlık/paper etkisi yok.
+        "shadow_routing": shadow_routing.viewmodel(),
     }
