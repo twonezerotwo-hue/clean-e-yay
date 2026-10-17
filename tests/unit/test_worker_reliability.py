@@ -42,6 +42,18 @@ def _utc_iso(delta_sec: float = 0.0) -> str:
     return (datetime.now(UTC) - timedelta(seconds=delta_sec)).isoformat()
 
 
+def test_learning_shadow_artifact_due_gate(tmp_path) -> None:
+    """Shadow-only history is recomputed only when its interval expires."""
+    from apps.learning_worker import main as lw
+
+    artifact = tmp_path / "shadow.json"
+    assert lw._artifact_due(artifact, 900) is True
+    artifact.write_text("{}", encoding="utf-8")
+    assert lw._artifact_due(artifact, 900) is False
+    # A non-positive interval is an explicit operator override for a fresh run.
+    assert lw._artifact_due(artifact, 0) is True
+
+
 # ------------------------------- heartbeat store -----------------------------
 
 def test_heartbeat_write_read(ops_env) -> None:
