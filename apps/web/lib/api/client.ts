@@ -803,7 +803,20 @@ export const api = {
         score: agent.dqs?.score ?? 0,
         status: agent.dqs?.status ?? "DEGRADED",
       },
-      headlines: brief.headlines ?? [],
+      // Cockpit carries evidence headlines (source/title/sentiment).  The
+      // legacy briefing view keeps its presentation shape without creating a
+      // second fetch or a second snapshot cycle.
+      headlines: (brief.headlines ?? []).map((headline) => ({
+        tone:
+          headline.sentiment === "bearish"
+            ? "warn"
+            : headline.sentiment === "bullish"
+              ? "ok"
+              : "info",
+        category: headline.source,
+        title: headline.title_tr ?? headline.title,
+        detail: headline.region ?? null,
+      })),
     };
   },
   voiceSpeak: (payload: VoiceSpeakRequest) =>

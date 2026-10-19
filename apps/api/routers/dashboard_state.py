@@ -100,6 +100,7 @@ def get_dashboard_state() -> dict:
             "generated_at": snap.generated_at.isoformat(),
             "dqs_score": snap.quality.score,
             "fallback_used": snap.quality.fallback_used,
+            "paper_state_revision": ps.revision,
         },
         "mode": prov,
         "risk_gate": {

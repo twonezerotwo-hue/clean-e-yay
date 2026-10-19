@@ -16,6 +16,7 @@ import {
 import { usePanelQueryPolicy } from "@/lib/panel-runtime";
 import {
   useAssetRegistry,
+  useCockpitBrief,
   useDataSnapshot,
   useDecisionMatrix,
   useRegimeReport,
@@ -1025,11 +1026,20 @@ function AddAssetForm({ onClose }: { onClose: () => void }) {
 
 export function HolographicSignalDeck({ brief }: { brief: AgentBrief }) {
   const queryClient = useQueryClient();
+  const { data: cockpit } = useCockpitBrief();
   const { data: snap } = useDataSnapshot();
   const { data: decisionMatrix } = useDecisionMatrix();
   const { data: regime } = useRegimeReport();
   const { data: ticketList } = useTradeTickets();
   const { data: assetRegistry } = useAssetRegistry();
+  const cockpitSnapshotId = cockpit?.snapshot_id ?? null;
+  const snapshotAligned =
+    !cockpitSnapshotId || !snap?.meta?.snapshot_id || cockpitSnapshotId === snap.meta.snapshot_id;
+  const authoritativePrices = cockpit?.prices ?? (snapshotAligned ? snap?.prices : undefined);
+  const authoritativeCells = cockpit?.decision_matrix?.cells ??
+    (snapshotAligned ? decisionMatrix?.cells : undefined);
+  const regimeAligned =
+    !cockpitSnapshotId || !regime?.meta?.snapshot_id || cockpitSnapshotId === regime.meta.snapshot_id;
   const customSymbols = useMemo(
     () => new Set(assetRegistry?.custom ?? []),
     [assetRegistry?.custom],
@@ -1053,12 +1063,12 @@ export function HolographicSignalDeck({ brief }: { brief: AgentBrief }) {
   };
 
   const rows = useMemo(
-    () => pickDeckRows(brief.top_candidates ?? [], snap?.prices, decisionMatrix?.cells, customSymbols),
-    [brief.top_candidates, decisionMatrix?.cells, snap?.prices, customSymbols],
+    () => pickDeckRows(brief.top_candidates ?? [], authoritativePrices, authoritativeCells, customSymbols),
+    [brief.top_candidates, authoritativeCells, authoritativePrices, customSymbols],
   );
   const supports = useMemo(
-    () => pickSupports(regime?.assets, snap?.prices),
-    [regime?.assets, snap?.prices],
+    () => pickSupports(regimeAligned ? regime?.assets : undefined, authoritativePrices),
+    [authoritativePrices, regime?.assets, regimeAligned],
   );
 
   const [activeIndex, setActiveIndex] = useState(0);
@@ -1113,7 +1123,7 @@ export function HolographicSignalDeck({ brief }: { brief: AgentBrief }) {
   const activeSymbolQuery = activeRow?.symbol ?? "";
   const activeAction = active ? actionBadge(active) : { label: "—", cls: "" };
 
-  const techForSymbol = snap?.technicals_by_tf?.[activeSymbol];
+  const techForSymbol = snapshotAligned ? snap?.technicals_by_tf?.[activeSymbol] : undefined;
   const effectiveTf: Timeframe | null =
     selectedTf ?? (active?.timeframe as Timeframe | undefined) ?? null;
   const tech = effectiveTf ? techForSymbol?.[effectiveTf] : undefined;

@@ -10,6 +10,8 @@ export type SnapshotMeta = {
   generated_at: string;
   dqs_score?: number;
   fallback_used?: boolean;
+  /** Paper ledger revision used while this snapshot was assembled. */
+  paper_state_revision?: number | null;
 };
 
 export type RegimeLabel = "OFFENSIVE" | "NEUTRAL" | "DEFENSIVE" | "CRISIS";
@@ -628,6 +630,9 @@ export type NewsPreparedSetup = {
 };
 
 export type PaperTradingState = {
+  /** Monotonic ledger revision; panels must not merge older revisions. */
+  revision?: number | null;
+  generated_at?: string;
   equity_usd: number;
   realized_pnl_usd: number;
   unrealized_pnl_usd?: number;
@@ -990,6 +995,7 @@ export type DataSnapshot = {
     snapshot_id: string;
     generated_at: string;
     symbols: string[];
+    paper_state_revision?: number | null;
   };
   // /data/snapshot runtime'da provenance damgası döner (7 alan) — SnapshotMode değil.
   mode: ProvenanceMode;
@@ -1468,6 +1474,10 @@ export type TimeframeDecision = {
 
 export type DecisionMatrix = {
   generated_at: string;
+  /** Snapshot provenance for cross-panel consistency checks. */
+  snapshot_id?: string | null;
+  snapshot_generated_at?: string | null;
+  paper_state_revision?: number | null;
   symbols: string[];
   timeframes: Timeframe[];
   regime?: string;
@@ -1671,12 +1681,27 @@ export type CockpitBrief = {
   generated_at?: string;
   /** Authoritative snapshot used for both the cockpit and executive brief. */
   snapshot_id?: string | null;
+  snapshot_generated_at?: string | null;
   paper_state_revision?: number | null;
   mode?: ProvenanceMode;
   agent_brief: AgentBrief;
   executive?: AgentBriefingExecutive;
   engine?: AgentBriefingEngine;
-  headlines?: AgentBriefingHeadline[];
+  /** Full evidence envelope; all first-screen decision panels read this cycle. */
+  prices?: LivePrice[];
+  headlines?: NewsHeadline[];
+  decision_matrix?: DecisionMatrix;
+  paper_state?: {
+    revision?: number | null;
+    open_positions?: Array<{
+      id: string;
+      symbol: string;
+      side: "long" | "short";
+      timeframe?: string | null;
+      size_usd: number;
+      unrealized_pnl_usd: number;
+    }>;
+  };
   decision_trace: DecisionTrace;
   portfolio_risk?: PortfolioRiskReport;
   world_state?: WorldStateEvidence;

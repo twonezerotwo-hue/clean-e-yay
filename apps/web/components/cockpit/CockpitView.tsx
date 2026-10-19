@@ -12,7 +12,6 @@ import { PanelHeader } from "@/components/shell/PanelHeader";
 import {
   useAgentMatrix,
   useCockpitBrief,
-  useDashboardState,
   usePaperTradingState,
   useTradeTickets,
 } from "@/lib/queries/hooks";
@@ -345,8 +344,8 @@ function riskGateTone(action?: string | null) {
 }
 
 function RiskGateAnchorPanel() {
-  const { data, isLoading } = useDashboardState();
-  const riskGate = data?.risk_gate;
+  const { data, isLoading } = useCockpitBrief();
+  const riskGate = data?.decision_matrix?.risk_gate;
   return (
     <PanelFrame id="risk_gate">
       <PanelHeader title="Risk Kapisi" subtitle="dashboard#risk_gate karsiligi / read-only" />

@@ -10,6 +10,7 @@ from fastapi import APIRouter
 
 from packages.data.ingestion.pipeline import DEFAULT_SYMBOLS, get_cached_snapshot
 from packages.data.provenance import data_provenance
+from packages.paper import state as paper_state
 
 router = APIRouter(tags=["data"])
 
@@ -17,12 +18,14 @@ router = APIRouter(tags=["data"])
 @router.get("/data/snapshot")
 def get_snapshot() -> dict:
     snap = get_cached_snapshot()
+    ps = paper_state.load()
     q = snap.quality
     return {
         "meta": {
             "snapshot_id": snap.snapshot_id,
             "generated_at": snap.generated_at.isoformat(),
             "symbols": DEFAULT_SYMBOLS,
+            "paper_state_revision": ps.revision,
         },
         "mode": data_provenance(snap),
         "prices": [

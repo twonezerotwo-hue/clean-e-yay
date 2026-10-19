@@ -38,6 +38,7 @@ import {
   useAssetRegistry,
   useConflictGateStatus,
   useConflictGateValidation,
+  useCockpitBrief,
   useDataSnapshot,
   useDecisionMatrix,
   useElliottScenario,
@@ -446,20 +447,32 @@ export function Layer2SoulAssetStrip({
   onSelectSymbol: (symbol: string) => void;
 }) {
   const registry = useAssetRegistry();
+  const cockpit = useCockpitBrief();
   const snapshot = useDataSnapshot();
   const decisionMatrix = useDecisionMatrix();
   const regime = useRegimeReport();
+  const cockpitSnapshotId = cockpit.data?.snapshot_id ?? null;
+  const snapshotAligned =
+    !cockpitSnapshotId || !snapshot.data?.meta?.snapshot_id || cockpitSnapshotId === snapshot.data.meta.snapshot_id;
+  const matrixAligned =
+    !cockpitSnapshotId || !decisionMatrix.data?.snapshot_id || cockpitSnapshotId === decisionMatrix.data.snapshot_id;
+  const regimeAligned =
+    !cockpitSnapshotId || !regime.data?.meta?.snapshot_id || cockpitSnapshotId === regime.data.meta.snapshot_id;
   const options = useMemo(() => {
     const registryBy = new Map(
       (registry.data?.assets ?? []).map((asset) => [normalizeSymbol(asset.symbol), asset]),
     );
     const priceBy = new Map(
-      (snapshot.data?.prices ?? [])
+      (cockpit.data?.prices ?? (snapshotAligned ? snapshot.data?.prices : undefined) ?? [])
         .filter((price) => price.price != null && Number.isFinite(price.price))
         .map((price) => [normalizeSymbol(price.symbol), price.price]),
     );
     const candidatesBy = bestCandidateBySymbol(brief.top_candidates ?? []);
-    const matrixBy = bestMatrixBySymbol(decisionMatrix.data?.cells ?? []);
+    const matrixBy = bestMatrixBySymbol(
+      cockpit.data?.decision_matrix?.cells ??
+        (matrixAligned ? decisionMatrix.data?.cells : undefined) ??
+        [],
+    );
     const map = new Map<string, Layer2AssetOption>();
     const add = (symbolInput: string | undefined | null, source: string, order: number) => {
       const symbol = normalizeSymbol(symbolInput);
@@ -488,10 +501,12 @@ export function Layer2SoulAssetStrip({
     };
 
     (brief.top_candidates ?? []).forEach((candidate, index) => add(candidate.symbol, "layer1", index));
-    (decisionMatrix.data?.symbols ?? []).forEach((symbol, index) => add(symbol, "matrix", 50 + index));
+    (cockpit.data?.decision_matrix?.symbols ??
+      (matrixAligned ? decisionMatrix.data?.symbols : undefined) ??
+      []).forEach((symbol, index) => add(symbol, "matrix", 50 + index));
     (registry.data?.trade ?? []).forEach((symbol, index) => add(symbol, "registry", 100 + index));
     (registry.data?.custom ?? []).forEach((symbol, index) => add(symbol, "custom", 130 + index));
-    (regime.data?.assets ?? []).forEach((asset, index) => add(asset.symbol, "liquidity", 180 + index));
+    (regimeAligned ? regime.data?.assets ?? [] : []).forEach((asset, index) => add(asset.symbol, "liquidity", 180 + index));
     DEFAULT_SYMBOLS.forEach((symbol, index) => add(symbol, "default", 220 + index));
 
     return [...map.values()].sort((a, b) => {
@@ -501,6 +516,9 @@ export function Layer2SoulAssetStrip({
     });
   }, [
     brief.top_candidates,
+    cockpit.data?.decision_matrix?.cells,
+    cockpit.data?.decision_matrix?.symbols,
+    cockpit.data?.prices,
     decisionMatrix.data?.cells,
     decisionMatrix.data?.symbols,
     regime.data?.assets,
@@ -508,6 +526,9 @@ export function Layer2SoulAssetStrip({
     registry.data?.custom,
     registry.data?.trade,
     snapshot.data?.prices,
+    snapshotAligned,
+    matrixAligned,
+    regimeAligned,
   ]);
   const activeSymbol = resolveActiveSymbol(selectedSymbol);
   const active = options.find((option) => option.symbol === activeSymbol) ?? options[0];

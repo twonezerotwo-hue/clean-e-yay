@@ -60,6 +60,11 @@ def _build_cockpit_brief() -> dict:
         paper_exploration=paper_policy.enabled(),
     )
     view = matrix_view(regime, risk, decisions, snap, matrix_symbols)
+    # The embedded matrix carries the same provenance as its parent envelope;
+    # clients can reject a stale standalone response instead of merging it.
+    view["snapshot_id"] = getattr(snap, "id", None) or getattr(snap, "snapshot_id", None)
+    view["snapshot_generated_at"] = snap.generated_at.isoformat()
+    view["paper_state_revision"] = getattr(ps, "revision", None)
     provenance = data_provenance(snap)
     halt_active = bool(halt_store.active_halts())
     world_state = build_world_state(snap)
@@ -116,19 +121,70 @@ def _build_cockpit_brief() -> dict:
     # Layer-0 yönetici metni de bu endpoint'in aynı snapshot/pozisyon state'ini
     # kullanır. Ayrı /agent/briefing hesabı dashboard'da aday ve pozisyonun
     # farklı cycle'lardan görünmesine neden olabiliyordu.
+    engine = agent_engine_health()
     executive = build_executive(
         snap,
         regime,
         view.get("cells") or [],
-        agent_engine_health(),
+        engine,
         world_state,
         paper_state_obj=ps,
     )
+    # Cockpit is the authoritative read model for the first-screen panels.
+    # Keep the complete decision matrix, prices and headlines in this same
+    # snapshot envelope so a client never has to merge different cycles.
+    prices = [
+        {
+            "symbol": quote.symbol,
+            "price": quote.price,
+            "ts": quote.ts.isoformat(),
+            "source": quote.source,
+            "verified": quote.verified,
+            "status": quote.status,
+            "error": quote.error,
+            "fallback": quote.fallback,
+        }
+        for quote in snap.prices
+    ]
+    headlines = [
+        {
+            "id": headline.id,
+            "source": headline.source,
+            "region": headline.region,
+            "ts": headline.ts.isoformat(),
+            "title": headline.title,
+            "title_tr": headline.title_tr,
+            "sentiment": headline.sentiment,
+            "asset_impact": headline.asset_impact,
+            "actionable": bool(headline.asset_impact),
+            "freshness": headline.freshness,
+        }
+        for headline in snap.headlines
+    ]
     return {
         "generated_at": view["generated_at"],
         "snapshot_id": getattr(snap, "id", None) or getattr(snap, "snapshot_id", None),
+        "snapshot_generated_at": snap.generated_at.isoformat(),
         "paper_state_revision": getattr(ps, "revision", None),
         "mode": provenance,
+        "engine": engine,
+        "prices": prices,
+        "headlines": headlines,
+        "decision_matrix": view,
+        "paper_state": {
+            "revision": ps.revision,
+            "open_positions": [
+                {
+                    "id": position.id,
+                    "symbol": position.symbol,
+                    "side": position.side,
+                    "timeframe": position.timeframe,
+                    "size_usd": position.size_usd,
+                    "unrealized_pnl_usd": round(position.unrealized_pnl_usd, 2),
+                }
+                for position in ps.open_positions
+            ],
+        },
         "agent_brief": agent_brief_view(
             view, snap, ps, provenance, halt_active=halt_active
         ),

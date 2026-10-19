@@ -80,6 +80,7 @@ export const useClosePaperPosition = () => {
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: qk.paperTradingState });
       void queryClient.invalidateQueries({ queryKey: qk.cockpitBrief });
+      void queryClient.invalidateQueries({ queryKey: qk.decisionMatrix });
     },
   });
 };
@@ -97,6 +98,7 @@ export const useUpdatePaperPositionRiskPlan = () => {
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: qk.paperTradingState });
       void queryClient.invalidateQueries({ queryKey: qk.cockpitBrief });
+      void queryClient.invalidateQueries({ queryKey: qk.decisionMatrix });
     },
   });
 };
@@ -581,6 +583,8 @@ export const useOpenIdeaPaperPosition = () => {
     onSettled: () => {
       void queryClient.invalidateQueries({ queryKey: qk.paperTradingState });
       void queryClient.invalidateQueries({ queryKey: qk.ideas });
+      void queryClient.invalidateQueries({ queryKey: qk.cockpitBrief });
+      void queryClient.invalidateQueries({ queryKey: qk.decisionMatrix });
     },
   });
 };
@@ -886,6 +890,8 @@ export const usePlaceOrder = () => {
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: qk.pendingOrders });
       void queryClient.invalidateQueries({ queryKey: qk.paperTradingState });
+      void queryClient.invalidateQueries({ queryKey: qk.cockpitBrief });
+      void queryClient.invalidateQueries({ queryKey: qk.decisionMatrix });
     },
   });
 };
@@ -938,6 +944,9 @@ export const useHaltReset = () => {
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: qk.riskHalts });
       void queryClient.invalidateQueries({ queryKey: qk.dashboardState });
+      void queryClient.invalidateQueries({ queryKey: qk.cockpitBrief });
+      void queryClient.invalidateQueries({ queryKey: qk.paperTradingState });
+      void queryClient.invalidateQueries({ queryKey: qk.decisionMatrix });
     },
   });
 };

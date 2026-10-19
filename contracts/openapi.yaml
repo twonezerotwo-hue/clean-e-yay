@@ -1452,6 +1452,10 @@ components:
         generated_at: { type: string, format: date-time }
         dqs_score: { type: number, minimum: 0, maximum: 100 }
         fallback_used: { type: boolean }
+        paper_state_revision:
+          type: integer
+          nullable: true
+          description: Monotonic paper ledger revision used for this snapshot.
 
     RegimeLayer:
       type: object
@@ -2036,6 +2040,11 @@ components:
       type: object
       required: [equity_usd, realized_pnl_usd, open_positions, recent_trades]
       properties:
+        revision:
+          type: integer
+          nullable: true
+          description: Monotonic paper ledger revision for cross-panel consistency.
+        generated_at: { type: string, format: date-time }
         equity_usd: { type: number }
         realized_pnl_usd: { type: number }
         unrealized_pnl_usd: { type: number }
@@ -2889,6 +2898,9 @@ components:
       required: [generated_at, symbols, timeframes, cells]
       properties:
         generated_at: { type: string, format: date-time }
+        snapshot_id: { type: string, nullable: true }
+        snapshot_generated_at: { type: string, format: date-time, nullable: true }
+        paper_state_revision: { type: integer, nullable: true }
         symbols:
           type: array
           items: { type: string }
@@ -3078,6 +3090,7 @@ components:
           properties:
             snapshot_id: { type: string }
             generated_at: { type: string, format: date-time }
+            paper_state_revision: { type: integer, nullable: true }
             symbols:
               type: array
               items: { type: string }
@@ -3652,9 +3665,36 @@ components:
       required: [agent_brief, decision_trace]
       properties:
         generated_at: { type: string, format: date-time }
+        snapshot_id: { type: string, nullable: true }
+        snapshot_generated_at: { type: string, format: date-time, nullable: true }
+        paper_state_revision: { type: integer, nullable: true }
         mode:
           type: object
           additionalProperties: true
+        engine: { $ref: "#/components/schemas/AgentBriefingEngine" }
+        prices:
+          type: array
+          items: { $ref: "#/components/schemas/LivePrice" }
+        headlines:
+          type: array
+          items: { $ref: "#/components/schemas/NewsHeadline" }
+        decision_matrix: { $ref: "#/components/schemas/DecisionMatrix" }
+        paper_state:
+          type: object
+          properties:
+            revision: { type: integer, nullable: true }
+            open_positions:
+              type: array
+              items:
+                type: object
+                required: [id, symbol, side, size_usd, unrealized_pnl_usd]
+                properties:
+                  id: { type: string }
+                  symbol: { type: string }
+                  side: { type: string, enum: [long, short] }
+                  timeframe: { type: string, nullable: true }
+                  size_usd: { type: number }
+                  unrealized_pnl_usd: { type: number }
         agent_brief: { $ref: "#/components/schemas/AgentBrief" }
         decision_trace: { $ref: "#/components/schemas/DecisionTrace" }
         portfolio_risk: { $ref: "#/components/schemas/PortfolioRiskReport" }

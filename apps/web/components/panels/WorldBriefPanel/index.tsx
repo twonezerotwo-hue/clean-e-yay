@@ -4,7 +4,7 @@ import { PanelFrame } from "@/components/shell/PanelFrame";
 import { PanelHeader } from "@/components/shell/PanelHeader";
 import { EmptyState } from "@/components/shell/EmptyState";
 import { LoadingState } from "@/components/shell/LoadingState";
-import { useDashboardState } from "@/lib/queries/hooks";
+import { useCockpitBrief } from "@/lib/queries/hooks";
 import type { WorldBrief } from "@/types/generated/api";
 
 type Props = { detail?: boolean };
@@ -20,7 +20,7 @@ function listValues(values: string[] | undefined, empty = "yok") {
 }
 
 export function WorldBriefPanel({ detail = false }: Props) {
-  const { data, isLoading } = useDashboardState();
+  const { data, isLoading } = useCockpitBrief();
   const brief = data?.world_brief;
 
   return (

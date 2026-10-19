@@ -1597,6 +1597,8 @@ export interface components {
             generated_at: string;
             dqs_score?: number;
             fallback_used?: boolean;
+            /** @description Monotonic paper ledger revision used for this snapshot. */
+            paper_state_revision?: number | null;
         };
         RegimeLayer: {
             name: string;
@@ -2017,6 +2019,10 @@ export interface components {
             last_blocker?: string | null;
         };
         PaperTradingState: {
+            /** @description Monotonic paper ledger revision for cross-panel consistency. */
+            revision?: number | null;
+            /** Format: date-time */
+            generated_at?: string;
             equity_usd: number;
             realized_pnl_usd: number;
             unrealized_pnl_usd?: number;
@@ -2607,6 +2613,10 @@ export interface components {
         DecisionMatrix: {
             /** Format: date-time */
             generated_at: string;
+            snapshot_id?: string | null;
+            /** Format: date-time */
+            snapshot_generated_at?: string | null;
+            paper_state_revision?: number | null;
             symbols: string[];
             timeframes: components["schemas"]["Timeframe"][];
             regime?: string;
@@ -2721,6 +2731,7 @@ export interface components {
                 snapshot_id: string;
                 /** Format: date-time */
                 generated_at: string;
+                paper_state_revision?: number | null;
                 symbols: string[];
             };
             mode: components["schemas"]["ProvenanceMode"];
@@ -3111,8 +3122,28 @@ export interface components {
         CockpitBrief: {
             /** Format: date-time */
             generated_at?: string;
+            snapshot_id?: string | null;
+            /** Format: date-time */
+            snapshot_generated_at?: string | null;
+            paper_state_revision?: number | null;
             mode?: {
                 [key: string]: unknown;
+            };
+            engine?: components["schemas"]["AgentBriefingEngine"];
+            prices?: components["schemas"]["LivePrice"][];
+            headlines?: components["schemas"]["NewsHeadline"][];
+            decision_matrix?: components["schemas"]["DecisionMatrix"];
+            paper_state?: {
+                revision?: number | null;
+                open_positions?: {
+                    id: string;
+                    symbol: string;
+                    /** @enum {string} */
+                    side: "long" | "short";
+                    timeframe?: string | null;
+                    size_usd: number;
+                    unrealized_pnl_usd: number;
+                }[];
             };
             agent_brief: components["schemas"]["AgentBrief"];
             decision_trace: components["schemas"]["DecisionTrace"];

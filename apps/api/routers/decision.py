@@ -42,6 +42,12 @@ def get_decision_matrix() -> dict:
     )
     view = matrix_view(regime, risk, decisions, snap, matrix_symbols)
     view["mode"] = data_provenance(snap)
+    # Version envelope: consumers can reject a matrix that belongs to a
+    # different market snapshot or paper-state revision instead of mixing it
+    # with newer prices/positions.
+    view["snapshot_id"] = snap.snapshot_id
+    view["snapshot_generated_at"] = snap.generated_at.isoformat()
+    view["paper_state_revision"] = ps.revision
     return view
 
 

@@ -287,6 +287,19 @@ def test_cockpit_brief_endpoint():
     assert body.get("snapshot_id")
     assert body.get("paper_state_revision") is not None
     assert body.get("executive", {}).get("headline")
+    assert body["decision_matrix"]["snapshot_id"] == body["snapshot_id"]
+    assert body["decision_matrix"]["paper_state_revision"] == body["paper_state_revision"]
+    assert body["paper_state"]["revision"] == body["paper_state_revision"]
+    assert isinstance(body.get("prices"), list)
+    assert isinstance(body.get("headlines"), list)
+
+
+def test_legacy_agent_briefing_reuses_cockpit_envelope():
+    cockpit = client.get("/api/v1/cockpit/brief")
+    legacy = client.get("/api/v1/agent/briefing")
+    assert cockpit.status_code == legacy.status_code == 200
+    assert legacy.json()["snapshot_id"] == cockpit.json()["snapshot_id"]
+    assert legacy.json()["paper_state_revision"] == cockpit.json()["paper_state_revision"]
 
 
 def test_cockpit_all_cells_suspended_share_global_gate():

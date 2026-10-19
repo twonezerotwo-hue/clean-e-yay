@@ -78,6 +78,8 @@ def _serialize_state(ps: paper_state.PaperState) -> dict:
     anomaly = state_anomaly.detect_state(ps)
     total_exposure_usd = round(sum(p.size_usd for p in ps.open_positions), 2)
     return {
+        "revision": ps.revision,
+        "generated_at": now.isoformat(),
         "equity_usd": round(ps.equity_usd, 2),
         "realized_pnl_usd": round(ps.realized_pnl_usd, 2),
         "unrealized_pnl_usd": round(unreal_total, 2),

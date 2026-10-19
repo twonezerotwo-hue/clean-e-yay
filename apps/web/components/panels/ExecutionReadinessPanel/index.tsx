@@ -113,19 +113,44 @@ export function ExecutionReadinessPanel() {
   const activeTicket = tickets.data?.tickets.find((ticket) => ticket.status === "active");
 
   const checks = useMemo<CheckItem[]>(() => {
-    const dqs = snapshot.data?.dqs;
-    const providers = Object.entries(snapshot.data?.provider_status ?? {});
+    // Cockpit is the authoritative decision envelope. Raw providers/prices
+    // remain authoritative only when they carry the same snapshot id; paper
+    // positions require the same monotonic ledger revision.
+    const cockpitSnapshotId = cockpit.data?.snapshot_id ?? null;
+    const snapshotAligned =
+      !cockpitSnapshotId ||
+      !snapshot.data?.meta?.snapshot_id ||
+      cockpitSnapshotId === snapshot.data.meta.snapshot_id;
+    const cockpitMatrix = cockpit.data?.decision_matrix;
+    const authoritativeMatrix = cockpitMatrix ?? (cockpit.data ? undefined : matrix.data);
+    const cockpitPaperRevision = cockpit.data?.paper_state_revision ?? null;
+    const paperAligned =
+      !cockpitPaperRevision ||
+      !paper.data?.revision ||
+      cockpitPaperRevision === paper.data.revision;
+    const dqs = snapshotAligned
+      ? snapshot.data?.dqs
+      : cockpit.data?.agent_brief?.dqs
+        ? {
+            score: cockpit.data.agent_brief.dqs.score ?? 0,
+            status: cockpit.data.agent_brief.dqs.status ?? "DEGRADED",
+          }
+        : undefined;
+    const providers = snapshotAligned ? Object.entries(snapshot.data?.provider_status ?? {}) : [];
     const downProviders = providers.filter(([, provider]) => provider.status === "down").map(([name]) => name);
     const degradedProviders = providers.filter(([, provider]) => provider.status === "degraded").map(([name]) => name);
     const staleWorkers = system.data?.stale_workers ?? [];
     const haltActive = selectHaltActive(halts.data) || Boolean(system.data?.risk_halt_status?.active);
-    const riskGate = dashboard.data?.risk_gate;
-    const eventRestrictive = Boolean(regime.data?.event_risk?.restrictive || matrix.data?.event_risk?.restrictive);
+    const riskGate = cockpitMatrix?.risk_gate ?? (cockpit.data ? undefined : dashboard.data?.risk_gate);
+    const eventRestrictive = Boolean(
+      cockpitMatrix?.event_risk?.restrictive ??
+        (cockpit.data ? false : regime.data?.event_risk?.restrictive || matrix.data?.event_risk?.restrictive),
+    );
     const structureWarnings =
-      (matrix.data?.derivatives?.length ?? 0) +
-      (matrix.data?.volatility?.length ?? 0) +
-      (matrix.data?.options?.length ?? 0) +
-      (matrix.data?.catalysts?.length ?? 0);
+      (authoritativeMatrix?.derivatives?.length ?? 0) +
+      (authoritativeMatrix?.volatility?.length ?? 0) +
+      (authoritativeMatrix?.options?.length ?? 0) +
+      (authoritativeMatrix?.catalysts?.length ?? 0);
     const gateModes = conflictGateStatus.data?.profile_modes ?? {};
     const restrictedGateProfiles = Object.entries(gateModes).filter(([, mode]) => mode !== "OFF");
     const validationReport = conflictGateValidation.data;
@@ -148,13 +173,13 @@ export function ExecutionReadinessPanel() {
 
     // #6 — tüm trade evreninde (statik + custom asset) actionable sinyal sayısı.
     const tradeUniverse = assetRegistry.data?.trade ?? [];
-    const matrixCells = matrix.data?.cells ?? [];
+    const matrixCells = authoritativeMatrix?.cells ?? [];
     const actionableSymbols = new Set(
       matrixCells
         .filter((cell) => cell.actionable && (cell.action === "open_long" || cell.action === "open_short"))
         .map((cell) => cell.symbol),
     );
-    const matrixUsable = Boolean(matrix.data) && matrix.data?.suspended !== true && matrix.data?.dqs_status !== "BLOCKED";
+    const matrixUsable = Boolean(authoritativeMatrix) && authoritativeMatrix?.suspended !== true && authoritativeMatrix?.dqs_status !== "BLOCKED";
     const universeCount = tradeUniverse.length || new Set(matrixCells.map((c) => c.symbol)).size;
 
     // #7 — işlem evrenindeki her asset için piyasa/session durumu (tek çağrı).
@@ -182,7 +207,7 @@ export function ExecutionReadinessPanel() {
     const exposureUsd = paper.data?.total_exposure_usd ?? 0;
     const equityUsd = paper.data?.equity_usd ?? 0;
     const exposurePct = equityUsd > 0 ? (exposureUsd / equityUsd) * 100 : 0;
-    const portfolioPassed = Boolean(paper.data) && !anomalyDetected && duplicateWarnings === 0;
+    const portfolioPassed = paperAligned && Boolean(paper.data) && !anomalyDetected && duplicateWarnings === 0;
 
     // #10 — aktif TÜM ticket'lar (tek ticket değil) broker-hazırlığı.
     const activeTickets = tickets.data?.tickets.filter((t) => t.status === "active") ?? [];
@@ -239,7 +264,7 @@ export function ExecutionReadinessPanel() {
         title: "Risk yeni girişe izin veriyor mu?",
         source: "RiskDurumu / RiskGate",
         passed:
-          Boolean(dashboard.data && cockpit.data) &&
+          Boolean(riskGate && cockpit.data) &&
           riskGate?.action === "HOLD" &&
           brief?.main_blocker?.code === "NONE" &&
           !haltActive,
@@ -273,10 +298,11 @@ export function ExecutionReadinessPanel() {
         id: "market_structure",
         title: "Haber / volatilite engeli var mı?",
         source: "Derivatives / Volatility / Options / Catalyst",
-        passed: Boolean(regime.data && matrix.data) && !eventRestrictive && structureWarnings === 0,
+        passed: Boolean(authoritativeMatrix) && !eventRestrictive && structureWarnings === 0,
         metric: `uyarı ${structureWarnings} · event ${eventRestrictive ? "restrictive" : "clear"}`,
         detail: eventRestrictive
-          ? regime.data?.event_risk?.reason ?? matrix.data?.event_risk?.reason ?? "Restrictive event risk var."
+          ? cockpitMatrix?.event_risk?.reason ??
+            (cockpit.data ? "Restrictive event risk var." : regime.data?.event_risk?.reason ?? matrix.data?.event_risk?.reason ?? "Restrictive event risk var.")
           : structureWarnings > 0
             ? "Piyasa yapısı, volatilite veya haber katmanında uyarı var."
             : "Haber, volatilite ve piyasa yapısında sert engel görünmüyor.",
@@ -323,7 +349,9 @@ export function ExecutionReadinessPanel() {
         source: "PaperState / StateAnomaly (tüm açık pozisyonlar, tek ticket değil)",
         passed: portfolioPassed,
         metric: `exposure $${Math.round(exposureUsd).toLocaleString("en-US")} (%${exposurePct.toFixed(1)} equity)`,
-        detail: anomalyDetected
+        detail: !paperAligned
+          ? "Pozisyon defteri yenileniyor; farklı revizyonlar birleştirilmedi."
+          : anomalyDetected
           ? `State anomaly: ${paper.data?.state_anomaly?.reasons?.join(", ") || "tespit edildi"}.`
           : duplicateWarnings > 0
             ? "Aynı (symbol, timeframe) için duplicate açık pozisyon var."

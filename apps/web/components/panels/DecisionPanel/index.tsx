@@ -8,8 +8,6 @@ import { DataQualityBadge } from "@/components/shell/DataQualityBadge";
 import {
   useAIReport,
   useCockpitBrief,
-  useDashboardState,
-  useDecisionMatrix,
 } from "@/lib/queries/hooks";
 import {
   selectMatrixFirstSymbol,
@@ -23,7 +21,8 @@ import type { TimeframeDecision } from "@/types/generated/api";
 // T2 — mini TF strip: candidate→final + blocked_by tooltip'te; rozetler
 // backend ViewModel'inden gelir.
 function TfStrip() {
-  const { data } = useDecisionMatrix();
+  const { data: cockpit } = useCockpitBrief();
+  const data = cockpit?.decision_matrix;
   const symbol = selectMatrixFirstSymbol(data);
   const cells = symbol ? selectTfStripFor(data, symbol) : [];
   if (!cells.length) return null;
@@ -63,9 +62,10 @@ function TfStrip() {
 
 export function DecisionPanel() {
   const ai = useAIReport();
-  const dash = useDashboardState();
   const cockpit = useCockpitBrief();
   const brief = selectAgentBrief(cockpit.data);
+  const riskGate = cockpit.data?.decision_matrix?.risk_gate;
+  const dqs = cockpit.data?.agent_brief?.dqs;
   return (
     <PanelFrame id="decision">
       <PanelHeader
@@ -73,15 +73,15 @@ export function DecisionPanel() {
         subtitle="AI verdict + risk kapısı"
         actions={
           <DataQualityBadge
-            dqs={dash.data?.meta.dqs_score}
-            generatedAt={dash.data?.meta.generated_at}
-            fallback={dash.data?.meta.fallback_used}
+            dqs={dqs?.score ?? undefined}
+            generatedAt={cockpit.data?.snapshot_generated_at ?? cockpit.data?.generated_at}
+            fallback={cockpit.data?.mode?.mock_warning}
           />
         }
       />
-      {ai.isLoading || dash.isLoading ? (
+      {ai.isLoading || cockpit.isLoading ? (
         <LoadingState />
-      ) : !ai.data || !dash.data ? (
+      ) : !ai.data || !cockpit.data || !riskGate ? (
         <EmptyState />
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -106,10 +106,10 @@ export function DecisionPanel() {
             </div>
             <div
               className={`text-2xl font-display mt-1 ${
-                RISK_ACTION_COLOR[dash.data.risk_gate.action] ?? "text-white"
+                RISK_ACTION_COLOR[riskGate.action] ?? "text-white"
               }`}
             >
-              {dash.data.risk_gate.action}
+              {riskGate.action}
             </div>
             {/* UX1 — tek ana engel (no "veya"); backend ViewModel'inden. */}
             {brief ? (
@@ -129,7 +129,7 @@ export function DecisionPanel() {
                 </p>
               )
             ) : (
-              <p className="text-sm text-white/70 mt-2">{dash.data.risk_gate.reason}</p>
+              <p className="text-sm text-white/70 mt-2">{riskGate.reason}</p>
             )}
             <TfStrip />
           </div>
