@@ -57,6 +57,7 @@ REGISTRY: dict[str, str] = {
     "CAUSAL_OBSERVE_INTERVAL_SEC": "runtime",
     "CORS_EXTRA_ORIGINS": "runtime",
     "COUNCIL_SCORECARD_INTERVAL_SEC": "runtime",
+    "COCKPIT_BRIEF_CACHE_SEC": "runtime",
     "DEV_CORS": "runtime",
     "DISCOVERY_SHADOW_MAX_MB": "runtime",
     "EXIT_BACKTEST_INTERVAL_SEC": "runtime",
