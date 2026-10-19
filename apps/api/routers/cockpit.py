@@ -7,11 +7,11 @@ diğer endpoint'lerle aynıdır; bu router sadece özet üretir. PAPER_SAFE.
 """
 from __future__ import annotations
 
-from dataclasses import asdict
 import logging
 import os
 import threading
 import time
+from dataclasses import asdict
 
 from fastapi import APIRouter
 
