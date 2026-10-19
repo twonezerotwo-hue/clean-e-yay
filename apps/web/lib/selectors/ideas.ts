@@ -18,6 +18,11 @@ export const IDEA_KIND_LABEL: Record<string, string> = {
   news: "Haber",
 };
 
+// Backend'in mevcut fikir formülü: teknik 40 + gölge karne 25 + haber 25.
+// Risk yalnızca puan düşürür; bu yüzden gözlem skoru şu an 0–90 aralığındadır.
+// Formülü değiştirmeden UI'da /100 izlenimi vermemek için tek kaynak burada tutulur.
+export const IDEA_SCORE_MAX = 90;
+
 /** Sembol bazında tekilleştir — aynı aday için duplicate kart oluşmaz. Sıra backend'in skor sırası. */
 export function dedupeIdeas(board: IdeaBoardView | undefined): Idea[] {
   const seen = new Map<string, Idea>();
@@ -60,6 +65,8 @@ export type IdeaBannerFacts = {
   kindLabel: string;
   direction: { text: string; tone: string };
   score: number;
+  scoreMax: number;
+  components: Idea["components"];
   confidencePct: number | null;
   timeframe: string | null;
   techConfirmed: boolean;
@@ -70,6 +77,59 @@ export type IdeaBannerFacts = {
   relation: string | null;
   updatedAt: string | null;
 };
+
+function sentence(value: string | null | undefined): string | null {
+  const text = value?.replace(/\s+/g, " ").trim();
+  if (!text) return null;
+  return /[.!?]$/.test(text) ? text : `${text}.`;
+}
+
+/** Haber zincirini kullanıcıya tek bakışta anlaşılır bir neden→etki cümlesine çevirir. */
+export function formatIdeaNewsImpact(idea: Idea): string | null {
+  const chain = idea.news_chain?.[0];
+  const title = sentence(chain?.title ?? idea.news?.evidence?.[0]?.title);
+  const consequence = sentence(chain?.consequence);
+  const direction = idea.news?.direction === "up"
+    ? "Beklenen yön: yukarı."
+    : idea.news?.direction === "down"
+      ? "Beklenen yön: aşağı."
+      : null;
+  const parts = [
+    title ? `Haber: ${title}` : null,
+    consequence ? `Beklenen etkisi: ${consequence}` : null,
+    direction,
+  ].filter(Boolean);
+  return parts.length ? parts.join(" ") : null;
+}
+
+/** "Neden?" alanı artık ham skor dökümü değil, kararın hangi kanıta dayandığını söyler. */
+export function formatIdeaReason(idea: Idea): string | null {
+  const thesis = idea.ai?.thesis?.replace(/\s+/g, " ").trim();
+  if (thesis && !/^Fikir skoru\s+/i.test(thesis)) return thesis;
+  const components = idea.components;
+  const technical = components?.technical ?? 0;
+  const scorecard = components?.scorecard ?? 0;
+  const news = components?.news ?? 0;
+  const risk = components?.risk ?? 0;
+  const technicalText = technical > 0 ? "teknik teyit var" : "teknik teyit yok";
+  const newsText = news > 0 ? "haber desteği var" : news < 0 ? "haber yönü ters" : "haber desteği nötr";
+  const cardText = scorecard > 0 ? "gölge karne destekliyor" : "gölge karne henüz kanıt üretmedi";
+  const riskText = risk < 0 ? `risk etkisi ${risk}` : "ek risk puanı yok";
+  return `İzleme nedeni: ${technicalText}; ${newsText}; ${cardText}; ${riskText}. Toplam fikir skoru ${Math.round(idea.score)}/${IDEA_SCORE_MAX}.`;
+}
+
+/** Haber ile varlık arasındaki mekanizmayı açıkça etiketler; ham kategori adı bırakmaz. */
+export function formatIdeaRelation(idea: Idea): string | null {
+  const chain = idea.news_chain?.[0];
+  const mechanism = sentence(chain?.mechanism);
+  if (mechanism) return `Bağlantı: Bu haber ${idea.symbol} varlığını şu kanaldan etkileyebilir: ${mechanism}`;
+  const title = sentence(chain?.title);
+  const consequence = sentence(chain?.consequence);
+  if (title && consequence) return `Haber zinciri: ${title} → ${consequence}`;
+  return idea.news
+    ? `Bağlantı: ${idea.news.n_headlines ?? 0} haber başlığı ve ${Math.round(idea.news.strength ?? 0)} güç puanı izleniyor.`
+    : null;
+}
 
 /** Banner alanları — hepsi fikrin kendi verisinden; olmayan alan null (uydurma metin yok). */
 export function selectIdeaBannerFacts(idea: Idea, boardAt?: string | null): IdeaBannerFacts {
@@ -87,20 +147,18 @@ export function selectIdeaBannerFacts(idea: Idea, boardAt?: string | null): Idea
     // Haber yönü yoksa teknik teyitli fikir yukarıdır (keşif yalnız LONG üretir).
     direction: ideaDirection(newsDir ?? (confirmed ? "up" : null)),
     score: Math.round(idea.score),
+    scoreMax: IDEA_SCORE_MAX,
+    components: idea.components,
     confidencePct: tech.confidence != null ? Math.round(tech.confidence * 100) : null,
     timeframe: tech.entry_timeframe ?? null,
     techConfirmed: confirmed,
     techText: confirmed
       ? `teyitli${tfs}${firstConfirmation ? ` · ${firstConfirmation}` : ""}`
       : `teyit yok (${tech.verdict || "veri yok"})`,
-    impact: chain?.consequence || chain?.title || evidence?.title || null,
-    why: idea.ai?.thesis || tech.reasons?.[0] || null,
+    impact: formatIdeaNewsImpact(idea) || evidence?.title || null,
+    why: formatIdeaReason(idea) || tech.reasons?.[0] || null,
     followCondition: idea.ai?.change_mind || null,
-    relation: chain?.mechanism
-      || (chain?.title && chain.consequence
-        ? `${chain.title} → ${chain.consequence}${chain.direction ? ` → ${chain.direction}` : ""}`
-        : null)
-      || (idea.news ? `${idea.news.n_headlines ?? 0} haber başlığı, güç ${Math.round(idea.news.strength)}` : null),
+    relation: formatIdeaRelation(idea),
     updatedAt: fmtIdeaStamp(tech.checked_at ?? boardAt),
   };
 }

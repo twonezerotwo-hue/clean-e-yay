@@ -50,8 +50,8 @@ export function ThresholdAutotunePanel() {
       />
       <p className="mb-2 rounded border border-white/10 bg-white/[0.02] px-2 py-1 text-[11px] leading-5 text-white/55">
         İzin verilen eşikleri (tp_rr_ratio, bias_cuts, adx) <strong className="text-white/75">backtest ile
-        doğrular</strong>, edge stabilse dar-bantta otomatik uygular, sonuç kötüleşirse geri alır (rollback).
-        Flag kapalıyken hiçbir eşik değişmez.
+        doğrular</strong>. Edge stabil değilse otomatik uygulama yapılmaz; öneri owner onayına düşer.
+        Uygulanan değişiklikler rollback ile izlenir.
       </p>
 
       {/* İki kapı: flag (owner) + edge (güvenlik) */}

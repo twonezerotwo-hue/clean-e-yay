@@ -69,8 +69,9 @@ export function NewsEventStudyPanel() {
           </div>
 
           <div className="mb-2 text-[10px] text-white/40">
-            {d.matured} olgunlaşmış · {d.pending} bekleyen ({d.horizon_bars} bar sonrası
-            ölçülür) · toplam {d.events_total} haber damgası
+            {d.matured} varlık ölçümü olgunlaşmış · {d.pending} varlık ölçümü bekleyen
+            ({d.horizon_bars} bar sonrası ölçülür) · {d.events_total} haber damgası
+            · toplam {d.observations_total ?? d.matured + d.pending} varlık ölçümü
           </div>
 
           {buckets.length ? (

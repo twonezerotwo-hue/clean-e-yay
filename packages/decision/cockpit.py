@@ -112,7 +112,7 @@ def compute_status(main_blocker_code: str, can_act: bool) -> str:
 
 
 _STANCE: dict[str, str] = {
-    "ACTIONABLE": "RiskGate limitleri dahilinde yeni giriş açılabilir.",
+    "ACTIONABLE": "Teknik olarak giriş engeli yok; edge kanıtı ayrıca doğrulanmalıdır.",
     "WATCHING": "Yeni giriş yok — mevcut pozisyonları izle.",
     "FROZEN": "Donduruldu — owner reset gerekli, yalnızca mevcut riski yönet.",
     "BLOCKED": "Bloklu — veri yetersiz, yeni karar üretilmiyor.",

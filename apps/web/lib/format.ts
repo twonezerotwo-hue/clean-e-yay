@@ -7,6 +7,21 @@ export const fmtUSD = (v: number | null | undefined, digits = 0) =>
         maximumFractionDigits: digits,
       }).format(v);
 
+/**
+ * PnL display keeps cents for small non-zero values. This is formatting only;
+ * all PnL arithmetic remains owned by the backend paper-trading state.
+ */
+export const fmtPnlUSD = (v: number | null | undefined) => {
+  if (v == null) return "—";
+  const digits = v !== 0 && Math.abs(v) < 100 ? 2 : 0;
+  return new Intl.NumberFormat("tr-TR", {
+    style: "currency",
+    currency: "USD",
+    minimumFractionDigits: digits,
+    maximumFractionDigits: digits,
+  }).format(v);
+};
+
 export const fmtPct = (v: number | null | undefined, digits = 1) =>
   v == null ? "—" : `${(v * 100).toFixed(digits)}%`;
 

@@ -9,7 +9,7 @@ Karar mantığı yok — sadece "şu an state şu, kullanıcı tek bakışta gö
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Any, Literal
 
 from packages.data.ingestion.pipeline import get_cached_snapshot
@@ -104,10 +104,10 @@ def _engine_health() -> dict[str, Any]:
     }
 
 
-def _safe_cells(snap):
+def _safe_cells(snap, paper_state_obj=None):
     """matrix_view cells — direction/score/timeframe/final_action içerir."""
     try:
-        ps = paper_state.load()
+        ps = paper_state_obj if paper_state_obj is not None else paper_state.load()
         risk_in = RiskInput(
             dqs_score=snap.quality.score,
             equity_usd=ps.equity_usd,
@@ -151,17 +151,24 @@ def _market_headlines(snap, cells) -> list[Headline]:
             f"Piyasa nötr — {len(neutral)} hücrenin tamamı yön vermiyor.",
         ))
 
-    top = max(cells, key=lambda c: c.get("score") or 0)
+    actionable = _actionable_cells(cells)
+    top = max(actionable or cells, key=lambda c: c.get("score") or 0)
     score = top.get("score") or 0
     sym = top.get("symbol", "?")
     tf = top.get("timeframe", "?")
     thr = SCORE_DIRECTIONAL
     gap_dir = thr - score
-    if gap_dir <= 0:
+    if gap_dir <= 0 and actionable:
         out.append(Headline(
             "ok", "market",
             f"{sym} {tf} skor {score:.0f}/{thr:.0f} → yön eşiğini geçti.",
             f"Güçlü yön eşiğine ({SCORE_STRONG:.0f}) {SCORE_STRONG - score:+.1f} puan.",
+        ))
+    elif gap_dir <= 0:
+        out.append(Headline(
+            "info", "market",
+            f"{sym} {tf} adayı {score:.0f}/{thr:.0f} ile eşiği geçti; son karar yeni girişe açık değil.",
+            str(top.get("reason") or "Risk/veri kapıları yeniden kontrol ediliyor."),
         ))
     elif gap_dir <= 2:
         out.append(Headline(
@@ -431,6 +438,44 @@ _TF_TR = {
 }
 _DIRECTION_TR = {"bullish": "alış (yukarı)", "bearish": "satış (aşağı)", "neutral": "henüz yönsüz"}
 
+# Dünya özeti yalnızca haber akışında gerçekten görünen aktörleri kullanır.
+# Bu liste bir jeopolitik iddia üretmez; başlık/evidence metnindeki isimleri
+# okunur hale getirir. Eşleşme yoksa aktör adı uydurulmaz.
+_ACTOR_ALIASES: tuple[tuple[str, tuple[str, ...]], ...] = (
+    ("Trump / ABD", ("trump", "donald trump", "white house", "washington", "abd", "u.s.")),
+    ("Çin", ("china", "çin", "chinese", "pekin", "beijing", "pboc")),
+    ("Rusya", ("russia", "rusya", "russian", "moscow", "moskova")),
+    ("İran", ("iran", "iranian", "tehran", "tahran")),
+    ("İsrail", ("israel", "israil", "israeli", "tel aviv")),
+    ("Türkiye", ("turkey", "türkiye", "turkish", "ankara")),
+)
+
+_WORLD_CHANNEL_TR = {
+    "energy_supply_risk": "enerji arzı/petrol",
+    "energy_infrastructure_attack": "enerji altyapısı",
+    "shipping_risk": "deniz taşımacılığı ve navlun",
+    "trade_risk": "ticaret ve tedarik zinciri",
+    "sanctions_pressure": "yaptırım ve finans akışı",
+    "risk_aversion": "risk iştahı ve güvenli limanlar",
+}
+_WORLD_EVENT_TR = {
+    "CHOKEPOINT_THREAT": "boğaz/koridor tehdidi",
+    "CHOKEPOINT_DISRUPTION": "boğaz/koridor kesintisi",
+    "SHIPPING_ATTACK": "gemi saldırısı",
+    "PORT_DISRUPTION": "liman kesintisi",
+    "SANCTIONS": "yaptırım",
+    "TRADE_RESTRICTION": "ticaret kısıtlaması",
+    "AIRSTRIKE": "hava saldırısı",
+    "MISSILE_ATTACK": "füze saldırısı",
+    "DRONE_ATTACK": "İHA saldırısı",
+    "GROUND_OFFENSIVE": "kara harekâtı",
+    "MILITARY_ESCALATION": "askeri tırmanma",
+    "MILITARY_DEESCALATION": "askeri gerilim azalması",
+    "CEASEFIRE": "ateşkes",
+    "PEACE_TALKS": "barış görüşmesi",
+    "NUCLEAR_ESCALATION": "nükleer tırmanma",
+}
+
 
 def _regime_tr(label: str | None) -> str:
     return _REGIME_TR.get(str(label or "").upper(), str(label or "belirsiz").lower())
@@ -448,6 +493,76 @@ def _tf_tr(tf: str | None) -> str:
 def _usd_tr(value: float) -> str:
     """10538.4 → '10.538 dolar' (Türkçe binlik ayraç, sesli okunur)."""
     return f"{value:,.0f}".replace(",", ".") + " dolar"
+
+
+def _side_tr(side: str | None) -> str:
+    return {"long": "LONG", "short": "SHORT"}.get(str(side or "").lower(), "?")
+
+
+def _position_clause(positions: list[Any], rechecks: list[dict] | None = None) -> str:
+    """Açık pozisyonları brief'e bağlayan kısa, karar-dışı durum özeti.
+
+    Brief daha önce yalnızca toplam pozisyon sayısını söylüyordu. Bu, aynı anda
+    ekranda görünen açık pozisyonlarla hangi sinyalin ilişkili olduğunun
+    anlaşılmasını engelliyordu. Buradaki verdict yalnızca son recheck gözlemidir;
+    otomatik kapatma veya yeni emir üretmez.
+    """
+    if not positions:
+        return "masada açık pozisyon yok"
+
+    checks = {
+        str(item.get("position_id")): item
+        for item in (rechecks or ())
+        if isinstance(item, dict) and item.get("position_id")
+    }
+    details: list[str] = []
+    for position in positions[:4]:
+        verdict = (checks.get(str(getattr(position, "id", ""))) or {}).get("verdict")
+        verdict_text = str(verdict or "İZLE")
+        try:
+            pnl = float(position.unrealized_pnl_usd)
+            pnl_text = f"{pnl:+.2f} dolar"
+        except (AttributeError, TypeError, ValueError):
+            pnl_text = "PnL bekleniyor"
+        details.append(
+            f"{_symbol_tr(getattr(position, 'symbol', None))} "
+            f"{_side_tr(getattr(position, 'side', None))} "
+            f"{_tf_tr(getattr(position, 'timeframe', None))} "
+            f"({pnl_text}, {verdict_text})"
+        )
+    suffix = f"; ayrıca {len(positions) - 4} pozisyon daha" if len(positions) > 4 else ""
+    return f"açıklar: {' · '.join(details)}{suffix}"
+
+
+def _actionable_cells(cells: list[dict]) -> list[dict]:
+    """Yalnızca final kararı gerçekten girişe açık hücreleri seçer.
+
+    Score eşiğini aşan ama concentration/EV/entry-quality/data kapılarıyla
+    kısıtlanan bir aday brief'te "işlem sinyali" diye anlatılmamalıdır.
+    """
+    return [
+        cell
+        for cell in cells
+        if bool(cell.get("actionable"))
+        and cell.get("action") in {"open_long", "open_short"}
+        and cell.get("paper_action") in {"open_long", "open_short"}
+    ]
+
+
+def _position_public_row(position: Any) -> dict[str, Any]:
+    """Brief sözleşmesi için güvenli, hesap yapmayan pozisyon satırı."""
+    try:
+        pnl = round(float(position.unrealized_pnl_usd), 2)
+    except (AttributeError, TypeError, ValueError):
+        pnl = None
+    return {
+        "id": getattr(position, "id", None),
+        "symbol": getattr(position, "symbol", None),
+        "side": getattr(position, "side", None),
+        "timeframe": getattr(position, "timeframe", None),
+        "size_usd": getattr(position, "size_usd", None),
+        "unrealized_pnl_usd": pnl,
+    }
 
 
 def _nearest_event(snap):
@@ -473,7 +588,182 @@ def _nearest_event(snap):
     return best
 
 
-def _executive(snap, regime, cells, engine) -> dict[str, Any]:
+def _as_utc(value: Any) -> datetime | None:
+    """Başlık zamanını karşılaştırılabilir UTC datetime'a çevirir."""
+    if isinstance(value, str):
+        try:
+            value = datetime.fromisoformat(value.replace("Z", "+00:00"))
+        except ValueError:
+            return None
+    if not isinstance(value, datetime):
+        return None
+    return value.replace(tzinfo=UTC) if value.tzinfo is None else value.astimezone(UTC)
+
+
+def _brief_news_rows(snap, limit: int = 3) -> list[Any]:
+    """Son 24 saatin başlıklarını tarihe göre seç; tarih yoksa en yeniyi kullan."""
+    rows = [item for item in (getattr(snap, "headlines", None) or ())
+            if str(getattr(item, "title_tr", None) or getattr(item, "title", None) or "").strip()]
+    rows.sort(key=lambda item: _as_utc(getattr(item, "ts", None)) or datetime.min.replace(tzinfo=UTC), reverse=True)
+    now = datetime.now(UTC)
+    recent = [item for item in rows if (stamp := _as_utc(getattr(item, "ts", None)))
+              and now - timedelta(hours=24) <= stamp <= now + timedelta(minutes=5)]
+    selected = recent or rows
+    unique: list[Any] = []
+    seen: set[str] = set()
+    for item in selected:
+        text = " ".join(str(getattr(item, key, None) or "") for key in ("title_tr", "title")).strip()
+        key = " ".join(text.casefold().split())
+        if key and key not in seen:
+            seen.add(key)
+            unique.append(item)
+        if len(unique) >= limit:
+            break
+    return unique
+
+
+def _clean_text(value: Any, limit: int = 180) -> str:
+    text = " ".join(str(value or "").split()).strip()
+    return text if len(text) <= limit else text[: limit - 1].rstrip() + "…"
+
+
+def _headline_world_context(snap, world_state: Any | None) -> str:
+    """Layer-0'a günlük haber → etki → fikir zincirini ekler.
+
+    Bu fonksiyon gözlem metni üretir; sinyal, pozisyon, boyut veya emir üretmez.
+    Kanıt yoksa açıkça "doğrulanmadı" der ve tahmin uydurmaz.
+    """
+    rows = _brief_news_rows(snap)
+    if rows:
+        bits = []
+        for item in rows:
+            title = _clean_text(getattr(item, "title_tr", None) or getattr(item, "title", None), 150)
+            source = _clean_text(getattr(item, "source", None) or "kaynak bilinmiyor", 32)
+            bits.append(f"{source}: {title}")
+        news_clause = "Bugünün gündemi: " + " | ".join(bits) + "."
+    else:
+        news_clause = "Bugünün gündemi: doğrulanmış yeni haber alınamadı."
+
+    if world_state is None:
+        return f"{news_clause} Haber→piyasa etkisi henüz hesaplanamadı; fikir yalnızca izleme düzeyinde."
+
+    events = [event for event in (getattr(world_state, "geopolitical_events", None) or ())
+              if not bool(getattr(event, "expired", False))]
+    channels: list[str] = []
+    for event in events:
+        for channel in (getattr(event, "channels", None) or ()):
+            if channel not in channels and channel in _WORLD_CHANNEL_TR:
+                channels.append(channel)
+
+    impact_parts: list[str] = []
+    # Haber sağlayıcısının varlık eşlemesi, gerçekleşmiş getiriyi değil,
+    # haberin hangi varlıkta hangi yönde baskı beklediğini gösterir.
+    asset_impacts: dict[str, float] = {}
+    for item in _brief_news_rows(snap, limit=20):
+        for symbol, raw_value in (getattr(item, "asset_impact", None) or {}).items():
+            try:
+                asset_impacts[str(symbol).upper()] = asset_impacts.get(str(symbol).upper(), 0.0) + float(raw_value or 0.0)
+            except (TypeError, ValueError):
+                continue
+    for symbol, value in sorted(asset_impacts.items(), key=lambda pair: abs(pair[1]), reverse=True)[:4]:
+        if abs(value) >= 0.15:
+            impact_parts.append(f"{_symbol_tr(symbol)} üzerinde {'yukarı' if value > 0 else 'aşağı'} haber baskısı")
+    pressure_fields = (
+        ("energy_supply_risk", "enerji arzı/petrol"),
+        ("shipping_risk", "taşımacılık/navlun"),
+        ("sanctions_pressure", "yaptırım/finans"),
+        ("trade_risk", "ticaret/tedarik"),
+        ("risk_aversion", "riskten kaçış"),
+    )
+    for field, label in pressure_fields:
+        value = getattr(world_state, field, None)
+        try:
+            numeric = float(value) if value is not None else None
+        except (TypeError, ValueError):
+            numeric = None
+        if numeric is not None and abs(numeric) >= 0.15:
+            impact_parts.append(f"{label} baskısı {'artıyor' if numeric > 0 else 'azalıyor'} ({abs(numeric) * 100:.0f}/100)")
+    if not impact_parts and channels:
+        impact_parts = [_WORLD_CHANNEL_TR[channel] + " kanalı izleniyor" for channel in channels[:3]]
+    if impact_parts:
+        impact_clause = "Piyasa etkisi: " + ", ".join(impact_parts) + "."
+    else:
+        impact_clause = "Piyasa etkisi: haberler henüz doğrulanmış bir fiyat kanalı oluşturmuyor; etki teyidi sürüyor."
+
+    actors: list[str] = []
+    searchable = " ".join(
+        _clean_text(getattr(item, "title", None), 240) + " " + _clean_text(getattr(item, "title_tr", None), 240)
+        for item in _brief_news_rows(snap, limit=20)
+    ).casefold()
+    for event in events:
+        searchable += " " + " ".join(str(actor) for actor in (getattr(event, "actors", None) or ())).casefold()
+    statement_parts: list[str] = []
+    for statement in (getattr(world_state, "statements", None) or ()):
+        name = getattr(statement, "speaker", None) or getattr(statement, "institution", None)
+        if name and str(name).casefold() not in {"government", "unknown", "none"}:
+            name_text = str(name)
+            if name_text not in actors:
+                actors.append(name_text)
+            direction = {
+                "tightening": "sıkılaştırma",
+                "easing": "gevşeme",
+                "unknown": "yön belirsiz",
+            }.get(str(getattr(statement, "policy_direction", None) or "unknown"), "yön belirsiz")
+            evidence = next(iter(getattr(statement, "evidence", None) or ()), None)
+            statement_parts.append(
+                f"{name_text} — {direction}"
+                + (f" ({_clean_text(evidence, 100)})" if evidence else "")
+            )
+    for label, aliases in _ACTOR_ALIASES:
+        if any(alias in searchable for alias in aliases) and label not in actors:
+            actors.append(label)
+    actor_events = []
+    for event in events[:3]:
+        event_type = _WORLD_EVENT_TR.get(str(getattr(event, "event_type", "")), "jeopolitik gelişme")
+        event_actors = ", ".join(str(actor) for actor in (getattr(event, "actors", None) or ()))
+        if event_actors:
+            actor_events.append(f"{event_actors}: {event_type}")
+    if statement_parts or actor_events:
+        details = statement_parts[:3] + actor_events[:3]
+        actor_clause = "Aktör açıklamaları/olaylar: " + " | ".join(details) + "."
+    elif actors:
+        actor_clause = "Başlıklarda geçen aktörler: " + ", ".join(actors[:6]) + "; resmi açıklama ayrıntısı sınırlı."
+    else:
+        actor_clause = "Aktör açıklaması: bugünkü akışta yapılandırılmış resmi açıklama bulunamadı."
+
+    discovery = getattr(world_state, "asset_discovery", None) or {}
+    candidates = discovery.get("candidates") if isinstance(discovery, dict) else None
+    candidate_symbols = [str(item.get("symbol")).upper() for item in (candidates or ())
+                         if isinstance(item, dict) and item.get("symbol")][:3]
+    if candidate_symbols:
+        idea_clause = ("Fikir kıvılcımı: haber kanalıyla ilişkili " + ", ".join(candidate_symbols) +
+                       " izleme listesine alındı; fiyat/teknik teyit olmadan işlem açılmaz.")
+    elif channels:
+        idea_clause = ("Fikir kıvılcımı: " + ", ".join(_WORLD_CHANNEL_TR[channel] for channel in channels[:2]) +
+                       " tarafında aday aranabilir; fiyat teyidi olmadan işlem açılmaz.")
+    else:
+        idea_clause = "Fikir kıvılcımı: doğrulanmış etki yok; yeni pozisyon fikri üretmek için veri bekleniyor."
+    return " ".join((news_clause, impact_clause, actor_clause, idea_clause))
+
+
+def _safe_world_state(snap):
+    """Dünya-state hesaplaması hata verse bile eski briefing akışı çalışır."""
+    try:
+        from packages.world_state.engine import build as build_world_state
+
+        return build_world_state(snap)
+    except Exception:
+        return None
+
+
+def _executive(
+    snap,
+    regime,
+    cells,
+    engine,
+    world_state=None,
+    paper_state_obj=None,
+) -> dict[str, Any]:
     """Genel müdür → CEO brifingi: tek cümle sonuç + kısa sentez + tavsiye.
 
     Tamamen deterministik (LLM yok). Önceliklendirilmiş duruş (stance) belirler,
@@ -486,13 +776,17 @@ def _executive(snap, regime, cells, engine) -> dict[str, Any]:
 
     # Açık pozisyon / equity
     try:
-        ps = paper_state.load()
+        ps = paper_state_obj if paper_state_obj is not None else paper_state.load()
         positions = list(ps.open_positions or [])
     except Exception:
+        ps = None
         positions = []
     if positions:
         total = sum(p.size_usd for p in positions)
-        pos_clause = f"masada {len(positions)} açık pozisyon var (toplam {_usd_tr(total)})"
+        pos_clause = (
+            f"masada {len(positions)} açık pozisyon var (toplam {_usd_tr(total)}); "
+            f"{_position_clause(positions, getattr(ps, 'last_rechecks', None))}"
+        )
     else:
         pos_clause = "masada açık pozisyon yok"
 
@@ -511,19 +805,27 @@ def _executive(snap, regime, cells, engine) -> dict[str, Any]:
         elif st == "degraded":
             deg.append(name)
 
-    # En güçlü hücre — patron diline çevrilir: hangi varlık, hangi grafik,
-    # hangi yön, sinyal gücü ne ve eşiğe göre nerede.
-    top = max(cells, key=lambda c: c.get("score") or 0) if cells else None
+    # Score eşiğini aşan her hücre işlem sinyali değildir. Önce final kararı
+    # gerçekten girişe açık hücreyi seç; yoksa en yüksek skoru yalnızca aday
+    # olarak anlat. Böylece concentration/EV/entry-quality blokları gizlenmez.
+    actionable = _actionable_cells(cells)
+    top_actionable = max(actionable, key=lambda c: c.get("score") or 0) if actionable else None
+    top = top_actionable or (max(cells, key=lambda c: c.get("score") or 0) if cells else None)
     top_score = (top.get("score") or 0) if top else 0
     gap = SCORE_DIRECTIONAL - top_score
     if top:
         sym_txt = _symbol_tr(top.get("symbol"))
         tf_txt = _tf_tr(top.get("timeframe"))
         dir_txt = _DIRECTION_TR.get(str(top.get("direction") or ""), "yukarı")
-        if gap <= 0:
+        if gap <= 0 and top_actionable:
             market_clause = (
                 f"en güçlü sinyal {sym_txt} tarafında: {tf_txt}, {dir_txt} yönü; sinyal gücü "
                 f"{top_score:.0f} puan ve işlem için aradığımız alt sınır ({SCORE_DIRECTIONAL:.0f} puan) aşıldı"
+            )
+        elif gap <= 0:
+            market_clause = (
+                f"en güçlü aday {sym_txt} tarafında: {tf_txt}, {dir_txt} yönü; skor "
+                f"{top_score:.0f} puanla eşiği aşsa da son karar yeni girişe açık değil"
             )
         else:
             market_clause = (
@@ -554,6 +856,21 @@ def _executive(snap, regime, cells, engine) -> dict[str, Any]:
         flags.append(f"Veri kalitesi engelli (puan {dqs_score:.0f}) — doğrulanmış veri yetersiz")
     if deg:
         flags.append(f"Veri kaynağı zayıf çalışıyor: {', '.join(deg)}")
+
+    restrictive = {
+        str(blocker)
+        for cell in cells
+        for blocker in (cell.get("blocked_by") or [])
+        if any(
+            token in str(blocker)
+            for token in ("concentration", "NO_POSITION_INCREASE", "RISK_REDUCE")
+        )
+    }
+    risk_clause = (
+        "risk kapısı açık; ancak açık pozisyon/yoğunlaşma kısıtları izleniyor"
+        if restrictive
+        else "risk tarafında engel yok"
+    )
 
     # ── Duruş (öncelik sırası: en kritik kazanır) ──
     if halts:
@@ -603,11 +920,11 @@ def _executive(snap, regime, cells, engine) -> dict[str, Any]:
             f"kör noktası var. Şu an {market_clause}. {regime_clause.capitalize()}; {pos_clause}."
         )
         recommendation = "Veri kaynakları düzelene kadar yeni pozisyonlara temkinli yaklaşmak doğru olur."
-    elif gap <= 0:
+    elif gap <= 0 and top_actionable:
         stance, label_, tone = "signal", "SİNYAL VAR", "ok"
         headline = f"İşlem sinyali oluştu — {market_clause}."
         narrative = (
-            f"{regime_clause.capitalize()}, risk tarafında engel yok; {pos_clause}. "
+            f"{regime_clause.capitalize()}, {risk_clause}; {pos_clause}. "
             f"{event_clause.capitalize()}."
         )
         recommendation = (
@@ -617,19 +934,28 @@ def _executive(snap, regime, cells, engine) -> dict[str, Any]:
     elif gap <= 2:
         stance, label_, tone = "watching", "İZLEMEDE", "info"
         headline = f"Fırsata yaklaşıyoruz — {market_clause}."
+        watch_reason = (
+            "Aday skor eşiğini geçmiş olsa da son karar yeni girişe açık değil."
+            if gap <= 0
+            else "Henüz işlem açacak güçte bir sinyal yok ama bir aday sınırın hemen altında."
+        )
         narrative = (
-            f"Henüz işlem açacak güçte bir sinyal yok ama bir aday sınırın hemen altında. "
-            f"{regime_clause.capitalize()}, risk tarafı temiz; {pos_clause}. {event_clause.capitalize()}."
+            f"{watch_reason} "
+            f"{regime_clause.capitalize()}, {risk_clause}; {pos_clause}. {event_clause.capitalize()}."
         )
         recommendation = "Şu an yapılacak bir şey yok; aday sınırı geçerse anında haber veririm."
     else:
         stance, label_, tone = "calm", "SAKİN", "info"
         headline = "Piyasa sakin — işlem açacak güçte bir sinyal yok."
         narrative = (
-            f"Şu an {market_clause}. {regime_clause.capitalize()}, risk tarafı temiz; {pos_clause}. "
+            f"Şu an {market_clause}. {regime_clause.capitalize()}, {risk_clause}; {pos_clause}. "
             f"{event_clause.capitalize()}."
         )
         recommendation = "Beklemek en doğrusu; sistem güçlü bir sinyal görmeden işlem zorlamaz."
+
+    # Dünya özeti her duruşta gösterilir; yalnızca haber/world-state kanıtıdır.
+    # Böylece statik "Piyasa sakin" cümlesi günün akışını gizleyemez.
+    narrative = f"{narrative} {_headline_world_context(snap, world_state)}"
 
     return {
         "stance": stance,
@@ -642,12 +968,42 @@ def _executive(snap, regime, cells, engine) -> dict[str, Any]:
     }
 
 
+def build_executive(
+    snap,
+    regime,
+    cells,
+    engine,
+    world_state=None,
+    paper_state_obj=None,
+) -> dict[str, Any]:
+    """Cockpit'in aynı snapshot'ından yönetici metnini üretir.
+
+    HTTP katmanları bu public wrapper'ı kullanır; böylece Layer-0 metni ayrı
+    bir karar/snapshot okumasıyla ekrandaki Cockpit özetinden kopmaz.
+    """
+    return _executive(
+        snap,
+        regime,
+        cells,
+        engine,
+        world_state,
+        paper_state_obj=paper_state_obj,
+    )
+
+
 def build() -> dict[str, Any]:
     """Tek çağrı: yönetici özeti + önceliklendirilmiş başlıklar üretir."""
     snap = get_cached_snapshot()
+    try:
+        ps = paper_state.load()
+    except Exception:
+        # Briefing gözlem katmanıdır; state okunamadığında eski güvenli
+        # fallback'ler çalışmaya devam eder, yeni karar/emir üretilmez.
+        ps = None
     regime = classify(snap)
-    cells = _safe_cells(snap)
+    cells = _safe_cells(snap, paper_state_obj=ps)
     engine = _engine_health()
+    world_state = _safe_world_state(snap)
 
     sections: list[Headline] = []
     sections.extend(_market_headlines(snap, cells))
@@ -663,7 +1019,7 @@ def build() -> dict[str, Any]:
     # kategori gruplamasını aynı tonda korur.
     sections.sort(key=lambda h: _TONE_RANK.get(h.tone, 2))
 
-    executive = _executive(snap, regime, cells, engine)
+    executive = _executive(snap, regime, cells, engine, world_state, paper_state_obj=ps)
 
     return {
         "generated_at": datetime.now(UTC).isoformat(),
@@ -674,4 +1030,9 @@ def build() -> dict[str, Any]:
         "engine": engine,
         "stale": engine["stale"],
         "dqs": {"score": snap.quality.score, "status": snap.quality.status},
+        "paper_state_revision": getattr(ps, "revision", None),
+        "open_positions": [
+            _position_public_row(position)
+            for position in list(getattr(ps, "open_positions", None) or [])
+        ],
     }

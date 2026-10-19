@@ -16,6 +16,18 @@ const KIND_LABEL: Record<string, string> = {
   crypto: "Kripto",
 };
 
+// Düşük örneklemli gölgeler fikir üretir; karar adayı değildir. Bunları
+// ana tabloda göstermemek yalnızca sunum filtresidir, artifact geçmişi silinmez.
+const MIN_SHADOW_SAMPLES = 20;
+
+function isDecisionReadyCandidate(c: DiscoveryCandidate): boolean {
+  return (
+    /^[A-Z0-9._-]{2,20}$/.test(c.symbol) &&
+    c.shadow_signals >= MIN_SHADOW_SAMPLES &&
+    c.shadow_resolved >= MIN_SHADOW_SAMPLES
+  );
+}
+
 function pct(v: number | null | undefined): string {
   return v === null || v === undefined ? "—" : `%${Math.round(v * 100)}`;
 }
@@ -104,13 +116,14 @@ export function DiscoveryPanel() {
     );
   }
 
-  const cands = d.candidates;
+  const cands = d.candidates.filter(isDecisionReadyCandidate);
+  const withheldCount = d.candidates.length - cands.length;
 
   return (
     <PanelFrame id="discovery">
       <PanelHeader
         title="Keşif Tarayıcısı"
-        subtitle="Analiz sabit, varlık değişken — hangi yeni aday açılırdı"
+        subtitle="Analiz sabit, varlık değişken — yalnızca yeterli kanıtlı adaylar"
         actions={
           <span className="rounded bg-white/10 px-1.5 py-0.5 text-[10px] font-mono text-white/60">
             {d.regime ?? "—"}
@@ -147,6 +160,9 @@ export function DiscoveryPanel() {
             +{d.shadow.tracked_new} yeni · {d.shadow.resolved} çözüldü
           </span>
         </span>
+        <span className="text-amber-200/70">
+          {withheldCount} aday kanıt eşiğinin altında tutuldu (min. {MIN_SHADOW_SAMPLES} çözüm)
+        </span>
       </div>
 
       {cands.length ? (
@@ -178,8 +194,8 @@ export function DiscoveryPanel() {
         </div>
       ) : (
         <div className="rounded border border-white/10 bg-white/[0.02] px-2 py-2 text-[11px] text-white/50">
-          Henüz aday yok. Tarayıcı her koşuda evrenin bir dilimini tarar; sinyal
-          bulur ya da gölge karnesi biriktikçe bu tablo dolar.
+          Yeterli doğrulanmış gölge örneği olan aday yok. Düşük örneklemli
+          adaylar geçmişte korunur fakat karar tablosuna alınmaz.
         </div>
       )}
     </PanelFrame>

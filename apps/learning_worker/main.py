@@ -77,11 +77,13 @@ TF_TARGET_MIN_NEW = int(os.environ.get("TF_TARGET_MIN_NEW", "20"))
 
 
 def _tf_target_edge_gate_on() -> bool:
-    """CP4 slice 2 — edge-gate + rollback flag'i. Default OFF → geometri auto-apply
-    eski davranışla (gate'siz) çalışır, bayt-aynı. AÇIK iken: band-içi nudge'lar yalnız
-    `edge_report.safe_to_autotune` STABLE iken otomatik uygulanır + her auto-apply
-    outcome-rollback ile izlenir (kötüleşirse geri alınır)."""
-    return os.environ.get("TF_TARGET_EDGE_GATE", "0").strip().lower() not in {
+    """Edge-gate + rollback kapısı; güvenli varsayılan AÇIKTIR.
+
+    Edge kanıtı stabil değilse geometri önerisi yalnızca PENDING olarak kalır.
+    Bu koruma işlem döngüsünü değiştirmez; doğrulanmamış otomatik nudge'ı
+    durdurur.
+    """
+    return os.environ.get("TF_TARGET_EDGE_GATE", "1").strip().lower() not in {
         "0", "false", "no", "off", ""
     }
 # CP1 — performans bütçesi: learning koşusu bu süreyi aşarsa WARN + run meta'da
@@ -306,13 +308,12 @@ def run_once() -> dict:
                         )
                         for tf in tt_result.per_timeframe
                     }
-                    # CP4 slice 2 edge-gate: flag açıksa band-içi nudge'lar yalnız
-                    # edge STABLE iken auto-apply edilir (UNSTABLE → gated_pending).
-                    # Flag OFF (default) → allowed=True, eski davranış birebir.
+                    # Fail-safe: gate kapalı veya edge güvenli değilse hiçbir
+                    # geometri nudge'ı otomatik uygulanmaz; owner onayına düşer.
                     gate_on = _tf_target_edge_gate_on()
-                    auto_allowed = True
-                    if gate_on:
-                        auto_allowed = bool(edge_report.report().get("safe_to_autotune"))
+                    auto_allowed = bool(
+                        gate_on and edge_report.report().get("safe_to_autotune")
+                    )
                     rec = tf_target_store.submit_proposal(
                         payload, current_baseline=baseline,
                         auto_apply_allowed=auto_allowed,

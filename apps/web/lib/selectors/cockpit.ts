@@ -45,7 +45,7 @@ export const DATA_MODE_TONE: Record<DataMode, string> = {
 };
 
 export const AGENT_STATUS_LABEL: Record<AgentStatus, string> = {
-  ACTIONABLE: "İŞLEM AÇABİLİR",
+  ACTIONABLE: "TEKNİK OLARAK AÇILABİLİR",
   NO_ACTION: "AKSİYON YOK",
   WATCHING: "İZLİYOR",
   FROZEN: "DONDURULDU",

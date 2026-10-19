@@ -353,7 +353,7 @@ def get_tf_targets() -> dict:
         effective[tf] = te._tf_params(tf)
     # CP4 slice 2 — edge-gate + outcome-rollback durumu (observe). Gate flag açıksa
     # geometri auto-apply yalnız edge STABLE iken olur ve her apply izlenir.
-    gate_on = os.environ.get("TF_TARGET_EDGE_GATE", "0").strip().lower() not in {
+    gate_on = os.environ.get("TF_TARGET_EDGE_GATE", "1").strip().lower() not in {
         "0", "false", "no", "off", ""
     }
     rb = tf_target_rollback.load()

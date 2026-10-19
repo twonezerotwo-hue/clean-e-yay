@@ -495,26 +495,17 @@ export function Layer0HumanComputerModel({
   };
   return (
     <div
-      className={`layer0-human-model${pttEnabled ? " layer0-human-model--ptt" : ""}${
-        pttActive ? " layer0-human-model--listening" : ""
-      }`}
+      className={`layer0-human-model${pttActive ? " layer0-human-model--listening" : ""}`}
       onClick={handleTap}
       onContextMenu={(event) => {
         if (pttEnabled) event.preventDefault();
       }}
-      title={pttEnabled ? "Çift tıkla konuş (aç/kapa)" : undefined}
       style={
         pttEnabled
           ? { touchAction: "manipulation", cursor: "pointer", userSelect: "none", WebkitUserSelect: "none" }
           : undefined
       }
     >
-      {pttEnabled ? (
-        <div className={`layer0-ptt-hint${pttActive ? " layer0-ptt-hint--on" : ""}`} aria-hidden>
-          <span className="layer0-ptt-dot" />
-          {pttActive ? "Dinliyorum… çift tıkla durdur" : "Çift tıkla konuş"}
-        </div>
-      ) : null}
       <Canvas
         camera={{ position: [0, 0.32, 5.15], fov: 40 }}
         dpr={[1, 1.75]}

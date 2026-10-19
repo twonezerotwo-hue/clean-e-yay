@@ -785,7 +785,27 @@ export const api = {
       // history: son konuşma turları — backend LLM'i bağlam için kullanır.
       body: JSON.stringify(history?.length ? { message, history } : { message }),
     }),
-  agentBriefing: () => fetchJSON<AgentBriefing>("/api/v1/agent/briefing"),
+  // Layer-0 and cockpit must read one authoritative snapshot.  The legacy
+  // /agent/briefing endpoint can be a different cache cycle, so adapt the
+  // unified cockpit view to the small AgentBriefing shape used by the panel.
+  agentBriefing: async (): Promise<AgentBriefing> => {
+    const brief = await fetchJSON<CockpitBrief>("/api/v1/cockpit/brief");
+    const agent = brief.agent_brief;
+    return {
+      generated_at:
+        brief.generated_at ?? agent.generated_at ?? new Date().toISOString(),
+      snapshot_id: brief.snapshot_id,
+      regime_label: agent.regime,
+      stale: brief.engine?.stale ?? false,
+      executive: brief.executive,
+      engine: brief.engine,
+      dqs: {
+        score: agent.dqs?.score ?? 0,
+        status: agent.dqs?.status ?? "DEGRADED",
+      },
+      headlines: brief.headlines ?? [],
+    };
+  },
   voiceSpeak: (payload: VoiceSpeakRequest) =>
     fetchAudio("/api/voice/speak", {
       method: "POST",

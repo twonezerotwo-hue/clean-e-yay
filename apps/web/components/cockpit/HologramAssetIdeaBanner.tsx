@@ -26,7 +26,7 @@ import type { IdeaPaperOpenResult } from "@/types/generated/api";
 // Üzerine gelince/odaklanınca/tıklayınca ve onay sürerken döngü durur; böylece okunan ya da onaylanan fikir kaymaz.
 // Banner yüksekliği her fikirde SABİT tutulur: yükseklik değişirse hologram kartı her turda yeniden boyutlanır.
 
-const ROTATE_MS = 3000;
+const ROTATE_MS = 5000;
 const HOLD_MS = 10000; // kullanıcı eyleminden sonra döngü bu kadar bekler (sonuç okunabilsin)
 
 const BUTTON_TONE: Record<PaperButtonView["tone"], string> = {
@@ -190,8 +190,7 @@ export function HologramAssetIdeaBanner() {
         }}
       >
         <PanelHeader
-          title="HOLOGRAM · YENİ ASSET FİKRİ"
-          subtitle="Haber → teknik teyit → takip koşulu"
+          title="YENİ ASSET FİKRİ"
           actions={
             facts ? (
               <>
@@ -256,7 +255,6 @@ export function HologramAssetIdeaBanner() {
                 {facts.direction.text}
               </span>
               </div>
-              <p className="mt-1 text-[10px] uppercase tracking-[0.12em] text-accent-cyan/65">Hologramın izlediği aday · emir değildir</p>
             </div>
 
             <div className="space-y-2">
@@ -277,8 +275,15 @@ export function HologramAssetIdeaBanner() {
               ) : (
                 <>
                   <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-                    <Stat label="Skor">{facts.score}</Stat>
-                    <Stat label="Güven">{facts.confidencePct != null ? `%${facts.confidencePct}` : "—"}</Stat>
+                    <Stat label="Fikir skoru" title="Genel fikir kalitesi; mevcut formülün üst sınırı 90 puandır.">
+                      {facts.score}/{facts.scoreMax}
+                    </Stat>
+                    <Stat
+                      label="Teknik güven"
+                      title="Kalibre edilmiş teknik sinyal güveni; haber, gölge karne ve RiskGate sonucu değildir."
+                    >
+                      {facts.confidencePct != null ? `%${facts.confidencePct}` : "—"}
+                    </Stat>
                     <Stat label="Zaman dilimi">{facts.timeframe ?? "—"}</Stat>
                     <Stat label="Teknik teyit" title={facts.techText} className="min-w-0">
                       <span className={facts.techConfirmed ? "text-emerald-300" : "text-amber-200"}>{facts.techText}</span>
@@ -304,6 +309,10 @@ export function HologramAssetIdeaBanner() {
                       </span>
                     </summary>
                     <div className="mt-2 space-y-1 border-t border-white/[0.08] pt-2">
+                      <TextRow
+                        label="Skor kırılımı"
+                        text={`Teknik ${facts.components.technical}/40 · Gölge ${facts.components.scorecard}/25 · Haber ${facts.components.news > 0 ? "+" : ""}${facts.components.news}/25 · Risk ${facts.components.risk}`}
+                      />
                       <TextRow label="Takip koşulu" text={facts.followCondition} />
                       <TextRow label="Haber–varlık ilişkisi" text={facts.relation} />
                     </div>

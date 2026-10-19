@@ -12,7 +12,7 @@ import {
 } from "@/lib/queries/hooks";
 import { selectFlaggedClusters, selectLimits } from "@/lib/selectors/correlation";
 import { selectHaltLevel } from "@/lib/selectors/halts";
-import { fmtUSD, fmtPct, fmtNum, fmtRelative } from "@/lib/format";
+import { fmtUSD, fmtPnlUSD, fmtPct, fmtNum, fmtRelative } from "@/lib/format";
 import type { Position, Trade } from "@/types/generated/api";
 
 // Phase 3 — codex PaperTradingTicker'ın GÖRSEL dilini (mono ticker chip'leri +
@@ -35,7 +35,7 @@ function pnlTone(v: number | null | undefined): string {
 // işaretler). Hesap yok.
 function fmtSignedUSD(v: number | null | undefined): string {
   if (v == null) return "—";
-  return v >= 0 ? `+${fmtUSD(v)}` : fmtUSD(v);
+  return v >= 0 ? `+${fmtPnlUSD(v)}` : fmtPnlUSD(v);
 }
 
 // Codex ticker chip'i — küçük uppercase etiket + mono değer, dikey ayraçlı.

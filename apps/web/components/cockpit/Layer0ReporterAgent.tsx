@@ -137,11 +137,6 @@ function cleanForVoice(text: string) {
     .slice(0, 900);
 }
 
-function shortLine(text: string, max = 148) {
-  const clean = text.replace(/\s+/g, " ").trim();
-  return clean.length > max ? `${clean.slice(0, max - 1)}...` : clean;
-}
-
 function fmtMoney(value: number | null | undefined, digits = 0) {
   if (value == null || !Number.isFinite(value)) return "---";
   return value.toLocaleString("en-US", {
@@ -150,10 +145,16 @@ function fmtMoney(value: number | null | undefined, digits = 0) {
   });
 }
 
+// PnL is often a fraction of a dollar for small paper positions. Do not hide
+// a real, non-zero result behind the integer-only dashboard format.
+function pnlDigits(value: number) {
+  return value !== 0 && Math.abs(value) < 100 ? 2 : 0;
+}
+
 function fmtSignedMoney(value: number | null | undefined) {
   if (value == null || !Number.isFinite(value)) return "---";
   const prefix = value >= 0 ? "+" : "";
-  return `${prefix}$${fmtMoney(value)}`;
+  return `${prefix}$${fmtMoney(value, pnlDigits(value))}`;
 }
 
 function fmtMoneyCompact(value: number | null | undefined) {
@@ -349,9 +350,6 @@ function Layer0PositionManager({
           <div className="text-[15px] font-semibold uppercase tracking-[0.18em] text-white/88">
             Açık Pozisyonlar
           </div>
-          <div className="mt-1 text-[10px] uppercase tracking-widest text-white/36">
-            paper-safe pozisyon yönetim merkezi
-          </div>
         </div>
         <div className="rounded-full border border-white/10 bg-white/[0.035] px-2.5 py-1 text-[9px] font-semibold uppercase tracking-widest text-white/42">
           PAPER_SAFE
@@ -417,7 +415,7 @@ function Layer0PositionManager({
           </div>
         ) : (
           <div className="rounded-xl border border-white/10 bg-white/[0.035] px-3 py-3 text-sm text-white/50">
-            Açık pozisyon yok. Bu alan sadece mevcut backend paper state'inden gelen açık pozisyonları gösterir.
+            Açık pozisyon yok.
           </div>
         )}
       </div>
@@ -850,65 +848,23 @@ function PositionManageModal({
   );
 }
 
-/** Layer 0 orta sütun durum özeti — hologramın altında; yalnız karar için gerekli bilgi. */
-function Layer0StatusCore({
+/** Layer 0 navigasyon şeridi — durum kartı kaldırıldı, geçişler sütunun altında kalır. */
+function Layer0NavigationActions({
   hero,
   onNavigate,
 }: {
   hero: Layer0HeroProps;
   onNavigate: (layer: 0 | 1 | 2 | 3) => void;
 }) {
-  const readState = (item: ScanItem) => item.state ?? (item.ok ? "OK" : "IZLE");
-  const veriState = readState(hero.scans.veri);
-  const riskState = readState(hero.scans.risk);
-  // Giriş izni = veri + risk kapılarının en kötüsü. Sinyal sayısı izin değil,
-  // akış bilgisidir — bu yüzden karara dahil edilmez.
-  const entry = hero.entryOverride ?? (
-    veriState === "ENGEL"
-      ? { word: "KAPALI", tone: "text-red-200", source: "veri güveni düşük" }
-      : riskState === "ENGEL"
-        ? { word: "KAPALI", tone: "text-red-200", source: "risk kapısı" }
-        : riskState === "IZLE"
-          ? { word: "KISITLI", tone: "text-amber-200", source: "risk kapısı" }
-        : { word: "AÇIK", tone: "text-emerald-300", source: "kapılar açık" }
-  );
-  const headline = hero.pnl.value === "flat" ? hero.title : `${hero.title} · ${hero.pnl.value}`;
-  const riskTone =
-    riskState === "OK" ? "text-emerald-300" : riskState === "IZLE" ? "text-amber-200" : "text-red-200";
-
   return (
-    <div className="layer0-status-core layer0-brain-matrix shrink-0">
-      <div className="layer0-status-core__scan" aria-hidden />
-      <div className="brain-matrix-top">
-        <div>
-          <div className="brain-matrix-kicker">Brain durum özeti</div>
-          <strong className={hero.tone}>{headline}</strong>
-          <p>{hero.detail}</p>
-        </div>
-        <div className="brain-matrix-readiness">
-          <span>Giriş izni</span>
-          <strong className={entry.tone}>{entry.word}</strong>
-          <em>{entry.source}</em>
-        </div>
-      </div>
-
-      <div className="brain-matrix-grid">
-        <div className="brain-matrix-cell brain-matrix-cell--wide">
-          <span>Risk kapısı</span>
-          <strong className={riskTone}>{hero.scans.risk.value}</strong>
-          {hero.scans.risk.code ? <p>kod: {hero.scans.risk.code}</p> : null}
-        </div>
-      </div>
-
-      <div className="brain-matrix-actions">
-        <button type="button" onClick={() => onNavigate(1)}>
-          Heart radar
-        </button>
-        <button type="button" onClick={() => onNavigate(3)}>
-          Conscious
-        </button>
-        {hero.scans.risk.href ? <a href={hero.scans.risk.href}>Risk gate</a> : null}
-      </div>
+    <div className="brain-matrix-actions mt-auto shrink-0">
+      <button type="button" onClick={() => onNavigate(1)}>
+        Heart radar
+      </button>
+      <button type="button" onClick={() => onNavigate(3)}>
+        Conscious
+      </button>
+      <a href={hero.scans.risk.href ?? "/dashboard#risk_gate"}>Risk gate</a>
     </div>
   );
 }
@@ -936,7 +892,6 @@ export function Layer0ReporterAgent({
   const [voiceLoading, setVoiceLoading] = useState(false);
   const [voiceError, setVoiceError] = useState<string | null>(null);
   const [micReady, setMicReady] = useState(false);
-  const [lastUserText, setLastUserText] = useState("");
   const [liveTranscript, setLiveTranscript] = useState("");
   // Gerçek SSE akış fazı: pending = ilk parça bekleniyor, streaming = parçalar akıyor.
   const [streamPhase, setStreamPhase] = useState<"idle" | "pending" | "streaming">("idle");
@@ -1276,7 +1231,6 @@ export function Layer0ReporterAgent({
     const text = message.trim();
     if (!text || chatBusy) return;
     setLiveTranscript("");
-    setLastUserText(text);
     // Son turlar backend LLM bağlamına gider — takip sorusu ("peki neden?")
     // önceki cevabıyla birlikte anlaşılır. Yeni soru history'ye girmez.
     const history = messages
@@ -1400,19 +1354,6 @@ export function Layer0ReporterAgent({
         : "idle";
   const positions = paper.data?.open_positions ?? [];
   const totalPnl = paper.data?.unrealized_pnl_usd ?? 0;
-  const subtitleText =
-    modelMode === "listening"
-      ? "Dinliyorum."
-      : modelMode === "thinking"
-        ? lastUserText
-          ? `Sorun okunuyor: ${shortLine(lastUserText, 110)}`
-          : "State ve kanıtlar taranıyor."
-        : modelMode === "speaking"
-          ? streamPhase === "streaming"
-            ? "E-yAy canli yaziyor."
-            : "E-yAy yaniti okunuyor."
-          : "";
-
   // Yeni mesaj/parça geldikçe transcript dibe kilitli kalır — kullanıcı yukarı
   // scroll ettiyse (stickToBottom=false) okuma bozulmaz.
   useEffect(() => {
@@ -1456,8 +1397,7 @@ export function Layer0ReporterAgent({
 
         {/* Hologramın altında: Heart "Yeni Asset" panelinin kompakt görünümü (aynı useIdeas sorgusu). */}
         <HologramAssetIdeaBanner />
-
-        <Layer0StatusCore hero={hero} onNavigate={onNavigate} />
+        <Layer0NavigationActions hero={hero} onNavigate={onNavigate} />
       </div>
 
       {/* ── Sutun 3: Konusma paneli ─────────────────────────────────── */}
@@ -1510,7 +1450,6 @@ export function Layer0ReporterAgent({
           }}
           className="layer0-voice-scroll mt-2 min-h-0 flex-1 space-y-2 overflow-y-auto pr-1"
         >
-          {subtitleText ? <div className="layer0-voice-kicker">{subtitleText}</div> : null}
           {messages.length === 0 ? (
             <div className="layer0-chat-msg layer0-chat-msg--agent">
               <div className="layer0-chat-msg-role">E-yAy · brifing</div>
@@ -1593,7 +1532,6 @@ export function Layer0ReporterAgent({
           <input
             value={input}
             onChange={(event) => setInput(event.target.value)}
-            placeholder="Ornek: 15 dakikalik firsat var mi?"
             maxLength={2000}
           />
           <button

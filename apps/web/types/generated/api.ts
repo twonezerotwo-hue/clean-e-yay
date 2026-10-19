@@ -1669,8 +1669,14 @@ export type DecisionTrace = {
 
 export type CockpitBrief = {
   generated_at?: string;
+  /** Authoritative snapshot used for both the cockpit and executive brief. */
+  snapshot_id?: string | null;
+  paper_state_revision?: number | null;
   mode?: ProvenanceMode;
   agent_brief: AgentBrief;
+  executive?: AgentBriefingExecutive;
+  engine?: AgentBriefingEngine;
+  headlines?: AgentBriefingHeadline[];
   decision_trace: DecisionTrace;
   portfolio_risk?: PortfolioRiskReport;
   world_state?: WorldStateEvidence;

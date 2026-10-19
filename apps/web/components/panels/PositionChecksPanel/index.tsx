@@ -5,7 +5,7 @@ import { PanelHeader } from "@/components/shell/PanelHeader";
 import { LoadingState } from "@/components/shell/LoadingState";
 import { EmptyState } from "@/components/shell/EmptyState";
 import { usePaperTradingState } from "@/lib/queries/hooks";
-import { fmtUSD, fmtNum } from "@/lib/format";
+import { fmtUSD, fmtPnlUSD, fmtNum } from "@/lib/format";
 import type { PositionRecheck, PositionRecheckVerdict } from "@/types/generated/api";
 
 const VERDICT_BADGE: Record<PositionRecheckVerdict, string> = {
@@ -99,7 +99,7 @@ export function PositionChecksPanel() {
                       (p.unrealized_pnl_usd ?? 0) >= 0 ? "text-signal-up" : "text-signal-down"
                     }`}
                   >
-                    {fmtUSD(p.unrealized_pnl_usd)}
+                    {fmtPnlUSD(p.unrealized_pnl_usd)}
                   </td>
                   <td className="text-center">
                     <VerdictBadge r={r} />

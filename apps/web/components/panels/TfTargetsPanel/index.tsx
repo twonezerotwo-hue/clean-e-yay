@@ -12,8 +12,8 @@ import { api } from "@/lib/api/client";
 import type { TfTargetParams, TfTargetsView } from "@/types/generated/api";
 
 // Faz B — TF-aware SL/TP öğrenmesi (packages/learning/tf_target_*.py).
-// Backend her trainer döngüsünde TF başına nudge önerir; ±15% bant içi otomatik
-// uygulanır, dışı owner onayına düşer. Frontend hesap YAPMAZ; tüm değerler
+// Backend her trainer döngüsünde TF başına nudge önerir; edge doğrulanırsa
+// ±15% bant içi uygulanabilir, aksi halde owner onayına düşer. Frontend hesap YAPMAZ; tüm değerler
 // /api/v1/learning/tf-targets ViewModel'inden gelir (DASHBOARD_RULES).
 
 const TFS = ["15m", "1h", "4h", "1d"] as const;
@@ -99,7 +99,7 @@ export function TfTargetsPanel() {
         {enabled
           ? "Live açılışlar bu geometriyle SL/TP koyuyor."
           : "Faz A — shadow mode: motor hesaplıyor, log birikiyor; canlı SL/TP hâlâ sabit-%. Aktivasyon ayrı onayla."}{" "}
-        Trainer ±{bandPct}% bant içi nudge'u otomatik uygular; dışı owner onayı bekler.
+        Trainer ±{bandPct}% bant içi nudge'u yalnız edge doğrulanırsa uygular; diğerleri owner onayı bekler.
       </p>
       {d?.coverage ? (
         <div className="mb-2 flex flex-wrap items-center gap-1.5">
@@ -192,7 +192,7 @@ export function TfTargetsPanel() {
         </div>
       ) : (
         <div className="mt-3 text-[10px] text-white/40">
-          Bekleyen değişiklik yok — trainer ±{bandPct}% içi nudge'ları otomatik uyguluyor.
+          Bekleyen değişiklik yok — edge doğrulanmadan otomatik nudge uygulanmaz.
         </div>
       )}
 
@@ -217,7 +217,7 @@ export function TfTargetsPanel() {
               ? d.edge_gate.safe_to_autotune
                 ? "Edge STABİL → geometri nudge'ları otomatik uygulanıyor + rollback izleniyor."
                 : "Edge TUTARSIZ → otomatik uygulama duraklatıldı (gated_pending, owner onayına düşer)."
-              : "Kapalı: nudge'lar edge'den bağımsız uygulanıyor (rollback izleme yok). TF_TARGET_EDGE_GATE=1 ile aç."}
+              : "Kapalı: güvenlik nedeniyle nudge'lar otomatik uygulanmıyor; TF_TARGET_EDGE_GATE=1 ile edge kapısı etkinleştirilmeli."}
           </p>
           {d.edge_gate.active_monitor ? (
             <p className="mt-1 text-[10px] text-amber-300/80">

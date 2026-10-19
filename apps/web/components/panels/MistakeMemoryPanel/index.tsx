@@ -20,6 +20,11 @@ const ACTION_TONE: Record<MistakeAction, string> = {
   NEUTRAL: "bg-white/10 text-white/50",
 };
 
+// Birkaç gözleme dayalı BOOST/AVOID kararları kararı bozmasın. Backend'in
+// RiskGate'i yine son sözü söyler; bu eşik yalnızca paneldeki risk işaretlerini
+// kanıt seviyesi yeterli olanlarla sınırlar.
+const MIN_MEMORY_TRADES = 20;
+
 /**
  * G3 — Mistake memory paneli. Geçmiş benzer hatalar + verdict + size
  * adjustment. RiskGate ve DQS hard gate'leri her zaman önce çalışır;
@@ -36,8 +41,12 @@ export function MistakeMemoryPanel() {
     );
   }
   const { total, flagged } = selectCounts(data);
-  const flaggedItems = selectFlagged(data);
   const byFp = selectRecordsByFp(data);
+  const flaggedItems = selectFlagged(data).filter((v) => {
+    const rec = byFp.get(v.fingerprint);
+    return rec != null && rec.trades >= MIN_MEMORY_TRADES;
+  });
+  const withheldFlagCount = flagged - flaggedItems.length;
 
   if (!total) {
     return (
@@ -61,6 +70,12 @@ export function MistakeMemoryPanel() {
           </span>
         }
       />
+      {withheldFlagCount > 0 ? (
+        <p className="mb-2 rounded border border-amber-400/20 bg-amber-400/[0.06] px-2 py-1 text-[10px] leading-4 text-amber-200/75">
+          {withheldFlagCount} işaret düşük örneklem nedeniyle gösterilmiyor;
+          BOOST/AVOID için en az {MIN_MEMORY_TRADES} doğrulanmış işlem gerekir.
+        </p>
+      ) : null}
       {flaggedItems.length === 0 ? (
         <p className="text-xs text-white/40">
           Tüm fingerprint'ler NEUTRAL — adjustment uygulanmıyor.

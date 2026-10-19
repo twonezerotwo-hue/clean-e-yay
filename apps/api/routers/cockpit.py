@@ -8,9 +8,15 @@ diğer endpoint'lerle aynıdır; bu router sadece özet üretir. PAPER_SAFE.
 from __future__ import annotations
 
 from dataclasses import asdict
+import logging
+import os
+import threading
+import time
 
 from fastapi import APIRouter
 
+from packages.agent.briefing import _engine_health as agent_engine_health
+from packages.agent.briefing import build_executive
 from packages.agent.llm.world_report import build_world_brief
 from packages.causal.engine import build_shadow
 from packages.data.ingestion.pipeline import get_cached_snapshot
@@ -27,9 +33,14 @@ from packages.world_state.engine import build as build_world_state
 
 router = APIRouter(tags=["cockpit"])
 
+_log = logging.getLogger("api.cockpit")
+_BRIEF_TTL_SEC = max(1.0, float(os.environ.get("COCKPIT_BRIEF_CACHE_SEC", "10")))
+_BRIEF_CACHE: tuple[float, dict] | None = None
+_BRIEF_CACHE_LOCK = threading.Lock()
+_BRIEF_REFRESHING = False
 
-@router.get("/cockpit/brief")
-def get_cockpit_brief() -> dict:
+
+def _build_cockpit_brief() -> dict:
     snap = get_cached_snapshot()
     ps = paper_state.load()
     matrix_symbols = asset_registry.trade_symbols()
@@ -102,12 +113,26 @@ def get_cockpit_brief() -> dict:
         # kendi isteğinde tam anlatıyı üretmeye devam eder.
         allow_llm=False,
     )
+    # Layer-0 yönetici metni de bu endpoint'in aynı snapshot/pozisyon state'ini
+    # kullanır. Ayrı /agent/briefing hesabı dashboard'da aday ve pozisyonun
+    # farklı cycle'lardan görünmesine neden olabiliyordu.
+    executive = build_executive(
+        snap,
+        regime,
+        view.get("cells") or [],
+        agent_engine_health(),
+        world_state,
+        paper_state_obj=ps,
+    )
     return {
         "generated_at": view["generated_at"],
+        "snapshot_id": getattr(snap, "id", None) or getattr(snap, "snapshot_id", None),
+        "paper_state_revision": getattr(ps, "revision", None),
         "mode": provenance,
         "agent_brief": agent_brief_view(
             view, snap, ps, provenance, halt_active=halt_active
         ),
+        "executive": executive,
         "decision_trace": decision_trace_view(view, snap),
         "world_state": world_state.to_dict(),
         "world_brief": world_brief,
@@ -117,3 +142,50 @@ def get_cockpit_brief() -> dict:
         # geçerlilik ve bekleyen kapıyı birlikte gösterir.
         "news_prepared_setups": [asdict(item) for item in ps.news_prepared_setups[-32:]],
     }
+
+
+def _refresh_brief_cache() -> None:
+    """Refresh the read-only cockpit cache without blocking HTTP requests."""
+    global _BRIEF_CACHE, _BRIEF_REFRESHING
+    try:
+        result = _build_cockpit_brief()
+        with _BRIEF_CACHE_LOCK:
+            _BRIEF_CACHE = (time.monotonic(), result)
+    except Exception:
+        _log.exception("cockpit brief refresh failed; last good snapshot kept")
+    finally:
+        with _BRIEF_CACHE_LOCK:
+            _BRIEF_REFRESHING = False
+
+
+@router.get("/cockpit/brief")
+def get_cockpit_brief() -> dict:
+    """Return a cached read-only brief; refresh stale data in the background.
+
+    Tick/learning workers may spend seconds in CPU-bound analysis. The first
+    request still builds the same authoritative view, but subsequent dashboard
+    polls never wait behind that work and keep the last known-good snapshot.
+    """
+    global _BRIEF_CACHE, _BRIEF_REFRESHING
+    now = time.monotonic()
+    with _BRIEF_CACHE_LOCK:
+        cached = _BRIEF_CACHE
+        if cached is not None:
+            age = now - cached[0]
+            if age <= _BRIEF_TTL_SEC:
+                return cached[1]
+            if not _BRIEF_REFRESHING:
+                _BRIEF_REFRESHING = True
+                threading.Thread(
+                    target=_refresh_brief_cache,
+                    name="cockpit-brief-refresh",
+                    daemon=True,
+                ).start()
+            return cached[1]
+
+    # Cold start only: preserve the original synchronous behaviour so the
+    # endpoint never returns an empty/partial decision view.
+    result = _build_cockpit_brief()
+    with _BRIEF_CACHE_LOCK:
+        _BRIEF_CACHE = (time.monotonic(), result)
+    return result

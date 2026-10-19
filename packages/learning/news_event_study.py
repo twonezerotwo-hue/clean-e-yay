@@ -221,6 +221,9 @@ def compute(events=None, now: datetime | None = None) -> dict:
         "horizon_bars": horizon,
         "timeframe": tf,
         "events_total": len(events),
+        # Bir haber birden fazla varlığı etkileyebilir. UI bu iki sayıyı
+        # birbirine eklememeli; matured+pending varlık-ölçümü sayısıdır.
+        "observations_total": matured + pending,
         "matured": matured,
         "pending": pending,
         "buckets": dict(sorted(buckets.items())),
@@ -252,6 +255,10 @@ def viewmodel() -> dict:
         "generated_at": (table or {}).get("generated_at"),
         "horizon_bars": (table or {}).get("horizon_bars", _HORIZON_DEFAULT),
         "events_total": (table or {}).get("events_total", 0),
+        "observations_total": (table or {}).get(
+            "observations_total",
+            int((table or {}).get("matured", 0)) + int((table or {}).get("pending", 0)),
+        ),
         "matured": (table or {}).get("matured", 0),
         "pending": (table or {}).get("pending", 0),
         "buckets": (table or {}).get("buckets") or {},

@@ -275,6 +275,7 @@ export interface NewsEventStudyView {
   generated_at?: string | null;
   horizon_bars: number;
   events_total: number;
+  observations_total?: number;
   matured: number;
   pending: number;
   buckets: Record<string, NewsEventBucket>;

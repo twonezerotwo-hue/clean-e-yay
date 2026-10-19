@@ -27,6 +27,12 @@ function Row({ sym, r }: { sym: string; r: TfScoringShadowSymbol }) {
   const reg = r.regime;
   const speaker = r.speaker_tf ?? (reg?.regime === "DOWN" ? "4h" : "1d");
   const speaking = r.direction_v4 != null ? "v4" : r.direction_backup != null ? "yedek" : "—";
+  const divergent =
+    r.direction_v4 != null &&
+    r.direction_backup != null &&
+    Math.sign(r.direction_v4) !== Math.sign(r.direction_backup) &&
+    Math.abs(r.direction_v4) >= 0.15 &&
+    Math.abs(r.direction_backup) >= 0.15;
   return (
     <div
       className="flex items-center justify-between gap-2 rounded border border-white/10 bg-black/20 px-2 py-1"
@@ -48,6 +54,14 @@ function Row({ sym, r }: { sym: string; r: TfScoringShadowSymbol }) {
         <span className={`rounded px-1 py-0.5 text-[9px] font-bold uppercase tracking-wide ${bias.cls}`}>
           {bias.label}
         </span>
+        {divergent ? (
+          <span
+            className="rounded bg-amber-400/15 px-1 py-0.5 text-[9px] font-bold uppercase tracking-wide text-amber-300"
+            title="v4 ve yedek yönleri zıt; bu satır edge teyidi sayılmaz"
+          >
+            SAPMA
+          </span>
+        ) : null}
       </span>
     </div>
   );
@@ -91,6 +105,10 @@ export function TfScoringShadowPanel() {
         oy <strong className="text-white/75">v4 owner formülünden</strong> gelir; v4 çekimserse
         {" "}<strong className="text-white/75">yedek motor</strong> (kanıtlı-sinyal yolu) devralır,
         o da yoksa zemin motor. Rozet konuşan yönü gösterir.
+      </p>
+      <p className="mb-2 rounded border border-amber-400/20 bg-amber-400/[0.05] px-2 py-1 text-[10px] leading-4 text-amber-200/75">
+        v4 ve yedek yönleri zıt olduğunda satır <strong>sapma</strong> olarak
+        işaretlenir; bu durumda tek başına işlem teyidi verilmez.
       </p>
 
       {hasData ? (

@@ -1534,7 +1534,7 @@ export function CockpitView() {
               <LearnStep step="15" label="0-2 strateji (donduruldu) — owner LONG akışının gölge ölçümü; yeni karar yok" wide>
                 <ZeroTwoStrategyPanel />
               </LearnStep>
-              <LearnStep step="16" label="Bölge önerileri — owner kesişim yöntemi her asset'te: işaretli grafik + iptal edilmedikçe onaylı (onaylılar flag açıkken SL/TP yerleşimini etkiler)" wide>
+              <LearnStep step="16" label="Bölge önerileri — owner incelemesi için işaretli grafik; canlı SL/TP'ye otomatik etki etmez" wide>
                 <ZoneProposerPanel />
               </LearnStep>
               <LearnStep step="17" label="Konsey karnesi — katmanlar birlikte ne söylüyor: modül yayılımları + veriden türetilen sanki-filtreler (in-sample kanıt)" wide>

@@ -282,6 +282,11 @@ def test_cockpit_brief_endpoint():
     )
     # tek ana engel — "veya" yok.
     assert "veya" not in ab["main_blocker"]["label"].lower()
+    # Layer-0 yönetici metni aynı cockpit snapshot'ı ve paper revision'ı ile
+    # üretilir; ayrı /agent/briefing cache'ine düşmemelidir.
+    assert body.get("snapshot_id")
+    assert body.get("paper_state_revision") is not None
+    assert body.get("executive", {}).get("headline")
 
 
 def test_cockpit_all_cells_suspended_share_global_gate():

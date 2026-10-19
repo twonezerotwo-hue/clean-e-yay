@@ -5,6 +5,7 @@ en üste çıkışını kilitler (observer; karar vermez).
 """
 from __future__ import annotations
 
+from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
 
 from packages.agent import briefing
@@ -73,7 +74,7 @@ def test_signal_briefing_distinguishes_paper_from_live_execution(monkeypatch):
     )
     monkeypatch.setattr(briefing, "get_cached_snapshot", lambda: snap)
     monkeypatch.setattr(briefing, "classify", lambda _snap: SimpleNamespace(label="NEUTRAL"))
-    monkeypatch.setattr(briefing, "_safe_cells", lambda _snap: [{
+    monkeypatch.setattr(briefing, "_safe_cells", lambda _snap, paper_state_obj=None: [{
         "symbol": "BTCUSDT",
         "timeframe": "1h",
         "direction": "LONG",
@@ -94,3 +95,94 @@ def test_signal_briefing_distinguishes_paper_from_live_execution(monkeypatch):
         assert "paper_only" in text
         assert "gerçek broker emri gönderilmez" in text
         assert "otomatik açılır" not in text
+
+
+def test_blocked_score_is_not_reported_as_trade_signal(monkeypatch):
+    """Skor eşiği geçse bile final kapı blokluyorsa brief sinyal demez."""
+    snap = SimpleNamespace(
+        quality=SimpleNamespace(score=90.0, status="OK"),
+        provider_status={},
+        headlines=[],
+        catalysts=[],
+    )
+    position = SimpleNamespace(
+        id="p1",
+        symbol="XAGUSD",
+        side="short",
+        timeframe="1h",
+        size_usd=100.0,
+        unrealized_pnl_usd=-0.5,
+    )
+    ps = SimpleNamespace(
+        revision=7,
+        open_positions=[position],
+        last_rechecks=[{
+            "position_id": "p1",
+            "verdict": "WATCH",
+        }],
+    )
+    cells = [{
+        "symbol": "XAGUSD",
+        "timeframe": "4h",
+        "direction": "bearish",
+        "score": 60.0,
+        "action": "hold",
+        "actionable": False,
+        "paper_action": "none",
+        "blocked_by": ["concentration_guard"],
+        "reason": "aynı sembolde açık pozisyon var",
+    }]
+    monkeypatch.setattr(briefing, "get_cached_snapshot", lambda: snap)
+    monkeypatch.setattr(briefing, "classify", lambda _snap: SimpleNamespace(label="DEFENSIVE"))
+    monkeypatch.setattr(briefing, "_safe_cells", lambda _snap, paper_state_obj=None: cells)
+    monkeypatch.setattr(briefing, "_safe_world_state", lambda _snap: None)
+    monkeypatch.setattr(
+        briefing,
+        "_engine_health",
+        lambda: {"status": "OK", "age_seconds": 1.0, "cycle_count": 1, "stale": False},
+    )
+    monkeypatch.setattr(briefing.halt_store, "active_halts", lambda: [])
+    monkeypatch.setattr(briefing.paper_state, "load", lambda: ps)
+    monkeypatch.setattr(briefing, "_nearest_event", lambda _snap: None)
+
+    executive = briefing.build()["executive"]
+    assert executive["stance"] == "watching"
+    assert "İşlem sinyali oluştu" not in executive["headline"]
+    assert "Gümüş SHORT" in executive["narrative"]
+    assert "WATCH" in executive["narrative"]
+
+
+def test_layer0_context_uses_current_news_and_world_evidence():
+    """Layer-0 sabit durum cümlesi yerine güncel haber → etki → fikir zincirini gösterir."""
+    now = datetime.now(UTC)
+    snap = SimpleNamespace(headlines=[SimpleNamespace(
+        ts=now - timedelta(minutes=5),
+        source="Reuters",
+        title="Trump announces new sanctions on Russia",
+        title_tr="Trump Rusya'ya yeni yaptırımlar açıkladı",
+        asset_impact={"XAUUSD": 1.0},
+    )])
+    world = SimpleNamespace(
+        geopolitical_events=(SimpleNamespace(
+            expired=False,
+            channels=("sanctions_pressure", "trade_risk"),
+            event_type="SANCTIONS",
+            actors=(),
+        ),),
+        sanctions_pressure=0.62,
+        trade_risk=0.41,
+        energy_supply_risk=None,
+        shipping_risk=None,
+        risk_aversion=None,
+        statements=(),
+        asset_discovery={"candidates": [{"symbol": "XAUUSD"}]},
+    )
+
+    text = briefing._headline_world_context(snap, world)
+
+    assert "Bugünün gündemi" in text
+    assert "Piyasa etkisi" in text
+    assert "yaptırım/finans baskısı artıyor" in text
+    assert "Altın üzerinde yukarı haber baskısı" in text
+    assert "Trump / ABD" in text
+    assert "XAUUSD" in text

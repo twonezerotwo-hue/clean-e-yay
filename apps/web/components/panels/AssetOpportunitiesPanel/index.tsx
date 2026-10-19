@@ -7,7 +7,15 @@ import { LoadingState } from "@/components/shell/LoadingState";
 import { PanelFrame } from "@/components/shell/PanelFrame";
 import { PanelHeader } from "@/components/shell/PanelHeader";
 import { useIdeas } from "@/lib/queries/hooks";
-import { dedupeIdeas, fmtIdeaStamp, IDEA_KIND_LABEL, ideaDirection } from "@/lib/selectors/ideas";
+import {
+  dedupeIdeas,
+  fmtIdeaStamp,
+  formatIdeaNewsImpact,
+  formatIdeaReason,
+  IDEA_SCORE_MAX,
+  IDEA_KIND_LABEL,
+  ideaDirection,
+} from "@/lib/selectors/ideas";
 import type { Idea, IdeaStatus } from "@/types/generated/api";
 
 // Heart — "Yeni Asset / Emtia Fırsatları" (SALT-GÖZLEM).
@@ -25,11 +33,12 @@ const STATUS_TONE: Record<IdeaStatus, string> = {
 
 function AssetOpportunityCard({ idea, onOpen }: { idea: Idea; onOpen?: (symbol: string) => void }) {
   const dir = ideaDirection(idea.news?.direction);
-  const chain = idea.news_chain?.[0];
   const confidence = idea.technical?.confidence;
   const timeframe = idea.technical?.entry_timeframe;
   const evidence = idea.news?.n_headlines ?? idea.scorecard?.signals;
   const updated = fmtIdeaStamp(idea.technical?.checked_at);
+  const newsImpact = formatIdeaNewsImpact(idea);
+  const reason = formatIdeaReason(idea);
   const tone = STATUS_TONE[idea.status] ?? "border-white/15 bg-white/[0.04] text-white/70";
   const statusLabel = idea.status_label || idea.status;
   const paperReady = idea.paper_open?.can_open === true;
@@ -57,20 +66,23 @@ function AssetOpportunityCard({ idea, onOpen }: { idea: Idea; onOpen?: (symbol: 
 
       <div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-0.5 font-mono text-[10px] text-white/55">
         <span className={dir.tone}>{dir.text}</span>
-        <span>skor {Math.round(idea.score)}</span>
-        {confidence != null ? <span>güven {Math.round(confidence * 100)}%</span> : null}
+        <span>fikir {Math.round(idea.score)}/{IDEA_SCORE_MAX}</span>
+        {confidence != null ? <span>teknik güven {Math.round(confidence * 100)}%</span> : null}
         {timeframe ? <span>{timeframe}</span> : null}
         {evidence != null ? <span>kanıt {evidence}</span> : null}
         {idea.news?.strength != null ? <span>haber {Math.round(idea.news.strength)}</span> : null}
       </div>
 
-      {chain?.title ? (
+      {newsImpact ? (
         <p className="mt-1.5 text-[10px] leading-4 text-white/50">
-          <span className="text-white/35">Neden: </span>
-          {chain.title}
-          {chain.consequence ? ` → ${chain.consequence}` : ""}
+          <span className="text-white/35">Haber etkisi: </span>
+          {newsImpact}
         </p>
       ) : null}
+      <p className="mt-0.5 text-[10px] leading-4 text-white/45">
+        <span className="text-white/30">Neden izleniyor: </span>
+        {reason ?? "Güncel kanıt özeti yok."}
+      </p>
       {idea.ai?.verdict_label ? (
         <p className="mt-0.5 text-[10px] leading-4 text-white/45">
           <span className="text-white/30">YZ: </span>
