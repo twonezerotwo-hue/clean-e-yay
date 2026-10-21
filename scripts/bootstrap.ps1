@@ -59,7 +59,32 @@ if (-not (Test-Path $runtime)) {
   Write-Host "[bootstrap] data/runtime/ olusturuldu"
 }
 
-# ---- 4b. git hooks (F1: pre-push ruff guard, CI-red -> AWS drift onler) ------
+# ---- 4a. Web bagimliliklari --------------------------------------------------
+$node = Get-Command node.exe -ErrorAction SilentlyContinue
+$pnpm = Get-Command pnpm.cmd -ErrorAction SilentlyContinue
+if (-not $pnpm) { $pnpm = Get-Command pnpm.exe -ErrorAction SilentlyContinue }
+if (-not $node) {
+  Write-Error "Node.js 18+ gerekli. Node.js kurup bootstrap'i tekrar calistirin."
+  exit 1
+}
+Write-Host "[bootstrap] web bagimliliklari kuruluyor (pnpm)..."
+$corepack = Get-Command corepack.cmd -ErrorAction SilentlyContinue
+if ($pnpm) {
+  & $pnpm.Source install --frozen-lockfile
+} elseif ($corepack) {
+  & $corepack.Source pnpm install --frozen-lockfile
+} else {
+  Write-Error "pnpm veya Corepack bulunamadi. Node.js 18+ ile birlikte pnpm 9+ kurun."
+  exit 1
+}
+if ($LASTEXITCODE -ne 0) { Write-Error "pnpm install basarisiz"; exit 1 }
+
+# ---- 4b. Yerel Piper + Turkce model -----------------------------------------
+Write-Host "[bootstrap] Piper yerel ses motoru kuruluyor..."
+& powershell.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $Root "scripts\setup-piper.ps1")
+if ($LASTEXITCODE -ne 0) { Write-Error "Piper kurulumu basarisiz"; exit 1 }
+
+# ---- 4c. git hooks (F1: pre-push ruff guard, CI-red -> AWS drift onler) ------
 if (Test-Path (Join-Path $Root ".git")) {
   git -C $Root config core.hooksPath .githooks
   Write-Host "[bootstrap] git hooks aktif (.githooks; pre-push ruff guard)"

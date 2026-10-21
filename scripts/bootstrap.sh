@@ -61,7 +61,31 @@ echo "[bootstrap] backend bağımlılıkları kuruluyor (pyproject)..."
 # ---- 4. data/runtime --------------------------------------------------------
 mkdir -p "$ROOT/data/runtime"
 
-# ---- 4b. git hooks (F1: pre-push ruff guard — CI-red → AWS drift önler) ------
+# ---- 4a. Web bağımlılıkları --------------------------------------------------
+if ! command -v node >/dev/null 2>&1; then
+  echo "[bootstrap] HATA: Node.js 18+ bulunamadı." >&2
+  exit 1
+fi
+echo "[bootstrap] web bağımlılıkları kuruluyor (pnpm)..."
+if command -v pnpm >/dev/null 2>&1; then
+  pnpm install --frozen-lockfile
+elif command -v corepack >/dev/null 2>&1; then
+  corepack pnpm install --frozen-lockfile
+else
+  echo "[bootstrap] HATA: pnpm veya Corepack bulunamadı." >&2
+  exit 1
+fi
+
+# ---- 4b. Yerel Piper + Türkçe model -----------------------------------------
+if [ -x "$ROOT/.venv/bin/python" ]; then
+  echo "[bootstrap] Piper yerel ses motoru kuruluyor..."
+  "$ROOT/.venv/bin/python" -m pip install piper-tts --quiet
+fi
+if [ -x "$ROOT/scripts/setup-piper.sh" ]; then
+  "$ROOT/scripts/setup-piper.sh"
+fi
+
+# ---- 4c. git hooks (F1: pre-push ruff guard — CI-red → AWS drift önler) ------
 if [ -d "$ROOT/.git" ]; then
   git -C "$ROOT" config core.hooksPath .githooks
   chmod +x "$ROOT/.githooks/pre-push" 2>/dev/null || true

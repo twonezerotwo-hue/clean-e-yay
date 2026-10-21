@@ -13,6 +13,22 @@ def test_voice_speak_rejects_empty_text() -> None:
     assert response.json()["detail"] == "text is required."
 
 
+def test_voice_speak_uses_local_piper_by_default(monkeypatch) -> None:
+    monkeypatch.delenv("TTS_PROVIDER", raising=False)
+    monkeypatch.setattr(
+        voice_router.PiperTTSProvider,
+        "speak",
+        lambda self, text, voice=None: b"RIFF" + b"fake-wav",
+    )
+    client = TestClient(create_app())
+
+    response = client.post("/api/voice/speak", json={"text": "Merhaba."})
+
+    assert response.status_code == 200
+    assert response.headers["content-type"] == "audio/wav"
+    assert response.content == b"RIFFfake-wav"
+
+
 def test_voice_speak_falls_back_to_edge_when_primary_unconfigured(monkeypatch) -> None:
     """ElevenLabs key missing → speak() no longer hard-fails; it falls back to
     the free Edge TTS provider so the caller still gets quality audio (see
@@ -43,7 +59,11 @@ def test_voice_speak_503_when_both_providers_fail(monkeypatch) -> None:
     def _edge_boom(self, text: str, voice: str | None = None) -> bytes:
         raise HTTPException(status_code=503, detail="Edge TTS request failed: Boom")
 
+    def _google_boom(self, text: str, voice: str | None = None) -> bytes:
+        raise HTTPException(status_code=503, detail="Google TTS request failed: Boom")
+
     monkeypatch.setattr(voice_router.EdgeTTSProvider, "speak", _edge_boom)
+    monkeypatch.setattr(voice_router.GoogleTranslateTTSProvider, "speak", _google_boom)
     client = TestClient(create_app())
 
     response = client.post("/api/voice/speak", json={"text": "Merhaba."})

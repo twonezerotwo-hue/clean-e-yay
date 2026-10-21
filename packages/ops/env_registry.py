@@ -99,6 +99,8 @@ REGISTRY: dict[str, str] = {
     "OPENROUTER_APP_NAME": "provider",
     "OPENROUTER_MODEL": "provider",
     "OPENROUTER_SITE_URL": "provider",
+    "PIPER_BIN": "provider",
+    "PIPER_MODEL": "provider",
     "TAVILY_LOAD_DOTENV": "provider",
     "TAVILY_MAX_RESULTS": "provider",
     "TAVILY_SEARCH_DEPTH": "provider",

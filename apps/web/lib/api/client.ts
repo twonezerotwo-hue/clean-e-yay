@@ -470,9 +470,15 @@ async function fetchJSON<T>(path: string, init?: RequestInit): Promise<T> {
   return res.json() as Promise<T>;
 }
 
-async function fetchAudio(path: string, init?: RequestInit): Promise<Blob> {
+async function fetchAudio(
+  path: string,
+  init?: RequestInit,
+  interactive = false,
+): Promise<Blob> {
   // Sesli okuma otomatik tetiklenir (bildirim, cevap) — anahtar sorusu açmaz.
-  const res = await authedFetch(path, init, false);
+  // Kullanıcının açıkça başlattığı "Oku" eylemi ise eksik yazma anahtarını
+  // bir kez isteyebilir; otomatik akışlar sessiz kalır.
+  const res = await authedFetch(path, init, interactive);
   if (!res.ok) {
     throw new Error(`API ${res.status} ${path}: ${await res.text().catch(() => "")}`);
   }
@@ -819,9 +825,9 @@ export const api = {
       })),
     };
   },
-  voiceSpeak: (payload: VoiceSpeakRequest) =>
+  voiceSpeak: (payload: VoiceSpeakRequest, interactive = false) =>
     fetchAudio("/api/voice/speak", {
       method: "POST",
       body: JSON.stringify(payload),
-    }),
+    }, interactive),
 };

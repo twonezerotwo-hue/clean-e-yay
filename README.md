@@ -142,6 +142,23 @@ pip install certifi
 SSL_CERT_FILE="$(python -m certifi)" PYTHONPATH=. uvicorn apps.api.main:app --port 9000
 ```
 
+### Yerel ücretsiz Türkçe ses (Piper)
+
+Sesli brief, sohbet ve bildirimler API üzerinden yerel Piper motorunu kullanır;
+ses verisi karar motoruna yazılmaz. İlk kurulumda PowerShell'i proje kökünde
+çalıştırın:
+
+```powershell
+.\scripts\setup-piper.ps1
+```
+
+Script Piper çalıştırıcısını (yoksa `piper-tts` paketini) ve Türkçe modeli
+`data/models/piper/` altına kurar. Model dosyaları büyük olduğu için Git'e
+eklenmez; yeni bir makinede script yeniden çalıştırılabilir. `.env` içinde
+`TTS_PROVIDER=piper` ve `PIPER_MODEL=data/models/piper/tr_TR-dfki-medium.onnx`
+bulunmalıdır. Piper geçici olarak kullanılamazsa yalnızca ses katmanı tarayıcı
+sesine düşer; işlem/risk/LLM akışı durmaz.
+
 ### Port seçimi
 
 API **9000**, web **4000**.

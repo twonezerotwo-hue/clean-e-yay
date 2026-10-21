@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import {
   useAgentBriefing,
@@ -313,15 +313,6 @@ function Layer0PositionManager({
     [positions],
   );
   const bookDataReady = invalidPositions.length === 0;
-  const missingSl = useMemo(
-    () => positions.filter((position) => position.sl == null).length,
-    [positions],
-  );
-  const missingTp = useMemo(
-    () => positions.filter((position) => position.tp == null).length,
-    [positions],
-  );
-
   useEffect(() => {
     setExpandedIds((current) => {
       const validIds = new Set(positions.map((position) => position.id));
@@ -356,7 +347,7 @@ function Layer0PositionManager({
         </div>
       </div>
 
-      <div className="relative mt-3 grid grid-cols-2 gap-1.5 sm:grid-cols-5">
+      <div className="relative mt-3 grid grid-cols-3 gap-1.5">
         <PositionMetric
           label="Açık"
           value={
@@ -377,16 +368,6 @@ function Layer0PositionManager({
           label="Büyüklük"
           value={loading ? "..." : bookDataReady ? fmtMoneyCompact(totalSize) : "VERİ HATASI"}
           tone={bookDataReady ? "text-white/88" : "text-amber-200"}
-        />
-        <PositionMetric
-          label="SL Kapsama"
-          value={loading ? "..." : positions.length ? `${positions.length - missingSl}/${positions.length}` : "—"}
-          tone={missingSl ? "text-amber-200" : "text-emerald-300"}
-        />
-        <PositionMetric
-          label="TP Kapsama"
-          value={loading ? "..." : positions.length ? `${positions.length - missingTp}/${positions.length}` : "—"}
-          tone={missingTp ? "text-amber-200" : "text-emerald-300"}
         />
       </div>
 
@@ -907,7 +888,8 @@ export function Layer0ReporterAgent({
   const audioUrlRef = useRef<string | null>(null);
   const speechRunRef = useRef(0);
   const audioUnlockedRef = useRef(false);
-  const voiceEnabled = !silent;
+  const lastAutoReadBriefingRef = useRef("");
+  const [audioUnlocked, setAudioUnlocked] = useState(false);
 
   // Tarayıcı autoplay politikası: sayfa hiç tıklanmadan (sadece "Hey E-yAy"
   // söylenerek) tetiklenen ilk audio.play()/speechSynthesis.speak() çağrısı
@@ -917,37 +899,41 @@ export function Layer0ReporterAgent({
   // kilidi bir kerede açıyoruz; sonraki gesture'sız (wake-word tetikli)
   // play()/speak() çağrıları artık bu "sound played after interaction"
   // kaydı sayesinde sessizce engellenmiyor.
-  useEffect(() => {
-    const unlock = () => {
-      if (audioUnlockedRef.current) return;
-      audioUnlockedRef.current = true;
+  const unlockAudio = useCallback(() => {
+    if (audioUnlockedRef.current) return;
+    audioUnlockedRef.current = true;
+    setAudioUnlocked(true);
+    try {
+      const silent = new Audio(
+        "data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAA=",
+      );
+      void silent.play().catch(() => {});
+    } catch {
+      // yut — autoplay yine de engellenmişse sonraki adımlar normal akışa düşer
+    }
+    if (typeof window !== "undefined" && "speechSynthesis" in window) {
       try {
-        const silent = new Audio(
-          "data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAA=",
-        );
-        void silent.play().catch(() => {});
+        const warm = new SpeechSynthesisUtterance(" ");
+        warm.volume = 0;
+        window.speechSynthesis.speak(warm);
       } catch {
-        // yut — autoplay yine de engellenmişse sonraki adımlar normal akışa düşer
+        // yut
       }
-      if (typeof window !== "undefined" && "speechSynthesis" in window) {
-        try {
-          const warm = new SpeechSynthesisUtterance(" ");
-          warm.volume = 0;
-          window.speechSynthesis.speak(warm);
-        } catch {
-          // yut
-        }
-      }
-    };
-    window.addEventListener("pointerdown", unlock, { passive: true });
-    window.addEventListener("keydown", unlock);
-    window.addEventListener("touchstart", unlock, { passive: true });
-    return () => {
-      window.removeEventListener("pointerdown", unlock);
-      window.removeEventListener("keydown", unlock);
-      window.removeEventListener("touchstart", unlock);
-    };
+    }
+    // Browser speech queue may start only after the current gesture callback.
+    // The state update lets the brief effect start on the next render.
   }, []);
+
+  useEffect(() => {
+    window.addEventListener("pointerdown", unlockAudio, { passive: true });
+    window.addEventListener("keydown", unlockAudio);
+    window.addEventListener("touchstart", unlockAudio, { passive: true });
+    return () => {
+      window.removeEventListener("pointerdown", unlockAudio);
+      window.removeEventListener("keydown", unlockAudio);
+      window.removeEventListener("touchstart", unlockAudio);
+    };
+  }, [unlockAudio]);
 
   useEffect(() => {
     setMicReady(Boolean(getSpeechRecognition()));
@@ -1035,11 +1021,13 @@ export function Layer0ReporterAgent({
   };
 
   const speakWithBrowserFallback = (text: string) => {
-    if (!voiceEnabled || typeof window === "undefined" || !("speechSynthesis" in window)) {
+    if (silentRef.current || typeof window === "undefined" || !("speechSynthesis" in window)) {
       return false;
     }
+    speechRunRef.current += 1;
     clearAudioPlayback();
     window.speechSynthesis.cancel();
+    setVoiceLoading(false);
     setSpeaking(false);
     const utterance = new SpeechSynthesisUtterance(cleanForVoice(text));
     utterance.lang = "tr-TR";
@@ -1058,18 +1046,48 @@ export function Layer0ReporterAgent({
       voices.find((v) => isEn(v) && isNatural(v)) ??
       voices.find(isEn) ??
       null;
+    let retried = false;
     utterance.onstart = () => setSpeaking(true);
     utterance.onend = () => setSpeaking(false);
-    utterance.onerror = () => setSpeaking(false);
-    window.speechSynthesis.speak(utterance);
+    utterance.onerror = (event) => {
+      // Chromium occasionally reports a transient `interrupted` error when a
+      // warm-up utterance is cancelled. Retry once after the queue settles;
+      // otherwise the button appeared to work but stopped without audio.
+      if (!retried && event.error !== "canceled" && !silentRef.current) {
+        retried = true;
+        window.setTimeout(() => {
+          if (silentRef.current) return;
+          try {
+            window.speechSynthesis.cancel();
+            window.speechSynthesis.resume();
+            window.speechSynthesis.speak(utterance);
+          } catch {
+            setSpeaking(false);
+            setVoiceError("Tarayıcı ses motoru başlatılamadı.");
+          }
+        }, 120);
+        return;
+      }
+      setSpeaking(false);
+      setVoiceError("Tarayıcı ses motoru başlatılamadı.");
+    };
+    try {
+      window.speechSynthesis.resume();
+      window.speechSynthesis.speak(utterance);
+    } catch {
+      setVoiceError("Tarayıcı ses motoru başlatılamadı.");
+      return false;
+    }
     return true;
   };
 
-  const speak = async (text: string) => {
+  const speak = async (text: string, interactive = false) => {
     const cleanText = cleanForVoice(text);
-    if (!voiceEnabled || !cleanText || typeof window === "undefined") {
+    if (silentRef.current || !cleanText || typeof window === "undefined") {
       return false;
     }
+
+    if (interactive) unlockAudio();
 
     const runId = speechRunRef.current + 1;
     speechRunRef.current = runId;
@@ -1082,7 +1100,7 @@ export function Layer0ReporterAgent({
     }
 
     try {
-      const audioBlob = await api.voiceSpeak({ text: cleanText });
+      const audioBlob = await api.voiceSpeak({ text: cleanText }, interactive);
       if (speechRunRef.current !== runId) return false;
 
       const audioUrl = window.URL.createObjectURL(audioBlob);
@@ -1119,6 +1137,36 @@ export function Layer0ReporterAgent({
       return fallbackSpoke;
     }
   };
+
+  const readBriefing = () => {
+    if (!briefingText.trim()) return;
+    unlockAudio();
+    // A manual read supersedes the next automatic pass for this exact text.
+    lastAutoReadBriefingRef.current = briefingText;
+    // Prefer the verified server audio. The click warm-up above unlocks the
+    // media element; if the provider/network fails, speak() falls back to the
+    // browser engine with its retry guard.
+    setVoiceError(null);
+    void speak(briefingText, true);
+  };
+
+  // Tarayıcı ilk ses çıkışını kullanıcı etkileşimi olmadan engelleyebilir. İlk
+  // etkileşimle ses kilidi açıldıktan sonra güncel executive brief'i bir kez
+  // otomatik oku; aynı metin polling nedeniyle tekrar tekrar okunmaz.
+  useEffect(() => {
+    if (
+      !audioUnlocked ||
+      silent ||
+      briefing.isLoading ||
+      !briefing.data ||
+      !briefingText.trim() ||
+      lastAutoReadBriefingRef.current === briefingText
+    ) {
+      return;
+    }
+    lastAutoReadBriefingRef.current = briefingText;
+    void speak(briefingText);
+  }, [audioUnlocked, briefing.data, briefing.isLoading, briefingText, silent, speak]);
 
   // Gönderim kilidi: stream sürerken ya da non-stream fallback beklerken yeni soru yok.
   const chatBusy = streamPhase !== "idle" || chat.isPending;
@@ -1419,26 +1467,41 @@ export function Layer0ReporterAgent({
               E-yAy
             </span>
           </div>
-          <button
-            type="button"
-            onClick={() => {
-              setSilent((value) => {
-                const next = !value;
-                if (next) enterSilent();
-                return next;
-              });
-            }}
-            aria-pressed={silent}
-            title={silent ? "Sessiz mod acik — sesi ac" : "Sessiz mod — sesli cevabi ve mikrofonu kapat"}
-            className={`inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[10px] font-semibold uppercase tracking-widest transition-colors ${
-              silent
-                ? "border-amber-400/45 bg-amber-400/12 text-amber-200"
-                : "border-emerald-400/40 bg-emerald-400/10 text-emerald-300"
-            }`}
-          >
-            <span aria-hidden>{silent ? "🔇" : "🔊"}</span>
-            {silent ? "Sessiz" : "Sesli"}
-          </button>
+          <div className="flex items-center gap-1.5">
+            {!silent ? (
+              <button
+                type="button"
+                onPointerDown={unlockAudio}
+                onClick={speaking || voiceLoading ? stopAllVoice : readBriefing}
+                title={speaking || voiceLoading ? "Brief sesini durdur" : "Güncel brief'i sesli oku"}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-accent-cyan/35 bg-accent-cyan/10 px-2.5 py-1.5 text-[10px] font-semibold uppercase tracking-widest text-accent-cyan transition-colors hover:bg-accent-cyan/20"
+              >
+                <span aria-hidden>{speaking || voiceLoading ? "■" : "▶"}</span>
+                {speaking || voiceLoading ? "Durdur" : "Oku"}
+              </button>
+            ) : null}
+            <button
+              type="button"
+              onPointerDown={unlockAudio}
+              onClick={() => {
+                setSilent((value) => {
+                  const next = !value;
+                  if (next) enterSilent();
+                  return next;
+                });
+              }}
+              aria-pressed={silent}
+              title={silent ? "Sessiz mod acik — sesi ac" : "Sessiz mod — sesli cevabi ve mikrofonu kapat"}
+              className={`inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[10px] font-semibold uppercase tracking-widest transition-colors ${
+                silent
+                  ? "border-amber-400/45 bg-amber-400/12 text-amber-200"
+                  : "border-emerald-400/40 bg-emerald-400/10 text-emerald-300"
+              }`}
+            >
+              <span aria-hidden>{silent ? "🔇" : "🔊"}</span>
+              {silent ? "Sessiz" : "Sesli"}
+            </button>
+          </div>
         </div>
 
         <div
