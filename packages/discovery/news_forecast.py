@@ -222,14 +222,15 @@ def _reclassify(store: dict[str, dict]) -> int:
     kelime sınırı düzeltmesinden önce gelen "September" başlıkları TEM'e yazılı kalmıştı)."""
     changed = 0
     for h in store.values():
-        if h.get("origin") != "rss":
-            continue
         title = str(h.get("title") or "")
         source = str(h.get("source") or "")
+        canonical_family = source_family(source, title=title, url=h.get("url"))
+        if h.get("source_family") != canonical_family:
+            h["source_family"] = canonical_family
+        if h.get("origin") != "rss":
+            continue
         if not h.get("story_key"):
             h["story_key"] = story_key(title)
-        if not h.get("source_family"):
-            h["source_family"] = source_family(source, title=title, url=h.get("url"))
         new = classify.classify_asset_impact(h["title"], h.get("sentiment") or "neutral")
         if new != dict(h.get("impact") or {}):
             h["impact"] = new
@@ -248,10 +249,12 @@ def _ingest_llm(store: dict[str, dict], rows: Iterable[Mapping[str, Any]], now: 
         k = _key(title)
         if k not in store:
             source = str(row.get("source") or "")
+            url = row.get("url")
             store[k] = {"title": title[:240], "source": source, "origin": "rss",
                         "ts": _iso(_parse(row.get("ts")) or now), "sentiment": "neutral", "impact": {},
                         "story_key": story_key(title),
-                        "source_family": source_family(source, title=title)}
+                        "source_family": source_family(source, title=title, url=url),
+                        "url": url}
             added += 1
         store[k]["llm_impacts"] = dict(row["impacts"])
         store[k]["consequence"] = row.get("consequence")
@@ -287,10 +290,25 @@ def source_weight(table: Mapping[str, Any], source: str, sentiment: str, origin:
     if origin == "web":
         return 0.7
     family = source_family(source)
-    bucket = (table.get("buckets") or {}).get(f"{family}|{sentiment}") or {}
-    # Backward compatibility for the pre-provenance event-study ledger.
+    buckets = table.get("buckets") or {}
+    bucket = buckets.get(f"{family}|{sentiment}") or {}
+    # Backward compatibility for pre-canonical ledgers: resolve old family
+    # labels through the same mapper, then select the most observed matching
+    # bucket.  This prevents one publisher's historical aliases from getting
+    # unrelated weights or being silently ignored.
     if not bucket:
-        bucket = (table.get("buckets") or {}).get(f"{source}|{sentiment}") or {}
+        matches = []
+        for key, row in buckets.items():
+            raw_family, sep, raw_sentiment = str(key).partition("|")
+            if not sep or raw_sentiment != sentiment:
+                continue
+            if source_family(raw_family) == family and isinstance(row, Mapping):
+                matches.append(row)
+        if matches:
+            bucket = max(matches, key=lambda row: int(row.get("n") or 0))
+    # Last-resort compatibility for rows keyed by the original display label.
+    if not bucket:
+        bucket = buckets.get(f"{source}|{sentiment}") or {}
     verdict = bucket.get("verdict")
     if verdict == "PREDICTIVE":
         hit = float(bucket.get("hit_rate") or 0.5)

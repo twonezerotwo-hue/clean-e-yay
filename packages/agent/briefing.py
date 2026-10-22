@@ -557,9 +557,32 @@ def _actionable_cells(cells: list[dict]) -> list[dict]:
         cell
         for cell in cells
         if bool(cell.get("actionable"))
+        # Older snapshots do not carry the additive field; their existing
+        # actionable contract remains compatible.  Live matrix cells always
+        # include it, so exploration/negative-EV cells are excluded there.
+        and bool(cell.get("execution_ready", True))
         and cell.get("action") in {"open_long", "open_short"}
         and cell.get("paper_action") in {"open_long", "open_short"}
     ]
+
+
+def _directional_strength(cell: dict) -> float:
+    """Normalize bullish and bearish scores to the same 0–100 strength.
+
+    Consensus stores a directional score (50 is neutral): a bearish score of
+    35 is a 65-point short signal, not a weak 35-point signal.  The old brief
+    compared the raw score to the bullish threshold, so a valid short and its
+    chat/ticket surfaces described different states.
+    """
+    try:
+        score = max(0.0, min(100.0, float(cell.get("score") or 0.0)))
+    except (TypeError, ValueError):
+        return 0.0
+    direction = str(cell.get("direction") or "").casefold()
+    action = str(cell.get("action") or "").casefold()
+    if direction in {"bearish", "down"} or action == "open_short":
+        return 100.0 - score
+    return score
 
 
 def _position_public_row(position: Any) -> dict[str, Any]:
@@ -858,9 +881,9 @@ def _executive(
     # gerçekten girişe açık hücreyi seç; yoksa en yüksek skoru yalnızca aday
     # olarak anlat. Böylece concentration/EV/entry-quality blokları gizlenmez.
     actionable = _actionable_cells(cells)
-    top_actionable = max(actionable, key=lambda c: c.get("score") or 0) if actionable else None
-    top = top_actionable or (max(cells, key=lambda c: c.get("score") or 0) if cells else None)
-    top_score = (top.get("score") or 0) if top else 0
+    top_actionable = max(actionable, key=_directional_strength) if actionable else None
+    top = top_actionable or (max(cells, key=_directional_strength) if cells else None)
+    top_score = _directional_strength(top) if top else 0.0
     gap = SCORE_DIRECTIONAL - top_score
     if top:
         sym_txt = _symbol_tr(top.get("symbol"))

@@ -23,6 +23,7 @@ from packages.ops.store import write_text_atomic
 
 ENGINE = "shadow_routing_v1"
 ROUTING_PATH = Path("data/runtime/shadow_routing.json")
+_REPLAY_MAX_READ = 100_000
 
 
 def _routing_path() -> Path:
@@ -48,7 +49,10 @@ def _counterfactual_summary() -> dict[str, Any]:
     try:
         from packages.decision import shadow
 
-        records = shadow.read_recent(limit=200)
+        # The report is the learning memory surface.  Reading only the last
+        # 200 snapshots made older shadow outcomes disappear from the report,
+        # so promotion reviews were based on an arbitrary tail of history.
+        records = shadow.read_recent(limit=_REPLAY_MAX_READ)
     except Exception:
         records = []
 
@@ -128,9 +132,13 @@ def _asset_evidence() -> dict[str, Any]:
 
 def _news_evidence() -> dict[str, Any]:
     try:
-        from packages.discovery import news_decision_shadow
+        from packages.discovery import news_decision_shadow, news_forecast
 
-        return {**news_decision_shadow.scorecard(), "shadow_only": True}
+        # Keep decision-shadow and price-resolved forecast evidence separate:
+        # they use different horizons and must not be averaged into one score.
+        decision = news_decision_shadow.scorecard()
+        forecast = news_forecast.scorecard()
+        return {**decision, "forecast": forecast, "shadow_only": True}
     except Exception as exc:
         return {"status": "ERROR", "error": type(exc).__name__, "shadow_only": True}
 
@@ -291,6 +299,7 @@ def build_report(now: datetime | None = None) -> dict[str, Any]:
         "counterfactual": _counterfactual_summary(),
         "asset_discovery": assets,
         "news_decision": news,
+        "news_forecast": news.get("forecast") or {},
         "technical_race": {
             "status": race_status or "NO_DATA",
             "beats_backup": race.get("beats_backup"),

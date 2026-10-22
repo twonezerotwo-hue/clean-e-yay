@@ -17,10 +17,79 @@ from urllib.parse import urlparse
 
 # These labels are query/proxy buckets in rss.py, not direct publisher feeds.
 _PROXY_BUCKETS = {
+    "google news": "google_news:redirect",
     "reuters": "google_news:reuters_query",
     "bloomberg/ft": "google_news:bloomberg_ft_query",
     "gold wire": "google_news:metals_query",
     "world wire": "google_news:world_query",
+}
+
+# A feed label is presentation data, not a publisher identity.  The same
+# newsroom currently arrives from RSS, Google News and topic-specific feeds
+# under several labels (for example ``Seeking Alpha`` and
+# ``seekingalpha.com``).  Keep one canonical family so a story is not counted
+# as several independent confirmations.
+_PUBLISHER_ALIASES = {
+    "seeking alpha": "direct:seekingalpha.com",
+    "seekingalpha": "direct:seekingalpha.com",
+    "seekingalpha.com": "direct:seekingalpha.com",
+    "investing": "direct:investing.com",
+    "investing.com": "direct:investing.com",
+    "investing emtia": "direct:investing.com",
+    "investing fx": "direct:investing.com",
+    "investing markets": "direct:investing.com",
+    "cnbc": "direct:cnbc.com",
+    "cnbc.com": "direct:cnbc.com",
+    "cnbc economy": "direct:cnbc.com",
+    "cointelegraph": "direct:cointelegraph.com",
+    "cointelegraph.com": "direct:cointelegraph.com",
+    "coindesk": "direct:coindesk.com",
+    "coindesk.com": "direct:coindesk.com",
+    "the block": "direct:theblock.co",
+    "theblock.co": "direct:theblock.co",
+    "cryptoslate": "direct:cryptoslate.com",
+    "cryptoslate.com": "direct:cryptoslate.com",
+    "bitcoin.com": "direct:news.bitcoin.com",
+    "news.bitcoin.com": "direct:news.bitcoin.com",
+    "crypto potato": "direct:cryptopotato.com",
+    "cryptopotato.com": "direct:cryptopotato.com",
+    "the defiant": "direct:thedefiant.io",
+    "thedefiant.io": "direct:thedefiant.io",
+    "u.today": "direct:u.today",
+    "u today": "direct:u.today",
+    "yahoo finance": "direct:finance.yahoo.com",
+    "finance.yahoo.com": "direct:finance.yahoo.com",
+    "al jazeera": "direct:aljazeera.com",
+    "aljazeera.com": "direct:aljazeera.com",
+}
+
+_HOST_ALIASES = {
+    "seekingalpha.com": "direct:seekingalpha.com",
+    "www.seekingalpha.com": "direct:seekingalpha.com",
+    "investing.com": "direct:investing.com",
+    "www.investing.com": "direct:investing.com",
+    "cnbc.com": "direct:cnbc.com",
+    "www.cnbc.com": "direct:cnbc.com",
+    "cointelegraph.com": "direct:cointelegraph.com",
+    "www.cointelegraph.com": "direct:cointelegraph.com",
+    "coindesk.com": "direct:coindesk.com",
+    "www.coindesk.com": "direct:coindesk.com",
+    "theblock.co": "direct:theblock.co",
+    "www.theblock.co": "direct:theblock.co",
+    "cryptoslate.com": "direct:cryptoslate.com",
+    "www.cryptoslate.com": "direct:cryptoslate.com",
+    "news.bitcoin.com": "direct:news.bitcoin.com",
+    "bitcoin.com": "direct:news.bitcoin.com",
+    "cryptopotato.com": "direct:cryptopotato.com",
+    "www.cryptopotato.com": "direct:cryptopotato.com",
+    "thedefiant.io": "direct:thedefiant.io",
+    "www.thedefiant.io": "direct:thedefiant.io",
+    "u.today": "direct:u.today",
+    "www.u.today": "direct:u.today",
+    "finance.yahoo.com": "direct:finance.yahoo.com",
+    "feeds.finance.yahoo.com": "direct:finance.yahoo.com",
+    "aljazeera.com": "direct:aljazeera.com",
+    "www.aljazeera.com": "direct:aljazeera.com",
 }
 
 _STOPWORDS = {
@@ -63,11 +132,28 @@ def source_family(source: Any, *, title: Any = None, url: Any = None) -> str:
         # several independent confirmations.
         return _PROXY_BUCKETS[low]
     if low.startswith("http"):
-        host = urlparse(low).netloc or low
-        return f"direct:{host.removeprefix('www.')}"
+        host = urlparse(low).netloc.casefold() or low
+        if host == "news.google.com":
+            return "google_news:redirect"
+        return _HOST_ALIASES.get(host, f"direct:{host.removeprefix('www.')}")
     host = urlparse(_clean(url)).netloc if _clean(url).startswith("http") else ""
     if host:
-        return f"direct:{host.removeprefix('www.')}"
+        host = host.casefold()
+        if host == "news.google.com":
+            return "google_news:redirect"
+        return _HOST_ALIASES.get(host, f"direct:{host.removeprefix('www.')}")
+    if low in _PUBLISHER_ALIASES:
+        return _PUBLISHER_ALIASES[low]
+    # Legacy event-study rows persisted values such as
+    # ``direct:seeking_alpha``.  Read them through the same canonical map so
+    # historical evidence joins the new buckets instead of silently starting
+    # a second publisher family.
+    legacy_label = low.removeprefix("direct:")
+    legacy_alias = _PUBLISHER_ALIASES.get(legacy_label) or _PUBLISHER_ALIASES.get(
+        legacy_label.replace("_", " ")
+    )
+    if legacy_alias:
+        return legacy_alias
     if "official" in low:
         return "direct:official"
     if "ministry" in low:
@@ -79,7 +165,12 @@ def source_family(source: Any, *, title: Any = None, url: Any = None) -> str:
 
 
 def is_proxy_source(source: Any) -> bool:
-    return _clean(source).casefold() in _PROXY_BUCKETS
+    low = _clean(source).casefold()
+    if low in _PROXY_BUCKETS:
+        return True
+    if low.startswith("http"):
+        return (urlparse(low).netloc or "").casefold() == "news.google.com"
+    return False
 
 
 def _direction(value: Any) -> str:

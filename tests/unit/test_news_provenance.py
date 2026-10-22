@@ -16,7 +16,15 @@ def _headline(source: str, title: str, impact: dict[str, float]):
 def test_google_query_buckets_are_not_independent_publishers():
     assert source_family("World Wire") == "google_news:world_query"
     assert source_family("Gold Wire") == "google_news:metals_query"
-    assert source_family("CNBC") == "direct:cnbc"
+    assert source_family("CNBC") == "direct:cnbc.com"
+
+
+def test_publisher_aliases_collapse_feed_labels_and_urls():
+    assert source_family("Seeking Alpha") == source_family("https://seekingalpha.com/news/example")
+    assert source_family("direct:seeking_alpha") == "direct:seekingalpha.com"
+    assert source_family("Investing Emtia") == source_family("https://www.investing.com/news/commodities")
+    assert source_family("CNBC") == source_family("https://www.cnbc.com/markets/")
+    assert source_family("https://news.google.com/rss/articles/example") == "google_news:redirect"
 
 
 def test_story_key_and_consensus_keep_conflicting_stories_visible():

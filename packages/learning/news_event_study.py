@@ -99,7 +99,13 @@ def record_events(headlines=None, now: datetime | None = None) -> int:
             rows.append(json.dumps({
                 "id": hid,
                 "source": source,
-                "source_family": source_family(source),
+                "source_family": source_family(
+                    source,
+                    title=getattr(h, "title", None),
+                    url=getattr(h, "url", None),
+                ),
+                "title": getattr(h, "title", None) or "",
+                "url": getattr(h, "url", None),
                 "sentiment": getattr(h, "sentiment", None) or "neutral",
                 "ts": (ts.isoformat() if hasattr(ts, "isoformat") else str(ts)),
                 "symbols": impact,
@@ -123,7 +129,16 @@ def _read_ledger() -> list[dict]:
             return out
         for line in p.read_text(encoding="utf-8").splitlines():
             try:
-                out.append(json.loads(line))
+                row = json.loads(line)
+                if not isinstance(row, dict):
+                    continue
+                # Canonicalize legacy rows at read time.  Older entries stored
+                # feed labels (or no family at all), which made one publisher
+                # appear as several independent sources in the scorecard.
+                row["source_family"] = source_family(
+                    row.get("source"), title=row.get("title"), url=row.get("url")
+                )
+                out.append(row)
             except ValueError:
                 continue
     except OSError:

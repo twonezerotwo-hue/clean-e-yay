@@ -11,6 +11,11 @@ from types import SimpleNamespace
 from packages.agent import briefing
 
 
+def test_bearish_score_is_reported_as_directional_strength():
+    assert briefing._directional_strength({"score": 35, "direction": "bearish"}) == 65
+    assert briefing._directional_strength({"score": 65, "direction": "bullish"}) == 65
+
+
 def test_build_shape():
     out = briefing.build()
     assert {"generated_at", "headlines", "executive", "engine", "stale", "dqs"} <= out.keys()
@@ -125,7 +130,8 @@ def test_blocked_score_is_not_reported_as_trade_signal(monkeypatch):
         "symbol": "XAGUSD",
         "timeframe": "4h",
         "direction": "bearish",
-        "score": 60.0,
+        # Bearish scores are directional: 40 raw = 60-point short strength.
+        "score": 40.0,
         "action": "hold",
         "actionable": False,
         "paper_action": "none",

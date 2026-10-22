@@ -17,6 +17,7 @@ PAPER_SAFE / NO_EXECUTION — karar üretmez, mevcut state'i sunar.
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 from dataclasses import asdict, dataclass, field
@@ -25,7 +26,7 @@ from pathlib import Path
 from typing import Any
 
 from packages.data.ingestion.pipeline import MarketSnapshot
-from packages.decision.engine import TradeDecision
+from packages.decision.engine import TradeDecision, is_execution_ready
 from packages.ops.store import write_text_atomic
 from packages.paper import session_gate
 from packages.paper.guards import price_sanity
@@ -340,7 +341,21 @@ def build_ticket(
     ts = datetime.now(UTC)
     tf_hours = _TF_HOURS.get(decision.timeframe, 1.0)
     expires_at = ts + timedelta(hours=tf_hours)
-    ticket_id = f"tk_{decision.symbol}_{decision.timeframe}_{int(ts.timestamp())}"
+    # Ticket identity describes the signal, not the tick timestamp.  A new
+    # timestamp on every worker cycle previously made the same signal look
+    # new, which produced duplicate cards and notifications.
+    signal_key = "|".join(
+        str(value or "")
+        for value in (
+            decision.symbol,
+            decision.timeframe,
+            side or decision.action,
+            decision.fingerprint,
+            decision.candidate_action,
+        )
+    )
+    signal_hash = hashlib.sha1(signal_key.encode("utf-8")).hexdigest()[:10]
+    ticket_id = f"tk_{decision.symbol}_{decision.timeframe}_{signal_hash}"
 
     if side is None:
         return TradeTicket(
@@ -473,12 +488,23 @@ def build_tickets_from_decisions(
 ) -> list[TradeTicket]:
     """Bir tick'in tüm karar matrisinden ticket listesi üret.
 
-    Yalnız actionable (open_long/open_short) ve status="active" olanlar UI'da
-    görünür. status="insufficient_rr" telemetry için saklı; "invalid" atılır.
+    Yalnız ortak execution-readiness kapısından geçen open_long/open_short
+    kararları ticket kuyruğuna girer. status="insufficient_rr" telemetry için
+    saklı; "invalid" atılır. Keşif/negatif-EV hücreleri matriste kalır ama
+    açılabilir ticket veya bildirim üretmez.
     """
     out: list[TradeTicket] = []
     for d in decisions:
         if d.action not in {"open_long", "open_short"}:
+            continue
+        # ``actionable`` is a legacy exploration intent.  Only the shared
+        # execution-readiness helper may enter the ticket/notification lane;
+        # exploratory, negative-EV and risk-suspended cells remain visible in
+        # the matrix/candidate surfaces but are not presented as open signals.
+        risk_action = str(getattr(getattr(d, "risk", None), "action", "") or "")
+        if risk_action in {"KILL_SWITCH", "RISK_REDUCE", "NO_POSITION_INCREASE"}:
+            continue
+        if not is_execution_ready(d, suspended=False):
             continue
         t = build_ticket(d, snap, paper_state, base_size_usd=base_size_usd)
         if t.status != "invalid":

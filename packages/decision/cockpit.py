@@ -139,12 +139,19 @@ def _top_candidates(cells: list[dict], limit: int = 6) -> list[dict]:
     ranked = sorted(cells, key=lambda c: -abs(float(c.get("score", 50)) - 50))
     out = []
     for c in ranked[:limit]:
+        try:
+            raw_score = max(0.0, min(100.0, float(c.get("score", 50))))
+        except (TypeError, ValueError):
+            raw_score = 50.0
+        direction = str(c.get("direction") or "").casefold()
+        strength = 100.0 - raw_score if direction in {"bearish", "down"} else raw_score
         out.append(
             {
                 "symbol": c.get("symbol"),
                 "timeframe": c.get("timeframe"),
                 "direction": c.get("direction"),
                 "score": c.get("score"),
+                "directional_strength": round(strength, 1),
                 "candidate_action": c.get("candidate_action"),
                 "final_action": c.get("action"),
                 "actionable": bool(c.get("actionable")),

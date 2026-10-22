@@ -367,11 +367,22 @@ async def run_once() -> None:
             rechecks = compute_rechecks(ps.open_positions, decisions)
             ps.last_rechecks = [r.to_dict() for r in rechecks]
             ps.last_recheck_at = now.isoformat()
+            # Read the previous persisted set before replacing it below.
+            seen_ticket_ids = set(_PREV_STATE["ticket_ids"])
+            if not seen_ticket_ids:
+                seen_ticket_ids = {
+                    str(row.get("id"))
+                    for row in (ticket.load_last().get("tickets") or [])
+                    if row.get("status") == "active" and row.get("id")
+                }
             tickets = ticket.build_tickets_from_decisions(decisions, snap, ps)
             ticket_dicts = [t.to_dict() for t in tickets]
             ticket.save_last(ticket_dicts)
             notifs = []
-            notifs += notif_detector.detect_new_tickets(_PREV_STATE["ticket_ids"], ticket_dicts)
+            # The worker may restart independently of the API.  The persisted
+            # set above prevents an unchanged signal from being announced as
+            # new after every restart.
+            notifs += notif_detector.detect_new_tickets(seen_ticket_ids, ticket_dicts)
             notifs += notif_detector.detect_expiring_tickets(ticket_dicts)
             notifs += notif_detector.detect_recheck_changes(_PREV_STATE["verdicts"], ps.last_rechecks)
             notifs += notif_detector.detect_risk_gate_change(

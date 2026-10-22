@@ -219,19 +219,26 @@ def _refresh_pool(state: dict, cfg: Mapping[str, Any], now: datetime, fetch_grou
     items: dict[str, dict] = {}
     article_rows = _enrich_heads(heads, cfg, now)
     from packages.data.providers.news import article_enrichment
+    from packages.data.providers.news.provenance import source_family
     for h in heads:
         title = str(getattr(h, "title", "") or "").strip()
         ts = getattr(h, "ts", None)
         if not title or not isinstance(ts, datetime):
             continue
         url = str(getattr(h, "url", None) or "").strip() or None
+        source = str(getattr(h, "source", "") or "")
+        family = source_family(source, title=title, url=url)
+        story_key = _key(title)
+        # Keep same-story confirmations from independent families as distinct
+        # queue entries.  Repeated copies from one family still collapse.
+        item_key = f"{story_key}:{family}"
         article = article_rows.get(article_enrichment.cache_key(url)) if url and article_rows else None
-        item = {"key": _key(title), "title": title[:240],
-                "source": str(getattr(h, "source", "") or ""), "ts": _iso(ts), "url": url}
+        item = {"key": item_key, "story_key": story_key, "source_family": family,
+                "title": title[:240], "source": source, "ts": _iso(ts), "url": url}
         if article:
             item["article"] = {k: article.get(k) for k in
                                ("status", "title", "description", "excerpt", "word_count", "fetched_at", "url")}
-        items.setdefault(_key(title), item)
+        items.setdefault(item_key, item)
     state["pool"] = {"fetched_at": _iso(now), "items": list(items.values()), "feeds_ok": ok, "last_error": err,
                      "article_enriched": sum(1 for item in items.values() if (item.get("article") or {}).get("excerpt")),
                      "article_enrichment_attempted_at": _iso(now)}

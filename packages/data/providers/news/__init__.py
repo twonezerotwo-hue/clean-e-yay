@@ -86,13 +86,20 @@ def reset_provider_status() -> None:
 
 
 def _dedup(headlines: list[NewsHeadline]) -> list[NewsHeadline]:
-    seen: set[str] = set()
+    # Keep one copy per publisher family.  Title-only dedup silently removed
+    # independent confirmations when two feeds syndicated the same headline.
+    # The canonical family also collapses repeated labels from one newsroom.
+    from packages.data.providers.news.provenance import source_family
+
+    seen: dict[str, set[str]] = {}
     out: list[NewsHeadline] = []
     for h in headlines:
         key = h.title.lower().strip()[:100]
-        if key in seen:
+        family = source_family(h.source, title=h.title, url=h.url)
+        families = seen.setdefault(key, set())
+        if family in families:
             continue
-        seen.add(key)
+        families.add(family)
         out.append(h)
     return out
 
