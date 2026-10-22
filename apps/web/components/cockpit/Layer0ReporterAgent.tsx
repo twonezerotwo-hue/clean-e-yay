@@ -15,6 +15,7 @@ import { streamChat, type ChatStreamStatus } from "@/lib/api/chatStream";
 import { selectDqs, selectSnapshotMeta } from "@/lib/selectors/snapshot";
 import type { AgentBriefing, ChatResponse, ChatTurn, Position } from "@/types/generated/api";
 import { HologramAssetIdeaBanner } from "./HologramAssetIdeaBanner";
+import { normalizeVoiceText } from "@/lib/voiceText";
 import {
   Layer0HumanComputerModel,
   type Layer0DataQualityPulse,
@@ -129,12 +130,36 @@ function getSpeechRecognition(): SpeechRecognitionConstructor | null {
   return scopedWindow.SpeechRecognition ?? scopedWindow.webkitSpeechRecognition ?? null;
 }
 
-function cleanForVoice(text: string) {
+function localizeBriefText(text: string) {
   return text
-    .replace(/\s+/g, " ")
-    .replace(/[•·]/g, ".")
-    .trim()
-    .slice(0, 900);
+    .replace(/Here[’']s what happened in crypto today/gi, "Bugün kripto piyasasında yaşananlar")
+    .replace(/Big Tech/gi, "büyük teknoloji şirketleri")
+    .replace(/may leave/gi, "riske atabilir")
+    .replace(/crypto bots exposed/gi, "kripto botlarını açıkta bırakabilir")
+    .replace(/CertiK warns/gi, "CertiK uyarıyor")
+    .replace(/Gold turns higher as oil prices dip/gi, "Petrol fiyatları düşerken altın yükseliyor")
+    .replace(/investors eye Fed rate outlook/gi, "yatırımcılar Fed'in faiz görünümünü izliyor")
+    .replace(/Breaking News/gi, "son dakika haberi")
+    .replace(/Latest News and Videos/gi, "son haberler ve videolar")
+    .replace(/\bbullish\b/gi, "yukarı yönlü")
+    .replace(/\bbearish\b/gi, "aşağı yönlü")
+    .replace(/\bneutral\b/gi, "nötr")
+    .replace(/\bLONG\b/g, "alış")
+    .replace(/\bSHORT\b/g, "satış")
+    .replace(/\bWATCH\b/gi, "izlemede")
+    .replace(/\bHOLD\b/gi, "beklemede")
+    .replace(/\bNFP\b/g, "tarım dışı istihdam verisi")
+    .replace(/\bCPI\b/g, "enflasyon verisi")
+    .replace(/\bAI\b/g, "yapay zekâ")
+    .replace(/\bETF\b/g, "borsa yatırım fonu")
+    .replace(/\bPnL\b/g, "kâr-zarar")
+    .replace(/\bpaper[_ -]?only\b/gi, "yalnızca kâğıt üzerinde")
+    .replace(/\bno[_ -]?execution\b/gi, "gerçek emir yok")
+    .replace(/White House event/gi, "Beyaz Saray etkinliği");
+}
+
+function cleanForVoice(text: string) {
+  return normalizeVoiceText(text);
 }
 
 function fmtMoney(value: number | null | undefined, digits = 0) {
@@ -888,40 +913,24 @@ export function Layer0ReporterAgent({
   const audioUrlRef = useRef<string | null>(null);
   const speechRunRef = useRef(0);
   const audioUnlockedRef = useRef(false);
-  const lastAutoReadBriefingRef = useRef("");
-  const [audioUnlocked, setAudioUnlocked] = useState(false);
 
-  // Tarayıcı autoplay politikası: sayfa hiç tıklanmadan (sadece "Hey E-yAy"
-  // söylenerek) tetiklenen ilk audio.play()/speechSynthesis.speak() çağrısı
-  // sessizce reddedilir — mikrofon/recognition bundan etkilenmez (input,
-  // gesture gerektirmez), ama SES ÇIKIŞI gerektirir. Sayfadaki İLK tıklama/
-  // tuşa basma/dokunuşta sessiz bir audio + boş bir utterance çalarak bu
-  // kilidi bir kerede açıyoruz; sonraki gesture'sız (wake-word tetikli)
-  // play()/speak() çağrıları artık bu "sound played after interaction"
-  // kaydı sayesinde sessizce engellenmiyor.
+  // Tarayıcı autoplay politikası: ilk kullanıcı etkileşiminde sessiz bir
+  // audio çalarak Piper çıktısının audio elementinden oynatılmasına izin ver.
   const unlockAudio = useCallback(() => {
     if (audioUnlockedRef.current) return;
     audioUnlockedRef.current = true;
-    setAudioUnlocked(true);
     try {
-      const silent = new Audio(
-        "data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAA=",
-      );
-      void silent.play().catch(() => {});
+      // Keep the same media element that receives Piper's WAV.  A temporary
+      // element can satisfy the click gesture, but the later element created
+      // after the network request is treated as autoplay and stops silently.
+      const audio = audioRef.current ?? new Audio();
+      audioRef.current = audio;
+      audio.src =
+        "data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAA=";
+      void audio.play().catch(() => {});
     } catch {
       // yut — autoplay yine de engellenmişse sonraki adımlar normal akışa düşer
     }
-    if (typeof window !== "undefined" && "speechSynthesis" in window) {
-      try {
-        const warm = new SpeechSynthesisUtterance(" ");
-        warm.volume = 0;
-        window.speechSynthesis.speak(warm);
-      } catch {
-        // yut
-      }
-    }
-    // Browser speech queue may start only after the current gesture callback.
-    // The state update lets the brief effect start on the next render.
   }, []);
 
   useEffect(() => {
@@ -944,9 +953,6 @@ export function Layer0ReporterAgent({
       if (audioUrlRef.current) {
         window.URL.revokeObjectURL(audioUrlRef.current);
         audioUrlRef.current = null;
-      }
-      if (typeof window !== "undefined" && "speechSynthesis" in window) {
-        window.speechSynthesis.cancel();
       }
       setSpeaking(false);
       setVoiceLoading(false);
@@ -978,13 +984,15 @@ export function Layer0ReporterAgent({
 
   const briefingText = useMemo(() => {
     if (executive) {
-      return `${executive.headline} ${executive.narrative} Tavsiyem: ${executive.recommendation}`;
+      return localizeBriefText(
+        `${executive.headline} ${executive.narrative} Tavsiyem: ${executive.recommendation}`,
+      );
     }
     const headlines = briefingData?.headlines ?? [];
     if (!headlines.length) return "Briefing bekleniyor. Bir sonraki veri cycle'i okunuyor.";
     return headlines
       .slice(0, 4)
-      .map((item) => `${CATEGORY_LABEL[item.category] ?? item.category}: ${item.title}`)
+      .map((item) => localizeBriefText(`${CATEGORY_LABEL[item.category] ?? item.category}: ${item.title}`))
       .join(". ");
   }, [briefingData?.headlines, executive]);
 
@@ -1011,74 +1019,13 @@ export function Layer0ReporterAgent({
     };
   }, [snapshot.data]);
 
-  const clearAudioPlayback = () => {
+  const clearAudioPlayback = (preserveElement = false) => {
     audioRef.current?.pause();
-    audioRef.current = null;
+    if (!preserveElement) audioRef.current = null;
     if (audioUrlRef.current) {
       window.URL.revokeObjectURL(audioUrlRef.current);
       audioUrlRef.current = null;
     }
-  };
-
-  const speakWithBrowserFallback = (text: string) => {
-    if (silentRef.current || typeof window === "undefined" || !("speechSynthesis" in window)) {
-      return false;
-    }
-    speechRunRef.current += 1;
-    clearAudioPlayback();
-    window.speechSynthesis.cancel();
-    setVoiceLoading(false);
-    setSpeaking(false);
-    const utterance = new SpeechSynthesisUtterance(cleanForVoice(text));
-    utterance.lang = "tr-TR";
-    utterance.rate = 1.0;
-    utterance.pitch = 1.02;
-    const voices = window.speechSynthesis.getVoices();
-    // Doğal/neural sesleri tercih et (Microsoft "Online (Natural)", Google,
-    // wavenet…) — yoksa varsayılan robotik sese düş.
-    const isNatural = (v: SpeechSynthesisVoice) =>
-      /natural|neural|online|google|premium|wavenet|siri/i.test(v.name);
-    const isTr = (v: SpeechSynthesisVoice) => v.lang.toLowerCase().startsWith("tr");
-    const isEn = (v: SpeechSynthesisVoice) => v.lang.toLowerCase().startsWith("en");
-    utterance.voice =
-      voices.find((v) => isTr(v) && isNatural(v)) ??
-      voices.find(isTr) ??
-      voices.find((v) => isEn(v) && isNatural(v)) ??
-      voices.find(isEn) ??
-      null;
-    let retried = false;
-    utterance.onstart = () => setSpeaking(true);
-    utterance.onend = () => setSpeaking(false);
-    utterance.onerror = (event) => {
-      // Chromium occasionally reports a transient `interrupted` error when a
-      // warm-up utterance is cancelled. Retry once after the queue settles;
-      // otherwise the button appeared to work but stopped without audio.
-      if (!retried && event.error !== "canceled" && !silentRef.current) {
-        retried = true;
-        window.setTimeout(() => {
-          if (silentRef.current) return;
-          try {
-            window.speechSynthesis.cancel();
-            window.speechSynthesis.resume();
-            window.speechSynthesis.speak(utterance);
-          } catch {
-            setSpeaking(false);
-            setVoiceError("Tarayıcı ses motoru başlatılamadı.");
-          }
-        }, 120);
-        return;
-      }
-      setSpeaking(false);
-      setVoiceError("Tarayıcı ses motoru başlatılamadı.");
-    };
-    try {
-      window.speechSynthesis.resume();
-      window.speechSynthesis.speak(utterance);
-    } catch {
-      setVoiceError("Tarayıcı ses motoru başlatılamadı.");
-      return false;
-    }
-    return true;
   };
 
   const speak = async (text: string, interactive = false) => {
@@ -1094,17 +1041,16 @@ export function Layer0ReporterAgent({
     setVoiceError(null);
     setVoiceLoading(true);
     setSpeaking(false);
-    clearAudioPlayback();
-    if ("speechSynthesis" in window) {
-      window.speechSynthesis.cancel();
-    }
-
+    // Preserve the element unlocked by the user's click so the Piper WAV is
+    // allowed to play after the asynchronous API response arrives.
+    clearAudioPlayback(interactive);
     try {
       const audioBlob = await api.voiceSpeak({ text: cleanText }, interactive);
       if (speechRunRef.current !== runId) return false;
 
       const audioUrl = window.URL.createObjectURL(audioBlob);
-      const audio = new Audio(audioUrl);
+      const audio = audioRef.current ?? new Audio();
+      audio.src = audioUrl;
       audioRef.current = audio;
       audioUrlRef.current = audioUrl;
       audio.onended = () => {
@@ -1128,45 +1074,20 @@ export function Layer0ReporterAgent({
       setVoiceLoading(false);
       setSpeaking(false);
       clearAudioPlayback();
-      const fallbackSpoke = speakWithBrowserFallback(cleanText);
-      setVoiceError(
-        fallbackSpoke
-          ? "Kaliteli ses üretilemedi; tarayıcı sesi kullanılıyor."
-          : "Ses üretilemedi.",
-      );
-      return fallbackSpoke;
+      setVoiceError("Yerel Piper sesi üretilemedi.");
+      return false;
     }
   };
 
   const readBriefing = () => {
     if (!briefingText.trim()) return;
     unlockAudio();
-    // A manual read supersedes the next automatic pass for this exact text.
-    lastAutoReadBriefingRef.current = briefingText;
-    // Prefer the verified server audio. The click warm-up above unlocks the
-    // media element; if the provider/network fails, speak() falls back to the
-    // browser engine with its retry guard.
+    // Yalnızca kullanıcının o anda gördüğü metni oku. Brief polling'i sırasında
+    // eski metnin otomatik olarak kuyruğa girmesi ses ile ekranın ayrışmasına
+    // neden oluyordu; brief artık kendiliğinden okunmaz.
     setVoiceError(null);
     void speak(briefingText, true);
   };
-
-  // Tarayıcı ilk ses çıkışını kullanıcı etkileşimi olmadan engelleyebilir. İlk
-  // etkileşimle ses kilidi açıldıktan sonra güncel executive brief'i bir kez
-  // otomatik oku; aynı metin polling nedeniyle tekrar tekrar okunmaz.
-  useEffect(() => {
-    if (
-      !audioUnlocked ||
-      silent ||
-      briefing.isLoading ||
-      !briefing.data ||
-      !briefingText.trim() ||
-      lastAutoReadBriefingRef.current === briefingText
-    ) {
-      return;
-    }
-    lastAutoReadBriefingRef.current = briefingText;
-    void speak(briefingText);
-  }, [audioUnlocked, briefing.data, briefing.isLoading, briefingText, silent, speak]);
 
   // Gönderim kilidi: stream sürerken ya da non-stream fallback beklerken yeni soru yok.
   const chatBusy = streamPhase !== "idle" || chat.isPending;
@@ -1301,9 +1222,6 @@ export function Layer0ReporterAgent({
   const stopAllVoice = () => {
     speechRunRef.current += 1;
     clearAudioPlayback();
-    if (typeof window !== "undefined" && "speechSynthesis" in window) {
-      window.speechSynthesis.cancel();
-    }
     setSpeaking(false);
     setVoiceLoading(false);
   };

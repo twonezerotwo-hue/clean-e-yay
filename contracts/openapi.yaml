@@ -154,7 +154,7 @@ paths:
   /api/voice/speak:
     post:
       operationId: postVoiceSpeak
-      summary: High quality TTS proxy (provider key never reaches frontend)
+      summary: Local Piper TTS (all spoken output uses the installed local model)
       requestBody:
         required: true
         content:
@@ -163,16 +163,16 @@ paths:
               $ref: "#/components/schemas/VoiceSpeakRequest"
       responses:
         "200":
-          description: MPEG audio
+          description: WAV audio from the local Piper model
           content:
-            audio/mpeg:
+            audio/wav:
               schema:
                 type: string
                 format: binary
         "400":
           description: Empty text
         "503":
-          description: TTS provider not configured or unavailable
+          description: Local Piper is not installed or unavailable
 
   /api/v1/paper-trading/state:
     get:
@@ -701,6 +701,19 @@ paths:
       responses:
         "200":
           description: OK (veri yoksa status=NO_DATA)
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+
+  /api/v1/learning/paper-canary:
+    get:
+      operationId: getLearningPaperCanary
+      summary: Kanıt-kapılı paper kanaryası — owner onayı bekleyen salt-gözlem raporu
+      responses:
+        "200":
+          description: OK (kanıt yoksa status=WAITING_EVIDENCE)
           content:
             application/json:
               schema:
@@ -1871,8 +1884,16 @@ components:
       required: [text]
       properties:
         text: { type: string, minLength: 1, maxLength: 4000 }
-        voice: { type: string, nullable: true, maxLength: 128 }
-        provider: { type: string, nullable: true, maxLength: 32 }
+        voice:
+          type: string
+          nullable: true
+          maxLength: 128
+          description: Deprecated compatibility field; local Piper model decides the voice.
+        provider:
+          type: string
+          nullable: true
+          maxLength: 32
+          description: Deprecated compatibility field; always ignored and routed to local Piper.
 
     ChatResponse:
       type: object
@@ -2157,6 +2178,10 @@ components:
               level: { type: string, enum: [ok, warn, error] }
               text: { type: string }
         confidence_text: { type: string }
+        execution_state:
+          type: string
+          description: READY, market/owner bekleme veya paper keşfi.
+        execution_reason: { type: string, nullable: true }
 
     TradeTicketList:
       type: object
@@ -2297,6 +2322,7 @@ components:
       required: [total_trades, win_rate, calibration]
       properties:
         total_trades: { type: integer }
+        expectancy_r: { type: number, nullable: true }
         min_sample:
           type: integer
           description: UX1 — Sharpe/win-rate'in istatistiksel anlam eşiği.
@@ -2354,6 +2380,12 @@ components:
             (packages/learning/cohorts.py). Mevcut alanlar tüm outcome'ları
             saymaya devam eder; auto sistemin gerçek performansı buradadır.
           $ref: "#/components/schemas/LearningCohorts"
+        performance:
+          description: >
+            Premium karar kalitesi özeti. Execution anomaly, çözülemeyen legacy
+            ve eksik atıf kayıtları öğrenme performansından ayrılır; eski ham
+            alanlar geriye dönük uyumluluk için korunur.
+          $ref: "#/components/schemas/LearningPerformance"
         shadow_routing:
           description: >
             Birleşik gölge kanıtı. Aday giriş ile final kapı sonucunu, yeni asset
@@ -2889,6 +2921,19 @@ components:
           type: array
           items: { type: string }
         actionable: { type: boolean }
+        execution_ready:
+          type: boolean
+          description: >
+            Hard kapıları geçen, negatif EV ve paper keşif gevşetmesi taşımayan
+            hücre. Yalnız görünürlük alanıdır; mevcut paper_action sözleşmesini
+            değiştirmez.
+        execution_state:
+          type: string
+          enum: [READY, EXPLORATION, BLOCKED, SUSPENDED]
+          description: >
+            READY gerçek paper hazırlığı; EXPLORATION yalnız paper keşif
+            gevşetmesi/negatif EV; BLOCKED kapı veya sinyal yok; SUSPENDED
+            küresel RiskGate/DQS askısı.
         status: { type: string, enum: [ACTIONABLE, NOT_ACTIONABLE, SUSPENDED] }
         paper_action: { type: string, enum: [open_long, open_short, none] }
 
@@ -3580,6 +3625,8 @@ components:
         candidate_action: { type: string }
         final_action: { type: string }
         actionable: { type: boolean }
+        execution_ready: { type: boolean }
+        execution_state: { type: string, enum: [READY, EXPLORATION, BLOCKED, SUSPENDED] }
         status: { type: string, enum: [ACTIONABLE, NOT_ACTIONABLE, SUSPENDED] }
 
     AgentBrief:
@@ -3657,6 +3704,28 @@ components:
           type: array
           items: { type: string }
 
+    LearningPerformance:
+      type: object
+      required: [total_trades, wins, losses, breakeven, win_rate, total_pnl, sample_sufficient]
+      properties:
+        total_trades: { type: integer }
+        wins: { type: integer }
+        losses: { type: integer }
+        breakeven: { type: integer }
+        win_rate: { type: number }
+        total_pnl: { type: number }
+        expectancy_r: { type: number, nullable: true }
+        r_sample: { type: integer }
+        sharpe: { type: number, nullable: true }
+        sample_sufficient: { type: boolean }
+        by_timeframe:
+          type: object
+          additionalProperties: { $ref: "#/components/schemas/OutcomeBucket" }
+        excluded_from_learning: { type: integer }
+        provenance_incomplete: { type: integer }
+        execution_anomalies: { type: integer }
+        legacy_outcomes: { type: integer }
+
     CockpitBrief:
       type: object
       description: >
@@ -3678,6 +3747,8 @@ components:
         headlines:
           type: array
           items: { $ref: "#/components/schemas/NewsHeadline" }
+        news_consensus:
+          $ref: "#/components/schemas/NewsConsensusView"
         decision_matrix: { $ref: "#/components/schemas/DecisionMatrix" }
         paper_state:
           type: object
@@ -3706,6 +3777,44 @@ components:
         news_prepared_setups:
           type: array
           items: { $ref: "#/components/schemas/NewsPreparedSetup" }
+
+    NewsConsensusView:
+      type: object
+      description: Haberlerin kaynak ailesi, öykü ve çelişki görünümü; observe-only.
+      properties:
+        generated_at: { type: string, nullable: true }
+        headline_count: { type: integer }
+        unique_source_labels: { type: integer }
+        independent_source_families: { type: integer }
+        proxy_headline_count: { type: integer }
+        proxy_share: { type: number }
+        story_count: { type: integer }
+        newest_headline_at: { type: string, nullable: true }
+        stories:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+        assets:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+        policy:
+          type: object
+          additionalProperties: true
+        feed_inventory:
+          type: object
+          additionalProperties: true
+        processing:
+          type: object
+          additionalProperties: true
+        idea_board:
+          type: object
+          additionalProperties: true
+        article_coverage:
+          type: object
+          additionalProperties: true
 
     ReplayStatus:
       type: object
@@ -5111,6 +5220,16 @@ components:
         direction: { type: string, nullable: true }
         confidence: { type: string, nullable: true }
         mechanism: { type: string, nullable: true }
+        url: { type: string, nullable: true }
+        article:
+          type: object
+          nullable: true
+          properties:
+            status: { type: string, nullable: true }
+            title: { type: string, nullable: true }
+            description: { type: string, nullable: true }
+            excerpt: { type: string, nullable: true }
+            fetched_at: { type: string, nullable: true }
 
     Idea:
       type: object
@@ -5162,6 +5281,17 @@ components:
             wilson_low: { type: number, nullable: true }
             avg_r: { type: number, nullable: true }
         news: { $ref: "#/components/schemas/IdeaNews" }
+        source:
+          type: object
+          description: >
+            Salt-okuma kaynak kanıtı. Discovery fiyatı ile paper fiyat eşlemesi
+            ayrıdır; mapped_for_paper otomatik asset terfisi anlamına gelmez.
+          properties:
+            provider: { type: string, nullable: true }
+            provider_id: { type: string, nullable: true }
+            mapped_for_paper: { type: boolean }
+            discovery_price: { type: number, nullable: true }
+            discovery_seen_at: { type: string, nullable: true }
         market:
           type: object
           properties:
@@ -5253,6 +5383,15 @@ components:
         direction: { type: string, enum: [up, down, neutral] }
         strength: { type: integer }
         n_headlines: { type: integer }
+        n_source_headlines: { type: integer }
+        n_stories: { type: integer }
+        independent_source_families: { type: integer }
+        source_families: { type: array, items: { type: string } }
+        article_enriched: { type: integer }
+        evidence_status: { type: string, enum: [CONFIRMED, SINGLE_SOURCE, CONFLICT] }
+        conflict: { type: boolean }
+        raw_direction: { type: string, enum: [up, down, neutral] }
+        weight_sum: { type: number }
         evidence:
           type: array
           items:
@@ -5264,6 +5403,16 @@ components:
               direction: { type: number }
               origin: { type: string, nullable: true }
               url: { type: string, nullable: true }
+              source_family: { type: string, nullable: true }
+              article:
+                type: object
+                nullable: true
+                properties:
+                  status: { type: string, nullable: true }
+                  title: { type: string, nullable: true }
+                  description: { type: string, nullable: true }
+                  excerpt: { type: string, nullable: true }
+                  fetched_at: { type: string, nullable: true }
 
     IdeaEvaluation:
       type: object

@@ -63,7 +63,15 @@ MARKET_FEEDS: Final[tuple[dict[str, str], ...]] = (
     {"url": "https://www.theblock.co/rss.xml", "source": "The Block"},
     {"url": "https://cryptoslate.com/feed/", "source": "CryptoSlate"},
     {"url": "https://news.bitcoin.com/feed/", "source": "Bitcoin.com"},
-    {"url": "https://finance.yahoo.com/news/rssindex", "source": "Yahoo Finance"},
+    # Yahoo'nun eski /news/rssindex yolu 404 dönüyor. Sembol bazlı resmi RSS
+    # uç noktası aynı kaynağı korur ve 404 kaynak hatasını üretmez.
+    {
+        "url": (
+            "https://feeds.finance.yahoo.com/rss/2.0/headline?"
+            "s=CL=F,GC=F,SI=F,BTC-USD&region=US&lang=en-US"
+        ),
+        "source": "Yahoo Finance",
+    },
     {
         "url": "https://feeds.content.dowjones.io/public/rss/mw_topstories",
         "source": "MarketWatch Top",
@@ -196,6 +204,7 @@ _NS = {"atom": "http://www.w3.org/2005/Atom"}
 _DATE_TAGS = (
     "pubDate",
     "atom:published",
+    "atom:updated",
     "published",
     "{http://purl.org/dc/elements/1.1/}date",
     "updated",
@@ -227,12 +236,25 @@ def parse_feed(
     raw_items: list[tuple[datetime, NewsHeadline]] = []
 
     for item in items[:25]:
+        # RSS'te etiketler namespaceless; Atom'da title/link çoğunlukla
+        # `atom:` namespace'iyle gelir. Önce RSS biçimini, yoksa Atom'u oku.
         title_el = item.find("title")
+        if title_el is None:
+            title_el = item.find("atom:title", _NS)
         title = (title_el.text or "").strip() if title_el is not None else ""
         if not title or classify.is_irrelevant(title):
             continue
 
         link_el = item.find("link")
+        if link_el is None:
+            # Bir Atom entry'sinde birden fazla link olabilir; haberin asıl
+            # sayfasını gösteren alternate linki tercih et.
+            atom_links = item.findall("atom:link", _NS)
+            link_el = next(
+                (candidate for candidate in atom_links
+                 if candidate.get("rel", "alternate") == "alternate"),
+                atom_links[0] if atom_links else None,
+            )
         url = ""
         if link_el is not None:
             url = (link_el.text or link_el.get("href", "") or "").strip()

@@ -948,6 +948,26 @@ def run_once() -> dict:
         tf_scoring_race_status = f"ERROR:{type(exc).__name__}"
         errors.append(f"tf_scoring_race:{type(exc).__name__}")
 
+    # Kanıt-kapılı paper kanaryası (ucuz, salt-gözlem). Giriş/stop zamanlaması,
+    # 1h teşhisi, haber konsensüsü, fiyat/teknik teyit ve rejim what-if'ı tek
+    # artifact'ta toplanır. Bütün kapılar geçse bile yalnız owner önerisi üretir;
+    # paper state'ine veya emir yoluna yazmaz.
+    paper_canary_status = "ERROR"
+    try:
+        from packages.learning import paper_canary
+
+        paper_result = paper_canary.run()
+        paper_canary_status = str(paper_result.get("status", "UNKNOWN"))
+        if paper_canary_status == "OK":
+            log.info(
+                "paper_canary: candidates=%s pending_owner=%s waiting=%s",
+                paper_result.get("candidates"), paper_result.get("pending_owner"),
+                paper_result.get("waiting_evidence"),
+            )
+    except Exception as exc:  # defensive — worker patlamamalı
+        paper_canary_status = f"ERROR:{type(exc).__name__}"
+        errors.append(f"paper_canary:{type(exc).__name__}")
+
     # Birleşik gölge kanıtı (ucuz, salt-gözlem). Aday giriş ile final kapı
     # sonucunu, asset terfi karnesini, haber teyidini, teknik yarışı ve exit
     # canary'yi tek artifact'ta toplar. Hiçbir kararı/ağırlığı/paper state'i
@@ -1027,6 +1047,7 @@ def run_once() -> dict:
         "subsignal_scorecard_status": subsignal_scorecard_status,  # D5 sinyal karnesi (DISABLED=flag OFF)
         "tf_scoring_v2_shadow_status": tf_scoring_v2_shadow_status,  # D6 v2 gölge skoru (DISABLED=flag OFF)
         "tf_scoring_race_status": tf_scoring_race_status,  # R5 yarış defteri (DISABLED=flag OFF)
+        "paper_canary_status": paper_canary_status,  # kanıt-kapılı owner önerisi (salt-gözlem)
         "shadow_routing_status": shadow_routing_status,  # birleşik gölge kanıtı (salt-gözlem)
         "duration_ms": duration_ms,        # CP1 — perf görünürlüğü
         "over_budget": over_budget,        # CP1 — bütçe aşımı bayrağı

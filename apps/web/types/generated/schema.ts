@@ -186,7 +186,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** High quality TTS proxy (provider key never reaches frontend) */
+        /** Local Piper TTS (all spoken output uses the installed local model) */
         post: operations["postVoiceSpeak"];
         delete?: never;
         options?: never;
@@ -833,6 +833,23 @@ export interface paths {
         };
         /** Çıkış stop-verim backtest'i — en verimli sabit+trailing stop aralığı (read-only) */
         get: operations["getLearningExitBacktest"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/learning/paper-canary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Kanıt-kapılı paper kanaryası — owner onayı bekleyen salt-gözlem raporu */
+        get: operations["getLearningPaperCanary"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1890,7 +1907,9 @@ export interface components {
         };
         VoiceSpeakRequest: {
             text: string;
+            /** @description Deprecated compatibility field; local Piper model decides the voice. */
             voice?: string | null;
+            /** @description Deprecated compatibility field; always ignored and routed to local Piper. */
             provider?: string | null;
         };
         /** @description v2.6 — state-grounded yanıt. refused=true → injection/bypass guard devrede. evidence_used yanıtın dayandığı state kanıtları. */
@@ -2110,6 +2129,9 @@ export interface components {
                 text?: string;
             }[];
             confidence_text?: string;
+            /** @description READY, market/owner bekleme veya paper keşfi. */
+            execution_state?: string;
+            execution_reason?: string | null;
         };
         TradeTicketList: {
             tickets: components["schemas"]["TradeTicket"][];
@@ -2190,6 +2212,7 @@ export interface components {
         };
         LearningSummary: {
             total_trades: number;
+            expectancy_r?: number | null;
             /** @description UX1 — Sharpe/win-rate'in istatistiksel anlam eşiği. */
             min_sample?: number;
             /** @description UX1 — total_trades ≥ min_sample (false → INSUFFICIENT SAMPLE). */
@@ -2232,6 +2255,8 @@ export interface components {
             proposal_status?: string;
             /** @description Denetim 2026-07-03 additive — AUTO/MANUAL/EXCLUDED kohort ayrımı (packages/learning/cohorts.py). Mevcut alanlar tüm outcome'ları saymaya devam eder; auto sistemin gerçek performansı buradadır. */
             cohorts?: components["schemas"]["LearningCohorts"];
+            /** @description Premium karar kalitesi özeti. Execution anomaly, çözülemeyen legacy ve eksik atıf kayıtları öğrenme performansından ayrılır; eski ham alanlar geriye dönük uyumluluk için korunur. */
+            performance?: components["schemas"]["LearningPerformance"];
             /** @description Birleşik gölge kanıtı. Aday giriş ile final kapı sonucunu, yeni asset terfisini, haber teyidini ve exit canary önerilerini gösterir; canlı karar/ağırlık/paper state'ine uygulanmaz. */
             shadow_routing?: {
                 [key: string]: unknown;
@@ -2604,6 +2629,13 @@ export interface components {
             reason?: string;
             blocked_by?: string[];
             actionable?: boolean;
+            /** @description Hard kapıları geçen, negatif EV ve paper keşif gevşetmesi taşımayan hücre. Yalnız görünürlük alanıdır; mevcut paper_action sözleşmesini değiştirmez. */
+            execution_ready?: boolean;
+            /**
+             * @description READY gerçek paper hazırlığı; EXPLORATION yalnız paper keşif gevşetmesi/negatif EV; BLOCKED kapı veya sinyal yok; SUSPENDED küresel RiskGate/DQS askısı.
+             * @enum {string}
+             */
+            execution_state?: "READY" | "EXPLORATION" | "BLOCKED" | "SUSPENDED";
             /** @enum {string} */
             status?: "ACTIONABLE" | "NOT_ACTIONABLE" | "SUSPENDED";
             /** @enum {string} */
@@ -3070,6 +3102,9 @@ export interface components {
             candidate_action?: string;
             final_action?: string;
             actionable?: boolean;
+            execution_ready?: boolean;
+            /** @enum {string} */
+            execution_state?: "READY" | "EXPLORATION" | "BLOCKED" | "SUSPENDED";
             /** @enum {string} */
             status?: "ACTIONABLE" | "NOT_ACTIONABLE" | "SUSPENDED";
         };
@@ -3118,6 +3153,25 @@ export interface components {
             }[];
             evidence_refs?: string[];
         };
+        LearningPerformance: {
+            total_trades: number;
+            wins: number;
+            losses: number;
+            breakeven: number;
+            win_rate: number;
+            total_pnl: number;
+            expectancy_r?: number | null;
+            r_sample?: number;
+            sharpe?: number | null;
+            sample_sufficient: boolean;
+            by_timeframe?: {
+                [key: string]: components["schemas"]["OutcomeBucket"];
+            };
+            excluded_from_learning?: number;
+            provenance_incomplete?: number;
+            execution_anomalies?: number;
+            legacy_outcomes?: number;
+        };
         /** @description UX1 — Agent Operating Cockpit özeti (tek çağrı). AgentBrief + DecisionTrace ilk-ekranı besler. Read-only; yeni karar/emir/live çağrı YOK. PAPER_SAFE. */
         CockpitBrief: {
             /** Format: date-time */
@@ -3132,6 +3186,7 @@ export interface components {
             engine?: components["schemas"]["AgentBriefingEngine"];
             prices?: components["schemas"]["LivePrice"][];
             headlines?: components["schemas"]["NewsHeadline"][];
+            news_consensus?: components["schemas"]["NewsConsensusView"];
             decision_matrix?: components["schemas"]["DecisionMatrix"];
             paper_state?: {
                 revision?: number | null;
@@ -3154,6 +3209,38 @@ export interface components {
                 [key: string]: unknown;
             };
             news_prepared_setups?: components["schemas"]["NewsPreparedSetup"][];
+        };
+        /** @description Haberlerin kaynak ailesi, öykü ve çelişki görünümü; observe-only. */
+        NewsConsensusView: {
+            generated_at?: string | null;
+            headline_count?: number;
+            unique_source_labels?: number;
+            independent_source_families?: number;
+            proxy_headline_count?: number;
+            proxy_share?: number;
+            story_count?: number;
+            newest_headline_at?: string | null;
+            stories?: {
+                [key: string]: unknown;
+            }[];
+            assets?: {
+                [key: string]: unknown;
+            }[];
+            policy?: {
+                [key: string]: unknown;
+            };
+            feed_inventory?: {
+                [key: string]: unknown;
+            };
+            processing?: {
+                [key: string]: unknown;
+            };
+            idea_board?: {
+                [key: string]: unknown;
+            };
+            article_coverage?: {
+                [key: string]: unknown;
+            };
         };
         /** @description R1 — replay store durumu. status=active (kayıt var) / empty (kayıt yok). mode=active_snapshot_replay / insufficient_snapshots / reserved_not_active. Rolling backtest motoru aktif değil. */
         ReplayStatus: {
@@ -4104,6 +4191,14 @@ export interface components {
             direction?: string | null;
             confidence?: string | null;
             mechanism?: string | null;
+            url?: string | null;
+            article?: {
+                status?: string | null;
+                title?: string | null;
+                description?: string | null;
+                excerpt?: string | null;
+                fetched_at?: string | null;
+            } | null;
         };
         Idea: {
             symbol: string;
@@ -4148,6 +4243,14 @@ export interface components {
                 avg_r?: number | null;
             };
             news?: components["schemas"]["IdeaNews"];
+            /** @description Salt-okuma kaynak kanıtı. Discovery fiyatı ile paper fiyat eşlemesi ayrıdır; mapped_for_paper otomatik asset terfisi anlamına gelmez. */
+            source?: {
+                provider?: string | null;
+                provider_id?: string | null;
+                mapped_for_paper?: boolean;
+                discovery_price?: number | null;
+                discovery_seen_at?: string | null;
+            };
             market?: {
                 chg_7d_pct?: number | null;
                 chg_30d_pct?: number | null;
@@ -4222,6 +4325,17 @@ export interface components {
             direction: "up" | "down" | "neutral";
             strength: number;
             n_headlines?: number;
+            n_source_headlines?: number;
+            n_stories?: number;
+            independent_source_families?: number;
+            source_families?: string[];
+            article_enriched?: number;
+            /** @enum {string} */
+            evidence_status?: "CONFIRMED" | "SINGLE_SOURCE" | "CONFLICT";
+            conflict?: boolean;
+            /** @enum {string} */
+            raw_direction?: "up" | "down" | "neutral";
+            weight_sum?: number;
             evidence?: {
                 title?: string;
                 source?: string | null;
@@ -4229,6 +4343,14 @@ export interface components {
                 direction?: number;
                 origin?: string | null;
                 url?: string | null;
+                source_family?: string | null;
+                article?: {
+                    status?: string | null;
+                    title?: string | null;
+                    description?: string | null;
+                    excerpt?: string | null;
+                    fetched_at?: string | null;
+                } | null;
             }[];
         } | null;
         /** @description Yapay zekâ fikir değerlendirmesi — anlatı; karar/terfi kriteri değildir. */
@@ -4661,13 +4783,13 @@ export interface operations {
             };
         };
         responses: {
-            /** @description MPEG audio */
+            /** @description WAV audio from the local Piper model */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "audio/mpeg": string;
+                    "audio/wav": string;
                 };
             };
             /** @description Empty text */
@@ -4677,7 +4799,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description TTS provider not configured or unavailable */
+            /** @description Local Piper is not installed or unavailable */
             503: {
                 headers: {
                     [name: string]: unknown;
@@ -5531,6 +5653,28 @@ export interface operations {
         requestBody?: never;
         responses: {
             /** @description OK (veri yoksa status=NO_DATA) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+    };
+    getLearningPaperCanary: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK (kanıt yoksa status=WAITING_EVIDENCE) */
             200: {
                 headers: {
                     [name: string]: unknown;

@@ -18,7 +18,7 @@ from pydantic import BaseModel, Field
 from packages.data.ingestion.pipeline import build_snapshot
 from packages.notifications import list_recent, mark_ack, mark_all_ack, unread_count
 from packages.paper import audit as paper_audit
-from packages.paper import idea_order, maintenance, manual_order, manual_queue, ticket
+from packages.paper import idea_order, maintenance, manual_order, manual_queue, news_setup, ticket
 from packages.paper import state as paper_state
 from packages.paper.guards import price_sanity, state_anomaly
 from packages.paper.lifecycle import close_position, max_drawdown_pct
@@ -96,9 +96,9 @@ def _serialize_state(ps: paper_state.PaperState) -> dict:
         "recent_audit_events": paper_audit.read_recent(20),
         "manual_ready_count": len(ps.manual_ready),
         "news_prepared_setups_count": len(
-            [s for s in ps.news_prepared_setups if s.status in {"WAITING_RISK", "ARMED"}]
+            [s for s in ps.news_prepared_setups if news_setup.is_live(s, now)]
         ),
-        "news_prepared_setups": [asdict(s) for s in ps.news_prepared_setups[-32:]],
+        "news_prepared_setups": [news_setup.view(s, now) for s in ps.news_prepared_setups[-32:]],
         # Recheck (UX-A14): her tick'te decide_matrix yan ürünü. Boşsa henüz tick
         # atılmamış. Sadece öneri — otomatik kapatma YOK; çıkış SL/TP veya manuel.
         "position_rechecks": list(ps.last_rechecks),

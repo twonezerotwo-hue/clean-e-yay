@@ -6,6 +6,7 @@ deterministik yanıt döner; state'te olmayan şey UYDURULMAZ.
 """
 from __future__ import annotations
 
+import copy
 import hashlib
 import re
 import time
@@ -86,6 +87,50 @@ _RISK_ACTION_TR = {
     "RISK_REDUCE": "riski azalt", "HEDGE_INCREASE": "korunmayı artır",
     "KILL_SWITCH": "acil durdurma",
 }
+
+# Karar motorunun makine kodları kanıt zincirinde kalır; kullanıcıya ve LLM'e
+# aynı kontrollerin anlaşılır Türkçe karşılığını gösteririz. Bilinmeyen bir kodu
+# ham haliyle sızdırmak yerine güvenli bir genel açıklamaya düşeriz.
+_BLOCKER_TR = {
+    "concentration_guard": "pozisyon yoğunluğu sınırı",
+    "confidence_floor": "sinyal güveni alt sınırı",
+    "correlation_veto": "varlıklar arası ilişki/korelasyon sınırı",
+    "entry_quality_v2:entry_quality": "giriş kalitesi teyit koşulu",
+    "NO_POSITION_INCREASE": "yeni pozisyon açma sınırı",
+    "RISK_REDUCE": "risk azaltma sınırı",
+    "price_sanity": "fiyat doğrulama sınırı",
+    "data_quality": "veri kalitesi sınırı",
+    "dqs": "veri kalitesi sınırı",
+}
+
+
+def _humanize_blocker(value: object) -> str:
+    """Makine kaynaklı blocker kodunu doğal, kısa bir açıklamaya çevirir."""
+    raw = str(value or "").strip()
+    if not raw:
+        return "ek bir risk/veri kontrolü"
+    if raw in _BLOCKER_TR:
+        return _BLOCKER_TR[raw]
+    # Bazı sağlayıcılar aynı kodu büyük/küçük harf veya prefix ile taşır.
+    normalized = raw.casefold()
+    for code, label in _BLOCKER_TR.items():
+        if normalized == code.casefold() or normalized.endswith(f":{code.casefold()}"):
+            return label
+    return "ek bir risk/veri kontrolü"
+
+
+def _humanized_blockers(values: object, limit: int = 5) -> list[str]:
+    """Sıralı, tekrarsız ve kullanıcıya uygun blocker listesi."""
+    result: list[str] = []
+    seen: set[str] = set()
+    for value in values if isinstance(values, (list, tuple, set)) else []:
+        label = _humanize_blocker(value)
+        if label not in seen:
+            seen.add(label)
+            result.append(label)
+        if len(result) >= limit:
+            break
+    return result
 
 
 def _regime_tr(label: str | None) -> str:
@@ -240,7 +285,7 @@ def _cells_for(ctx: dict, symbol: str, timeframe: str | None) -> list[dict]:
 
 
 def _fmt_cell(c: dict) -> str:
-    blocked = ", ".join(c.get("blocked_by") or [])
+    blocked = ", ".join(_humanized_blockers(c.get("blocked_by") or []))
     final = c.get("final", c.get("action", "?"))
     cand = c.get("candidate", "?")
     base = f"{c['symbol']} {c['timeframe']}: aday {cand} → final {final}"
@@ -305,9 +350,91 @@ def _risk_gate_answer(ctx: dict) -> tuple[str, list[str]]:
         evidence += [f"halt:{h['type']}" for h in ctx["halt"]["events"]]
     blocked = ctx["matrix"]["blocked_by_reasons"]
     if blocked:
-        parts.append("Asıl seni durduran, adayları kesen şu kurallar: " + ", ".join(blocked[:5]) + ".")
+        parts.append(
+            "Asıl seni durduran, adayları kesen şu kontroller: "
+            + ", ".join(_humanized_blockers(blocked))
+            + "."
+        )
         evidence += [f"blocked_by:{b}" for b in blocked[:5]]
     return " ".join(parts), evidence
+
+
+_BLOCKER_PRIORITY = (
+    "NO_POSITION_INCREASE",
+    "RISK_REDUCE",
+    "concentration_guard",
+    "confidence_floor",
+    "correlation_veto",
+    "entry_quality_v2:entry_quality",
+    "price_sanity",
+    "data_quality",
+    "dqs",
+)
+
+
+def _main_blocker_answer(ctx: dict) -> tuple[str, list[str]]:
+    """"Neden işlem yok/açılmıyor?" sorusunun tek, net açıklaması.
+
+    Chat bildirimindeki genel bakış yerine aynı karar matrisi ve RiskGate
+    durumunu kullanır. Ham kodlar yalnızca evidence'ta kalır; kullanıcıya
+    okunabilir neden ve varsa etkilenen adaylar gösterilir.
+    """
+    matrix = ctx.get("matrix") or {}
+    dqs = ctx.get("dqs") or {}
+    halt = ctx.get("halt") or {}
+    evidence: list[str] = [f"snapshot:{ctx.get('snapshot_id', '?')}"]
+
+    if dqs.get("status") == "BLOCKED":
+        evidence.append("dqs:BLOCKED")
+        return (
+            f"Ana engel veri kalitesi: DQS {float(dqs.get('score') or 0):.0f}. "
+            "Doğrulanmış veri yetersiz olduğu için yeni pozisyon açmıyorum.",
+            evidence,
+        )
+    if halt.get("active"):
+        events = halt.get("events") or []
+        evidence += [f"halt:{e.get('type', '?')}" for e in events[:4]]
+        return (
+            "Ana engel aktif güvenlik durdurması. Sistem yeni girişleri kilitledi; "
+            "mevcut pozisyonlar yönetilmeye devam eder.",
+            evidence,
+        )
+
+    raw_blocked = list(matrix.get("blocked_by_reasons") or [])
+    ordered = sorted(
+        raw_blocked,
+        key=lambda value: _BLOCKER_PRIORITY.index(value)
+        if value in _BLOCKER_PRIORITY else len(_BLOCKER_PRIORITY),
+    )
+    if ordered:
+        labels = _humanized_blockers(ordered)
+        evidence += [f"blocked_by:{value}" for value in ordered[:5]]
+        actions = matrix.get("paper_actions") or []
+        if actions:
+            affected = ", ".join(
+                f"{a.get('symbol', '?')} {a.get('timeframe', '?')} "
+                f"{_SIDE_TR.get(a.get('paper_action', ''), a.get('paper_action', ''))}"
+                for a in actions[:4]
+            )
+            lead = f"{affected} sinyali oluşmuş olsa da "
+        else:
+            lead = "Sinyal adayları oluşmuş olsa da "
+        extra = f" Ek kontroller: {', '.join(labels[1:4])}." if len(labels) > 1 else ""
+        return (
+            f"İşlem açılmasını şu an {labels[0]} durduruyor. {lead}"
+            "bu kontrol geçilmeden paper pozisyonu açılmıyor."
+            + extra,
+            evidence,
+        )
+
+    # Matrix'te blocker yoksa karar gerçekten giriş eşiği/teyit bekliyordur;
+    # bunu risk kilidi gibi sunmayız.
+    evidence.append("matrix:no_blocker")
+    return (
+        "Aktif bir risk kilidi görünmüyor. Şu anda işlem açılmamasının nedeni, "
+        "hiçbir adayın yön eşiği ve teknik teyidi birlikte tamamlamamış olması.",
+        evidence,
+    )
 
 
 def _why_no_trade_answer(ctx: dict, symbol: str, timeframe: str | None) -> tuple[str, list[str]]:
@@ -369,9 +496,10 @@ def _waiting_answer(ctx: dict) -> tuple[str, list[str]]:
         )
         ev = [f"paper_action:{a['symbol']}:{a['timeframe']}" for a in actions[:4]]
         if blocked:
+            readable_blocked = _humanized_blockers(blocked)
             return (
                 f"Sinyaller oluştu ({acts}) ama şu kurallar paper'da gerçek açılışı "
-                f"engelliyor: {', '.join(blocked[:4])}. Bu yüzden ekranda 'işlem yok' "
+                f"engelliyor: {', '.join(readable_blocked)}. Bu yüzden ekranda 'işlem yok' "
                 "görüyorsun — engeller kalkmadan pozisyon açılmaz.",
                 ev + [f"blocked_by:{b}" for b in blocked[:4]],
             )
@@ -1084,6 +1212,18 @@ def _grounded_answer(message: str, ctx: dict) -> tuple[str, list[str]]:
         return _news_answer(ctx)
     if any(k in folded for k in ("eksik", "missing", "hangi veri")):
         return _missing_data_answer(ctx)
+    # Ana engel soruları genel bültene düşmemeli: kullanıcı aynı cevapta
+    # karar matrisi, RiskGate ve etkilenmiş adayları görmeli.
+    if any(
+        k in folded
+        for k in (
+            "en büyük engel", "en buyuk engel", "ana engel", "ne engelliyor",
+            "işlem açmıyor", "islem acmiyor", "işlem açılmıyor", "islem acilmiyor",
+            "pozisyon açılmıyor", "pozisyon acilmiyor", "neden işlem yok",
+            "neden islem yok", "neden pozisyon yok",
+        )
+    ):
+        return _main_blocker_answer(ctx)
     # v2.7 deep-data niyetleri (RiskGate/why fallback'inden ÖNCE — "volatility
     # neden kısıtladı?" gibi sorular ilgili dimensiyona gitsin).
     if any(k in folded for k in ("options", "opsiyon", "skew", "implied", "term structure")):
@@ -1118,8 +1258,8 @@ def _grounded_answer(message: str, ctx: dict) -> tuple[str, list[str]]:
     # Sembolsüz "neden işlem yok / ne bekliyorsun" → genel bekleme gerekçesi.
     if any(
         k in folded
-        for k in ("bekliyor", "ne yapıyor", "waiting", "durum ne", "neden işlem",
-                  "neden islem", "niye işlem", "niye islem", "neden açmıyor", "neden acmiyor")
+        for k in ("bekliyor", "ne yapıyor", "waiting", "durum ne", "niye işlem",
+                  "niye islem")
     ):
         return _waiting_answer(ctx)
     # Çıplak sembol (niyet eşleşmedi): kullanıcı büyük ihtimalle o varlığın
@@ -1166,7 +1306,7 @@ _CHAT_TEMPERATURE = 0.6
 
 # Cache anahtar sürümü — prompt/yönlendirme değişince artır ki file-backed
 # cache'teki (2 saat TTL) eski üsluptaki cevaplar dönmesin.
-_PROMPT_VERSION = "v4-natural-tr"
+_PROMPT_VERSION = "v5-natural-tr-blockers"
 
 # Side-effect'li owner komutları (emir aç/iptal, pozisyon op'u): cevap
 # DETERMİNİSTİK kalır, LLM parafrazına GİRMEZ — sayı/SL-TP bozulmaz, cevap
@@ -1253,6 +1393,23 @@ def _fallback_response(prep: dict, reason: str, model: str | None = None) -> dic
     }
 
 
+def _prompt_context(ctx: dict) -> str:
+    """LLM bağlamında karar kodlarını kullanıcı diline çevir.
+
+    Ham kodlar API evidence alanında kalır; modelin prompt'una girmeleri, modelin
+    bunları cevapta aynen tekrarlamasına ve kullanıcıyı kodlarla karşılamasına yol
+    açıyordu. Derin kopya, karar state'ini ve golden replay'i değiştirmez.
+    """
+    safe = copy.deepcopy(ctx)
+    matrix = safe.get("matrix") or {}
+    matrix["blocked_by_reasons"] = _humanized_blockers(matrix.get("blocked_by_reasons") or [])
+    for key in ("top_cells", "candidate_vs_final_diffs"):
+        for cell in matrix.get(key) or []:
+            cell["blocked_by"] = _humanized_blockers(cell.get("blocked_by") or [])
+    safe["matrix"] = matrix
+    return ctx_mod.context_for_prompt(safe)
+
+
 def _chat_messages(prep: dict, message: str) -> list[dict]:
     """LLM'e giden GERÇEK çok-turlu mesaj dizisi: system + history + final user.
 
@@ -1293,7 +1450,7 @@ def _chat_messages(prep: dict, message: str) -> list[dict]:
     )
     user = (
         f"{source_label}:\n"
-        f"{ctx_mod.context_for_prompt(prep['ctx'])}\n\n"
+        f"{_prompt_context(prep['ctx'])}\n\n"
         f"{findings_label}:\n{prep['grounded']}\n\n"
         f"KULLANICI SORUSU: {message}\n\n"
         f"GOREV: Kullanicinin sorusunu dogrudan yanitla. {task_rule}{translate_rule} "

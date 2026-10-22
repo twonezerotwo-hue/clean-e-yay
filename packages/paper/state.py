@@ -205,6 +205,9 @@ class NewsPreparedSetup:
     side: str
     created_at: str
     valid_until: str
+    # Dünya olayının kimliği; sembol/TF anahtarı tek başına farklı haberleri
+    # birbirine yeniden bağlamasın. Legacy kayıtlar None ile yüklenir.
+    event_id: str | None = None
     status: str = "WAITING_RISK"  # WAITING_RISK | ARMED | ACTIVATED | EXPIRED | STALE
     world_direction: str | None = None
     world_score: float | None = None

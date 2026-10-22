@@ -13,15 +13,13 @@ if [ ! -x "$PYTHON" ]; then
   PYTHON="$(command -v python3 || command -v python)"
 fi
 
-PIPER=""
-if [ -x "$ROOT/.venv/bin/piper" ]; then
-  PIPER="$ROOT/.venv/bin/piper"
-elif command -v piper >/dev/null 2>&1; then
-  PIPER="$(command -v piper)"
-else
-  "$PYTHON" -m pip install piper-tts
-  PIPER="$ROOT/.venv/bin/piper"
+VOICE_VENV="$ROOT/.voice-venv"
+VOICE_PYTHON="$VOICE_VENV/bin/python"
+if [ ! -x "$VOICE_PYTHON" ]; then
+  "$PYTHON" -m venv "$VOICE_VENV"
 fi
+"$VOICE_PYTHON" -m pip install --upgrade "piper-tts==1.8.0"
+PIPER="$VOICE_VENV/bin/piper"
 
 download_if_missing() {
   url="$1"
@@ -56,8 +54,9 @@ set_env() {
     printf '\n%s=%s\n' "$name" "$value" >> "$ENV_FILE"
   fi
 }
-set_env TTS_PROVIDER piper
 set_env PIPER_MODEL "data/models/piper/$VOICE.onnx"
+set_env PIPER_BIN ".voice-venv/bin/piper"
+set_env PIPER_USE_CUDA "0"
 
 echo "Piper hazır: $PIPER"
 echo "Model hazır: $MODEL_DIR/$VOICE.onnx"

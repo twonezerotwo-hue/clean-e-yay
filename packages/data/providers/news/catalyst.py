@@ -18,6 +18,7 @@ from datetime import datetime, timedelta
 from typing import Final
 
 from packages.data.providers.news import classify
+from packages.data.providers.news.provenance import story_key
 from packages.data.types import (
     CatalystActionability,
     CatalystEventType,
@@ -402,12 +403,16 @@ def build_impacts(
     """Başlık listesinden catalyst etkilerini üretir, en kısıtlayıcı önce.
 
     Aynı (event_type, affected_assets) için tek catalyst (gürültüyü azalt)."""
-    impacts = [build_impact(h, now=now) for h in headlines]
+    impacts = [(h, build_impact(h, now=now)) for h in headlines]
 
     seen: set[tuple] = set()
     deduped: list[CatalystImpact] = []
-    for imp in impacts:
-        key = (imp.event_type, tuple(sorted(imp.affected_assets)))
+    for headline, imp in impacts:
+        # Deduplicate syndicated rewrites of the *same* story.  The previous
+        # key (event_type, assets) incorrectly discarded unrelated stories
+        # about the same asset and event class, hiding evidence from the
+        # world/consensus layers.
+        key = (story_key(headline.title), imp.event_type, tuple(sorted(imp.affected_assets)))
         if key in seen:
             continue
         seen.add(key)

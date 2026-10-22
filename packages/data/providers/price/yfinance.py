@@ -20,10 +20,31 @@ _SYMBOL_MAP = {
     "XAUUSD": "GC=F",       # Gold futures
     "XAGUSD": "SI=F",       # Silver futures
     "BRENT":  "BZ=F",       # Brent crude
+    "NATGAS": "NG=F",        # Henry Hub natural-gas futures
+    "SUGAR":  "SB=F",        # Sugar No. 11 futures
+    "CVX":    "CVX",         # Chevron
     "DXY":    "DX-Y.NYB",   # Dollar index
     "VIX":    "^VIX",
     "SP500":  "^GSPC",
     "QQQ":    "QQQ",
+    # Dashboard/rotation ETF'leri için fiyat ve OHLCV yönlendirmesi aynı
+    # Yahoo kaynağını kullanır; böylece aday paneli fiyat var diye gösterip
+    # emir ön-kontrolünde aynı sembolü kaybetmez.
+    "TLT": "TLT",
+    "HYG": "HYG",
+    "LQD": "LQD",
+    "XLK": "XLK",
+    "XLE": "XLE",
+    "XLF": "XLF",
+    "XLV": "XLV",
+    "XLI": "XLI",
+    "XLY": "XLY",
+    "XLP": "XLP",
+    "XLU": "XLU",
+    "XLB": "XLB",
+    "XLRE": "XLRE",
+    "XLC": "XLC",
+    "IYT": "IYT",
 }
 
 SUPPORTED = custom_assets.DynamicSymbolSet(frozenset(_SYMBOL_MAP.keys()), "yfinance")

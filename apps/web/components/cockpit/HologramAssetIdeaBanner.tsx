@@ -5,11 +5,13 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { PanelFrame } from "@/components/shell/PanelFrame";
 import { PanelHeader } from "@/components/shell/PanelHeader";
 import { fmtNum, fmtUSD } from "@/lib/format";
-import { useIdeas, useOpenIdeaPaperPosition, usePaperTradingState } from "@/lib/queries/hooks";
+import { useCockpitBrief, useIdeas, useOpenIdeaPaperPosition, usePaperTradingState } from "@/lib/queries/hooks";
 import {
   dedupeIdeas,
   fmtIdeaStamp,
   selectIdeaBannerFacts,
+  formatIdeaEvidence,
+  selectIdeaArticleExcerpt,
   selectOpenedPosition,
   selectPaperOpenView,
   stepIdea,
@@ -79,6 +81,7 @@ function TextRow({ label, text }: { label: string; text: string | null }) {
 
 export function HologramAssetIdeaBanner() {
   const ideas = useIdeas();
+  const cockpit = useCockpitBrief();
   const paper = usePaperTradingState();
   const open = useOpenIdeaPaperPosition();
   const list = useMemo(() => dedupeIdeas(ideas.data), [ideas.data]);
@@ -164,6 +167,8 @@ export function HologramAssetIdeaBanner() {
   };
 
   const facts = idea ? selectIdeaBannerFacts(idea, ideas.data?.generated_at) : null;
+  const evidenceSummary = idea ? formatIdeaEvidence(idea) : null;
+  const articleExcerpt = idea ? selectIdeaArticleExcerpt(idea) : null;
   const opened = idea ? selectOpenedPosition(idea, own?.outcome ?? null, paper.data?.open_positions) : null;
   const view = idea ? selectPaperOpenView({ idea, phase, outcome: own?.outcome ?? null, opened }) : null;
   const position = idea ? list.findIndex((item) => item.symbol === idea.symbol) + 1 : 0;
@@ -296,6 +301,31 @@ export function HologramAssetIdeaBanner() {
                       {facts.impact ?? "—"}
                     </p>
                   </div>
+
+                  {(evidenceSummary || articleExcerpt || cockpit.data?.news_consensus) ? (
+                    <div className="rounded-xl border border-white/[0.08] bg-black/20 px-3 py-2 text-[10px] leading-4 text-white/55">
+                      {evidenceSummary ? (
+                        <div>
+                          <span className="font-semibold text-cyan-100/45">Haber kanıtı: </span>
+                          {evidenceSummary}
+                        </div>
+                      ) : null}
+                      {articleExcerpt ? (
+                        <div className="mt-1 line-clamp-2" title={articleExcerpt}>
+                          <span className="font-semibold text-white/35">Kaynak özeti: </span>
+                          {articleExcerpt}
+                        </div>
+                      ) : null}
+                      {cockpit.data?.news_consensus?.article_coverage?.status ? (
+                        <div className="mt-1 text-white/35">
+                          Ortak haber kapsamı: {String(cockpit.data.news_consensus.article_coverage.status).toLowerCase()}
+                          {cockpit.data.news_consensus.article_coverage.coverage_pct != null
+                            ? ` · ${cockpit.data.news_consensus.article_coverage.coverage_pct.toFixed(1)}% makale`
+                            : ""}
+                        </div>
+                      ) : null}
+                    </div>
+                  ) : null}
 
                   <details key={idea.symbol} className="group rounded-xl border border-white/[0.08] bg-black/20 px-3 py-2 text-[11px]" data-testid="idea-details">
                     <summary

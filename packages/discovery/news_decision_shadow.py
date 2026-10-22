@@ -137,11 +137,26 @@ def run(now: datetime | None = None, *, forecasts: Mapping[str, Mapping[str, Any
     for r in rows:
         ts = _parse(r.get("ts"))
         price = prices.get(str(r.get("symbol")))
-        if ts is None or not price or not r.get("price"):
+        if ts is None or not r.get("price"):
             continue
         for h in cfg["horizons_hours"]:
             key = f"{h}h"
             if key in r.setdefault("resolved", {}) or now - ts < timedelta(hours=h):
+                continue
+            if not price:
+                # A missing provider quote at the nominal horizon is not a
+                # result.  Keep a grace window of one additional horizon for
+                # delayed data, then close the row explicitly so it cannot
+                # remain in an unresolved limbo forever.
+                if now - ts < timedelta(hours=2 * h):
+                    continue
+                r["resolved"][key] = {
+                    "ret_pct": None,
+                    "outcome": "expired",
+                    "reason": "price_unavailable",
+                    "at": _iso(now),
+                }
+                resolved += 1
                 continue
             ret = (price / float(r["price"]) - 1.0) * 100.0
             outcome = ("flat" if abs(ret) < cfg["flat_pct"]
@@ -178,10 +193,19 @@ def scorecard(discovery_cfg: Mapping[str, Any] | None = None) -> dict:
             res = (r.get("resolved") or {}).get(f"{h}h")
             if not res:
                 continue
-            cell = by.setdefault(str(r.get("relation")), {}).setdefault(f"{h}h", {"n": 0, "hit": 0, "miss": 0,
-                                                                                   "flat": 0})
+            cell = by.setdefault(str(r.get("relation")), {}).setdefault(
+                f"{h}h", {"n": 0, "hit": 0, "miss": 0, "flat": 0})
             cell["n"] += 1
-            cell[res["outcome"]] += 1
+            outcome = res.get("outcome")
+            if outcome == "expired":
+                cell["expired"] = cell.get("expired", 0) + 1
+            elif outcome in ("hit", "miss", "flat"):
+                cell[outcome] += 1
+            else:
+                # Unknown/legacy rows are not allowed to poison the scorecard
+                # with a KeyError or be counted as a successful observation.
+                cell["n"] -= 1
+                continue
             total += 1
     for rel in by.values():
         for cell in rel.values():
@@ -197,7 +221,9 @@ def compact(discovery_cfg: Mapping[str, Any] | None = None) -> dict:
     sc = scorecard(discovery_cfg)
     day = {rel: (v.get("24h") or {}) for rel, v in sc["by_relation"].items()}
     return {"resolved_total": sc["resolved_total"], "affect_decision": False,
-            "day": {rel: {"n": c.get("n", 0), "hit_rate": c.get("hit_rate")} for rel, c in day.items()}}
+            "day": {rel: {**{"n": c.get("n", 0), "hit_rate": c.get("hit_rate")},
+                           **({"expired": c["expired"]} if c.get("expired") else {})}
+                    for rel, c in day.items()}}
 
 
 __all__ = ["checks", "compact", "config", "relation", "run", "scorecard"]

@@ -383,6 +383,23 @@ def test_negative_edge_calibration_uses_topology_sign():
     assert resolved["weight"] == bucket["recommended_strength"]
 
 
+def test_causal_calibration_reports_zero_source_cells_without_using_them():
+    base = datetime(2026, 1, 1, tzinfo=UTC)
+    rows = [{
+        "edge_id": "energy_to_oil",
+        "source_value": 0.0,
+        "target_response": 0.2,
+        "horizon": "1d",
+        "prediction_as_of": base.isoformat(),
+        "outcome_as_of": (base + timedelta(days=1)).isoformat(),
+        "data_verified": True,
+    }]
+    report = calibrate_edges(rows)
+    assert report["eligible_rows"] == 0
+    assert report["rejection_reasons"]["zero_source_value"] == 1
+    assert report["rejection_details"]["zero_source_value"] == {"energy_to_oil|1d": 1}
+
+
 def test_calibrated_negative_and_positive_edges_keep_topology_direction(monkeypatch):
     state = WorldStateSnapshot(
         generated_at=datetime(2026, 1, 1, tzinfo=UTC),

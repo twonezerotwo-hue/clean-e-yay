@@ -416,7 +416,14 @@ def build_ticket(
         now_utc=ts,
         risk_action=decision.risk.action if decision.risk else None,
     )
-    if session.route == "open":
+    exploration = any(str(b).startswith("paper_exploration:") for b in decision.blocked_by)
+    if exploration:
+        execution_state = "EXPLORATION"
+        execution_reason = (
+            "Paper keşif sinyali: negatif EV veya güven tabanı aşılamadı; "
+            "otomatik açılış bekletildi, gölge sonucu birikiyor."
+        )
+    elif session.route == "open":
         execution_state = "READY"
         execution_reason = "Piyasa açık; tüm kapılar geçerse paper açılışı denenir."
     elif session.route == "manual_ready":

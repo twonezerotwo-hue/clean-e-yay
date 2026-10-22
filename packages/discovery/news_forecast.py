@@ -31,6 +31,7 @@ from typing import Any
 
 from packages.data import snapshot_store
 from packages.data.providers.news import classify
+from packages.data.providers.news.provenance import source_family, story_key
 from packages.data.registry import assets as asset_registry
 from packages.ops.store import write_text_atomic
 
@@ -184,6 +185,8 @@ def _ingest_snapshot_headlines(store: dict[str, dict], docs: Iterable[Mapping[st
                 "title": title[:240], "source": str(h.get("source") or ""), "origin": "rss",
                 "ts": _iso(_parse(h.get("ts")) or now), "sentiment": h.get("sentiment") or "neutral",
                 "impact": dict(h.get("asset_impact") or {}), "url": h.get("url"),
+                "story_key": story_key(title),
+                "source_family": source_family(h.get("source"), title=title, url=h.get("url")),
             }
             added += 1
     return added
@@ -206,6 +209,8 @@ def _ingest_web(store: dict[str, dict], asset: Mapping[str, Any], hits: Iterable
             "ts": _iso(_parse(getattr(hit, "published_date", None)) or now),
             "sentiment": classify.classify_sentiment_active(f"{title}. {content}"),
             "impact": {}, "url": url, "asset_hint": asset["symbol"],
+            "story_key": story_key(title),
+            "source_family": source_family(source, title=title, url=url),
         }
         added += 1
     return added
@@ -219,6 +224,12 @@ def _reclassify(store: dict[str, dict]) -> int:
     for h in store.values():
         if h.get("origin") != "rss":
             continue
+        title = str(h.get("title") or "")
+        source = str(h.get("source") or "")
+        if not h.get("story_key"):
+            h["story_key"] = story_key(title)
+        if not h.get("source_family"):
+            h["source_family"] = source_family(source, title=title, url=h.get("url"))
         new = classify.classify_asset_impact(h["title"], h.get("sentiment") or "neutral")
         if new != dict(h.get("impact") or {}):
             h["impact"] = new
@@ -236,11 +247,18 @@ def _ingest_llm(store: dict[str, dict], rows: Iterable[Mapping[str, Any]], now: 
             continue
         k = _key(title)
         if k not in store:
-            store[k] = {"title": title[:240], "source": str(row.get("source") or ""), "origin": "rss",
-                        "ts": _iso(_parse(row.get("ts")) or now), "sentiment": "neutral", "impact": {}}
+            source = str(row.get("source") or "")
+            store[k] = {"title": title[:240], "source": source, "origin": "rss",
+                        "ts": _iso(_parse(row.get("ts")) or now), "sentiment": "neutral", "impact": {},
+                        "story_key": story_key(title),
+                        "source_family": source_family(source, title=title)}
             added += 1
         store[k]["llm_impacts"] = dict(row["impacts"])
         store[k]["consequence"] = row.get("consequence")
+        if row.get("url"):
+            store[k]["url"] = row.get("url")
+        if row.get("article"):
+            store[k]["article"] = dict(row["article"])
     return added
 
 
@@ -268,7 +286,11 @@ def source_weight(table: Mapping[str, Any], source: str, sentiment: str, origin:
     """Kaynak güvenilirliği: öngörücü kova ağır, kanıtsız nötr, web hafif."""
     if origin == "web":
         return 0.7
-    bucket = (table.get("buckets") or {}).get(f"{source}|{sentiment}") or {}
+    family = source_family(source)
+    bucket = (table.get("buckets") or {}).get(f"{family}|{sentiment}") or {}
+    # Backward compatibility for the pre-provenance event-study ledger.
+    if not bucket:
+        bucket = (table.get("buckets") or {}).get(f"{source}|{sentiment}") or {}
     verdict = bucket.get("verdict")
     if verdict == "PREDICTIVE":
         hit = float(bucket.get("hit_rate") or 0.5)
@@ -298,7 +320,7 @@ def _headline_direction(asset: Mapping[str, Any], h: Mapping[str, Any], terms: l
 
 def forecast_for(asset: Mapping[str, Any], headlines: Iterable[Mapping[str, Any]], table: Mapping[str, Any],
                  now: datetime, half_life_hours: float) -> dict | None:
-    contribs: list[tuple[float, float, Mapping[str, Any]]] = []
+    raw_contribs: list[tuple[float, float, Mapping[str, Any]]] = []
     for h in headlines:
         terms = _matches(asset, h["title"]) if not asset.get("registry") else []
         d = _headline_direction(asset, h, terms)
@@ -310,26 +332,82 @@ def forecast_for(asset: Mapping[str, Any], headlines: Iterable[Mapping[str, Any]
         llm = (h.get("llm_impacts") or {}).get(asset["symbol"])
         if llm is not None:
             w *= _LLM_CONF_W.get(str(llm.get("k") or "med"), 0.9)
-        contribs.append((d, w, h))
-    if not contribs:
+        raw_contribs.append((d, w, h))
+    if not raw_contribs:
         return None
+
+    # Syndicated rewrites of one story are one evidence unit. A story that
+    # contains both directions is retained as a conflict instead of being
+    # silently averaged into a misleading signal.
+    by_story: dict[str, list[tuple[float, float, Mapping[str, Any]]]] = {}
+    for d, w, h in raw_contribs:
+        key = str(h.get("story_key") or story_key(h.get("title")))
+        by_story.setdefault(key, []).append((d, w, h))
+    contribs: list[tuple[float, float, Mapping[str, Any]]] = []
+    story_conflict = False
+    for entries in by_story.values():
+        signs = {"bullish" if d > 0 else "bearish" for d, _, _ in entries if d != 0}
+        if len(signs) > 1:
+            story_conflict = True
+            story_d = 0.0
+        else:
+            total_w = sum(w for _, w, _ in entries)
+            story_d = sum(d * w for d, w, _ in entries) / total_w if total_w else 0.0
+        # max() prevents a Google News/direct syndication from multiplying
+        # confidence merely because the same story appeared twice.
+        representative = max(entries, key=lambda row: row[1])
+        contribs.append((story_d, max(w for _, w, _ in entries), representative[2]))
     wsum = sum(w for _, w, _ in contribs)
     if wsum <= 0:
         return None
     score = sum(d * w for d, w, _ in contribs) / wsum
     confidence = min(1.0, wsum / 3.0)  # ~3 taze güvenilir başlık = tam güven
-    direction = "up" if score >= _DIRECTION_EPS else "down" if score <= -_DIRECTION_EPS else "neutral"
+    sign_weights: dict[str, float] = {"bullish": 0.0, "bearish": 0.0}
+    for d, weight, _ in contribs:
+        if d > 0:
+            sign_weights["bullish"] += weight
+        elif d < 0:
+            sign_weights["bearish"] += weight
+    signs = {key for key, value in sign_weights.items() if value > 0}
+    # A very old counter-story is context, not a live contradiction. Two
+    # fresh/meaningful directions remain MIXED and cannot produce a trade idea.
+    cross_story_conflict = (
+        len(signs) > 1 and min(sign_weights[key] for key in signs) >= 0.25
+    )
+    conflict = story_conflict or cross_story_conflict
+    raw_direction = "up" if score >= _DIRECTION_EPS else "down" if score <= -_DIRECTION_EPS else "neutral"
+    direction = "neutral" if conflict else raw_direction
     top = sorted(contribs, key=lambda c: -c[1])[:3]
+    source_families = sorted({
+        source_family(h.get("source"), title=h.get("title"), url=h.get("url"))
+        for _, _, h in raw_contribs
+    })
+    article_count = sum(1 for _, _, h in raw_contribs if (h.get("article") or {}).get("excerpt"))
+    evidence_status = (
+        "CONFLICT" if conflict else
+        "CONFIRMED" if len(source_families) >= 2 else
+        "SINGLE_SOURCE"
+    )
     return {
         "symbol": asset["symbol"], "kind": asset["kind"], "name": asset["name"],
         "direction": direction,
         "strength": round(abs(score) * confidence * 100),
         "score": round(score, 3),
         "n_headlines": len(contribs),
+        "n_source_headlines": len(raw_contribs),
+        "n_stories": len(by_story),
+        "independent_source_families": len(source_families),
+        "source_families": source_families,
+        "article_enriched": article_count,
+        "evidence_status": evidence_status,
+        "conflict": conflict,
+        "raw_direction": raw_direction,
         "weight_sum": round(wsum, 3),
         "evidence": [{"title": h["title"], "source": h.get("source"), "ts": h.get("ts"),
                       "direction": d, "origin": "llm" if asset["symbol"] in (h.get("llm_impacts") or {})
-                      else h.get("origin"), "url": h.get("url")} for d, _, h in top],
+                      else h.get("origin"), "url": h.get("url"), "article": h.get("article"),
+                      "source_family": source_family(h.get("source"), title=h.get("title"), url=h.get("url"))}
+                     for d, _, h in top],
     }
 
 
@@ -389,42 +467,88 @@ def _track(state: dict, forecasts: Mapping[str, dict], prices: Mapping[str, floa
     max_h = max(cfg["resolve_hours"] or [72])
     for o in open_:
         start = _parse(o["created_at"]) or now
+        # Older state files predate the explicit terminal lifecycle fields.
+        # Normalise them in memory so a malformed/missing `done` list cannot
+        # keep an otherwise resolvable forecast open forever.
+        done = {int(h) for h in (o.get("done") or []) if str(h).isdigit()}
         for h in cfg["resolve_hours"]:
-            if h in o["done"] or now < start + timedelta(hours=h):
+            if h in done or now < start + timedelta(hours=h):
                 continue
             p = prices.get(o["symbol"])
             if not p:
+                # Give delayed providers one full extra horizon to publish a
+                # price.  After that point the observation is terminally
+                # expired rather than silently discarded from `open`.
+                if now < start + timedelta(hours=2 * max_h):
+                    continue
+                rows.append({"id": o["id"], "symbol": o["symbol"], "kind": o["kind"],
+                             "direction": o["direction"], "strength": o["strength"],
+                             "horizon_h": h, "ret_pct": None, "outcome": "expired",
+                             "resolution_reason": "price_unavailable",
+                             "created_at": o["created_at"], "resolved_at": _iso(now)})
+                done.add(h)
+                resolved += 1
                 continue
             ret = (p / o["price"] - 1.0) * 100.0 * (1 if o["direction"] == "up" else -1)
             outcome = "hit" if ret > _FLAT_PCT else "miss" if ret < -_FLAT_PCT else "flat"
             rows.append({"id": o["id"], "symbol": o["symbol"], "kind": o["kind"], "direction": o["direction"],
                          "strength": o["strength"], "horizon_h": h, "ret_pct": round(ret, 3),
                          "outcome": outcome, "created_at": o["created_at"], "resolved_at": _iso(now)})
-            o["done"].append(h)
+            done.add(h)
             resolved += 1
-        if len(o["done"]) < len(cfg["resolve_hours"]) and now < start + timedelta(hours=2 * max_h):
+        o["done"] = sorted(done)
+        if len(done) < len(cfg["resolve_hours"]) and now < start + timedelta(hours=2 * max_h):
             keep.append(o)
-    state["open"] = keep[-_MAX_OPEN:]
+    # The state cap is a resource guard, not permission to forget evidence.
+    # If a burst exceeds it, close the oldest excess observations explicitly
+    # and retain their terminal rows in the ledger instead of dropping them.
+    if len(keep) > _MAX_OPEN:
+        overflow = sorted(keep, key=lambda row: row.get("created_at") or "")[:-_MAX_OPEN]
+        for o in overflow:
+            done = {int(h) for h in (o.get("done") or []) if str(h).isdigit()}
+            for h in cfg["resolve_hours"]:
+                if h in done:
+                    continue
+                rows.append({"id": o["id"], "symbol": o["symbol"], "kind": o["kind"],
+                             "direction": o["direction"], "strength": o["strength"],
+                             "horizon_h": h, "ret_pct": None, "outcome": "expired",
+                             "resolution_reason": "retention_capacity",
+                             "created_at": o["created_at"], "resolved_at": _iso(now)})
+                resolved += 1
+        state["open"] = sorted(keep, key=lambda row: row.get("created_at") or "")[-_MAX_OPEN:]
+    else:
+        state["open"] = keep
     _append_ledger(rows)
     return {"created": created, "resolved": resolved, "open": len(state["open"])}
 
 
-def scorecard(max_rows: int = 5000) -> dict:
+def scorecard(max_rows: int | None = None) -> dict:
     """Ufuk × tür × güç kovası isabet karnesi (çözülmüş öngörülerden)."""
     rows: list[dict] = []
     try:
-        lines = _ledger_path().read_text(encoding="utf-8").splitlines()[-max_rows:]
+        lines = _ledger_path().read_text(encoding="utf-8").splitlines()
+        if max_rows is not None:
+            lines = lines[-max_rows:]
         rows = [json.loads(line) for line in lines if line.strip()]
     except (OSError, ValueError):
         rows = []
 
     def agg(items: list[dict]) -> dict:
-        hits = sum(1 for r in items if r["outcome"] == "hit")
-        misses = sum(1 for r in items if r["outcome"] == "miss")
+        hits = sum(1 for r in items if r.get("outcome") == "hit")
+        misses = sum(1 for r in items if r.get("outcome") == "miss")
+        expired = sum(1 for r in items if r.get("outcome") == "expired")
         n = hits + misses
-        return {"n": len(items), "hits": hits, "misses": misses,
-                "hit_rate": round(hits / n, 3) if n else None,
-                "avg_ret_pct": round(sum(r["ret_pct"] for r in items) / len(items), 3) if items else None}
+        returns = [float(r["ret_pct"]) for r in items
+                   if r.get("ret_pct") is not None and r.get("outcome") != "expired"]
+        out = {"n": len(items), "hits": hits, "misses": misses,
+               "hit_rate": round(hits / n, 3) if n else None,
+               "avg_ret_pct": round(sum(returns) / len(returns), 3) if returns else None}
+        # Keep the established response shape for old consumers when there
+        # are no expirations, while exposing terminally lost observations as
+        # soon as they occur.
+        if expired:
+            out["expired"] = expired
+        return out
 
     by_h: dict[str, dict] = {}
     for h in sorted({r["horizon_h"] for r in rows}):

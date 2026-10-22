@@ -1288,6 +1288,34 @@ def decide_matrix(
 
 # Matrix hücresinin actionable/suspended rozetini frontend HESAPLAMAZ —
 # backend ViewModel üretir (DASHBOARD_RULES).
+def execution_readiness(decision: TradeDecision, *, suspended: bool = False) -> tuple[bool, str]:
+    """Matrix'te sinyal niyeti ile işlem hazırlığını birbirinden ayır.
+
+    ``actionable`` geçmiş sözleşmede paper keşfi için pozitif boyut anlamına
+    gelir; bu yüzden negatif EV veya ``paper_exploration:*`` taşıyan hücreler
+    de actionable görünüyordu. Bu yardımcı yalnızca açıklayıcı bir ViewModel
+    alanı üretir. Eski ``actionable``/RiskGate sözleşmesi korunur; otomatik
+    worker rotası yalnız READY hücreleri deftere geçirir.
+    """
+    if suspended:
+        return False, "SUSPENDED"
+    if not decision.actionable or decision.action not in {"open_long", "open_short"}:
+        return False, "BLOCKED"
+    exploratory = any(
+        str(reason).startswith("paper_exploration:")
+        for reason in decision.blocked_by
+    )
+    negative_ev = decision.expected_value is not None and decision.expected_value < 0.0
+    if exploratory or negative_ev:
+        return False, "EXPLORATION"
+    return True, "READY"
+
+
+def is_execution_ready(decision: TradeDecision, *, suspended: bool = False) -> bool:
+    """Tek rotalama noktalarının paylaşacağı READY kontrolü."""
+    return execution_readiness(decision, suspended=suspended)[0]
+
+
 def matrix_view(
     regime: RegimeOutput,
     risk: RiskDecision,
@@ -1393,6 +1421,7 @@ def matrix_view(
     cells = []
     for d in decisions:
         actionable = bool(d.actionable) and not suspended
+        execution_ready, execution_state = execution_readiness(d, suspended=suspended)
         if suspended:
             status = "SUSPENDED"
         elif actionable:
@@ -1413,6 +1442,10 @@ def matrix_view(
                 "blocked_by": list(d.blocked_by),
                 "warnings": list(getattr(d.consensus, "warnings", []) or []),
                 "actionable": actionable,
+                # Additive açıklık alanları: mevcut actionable/paper_action
+                # sözleşmesi ve emir akışı bilinçli olarak korunur.
+                "execution_ready": execution_ready,
+                "execution_state": execution_state,
                 "status": status,
                 "paper_action": d.action if actionable else "none",
                 # F5 gözlem — beklenen değer (R-katı); ev_gate KAPALI olsa da dolu.

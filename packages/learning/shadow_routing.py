@@ -167,6 +167,27 @@ def _recommendations(
                 "activation": "OWNER_APPROVAL_REQUIRED",
             }
         )
+    # Zamanlama teşhisi: yalnızca yeterli örnek + negatif ortalama R varsa
+    # review üret. Bu bir canlı kapı değildir; 4h/1d gibi yüksek TF'leri körce
+    # kapatmadan önce temiz holdout kanıtı ister.
+    by_tf = performance.get("by_timeframe") or {}
+    weak_tf = [
+        tf for tf, row in by_tf.items()
+        if int(row.get("trades") or 0) >= 20
+        and float(row.get("avg_r") or 0.0) < 0.0
+    ]
+    if weak_tf:
+        out.append(
+            {
+                "id": "entry-timing-review",
+                "priority": "HIGH",
+                "shadow": "learning_summary",
+                "finding": "Bazı zaman dilimleri temiz performansta negatif R üretiyor",
+                "evidence": {"timeframes": weak_tf},
+                "next_step": "Zaman dilimi başına giriş/stop kanaryası; canlı eşik değişikliği yapma",
+                "activation": "OWNER_APPROVAL_REQUIRED",
+            }
+        )
     if race.get("beats_backup"):
         out.append(
             {
@@ -230,15 +251,25 @@ def build_report(now: datetime | None = None) -> dict[str, Any]:
     exit_report = _artifact("exit_backtest.json")
     race = _artifact("tf_scoring_race_report.json")
     council = _artifact("council_scorecard.json")
+    paper_canary = _artifact("paper_canary.json")
+    entry_exit = paper_canary.get("timing_canary", {}).get("entry_exit_quality") or {}
     news = _news_evidence()
     assets = _asset_evidence()
     from packages.learning import shadow_policy
 
     race_status = race.get("race_status")
+    # Premium rapor temiz, öğrenilebilir kohortu esas alır. Ham metrikler
+    # learning_summary içindeki eski alanlarda korunur; anomaliler/legacy
+    # yüzünden karar kalitesi olduğundan iyi veya kötü gösterilmez.
+    clean = learning.get("performance") or {}
     performance = {
-        "total_trades": learning.get("total_trades", 0),
-        "win_rate": learning.get("win_rate"),
-        "expectancy_r": learning.get("expectancy_r"),
+        "total_trades": clean.get("total_trades", learning.get("total_trades", 0)),
+        "win_rate": clean.get("win_rate", learning.get("win_rate")),
+        "expectancy_r": clean.get("expectancy_r", learning.get("expectancy_r")),
+        "total_pnl": clean.get("total_pnl"),
+        "excluded_from_learning": clean.get("excluded_from_learning", 0),
+        "provenance_incomplete": clean.get("provenance_incomplete", 0),
+        "execution_anomalies": clean.get("execution_anomalies", 0),
         "by_close_reason": {
             key: {
                 "trades": value.get("trades", 0),
@@ -247,6 +278,7 @@ def build_report(now: datetime | None = None) -> dict[str, Any]:
             }
             for key, value in (learning.get("by_close_reason") or {}).items()
         },
+        "by_timeframe": clean.get("by_timeframe") or learning.get("by_timeframe") or {},
     }
     return {
         "generated_at": now.isoformat(),
@@ -271,6 +303,18 @@ def build_report(now: datetime | None = None) -> dict[str, Any]:
             "status": "SHADOW_ONLY",
             "per_timeframe": exit_report.get("per_tf_best") or {},
             "best_config": (exit_report.get("best_configs") or [None])[0],
+        },
+        "entry_exit_quality": {
+            "status": "SHADOW_ONLY",
+            "flagged_count": entry_exit.get("flagged_count", 0),
+            "verdict_counts": entry_exit.get("verdict_counts") or {},
+            "buckets": entry_exit.get("buckets") or [],
+        },
+        "paper_canary": paper_canary or {
+            "status": "NO_DATA",
+            "shadow_only": True,
+            "paper_safe": True,
+            "no_execution": True,
         },
         "council": {
             "status": council.get("status", "NO_DATA"),

@@ -30,3 +30,41 @@ def test_faithful_summary_not_dropped():
     grounded = "Canli web ozeti: SCOTUS kararı, sıcak hava uyarıları..."
     llm = "Öne çıkan haberler: Yüksek Mahkeme kararı ve sıcak hava uyarıları var."
     assert chat._llm_dropped_findings(llm, grounded, live_evidence=True) is False
+
+
+def _blocker_context() -> dict:
+    return {
+        "snapshot_id": "snap-test",
+        "dqs": {"status": "OK", "score": 80, "notes": []},
+        "halt": {"active": False, "events": []},
+        "matrix": {
+            "suspended": False,
+            "risk_gate": {"action": "HOLD", "reason": None},
+            "blocked_by_reasons": [
+                "concentration_guard",
+                "confidence_floor",
+                "entry_quality_v2:entry_quality",
+            ],
+            "paper_actions": [
+                {"symbol": "XAUUSD", "timeframe": "1h", "paper_action": "open_short"}
+            ],
+        },
+    }
+
+
+def test_main_blocker_answer_is_natural_and_keeps_raw_codes_out_of_text():
+    text, evidence = chat._grounded_answer("Şu an işlem açmaya en büyük engel ne?", _blocker_context())
+
+    assert "pozisyon yoğunluğu sınırı" in text
+    assert "sinyal güveni alt sınırı" in text
+    assert "concentration_guard" not in text
+    assert "confidence_floor" not in text
+    assert "blocked_by:concentration_guard" in evidence
+    assert "intent:overview" not in evidence
+
+
+def test_waiting_answer_translates_blocker_codes():
+    text, _ = chat._waiting_answer(_blocker_context())
+
+    assert "pozisyon yoğunluğu sınırı" in text
+    assert "concentration_guard" not in text

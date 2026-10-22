@@ -100,6 +100,15 @@ news_discovery:
   max_candidates: 15
   min_scan_strength: 20         # teknik analize girmek için en düşük haber gücü (yukarı yön)
   min_dollar_volume: 5000000    # hisse/ETF/kripto günlük işlem hacmi alt sınırı ($)
+  # Makale kanıtı: yalnız keşif yenilemesinde, sınırlı ve önbellekli; karar/emir
+  # yoluna doğrudan bağlanmaz. Kaynak erişilemezse RSS başlığı korunur.
+  article_enrichment:
+    enabled: true
+    max_articles_per_refresh: 8
+    timeout_seconds: 5
+    max_bytes: 500000
+    excerpt_chars: 1200
+    cache_ttl_hours: 6
   # Konu kaynakları — 2026-10-05'te repo'nun kendi fetch+parse'ıyla canlı test edildi
   # (hepsi taze başlık döndürdü; DATA_POLICY: çalışmayan eklenmez).
   extra_feeds:

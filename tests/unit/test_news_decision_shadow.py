@@ -1,6 +1,7 @@
 """Haber → karar GÖLGE girdisi (owner kararı 2026-10-05, üçüncü tur) — ağsız, karar değişmez."""
 from __future__ import annotations
 
+import json
 from datetime import UTC, datetime, timedelta
 
 import pytest
@@ -63,3 +64,16 @@ def test_run_records_dedupes_and_resolves(ledger):
 def test_affect_decision_is_always_false_even_if_config_says_true():
     cfg = nds.config({"news_decision_shadow": {"affect_decision": True}})
     assert cfg["affect_decision"] is False
+
+
+def test_missing_price_becomes_terminal_expiry(ledger):
+    path = ledger / "nds.jsonl"
+    path.write_text(json.dumps({
+        "symbol": "BTCUSD", "timeframe": "1h", "side": "long", "relation": "confirm",
+        "ts": (NOW - timedelta(hours=50)).isoformat(), "price": 100.0, "resolved": {},
+    }) + "\n", encoding="utf-8")
+    out = nds.run(NOW, forecasts={}, snapshot_doc={"data_snapshot": {}}, discovery_cfg=CFG)
+    assert out["resolved"] == 2
+    sc = nds.scorecard(CFG)
+    cell = sc["by_relation"]["confirm"]["4h"]
+    assert cell["expired"] == 1 and cell["hit_rate"] is None

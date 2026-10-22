@@ -787,6 +787,7 @@ export type CalibrationBin = {
 
 export type LearningSummary = {
   total_trades: number;
+  expectancy_r?: number | null;
   // UX1 — istatistiksel anlam eşiği + yeterlilik (frontend hesap yapmaz).
   min_sample?: number;
   sample_sufficient?: boolean;
@@ -817,6 +818,26 @@ export type LearningSummary = {
   // (packages/learning/cohorts.py). Mevcut alanlar tüm outcome'ları sayar;
   // auto sistemin gerçek performansı bu bloktadır.
   cohorts?: LearningCohorts;
+  /** Premium temiz performans: anomaliler ve eksik atıflar öğrenmeden ayrıdır. */
+  performance?: LearningPerformance;
+};
+
+export type LearningPerformance = {
+  total_trades: number;
+  wins: number;
+  losses: number;
+  breakeven: number;
+  win_rate: number;
+  total_pnl: number;
+  expectancy_r?: number | null;
+  r_sample?: number;
+  sharpe?: number | null;
+  sample_sufficient: boolean;
+  by_timeframe?: Record<string, OutcomeBucket>;
+  excluded_from_learning?: number;
+  provenance_incomplete?: number;
+  execution_anomalies?: number;
+  legacy_outcomes?: number;
 };
 
 export type CohortStats = {
@@ -1468,6 +1489,8 @@ export type TimeframeDecision = {
   reason?: string;
   blocked_by?: string[];
   actionable?: boolean;
+  execution_ready?: boolean;
+  execution_state?: "READY" | "EXPLORATION" | "BLOCKED" | "SUSPENDED";
   status?: MatrixCellStatus;
   paper_action?: "open_long" | "open_short" | "none";
 };
@@ -1640,6 +1663,8 @@ export type AgentBriefCandidate = {
   candidate_action?: string;
   final_action?: string;
   actionable?: boolean;
+  execution_ready?: boolean;
+  execution_state?: "READY" | "EXPLORATION" | "BLOCKED" | "SUSPENDED";
   status?: MatrixCellStatus;
 };
 
@@ -1677,6 +1702,69 @@ export type DecisionTrace = {
   evidence_refs?: string[];
 };
 
+/** Backend'in ortak haber kanıt görünümü; hesaplama frontend'de yapılmaz. */
+export type NewsConsensusView = {
+  generated_at?: string | null;
+  headline_count?: number;
+  unique_source_labels?: number;
+  independent_source_families?: number;
+  proxy_headline_count?: number;
+  proxy_share?: number;
+  story_count?: number;
+  newest_headline_at?: string | null;
+  stories?: Array<Record<string, unknown>>;
+  assets?: Array<{
+    symbol?: string;
+    consensus?: string;
+    bullish_stories?: number;
+    bearish_stories?: number;
+    neutral_stories?: number;
+    bullish_independent_families?: number;
+    bearish_independent_families?: number;
+    independent_source_families?: number;
+    conflict?: boolean;
+    evidence_status?: string;
+    [key: string]: unknown;
+  }>;
+  policy?: Record<string, unknown>;
+  feed_inventory?: Record<string, unknown>;
+  processing?: {
+    discovery?: {
+      generated_at?: string | null;
+      pool_headlines?: number | null;
+      article_enriched?: number;
+      article_coverage?: Record<string, unknown>;
+      screened?: number;
+      active_candidates?: number;
+      status?: string;
+    };
+    forecast?: {
+      generated_at?: string | null;
+      ledger_headlines?: number;
+      asset_forecasts?: number;
+      directional_forecasts?: number;
+      mode?: string;
+    };
+    status?: string;
+  };
+  idea_board?: {
+    generated_at?: string | null;
+    ideas?: number;
+    directional?: number;
+    conflicts?: number;
+    article_enriched?: number;
+  };
+  article_coverage?: {
+    status?: string;
+    headline_urls?: number;
+    cached_articles?: number;
+    coverage_pct?: number;
+    last_fetched_at?: string | null;
+    coverage_basis?: string;
+    [key: string]: unknown;
+  };
+};
+
 export type CockpitBrief = {
   generated_at?: string;
   /** Authoritative snapshot used for both the cockpit and executive brief. */
@@ -1690,6 +1778,7 @@ export type CockpitBrief = {
   /** Full evidence envelope; all first-screen decision panels read this cycle. */
   prices?: LivePrice[];
   headlines?: NewsHeadline[];
+  news_consensus?: NewsConsensusView;
   decision_matrix?: DecisionMatrix;
   paper_state?: {
     revision?: number | null;
@@ -2348,6 +2437,15 @@ export type IdeaNews = {
   direction: IdeaNewsDirection;
   strength: number;
   n_headlines?: number;
+  n_source_headlines?: number;
+  n_stories?: number;
+  independent_source_families?: number;
+  source_families?: string[];
+  article_enriched?: number;
+  evidence_status?: "CONFIRMED" | "SINGLE_SOURCE" | "CONFLICT";
+  conflict?: boolean;
+  raw_direction?: IdeaNewsDirection;
+  weight_sum?: number;
   evidence?: {
     title?: string;
     source?: string | null;
@@ -2355,6 +2453,14 @@ export type IdeaNews = {
     direction?: number;
     origin?: string | null;
     url?: string | null;
+    source_family?: string | null;
+    article?: {
+      status?: string | null;
+      title?: string | null;
+      description?: string | null;
+      excerpt?: string | null;
+      fetched_at?: string | null;
+    } | null;
   }[];
 };
 
@@ -2380,6 +2486,14 @@ export type IdeaChainLink = {
   direction?: string | null;
   confidence?: string | null;
   mechanism?: string | null;
+  url?: string | null;
+  article?: {
+    status?: string | null;
+    title?: string | null;
+    description?: string | null;
+    excerpt?: string | null;
+    fetched_at?: string | null;
+  } | null;
 };
 
 export type Idea = {
@@ -2418,6 +2532,13 @@ export type Idea = {
     avg_r?: number | null;
   };
   news?: IdeaNews | null;
+  source?: {
+    provider?: string | null;
+    provider_id?: string | null;
+    mapped_for_paper: boolean;
+    discovery_price?: number | null;
+    discovery_seen_at?: string | null;
+  };
   market?: { chg_7d_pct?: number | null; chg_30d_pct?: number | null };
   risk_notes: string[];
   news_chain?: IdeaChainLink[];

@@ -23,6 +23,7 @@ import statistics
 from datetime import UTC, datetime
 from pathlib import Path
 
+from packages.data.providers.news.provenance import source_family
 from packages.data.registry.loader import load_thresholds
 from packages.ops.store import write_text_atomic
 
@@ -94,9 +95,11 @@ def record_events(headlines=None, now: datetime | None = None) -> int:
                 continue  # yönsüz haber → öngörü testine girmez
             known.add(hid)
             ts = getattr(h, "ts", None)
+            source = getattr(h, "source", "?") or "?"
             rows.append(json.dumps({
                 "id": hid,
-                "source": getattr(h, "source", "?") or "?",
+                "source": source,
+                "source_family": source_family(source),
                 "sentiment": getattr(h, "sentiment", None) or "neutral",
                 "ts": (ts.isoformat() if hasattr(ts, "isoformat") else str(ts)),
                 "symbols": impact,
@@ -192,7 +195,7 @@ def compute(events=None, now: datetime | None = None) -> dict:
                 pending += 1
                 continue
             matured += 1
-            key = f"{source}|{sentiment}"
+            key = f"{ev.get('source_family') or source}|{sentiment}"
             b = buckets.setdefault(key, {"n": 0, "hits": 0, "sum_dir_return": 0.0})
             b["n"] += 1
             # yön-hizalı getiri: haber yukarı diyorsa +getiri iyi, aşağı diyorsa −

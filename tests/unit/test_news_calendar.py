@@ -53,6 +53,24 @@ def test_parse_feed_extracts_fresh_headline() -> None:
     assert "BTCUSD" in h.asset_impact
 
 
+def test_parse_feed_supports_namespaced_atom_title_and_alternate_link() -> None:
+    now = datetime.now(UTC)
+    published = format_datetime(now - timedelta(minutes=20))
+    xml = f"""<?xml version='1.0'?>
+    <feed xmlns='http://www.w3.org/2005/Atom'>
+      <entry>
+        <title>Oil supply disruption lifts Brent prices</title>
+        <link rel='self' href='https://example.test/raw'/>
+        <link rel='alternate' href='https://example.test/story'/>
+        <updated>{published}</updated>
+      </entry>
+    </feed>"""
+    out = rss.parse_feed(xml, "Atom Feed", now=now)
+    assert len(out) == 1
+    assert out[0].title.startswith("Oil supply disruption")
+    assert out[0].url == "https://example.test/story"
+
+
 def test_parse_feed_drops_stale_and_dateless() -> None:
     now = datetime.now(UTC)
     xml = _rss(

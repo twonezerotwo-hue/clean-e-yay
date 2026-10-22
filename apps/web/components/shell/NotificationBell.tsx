@@ -12,6 +12,7 @@ import {
   useNotifications,
 } from "@/lib/queries/hooks";
 import type { ChatResponse, Notification, NotificationPriority } from "@/types/generated/api";
+import { normalizeVoiceText } from "@/lib/voiceText";
 
 type BellMode = "feed" | "ask";
 type AssistantMessage = { role: "user" | "agent"; text: string; meta?: ChatResponse };
@@ -76,12 +77,7 @@ function relTime(iso: string): string {
 }
 
 function cleanForVoice(text: string): string {
-  return text
-    .replace(/\s+/g, " ")
-    .replace(/[•◆◇·]+/g, ".")
-    .replace(/[_*`#<>[\](){}]/g, " ")
-    .trim()
-    .slice(0, 1200);
+  return normalizeVoiceText(text, 1200);
 }
 
 function latestNotificationBrief(items: Notification[], unread: number): string {
@@ -289,37 +285,6 @@ export function NotificationBell() {
     }
   }, []);
 
-  const speakWithBrowserFallback = useCallback((text: string) => {
-    if (!voiceEnabled || typeof window === "undefined" || !("speechSynthesis" in window)) {
-      return false;
-    }
-    const cleanText = cleanForVoice(text);
-    if (!cleanText) return false;
-
-    clearAudioPlayback();
-    window.speechSynthesis.cancel();
-    const utterance = new SpeechSynthesisUtterance(cleanText);
-    utterance.lang = "tr-TR";
-    utterance.rate = 1.0;
-    utterance.pitch = 1.03;
-    const voices = window.speechSynthesis.getVoices();
-    const isNatural = (v: SpeechSynthesisVoice) =>
-      /natural|neural|online|google|premium|wavenet|siri/i.test(v.name);
-    const isTr = (v: SpeechSynthesisVoice) => v.lang.toLowerCase().startsWith("tr");
-    const isEn = (v: SpeechSynthesisVoice) => v.lang.toLowerCase().startsWith("en");
-    utterance.voice =
-      voices.find((v) => isTr(v) && isNatural(v)) ??
-      voices.find(isTr) ??
-      voices.find((v) => isEn(v) && isNatural(v)) ??
-      voices.find(isEn) ??
-      null;
-    utterance.onstart = () => setSpeaking(true);
-    utterance.onend = () => setSpeaking(false);
-    utterance.onerror = () => setSpeaking(false);
-    window.speechSynthesis.speak(utterance);
-    return true;
-  }, [clearAudioPlayback, voiceEnabled]);
-
   const speak = useCallback(async (text: string) => {
     const cleanText = cleanForVoice(text);
     if (!voiceEnabled || !cleanText || typeof window === "undefined") return false;
@@ -330,8 +295,6 @@ export function NotificationBell() {
     setVoiceLoading(true);
     setSpeaking(false);
     clearAudioPlayback();
-    if ("speechSynthesis" in window) window.speechSynthesis.cancel();
-
     try {
       const audioBlob = await api.voiceSpeak({ text: cleanText });
       if (speechRunRef.current !== runId) return false;
@@ -359,24 +322,14 @@ export function NotificationBell() {
       setVoiceLoading(false);
       setSpeaking(false);
       clearAudioPlayback();
-      const fallbackSpoke = speakWithBrowserFallback(cleanText);
-      if (fallbackSpoke) {
-        // Sessiz derecelendirme: kullanıcıya teknik detay gösterme, sadece logla.
-        console.debug("[voice] kaliteli ses kullanılamadı, tarayıcı sesine düşüldü");
-        setVoiceError(null);
-      } else {
-        setVoiceError("Ses üretilemedi.");
-      }
-      return fallbackSpoke;
+      setVoiceError("Yerel Piper sesi üretilemedi.");
+      return false;
     }
-  }, [clearAudioPlayback, speakWithBrowserFallback, voiceEnabled]);
+  }, [clearAudioPlayback, voiceEnabled]);
 
   const stopSpeaking = useCallback(() => {
     speechRunRef.current += 1;
     clearAudioPlayback();
-    if (typeof window !== "undefined" && "speechSynthesis" in window) {
-      window.speechSynthesis.cancel();
-    }
     setSpeaking(false);
     setVoiceLoading(false);
   }, [clearAudioPlayback]);
@@ -451,9 +404,6 @@ export function NotificationBell() {
       speechRunRef.current += 1;
       recognitionRef.current?.stop();
       clearAudioPlayback();
-      if (typeof window !== "undefined" && "speechSynthesis" in window) {
-        window.speechSynthesis.cancel();
-      }
     };
   }, [clearAudioPlayback]);
 

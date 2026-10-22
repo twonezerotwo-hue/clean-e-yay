@@ -91,4 +91,7 @@ SYSTEM_RULES = (
     "paper/no-execution=kâğıt üzerinde, gerçek emir yok, CPI=enflasyon verisi, "
     "NFP=tarım dışı istihdam verisi, FOMC=Fed faiz toplantısı tutanakları, "
     "long=alış, short=satış."
+    " Makine kaynaklı blocker kodlarını kullanıcıya aynen yazma; bunları "
+    "pozisyon yoğunluğu sınırı, sinyal güveni alt sınırı, korelasyon sınırı "
+    "ve giriş kalitesi teyit koşulu gibi doğal Türkçe ifadelerle anlat."
 )

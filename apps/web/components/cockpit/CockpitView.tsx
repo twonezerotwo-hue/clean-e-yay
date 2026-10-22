@@ -1164,7 +1164,11 @@ export function CockpitView() {
   const dqs = brief.dqs?.score ?? undefined;
   const openPaperPositions =
     brief.paper_state_summary?.open_positions ?? brief.open_paper_positions ?? 0;
-  const actionableCount = candidates.filter((candidate) => candidate.actionable).length;
+  // `actionable` paper keşfini de kapsar; Brain özetinde yalnız gerçekten
+  // hazır hücreleri say, keşif sinyali ayrı kartta görünür.
+  const actionableCount = candidates.filter(
+    (candidate) => candidate.execution_ready ?? candidate.actionable,
+  ).length;
   const riskAction = brief.risk?.action ?? "HOLD";
   const riskClear = brief.main_blocker.code !== "RISK_GATE";
   const dataTrusted = brief.data_mode !== "BLOCKED" && (dqs ?? 0) >= 60;

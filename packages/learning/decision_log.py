@@ -56,6 +56,7 @@ def _diagnostics(trade: Trade) -> list[str]:
 def entry_for(trade: Trade) -> dict:
     """Build the attribution entry for a closed trade (pure; no I/O)."""
     won = trade.pnl_usd > 0
+    diagnostics = _diagnostics(trade)
     return {
         # Deterministic id (replay-friendly): same trade → same record_id.
         "record_id": f"{trade.id}:{trade.closed_at}",
@@ -83,6 +84,12 @@ def entry_for(trade: Trade) -> dict:
             # Config köken damgası (yeniden-üretilebilirlik): açılış anındaki
             # weights/thresholds/manifest SHA + weights sürümü. Legacy → None.
             "config_provenance": getattr(trade, "open_config_provenance", None),
+            # Öğrenme hijyeni: eksik atıfla kapanan işlem yine kapanır ve loglanır,
+            # ancak trainer'lara güvenilir kanıt olarak sokulmaz. Bu alan eski
+            # kayıtlarla uyumludur; eski kayıtta diagnostics yoksa tüketici eski
+            # davranışı korur.
+            "provenance_complete": not diagnostics,
+            "provenance_missing": list(diagnostics),
         },
         # Market-session context at open (if available; getattr keeps legacy trades
         # backward-compatible — missing context stays null, never invented).
@@ -117,7 +124,7 @@ def entry_for(trade: Trade) -> dict:
         },
         "opened_at": trade.opened_at,
         "closed_at": trade.closed_at,
-        "diagnostics": _diagnostics(trade),
+        "diagnostics": diagnostics,
         # Safety contract stamped on every record (audit/replay evidence).
         "execution_mode": EXECUTION_MODE,
         "paper_safe": True,

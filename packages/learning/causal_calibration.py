@@ -115,9 +115,12 @@ def _valid_row(row: dict[str, Any]) -> tuple[bool, str | None]:
     return True, None
 
 
-def _quality_filter(rows: Iterable[dict[str, Any]]) -> tuple[list[dict[str, Any]], dict[str, int], int]:
+def _quality_filter(
+    rows: Iterable[dict[str, Any]],
+) -> tuple[list[dict[str, Any]], dict[str, int], int, dict[str, dict[str, int]]]:
     eligible: list[dict[str, Any]] = []
     rejected: dict[str, int] = {}
+    rejected_by_cell: dict[str, dict[str, int]] = {}
     raw = 0
     seen: set[tuple[Any, ...]] = set()
     for row in rows or ():
@@ -128,6 +131,11 @@ def _quality_filter(rows: Iterable[dict[str, Any]]) -> tuple[list[dict[str, Any]
         if not ok:
             key = reason or "invalid"
             rejected[key] = rejected.get(key, 0) + 1
+            edge = str(row.get("edge_id") or row.get("edge") or "UNKNOWN_EDGE")
+            horizon = str(row.get("horizon") or "ALL")
+            cell = f"{edge}|{horizon}"
+            by_reason = rejected_by_cell.setdefault(key, {})
+            by_reason[cell] = by_reason.get(cell, 0) + 1
             continue
         roots = tuple(sorted(set(row.get("root_event_ids") or ([row.get("event_id")] if row.get("event_id") else ["WORLD_STATE"]))))
         dedup = (row.get("edge"), roots, row.get("horizon"), row.get("prediction_as_of"))
@@ -136,7 +144,14 @@ def _quality_filter(rows: Iterable[dict[str, Any]]) -> tuple[list[dict[str, Any]
             continue
         seen.add(dedup)
         eligible.append(row)
-    return eligible, rejected, raw
+    # Teşhis çıktısı sınırlı tutulur; karar yolu ve örnekleme sayıları
+    # değişmez, yalnızca hangi hücrelerin veri kalitesi kapısında kaldığı
+    # görünür olur.
+    bounded = {
+        reason: dict(sorted(cells.items(), key=lambda item: (-item[1], item[0]))[:50])
+        for reason, cells in rejected_by_cell.items()
+    }
+    return eligible, rejected, raw, bounded
 
 
 def calibrate_edges(rows: Iterable[dict[str, Any]], *, priors: dict[str, float] | None = None, min_samples: int | None = None) -> dict[str, Any]:
@@ -144,7 +159,7 @@ def calibrate_edges(rows: Iterable[dict[str, Any]], *, priors: dict[str, float] 
     cfg = _cfg()
     minimum = int(min_samples or cfg.get("min_samples", 8))
     prior_map = priors or {}
-    eligible, rejection_reasons, raw_rows = _quality_filter(rows)
+    eligible, rejection_reasons, raw_rows, rejection_details = _quality_filter(rows)
     groups: dict[str, list[dict[str, Any]]] = {}
     for row in eligible:
         edge = str(row.get("edge_id") or row.get("edge") or f"{row.get('source')}->{row.get('target')}")
@@ -169,6 +184,7 @@ def calibrate_edges(rows: Iterable[dict[str, Any]], *, priors: dict[str, float] 
         "eligible_rows": len(eligible),
         "rejected_rows": raw_rows - len(eligible),
         "rejection_reasons": rejection_reasons,
+        "rejection_details": rejection_details,
         "recommendations": recommendations,
         "shadow_only": True,
         "auto_apply": False,

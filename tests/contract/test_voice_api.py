@@ -1,3 +1,6 @@
+from pathlib import Path
+from types import SimpleNamespace
+
 from fastapi import HTTPException
 from fastapi.testclient import TestClient
 
@@ -14,7 +17,6 @@ def test_voice_speak_rejects_empty_text() -> None:
 
 
 def test_voice_speak_uses_local_piper_by_default(monkeypatch) -> None:
-    monkeypatch.delenv("TTS_PROVIDER", raising=False)
     monkeypatch.setattr(
         voice_router.PiperTTSProvider,
         "speak",
@@ -26,46 +28,80 @@ def test_voice_speak_uses_local_piper_by_default(monkeypatch) -> None:
 
     assert response.status_code == 200
     assert response.headers["content-type"] == "audio/wav"
+    assert response.headers["x-voice-provider"] == "piper-local"
     assert response.content == b"RIFFfake-wav"
 
 
-def test_voice_speak_falls_back_to_edge_when_primary_unconfigured(monkeypatch) -> None:
-    """ElevenLabs key missing → speak() no longer hard-fails; it falls back to
-    the free Edge TTS provider so the caller still gets quality audio (see
-    voice.py's speak() comment). Edge itself is monkeypatched — no real
-    network call / edge_tts install needed for this test."""
-    monkeypatch.setenv("TTS_PROVIDER", "elevenlabs")
-    monkeypatch.delenv("ELEVENLABS_API_KEY", raising=False)
-    monkeypatch.setattr(
-        voice_router.EdgeTTSProvider,
-        "speak",
-        lambda self, text, voice=None: b"fake-mp3-bytes",
-    )
+def test_voice_speak_ignores_legacy_provider_selection(monkeypatch) -> None:
+    calls: list[str] = []
+
+    def _piper(self, text: str, voice: str | None = None) -> bytes:
+        calls.append(text)
+        return b"RIFFpiper-wav"
+
+    monkeypatch.setattr(voice_router.PiperTTSProvider, "speak", _piper)
     client = TestClient(create_app())
 
-    response = client.post("/api/voice/speak", json={"text": "Merhaba."})
+    response = client.post(
+        "/api/voice/speak",
+        json={"text": "Yerel ses.", "provider": "elevenlabs", "voice": "remote"},
+    )
 
     assert response.status_code == 200
-    assert response.headers["content-type"] == "audio/mpeg"
-    assert response.content == b"fake-mp3-bytes"
+    assert response.content == b"RIFFpiper-wav"
+    assert calls == ["Yerel ses."]
 
 
-def test_voice_speak_503_when_both_providers_fail(monkeypatch) -> None:
-    """Primary (ElevenLabs, key missing) AND the Edge fallback both fail →
-    the request genuinely has no audio to return, so 503 is correct."""
-    monkeypatch.setenv("TTS_PROVIDER", "elevenlabs")
-    monkeypatch.delenv("ELEVENLABS_API_KEY", raising=False)
+def test_voice_speak_normalizes_turkish_combining_characters(monkeypatch) -> None:
+    calls: list[str] = []
 
-    def _edge_boom(self, text: str, voice: str | None = None) -> bytes:
-        raise HTTPException(status_code=503, detail="Edge TTS request failed: Boom")
+    def _piper(self, text: str, voice: str | None = None) -> bytes:
+        calls.append(text)
+        return b"RIFFpiper-wav"
 
-    def _google_boom(self, text: str, voice: str | None = None) -> bytes:
-        raise HTTPException(status_code=503, detail="Google TTS request failed: Boom")
-
-    monkeypatch.setattr(voice_router.EdgeTTSProvider, "speak", _edge_boom)
-    monkeypatch.setattr(voice_router.GoogleTranslateTTSProvider, "speak", _google_boom)
+    monkeypatch.setattr(voice_router.PiperTTSProvider, "speak", _piper)
     client = TestClient(create_app())
 
-    response = client.post("/api/voice/speak", json={"text": "Merhaba."})
+    response = client.post("/api/voice/speak", json={"text": "İşlem i\u0307zleniyor.  Gümüş."})
+
+    assert response.status_code == 200
+    assert calls == ["İşlem izleniyor. Gümüş."]
+
+
+def test_voice_speak_does_not_fallback_when_piper_is_unavailable(monkeypatch) -> None:
+    def _piper_boom(self, text: str, voice: str | None = None) -> bytes:
+        raise HTTPException(status_code=503, detail="Piper executable is not installed.")
+
+    monkeypatch.setattr(voice_router.PiperTTSProvider, "speak", _piper_boom)
+    client = TestClient(create_app())
+
+    response = client.post("/api/voice/speak", json={"text": "Piper kontrol."})
 
     assert response.status_code == 503
+    assert response.json()["detail"] == "Piper executable is not installed."
+
+
+def test_piper_reads_utf8_file_for_turkish_characters(monkeypatch, tmp_path) -> None:
+    """Windows stdin code pages must not corrupt dotless ı or other Turkish letters."""
+    provider = object.__new__(voice_router.PiperTTSProvider)
+    provider.binary = tmp_path / "piper.exe"
+    provider.model = tmp_path / "tr_TR-dfki-medium.onnx"
+    provider.use_cuda = False
+    provider.runtime_env = {}
+    provider.binary.touch()
+    provider.model.touch()
+    seen: dict[str, str] = {}
+
+    def _run(command, **kwargs):
+        input_path = Path(command[command.index("--input_file") + 1])
+        seen["text"] = input_path.read_text(encoding="utf-8")
+        output = Path(command[command.index("--output_file") + 1])
+        output.write_bytes(b"RIFFfake-wav")
+        return SimpleNamespace(returncode=0, stderr=b"", stdout=b"")
+
+    monkeypatch.setattr(voice_router.subprocess, "run", _run)
+
+    audio = provider.speak("Sıkıntı şu: işlem açılmıyor; gümüş, güven ve ölçüm.")
+
+    assert audio == b"RIFFfake-wav"
+    assert seen["text"] == "Sıkıntı şu: işlem açılmıyor; gümüş, güven ve ölçüm.\n"

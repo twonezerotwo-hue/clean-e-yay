@@ -62,6 +62,17 @@ def test_runtime_unmapped_symbol_returns_data_unavailable(runtime) -> None:
     assert q.error
 
 
+def test_candidate_assets_share_price_and_ohlcv_source_mapping() -> None:
+    from packages.data.providers import price
+    from packages.data.providers.ohlcv import yfinance as ohlcv_yfinance
+
+    # Discovery adayının panelde görünür olup paper ön-kontrolünde kaybolmaması
+    # için spot fiyat ve teknik bar aynı sembolü kapsamalıdır.
+    candidates = ("CVX", "NATGAS", "SUGAR", "XLV", "XLP")
+    assert all(symbol in price.yfinance.SUPPORTED for symbol in candidates)
+    assert all(symbol in ohlcv_yfinance.SUPPORTED for symbol in candidates)
+
+
 def test_fred_missing_api_key_yields_none(monkeypatch) -> None:
     monkeypatch.delenv("FRED_API_KEY", raising=False)
     from packages.data.providers.price import fred

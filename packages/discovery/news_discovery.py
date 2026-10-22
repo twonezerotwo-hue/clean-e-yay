@@ -28,6 +28,7 @@ import re
 from collections.abc import Callable, Iterable, Mapping
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 
 from packages.ops.store import write_text_atomic
@@ -80,6 +81,7 @@ def config(discovery_cfg: Mapping[str, Any] | None = None) -> dict[str, Any]:
 
         discovery_cfg = load_config()
     raw = dict(discovery_cfg.get("news_discovery") or {})
+    article_raw = dict(raw.get("article_enrichment") or {})
     return {
         "enabled": bool(raw.get("enabled", True)),
         "feed_refresh_min": float(raw.get("feed_refresh_min", 15)),
@@ -99,6 +101,16 @@ def config(discovery_cfg: Mapping[str, Any] | None = None) -> dict[str, Any]:
         "min_dollar_volume": float(raw.get("min_dollar_volume", 5_000_000)),
         "min_daily_bars": int(raw.get("min_daily_bars", 31)),
         "extra_feeds": [dict(f) for f in raw.get("extra_feeds") or [] if f and f.get("url")],
+        # Opt-in in code so isolated tests/older deployments never make a new
+        # network request; production enables it explicitly in discovery.yaml.
+        "article_enrichment": {
+            "enabled": bool(article_raw.get("enabled", False)),
+            "max_articles": int(article_raw.get("max_articles_per_refresh", 8)),
+            "timeout_seconds": float(article_raw.get("timeout_seconds", 5)),
+            "max_bytes": int(article_raw.get("max_bytes", 500_000)),
+            "excerpt_chars": int(article_raw.get("excerpt_chars", 1_200)),
+            "cache_ttl_hours": float(article_raw.get("cache_ttl_hours", 6)),
+        },
     }
 
 
@@ -152,11 +164,52 @@ def _feeds(cfg: Mapping[str, Any]) -> tuple[dict[str, str], ...]:
     return rss.MARKET_FEEDS + rss.GEO_FEEDS + extra
 
 
+def _enrich_heads(heads: Iterable[Any], cfg: Mapping[str, Any], now: datetime) -> dict[str, dict]:
+    article_cfg = dict(cfg.get("article_enrichment") or {})
+    if not article_cfg.get("enabled"):
+        return {}
+    try:
+        from packages.data.providers.news import article_enrichment
+
+        return article_enrichment.enrich(
+            sorted(heads, key=lambda item: getattr(item, "ts", None) or now, reverse=True),
+            max_articles=article_cfg["max_articles"],
+            timeout_seconds=article_cfg["timeout_seconds"],
+            max_bytes=article_cfg["max_bytes"],
+            excerpt_chars=article_cfg["excerpt_chars"],
+            cache_ttl_hours=article_cfg["cache_ttl_hours"],
+            now=now,
+        )
+    except Exception:
+        # Article pages are optional evidence. A publisher outage must not
+        # stop RSS discovery or change the decision loop.
+        return {}
+
+
 def _refresh_pool(state: dict, cfg: Mapping[str, Any], now: datetime, fetch_group: FetchGroupFn | None) -> dict:
     pool = dict(state.get("pool") or {})
     fetched = _parse(pool.get("fetched_at"))
     if fetched is not None and now - fetched < timedelta(minutes=cfg["feed_refresh_min"]):
-        return {"status": "CACHED", "items": len(pool.get("items") or [])}
+        if (cfg.get("article_enrichment") or {}).get("enabled") and not pool.get("article_enrichment_attempted_at"):
+            from packages.data.providers.news import article_enrichment
+
+            cached_heads = [SimpleNamespace(id=item.get("key"), source=item.get("source"),
+                                             url=item.get("url"), ts=_parse(item.get("ts")),
+                                             title=item.get("title"))
+                            for item in pool.get("items") or [] if item.get("url")]
+            article_rows = _enrich_heads(cached_heads, cfg, now)
+            for item in pool.get("items") or []:
+                url = str(item.get("url") or "").strip()
+                article = article_rows.get(article_enrichment.cache_key(url)) if url else None
+                if article:
+                    item["article"] = {k: article.get(k) for k in
+                                       ("status", "title", "description", "excerpt", "word_count", "fetched_at", "url")}
+            pool["article_enriched"] = sum(1 for item in pool.get("items") or []
+                                           if (item.get("article") or {}).get("excerpt"))
+            pool["article_enrichment_attempted_at"] = _iso(now)
+            state["pool"] = pool
+        return {"status": "CACHED", "items": len(pool.get("items") or []),
+                "article_enriched": pool.get("article_enriched", 0)}
     if fetch_group is None:
         from packages.data.providers.news import rss
 
@@ -164,15 +217,26 @@ def _refresh_pool(state: dict, cfg: Mapping[str, Any], now: datetime, fetch_grou
     # geo=False: jeopolitik kaynaklarda da bölge süzgeci yok — sonucu olan her olay aday.
     heads, ok, err = fetch_group(_feeds(cfg), geo=False, max_items=cfg["per_feed"])
     items: dict[str, dict] = {}
+    article_rows = _enrich_heads(heads, cfg, now)
+    from packages.data.providers.news import article_enrichment
     for h in heads:
         title = str(getattr(h, "title", "") or "").strip()
         ts = getattr(h, "ts", None)
         if not title or not isinstance(ts, datetime):
             continue
-        items.setdefault(_key(title), {"key": _key(title), "title": title[:240],
-                                       "source": str(getattr(h, "source", "") or ""), "ts": _iso(ts)})
-    state["pool"] = {"fetched_at": _iso(now), "items": list(items.values()), "feeds_ok": ok, "last_error": err}
-    return {"status": "FETCHED", "items": len(items), "feeds_ok": ok}
+        url = str(getattr(h, "url", None) or "").strip() or None
+        article = article_rows.get(article_enrichment.cache_key(url)) if url and article_rows else None
+        item = {"key": _key(title), "title": title[:240],
+                "source": str(getattr(h, "source", "") or ""), "ts": _iso(ts), "url": url}
+        if article:
+            item["article"] = {k: article.get(k) for k in
+                               ("status", "title", "description", "excerpt", "word_count", "fetched_at", "url")}
+        items.setdefault(_key(title), item)
+    state["pool"] = {"fetched_at": _iso(now), "items": list(items.values()), "feeds_ok": ok, "last_error": err,
+                     "article_enriched": sum(1 for item in items.values() if (item.get("article") or {}).get("excerpt")),
+                     "article_enrichment_attempted_at": _iso(now)}
+    return {"status": "FETCHED", "items": len(items), "feeds_ok": ok,
+            "article_enriched": state["pool"]["article_enriched"]}
 
 
 # Olay değil yorum/tahmin olan başlıklar YZ'ye hiç gitmez (2026-10-05 canlı bulgu: "XRP Is
@@ -212,6 +276,14 @@ def _pending(state: Mapping[str, Any], cfg: Mapping[str, Any], now: datetime) ->
     return out
 
 
+def _prompt_item(item: Mapping[str, Any]) -> str:
+    """Format one title plus bounded article evidence for the local model."""
+    excerpt = str((item.get("article") or {}).get("excerpt") or "").strip()
+    if excerpt:
+        return f"{item['title']} | Makale kanıtı: {excerpt[:700]}"
+    return str(item["title"])
+
+
 # ---------------------------------------------------------------------------
 # 2) Yerel YZ çıkarımı
 # ---------------------------------------------------------------------------
@@ -237,6 +309,7 @@ _PROMPT = (
     "arz kesintisi/grev/yasak → up; üretim/ihracat artışı → down; satın alınan (hedef) şirket → up; "
     "getiriler yükselir → tahvil fonu down.\n"
     "- Endeks değil işlem gören araç ver (S&P 500 yerine SPY).\n"
+    "- Makale kanıtı verilirse yalnız metinde açıkça desteklenen iddiayı kullan; başlık ve kanıt çelişirse ATLA.\n"
     "- Sembol Yahoo Finance biçiminde: vadeli 'KC=F', ETF 'COPX', hisse 'FCX', kripto 'SOL-USD', döviz 'EURUSD=X'.\n"
     "Yalnız en önemli en fazla {max_events} başlık, her biri için en fazla {max_assets} varlık. "
     "Sonucu ve mekanizmayı Türkçe ve kısa yaz. Yalnız JSON:\n"
@@ -601,7 +674,7 @@ def run(
             if not batch or calls["n"] >= cfg["max_calls_per_day"]:
                 break
             prompt = _PROMPT.format(
-                titles="\n".join(f"{j + 1}. {it['title']}" for j, it in enumerate(batch)),
+                titles="\n".join(f"{j + 1}. {_prompt_item(it)}" for j, it in enumerate(batch)),
                 max_events=cfg["max_events_per_call"], max_assets=cfg["max_assets_per_event"],
             )
             try:
@@ -635,6 +708,7 @@ def run(
                     "id": head["key"], "title": head["title"], "source": head["source"], "ts": head["ts"],
                     "consequence": ev["c"], "assets": assets, "analyzed_at": _iso(now),
                     "model": getattr(comp, "model", None),
+                    "article": head.get("article"), "url": head.get("url"),
                 })
                 stats["events"] += 1
     state["calls"] = calls
@@ -676,7 +750,8 @@ def llm_headlines() -> list[dict]:
                    for a in ev.get("assets") or [] if a.get("status") in ("valid", "registry") and a.get("symbol")}
         if impacts:
             out.append({"key": ev["id"], "title": ev["title"], "source": ev.get("source") or "",
-                        "ts": ev.get("ts"), "consequence": ev.get("consequence"), "impacts": impacts})
+                        "ts": ev.get("ts"), "url": ev.get("url"), "article": ev.get("article"),
+                        "consequence": ev.get("consequence"), "impacts": impacts})
     return out
 
 
@@ -693,7 +768,8 @@ def chains_for(symbols: Iterable[str], limit: int = 3) -> dict[str, list[dict]]:
             if len(rows) < limit and all(r["title"] != ev["title"] for r in rows):
                 rows.append({"title": ev["title"], "source": ev.get("source"), "ts": ev.get("ts"),
                              "consequence": ev.get("consequence"), "direction": a.get("direction"),
-                             "confidence": a.get("confidence"), "mechanism": a.get("mechanism")})
+                             "confidence": a.get("confidence"), "mechanism": a.get("mechanism"),
+                             "article": ev.get("article"), "url": ev.get("url")})
     return out
 
 
@@ -713,17 +789,30 @@ def viewmodel(limit_events: int = 12) -> dict:
         if not any(a["status"] in ("valid", "registry") for a in shown):
             continue
         events.append({"title": ev["title"], "source": ev.get("source"), "ts": ev.get("ts"),
+                       "url": ev.get("url"), "article": ev.get("article"),
                        "consequence": ev.get("consequence"), "analyzed_at": ev.get("analyzed_at"), "assets": shown})
         if len(events) >= limit_events:
             break
     stats = dict(state.get("stats") or {})
+    try:
+        from packages.data.providers.news import article_enrichment
+
+        pool_coverage = article_enrichment.coverage(
+            SimpleNamespace(url=item.get("url"))
+            for item in (state.get("pool") or {}).get("items") or []
+        )
+    except Exception:
+        pool_coverage = {"status": "UNAVAILABLE"}
     return {
         "generated_at": state.get("generated_at"),
         "status": state.get("status") or "UNKNOWN",
         "events": events,
         "candidates": list(state.get("candidates") or []),
         "stats": {"calls_today": stats.get("calls_today", 0), "screened": stats.get("screened", 0),
-                  "pool": (stats.get("pool") or {}).get("items"), "rejected": stats.get("rejected") or {}},
+                  "pool": (stats.get("pool") or {}).get("items"),
+                  "article_enriched": (stats.get("pool") or {}).get("article_enriched", 0),
+                  "article_coverage": pool_coverage,
+                  "rejected": stats.get("rejected") or {}},
     }
 
 

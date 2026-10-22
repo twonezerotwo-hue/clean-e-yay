@@ -148,8 +148,10 @@ def test_blocked_score_is_not_reported_as_trade_signal(monkeypatch):
     executive = briefing.build()["executive"]
     assert executive["stance"] == "watching"
     assert "İşlem sinyali oluştu" not in executive["headline"]
-    assert "Gümüş SHORT" in executive["narrative"]
-    assert "WATCH" in executive["narrative"]
+    # Brief artık kullanıcıya Türkçe yön gösterir; backend kodu (SHORT) ham
+    # biçimde anlatıya sızmamalı.
+    assert "Gümüş satış" in executive["narrative"]
+    assert "izlemede" in executive["narrative"]
 
 
 def test_layer0_context_uses_current_news_and_world_evidence():

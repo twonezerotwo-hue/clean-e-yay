@@ -47,6 +47,17 @@ def has_live_source(symbol: str) -> bool:
     return _primary_for(symbol) is not None
 
 
+def live_source_for(symbol: str) -> str | None:
+    """Return the mapped primary provider without making a network call.
+
+    Discovery and the paper pre-check use the same registry mapping. Exposing
+    the provider name makes a panel able to explain a missing paper price
+    instead of presenting a discovery quote as execution-ready data.
+    """
+    primary = _primary_for(symbol)
+    return _provider_name(primary) if primary is not None else None
+
+
 # Sembol → birincil başarısız olursa sırayla denenecek fallback modülleri.
 # Sadece kripto/değerli metal — birincil sağlayıcı (coingecko/yfinance)
 # rate-limit veya geçici hata verirse devreye girer.

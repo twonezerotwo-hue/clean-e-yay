@@ -1,5 +1,6 @@
 param(
-    [string]$Voice = "tr_TR-dfki-medium"
+    [string]$Voice = "tr_TR-dfki-medium",
+    [switch]$Cuda
 )
 
 $ErrorActionPreference = "Stop"
@@ -8,42 +9,33 @@ $ModelDir = Join-Path $Root "data\models\piper"
 $ModelPath = Join-Path $ModelDir "$Voice.onnx"
 $ConfigPath = Join-Path $ModelDir "$Voice.onnx.json"
 $VoiceBase = "https://huggingface.co/rhasspy/piper-voices/resolve/main/tr/tr_TR/dfki/medium"
+$VoiceVenv = Join-Path $Root ".voice-venv"
+$VoicePython = Join-Path $VoiceVenv "Scripts\python.exe"
+$PiperPath = Join-Path $VoiceVenv "Scripts\piper.exe"
 
 New-Item -ItemType Directory -Force -Path $ModelDir | Out-Null
 
-function Find-Piper {
-    $venvPiper = Join-Path $Root ".venv\Scripts\piper.exe"
-    if (Test-Path $venvPiper) { return $venvPiper }
-    $command = Get-Command piper.exe -ErrorAction SilentlyContinue
-    if ($command) { return $command.Source }
-
-    $candidates = @(
-        (Join-Path $env:LOCALAPPDATA "Programs\Python\Python312\Scripts\piper.exe"),
-        (Join-Path $env:APPDATA "Python\Python312\Scripts\piper.exe"),
-        (Join-Path $Root ".voice-venv\Scripts\piper.exe")
-    )
-    return $candidates | Where-Object { Test-Path $_ } | Select-Object -First 1
+$python = Get-Command python.exe -ErrorAction SilentlyContinue
+if (-not $python) { $python = Get-Command py.exe -ErrorAction SilentlyContinue }
+if (-not $python) { throw "Python bulunamadı; Piper kurulamadı." }
+if (-not (Test-Path $VoicePython)) {
+    Write-Host "İzole Piper ortamı oluşturuluyor..."
+    & $python.Source -m venv $VoiceVenv
+    if ($LASTEXITCODE -ne 0) { throw "Piper ses ortamı oluşturulamadı." }
 }
-
-$venvPython = Join-Path $Root ".venv\Scripts\python.exe"
-$venvPiper = Join-Path $Root ".venv\Scripts\piper.exe"
-$piperPath = if (Test-Path $venvPiper) { $venvPiper } else { $null }
-if (-not $piperPath -and (Test-Path $venvPython)) {
-    Write-Host "Piper .venv içine kuruluyor..."
-    & $venvPython -m pip install piper-tts --quiet
-    if ($LASTEXITCODE -ne 0) { throw "piper-tts kurulumu başarısız oldu." }
-    $piperPath = Find-Piper
+Write-Host "Piper 1.8.0 kuruluyor (ana uygulama .venv'ine dokunulmaz)..."
+& $VoicePython -m pip install --upgrade --quiet "piper-tts==1.8.0"
+if ($LASTEXITCODE -ne 0) { throw "piper-tts kurulumu başarısız oldu." }
+if ($Cuda) {
+    Write-Host "CUDA destekli ONNX Runtime kuruluyor..."
+    # Piper's CPU wheel and GPU wheel share the same `onnxruntime` import
+    # package. Remove the CPU wheel first; otherwise Python can silently load
+    # CPU providers even though the GPU wheel is installed.
+    & $VoicePython -m pip uninstall --yes --quiet onnxruntime
+    & $VoicePython -m pip install --upgrade --quiet "onnxruntime-gpu[cuda,cudnn]==1.31.0"
+    if ($LASTEXITCODE -ne 0) { throw "CUDA ONNX Runtime kurulumu başarısız oldu." }
 }
-if (-not $piperPath) {
-    $python = Get-Command py.exe -ErrorAction SilentlyContinue
-    if (-not $python) { $python = Get-Command python.exe -ErrorAction SilentlyContinue }
-    if (-not $python) { throw "Python bulunamadı; Piper kurulamadı." }
-
-    & $python.Source -m pip install --user piper-tts
-    if ($LASTEXITCODE -ne 0) { throw "piper-tts kurulumu başarısız oldu." }
-    $piperPath = Find-Piper
-}
-if (-not $piperPath) { throw "Piper çalıştırıcısı bulunamadı." }
+if (-not (Test-Path $PiperPath)) { throw "İzole Piper çalıştırıcısı bulunamadı." }
 
 function Download-IfMissing([string]$Url, [string]$Path) {
     if (Test-Path $Path) {
@@ -79,13 +71,14 @@ function Set-EnvLine([string]$Name, [string]$Value) {
     }
     $lines.Add("$Name=$Value")
 }
-Set-EnvLine "TTS_PROVIDER" "piper"
 Set-EnvLine "PIPER_MODEL" "data/models/piper/$Voice.onnx"
+Set-EnvLine "PIPER_BIN" ".voice-venv/Scripts/piper.exe"
+Set-EnvLine "PIPER_USE_CUDA" ($(if ($Cuda) { "1" } else { "0" }))
 [System.IO.File]::WriteAllText(
     $envPath,
     (($lines -join [Environment]::NewLine) + [Environment]::NewLine),
     (New-Object System.Text.UTF8Encoding($false))
 )
 
-Write-Host "Piper hazır: $piperPath"
+Write-Host "Piper hazır: $PiperPath"
 Write-Host "Model hazır: $ModelPath"

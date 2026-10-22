@@ -34,10 +34,13 @@ const ACTION_LABEL: Record<string, string> = {
 
 function cellTone(c: TimeframeDecision): string {
   if (c.status === "SUSPENDED") return "border-signal-down/40 text-signal-down/80 bg-signal-down/5";
-  if (c.status === "ACTIONABLE")
+  const ready = c.execution_ready ?? c.actionable;
+  if (ready)
     return c.action === "open_long"
       ? "border-signal-up/50 text-signal-up bg-signal-up/10"
       : "border-accent-magenta/50 text-accent-magenta bg-accent-magenta/10";
+  if (c.execution_state === "EXPLORATION")
+    return "border-amber-300/40 text-amber-200 bg-amber-300/5";
   return "border-white/10 text-white/45";
 }
 
@@ -46,7 +49,7 @@ function cellTitle(c: TimeframeDecision): string {
     `${c.symbol} ${c.timeframe}`,
     `candidate: ${c.candidate_action ?? "?"} → final: ${c.action}`,
     `score ${c.score ?? "—"} · ${c.direction ?? "—"} · size ×${c.size_multiplier ?? 0}`,
-    `paper: ${c.paper_action ?? "none"} · ${c.status ?? ""}`,
+    `paper: ${c.paper_action ?? "none"} · ${c.status ?? ""} · execution: ${c.execution_state ?? "—"}`,
   ];
   if (c.blocked_by?.length) lines.push(`blocked_by: ${c.blocked_by.join(", ")}`);
   if (c.reason) lines.push(c.reason);
@@ -98,7 +101,11 @@ function MatrixCell({
         {globalSuspended ? null : (
           <>
             <div className="text-[8px] uppercase tracking-wider opacity-70">
-              {c.actionable ? "ACTIONABLE" : "NOT ACT."}
+              {c.execution_state === "EXPLORATION"
+                ? "KEŞİF"
+                : (c.execution_ready ?? c.actionable)
+                  ? "HAZIR"
+                  : "NOT ACT."}
             </div>
             {/* P0/T2 — bir hücreyi hangi kapı kıstı (event riski, risk gate,
                 mistake, korelasyon, 1w bias) kısa rozette görünür. */}

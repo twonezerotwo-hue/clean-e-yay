@@ -137,6 +137,10 @@ yazılır ve EXPLORATION kohortuna düşer: yalnız güven kalibrasyonu (`calibr
 - execution_anomaly (H7): temizlik öncesi çıkış mantığıyla (`Trade.exit_policy` < 2)
   kapanmış, -1.5R'den kötü SL kaybı. Düzeltilmiş mantıkla kapanan işlemler bu sınıfa
   hiç girmez. Kohort raporunda ayrı kolon; P3 son-performans freni de bunları saymaz.
+- Yeni karar damgası taşıyan işlemlerde snapshot, fingerprint, DQS, risk aksiyonu ve
+  açılış nedeni zorunludur. Eksik atıf işlemi kapatmayı durdurmaz; kayıt raporda kalır,
+  fakat `learning_grade()` ve premium `performance` özeti bu işlemi öğrenme kanıtından
+  ayırır. Ham metrikler şeffaflık için ayrıca korunur.
 
 ## Keşif & Fikir Panosu (salt-gözlem)
 

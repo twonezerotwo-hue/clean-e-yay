@@ -35,10 +35,17 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
+from packages.ops.store import read_jsonl_tail
+
 _log = logging.getLogger(__name__)
 
 DEFAULT_PATH = "data/runtime/discovery_shadow.jsonl"
 DEFAULT_MAX_READ = 1000
+# The public/read-API default stays small for latency.  Lifecycle replay must
+# see older opens as well, otherwise an unresolved tracking can fall out of the
+# tail and never reach its TTL.  The log is capped (current + one archive), so
+# this remains bounded while covering normal multi-month operation.
+REPLAY_MAX_READ = 100_000
 _MAX_MB_ENV = "DISCOVERY_SHADOW_MAX_MB"
 _DEFAULT_MAX_MB = 64.0
 _MFE_CAP_R = 20.0  # missed_opportunity ile aynı gösterge kırpması (2026-07-02)
@@ -102,25 +109,14 @@ def _append(entry: dict) -> None:
 def read_recent(limit: int = DEFAULT_MAX_READ) -> list[dict]:
     """Son `limit` event (eski→yeni); gerekirse `.1` arşivine uzanır."""
     p = _path()
-    lines: list[str] = []
+    requested = max(1, int(limit))
+    events: list[dict] = []
     for path in (p.with_suffix(p.suffix + ".1"), p):
-        try:
-            if path.exists():
-                lines.extend(path.read_text(encoding="utf-8").splitlines())
-        except OSError:
-            continue
-    out: list[dict] = []
-    for line in lines[-max(1, limit):]:
-        line = line.strip()
-        if not line:
-            continue
-        try:
-            obj = json.loads(line)
-        except (json.JSONDecodeError, ValueError):
-            continue
-        if isinstance(obj, dict):
-            out.append(obj)
-    return out
+        # Append-only günlükler büyüyebilir; sondan okuyarak her taramada tüm
+        # arşivi belleğe alma maliyetini kaldır. Her iki dosyadan `requested`
+        # kayıt almak, birleşimin son `requested` kaydını eksiksiz korur.
+        events.extend(read_jsonl_tail(path, requested))
+    return events[-requested:]
 
 
 # ----------------- aktif set (log replay) -----------------
@@ -226,7 +222,10 @@ def process_run(
     cfg = dict(cfg or {})
     summary = {"tracked_new": 0, "resolved": 0, "active": 0}
     try:
-        events = read_recent()
+        # Do not use the UI/API tail here.  Active tracking is derived from the
+        # append-only log and therefore needs enough history to pair every
+        # track_open with its later resolve event.
+        events = read_recent(limit=REPLAY_MAX_READ)
         active = _active_trackings(events)
 
         # (1) Aktif izlemeleri çöz.
@@ -288,7 +287,7 @@ def process_run(
 
 # ----------------- aday özeti (artifact + K-3 API besini) -----------------
 
-def candidate_summary(limit: int = DEFAULT_MAX_READ) -> dict:
+def candidate_summary(limit: int = REPLAY_MAX_READ) -> dict:
     """Sembol başına gölge karne: n_signals, resolved, cf_win_rate, ort. R.
 
     cf_win_rate = missed_win / (missed_win + avoided_loss) — expired paydaya

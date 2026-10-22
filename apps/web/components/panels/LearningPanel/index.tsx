@@ -29,15 +29,16 @@ export function LearningPanel() {
     );
   }
 
-  const insufficient = data.sample_sufficient === false;
-  const sampleCount = data.verified_outcomes ?? data.total_trades;
+  const quality = data.performance;
+  const insufficient = quality?.sample_sufficient === false || (!quality && data.sample_sufficient === false);
+  const sampleCount = quality?.total_trades ?? data.verified_outcomes ?? data.total_trades;
   const outcomeCount = data.outcomes_total ?? data.total_trades;
 
   return (
     <PanelFrame id="learning">
       <PanelHeader
         title="Öğrenme Özeti"
-        subtitle={`${sampleCount}/${outcomeCount} doğrulanmış işlem · ağırlık sürümü ${data.weights_version ?? "---"}`}
+        subtitle={`${sampleCount}/${outcomeCount} temiz işlem · ağırlık sürümü ${data.weights_version ?? "---"}`}
         actions={
           insufficient ? (
             <span className="rounded px-1.5 py-0.5 bg-amber-400/20 text-amber-300 uppercase tracking-wide text-[10px]">
@@ -59,11 +60,17 @@ export function LearningPanel() {
           insufficient ? "opacity-50" : ""
         }`}
       >
-        <Stat label="Recent" value={String(data.total_trades)} />
-        <Stat label="Win Rate" value={insufficient ? "---" : fmtPct(data.win_rate)} />
-        <Stat label="Sharpe" value={insufficient ? "---" : fmtNum(data.sharpe)} />
-        <Stat label="Sortino" value={insufficient ? "---" : fmtNum(data.sortino)} />
+        <Stat label="Temiz işlem" value={String(sampleCount)} />
+        <Stat label="Sistem win" value={insufficient ? "---" : fmtPct(quality?.win_rate ?? data.win_rate)} />
+        <Stat label="Expectancy R" value={insufficient ? "---" : fmtNum(quality?.expectancy_r ?? data.expectancy_r)} />
+        <Stat label="Sharpe" value={insufficient ? "---" : fmtNum(quality?.sharpe ?? data.sharpe)} />
       </div>
+
+      {quality && (quality.execution_anomalies ?? 0) + (quality.provenance_incomplete ?? 0) > 0 ? (
+        <p className="mb-3 rounded border border-amber-400/25 bg-amber-400/5 px-2 py-1 text-[10px] text-amber-200/80">
+          Ham kayıtlardan {quality.execution_anomalies ?? 0} çıkış anomalisi ve {quality.provenance_incomplete ?? 0} eksik atıf öğrenmeden ayrıldı.
+        </p>
+      ) : null}
 
       {data.cohorts ? (
         <div className="mb-3">

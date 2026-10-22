@@ -76,7 +76,7 @@ def evaluate() -> dict:
     matched, agreements = _matched_decisions(records)
 
     resolves = [
-        e for e in missed_opportunity.read_recent()
+        e for e in missed_opportunity.read_recent(limit=missed_opportunity.REPLAY_MAX_READ)
         if e.get("event") == "resolve" and e.get("outcome") in ("missed_win", "avoided_loss")
     ]
     challenger_wins = sum(1 for e in resolves if e.get("outcome") == "missed_win")

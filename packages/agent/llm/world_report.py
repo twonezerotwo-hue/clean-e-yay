@@ -116,17 +116,31 @@ def _list_text(value: Any, limit: int = 6) -> list[str]:
 
 def _headline_rows(headlines: Iterable[Any] | None) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
-    for item in headlines or ():
+    source_rows = list(headlines or ())
+    try:
+        from packages.data.providers.news.article_enrichment import cached
+
+        article_rows = cached(getattr(item, "url", None) or _row(item).get("url") for item in source_rows)
+    except Exception:
+        article_rows = {}
+    for item in source_rows:
         row = _row(item)
         title = str(row.get("title") or "").strip()
         if not title:
             continue
-        rows.append({
+        output = {
             "title": title[:240],
             "source": str(row.get("source") or "unknown")[:80],
             "verified": bool(row.get("verified", False)),
             "event_type": str(row.get("event_type") or "UNKNOWN"),
-        })
+        }
+        url = str(row.get("url") or "").strip()
+        article = article_rows.get(url)
+        if article:
+            output["article_excerpt"] = str(article.get("excerpt") or "")[:600]
+            output["article_status"] = str(article.get("status") or "OK")
+            output["article_fetched_at"] = article.get("fetched_at")
+        rows.append(output)
     return rows[:_MAX_HEADLINES]
 
 

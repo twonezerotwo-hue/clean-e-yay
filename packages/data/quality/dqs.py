@@ -35,13 +35,41 @@ class QualityReport:
     extended: dict | None = None
 
 
+_SOURCE_FRESHNESS_WINDOWS_SEC: dict[str, int] = {
+    # FRED serileri günlük/aylık güncellenir. 5 dakikalık bir fiyat penceresi
+    # uygulamak, geçerli makro veriyi yanlışlıkla bayat sayıyordu.
+    "fred": 172_800,
+    # Günlük Yahoo kapanışı, piyasa kapalıyken bir sonraki seansa kadar geçerli
+    # bir gözlemdir. Teknik bar tazeliği ayrıca kendi kapısından geçer.
+    "yfinance": 21_600,
+    # CoinGecko modülü 15 dk TTL ile çalışır; küçük bir ağ/worker gecikmesi payı.
+    "coingecko": 1_800,
+    "twelvedata": 3_600,
+    "alphavantage": 3_600,
+    "finnhub": 1_800,
+}
+
+
+def _freshness_window(source: str, default: int) -> int:
+    """Quote kaynağının doğal güncelleme aralığını döndür.
+
+    Bu yalnızca DQS ölçümüdür; karar motorunun teknik-bar ve işlem-session
+    kapıları aynı kalır. Bilinmeyen kaynaklar için sıkı varsayılan korunur.
+    """
+    key = str(source or "").strip().lower()
+    return _SOURCE_FRESHNESS_WINDOWS_SEC.get(key, default)
+
+
 def _freshness(quotes: list[PriceQuote], max_age_sec: int = 300) -> float:
     if not quotes:
         return 0.0
     now = datetime.now(UTC)
-    ages = [(now - q.ts).total_seconds() for q in quotes]
-    avg = sum(ages) / len(ages)
-    return max(0.0, min(100.0, 100.0 * (1.0 - min(avg / max_age_sec, 1.0))))
+    scores: list[float] = []
+    for q in quotes:
+        age = max(0.0, (now - q.ts).total_seconds())
+        window = _freshness_window(q.source, max_age_sec)
+        scores.append(max(0.0, min(100.0, 100.0 * (1.0 - min(age / window, 1.0)))))
+    return sum(scores) / len(scores)
 
 
 def _completeness(quotes: list[PriceQuote], expected: list[str]) -> float:

@@ -36,6 +36,10 @@ _log = logging.getLogger(__name__)
 
 DEFAULT_PATH = "data/runtime/missed_opportunity.jsonl"
 DEFAULT_MAX_READ = 500
+# The small default is kept for render/API calls.  Lifecycle replay and
+# learning consumers must see older opens too; otherwise an unresolved setup
+# can fall out of the tail before its TTL is evaluated.
+REPLAY_MAX_READ = 100_000
 
 # TTL süresi dolmuş ama TP/SL'e değmemiş izleme → "expired".
 _DEFAULT_TTL_HOURS: dict[str, float] = {
@@ -261,7 +265,7 @@ def scan_and_track(
     now = now or datetime.now(UTC)
     fetch = get_bars or ohlcv.get_bars
     try:
-        events = read_recent(limit=DEFAULT_MAX_READ)
+        events = read_recent(limit=REPLAY_MAX_READ)
         active = _active_trackings(events)
 
         # (1) Aktif izlemeleri çöz.
@@ -337,7 +341,7 @@ def read_recent(limit: int = DEFAULT_MAX_READ) -> list[dict]:
     return read_jsonl_tail(_path(), limit)
 
 
-def resolutions(limit: int = DEFAULT_MAX_READ) -> list[dict]:
+def resolutions(limit: int = REPLAY_MAX_READ) -> list[dict]:
     """F5-1 — çözülmüş counterfactual'lar (yalnız `resolve` event'leri).
 
     Kanıt tüketicileri (empirical_pwin cf-kanalı, edge raporu) için public
@@ -348,7 +352,7 @@ def resolutions(limit: int = DEFAULT_MAX_READ) -> list[dict]:
 
 # ----------------- viewmodel (panel/endpoint) -----------------
 
-def summary_viewmodel(limit: int = DEFAULT_MAX_READ) -> dict:
+def summary_viewmodel(limit: int = REPLAY_MAX_READ) -> dict:
     """Render-only özet: çözülmüş sonuç sayıları + aktif izlemeler + son olaylar.
 
     Frontend hesap yapmaz; tüm sayım burada. Veri yoksa available=false kabuk.

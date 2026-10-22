@@ -131,6 +131,36 @@ export function formatIdeaRelation(idea: Idea): string | null {
     : null;
 }
 
+/** Haber kanıtının backend'den gelen provenance özetini tek satıra çevirir. */
+export function formatIdeaEvidence(idea: Idea): string | null {
+  const news = idea.news;
+  if (!news) return null;
+  const families = news.independent_source_families;
+  const stories = news.n_stories;
+  const headlines = news.n_headlines;
+  const pieces = [
+    families != null ? `${families} bağımsız kaynak ailesi` : null,
+    stories != null ? `${stories} öykü` : null,
+    headlines != null ? `${headlines} kanıt` : null,
+  ].filter(Boolean);
+  const status = news.evidence_status === "CONFLICT" || news.conflict
+    ? "yön çelişkili"
+    : news.evidence_status === "CONFIRMED"
+      ? "çoklu kaynakla teyitli"
+      : news.evidence_status === "SINGLE_SOURCE"
+        ? "tek kaynak"
+        : null;
+  if (status) pieces.push(status);
+  return pieces.length ? pieces.join(" · ") : null;
+}
+
+/** Makale gövdesinden gelen sınırlı excerpt; başlık yoksa kartta gösterilmez. */
+export function selectIdeaArticleExcerpt(idea: Idea): string | null {
+  const evidence = idea.news?.evidence?.find((item) => item.article?.excerpt);
+  const chain = idea.news_chain?.find((item) => item.article?.excerpt);
+  return evidence?.article?.excerpt ?? chain?.article?.excerpt ?? null;
+}
+
 /** Banner alanları — hepsi fikrin kendi verisinden; olmayan alan null (uydurma metin yok). */
 export function selectIdeaBannerFacts(idea: Idea, boardAt?: string | null): IdeaBannerFacts {
   const tech = idea.technical;

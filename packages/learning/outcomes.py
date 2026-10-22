@@ -75,6 +75,12 @@ class CanonicalOutcome:
     # H7 — kapanışı yapan çıkış mantığı sürümü (0 = temizlik öncesi; bkz.
     # lifecycle.EXIT_POLICY_VERSION). is_execution_anomaly bunu okur.
     exit_policy: int = 0
+    # Atıf sözleşmesi: eksik DQS/risk/snapshot/fingerprint gibi eski kayıtlar
+    # raporda görünür kalır, fakat öğrenenlere güvenilir kanıt olarak girmez.
+    # Varsayılan True, sentetik/legacy test nesnelerinde geriye uyumluluğu korur;
+    # gerçek decision_log kaydı diagnostics ile açıkça damgalanır.
+    provenance_complete: bool = True
+    provenance_missing: list[str] = field(default_factory=list)
 
 
 def _duration_seconds(opened_at: str | None, closed_at: str | None) -> float | None:
@@ -128,6 +134,29 @@ def _module_contributions(raw) -> dict[str, float] | None:
     return out or None
 
 
+_PROVENANCE_FIELDS = (
+    ("snapshot_id", "snapshot_id_missing"),
+    ("fingerprint", "fingerprint_missing"),
+    ("open_dqs", "dqs_missing"),
+    ("open_risk_action", "risk_action_missing"),
+    ("open_reason", "open_reason_missing"),
+)
+
+
+def _trade_provenance(t: Trade) -> tuple[bool, list[str]]:
+    """Current engine kaydında zorunlu açılış atfını doğrula.
+
+    ``open_config_provenance`` yalnız yeni karar motorunun damgasıdır. Damga yoksa
+    eski/manual Trade'leri geriye dönük olarak uydurma eksik alanla cezalandırma;
+    damga varsa yeni sözleşmenin beş alanını eksiksiz istemek, bozuk kaydın
+    öğrenmeye sızmasını engeller.
+    """
+    if getattr(t, "open_config_provenance", None) is None:
+        return True, []
+    missing = [name for attr, name in _PROVENANCE_FIELDS if getattr(t, attr, None) is None]
+    return not missing, missing
+
+
 def build_outcome(t: Trade) -> CanonicalOutcome:
     """Tek Trade → CanonicalOutcome (legacy default'larla; asla patlamaz)."""
     parsed = fp.parse(getattr(t, "fingerprint", None))
@@ -139,6 +168,7 @@ def build_outcome(t: Trade) -> CanonicalOutcome:
     exit_ = getattr(t, "exit_price", None)
     pnl_pct = _pnl_pct(entry, exit_, side)
     risk_pct = _opt_float(getattr(t, "open_risk_pct", None))
+    provenance_complete, provenance_missing = _trade_provenance(t)
     return CanonicalOutcome(
         trade_id=str(getattr(t, "id", "") or ""),
         symbol=str(getattr(t, "symbol", "") or ""),
@@ -181,6 +211,8 @@ def build_outcome(t: Trade) -> CanonicalOutcome:
         ),
         exploration=bool(getattr(t, "exploration", False)),
         exit_policy=int(getattr(t, "exit_policy", 0) or 0),
+        provenance_complete=provenance_complete,
+        provenance_missing=provenance_missing,
     )
 
 
@@ -206,6 +238,10 @@ def build_outcome_from_log_entry(entry: dict) -> CanonicalOutcome:
     opening = entry.get("opening_signal") or {}
     exit_ = entry.get("exit") or {}
     outcome = entry.get("outcome") or {}
+    diagnostics = [str(x) for x in (entry.get("diagnostics") or []) if str(x)]
+    # Yeni kayıtlar diagnostics alanını her zaman taşır. Alan hiç yoksa bu,
+    # eski test/legacy zarfıdır; uydurma eksik alan üretmeden uyumluluğu sürdür.
+    provenance_complete = bool(opening.get("provenance_complete", not diagnostics)) and not diagnostics
     fingerprint = opening.get("fingerprint")
     parsed = fp.parse(fingerprint)
     side = entry.get("side") or "?"
@@ -252,6 +288,8 @@ def build_outcome_from_log_entry(entry: dict) -> CanonicalOutcome:
         module_contributions=_module_contributions(opening.get("module_contributions")),
         exploration=bool(opening.get("exploration", False)),
         exit_policy=int(exit_.get("policy") or 0),
+        provenance_complete=provenance_complete,
+        provenance_missing=diagnostics,
     )
 
 
@@ -316,7 +354,8 @@ def learning_grade(
     return [o for o in outcomes
             if getattr(o, "regime", None) not in LEGACY_REGIMES
             and (include_exploration or not is_exploration(o))
-            and not is_execution_anomaly(o)]
+            and not is_execution_anomaly(o)
+            and bool(getattr(o, "provenance_complete", True))]
 
 
 def is_exploration(o: object) -> bool:

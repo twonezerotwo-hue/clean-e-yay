@@ -35,6 +35,7 @@ from packages.learning import (
     missed_opportunity,
     mistake_memory,
     news_event_study,
+    paper_canary,
     promotion_criteria,
     subsignal_scorecard,
     technical_books_replay,
@@ -294,6 +295,16 @@ def get_entry_exit_quality() -> dict:
     granülerliğindeki boşluğu kapatır; karar zincirine etkisi yoktur (önerileri
     otonom uygulama ayrı bir slice — rollback net'iyle, edge STABLE kapısından)."""
     return entry_exit_quality.report()
+
+
+@router.get("/learning/paper-canary")
+def get_paper_canary() -> dict:
+    """Altı kanıt kapısının birleşik, salt-okuma paper kanaryası.
+
+    Rapor yalnız owner inceleme önerisi üretir. Hiçbir paper pozisyonu açmaz,
+    gerçek broker'a gitmez ve canlı karar/ağırlık/RiskGate akışını değiştirmez.
+    """
+    return paper_canary.viewmodel()
 
 
 @router.get("/learning/guard-safety")

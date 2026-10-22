@@ -12,6 +12,7 @@ from dataclasses import asdict, dataclass
 from datetime import UTC, datetime, timedelta
 from typing import Any, Literal
 
+from packages.agent.localization import localize_headline, localize_text
 from packages.data.ingestion.pipeline import get_cached_snapshot
 from packages.data.registry import assets as asset_registry
 from packages.decision import paper_policy
@@ -143,7 +144,7 @@ def _market_headlines(snap, cells) -> list[Headline]:
     if bullish or bearish:
         out.append(Headline(
             "info", "market",
-            f"Yön: {len(bullish)} bullish, {len(bearish)} bearish, {len(neutral)} nötr.",
+            f"Yön: {len(bullish)} yukarı, {len(bearish)} aşağı, {len(neutral)} nötr.",
         ))
     else:
         out.append(Headline(
@@ -336,13 +337,13 @@ def _news_headlines(snap) -> list[Headline]:
     bearish = sum(1 for h in headlines if (getattr(h, "sentiment", None) or "").lower() == "bearish")
     out.append(Headline(
         "info", "news",
-        f"{len(headlines)} başlık akışta · {bullish} bullish · {bearish} bearish.",
+        f"{len(headlines)} başlık akışta · {bullish} yukarı · {bearish} aşağı.",
     ))
     # En son (NewsHeadline.title field'i)
     latest = headlines[0] if headlines else None
     if latest is not None:
         src = getattr(latest, "source", "?")
-        txt = (getattr(latest, "title", None) or getattr(latest, "headline", "") or "")[:90]
+        txt = localize_headline(latest)[:120]
         out.append(Headline("info", "news", f"Son ({src}): {txt}"))
     return out
 
@@ -369,8 +370,8 @@ def _intel_headlines(cells) -> list[Headline]:
             out.append(Headline(
                 "warn", "news",
                 f"Haber öngörüsü {_symbol_tr(c['symbol'])} {_tf_tr(c['timeframe'])} "
-                f"{'long' if c['side'] == 'long' else 'short'} adayıyla çelişiyor ({arrow}, güç {c['strength']}).",
-                f"{(c.get('evidence') or '')[:100]} — gölge ölçüm; karar değişmedi.",
+                f"{'alış' if c['side'] == 'long' else 'satış'} adayıyla çelişiyor ({arrow}, güç {c['strength']}).",
+                f"{localize_text((c.get('evidence') or '')[:100])} — gölge ölçüm; karar değişmedi.",
             ))
     except Exception:  # brifing asla düşmesin
         return []
@@ -431,7 +432,14 @@ def _notification_headlines() -> list[Headline]:
 
 # ── Patron dili: kod/jargon yerine günlük Türkçe (yönetici özeti sesli okunur) ──
 _REGIME_TR = {"OFFENSIVE": "atak", "NEUTRAL": "nötr", "DEFENSIVE": "savunmacı", "CRISIS": "kriz"}
-_SYMBOL_TR = {"BTCUSD": "Bitcoin", "ETHUSD": "Ethereum", "XAUUSD": "Altın", "XAGUSD": "Gümüş"}
+_SYMBOL_TR = {
+    "BTCUSD": "Bitcoin",
+    "ETHUSD": "Ethereum",
+    "XAUUSD": "Altın",
+    "XAGUSD": "Gümüş",
+    "DXY": "dolar endeksi",
+    "CPI": "enflasyon verisi",
+}
 _TF_TR = {
     "15m": "15 dakikalık grafik", "1h": "1 saatlik grafik", "4h": "4 saatlik grafik",
     "1d": "günlük grafik", "1w": "haftalık grafik",
@@ -496,7 +504,7 @@ def _usd_tr(value: float) -> str:
 
 
 def _side_tr(side: str | None) -> str:
-    return {"long": "LONG", "short": "SHORT"}.get(str(side or "").lower(), "?")
+    return {"long": "alış", "short": "satış"}.get(str(side or "").lower(), "?")
 
 
 def _position_clause(positions: list[Any], rechecks: list[dict] | None = None) -> str:
@@ -518,7 +526,12 @@ def _position_clause(positions: list[Any], rechecks: list[dict] | None = None) -
     details: list[str] = []
     for position in positions[:4]:
         verdict = (checks.get(str(getattr(position, "id", ""))) or {}).get("verdict")
-        verdict_text = str(verdict or "İZLE")
+        verdict_text = {
+            "WATCH": "izlemede",
+            "HOLD": "beklemede",
+            "CLOSE": "kapatma sinyali",
+            "REDUCE": "azaltma sinyali",
+        }.get(str(verdict or "").upper(), "izlemede")
         try:
             pnl = float(position.unrealized_pnl_usd)
             pnl_text = f"{pnl:+.2f} dolar"
@@ -580,6 +593,7 @@ def _nearest_event(snap):
             if hours < -1:
                 continue
             label = getattr(c, "title", None) or getattr(c, "label", None) or getattr(c, "id", "?")
+            label = localize_text(label)
             imp = getattr(c, "importance", None) or getattr(c, "level", None)
             if best is None or hours < best[0]:
                 best = (hours, label, imp)
@@ -627,7 +641,13 @@ def _clean_text(value: Any, limit: int = 180) -> str:
     return text if len(text) <= limit else text[: limit - 1].rstrip() + "…"
 
 
-def _headline_world_context(snap, world_state: Any | None) -> str:
+def _sentence_start(value: str) -> str:
+    """Cümle başını büyütür; Türkçe metnin kalanını lower'a dönüştürmez."""
+    text = str(value or "")
+    return text[:1].upper() + text[1:] if text else text
+
+
+def _headline_world_context(snap, world_state: Any | None, idea_context: Any | None = None) -> str:
     """Layer-0'a günlük haber → etki → fikir zincirini ekler.
 
     Bu fonksiyon gözlem metni üretir; sinyal, pozisyon, boyut veya emir üretmez.
@@ -637,7 +657,7 @@ def _headline_world_context(snap, world_state: Any | None) -> str:
     if rows:
         bits = []
         for item in rows:
-            title = _clean_text(getattr(item, "title_tr", None) or getattr(item, "title", None), 150)
+            title = _clean_text(localize_headline(item), 150)
             source = _clean_text(getattr(item, "source", None) or "kaynak bilinmiyor", 32)
             bits.append(f"{source}: {title}")
         news_clause = "Bugünün gündemi: " + " | ".join(bits) + "."
@@ -702,8 +722,9 @@ def _headline_world_context(snap, world_state: Any | None) -> str:
         name = getattr(statement, "speaker", None) or getattr(statement, "institution", None)
         if name and str(name).casefold() not in {"government", "unknown", "none"}:
             name_text = str(name)
-            if name_text not in actors:
-                actors.append(name_text)
+            display_name = localize_text(name_text)
+            if display_name not in actors:
+                actors.append(display_name)
             direction = {
                 "tightening": "sıkılaştırma",
                 "easing": "gevşeme",
@@ -711,8 +732,8 @@ def _headline_world_context(snap, world_state: Any | None) -> str:
             }.get(str(getattr(statement, "policy_direction", None) or "unknown"), "yön belirsiz")
             evidence = next(iter(getattr(statement, "evidence", None) or ()), None)
             statement_parts.append(
-                f"{name_text} — {direction}"
-                + (f" ({_clean_text(evidence, 100)})" if evidence else "")
+                f"{display_name} — {direction}"
+                + (f" ({_clean_text(localize_text(evidence), 100)})" if evidence else "")
             )
     for label, aliases in _ACTOR_ALIASES:
         if any(alias in searchable for alias in aliases) and label not in actors:
@@ -720,7 +741,9 @@ def _headline_world_context(snap, world_state: Any | None) -> str:
     actor_events = []
     for event in events[:3]:
         event_type = _WORLD_EVENT_TR.get(str(getattr(event, "event_type", "")), "jeopolitik gelişme")
-        event_actors = ", ".join(str(actor) for actor in (getattr(event, "actors", None) or ()))
+        event_actors = ", ".join(
+            localize_text(str(actor)) for actor in (getattr(event, "actors", None) or ())
+        )
         if event_actors:
             actor_events.append(f"{event_actors}: {event_type}")
     if statement_parts or actor_events:
@@ -743,6 +766,31 @@ def _headline_world_context(snap, world_state: Any | None) -> str:
                        " tarafında aday aranabilir; fiyat teyidi olmadan işlem açılmaz.")
     else:
         idea_clause = "Fikir kıvılcımı: doğrulanmış etki yok; yeni pozisyon fikri üretmek için veri bekleniyor."
+
+    # Heart fikir panosu ile Brain anlatısının aynı gözlem kanıtını kullandığını
+    # görünür kıl. Bu yalnızca anlatıdır; fikirler karar/emir üretmez.
+    board_ideas = (idea_context or {}).get("ideas") if isinstance(idea_context, dict) else None
+    board_bits: list[str] = []
+    for idea in list(board_ideas or [])[:3]:
+        news = idea.get("news") or {}
+        direction = news.get("direction")
+        if direction not in {"up", "down", "neutral"}:
+            continue
+        symbol = str(idea.get("symbol") or "").upper()
+        if not symbol:
+            continue
+        direction_tr = {"up": "yukarı", "down": "aşağı", "neutral": "nötr"}[direction]
+        families = news.get("independent_source_families")
+        stories = news.get("n_stories")
+        status = str(news.get("evidence_status") or "").upper()
+        evidence = f"{families} bağımsız kaynak ailesi" if families is not None else "haber kanıtı"
+        if stories is not None:
+            evidence += f", {stories} öykü"
+        if status == "CONFLICT" or news.get("conflict"):
+            evidence += ", yön çelişkili"
+        board_bits.append(f"{symbol} {direction_tr} ({evidence})")
+    if board_bits:
+        idea_clause += " Brain-Heart ortak fikir kanıtı: " + " | ".join(board_bits) + "."
     return " ".join((news_clause, impact_clause, actor_clause, idea_clause))
 
 
@@ -763,6 +811,7 @@ def _executive(
     engine,
     world_state=None,
     paper_state_obj=None,
+    idea_context=None,
 ) -> dict[str, Any]:
     """Genel müdür → CEO brifingi: tek cümle sonuç + kısa sentez + tavsiye.
 
@@ -839,7 +888,7 @@ def _executive(
     if ev:
         hours, label, _imp = ev
         when = f"{hours / 24:.0f} gün sonra" if hours >= 24 else f"{hours:.0f} saat sonra"
-        event_clause = f"takvimdeki en yakın önemli olay {label}, {when}"
+        event_clause = f"takvimdeki en yakın önemli olay {localize_text(label)}, {when}"
     else:
         event_clause = "takvimde yakın zamanda piyasayı oynatacak bir olay görünmüyor"
 
@@ -878,8 +927,8 @@ def _executive(
         headline = f"İşlemler güvenlik nedeniyle durduruldu — {len(halts)} acil durdurma devrede."
         narrative = (
             f"Risk tarafında acil durdurma tetiklendi; sistem yeni pozisyon açmıyor ve bu kilidi "
-            f"yalnızca sen elle kaldırabilirsin. {pos_clause.capitalize()}; mevcut pozisyonlar "
-            f"yönetilmeye devam ediyor. {regime_clause.capitalize()}."
+            f"yalnızca sen elle kaldırabilirsin. {_sentence_start(pos_clause)}; mevcut pozisyonlar "
+            f"yönetilmeye devam ediyor. {_sentence_start(regime_clause)}."
         )
         recommendation = (
             "Durdurmanın sebebini risk panelinden incele; uygun görürsen kilidi elle kaldır, "
@@ -908,7 +957,7 @@ def _executive(
         )
         narrative = (
             f"Gelen piyasa verisi doğrulanamadığı için sistem bilerek yeni pozisyon açmıyor; "
-            f"eksik veriyle işlem açmak körleme olurdu. {pos_clause.capitalize()}. "
+            f"eksik veriyle işlem açmak körleme olurdu. {_sentence_start(pos_clause)}. "
             f"Veri düzelince adaylar otomatik olarak yeniden üretilir."
         )
         recommendation = "Veri kaynaklarının düzelmesini bekle; bu tabloda işlem zorlamak risklidir."
@@ -917,19 +966,19 @@ def _executive(
         headline = f"Veri boşluğu var — şu kaynaklar yanıt vermiyor: {', '.join(down)}."
         narrative = (
             f"Bir veya birden fazla veri kaynağı çevrimdışı; sistem karar üretmeye devam ediyor ama "
-            f"kör noktası var. Şu an {market_clause}. {regime_clause.capitalize()}; {pos_clause}."
+            f"kör noktası var. Şu an {market_clause}. {_sentence_start(regime_clause)}; {pos_clause}."
         )
         recommendation = "Veri kaynakları düzelene kadar yeni pozisyonlara temkinli yaklaşmak doğru olur."
     elif gap <= 0 and top_actionable:
         stance, label_, tone = "signal", "SİNYAL VAR", "ok"
         headline = f"İşlem sinyali oluştu — {market_clause}."
         narrative = (
-            f"{regime_clause.capitalize()}, {risk_clause}; {pos_clause}. "
-            f"{event_clause.capitalize()}."
+            f"{_sentence_start(regime_clause)}, {risk_clause}; {pos_clause}. "
+            f"{_sentence_start(event_clause)}."
         )
         recommendation = (
-            "Sinyal risk kontrolünden geçecek; PAPER_ONLY / NO_EXECUTION modunda uygun bulunursa "
-            "yalnızca simülasyon pozisyonu açılır. Gerçek broker emri gönderilmez."
+            "Sinyal risk kontrolünden geçecek; yalnızca simülasyon modunda uygun bulunursa "
+            "kâğıt üzerinde pozisyon açılır. Gerçek broker emri gönderilmez."
         )
     elif gap <= 2:
         stance, label_, tone = "watching", "İZLEMEDE", "info"
@@ -941,21 +990,21 @@ def _executive(
         )
         narrative = (
             f"{watch_reason} "
-            f"{regime_clause.capitalize()}, {risk_clause}; {pos_clause}. {event_clause.capitalize()}."
+            f"{_sentence_start(regime_clause)}, {risk_clause}; {pos_clause}. {_sentence_start(event_clause)}."
         )
         recommendation = "Şu an yapılacak bir şey yok; aday sınırı geçerse anında haber veririm."
     else:
         stance, label_, tone = "calm", "SAKİN", "info"
         headline = "Piyasa sakin — işlem açacak güçte bir sinyal yok."
         narrative = (
-            f"Şu an {market_clause}. {regime_clause.capitalize()}, {risk_clause}; {pos_clause}. "
-            f"{event_clause.capitalize()}."
+            f"Şu an {market_clause}. {_sentence_start(regime_clause)}, {risk_clause}; {pos_clause}. "
+            f"{_sentence_start(event_clause)}."
         )
         recommendation = "Beklemek en doğrusu; sistem güçlü bir sinyal görmeden işlem zorlamaz."
 
     # Dünya özeti her duruşta gösterilir; yalnızca haber/world-state kanıtıdır.
     # Böylece statik "Piyasa sakin" cümlesi günün akışını gizleyemez.
-    narrative = f"{narrative} {_headline_world_context(snap, world_state)}"
+    narrative = f"{narrative} {_headline_world_context(snap, world_state, idea_context)}"
 
     return {
         "stance": stance,
@@ -975,6 +1024,7 @@ def build_executive(
     engine,
     world_state=None,
     paper_state_obj=None,
+    idea_context=None,
 ) -> dict[str, Any]:
     """Cockpit'in aynı snapshot'ından yönetici metnini üretir.
 
@@ -988,6 +1038,7 @@ def build_executive(
         engine,
         world_state,
         paper_state_obj=paper_state_obj,
+        idea_context=idea_context,
     )
 
 

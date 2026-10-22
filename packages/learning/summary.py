@@ -17,6 +17,42 @@ from packages.paper import state as paper_state
 MIN_RELIABLE_TRADES = 20
 
 
+def _performance_snapshot(outcomes: list) -> dict:
+    """Temiz/öğrenilebilir kohort için tek performans özeti.
+
+    Eski üst seviye alanlar geriye dönük uyumluluk için tüm kapanışları göstermeye
+    devam eder. Premium panel ve yeni raporlar bu snapshot'ı kullanır; anomaliler,
+    çözülemeyen legacy kayıtlar ve eksik atıflar performansı kirletemez.
+    """
+    total = len(outcomes)
+    wins = sum(1 for o in outcomes if o.pnl > 0)
+    losses = sum(1 for o in outcomes if o.pnl < 0)
+    breakeven = total - wins - losses
+    decided = wins + losses
+    pnls = [float(o.pnl) for o in outcomes]
+    r_vals = [float(o.r_multiple) for o in outcomes if o.r_multiple is not None]
+    mean = sum(pnls) / len(pnls) if pnls else 0.0
+    if len(pnls) >= 2:
+        var = sum((p - mean) ** 2 for p in pnls) / (len(pnls) - 1)
+        sd = var**0.5
+        sharpe = round((mean / sd) * (252**0.5), 3) if sd > 0 else 0.0
+    else:
+        sharpe = None
+    return {
+        "total_trades": total,
+        "wins": wins,
+        "losses": losses,
+        "breakeven": breakeven,
+        "win_rate": round(wins / decided, 3) if decided else 0.0,
+        "total_pnl": round(sum(pnls), 2),
+        "expectancy_r": round(sum(r_vals) / len(r_vals), 4) if r_vals else None,
+        "r_sample": len(r_vals),
+        "sharpe": sharpe,
+        "sample_sufficient": total >= MIN_RELIABLE_TRADES,
+        "by_timeframe": outcomes_mod.bucketize(outcomes, lambda o: o.timeframe),
+    }
+
+
 def _proposal_status() -> str:
     """Rebalance proposal durumu (additive yüzey) — PENDING/APPROVED/REJECTED/NONE."""
     cur = rebalance_store.get_pending()
@@ -51,9 +87,12 @@ def build_summary() -> dict:
     # 0.5 baseline'ı kaldırıldı — DATA_POLICY: verified+predicted'a sahip
     # outcome'lar örneklere alınır. /learning/calibration endpoint'i ile aynı
     # kaynak → panel ile başlık tutarlı.
+    # Kalibrasyon yalnızca öğrenmeye uygun kayıtlarla ölçülür; eski SL
+    # anomalileri veya eksik atıf güven puanını bozmasın.
+    learning_outcomes = outcomes_mod.learning_grade(outcomes, include_exploration=True)
     samples = [
         (float(o.predicted_confidence), o.pnl > 0)
-        for o in outcomes
+        for o in learning_outcomes
         if o.data_verified and o.predicted_confidence is not None
     ]
     bins = [asdict(b) for b in reliability_bins(samples, n_bins=5)]
@@ -70,6 +109,12 @@ def build_summary() -> dict:
     # outcome'lar (legacy/SL'siz girmez). USD metrikleri olduğu gibi sürer.
     r_vals = [o.r_multiple for o in outcomes if o.r_multiple is not None]
     expectancy_r = round(sum(r_vals) / len(r_vals), 4) if r_vals else None
+    clean_performance = _performance_snapshot(learning_outcomes)
+    provenance_incomplete = sum(
+        1 for o in outcomes if not bool(getattr(o, "provenance_complete", True))
+    )
+    execution_anomalies = sum(1 for o in outcomes if outcomes_mod.is_execution_anomaly(o))
+    legacy_outcomes = sum(1 for o in outcomes if getattr(o, "regime", None) == "UNKNOWN")
 
     return {
         "total_trades": total,
@@ -114,6 +159,15 @@ def build_summary() -> dict:
         # saymaya devam eder (kırılım yok); auto sistemin gerçek performansı ve
         # manuel/test kirliliği bu blokta ayrı ayrı görünür.
         "cohorts": cohorts_mod.cohort_summary(outcomes),
+        # Premium görünüm için temiz performans. Eski ham alanlar silinmez;
+        # frontend artık karar kalitesi için bu alanı tercih eder.
+        "performance": {
+            **clean_performance,
+            "excluded_from_learning": max(0, total - len(learning_outcomes)),
+            "provenance_incomplete": provenance_incomplete,
+            "execution_anomalies": execution_anomalies,
+            "legacy_outcomes": legacy_outcomes,
+        },
         "worker_last_run": run_store.load(),
         "proposal_status": _proposal_status(),
         # Birleşik gölge kanıtı: yalnız gözlem, canlı karar/ağırlık/paper etkisi yok.

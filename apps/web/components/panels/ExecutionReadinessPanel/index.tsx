@@ -176,7 +176,19 @@ export function ExecutionReadinessPanel() {
     const matrixCells = authoritativeMatrix?.cells ?? [];
     const actionableSymbols = new Set(
       matrixCells
-        .filter((cell) => cell.actionable && (cell.action === "open_long" || cell.action === "open_short"))
+        .filter((cell) =>
+          (cell.execution_ready ?? cell.actionable) &&
+          (cell.action === "open_long" || cell.action === "open_short"),
+        )
+        .map((cell) => cell.symbol),
+    );
+    const explorationSymbols = new Set(
+      matrixCells
+        .filter(
+          (cell) =>
+            cell.execution_state === "EXPLORATION" &&
+            (cell.action === "open_long" || cell.action === "open_short"),
+        )
         .map((cell) => cell.symbol),
     );
     const matrixUsable = Boolean(authoritativeMatrix) && authoritativeMatrix?.suspended !== true && authoritativeMatrix?.dqs_status !== "BLOCKED";
@@ -309,15 +321,20 @@ export function ExecutionReadinessPanel() {
       },
       {
         id: "actionable_signals",
-        title: "Kaç assette actionable sinyal var?",
+        title: "Kaç asset işlem için hazır?",
         source: "DecisionMatrix / AssetRegistry (tüm trade evreni)",
         passed: matrixUsable && actionableSymbols.size > 0,
-        metric: `${actionableSymbols.size}/${universeCount} asset actionable`,
+        metric: `${actionableSymbols.size}/${universeCount} asset hazır`,
         detail: !matrixUsable
           ? "Decision matrix suspended veya DQS BLOCKED; hiçbir asset için yeni işlem yok."
           : actionableSymbols.size > 0
-            ? `Actionable: ${Array.from(actionableSymbols).join(", ")}.`
-            : "İşlem evrenindeki hiçbir asset'te şu an actionable hücre yok.",
+            ? `Hazır: ${Array.from(actionableSymbols).join(", ")}.` +
+              (explorationSymbols.size
+                ? ` Keşif: ${Array.from(explorationSymbols).join(", ")} (negatif EV veya paper gevşetmesi).`
+                : "")
+            : explorationSymbols.size
+              ? `Şu an yalnız keşif sinyali var: ${Array.from(explorationSymbols).join(", ")}; pozitif kanıt bekleniyor.`
+              : "İşlem evrenindeki hiçbir asset'te işlem hazırlığı tamamlanmadı.",
       },
       {
         id: "session_status",

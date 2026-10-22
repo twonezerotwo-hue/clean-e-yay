@@ -144,20 +144,30 @@ SSL_CERT_FILE="$(python -m certifi)" PYTHONPATH=. uvicorn apps.api.main:app --po
 
 ### Yerel ücretsiz Türkçe ses (Piper)
 
-Sesli brief, sohbet ve bildirimler API üzerinden yerel Piper motorunu kullanır;
-ses verisi karar motoruna yazılmaz. İlk kurulumda PowerShell'i proje kökünde
+Sesli brief, sohbet ve bildirimler API üzerinden aynı yerel Piper motorunu kullanır;
+tarayıcı/uzak TTS yedeği yoktur ve ses verisi karar motoruna yazılmaz. İlk kurulumda PowerShell'i proje kökünde
 çalıştırın:
 
 ```powershell
 .\scripts\setup-piper.ps1
 ```
 
-Script Piper çalıştırıcısını (yoksa `piper-tts` paketini) ve Türkçe modeli
-`data/models/piper/` altına kurar. Model dosyaları büyük olduğu için Git'e
-eklenmez; yeni bir makinede script yeniden çalıştırılabilir. `.env` içinde
-`TTS_PROVIDER=piper` ve `PIPER_MODEL=data/models/piper/tr_TR-dfki-medium.onnx`
-bulunmalıdır. Piper geçici olarak kullanılamazsa yalnızca ses katmanı tarayıcı
-sesine düşer; işlem/risk/LLM akışı durmaz.
+Script güncel `piper-tts==1.8.0` çalıştırıcısını karar/worker ortamından ayrı
+`.voice-venv` içine ve Türkçe modeli `data/models/piper/` altına kurar. RTX
+olan makinelerde CUDA hızlandırmasını ayrıca doğrulayarak kurmak için:
+
+```powershell
+.\scripts\setup-piper.ps1 -Cuda
+```
+
+Model dosyaları büyük olduğu için Git'e eklenmez; yeni bir makinede script
+yeniden çalıştırılabilir. `.env` içinde `PIPER_MODEL` ve `PIPER_BIN` bulunmalıdır.
+Resmî Türkçe Piper kataloğunda şu an tek doğrulanmış model orta kalite
+`tr_TR-dfki-medium` olduğundan, çalıştırıcı yükseltmesi telaffuz modelini
+kendiliğinden değiştirmez; daha kaliteli bir Türkçe model ayrıca doğrulanmadan
+sisteme alınmaz. Piper
+geçici olarak kullanılamazsa yalnızca ses isteği 503 döner;
+işlem/risk/LLM akışı durmaz ve başka bir ses motoruna sessizce geçilmez.
 
 ### Port seçimi
 

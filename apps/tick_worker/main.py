@@ -36,7 +36,7 @@ from packages.decision import (
     shadow,
     shadow_activation,
 )
-from packages.decision.engine import decide_matrix, matrix_view
+from packages.decision.engine import decide_matrix, is_execution_ready, matrix_view
 from packages.learning import (
     calibration_audit,
     event_outcomes,
@@ -419,6 +419,17 @@ async def run_once() -> None:
 
         for d in decisions:
             if d.action in {"blocked", "hold"}:
+                continue
+            # Paper keşfi negatif EV/güven gevşetmesini yalnız gölgede toplar;
+            # otomatik deftere READY kanıtı olmayan hücre yazılmaz. Bu ayrım
+            # RiskGate'i değiştirmez ve owner/manual akışını kapatmaz.
+            if not is_execution_ready(d):
+                log.info(
+                    "execution hold: %s %s %s state=%s ev=%s blocked_by=%s",
+                    d.symbol, d.timeframe, d.action,
+                    "EXPLORATION" if any(str(b).startswith("paper_exploration:") for b in d.blocked_by) else "BLOCKED",
+                    d.expected_value, d.blocked_by,
+                )
                 continue
             side = "long" if d.action == "open_long" else "short"
             # Tek rotalama noktası: session_gate (RiskGate sonrası seans kısıtı) +

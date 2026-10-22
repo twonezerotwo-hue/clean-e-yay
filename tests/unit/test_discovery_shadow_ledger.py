@@ -127,6 +127,22 @@ def test_ttl_expiry_without_bars(monkeypatch, tmp_path):
     assert rv["outcome"] == "expired" and rv["bars_seen"] == 0
 
 
+def test_lifecycle_replay_does_not_forget_old_open_after_tail(monkeypatch, tmp_path):
+    """Active resolution must replay beyond the small API/read tail."""
+    _isolate(monkeypatch, tmp_path)
+    results = {f"S{i}": _signal(f"S{i}") for i in range(1001)}
+    opened = shadow_ledger.process_run(
+        results=results, scanned=list(results), now=T0, bars_for=lambda s, tf, k: []
+    )
+    assert opened == {"tracked_new": 1001, "resolved": 0, "active": 1001}
+
+    expired = shadow_ledger.process_run(
+        results={}, scanned=[], now=T0 + timedelta(hours=80),
+        bars_for=lambda s, tf, k: None,
+    )
+    assert expired == {"tracked_new": 0, "resolved": 1001, "active": 0}
+
+
 # ---------------------------------------------------------------------------
 # aday özeti
 # ---------------------------------------------------------------------------

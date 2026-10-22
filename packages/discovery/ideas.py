@@ -69,16 +69,41 @@ def _market_info(art: Mapping[str, Any]) -> dict[str, dict]:
     for key, kind in (("crypto_universe", "crypto"), ("commodity_universe", "commodity")):
         for c in (art.get(key) or {}).get("candidates") or []:
             out[str(c["symbol"])] = {"kind": kind, "name": c.get("name") or c["symbol"],
+                                     "ticker": c.get("ticker"), "provider_id": c.get("id") or c.get("ticker"),
+                                     "price": c.get("price"), "last_seen": c.get("last_seen"),
                                      "chg_7d_pct": c.get("chg_7d_pct"), "chg_30d_pct": c.get("chg_30d_pct")}
     for s in art.get("rising_sectors") or []:
         out[str(s["symbol"])] = {"kind": "sector_etf", "name": s.get("label") or s["symbol"],
+                                 "ticker": s.get("ticker") or s.get("symbol"),
+                                 "provider_id": s.get("ticker") or s.get("symbol"),
+                                 "price": s.get("price"), "last_seen": s.get("last_seen"),
                                  "chg_7d_pct": None, "chg_30d_pct": None}
     # Haber güdümlü keşif: tüm haber akışından YZ'nin bulup doğruladığı varlıklar.
     for c in (art.get("news_universe") or {}).get("candidates") or []:
         out.setdefault(str(c["symbol"]), {"kind": "news", "name": c.get("name") or c["symbol"],
                                           "asset_type": c.get("asset_type"), "chg_7d_pct": c.get("chg_7d_pct"),
+                                          "ticker": c.get("ticker") or c.get("proposed_ticker"),
+                                          "provider_id": c.get("ticker") or c.get("proposed_ticker"),
+                                          "price": c.get("price"), "last_seen": c.get("last_seen"),
                                           "chg_30d_pct": c.get("chg_30d_pct")})
     return out
+
+
+def _price_provenance(symbol: str, info: Mapping[str, Any]) -> dict:
+    """Discovery/paper source contract; no provider call and no auto-promotion."""
+    try:
+        from packages.data.providers import price as price_provider
+
+        provider = price_provider.live_source_for(symbol)
+    except Exception:
+        provider = None
+    return {
+        "provider": provider,
+        "provider_id": info.get("provider_id") or info.get("ticker") or symbol,
+        "mapped_for_paper": provider is not None,
+        "discovery_price": info.get("price"),
+        "discovery_seen_at": info.get("last_seen"),
+    }
 
 
 def _chains(symbols: set[str]) -> dict[str, list[dict]]:
@@ -187,8 +212,18 @@ def build_ideas(art: Mapping[str, Any], shadow_cands: Mapping[str, Any], forecas
                 "reasons": list(res.get("reasons") or []),
             },
             "scorecard": card,
-            "news": None if not news else {k: news.get(k) for k in ("direction", "strength", "n_headlines", "evidence")},
+            # Haber kanıtını Heart ve Brain için aynı şekliyle taşı. Bu alanlar
+            # yalnızca gözlem/şeffaflık içindir; fikir skoru ve emir akışı aynı
+            # backend hesaplarından gelmeye devam eder.
+            "news": None if not news else {k: news.get(k) for k in (
+                "direction", "strength", "n_headlines", "n_source_headlines", "n_stories",
+                "independent_source_families", "source_families", "article_enriched",
+                "evidence_status", "conflict", "raw_direction", "weight_sum", "evidence",
+            )},
             "market": {"chg_7d_pct": info.get("chg_7d_pct"), "chg_30d_pct": info.get("chg_30d_pct")},
+            # Salt-okuma kaynağı: keşif fiyatı ile paper kaynağı aynı değildir;
+            # ayrımı görünür tut, evrene otomatik varlık ekleme.
+            "source": _price_provenance(sym, info),
             "news_chain": list(chains.get(sym) or []),
             "risk_notes": notes,
         })
@@ -231,6 +266,10 @@ def dossier(idea: Mapping[str, Any]) -> dict:
         "golge_karne": idea["scorecard"],
         "haber_ongorusu": {"yon": news.get("direction"), "guc": news.get("strength"),
                            "baslik_sayisi": news.get("n_headlines"),
+                           "oyku_sayisi": news.get("n_stories"),
+                           "bagimsiz_kaynak_aileleri": news.get("independent_source_families"),
+                           "kanıt_durumu": news.get("evidence_status"),
+                           "celiski": news.get("conflict"),
                            "basliklar": [f"{e.get('source')}: {e.get('title')}" for e in (news.get("evidence") or [])]},
         "fikir_skoru": idea["score"], "bilesenler": idea["components"], "risk_notlari": idea["risk_notes"],
     }
@@ -495,11 +534,48 @@ def evaluation_for(symbol: str) -> dict | None:
     return dict(_load().get("evaluations") or {}).get(symbol)
 
 
+def _backfill_forecast_news(ideas: list[dict], forecasts: Mapping[str, Any]) -> None:
+    """Eski board kayıtlarına forecast provenance alanlarını salt-okuma ekle."""
+    for idea in ideas:
+        forecast = forecasts.get(str(idea.get("symbol") or ""))
+        if not forecast:
+            continue
+        merged = dict(idea.get("news") or {})
+        for key in (
+            "direction", "strength", "n_headlines", "n_source_headlines", "n_stories",
+            "independent_source_families", "source_families", "article_enriched",
+            "evidence_status", "conflict", "raw_direction", "weight_sum", "evidence",
+        ):
+            if key in forecast and forecast.get(key) is not None:
+                merged[key] = forecast[key]
+        idea["news"] = merged
+
+
+def brief_context(limit: int = 3) -> dict:
+    """Brain için hafif ortak fikir özeti; keşif havuzunu yeniden taramaz."""
+    from packages.discovery import news_forecast
+
+    state = _load()
+    ideas = list(state.get("ideas") or [])
+    _backfill_forecast_news(ideas, news_forecast.load_forecasts())
+    return {"generated_at": state.get("generated_at"), "ideas": ideas[:max(1, int(limit))]}
+
+
 def viewmodel() -> dict:
     from packages.discovery import news_discovery, news_forecast
 
     state = _load()
+    # Eski board dosyaları yeni provenance alanını taşımayabilir. Salt-okuma
+    # görünümünde aynı registry eşlemesini tamamla; dosyayı ve karar akışını
+    # değiştirme, keşif fiyatını paper fiyatı gibi göstermeme.
+    for idea in state.get("ideas") or []:
+        if not idea.get("source"):
+            idea["source"] = _price_provenance(str(idea.get("symbol") or ""), {})
     nf = news_forecast.viewmodel()
+    # State dosyası eski bir worker turundan kalmış olabilir. Frontend'in Brain
+    # ve Heart görünümleri aynı güncel forecast kanıtını okuyabilsin diye bu
+    # backfill salt-okuma yapılır; board dosyasını ve karar akışını değiştirmez.
+    _backfill_forecast_news(list(state.get("ideas") or []), news_forecast.load_forecasts())
     return {
         "generated_at": state.get("generated_at"),
         "mode": "observe_only",
@@ -538,6 +614,6 @@ def compact_for_chat(limit: int = 3) -> dict[str, Any]:
             "note": "fikirler hipotetiktir; işlem emri değildir"}
 
 
-__all__ = ["build_ideas", "compact_for_chat", "dossier", "evaluation_for", "fallback_evaluation",
+__all__ = ["brief_context", "build_ideas", "compact_for_chat", "dossier", "evaluation_for", "fallback_evaluation",
            "find", "is_review_candidate", "parse_evaluation", "review_notification", "review_recommendations", "run",
            "score_idea", "viewmodel"]

@@ -6,11 +6,12 @@ decision. It reuses the snapshot's verified news/catalyst and rotation outputs.
 from __future__ import annotations
 
 import math
-import re
 from datetime import UTC, datetime
 from typing import Any
 
 from packages.data.ingestion.pipeline import MarketSnapshot
+from packages.data.providers.news.provenance import source_family as _provenance_source_family
+from packages.data.providers.news.provenance import story_key as _provenance_story_key
 from packages.data.registry.loader import load_thresholds
 from packages.world_state.model import (
     EventInteraction,
@@ -220,29 +221,23 @@ def _headline_text(headline: Any) -> str:
 
 
 def _story_key(text: str) -> str:
-    # Canonicalise light syndication rewrites (word order/punctuation) while
-    # retaining enough content to avoid merging unrelated headlines.
-    synonym = {"tehran": "iran", "warns": "threat", "warned": "threat", "threatens": "threat", "threatening": "threat", "shut": "close", "closed": "close", "halted": "halt"}
-    tokens = [synonym.get(t, t) for t in re.findall(r"[\w']+", text.casefold())
-              if len(t) > 2 and t not in {"the", "and", "for", "from", "says", "said", "with", "could", "may", "strait", "bir", "ile", "için"}]
-    return " ".join(sorted(set(tokens)))
+    # Shared with the news consensus/reporting layer so story grouping cannot
+    # disagree between the world graph and the dashboard evidence view.
+    return _provenance_story_key(text)
 
 
-def _source_family(source: Any) -> str:
-    value = str(source or "unknown").casefold()
-    if re.search(r"\bap\b", value):
-        return "associated press"
-    for family in ("reuters", "associated press", "bloomberg", "afp", "official", "ministry", "government"):
-        if family in value:
-            return family
-    return re.sub(r"^https?://", "", value).split("/")[0] or "unknown"
+def _source_family(source: Any, *, title: Any = None, url: Any = None) -> str:
+    # Google News query buckets are not independent publishers.  Keep this
+    # wrapper for callers while delegating to the shared provenance rule.
+    return _provenance_source_family(source, title=title, url=url)
 
 
 def _source_credibility(source: Any, verified: bool) -> float:
     return {
-        "reuters": 0.90, "associated press": 0.88, "bloomberg": 0.88,
-        "afp": 0.82, "official": 0.92, "ministry": 0.88,
-        "government": 0.90,
+        "direct:reuters": 0.90, "direct:associated_press": 0.88,
+        "direct:bloomberg": 0.88, "direct:afp": 0.82,
+        "direct:official": 0.92, "direct:ministry": 0.88,
+        "direct:government": 0.90,
     }.get(_source_family(source), 0.60 if verified else 0.20)
 
 
@@ -325,7 +320,14 @@ def _geo_events(snapshot: MarketSnapshot, now: datetime, config: dict[str, Any])
         event_type = _event_taxonomy(title, getattr(impact, "event_type", "unknown"))
         threat_only = any(word in lower for word in ("threat", "could", "may", "might", "iddia", "tehdit"))
         verified_rows = [row for row, _ in rows if getattr(row, "verified", False)]
-        families = {_source_family(getattr(row, "source", None)) for row, _ in rows}
+        families = {
+            _source_family(
+                getattr(row, "source", None),
+                title=_headline_text(row),
+                url=getattr(row, "url", None),
+            )
+            for row, _ in rows
+        }
         official = any(_official_source(getattr(row, "source", None), _headline_text(row)) for row in verified_rows)
         confirmed = bool(verified_rows) and not threat_only
         ts = getattr(headline, "ts", None)

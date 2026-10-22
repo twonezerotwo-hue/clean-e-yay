@@ -151,6 +151,20 @@ def test_scorecard_resolves_tracked_forecasts(paths):
     assert card["horizons"]["4h"]["by_kind"]["crypto"]["hit_rate"] == 1.0
 
 
+def test_missing_price_becomes_terminal_expiry(paths):
+    cfg = nf.config(DISC_CFG)
+    state = {"open": [{"id": "old", "symbol": "COPPER", "kind": "commodity",
+                        "direction": "up", "strength": 60, "price": 100.0,
+                        "created_at": (NOW - timedelta(hours=60)).isoformat(),
+                        "done": []}]}
+    out = nf._track(state, {}, {}, cfg, NOW)
+    assert out == {"created": 0, "resolved": 2, "open": 0}
+    rows = [json.loads(line) for line in (paths / "nf_ledger.jsonl").read_text(encoding="utf-8").splitlines()]
+    assert {r["outcome"] for r in rows} == {"expired"}
+    assert all(r["resolution_reason"] == "price_unavailable" for r in rows)
+    assert nf.scorecard()["horizons"]["4h"]["all"]["expired"] == 1
+
+
 def test_stale_registry_impacts_are_reclassified_with_current_classifier(paths, monkeypatch):
     monkeypatch.setattr("packages.data.registry.assets.all_assets",
                         lambda: [SimpleNamespace(symbol="TEM", label="tem", asset_class="risk")])

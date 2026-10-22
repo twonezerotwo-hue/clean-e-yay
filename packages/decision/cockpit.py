@@ -148,6 +148,8 @@ def _top_candidates(cells: list[dict], limit: int = 6) -> list[dict]:
                 "candidate_action": c.get("candidate_action"),
                 "final_action": c.get("action"),
                 "actionable": bool(c.get("actionable")),
+                "execution_ready": bool(c.get("execution_ready", c.get("actionable"))),
+                "execution_state": c.get("execution_state"),
                 "status": c.get("status"),
             }
         )
@@ -308,7 +310,9 @@ def agent_brief_view(
         halt_active=halt_active,
         provider_down=provider_down,
     )
-    can_act = (not suspended) and any(c.get("actionable") for c in cells)
+    can_act = (not suspended) and any(
+        c.get("execution_ready", c.get("actionable")) for c in cells
+    )
     status = compute_status(blocker["code"], can_act)
     data_mode = compute_data_mode(provenance, dqs_status)
 
@@ -320,10 +324,13 @@ def agent_brief_view(
     watch = next_watch_conditions(view, snap, open_positions, now)
     top_blockers = _blocked_by_reasons(cells)[:6]
 
-    actionable_n = sum(1 for c in cells if c.get("actionable"))
+    actionable_n = sum(1 for c in cells if c.get("execution_ready", c.get("actionable")))
+    exploration_n = sum(1 for c in cells if c.get("execution_state") == "EXPLORATION")
     if blocker["code"] == "NONE":
         summary = (
-            f"Agent {status}. Engel yok; {actionable_n} hücre actionable, "
+            f"Agent {status}. Engel yok; {actionable_n} hücre hazır"
+            + (f", {exploration_n} keşif" if exploration_n else "")
+            + ", "
             f"{len(candidates)} aday izleniyor."
         )
     else:
