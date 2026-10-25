@@ -40,3 +40,73 @@ def test_missing_price_is_blocked():
         ["BTCUSD"],
     )
     assert r.status == "BLOCKED"
+
+
+def _mixed_quotes(verified_count: int):
+    symbols = ["BTCUSD", "ETHUSD", "XAUUSD", "XAGUSD", "BRENT"]
+    quotes = [
+        PriceQuote(
+            symbol=symbol,
+            price=100.0,
+            ts=datetime.now(UTC),
+            source="yfinance",
+            verified=(i < verified_count),
+            status="OK",
+        )
+        for i, symbol in enumerate(symbols)
+    ]
+    return compute(quotes, symbols)
+
+
+def test_mixed_one_of_five_verified_blocks():
+    result = _mixed_quotes(1)
+    assert result.completeness == 20.0
+    assert result.decision_usage == 20.0
+    assert result.score <= 20.0
+    assert result.score < 55.0
+    assert result.status == "BLOCKED"
+
+
+def test_mixed_four_of_five_verified_never_ok():
+    result = _mixed_quotes(4)
+    assert result.completeness == 80.0
+    assert result.score <= 69.9
+    assert result.status == "DEGRADED"
+
+
+def test_all_five_verified_stays_ok():
+    result = _mixed_quotes(5)
+    assert result.completeness == 100.0
+    assert result.score >= 99.0
+    assert result.status == "OK"
+
+
+def test_none_verified_stays_blocked():
+    result = _mixed_quotes(0)
+    assert result.score == 0.0
+    assert result.status == "BLOCKED"
+
+
+def test_verified_flag_without_ok_status_not_trusted():
+    quotes = [
+        PriceQuote(
+            symbol="BTCUSD",
+            price=100.0,
+            ts=datetime.now(UTC),
+            source="yfinance",
+            verified=True,
+            status="DATA_UNAVAILABLE",
+        ),
+        PriceQuote(
+            symbol="ETHUSD",
+            price=100.0,
+            ts=datetime.now(UTC),
+            source="yfinance",
+            verified=True,
+            status="OK",
+        ),
+    ]
+    result = compute(quotes, ["BTCUSD", "ETHUSD"])
+    assert result.completeness == 50.0
+    assert result.score <= 50.0
+    assert result.status != "OK"

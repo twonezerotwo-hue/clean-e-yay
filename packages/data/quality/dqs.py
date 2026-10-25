@@ -215,8 +215,21 @@ def apply_extended_gate(report: QualityReport, cfg: dict | None) -> QualityRepor
 
 
 def compute(quotes: list[PriceQuote], expected: list[str]) -> QualityReport:
+    # Preserve the isolated mock-only simulation contract.
+    priced = [q for q in quotes if q.price is not None]
+    mock_only = bool(priced) and all(q.status == "MOCK" for q in priced)
+
+    # A live quote is usable only with an explicitly verified, OK price.
+    trusted = [
+        q for q in quotes
+        if q.price is not None and q.verified and q.status == "OK"
+    ]
+
     fr = _freshness(quotes)
-    co = _completeness(quotes, expected)
+    co = _completeness(
+        quotes if mock_only else trusted,
+        expected,
+    )
     dr = _drift(quotes)
     rc = _reconciliation(quotes)
     du, fb = _decision_usage(quotes)
@@ -224,18 +237,21 @@ def compute(quotes: list[PriceQuote], expected: list[str]) -> QualityReport:
         0.20 * fr + 0.30 * co + 0.15 * dr + 0.10 * rc + 0.25 * du,
         1,
     )
-    # Test/mock fixture'larinin mevcut SIMULATION sozlesmesini koru.
-    # Gercek veri akisinda guvenilir fiyat yoksa karari engelle.
-    priced = [q for q in quotes if q.price is not None]
-    mock_only = bool(priced) and all(
-        q.status == "MOCK" for q in priced
-    )
-    has_verified_live = any(
-        q.verified and q.status == "OK"
-        for q in priced
-    )
-    if priced and not mock_only and not has_verified_live:
-        score = 0.0
+    # Live data must not get an OK score from unverified/missing
+    # expected assets. The numeric cap also reaches RiskGate, which
+    # evaluates dqs_score rather than the textual status.
+    # Mock-only test fixtures preserve their previous behavior.
+    if not mock_only:
+        if not trusted:
+            score = 0.0
+        elif expected:
+            expected_symbols = set(expected)
+            trusted_symbols = {q.symbol for q in trusted}
+            coverage = 100.0 * len(
+                trusted_symbols & expected_symbols
+            ) / len(expected_symbols)
+            if coverage < 100.0:
+                score = round(min(score, coverage, 69.9), 1)
     status = _status(score, co)
     notes: list[str] = []
     missing = [s for s in expected if not any(q.symbol == s and q.price is not None for q in quotes)]
