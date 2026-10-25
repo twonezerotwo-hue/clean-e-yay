@@ -27,6 +27,7 @@ from packages.data.providers.ohlcv import (
     coingecko,
     fixtures,
     history,
+    kraken,
     resample,
     yfinance,
 )
@@ -41,7 +42,7 @@ _MAX_BARS: dict[Timeframe, int] = {
     "1w": 400,
 }
 
-_PROVIDER_NAMES = ("ohlcv_coingecko", "ohlcv_yfinance")
+_PROVIDER_NAMES = ("ohlcv_coingecko", "ohlcv_yfinance", "ohlcv_kraken")
 
 _LOCK = threading.Lock()
 _STATUS: dict[str, dict] = {
@@ -109,6 +110,44 @@ def _provider_for(symbol: str):
 
 
 def _native_bars(symbol: str, tf: Timeframe) -> list[OHLCVBar]:
+    if kraken.enabled_for(symbol):
+        cached_kraken = cache.load(symbol, tf)
+
+        trusted_cache = (
+            cached_kraken is not None
+            and len(cached_kraken.bars) >= 200
+            and all(
+                b.source == "kraken_spot" and b.verified
+                for b in cached_kraken.bars
+            )
+        )
+
+        if trusted_cache and cached_kraken.fresh:
+            return cached_kraken.bars
+
+        live_kraken = kraken.get_bars(symbol, tf)
+
+        if live_kraken is not None:
+            live_kraken = live_kraken[-_MAX_BARS[tf]:]
+            cache.save(symbol, tf, live_kraken)
+            _mark("ohlcv_kraken", ok=True)
+            return live_kraken
+
+        _mark(
+            "ohlcv_kraken",
+            ok=False,
+            error="real_candles_unavailable",
+        )
+
+        if trusted_cache:
+            _mark(
+                "ohlcv_kraken",
+                ok=False,
+                error="serving_previous_real_candles",
+                fallback=True,
+            )
+            return cached_kraken.bars
+
     provider, name = _provider_for(symbol)
     if provider is None or name is None:
         return []
@@ -140,12 +179,29 @@ def get_bars(symbol: str, timeframe: str = "1d") -> list[OHLCVBar]:
     tf: Timeframe = timeframe if timeframe in TIMEFRAMES else "1d"  # type: ignore[assignment]
     if is_fixture_mode():
         return fixtures.get_bars(symbol, tf)
-    if tf == "4h":
+    if tf in ("4h", "1w") and kraken.enabled_for(symbol):
+        direct = _native_bars(symbol, tf)
+
+        if direct and all(
+            b.source == "kraken_spot" and b.verified
+            for b in direct
+        ):
+            bars = direct
+        elif tf == "4h":
+            base = get_bars(symbol, "1h")
+            bars = resample.resample(base, "4h")[-_MAX_BARS["4h"]:]
+        else:
+            base = get_bars(symbol, "1d")
+            bars = resample.resample(base, "1w")[-_MAX_BARS["1w"]:]
+
+    elif tf == "4h":
         base = get_bars(symbol, "1h")
         bars = resample.resample(base, "4h")[-_MAX_BARS["4h"]:]
+
     elif tf == "1w" and symbol in coingecko.SUPPORTED:
         base = get_bars(symbol, "1d")
         bars = resample.resample(base, "1w")[-_MAX_BARS["1w"]:]
+
     else:
         bars = _native_bars(symbol, tf)
     # Bar arşivi (BAR_HISTORY_ENABLED, default OFF → no-op): kapanmış barları

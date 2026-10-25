@@ -41,11 +41,21 @@ _THROTTLE_LOCK = threading.Lock()
 _BARS_CACHE: dict[tuple[str, str], tuple[float, list[OHLCVBar]]] = {}
 
 
-def _ohlcv_ttl_sec() -> float:
+def _ohlcv_ttl_sec(timeframe: str | None = None) -> float:
     try:
-        return float(os.environ.get("COINGECKO_OHLCV_TTL_SEC", _DEFAULT_OHLCV_TTL_SEC))
+        ttl = float(
+            os.environ.get(
+                "COINGECKO_OHLCV_TTL_SEC",
+                _DEFAULT_OHLCV_TTL_SEC,
+            )
+        )
     except (TypeError, ValueError):
-        return float(_DEFAULT_OHLCV_TTL_SEC)
+        ttl = float(_DEFAULT_OHLCV_TTL_SEC)
+
+    if timeframe == "15m":
+        return min(max(ttl, 60.0), 900.0)
+
+    return max(ttl, 60.0)
 
 _SYMBOL_MAP = {
     "BTCUSD": "bitcoin",
@@ -129,7 +139,7 @@ def fetch_by_ticker(cg_id: str, symbol: str, timeframe: Timeframe) -> list[OHLCV
     if plan is None:
         return None
     key = (symbol, timeframe)
-    ttl = _ohlcv_ttl_sec()
+    ttl = _ohlcv_ttl_sec(timeframe)
     now = time.monotonic()
     with _THROTTLE_LOCK:
         cached = _BARS_CACHE.get(key)
