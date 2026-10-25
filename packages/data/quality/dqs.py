@@ -224,6 +224,18 @@ def compute(quotes: list[PriceQuote], expected: list[str]) -> QualityReport:
         0.20 * fr + 0.30 * co + 0.15 * dr + 0.10 * rc + 0.25 * du,
         1,
     )
+    # Test/mock fixture'larinin mevcut SIMULATION sozlesmesini koru.
+    # Gercek veri akisinda guvenilir fiyat yoksa karari engelle.
+    priced = [q for q in quotes if q.price is not None]
+    mock_only = bool(priced) and all(
+        q.status == "MOCK" for q in priced
+    )
+    has_verified_live = any(
+        q.verified and q.status == "OK"
+        for q in priced
+    )
+    if priced and not mock_only and not has_verified_live:
+        score = 0.0
     status = _status(score, co)
     notes: list[str] = []
     missing = [s for s in expected if not any(q.symbol == s and q.price is not None for q in quotes)]
