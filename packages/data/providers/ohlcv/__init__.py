@@ -152,6 +152,10 @@ def _native_bars(symbol: str, tf: Timeframe) -> list[OHLCVBar]:
     if provider is None or name is None:
         return []
     cached = cache.load(symbol, tf)
+    if cached is not None and any(
+        b.source == "kraken_spot" for b in cached.bars
+    ):
+        cached = None
     if cached is not None and cached.fresh:
         return cached.bars
     try:
