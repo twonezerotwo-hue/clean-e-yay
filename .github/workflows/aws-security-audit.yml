@@ -1,0 +1,75 @@
+name: AWS Security Read-Only Audit
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: aws-security-readonly-audit
+  cancel-in-progress: false
+
+jobs:
+  inspect:
+    if: github.repository == 'twonezerotwo-hue/clean-e-yay' && github.ref == 'refs/heads/main'
+    runs-on: [self-hosted, clean-e-yay-ec2]
+    timeout-minutes: 3
+
+    steps:
+      - name: Inspect production without exposing secrets
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd /opt/clean-e-yay
+
+          echo "=== PRODUCTION COMMIT ==="
+          printf 'AWS_SHA=%s\n' "$(git rev-parse HEAD)"
+
+          echo "=== SECRET CONFIGURATION ==="
+          if [ -f .env ]; then
+            echo "AWS_ENV_FILE_PRESENT=true"
+          else
+            echo "AWS_ENV_FILE_PRESENT=false"
+          fi
+
+          if [ -f .env ] && grep -Eq '^[[:space:]]*API_AUTH_TOKEN=[^[:space:]]+' .env; then
+            echo "AWS_ENV_TOKEN_PRESENT=true"
+          else
+            echo "AWS_ENV_TOKEN_PRESENT=false"
+          fi
+
+          echo "=== SERVICE STATUS ==="
+          printf 'SUPERVISOR=%s\n' "$(systemctl is-active eyay-supervisor.service || true)"
+          printf 'WEB=%s\n' "$(systemctl is-active eyay-web.service || true)"
+
+          echo "=== LOCAL API HEALTH ==="
+          health=$(curl --silent --show-error \
+            --output /dev/null \
+            --write-out '%{http_code}' \
+            --connect-timeout 2 \
+            --max-time 8 \
+            http://127.0.0.1:9000/api/v1/health || true)
+
+          printf 'API_HEALTH_HTTP=%s\n' "$health"
+
+          echo "=== AUTHORIZATION PROBE ==="
+          probe=$(curl --silent --show-error \
+            --output /dev/null \
+            --write-out '%{http_code}' \
+            --connect-timeout 2 \
+            --max-time 8 \
+            --request POST \
+            http://127.0.0.1:9000/api/v1/__eyay_auth_nonexistent_probe__ || true)
+
+          printf 'UNAUTHENTICATED_POST_HTTP=%s\n' "$probe"
+
+          if [ "$probe" = "401" ]; then
+            echo "API_AUTH_GUARD=ACTIVE"
+          elif [ "$probe" = "404" ]; then
+            echo "API_AUTH_GUARD=NOT_ENFORCED"
+          else
+            echo "API_AUTH_GUARD=INCONCLUSIVE"
+          fi
+
+          echo "AUDIT_FINISHED=true"
