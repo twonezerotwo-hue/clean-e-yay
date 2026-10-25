@@ -79,6 +79,7 @@ REGISTRY: dict[str, str] = {
     "ALPHAVANTAGE_TTL_SEC": "provider",
     "CHAT_LLM_LOCAL_FIRST": "provider",
     "COINGECKO_OHLCV_TTL_SEC": "provider",
+    "EYAY_KRAKEN_OHLCV_ENABLED": "provider",
     "COINGECKO_PRICE_TTL_SEC": "provider",
     "FINNHUB_TTL_SEC": "provider",
     "FRED_TTL_SEC": "provider",

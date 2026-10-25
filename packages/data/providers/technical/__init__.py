@@ -13,6 +13,7 @@ from datetime import UTC, datetime
 
 from packages.data.providers import ohlcv
 from packages.data.providers.technical import fibonacci, indicators
+from packages.data.providers.technical.observation import observed_at
 from packages.data.types import (
     TIMEFRAMES,
     FibonacciAnalysis,
@@ -110,8 +111,9 @@ def compute_snapshot(
         e for e in tf_result.timeframe_summary.evidence if e.startswith(_LOC_PREFIXES)
     ][:3]
 
-    stale = bool(bars) and (
-        (now - bars[-1].ts).total_seconds() > STALE_AFTER_SEC[timeframe]
+    observed = observed_at(bars, timeframe)
+    stale = observed is not None and (
+        (now - observed).total_seconds() > STALE_AFTER_SEC[timeframe]
     )
     degraded = (
         not bars
@@ -132,7 +134,7 @@ def compute_snapshot(
         direction_score=round(direction_score, 2) if direction_score is not None else None,
         location_gate=round(location_gate, 3) if location_gate is not None else None,
         location_evidence=location_evidence,
-        ts=bars[-1].ts if bars else now,
+        ts=observed if observed is not None else now,
         status="DEGRADED" if degraded else "OK",
         source=bars[-1].source if bars else "none",
         bars_used=len(bars),

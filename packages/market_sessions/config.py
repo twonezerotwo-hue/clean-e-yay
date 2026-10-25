@@ -47,7 +47,26 @@ class MarketSessionsConfig:
 
     def markets_for_asset(self, asset_code: str) -> tuple[MarketConfig, ...]:
         a = asset_code.upper()
-        return tuple(m for m in self.markets if a in {x.upper() for x in m.assets})
+
+        known = tuple(
+            m for m in self.markets
+            if a in {x.upper() for x in m.assets}
+        )
+
+        if known:
+            return known
+
+        from packages.data.registry import custom_assets
+
+        asset = custom_assets.get(a)
+
+        if asset is not None and asset.provider == "coingecko":
+            crypto = self.market_by_id("CRYPTO_GLOBAL")
+
+            if crypto is not None and crypto.kind == "continuous":
+                return (crypto,)
+
+        return known
 
     def market_by_id(self, market_id: str) -> MarketConfig | None:
         return next((m for m in self.markets if m.market_id == market_id), None)
