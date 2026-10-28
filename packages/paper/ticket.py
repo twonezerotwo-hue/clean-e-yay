@@ -28,7 +28,7 @@ from typing import Any
 from packages.data.ingestion.pipeline import MarketSnapshot
 from packages.decision.engine import TradeDecision, is_execution_ready
 from packages.ops.store import write_text_atomic
-from packages.paper import session_gate
+from packages.paper import news_setup, session_gate
 from packages.paper.guards import price_sanity
 from packages.paper.state import PaperState
 from packages.risk.trade_economics import compute_adaptive_targets
@@ -494,6 +494,14 @@ def build_tickets_from_decisions(
     açılabilir ticket veya bildirim üretmez.
     """
     out: list[TradeTicket] = []
+    prices = {
+        str(getattr(quote, "symbol", "")): getattr(quote, "price", None)
+        for quote in (getattr(snap, "prices", None) or ())
+    }
+    verified = {
+        str(getattr(quote, "symbol", "")): bool(getattr(quote, "verified", False))
+        for quote in (getattr(snap, "prices", None) or ())
+    }
     for d in decisions:
         if d.action not in {"open_long", "open_short"}:
             continue
@@ -506,6 +514,24 @@ def build_tickets_from_decisions(
             continue
         if not is_execution_ready(d, suspended=False):
             continue
+        # The notification/ticket lane must use the same final evidence
+        # contract as automatic paper opening.  Without this check the UI
+        # announced a high-priority "new signal" while the tick worker later
+        # rejected the same candidate because no live news+technical setup was
+        # armed.  Such a candidate belongs in observation, not in the audible
+        # trade-signal stream.
+        if news_setup.require_confluence_for_auto_open():
+            side = "long" if d.action == "open_long" else "short"
+            confluence = news_setup.match_confluence(
+                paper_state.news_prepared_setups,
+                symbol=d.symbol,
+                timeframe=d.timeframe,
+                side=side,
+                price=prices.get(d.symbol),
+                data_verified=verified.get(d.symbol, False),
+            )
+            if confluence is None:
+                continue
         t = build_ticket(d, snap, paper_state, base_size_usd=base_size_usd)
         if t.status != "invalid":
             out.append(t)

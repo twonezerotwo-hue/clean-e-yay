@@ -17,6 +17,7 @@ def test_google_query_buckets_are_not_independent_publishers():
     assert source_family("World Wire") == "google_news:world_query"
     assert source_family("Gold Wire") == "google_news:metals_query"
     assert source_family("CNBC") == "direct:cnbc.com"
+    assert source_family("US Foreign Affairs") == source_family("Iran Foreign Affairs")
 
 
 def test_publisher_aliases_collapse_feed_labels_and_urls():

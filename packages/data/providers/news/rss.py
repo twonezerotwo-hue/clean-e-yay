@@ -102,14 +102,68 @@ GEO_FEEDS: Final[tuple[dict[str, str], ...]] = (
     {
         "url": (
             "https://news.google.com/rss/search?q=when:1d+(geopolitics+OR+iran+OR+"
-            "israel+OR+ukraine+OR+taiwan+OR+opec)&hl=en-US&gl=US&ceid=US:en"
+            "israel+OR+ukraine+OR+taiwan+OR+opec+OR+election+OR+senate+OR+"
+            "congress+OR+war+OR+peace+OR+ceasefire)&hl=en-US&gl=US&ceid=US:en"
         ),
         "source": "World Wire",
     },
     # 2026-07-04 RSS genişletme (owner kararı — N1/kat 4, üstteki not).
     {"url": "https://www.theguardian.com/world/rss", "source": "Guardian World"},
     {"url": "https://www.france24.com/en/rss", "source": "France24"},
+    # Foreign-affairs coverage: broad world feeds can miss a same-day official
+    # statement when it is syndicated under a market headline.  These are
+    # Google News transport buckets, not independent publishers; provenance
+    # collapses them into their own query families and the UI labels them by
+    # focus country.  They are read-only evidence and never bypass RiskGate.
+    {
+        "url": (
+            "https://news.google.com/rss/search?q=when:1d+(Trump+OR+%22White+House%22+OR+"
+            "%22State+Department%22+OR+Pentagon+OR+Congress)+(Iran+OR+China+OR+Russia+"
+            "OR+Israel+OR+sanctions+OR+tariffs+OR+military)&hl=en-US&gl=US&ceid=US:en"
+        ),
+        "source": "US Foreign Affairs",
+    },
+    {
+        "url": (
+            "https://news.google.com/rss/search?q=when:1d+(Iran+OR+Tehran+OR+IRGC+OR+"
+            "Khamenei+OR+Hormuz)+(US+OR+Israel+OR+sanctions+OR+nuclear+OR+ceasefire+"
+            "OR+shipping)&hl=en-US&gl=US&ceid=US:en"
+        ),
+        "source": "Iran Foreign Affairs",
+    },
+    {
+        "url": (
+            "https://news.google.com/rss/search?q=when:1d+(China+OR+Beijing+OR+Xi+OR+"
+            "Taiwan+OR+PLA)+(US+OR+trade+OR+sanctions+OR+export+OR+%22South+China+Sea%22+"
+            "OR+military)&hl=en-US&gl=US&ceid=US:en"
+        ),
+        "source": "China Foreign Affairs",
+    },
+    {
+        "url": (
+            "https://news.google.com/rss/search?q=when:1d+(Russia+OR+Moscow+OR+Putin+OR+"
+            "Kremlin+OR+Ukraine)+(US+OR+NATO+OR+sanctions+OR+energy+OR+peace+OR+military)"
+            "&hl=en-US&gl=US&ceid=US:en"
+        ),
+        "source": "Russia Foreign Affairs",
+    },
+    {
+        "url": (
+            "https://news.google.com/rss/search?q=when:1d+(Israel+OR+Netanyahu+OR+IDF+OR+"
+            "Gaza+OR+Hezbollah)+(Iran+OR+US+OR+ceasefire+OR+sanctions+OR+military+OR+"
+            "Lebanon)&hl=en-US&gl=US&ceid=US:en"
+        ),
+        "source": "Israel Foreign Affairs",
+    },
 )
+
+FOREIGN_AFFAIRS_FEED_SOURCES: Final[frozenset[str]] = frozenset({
+    "US Foreign Affairs",
+    "Iran Foreign Affairs",
+    "China Foreign Affairs",
+    "Russia Foreign Affairs",
+    "Israel Foreign Affairs",
+})
 
 
 def default_fetch(url: str) -> str:

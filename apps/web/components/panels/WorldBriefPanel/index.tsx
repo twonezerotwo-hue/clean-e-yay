@@ -59,8 +59,10 @@ export function WorldBriefPanel({ detail = false }: Props) {
           {detail ? (
             <>
               <InfoLine label="Neden önemli" value={brief.why_it_matters ?? "Backend kanıtı yok."} />
+              <InfoLine label="Olay zinciri" value={brief.timeline_summary ?? "Yapılandırılmış olay zinciri yok."} />
               <InfoLine label="İzlenecekler" value={listValues(brief.what_to_watch)} />
               <InfoLine label="Geçersiz kılan kanıt" value={listValues(brief.invalidators)} />
+              <EventTimeline rows={brief.event_timeline ?? []} />
               <EvidenceRows brief={brief} />
             </>
           ) : null}
@@ -68,6 +70,44 @@ export function WorldBriefPanel({ detail = false }: Props) {
       )}
     </PanelFrame>
   );
+}
+
+function EventTimeline({ rows }: { rows: Array<Record<string, unknown>> }) {
+  if (!rows.length) return null;
+  return (
+    <div className="space-y-2">
+      <div className="text-[10px] uppercase tracking-widest text-white/38">Haber olay zinciri</div>
+      <div className="space-y-1.5 rounded-lg border border-white/10 bg-black/20 p-2">
+        {rows.slice(0, 18).map((row, index) => {
+          const phase = String(row.phase_label ?? "Piyasa haberi");
+          const tone = phase.includes("Karşı") || phase.includes("gerilim")
+            ? "text-rose-200"
+            : phase.includes("Barış")
+              ? "text-emerald-200"
+              : "text-white/65";
+          const assets = row.asset_impact && typeof row.asset_impact === "object"
+            ? Object.keys(row.asset_impact as Record<string, unknown>).join(", ")
+            : "";
+          return (
+            <div key={`${String(row.id ?? index)}`} className="grid gap-1 border-b border-white/5 pb-1.5 last:border-0 last:pb-0 sm:grid-cols-[7rem_1fr]">
+              <div className="font-mono text-[10px] text-white/38">{formatTimelineDate(row.ts)}</div>
+              <div className="min-w-0">
+                <div className={`text-[10px] uppercase tracking-wider ${tone}`}>{phase} · {String(row.source ?? "kaynak yok")}</div>
+                <div className="truncate text-xs text-white/70" title={String(row.title ?? "")}>{String(row.title ?? "Başlık yok")}</div>
+                {assets ? <div className="text-[10px] text-white/38">Varlık etkisi: {assets}</div> : null}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function formatTimelineDate(value: unknown): string {
+  const date = new Date(String(value ?? ""));
+  if (Number.isNaN(date.getTime())) return "zaman yok";
+  return date.toLocaleString("tr-TR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
 }
 
 function InfoLine({ label, value, tone = "text-white/65" }: { label: string; value: string; tone?: string }) {

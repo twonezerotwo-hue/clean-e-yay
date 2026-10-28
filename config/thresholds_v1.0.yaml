@@ -1297,8 +1297,15 @@ causal_world:
 # yeniden değerlendirir.
 news_prepared_setups:
   enabled: true
+  # Owner activation: automatic PAPER entries require an armed world/news
+  # event and a same-direction technical confirmation. This only filters the
+  # existing RiskGate → session → attempt_open path; it never sends a broker
+  # order and remains PAPER_SAFE / NO_EXECUTION.
+  require_confluence_for_auto_open: true
   min_confidence: 0.55
   min_abs_world_score: 0.15
+  min_technical_confirmation: 0.10
+  allowed_confluence_states: [STRONG_CONFLUENCE, MODERATE_CONFLUENCE]
   ttl_hours: 72
   max_active: 16
 

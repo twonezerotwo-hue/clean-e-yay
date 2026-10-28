@@ -12,9 +12,11 @@ import hashlib
 import json
 import math
 import os
+import threading
 from collections.abc import Iterable, Mapping
 from dataclasses import asdict, is_dataclass
-from datetime import datetime
+from datetime import UTC, datetime, timedelta
+from pathlib import Path
 from typing import Any
 
 from packages.agent.llm import budget, cache
@@ -32,6 +34,18 @@ _MAX_HEADLINES = 5
 _MAX_EVENTS = 5
 _MAX_ASSETS = 12
 _MAX_FORECASTS = 16
+_MAX_TIMELINE = 18
+_TIMELINE_LOOKBACK_HOURS = 48
+
+# The event ledger is an existing shadow-only observation store.  Keep a small
+# stat-keyed cache here so cockpit polling does not reread the JSONL file on
+# every request.  This cache is narrative-only: it never feeds a decision,
+# gate, position or order.
+_TIMELINE_CACHE_LOCK = threading.Lock()
+_TIMELINE_CACHE_KEY: tuple[str, int, int] | None = None
+_TIMELINE_CACHE_ROWS: list[dict[str, Any]] = []
+_FORECAST_CACHE_KEY: tuple[str, int, int] | None = None
+_FORECAST_CACHE_ROWS: list[dict[str, Any]] = []
 
 # Dünya olay-tipi kodları → kullanıcıya dönük Türkçe etiket. Ham kod (ör.
 # GEOPOLITICAL_ESCALATION / MILITARY_ESCALATION) panelde GÖSTERİLMEZ; bilinmeyen
@@ -112,6 +126,262 @@ def _list_text(value: Any, limit: int = 6) -> list[str]:
     if isinstance(value, str):
         return [value] if value else []
     return [str(item) for item in (value or ()) if item][:limit]
+
+
+def _parse_timestamp(value: Any) -> datetime | None:
+    try:
+        parsed = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+    except (TypeError, ValueError):
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=UTC)
+    return parsed.astimezone(UTC)
+
+
+def _timeline_phase(title: str) -> tuple[str, str]:
+    """Classify an observed headline for an explanatory event chain.
+
+    This is intentionally a conservative presentation label, not a sentiment
+    or trading signal.  Reversal/denial language wins over generic peace words
+    so a headline such as “peace hopes fade” is not shown as a confirmation.
+    """
+    text = " ".join(str(title or "").casefold().split())
+    reversal_terms = (
+        "peace hopes fade", "no ceasefire", "denies", "denied", "reject",
+        "no negotiation", "no negotiations", "no talks", "counter", "senate", "congress", "attack", "strike", "missile",
+        "blockade", "escalat", "war continues", "sanction", "sell-off", "selloff", "market sell-off",
+        "plunge", "plunges", "slump", "tumble", "tumbles", "falls", "fall", "drops", "drop",
+        "risk-off", "risk off", "funding slowdown", "batter risk", "retreat from risk",
+    )
+    # Do not treat ordinary business headlines such as "without a China
+    # deal" or "crypto deals" as peace signals.  A generic ``deal`` token is
+    # therefore intentionally excluded; the explicit ``peace``/``ceasefire``
+    # terms above still classify a real peace deal correctly.
+    peace_terms = (
+        "ceasefire", "peace", "talks", "negotiat", "truce", "resume",
+        "end war", "war will end", "agreement",
+    )
+    if any(term in text for term in reversal_terms):
+        return "REVERSAL_OR_ESCALATION", "Karşı açıklama / gerilim"
+    if any(term in text for term in peace_terms):
+        return "PEACE_SIGNAL", "Barış / ateşkes sinyali"
+    return "NEWS", "Piyasa haberi"
+
+
+def _read_timeline_ledger() -> list[dict[str, Any]]:
+    """Read the existing news event ledger once per file change."""
+    global _TIMELINE_CACHE_KEY, _TIMELINE_CACHE_ROWS
+    path = Path(os.environ.get("NEWS_EVENT_LEDGER_PATH", "data/runtime/news_event_ledger.jsonl"))
+    try:
+        stat = path.stat()
+        key = (str(path.resolve()), int(stat.st_mtime_ns), int(stat.st_size))
+    except OSError:
+        return []
+    with _TIMELINE_CACHE_LOCK:
+        if key == _TIMELINE_CACHE_KEY:
+            return list(_TIMELINE_CACHE_ROWS)
+    rows: list[dict[str, Any]] = []
+    try:
+        # The ledger is capped by the learning module.  The read cap is an
+        # additional safety valve for corrupted/legacy oversized files.
+        with path.open("r", encoding="utf-8") as stream:
+            for index, line in enumerate(stream):
+                if index >= 12_000:
+                    break
+                try:
+                    row = json.loads(line)
+                except (TypeError, ValueError):
+                    continue
+                if not isinstance(row, Mapping):
+                    continue
+                title = str(row.get("title") or "").strip()
+                timestamp = _parse_timestamp(row.get("ts"))
+                symbols = row.get("symbols")
+                if not title or timestamp is None or not isinstance(symbols, Mapping):
+                    continue
+                phase, phase_label = _timeline_phase(title)
+                rows.append({
+                    "id": str(row.get("id") or f"ledger-{index}"),
+                    "ts": timestamp.isoformat(),
+                    "source": str(row.get("source") or "Bilinmeyen kaynak")[:80],
+                    "source_family": str(row.get("source_family") or "")[:80],
+                    "title": title[:240],
+                    "sentiment": str(row.get("sentiment") or "neutral"),
+                    "asset_impact": {str(key): value for key, value in symbols.items()},
+                    "phase": phase,
+                    "phase_label": phase_label,
+                    "url": str(row.get("url") or "")[:500],
+                    "_timestamp": timestamp,
+                })
+    except OSError:
+        rows = []
+    with _TIMELINE_CACHE_LOCK:
+        _TIMELINE_CACHE_KEY = key
+        _TIMELINE_CACHE_ROWS = rows
+    return list(rows)
+
+
+def _read_forecast_headlines() -> list[dict[str, Any]]:
+    """Read the existing 72-hour forecast headline store for prior-day context."""
+    global _FORECAST_CACHE_KEY, _FORECAST_CACHE_ROWS
+    path = Path(os.environ.get("NEWS_FORECAST_PATH", "data/runtime/news_forecast.json"))
+    try:
+        stat = path.stat()
+        key = (str(path.resolve()), int(stat.st_mtime_ns), int(stat.st_size))
+    except OSError:
+        return []
+    with _TIMELINE_CACHE_LOCK:
+        if key == _FORECAST_CACHE_KEY:
+            return list(_FORECAST_CACHE_ROWS)
+    rows: list[dict[str, Any]] = []
+    try:
+        state = json.loads(path.read_text(encoding="utf-8"))
+        headlines = state.get("headlines") if isinstance(state, Mapping) else {}
+        if isinstance(headlines, Mapping):
+            for identifier, item in headlines.items():
+                if not isinstance(item, Mapping):
+                    continue
+                title = str(item.get("title") or "").strip()
+                timestamp = _parse_timestamp(item.get("ts"))
+                impact = item.get("impact")
+                if not title or timestamp is None:
+                    continue
+                phase, phase_label = _timeline_phase(title)
+                # Actor/election/war statements are useful context even when
+                # the classifier did not map them to a ticker.  Ordinary
+                # non-directional market noise remains excluded.
+                if not isinstance(impact, Mapping):
+                    impact = {}
+                if not impact and phase == "NEWS":
+                    continue
+                rows.append({
+                    "id": f"forecast:{identifier}",
+                    "ts": timestamp.isoformat(),
+                    "source": str(item.get("source") or "Bilinmeyen kaynak")[:80],
+                    "source_family": str(item.get("source_family") or "")[:80],
+                    "title": title[:240],
+                    "sentiment": str(item.get("sentiment") or "neutral"),
+                    "asset_impact": {str(key): value for key, value in impact.items()},
+                    "phase": phase,
+                    "phase_label": phase_label,
+                    "url": str(item.get("url") or "")[:500],
+                    "_timestamp": timestamp,
+                })
+    except (OSError, TypeError, ValueError):
+        rows = []
+    with _TIMELINE_CACHE_LOCK:
+        _FORECAST_CACHE_KEY = key
+        _FORECAST_CACHE_ROWS = rows
+    return list(rows)
+
+
+def _event_timeline(
+    headlines: Iterable[Any] | None,
+    *,
+    now: datetime | None = None,
+    lookback_hours: int = _TIMELINE_LOOKBACK_HOURS,
+    limit: int = _MAX_TIMELINE,
+) -> list[dict[str, Any]]:
+    """Return a bounded recent chain, preserving the prior-day phase change."""
+    current = (now or datetime.now(UTC)).astimezone(UTC)
+    cutoff = current - timedelta(hours=lookback_hours)
+    source_rows = _read_timeline_ledger() + _read_forecast_headlines()
+    # The forecast store is populated from the same RSS snapshot as the event
+    # ledger.  Collapse that intentional overlap so one story is not counted
+    # twice in the user-facing chain.
+    unique: dict[str, dict[str, Any]] = {}
+    for row in source_rows:
+        timestamp = row.get("_timestamp", current)
+        if not cutoff <= timestamp <= current + timedelta(minutes=5):
+            continue
+        key = " ".join(str(row.get("title") or "").casefold().split())
+        unique.setdefault(key, row)
+    rows = list(unique.values())
+    seen = {str(row.get("id")) for row in rows}
+    seen_titles = {" ".join(str(row.get("title") or "").casefold().split()) for row in rows}
+    # Include a just-arrived snapshot headline even when the off-tick ledger
+    # has not recorded it yet.  This keeps the brief honest and responsive.
+    for item in headlines or ():
+        row = _row(item)
+        title = str(row.get("title") or "").strip()
+        timestamp = _parse_timestamp(row.get("ts"))
+        if not title or timestamp is None or timestamp < cutoff or timestamp > current + timedelta(minutes=5):
+            continue
+        title_key = " ".join(title.casefold().split())
+        identifier = str(row.get("id") or f"snapshot-{timestamp.isoformat()}-{title[:32]}")
+        if identifier in seen or title_key in seen_titles:
+            continue
+        phase, phase_label = _timeline_phase(title)
+        rows.append({
+            "id": identifier,
+            "ts": timestamp.isoformat(),
+            "source": str(row.get("source") or "Bilinmeyen kaynak")[:80],
+            "source_family": str(row.get("source_family") or "")[:80],
+            "title": title[:240],
+            "sentiment": str(row.get("sentiment") or "neutral"),
+            "asset_impact": row.get("asset_impact") or {},
+            "phase": phase,
+            "phase_label": phase_label,
+            "url": str(row.get("url") or "")[:500],
+            "_timestamp": timestamp,
+        })
+        seen.add(identifier)
+        seen_titles.add(title_key)
+    if not rows:
+        return []
+    rows.sort(key=lambda row: row.get("_timestamp", current))
+    # Keep both the newest snapshot and the prior-day/phase-change context;
+    # taking only the last N records would hide the first side of a reversal.
+    selected: list[dict[str, Any]] = []
+    selected_ids: set[str] = set()
+
+    def add(candidates: Iterable[dict[str, Any]], count: int) -> None:
+        # Callers pass candidates in newest-first order; taking from the
+        # front preserves the intended recent/phase context.
+        for row in list(candidates)[:count]:
+            identifier = str(row.get("id"))
+            if identifier not in selected_ids:
+                selected.append(row)
+                selected_ids.add(identifier)
+
+    add(reversed(rows), 8)
+    prior_day = [row for row in rows if row.get("_timestamp", current).date() < current.date()]
+    add(reversed(prior_day), 6)
+    phase_rows = [row for row in rows if row.get("phase") != "NEWS"]
+    add(reversed(phase_rows), 8)
+    add(reversed(rows), max(0, limit - len(selected)))
+    selected.sort(key=lambda row: row.get("_timestamp", current), reverse=True)
+    output: list[dict[str, Any]] = []
+    for row in selected[:limit]:
+        clean = {key: value for key, value in row.items() if not key.startswith("_")}
+        output.append(clean)
+    return output
+
+
+def _timeline_summary(rows: Iterable[Mapping[str, Any]] | None) -> str:
+    items = [dict(row) for row in (rows or ())]
+    if not items:
+        return "Olay zinciri için yeterli yapılandırılmış haber kaydı yok."
+    peace = [row for row in items if row.get("phase") == "PEACE_SIGNAL"]
+    reversal = [row for row in items if row.get("phase") == "REVERSAL_OR_ESCALATION"]
+    if peace and reversal:
+        peace_ts = min(str(row.get("ts") or "") for row in peace)
+        reversal_ts = min(str(row.get("ts") or "") for row in reversal)
+        if peace_ts <= reversal_ts:
+            return (
+                "Önce barış/ateşkes beklentisi taşıyan açıklamalar, ardından karşı açıklama "
+                "veya gerilim haberleri görüldü; ilk piyasa yönü bu nedenle tersine dönebilir. "
+                "Fiyat tepkisi ayrıca teknik verilerle teyit edilmelidir."
+            )
+        return (
+            "Gerilim haberleri baskınken barış sinyalleri de geldi; haber akışı karışık ve yön "
+            "teyidi gerekiyor. Fiyat tepkisi ayrıca teknik verilerle doğrulanmalıdır."
+        )
+    if peace:
+        return "Barış/ateşkes sinyalleri izleniyor; kalıcılık için bağımsız teyit ve fiyat verisi bekleniyor."
+    if reversal:
+        return "Karşı açıklama veya gerilim haberleri baskın; ilk haber etkisinin devamı teyit edilmedi."
+    return "Yeni haber akışı kaydedildi; henüz belirgin bir karşıt olay zinciri oluşmadı."
 
 
 def _headline_rows(headlines: Iterable[Any] | None) -> list[dict[str, Any]]:
@@ -228,6 +498,8 @@ def _evidence(
     dqs: Mapping[str, Any] | None,
 ) -> dict[str, Any]:
     world = _world_rows(world_state)
+    headline_items = list(headlines or ())
+    timeline = _event_timeline(headline_items)
     graph_assets = set(world["graph"]["affected_assets"])
     scenario_assets: set[str] = set()
     for event in world["scenario"]["events"]:
@@ -242,7 +514,9 @@ def _evidence(
     gate = _row(risk_gate)
     quality = _row(dqs)
     payload = {
-        "headlines": _headline_rows(headlines),
+        "headlines": _headline_rows(headline_items),
+        "event_timeline": timeline,
+        "timeline_summary": _timeline_summary(timeline),
         "world": world,
         "forecast_bands": forecast_rows,
         "portfolio": {
@@ -296,6 +570,11 @@ def _evidence_used(payload: Mapping[str, Any]) -> list[str]:
     used: list[str] = []
     for headline in payload.get("headlines") or ():
         used.append(f"headline:{str(_row(headline).get('title') or '')[:80]}")
+    for row in (payload.get("event_timeline") or ())[:4]:
+        item = _row(row)
+        used.append(
+            f"timeline:{item.get('source') or 'unknown'}:{str(item.get('title') or '')[:70]}"
+        )
     for event in _row(payload.get("world")).get("events") or ():
         row = _row(event)
         used.append(f"event:{row.get('event_id') or _event_type_label(row.get('event_type'))}")
@@ -357,6 +636,8 @@ def _fallback(payload: Mapping[str, Any], *, reason: str) -> dict[str, Any]:
         "model": None,
         "title": _event_title(payload),
         "summary": summary,
+        "event_timeline": payload.get("event_timeline") or [],
+        "timeline_summary": payload.get("timeline_summary") or "",
         "why_it_matters": why,
         "what_to_watch": list(dict.fromkeys(str(item) for item in watch))[:8],
         "invalidators": list(dict.fromkeys(str(item) for item in invalidators))[:8],
@@ -508,6 +789,8 @@ def build_world_brief(
     }
     # Structured evidence is always backend-owned; the model cannot replace it.
     result["affected_assets"] = payload["affected_assets"]
+    result["event_timeline"] = payload.get("event_timeline") or []
+    result["timeline_summary"] = payload.get("timeline_summary") or ""
     result["scenario_report"] = _row(payload["world"]).get("scenario")
     result["forecast_bands"] = payload["forecast_bands"]
     result["evidence_used"] = _evidence_used(payload)

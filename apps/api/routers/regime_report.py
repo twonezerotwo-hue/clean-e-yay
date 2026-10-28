@@ -6,12 +6,34 @@ from fastapi import APIRouter
 from packages.consensus.engine import build as build_consensus
 from packages.data.ingestion.pipeline import get_cached_snapshot
 from packages.data.provenance import data_provenance
+from packages.data.providers.news import classify as news_classify
+from packages.data.providers.news import get_provider_status, list_headlines, rss
 from packages.data.registry import assets as asset_registry
 from packages.learning import event_outcomes
 from packages.regime.classifier import classify
 from packages.risk import event_risk
 
 router = APIRouter(tags=["regime"])
+
+
+def _headline_view(headline) -> dict:
+    """One canonical read-only headline projection for regime and news wall."""
+    return {
+        "id": headline.id,
+        "source": headline.source,
+        "region": headline.region,
+        # Additive multi-actor view: the legacy primary region remains intact.
+        "countries": list(news_classify.detect_regions(headline.title)),
+        "ts": headline.ts.isoformat(),
+        "title": headline.title,
+        "title_tr": headline.title_tr,
+        "sentiment": headline.sentiment,
+        "sentiment_v2": headline.sentiment_v2,
+        "asset_impact": headline.asset_impact,
+        "url": headline.url,
+        "actionable": bool(headline.asset_impact),
+        "freshness": headline.freshness,
+    }
 
 
 @router.get("/regime-report/current")
@@ -78,25 +100,7 @@ def get_regime_report_current() -> dict:
         ],
         "assets": assets,
         "headlines": [
-            {
-                "id": h.id,
-                "source": h.source,
-                "region": h.region,
-                "ts": h.ts.isoformat(),
-                "title": h.title,
-                "title_tr": h.title_tr,
-                "sentiment": h.sentiment,
-                # M1 — v2 sınıflandırıcı gözlemi: owner v1/v2 ayrışmasını buradan
-                # izleyip `news.sentiment_v2` aktivasyon kararını verir.
-                "sentiment_v2": h.sentiment_v2,
-                "asset_impact": h.asset_impact,
-                # UI haber kartlarından kaynak makaleye geçiş için.
-                "url": h.url,
-                # P0 — haber yalnızca bağlam/analytics; deterministik kararı
-                # belirleyen sembol etkisi varsa actionable, yoksa context-only.
-                "actionable": bool(h.asset_impact),
-                "freshness": h.freshness,
-            }
+            _headline_view(h)
             for h in snap.headlines
         ],
         "catalysts": [
@@ -122,6 +126,36 @@ def get_regime_report_current() -> dict:
             "evidence": list(ev.evidence),
             "restrictive": ev.restrictive,
         },
+    }
+
+
+@router.get("/news/current")
+def get_news_current(limit: int = 48) -> dict:
+    """Heart Haberler sekmesi için geniş, salt-okuma haber duvarı.
+
+    Bu endpoint karar snapshot'ını veya paper defterini değiştirmez. Snapshot'ın
+    karar yolundaki kısa başlık penceresinden ayrı olarak tüm doğrulanmış market
+    + foreign-affairs RSS gruplarından daha geniş bir görünüm sunar.
+    """
+    safe_limit = max(1, min(int(limit), 96))
+    headlines = list_headlines(safe_limit)
+    generated_at = max((item.ts for item in headlines), default=None)
+    return {
+        "generated_at": generated_at.isoformat() if generated_at else None,
+        "headlines": [_headline_view(item) for item in headlines],
+        "count": len(headlines),
+        "coverage": {
+            "requested_limit": safe_limit,
+            "market_feeds": len(rss.MARKET_FEEDS),
+            "foreign_affairs_feeds": sum(
+                1 for feed in rss.GEO_FEEDS
+                if feed["source"] in rss.FOREIGN_AFFAIRS_FEED_SOURCES
+            ),
+            "geo_feeds": len(rss.GEO_FEEDS),
+            "source_status": get_provider_status(),
+        },
+        "paper_safe": True,
+        "no_execution": True,
     }
 
 

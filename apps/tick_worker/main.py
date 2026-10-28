@@ -145,9 +145,26 @@ def _pid_alive(pid: int) -> bool:
     if pid <= 0:
         return False
     if os.name == "nt":
-        handle = ctypes.windll.kernel32.OpenProcess(0x1000, False, pid)
+        # A PID can be reused after a worker dies.  The previous check only
+        # asked Windows whether the number existed, so a reused PID belonging
+        # to an unrelated process could freeze the tick loop forever.  Verify
+        # that the live process is still a Python worker before honouring the
+        # lock.  This remains compatible with the unit-test's live Python PID.
+        access = 0x1000  # PROCESS_QUERY_LIMITED_INFORMATION
+        handle = ctypes.windll.kernel32.OpenProcess(access, False, pid)
         if handle:
-            ctypes.windll.kernel32.CloseHandle(handle)
+            try:
+                size = ctypes.c_ulong(32768)
+                buffer = ctypes.create_unicode_buffer(size.value)
+                query = ctypes.windll.kernel32.QueryFullProcessImageNameW
+                query.argtypes = [ctypes.c_void_p, ctypes.c_ulong, ctypes.c_wchar_p, ctypes.POINTER(ctypes.c_ulong)]
+                query.restype = ctypes.c_bool
+                if query(handle, 0, buffer, ctypes.byref(size)):
+                    executable = os.path.basename(buffer.value).casefold()
+                    if executable not in {"python.exe", "pythonw.exe"}:
+                        return False
+            finally:
+                ctypes.windll.kernel32.CloseHandle(handle)
             return True
         return False
     try:
@@ -431,6 +448,25 @@ async def run_once() -> None:
         for d in decisions:
             if d.action in {"blocked", "hold"}:
                 continue
+            if d.action not in {"open_long", "open_short"}:
+                continue
+            news_match = None
+            if news_setup.require_confluence_for_auto_open():
+                news_match = news_setup.match_confluence(
+                    ps.news_prepared_setups,
+                    symbol=d.symbol,
+                    timeframe=d.timeframe,
+                    side="long" if d.action == "open_long" else "short",
+                    price=prices.get(d.symbol),
+                    data_verified=verified_flags.get(d.symbol, False),
+                    now=now,
+                )
+                if news_match is None:
+                    log.info(
+                        "news confluence hold: %s %s %s — armed haber+teknik kurulumu yok",
+                        d.symbol, d.timeframe, d.action,
+                    )
+                    continue
             # Paper keşfi negatif EV/güven gevşetmesini yalnız gölgede toplar;
             # otomatik deftere READY kanıtı olmayan hücre yazılmaz. Bu ayrım
             # RiskGate'i değiştirmez ve owner/manual akışını kapatmaz.
@@ -477,7 +513,10 @@ async def run_once() -> None:
                 entry_price=prices.get(d.symbol),
                 size_multiplier=d.size_multiplier * routed.effective_multiplier,
                 timeframe=d.timeframe,
-                open_reason=d.reason,
+                open_reason=(
+                    f"{d.reason} · news_confluence:{news_match.get('event_id') or news_match.get('setup_id')}"
+                    if news_match else d.reason
+                ),
                 snapshot_id=snap.snapshot_id,
                 fingerprint=d.fingerprint,
                 data_verified=verified_flags.get(d.symbol, False),

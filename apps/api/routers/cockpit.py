@@ -16,11 +16,13 @@ from fastapi import APIRouter
 
 from packages.agent.briefing import _engine_health as agent_engine_health
 from packages.agent.briefing import build_executive
+from packages.agent.llm.premium_brief import build_premium_brief
 from packages.agent.llm.world_report import build_world_brief
 from packages.agent.localization import localize_headline
 from packages.causal.engine import build_shadow
 from packages.data.ingestion.pipeline import get_cached_snapshot
 from packages.data.provenance import data_provenance
+from packages.data.providers.news import classify as news_classify
 from packages.data.providers.news import get_provider_status
 from packages.data.providers.news import rss as news_rss
 from packages.data.providers.news.provenance import build_consensus
@@ -164,6 +166,7 @@ def _build_cockpit_brief() -> dict:
             "id": headline.id,
             "source": headline.source,
             "region": headline.region,
+            "countries": list(news_classify.detect_regions(headline.title)),
             "ts": headline.ts.isoformat(),
             "title": headline.title,
             # API polling is hot-path; full local translation is performed for
@@ -204,6 +207,10 @@ def _build_cockpit_brief() -> dict:
     news_consensus["feed_inventory"] = {
         "market_feeds": len(news_rss.MARKET_FEEDS),
         "geo_feeds": len(news_rss.GEO_FEEDS),
+        "foreign_affairs_feeds": sum(
+            1 for feed in news_rss.GEO_FEEDS
+            if feed["source"] in news_rss.FOREIGN_AFFAIRS_FEED_SOURCES
+        ),
         "discovery_topic_feeds": len(extra_feeds),
         "unique_feed_urls": len(base_urls | set(extra_feeds)),
         "provider_status": get_provider_status(),
@@ -249,6 +256,29 @@ def _build_cockpit_brief() -> dict:
     except Exception:
         news_consensus["processing"] = {"status": "unavailable"}
         news_consensus["article_coverage"] = {"status": "UNAVAILABLE"}
+    # Build the operational read model once and feed the same snapshot into
+    # both the CFO narrative and the dashboard cards.  Previously the premium
+    # brief could only see world/news evidence, so it read like a headline
+    # feed even when the decision engine had already identified the actual
+    # blockers (confidence, timing, EV, stale data, or concentration).
+    agent_brief = agent_brief_view(
+        view, snap, ps, provenance, halt_active=halt_active
+    )
+    # Premium brief is a narrative-only overlay.  It returns immediately
+    # with a deterministic summary and lets the optional LLM rewrite happen
+    # in one background worker when the evidence digest changes.
+    premium_brief = build_premium_brief(
+        headlines=snap.headlines,
+        world_brief=world_brief,
+        news_consensus=news_consensus,
+        world_state=world_state.to_dict(),
+        causal_shadow=causal_shadow.to_dict(),
+        portfolio_risk=portfolio_risk.to_dict(),
+        risk_gate={"action": risk.action, "reason": risk.reason},
+        dqs={"status": snap.quality.status, "score": snap.quality.score},
+        agent_brief=agent_brief,
+        decision_matrix=view,
+    )
     return {
         "generated_at": view["generated_at"],
         "snapshot_id": getattr(snap, "id", None) or getattr(snap, "snapshot_id", None),
@@ -274,13 +304,12 @@ def _build_cockpit_brief() -> dict:
                 for position in ps.open_positions
             ],
         },
-        "agent_brief": agent_brief_view(
-            view, snap, ps, provenance, halt_active=halt_active
-        ),
+        "agent_brief": agent_brief,
         "executive": executive,
         "decision_trace": decision_trace_view(view, snap),
         "world_state": world_state.to_dict(),
         "world_brief": world_brief,
+        "premium_brief": premium_brief,
         "causal_shadow": causal_shadow.to_dict(),
         "portfolio_risk": portfolio_risk.to_dict(),
         # Haber kaynaklı hazırlıklar emir değildir; frontend'e durum, kanıt,

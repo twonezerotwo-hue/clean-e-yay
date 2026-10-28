@@ -43,6 +43,16 @@ export const useRegimeReport = () => {
   });
 };
 
+/** Heart Haberler: karar snapshot'ından bağımsız geniş read-only haber duvarı. */
+export const useNewsCurrent = () => {
+  return useQuery({
+    queryKey: qk.newsCurrent,
+    queryFn: () => api.newsCurrent(48),
+    staleTime: 15_000,
+    ...usePanelQueryPolicy(30_000),
+  });
+};
+
 export const useDashboardState = () => {
   const policy = usePanelQueryPolicy(30_000);
   return useQuery({

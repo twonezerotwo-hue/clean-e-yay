@@ -55,12 +55,86 @@ def _iso(value: datetime) -> str:
 
 def _cfg() -> dict[str, Any]:
     raw = load_thresholds().get("news_prepared_setups") or {}
+    allowed = raw.get("allowed_confluence_states") or ["STRONG_CONFLUENCE", "MODERATE_CONFLUENCE"]
     return {
         "enabled": bool(raw.get("enabled", True)),
+        "require_confluence_for_auto_open": bool(raw.get("require_confluence_for_auto_open", False)),
         "min_confidence": float(raw.get("min_confidence", 0.55)),
         "min_abs_world_score": float(raw.get("min_abs_world_score", 0.15)),
+        "min_technical_confirmation": float(raw.get("min_technical_confirmation", 0.10)),
+        "allowed_confluence_states": {str(item) for item in allowed},
         "ttl_hours": max(1.0, float(raw.get("ttl_hours", 72))),
         "max_active": max(1, int(raw.get("max_active", 16))),
+    }
+
+
+def require_confluence_for_auto_open() -> bool:
+    """Whether automatic paper entries need a live news+technical setup.
+
+    The flag is intentionally read from the owner config and defaults off when
+    absent, preserving legacy behavior for old installations.  Even when on,
+    this helper only filters candidates; the canonical RiskGate and
+    ``attempt_open`` path remain the final authorities.
+    """
+    cfg = _cfg()
+    return bool(cfg["enabled"] and cfg["require_confluence_for_auto_open"])
+
+
+def match_confluence(
+    setups: Iterable[NewsPreparedSetup],
+    *,
+    symbol: str,
+    timeframe: str,
+    side: str,
+    price: float | None,
+    data_verified: bool,
+    now: datetime | None = None,
+) -> dict[str, Any] | None:
+    """Return the newest live setup that agrees with the technical decision.
+
+    This is deliberately restrictive: an armed news intent, a matching side
+    and timeframe, fresh verified price data, positive technical confirmation,
+    and an explicit causal confluence state are all required.  No setup is
+    created or mutated here, so it is safe to call before the normal paper
+    opener.
+    """
+    cfg = _cfg()
+    if not cfg["enabled"] or not data_verified or price is None or price <= 0:
+        return None
+    now = now or datetime.now(UTC)
+    required_side = str(side).lower()
+    candidates: list[NewsPreparedSetup] = []
+    for setup in setups:
+        if setup.status != "ARMED":
+            continue
+        if setup.symbol != symbol or setup.timeframe != timeframe or setup.side != required_side:
+            continue
+        deadline = _parse_time(setup.valid_until)
+        if deadline is not None and deadline <= now:
+            continue
+        if str(setup.world_direction or "").upper() != ("BULLISH" if required_side == "long" else "BEARISH"):
+            continue
+        if setup.confidence is None or float(setup.confidence) < cfg["min_confidence"]:
+            continue
+        confirmation = _float(setup.technical_confirmation)
+        if confirmation is None or abs(confirmation) < cfg["min_technical_confirmation"]:
+            continue
+        if (required_side == "long" and confirmation <= 0) or (required_side == "short" and confirmation >= 0):
+            continue
+        if str(setup.confluence_state or "") not in cfg["allowed_confluence_states"]:
+            continue
+        candidates.append(setup)
+    if not candidates:
+        return None
+    candidates.sort(key=lambda item: item.created_at, reverse=True)
+    setup = candidates[0]
+    return {
+        "setup_id": setup.id,
+        "event_id": setup.event_id,
+        "news_title": setup.news_title,
+        "confluence_state": setup.confluence_state,
+        "technical_confirmation": setup.technical_confirmation,
+        "confidence": setup.confidence,
     }
 
 
@@ -325,6 +399,8 @@ def sync(
             setup.current_price = price
             setup.world_score = world_score
             setup.confidence = confidence
+            setup.technical_confirmation = _float(row.get("technical_confirmation"))
+            setup.confluence_state = str(row.get("confluence_state") or setup.confluence_state or "UNKNOWN")
             setup.last_checked_at = _iso(now)
             setup.snapshot_id = snapshot_id
             counts["updated"] += 1
@@ -359,4 +435,4 @@ def sync(
     return counts
 
 
-__all__ = ["is_live", "sync", "view"]
+__all__ = ["is_live", "match_confluence", "require_confluence_for_auto_open", "sync", "view"]

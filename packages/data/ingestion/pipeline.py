@@ -212,7 +212,11 @@ def build_snapshot(symbols: list[str] | None = None) -> MarketSnapshot:
     # timeout'unu (4-8s) zaten uygular; havuz yalnızca eşzamanlılık ekler.
     with ThreadPoolExecutor(max_workers=5) as _ex:
         _f_prices = _ex.submit(price_provider.get_quotes, syms)
-        _f_news = _ex.submit(news_provider.list_headlines, 14)
+        # Foreign-affairs coverage is part of the world-state input, not only
+        # a UI wall.  Keep a bounded but materially wider window so a fresh
+        # US/Iran/China/Russia/Israel statement cannot be pushed out by market
+        # headlines before causal + technical confluence is evaluated.
+        _f_news = _ex.submit(news_provider.list_headlines, 48)
         _f_cal = _ex.submit(cal_provider.list_catalysts, 8)
         _f_rot = _ex.submit(rot_provider.get_rotation)
         _f_deriv = _ex.submit(

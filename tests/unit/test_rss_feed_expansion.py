@@ -45,6 +45,40 @@ def test_expansion_feeds_present():
     } <= market_sources
 
 
+def test_world_wire_covers_actor_statements_and_reversals():
+    world_wire = next(feed for feed in rss.GEO_FEEDS if feed["source"] == "World Wire")
+    query = world_wire["url"].casefold()
+    assert "election" in query
+    assert "senate" in query
+    assert "congress" in query
+    assert "ceasefire" in query
+
+
+def test_foreign_affairs_feeds_cover_requested_actor_groups():
+    sources = {feed["source"] for feed in rss.GEO_FEEDS}
+    assert {
+        "US Foreign Affairs",
+        "Iran Foreign Affairs",
+        "China Foreign Affairs",
+        "Russia Foreign Affairs",
+        "Israel Foreign Affairs",
+    } <= sources
+    for source in sources & {
+        "US Foreign Affairs", "Iran Foreign Affairs", "China Foreign Affairs",
+        "Russia Foreign Affairs", "Israel Foreign Affairs",
+    }:
+        feed = next(item for item in rss.GEO_FEEDS if item["source"] == source)
+        assert "when:1d" in feed["url"]
+
+
+def test_detect_regions_keeps_multi_actor_headline_visible():
+    from packages.data.providers.news.classify import detect_regions
+
+    assert detect_regions("Trump warns Iran after China and Russia statements")[:4] == (
+        "USA", "Iran", "China", "Russia"
+    )
+
+
 def test_parse_feed_behavior_unchanged_by_expansion():
     # Genişleme yalnız feed LİSTESİNİ büyütür; ayrıştırma birebir aynı —
     # taze item sayılır, 24h+ eskisi atılır, MAX_PER_FEED tavanı korunur.

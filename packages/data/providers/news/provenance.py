@@ -22,6 +22,14 @@ _PROXY_BUCKETS = {
     "bloomberg/ft": "google_news:bloomberg_ft_query",
     "gold wire": "google_news:metals_query",
     "world wire": "google_news:world_query",
+    # These are five query views over the same Google News transport.  Keep
+    # their UI labels distinct but count them as one provenance family so a
+    # story repeated across focus queries cannot fake independent confirmation.
+    "us foreign affairs": "google_news:foreign_affairs_query",
+    "iran foreign affairs": "google_news:foreign_affairs_query",
+    "china foreign affairs": "google_news:foreign_affairs_query",
+    "russia foreign affairs": "google_news:foreign_affairs_query",
+    "israel foreign affairs": "google_news:foreign_affairs_query",
 }
 
 # A feed label is presentation data, not a publisher identity.  The same

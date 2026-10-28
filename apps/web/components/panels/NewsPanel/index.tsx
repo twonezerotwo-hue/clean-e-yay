@@ -1,23 +1,38 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 
 import { PanelFrame } from "@/components/shell/PanelFrame";
 import { PanelHeader } from "@/components/shell/PanelHeader";
 import { LoadingState } from "@/components/shell/LoadingState";
 import { EmptyState } from "@/components/shell/EmptyState";
 import { MobileFlipCard } from "@/components/cockpit/MobileFlipCard";
-import { useRegimeReport } from "@/lib/queries/hooks";
-import { headlineImpactBadges, selectHeadlines } from "@/lib/selectors/regime";
+import { useCockpitBrief, useNewsCurrent, useRegimeReport } from "@/lib/queries/hooks";
+import { headlineImpactBadges } from "@/lib/selectors/regime";
 import { fmtRelative } from "@/lib/format";
 import { DIRECTION_COLOR } from "@/lib/constants";
 import { resolveNewsLink } from "@/lib/news-links";
+import type { NewsHeadline } from "@/types/generated/api";
 import { NewsMapRadarLayer } from "./NewsMapRadarLayer";
 
 // UX4 — ham haber detaydır: ilk birkaç başlık görünür, gerisi collapsed.
 const NEWS_HEAD = 6;
 
-type Headline = ReturnType<typeof selectHeadlines>[number];
+type Headline = NewsHeadline;
+
+const FOCUS_COUNTRIES = [
+  { id: "ALL", label: "Tümü" },
+  { id: "USA", label: "ABD" },
+  { id: "Iran", label: "İran" },
+  { id: "China", label: "Çin" },
+  { id: "Russia", label: "Rusya" },
+  { id: "Israel", label: "İsrail" },
+] as const;
+
+function headlineCountries(h: Headline): string[] {
+  const countries = (h as Headline & { countries?: string[] }).countries;
+  return countries?.length ? countries : h.region ? [h.region] : [];
+}
 
 function HeadlineItem({ h }: { h: Headline }) {
   const badges = headlineImpactBadges(h.asset_impact);
@@ -42,6 +57,11 @@ function HeadlineItem({ h }: { h: Headline }) {
         <span>{h.source}</span>
         <span>·</span>
         <span>{fmtRelative(h.ts)}</span>
+        {headlineCountries(h).slice(0, 3).map((country) => (
+          <span key={country} className="rounded border border-cyan-300/20 px-1 text-cyan-200/65">
+            {country}
+          </span>
+        ))}
         {h.sentiment ? (
           <>
             <span>·</span>
@@ -87,22 +107,41 @@ type NewsPanelProps = {
 };
 
 export function NewsPanel({ defaultView = "list" }: NewsPanelProps) {
-  const { data, isLoading } = useRegimeReport();
-  const items = selectHeadlines(data, 14);
+  const wall = useNewsCurrent();
+  const cockpit = useCockpitBrief();
+  const regime = useRegimeReport();
+  const [focus, setFocus] = useState<(typeof FOCUS_COUNTRIES)[number]["id"]>("ALL");
+  const sourceItems = wall.data?.headlines?.length
+    ? wall.data.headlines
+    : cockpit.data?.headlines?.length
+      ? cockpit.data.headlines
+      : regime.data?.headlines ?? [];
+  const allItems = useMemo(() => sourceItems.slice(0, 96), [sourceItems]);
+  const items = useMemo(
+    () => focus === "ALL"
+      ? allItems
+      : allItems.filter((headline) => headlineCountries(headline).includes(focus)),
+    [allItems, focus],
+  );
+  const isLoading = wall.isLoading && cockpit.isLoading && regime.isLoading;
+  const headlineCount = wall.data?.count ?? allItems.length;
   const head = items.slice(0, NEWS_HEAD);
   const rest = items.slice(NEWS_HEAD);
   const [view, setView] = useState<"list" | "radar">(defaultView);
   const hasItems = items.length > 0;
   const primary = items[0];
   const primaryBadges = primary ? headlineImpactBadges(primary.asset_impact).slice(0, 2) : [];
-  const eventRisk = data?.event_risk?.level ?? "clear";
+  const eventRisk = regime.data?.event_risk?.level ?? "clear";
+  const liveSetups = (cockpit.data?.news_prepared_setups ?? []).filter((setup) =>
+    setup.status === "ARMED" || setup.status === "WAITING_RISK",
+  );
   return (
     <>
     <div className="h-full">
     <PanelFrame id="news" className="h-full">
       <PanelHeader
         title="Haberler"
-        subtitle={`${items.length} başlık`}
+        subtitle={`${items.length}/${headlineCount} başlık · ${wall.data?.coverage?.foreign_affairs_feeds ?? 5} dış politika akışı`}
         actions={
           hasItems ? (
             <div className="flex items-center gap-1 text-[10px] font-mono">
@@ -132,6 +171,27 @@ export function NewsPanel({ defaultView = "list" }: NewsPanelProps) {
           ) : undefined
         }
       />
+      <div className="mb-2 flex flex-wrap gap-1">
+        {FOCUS_COUNTRIES.map((option) => (
+          <button
+            key={option.id}
+            type="button"
+            onClick={() => setFocus(option.id)}
+            className={`rounded border px-1.5 py-0.5 text-[10px] uppercase tracking-wider transition-colors ${
+              focus === option.id
+                ? "border-accent-cyan/60 text-accent-cyan"
+                : "border-white/10 text-white/40 hover:text-white/70"
+            }`}
+          >
+            {option.label}
+          </button>
+        ))}
+      </div>
+      <div className="mb-2 rounded border border-emerald-300/15 bg-emerald-300/[0.03] px-2 py-1 text-[10px] text-emerald-100/65">
+        {liveSetups.length
+          ? `Haber + teknik teyit: ${liveSetups.length} aday RiskGate için izleniyor · emir yalnız paper-safe kapıdan geçer.`
+          : "Haber + grafik teyidi birlikte oluştuğunda aday hazırlanır; haber tek başına emir üretmez."}
+      </div>
       {isLoading ? (
         <LoadingState />
       ) : !hasItems ? (

@@ -45,6 +45,23 @@ paths:
               schema:
                 $ref: "#/components/schemas/RegimeReport"
 
+  /api/v1/news/current:
+    get:
+      operationId: getNewsCurrent
+      summary: Heart Haberler — geniş doğrulanmış market ve dış politika akışı (read-only)
+      parameters:
+        - name: limit
+          in: query
+          required: false
+          schema: { type: integer, minimum: 1, maximum: 96, default: 48 }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NewsWall"
+
   /api/v1/calendar/event-outcomes:
     get:
       operationId: getEventOutcomes
@@ -1657,6 +1674,10 @@ components:
         id: { type: string }
         source: { type: string }
         region: { type: string }
+        countries:
+          type: array
+          items: { type: string }
+          description: Başlıkta geçen tüm ülke/bölge etiketleri; region birincil etikettir.
         ts: { type: string, format: date-time }
         title: { type: string }
         title_tr: { type: string }
@@ -1670,6 +1691,24 @@ components:
         # P0 — haber yalnızca bağlam; sembol etkisi varsa actionable, yoksa context-only.
         actionable: { type: boolean }
         freshness: { type: string, enum: [FRESH, RECENT, STALE] }
+
+    NewsWall:
+      type: object
+      description: >
+        Heart Haberler sekmesinin geniş, salt-okuma haber duvarı. Karar veya
+        emir üretmez; PAPER_SAFE / NO_EXECUTION.
+      required: [headlines, count, paper_safe, no_execution]
+      properties:
+        generated_at: { type: string, format: date-time, nullable: true }
+        headlines:
+          type: array
+          items: { $ref: "#/components/schemas/NewsHeadline" }
+        count: { type: integer }
+        coverage:
+          type: object
+          additionalProperties: true
+        paper_safe: { type: boolean }
+        no_execution: { type: boolean }
 
     Catalyst:
       type: object
@@ -2598,6 +2637,17 @@ components:
         model: { type: string, nullable: true }
         title: { type: string }
         summary: { type: string }
+        timeline_summary:
+          type: string
+          description: Son gözlem penceresindeki barış/gerilim haber zincirinin deterministik özeti.
+        event_timeline:
+          type: array
+          description: >
+            Mevcut haber olay defterinden salt-okuma zaman çizelgesi. Karar,
+            risk kapısı veya emir girdisi değildir.
+          items:
+            type: object
+            additionalProperties: true
         why_it_matters: { type: string }
         what_to_watch:
           type: array
@@ -2628,6 +2678,45 @@ components:
         llm:
           type: object
           additionalProperties: true
+
+    PremiumBrief:
+      type: object
+      description: >
+        Haber kanıtını kısa değişim raporuna dönüştüren narrative-only katman.
+        Emir, risk kapısı veya pozisyon girdisi değildir; LLM gecikirse
+        deterministik özetle çalışır.
+      required: [status, mode, changed, report, execution]
+      properties:
+        status: { type: string, enum: [OK] }
+        mode: { type: string, enum: [ALERT, DELTA, STEADY] }
+        changed: { type: boolean }
+        alert: { type: string, nullable: true }
+        main_idea: { type: string }
+        conclusion: { type: string }
+        market_effect: { type: string }
+        consensus: { type: string }
+        source_note: { type: string }
+        conflicts:
+          type: array
+          items: { type: string }
+        report: { type: string }
+        watch:
+          type: array
+          items: { type: string }
+        affected_assets:
+          type: array
+          items: { type: string }
+        evidence_digest: { type: string }
+        evidence_count: { type: integer }
+        headline_count: { type: integer }
+        story_count: { type: integer, nullable: true }
+        independent_source_families: { type: integer, nullable: true }
+        source_count: { type: integer }
+        updated_at: { type: string, format: date-time }
+        ai:
+          type: object
+          additionalProperties: true
+        execution: { type: string, enum: [NO_EXECUTION] }
 
     WorldGraphContext:
       type: object
@@ -3771,6 +3860,7 @@ components:
         portfolio_risk: { $ref: "#/components/schemas/PortfolioRiskReport" }
         world_state: { $ref: "#/components/schemas/WorldStateEvidence" }
         world_brief: { $ref: "#/components/schemas/WorldBrief" }
+        premium_brief: { $ref: "#/components/schemas/PremiumBrief" }
         causal_shadow:
           type: object
           additionalProperties: true

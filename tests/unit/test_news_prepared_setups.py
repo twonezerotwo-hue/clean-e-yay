@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
 
-from packages.paper.news_setup import sync
+from packages.paper.news_setup import match_confluence, sync
 from packages.paper.state import PaperState
 
 
@@ -115,3 +115,28 @@ def test_news_setup_title_falls_back_to_event_type_without_headline_evidence():
     sync(state, causal_shadow=_shadow(), world_state=world, prices={"BTCUSD": 85_000},
          decisions=[], risk_action="HOLD", snapshot_id="snap-1")
     assert state.news_prepared_setups[0].news_title == "Missile Attack"
+
+
+def test_news_confluence_match_requires_armed_same_direction_verified_technical_setup():
+    state = PaperState(100_000, 100_000)
+    sync(
+        state,
+        causal_shadow=_shadow(),
+        world_state=_evidence(),
+        prices={"BTCUSD": 85_000},
+        decisions=[SimpleNamespace(symbol="BTCUSD", timeframe="1d", action="open_short")],
+        risk_action="HOLD",
+        snapshot_id="snap-1",
+    )
+    match = match_confluence(
+        state.news_prepared_setups,
+        symbol="BTCUSD", timeframe="1d", side="short", price=85_100,
+        data_verified=True,
+    )
+    assert match is not None
+    assert match["confluence_state"] == "STRONG_CONFLUENCE"
+    assert match_confluence(
+        state.news_prepared_setups,
+        symbol="BTCUSD", timeframe="1d", side="short", price=85_100,
+        data_verified=False,
+    ) is None

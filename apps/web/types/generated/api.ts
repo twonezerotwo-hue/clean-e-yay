@@ -43,6 +43,7 @@ export type NewsHeadline = {
   id: string;
   source: string;
   region?: string;
+  countries?: string[];
   ts: string;
   title: string;
   title_tr?: string;
@@ -51,6 +52,15 @@ export type NewsHeadline = {
   // P0 — haber yalnızca bağlam; sembol etkisi varsa actionable, yoksa context-only.
   actionable?: boolean;
   freshness?: "FRESH" | "RECENT" | "STALE";
+};
+
+export type NewsWall = {
+  generated_at?: string | null;
+  headlines: NewsHeadline[];
+  count: number;
+  coverage?: Record<string, unknown>;
+  paper_safe: boolean;
+  no_execution: boolean;
 };
 
 export type EventRiskLevel = "NONE" | "WATCH" | "NO_POSITION_INCREASE";
@@ -426,6 +436,8 @@ export type WorldBrief = {
   model?: string | null;
   title: string;
   summary: string;
+  timeline_summary?: string;
+  event_timeline?: Array<Record<string, unknown>>;
   why_it_matters?: string;
   what_to_watch?: string[];
   invalidators?: string[];
@@ -438,6 +450,31 @@ export type WorldBrief = {
   missing_data?: string[];
   warnings?: string[];
   llm?: Record<string, unknown>;
+};
+
+export type PremiumBrief = {
+  status: "OK";
+  mode: "ALERT" | "DELTA" | "STEADY";
+  changed: boolean;
+  alert?: string | null;
+  main_idea: string;
+  conclusion: string;
+  market_effect: string;
+  consensus: string;
+  source_note: string;
+  conflicts?: string[];
+  report: string;
+  watch?: string[];
+  affected_assets?: string[];
+  evidence_digest?: string;
+  evidence_count?: number;
+  headline_count?: number;
+  story_count?: number | null;
+  independent_source_families?: number | null;
+  source_count?: number;
+  updated_at?: string;
+  ai?: Record<string, unknown>;
+  execution: "NO_EXECUTION";
 };
 
 // v2.6 — persona katmanı (narrative-only; decision path'e yazmaz).
@@ -1795,6 +1832,7 @@ export type CockpitBrief = {
   portfolio_risk?: PortfolioRiskReport;
   world_state?: WorldStateEvidence;
   world_brief?: WorldBrief;
+  premium_brief?: PremiumBrief;
   causal_shadow?: Record<string, unknown>;
   news_prepared_setups?: NewsPreparedSetup[];
 };

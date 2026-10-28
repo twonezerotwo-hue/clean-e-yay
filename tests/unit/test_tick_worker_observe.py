@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import asyncio
 import importlib
+from types import SimpleNamespace
 
 import pytest
 
@@ -78,3 +79,27 @@ def test_get_tickets_reads_worker_store(env) -> None:
     assert [t["id"] for t in body["tickets"]] == ["tk-1"]  # filtreli: yalnız active
     assert body["total"] == 1
     assert body["last_built_at"] is not None
+
+
+def test_ticket_notifications_share_news_confluence_gate(monkeypatch) -> None:
+    """A signal without final news+technical confluence is not announced."""
+    from packages.paper import ticket
+
+    decision = SimpleNamespace(
+        action="open_short",
+        symbol="XAGUSD",
+        timeframe="15m",
+        risk=SimpleNamespace(action="ALLOW_NORMAL"),
+    )
+    snapshot = SimpleNamespace(
+        prices=[SimpleNamespace(symbol="XAGUSD", price=53.2, verified=True)]
+    )
+    state = SimpleNamespace(news_prepared_setups=[])
+    monkeypatch.setattr(ticket, "is_execution_ready", lambda *_args, **_kwargs: True)
+    monkeypatch.setattr(ticket.news_setup, "require_confluence_for_auto_open", lambda: True)
+    monkeypatch.setattr(ticket.news_setup, "match_confluence", lambda *_args, **_kwargs: None)
+    assert ticket.build_tickets_from_decisions([decision], snapshot, state) == []
+
+    monkeypatch.setattr(ticket.news_setup, "match_confluence", lambda *_args, **_kwargs: {"setup_id": "s1"})
+    monkeypatch.setattr(ticket, "build_ticket", lambda *_args, **_kwargs: SimpleNamespace(status="active"))
+    assert len(ticket.build_tickets_from_decisions([decision], snapshot, state)) == 1

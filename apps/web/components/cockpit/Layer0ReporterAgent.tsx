@@ -13,7 +13,7 @@ import {
 import { api } from "@/lib/api/client";
 import { streamChat, type ChatStreamStatus } from "@/lib/api/chatStream";
 import { selectDqs, selectSnapshotMeta } from "@/lib/selectors/snapshot";
-import type { AgentBriefing, ChatResponse, ChatTurn, Position } from "@/types/generated/api";
+import type { AgentBriefing, ChatResponse, ChatTurn, Position, PremiumBrief, WorldBrief } from "@/types/generated/api";
 import { HologramAssetIdeaBanner } from "./HologramAssetIdeaBanner";
 import { normalizeVoiceText } from "@/lib/voiceText";
 import {
@@ -73,6 +73,8 @@ type BriefingEngine = {
 type AgentBriefingWithExecutive = AgentBriefing & {
   executive?: ExecutiveBriefing | null;
   engine?: BriefingEngine | null;
+  world_brief?: WorldBrief;
+  premium_brief?: PremiumBrief;
 };
 
 /** Center "ilk ekran" durum paneli için CockpitView'den gelen hazır veriler. */
@@ -981,6 +983,14 @@ export function Layer0ReporterAgent({
 
   const briefingData = briefing.data as AgentBriefingWithExecutive | undefined;
   const executive = briefingData?.executive ?? null;
+  const timelineSummary = briefingData?.world_brief?.timeline_summary?.trim() ?? "";
+  const timelineRows = briefingData?.world_brief?.event_timeline ?? [];
+  const premiumBrief = briefingData?.premium_brief;
+  const premiumModeLabel = premiumBrief?.mode === "ALERT"
+    ? "SON DAKİKA"
+    : premiumBrief?.mode === "DELTA"
+      ? "GÜNCELLENDİ"
+      : "GÜNCEL";
 
   const briefingText = useMemo(() => {
     if (executive) {
@@ -995,6 +1005,23 @@ export function Layer0ReporterAgent({
       .map((item) => localizeBriefText(`${CATEGORY_LABEL[item.category] ?? item.category}: ${item.title}`))
       .join(". ");
   }, [briefingData?.headlines, executive]);
+
+  const voiceTimeline = timelineRows
+    .filter((row) => row.phase !== "NEWS")
+    .slice(0, 3)
+    .map((row) => `${String(row.source ?? "haber kaynağı")}: ${String(row.title ?? "başlık yok")}`)
+    .join(". ");
+  const premiumVoiceText = premiumBrief
+    ? [
+        premiumBrief.alert,
+        premiumBrief.report || premiumBrief.main_idea,
+      ].filter(Boolean).join(". ")
+    : "";
+  const voiceBriefingText = premiumVoiceText
+    ? premiumVoiceText
+      : timelineSummary
+        ? `${briefingText} Dünya olay zinciri: ${timelineSummary}${voiceTimeline ? ` Öne çıkan haberler: ${voiceTimeline}` : ""}`
+        : briefingText;
 
   const dataQualityPulse = useMemo<Layer0DataQualityPulse | null>(() => {
     const dqs = selectDqs(snapshot.data);
@@ -1080,13 +1107,13 @@ export function Layer0ReporterAgent({
   };
 
   const readBriefing = () => {
-    if (!briefingText.trim()) return;
+    if (!voiceBriefingText.trim()) return;
     unlockAudio();
     // Yalnızca kullanıcının o anda gördüğü metni oku. Brief polling'i sırasında
     // eski metnin otomatik olarak kuyruğa girmesi ses ile ekranın ayrışmasına
     // neden oluyordu; brief artık kendiliğinden okunmaz.
     setVoiceError(null);
-    void speak(briefingText, true);
+    void speak(voiceBriefingText, true);
   };
 
   // Gönderim kilidi: stream sürerken ya da non-stream fallback beklerken yeni soru yok.
@@ -1431,12 +1458,38 @@ export function Layer0ReporterAgent({
           }}
           className="layer0-voice-scroll mt-2 min-h-0 flex-1 space-y-2 overflow-y-auto pr-1"
         >
-          {messages.length === 0 ? (
-            <div className="layer0-chat-msg layer0-chat-msg--agent">
-              <div className="layer0-chat-msg-role">E-yAy · brifing</div>
-              <div className="layer0-chat-msg-text">{briefingText}</div>
+          {premiumBrief ? (
+            <div
+              className={`rounded-xl border px-3 py-3 text-xs leading-5 ${
+                premiumBrief.alert
+                  ? "border-amber-300/45 bg-amber-300/[0.09] text-amber-50"
+                  : "border-accent-cyan/25 bg-accent-cyan/[0.06] text-white/80"
+              }`}
+            >
+              <div className="mb-2 flex items-center justify-between gap-2 border-b border-white/10 pb-2">
+                <div className={`text-[10px] font-semibold uppercase tracking-[0.18em] ${premiumBrief.alert ? "text-amber-200" : "text-accent-cyan/85"}`}>
+                  {premiumBrief.alert ? "Son dakika · dikkat" : "E-yAy · yönetici brifi"}
+                </div>
+                <span className="text-[10px] uppercase tracking-widest text-white/40">{premiumModeLabel}</span>
+              </div>
+              {premiumBrief.alert ? (
+                <div className="mb-2 rounded-md border border-amber-200/25 bg-black/20 px-2 py-1.5 text-amber-50">
+                  {premiumBrief.alert}
+                </div>
+              ) : null}
+              <div className="whitespace-pre-line text-[13px] leading-6 text-white/85">
+                {premiumBrief.report || premiumBrief.main_idea}
+              </div>
+              <div className="mt-2 border-t border-white/10 pt-2 text-[10px] text-white/40">
+                {premiumBrief.source_note} · {premiumBrief.evidence_count ?? 0} kanıt · {premiumBrief.ai?.status === "UPDATING" ? "AI değerlendiriyor" : premiumBrief.ai?.status === "READY" ? "AI raporu hazır" : "güvenli kısa özet"}
+              </div>
             </div>
-          ) : null}
+          ) : (
+            <div className="layer0-chat-msg layer0-chat-msg--agent">
+              <div className="layer0-chat-msg-role">E-yAy</div>
+              <div className="layer0-chat-msg-text">Brief hazırlanıyor.</div>
+            </div>
+          )}
           {messages.map((message, index) => (
             <div
               key={`${message.role}-${index}`}

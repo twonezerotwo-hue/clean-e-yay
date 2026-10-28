@@ -58,9 +58,12 @@ import type {
   GovernorProposalsView,
   TradeTicketList,
   AgentBriefing,
+  WorldBrief,
+  PremiumBrief,
   VoiceSpeakRequest,
   AgentQuorumMatrixResponse,
   MarketSessionsTradeUniverseResponse,
+  NewsWall,
 } from "@/types/generated/api";
 // Sözleşmesiz (observe-only) öğrenme görünümleri — codegen'e girmedi (I serisi).
 import type {
@@ -489,6 +492,8 @@ export const api = {
   health: () => fetchJSON<Health>("/api/v1/health"),
   systemHealth: () => fetchJSON<SystemHealth>("/api/v1/system/health"),
   regimeReport: () => fetchJSON<RegimeReport>("/api/v1/regime-report/current"),
+  newsCurrent: (limit = 48) =>
+    fetchJSON<NewsWall>(`/api/v1/news/current?limit=${Math.max(1, Math.min(96, limit))}`),
   eventOutcomes: () => fetchJSON<EventOutcomesView>("/api/v1/calendar/event-outcomes"),
   dashboardState: () => fetchJSON<DashboardState>("/api/v1/dashboard/state"),
   aiReport: () => fetchJSON<AIReport>("/api/v1/ai-report/current"),
@@ -794,7 +799,7 @@ export const api = {
   // Layer-0 and cockpit must read one authoritative snapshot.  The legacy
   // /agent/briefing endpoint can be a different cache cycle, so adapt the
   // unified cockpit view to the small AgentBriefing shape used by the panel.
-  agentBriefing: async (): Promise<AgentBriefing> => {
+  agentBriefing: async (): Promise<AgentBriefing & { world_brief?: WorldBrief; premium_brief?: PremiumBrief }> => {
     const brief = await fetchJSON<CockpitBrief>("/api/v1/cockpit/brief");
     const agent = brief.agent_brief;
     return {
@@ -804,6 +809,8 @@ export const api = {
       regime_label: agent.regime,
       stale: brief.engine?.stale ?? false,
       executive: brief.executive,
+      world_brief: brief.world_brief,
+      premium_brief: brief.premium_brief,
       engine: brief.engine,
       dqs: {
         score: agent.dqs?.score ?? 0,

@@ -222,7 +222,7 @@ REGIONS: Final[tuple[str, ...]] = (
 
 _REGION_KEYWORDS: Final[dict[str, frozenset[str]]] = {
     "USA": frozenset({
-        "united states", "u.s.", "america", "washington", "white house",
+        "united states", "u.s.", "u.s", "us ", "america", "washington", "white house",
         "congress", "senate", "pentagon", "federal reserve", "fed ",
         "trump", "treasury", "american",
     }),
@@ -254,20 +254,27 @@ _REGION_KEYWORDS: Final[dict[str, frozenset[str]]] = {
 
 
 def detect_region(text: str) -> str | None:
+    regions = detect_regions(text)
+    return regions[0] if regions else None
+
+
+def detect_regions(text: str) -> tuple[str, ...]:
+    """Return every country/region materially mentioned by a headline.
+
+    ``region`` remains the legacy primary label (the highest scoring region),
+    while this additive view prevents a headline such as ``Trump warns Iran``
+    from being displayed as if it belonged to only one country.  Ordering is
+    deterministic: score descending, then the canonical ``REGIONS`` order.
+    """
     lower = text.lower()
-    scores: dict[str, int] = {}
-    for region, keywords in _REGION_KEYWORDS.items():
-        n = sum(1 for kw in keywords if kw in lower)
-        if n:
-            scores[region] = n
-    if not scores:
-        return None
-    # Eşitlikte REGIONS sırası belirleyici (deterministik)
-    best = max(scores.values())
-    for region in REGIONS:
-        if scores.get(region) == best:
-            return region
-    return None
+    scored = [
+        (region, sum(1 for kw in keywords if kw in lower))
+        for region, keywords in _REGION_KEYWORDS.items()
+    ]
+    scored = [(region, score) for region, score in scored if score]
+    order = {region: index for index, region in enumerate(REGIONS)}
+    scored.sort(key=lambda item: (-item[1], order[item[0]]))
+    return tuple(region for region, _ in scored)
 
 
 # ---------------------------------------------------------------------------

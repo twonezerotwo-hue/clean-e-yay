@@ -233,7 +233,11 @@ while ($true) {
     }
 
     # web - production build (next start from .next-prod; stable, no HMR rot)
-    Ensure-HttpSvc "web" "http://127.0.0.1:4000/" 4000 $node "next" `
+    # Match this checkout's production listener, not an unrelated Next dev
+    # server (for example a different project on port 3000).  The old broad
+    # "next" match made the keeper believe the web service was alive and it
+    # never started the C:\dev\clean-e-yay build.
+    Ensure-HttpSvc "web" "http://127.0.0.1:4000/" 4000 $node "start -p 4000" `
         @("node_modules/next/dist/bin/next","start","-p","4000","-H","127.0.0.1") `
         $web "$logs\web.out.log" "$logs\web.err.log" ([ref]$webDown)
 

@@ -55,6 +55,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/news/current": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Heart Haberler — geniş doğrulanmış market ve dış politika akışı (read-only) */
+        get: operations["getNewsCurrent"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/calendar/event-outcomes": {
         parameters: {
             query?: never;
@@ -1747,6 +1764,8 @@ export interface components {
             id: string;
             source: string;
             region?: string;
+            /** @description Başlıkta geçen tüm ülke/bölge etiketleri; region birincil etikettir. */
+            countries?: string[];
             /** Format: date-time */
             ts: string;
             title: string;
@@ -1761,6 +1780,18 @@ export interface components {
             actionable?: boolean;
             /** @enum {string} */
             freshness?: "FRESH" | "RECENT" | "STALE";
+        };
+        /** @description Heart Haberler sekmesinin geniş, salt-okuma haber duvarı. Karar veya emir üretmez; PAPER_SAFE / NO_EXECUTION. */
+        NewsWall: {
+            /** Format: date-time */
+            generated_at?: string | null;
+            headlines: components["schemas"]["NewsHeadline"][];
+            count: number;
+            coverage?: {
+                [key: string]: unknown;
+            };
+            paper_safe: boolean;
+            no_execution: boolean;
         };
         Catalyst: {
             id: string;
@@ -2397,6 +2428,12 @@ export interface components {
             model?: string | null;
             title: string;
             summary: string;
+            /** @description Son gözlem penceresindeki barış/gerilim haber zincirinin deterministik özeti. */
+            timeline_summary?: string;
+            /** @description Mevcut haber olay defterinden salt-okuma zaman çizelgesi. Karar, risk kapısı veya emir girdisi değildir. */
+            event_timeline?: {
+                [key: string]: unknown;
+            }[];
             why_it_matters?: string;
             what_to_watch?: string[];
             invalidators?: string[];
@@ -2416,6 +2453,37 @@ export interface components {
             llm?: {
                 [key: string]: unknown;
             };
+        };
+        /** @description Haber kanıtını kısa değişim raporuna dönüştüren narrative-only katman. Emir, risk kapısı veya pozisyon girdisi değildir; LLM gecikirse deterministik özetle çalışır. */
+        PremiumBrief: {
+            /** @enum {string} */
+            status: "OK";
+            /** @enum {string} */
+            mode: "ALERT" | "DELTA" | "STEADY";
+            changed: boolean;
+            alert?: string | null;
+            main_idea?: string;
+            conclusion?: string;
+            market_effect?: string;
+            consensus?: string;
+            source_note?: string;
+            conflicts?: string[];
+            report: string;
+            watch?: string[];
+            affected_assets?: string[];
+            evidence_digest?: string;
+            evidence_count?: number;
+            headline_count?: number;
+            story_count?: number | null;
+            independent_source_families?: number | null;
+            source_count?: number;
+            /** Format: date-time */
+            updated_at?: string;
+            ai?: {
+                [key: string]: unknown;
+            };
+            /** @enum {string} */
+            execution: "NO_EXECUTION";
         };
         WorldGraphContext: {
             graph_version?: string;
@@ -3205,6 +3273,7 @@ export interface components {
             portfolio_risk?: components["schemas"]["PortfolioRiskReport"];
             world_state?: components["schemas"]["WorldStateEvidence"];
             world_brief?: components["schemas"]["WorldBrief"];
+            premium_brief?: components["schemas"]["PremiumBrief"];
             causal_shadow?: {
                 [key: string]: unknown;
             };
@@ -4618,6 +4687,28 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RegimeReport"];
+                };
+            };
+        };
+    };
+    getNewsCurrent: {
+        parameters: {
+            query?: {
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NewsWall"];
                 };
             };
         };
