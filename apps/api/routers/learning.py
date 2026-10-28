@@ -25,6 +25,8 @@ from packages.learning import (
     council_scorecard,
     dataset_health,
     edge_report,
+    external_edge,
+    forward_test,
     empirical_pwin,
     entry_exit_quality,
     evidence_bus,
@@ -614,6 +616,22 @@ def get_backtest_challenger() -> dict:
     B-4 terfi durumu. Canlı ağırlık/paper/karara ASLA dokunmaz. Flag
     BACKTEST_CHALLENGER_ENABLED kapalıysa enabled=false + boş görünüm."""
     return challenger_trainer.viewmodel()
+
+
+@router.get("/learning/external-edge")
+def get_external_edge() -> dict:
+    """Chronological external holdout edge report (read-only, paper-safe).
+
+    The holdout is measured from the isolated challenger stream and is never
+    promoted automatically into weights or execution.
+    """
+    return external_edge.viewmodel()
+
+
+@router.get("/learning/forward-test-90d")
+def get_forward_test_90d() -> dict:
+    """Ninety-day automatic-paper forward test (read-only, no execution)."""
+    return forward_test.viewmodel()
 
 
 @router.get("/learning/technical-books-replay")

@@ -968,6 +968,28 @@ def run_once() -> dict:
         paper_canary_status = f"ERROR:{type(exc).__name__}"
         errors.append(f"paper_canary:{type(exc).__name__}")
 
+    # External chronological holdout + 90-day paper forward ledger. Both are
+    # read-only evidence artifacts; neither can change weights, gates, or paper
+    # execution. They are intentionally best-effort so the learning worker
+    # remains available if an artifact is temporarily unreadable.
+    external_edge_status = "ERROR"
+    try:
+        from packages.learning import external_edge
+        external_edge_result = external_edge.run_if_due()
+        external_edge_status = str(external_edge_result.get("status", "UNKNOWN"))
+    except Exception as exc:  # defensive — worker patlamamalı
+        external_edge_status = f"ERROR:{type(exc).__name__}"
+        errors.append(f"external_edge:{type(exc).__name__}")
+
+    forward_test_status = "ERROR"
+    try:
+        from packages.learning import forward_test
+        forward_result = forward_test.run()
+        forward_test_status = str(forward_result.get("status", "UNKNOWN"))
+    except Exception as exc:  # defensive — worker patlamamalı
+        forward_test_status = f"ERROR:{type(exc).__name__}"
+        errors.append(f"forward_test_90d:{type(exc).__name__}")
+
     # Birleşik gölge kanıtı (ucuz, salt-gözlem). Aday giriş ile final kapı
     # sonucunu, asset terfi karnesini, haber teyidini, teknik yarışı ve exit
     # canary'yi tek artifact'ta toplar. Hiçbir kararı/ağırlığı/paper state'i
@@ -1048,6 +1070,8 @@ def run_once() -> dict:
         "tf_scoring_v2_shadow_status": tf_scoring_v2_shadow_status,  # D6 v2 gölge skoru (DISABLED=flag OFF)
         "tf_scoring_race_status": tf_scoring_race_status,  # R5 yarış defteri (DISABLED=flag OFF)
         "paper_canary_status": paper_canary_status,  # kanıt-kapılı owner önerisi (salt-gözlem)
+        "external_edge_status": external_edge_status,  # kronolojik dış holdout (read-only)
+        "forward_test_90d_status": forward_test_status,  # 90 günlük paper ileri test
         "shadow_routing_status": shadow_routing_status,  # birleşik gölge kanıtı (salt-gözlem)
         "duration_ms": duration_ms,        # CP1 — perf görünürlüğü
         "over_budget": over_budget,        # CP1 — bütçe aşımı bayrağı

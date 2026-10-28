@@ -17,7 +17,6 @@ PAPER_SAFE / NO_EXECUTION — karar üretmez, mevcut state'i sunar.
 """
 from __future__ import annotations
 
-import hashlib
 import json
 import os
 from dataclasses import asdict, dataclass, field
@@ -29,6 +28,7 @@ from packages.data.ingestion.pipeline import MarketSnapshot
 from packages.decision.engine import TradeDecision, is_execution_ready
 from packages.ops.store import write_text_atomic
 from packages.paper import news_setup, session_gate
+from packages.paper.signal_identity import build_signal_id
 from packages.paper.guards import price_sanity
 from packages.paper.state import PaperState
 from packages.risk.trade_economics import compute_adaptive_targets
@@ -46,6 +46,13 @@ class TradeTicket:
     status: str             # active | insufficient_rr | invalid
     expires_at: str
     ttl_seconds: int
+
+    # One identity shared by decision → ticket → notification → position.
+    # Optional keeps old runtime ticket files and external callers readable.
+    signal_id: str | None = None
+    position_id: str | None = None
+    news_setup_id: str | None = None
+    news_event_id: str | None = None
 
     summary: dict[str, Any] = field(default_factory=dict)
     technical_detail: dict[str, Any] = field(default_factory=dict)
@@ -274,6 +281,9 @@ def _build_technical_detail(
             "fingerprint": decision.fingerprint,
             "candidate_action": decision.candidate_action,
             "final_action": decision.action,
+            "signal_id": signal_id,
+            "news_setup_id": news_setup_id,
+            "news_event_id": news_event_id,
         },
     }
 
@@ -331,6 +341,10 @@ def build_ticket(
     paper_state: PaperState,
     *,
     base_size_usd: float = 25_000.0,
+    signal_id: str | None = None,
+    news_setup_id: str | None = None,
+    news_event_id: str | None = None,
+    position_id: str | None = None,
 ) -> TradeTicket:
     """Karar + snapshot + state → TradeTicket. Sadece actionable kararlar için.
 
@@ -344,18 +358,15 @@ def build_ticket(
     # Ticket identity describes the signal, not the tick timestamp.  A new
     # timestamp on every worker cycle previously made the same signal look
     # new, which produced duplicate cards and notifications.
-    signal_key = "|".join(
-        str(value or "")
-        for value in (
-            decision.symbol,
-            decision.timeframe,
-            side or decision.action,
-            decision.fingerprint,
-            decision.candidate_action,
-        )
+    signal_id = signal_id or build_signal_id(
+        symbol=decision.symbol,
+        timeframe=decision.timeframe,
+        side=side or decision.action,
+        fingerprint=decision.fingerprint,
+        news_setup_id=news_setup_id,
+        news_event_id=news_event_id,
     )
-    signal_hash = hashlib.sha1(signal_key.encode("utf-8")).hexdigest()[:10]
-    ticket_id = f"tk_{decision.symbol}_{decision.timeframe}_{signal_hash}"
+    ticket_id = f"tk_{signal_id[4:]}"
 
     if side is None:
         return TradeTicket(
@@ -366,6 +377,10 @@ def build_ticket(
             status="invalid",
             expires_at=expires_at.isoformat(),
             ttl_seconds=int(tf_hours * 3600),
+            signal_id=signal_id,
+            position_id=position_id,
+            news_setup_id=news_setup_id,
+            news_event_id=news_event_id,
         )
 
     # Entry: current price (snapshot prices)
@@ -386,6 +401,10 @@ def build_ticket(
             status="invalid",
             expires_at=expires_at.isoformat(),
             ttl_seconds=int(tf_hours * 3600),
+            signal_id=signal_id,
+            position_id=position_id,
+            news_setup_id=news_setup_id,
+            news_event_id=news_event_id,
             technical_detail={
                 "safety_checks": {
                     "blocked_by": ["price_sanity"],
@@ -473,6 +492,10 @@ def build_ticket(
         status=status,
         expires_at=expires_at.isoformat(),
         ttl_seconds=int(tf_hours * 3600),
+        signal_id=signal_id,
+        position_id=position_id,
+        news_setup_id=news_setup_id,
+        news_event_id=news_event_id,
         summary=summary,
         technical_detail=technical_detail,
         display=display,
@@ -485,6 +508,8 @@ def build_tickets_from_decisions(
     paper_state: PaperState,
     *,
     base_size_usd: float = 25_000.0,
+    only_signal_ids: set[str] | None = None,
+    position_ids_by_signal: dict[str, str] | None = None,
 ) -> list[TradeTicket]:
     """Bir tick'in tüm karar matrisinden ticket listesi üret.
 
@@ -520,6 +545,7 @@ def build_tickets_from_decisions(
         # rejected the same candidate because no live news+technical setup was
         # armed.  Such a candidate belongs in observation, not in the audible
         # trade-signal stream.
+        confluence = None
         if news_setup.require_confluence_for_auto_open():
             side = "long" if d.action == "open_long" else "short"
             confluence = news_setup.match_confluence(
@@ -532,7 +558,29 @@ def build_tickets_from_decisions(
             )
             if confluence is None:
                 continue
-        t = build_ticket(d, snap, paper_state, base_size_usd=base_size_usd)
+        side = "long" if d.action == "open_long" else "short"
+        news_setup_id = str((confluence or {}).get("setup_id") or "") or None
+        news_event_id = str((confluence or {}).get("event_id") or "") or None
+        signal_id = build_signal_id(
+            symbol=d.symbol,
+            timeframe=d.timeframe,
+            side=side,
+                fingerprint=getattr(d, "fingerprint", None),
+            news_setup_id=news_setup_id,
+            news_event_id=news_event_id,
+        )
+        if only_signal_ids is not None and signal_id not in only_signal_ids:
+            continue
+        t = build_ticket(
+            d,
+            snap,
+            paper_state,
+            base_size_usd=base_size_usd,
+            signal_id=signal_id,
+            news_setup_id=news_setup_id,
+            news_event_id=news_event_id,
+            position_id=(position_ids_by_signal or {}).get(signal_id),
+        )
         if t.status != "invalid":
             out.append(t)
     return out

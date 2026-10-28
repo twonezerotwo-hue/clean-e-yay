@@ -86,6 +86,9 @@ def route_to_manual_ready(
     reason: str | None = None,
     fingerprint: str | None = None,
     snapshot_id: str | None = None,
+    signal_id: str | None = None,
+    news_setup_id: str | None = None,
+    news_event_id: str | None = None,
 ) -> ManualReady | None:
     """Queue a candidate for owner approval. Returns the entry, or None if silently
     blocked (already queued/rejected — no spam)."""
@@ -103,11 +106,15 @@ def route_to_manual_ready(
         reason=reason,
         fingerprint=fingerprint,
         snapshot_id=snapshot_id,
+        signal_id=signal_id,
+        news_setup_id=news_setup_id,
+        news_event_id=news_event_id,
     )
     state.manual_ready.append(entry)
     audit.record(
         "MANUAL_READY_QUEUED", position_id=entry.id, symbol=symbol, timeframe=timeframe,
         side=side, reason=reason, fingerprint=fingerprint, snapshot_id=snapshot_id,
+        signal_id=signal_id, news_setup_id=news_setup_id, news_event_id=news_event_id,
     )
     return entry
 
@@ -200,6 +207,9 @@ def approve(
         timeframe=entry.timeframe,
         open_reason=f"owner_approved:{entry.reason or ''}",
         snapshot_id=entry.snapshot_id,
+        signal_id=entry.signal_id,
+        news_setup_id=entry.news_setup_id,
+        news_event_id=entry.news_event_id,
         fingerprint=entry.fingerprint,
         open_dqs=open_dqs,
         open_risk_action=open_risk_action,

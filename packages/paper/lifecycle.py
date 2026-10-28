@@ -187,6 +187,9 @@ def open_position(
     timeframe: str = "1d",
     open_reason: str | None = None,
     snapshot_id: str | None = None,
+    signal_id: str | None = None,
+    news_setup_id: str | None = None,
+    news_event_id: str | None = None,
     scale_in: bool = False,
     open_dqs: float | None = None,
     open_risk_action: str | None = None,
@@ -288,6 +291,9 @@ def open_position(
         pending_exit_reason=None,
         open_reason=open_reason,
         snapshot_id=snapshot_id,
+        signal_id=signal_id,
+        news_setup_id=news_setup_id,
+        news_event_id=news_event_id,
         scale_in=bool(scale_in),
         open_dqs=open_dqs,
         open_risk_action=open_risk_action,
@@ -326,6 +332,9 @@ def open_position(
         reason=open_reason,
         fingerprint=fingerprint,
         snapshot_id=snapshot_id,
+        signal_id=signal_id,
+        news_setup_id=news_setup_id,
+        news_event_id=news_event_id,
         scale_in=bool(scale_in),
         # TF-farkında trailing shadow (eski düz değer paraşüt + kıyas): canlı
         # kullanılan vs eski-düz. Flag OFF iken ikisi eşit (bayt-aynı gözlem).
@@ -383,6 +392,9 @@ def attempt_open(
     scale_in: bool = False,
     open_reason: str | None = None,
     snapshot_id: str | None = None,
+    signal_id: str | None = None,
+    news_setup_id: str | None = None,
+    news_event_id: str | None = None,
     fingerprint: str | None = None,
     data_verified: bool = False,
     predicted_confidence: float | None = None,
@@ -416,6 +428,7 @@ def attempt_open(
     audit.record(
         "OPEN_ATTEMPT", symbol=symbol, timeframe=timeframe, side=side,
         price_used=entry_price, reason=open_reason, snapshot_id=snapshot_id,
+        signal_id=signal_id, news_setup_id=news_setup_id, news_event_id=news_event_id,
         scale_in=bool(scale_in),
     )
     if entry_price is None or entry_price <= 0:
@@ -423,6 +436,7 @@ def attempt_open(
         audit.record(
             "OPEN_BLOCKED", symbol=symbol, timeframe=timeframe, side=side,
             reason="no_price", snapshot_id=snapshot_id,
+            signal_id=signal_id, news_setup_id=news_setup_id, news_event_id=news_event_id,
         )
         return None, decision
     # Price sanity (absolute bounds): cross-pair contamination / absurd price must
@@ -436,6 +450,7 @@ def attempt_open(
             "OPEN_BLOCKED", symbol=symbol, timeframe=timeframe, side=side,
             reason="price_insane", detail=sane_reason, price_used=entry_price,
             snapshot_id=snapshot_id,
+            signal_id=signal_id, news_setup_id=news_setup_id, news_event_id=news_event_id,
         )
         return None, decision
     # A zero multiplier is a valid non-entry decision, never a valid paper
@@ -453,6 +468,7 @@ def attempt_open(
             side=side,
             reason="zero_size",
             snapshot_id=snapshot_id,
+            signal_id=signal_id, news_setup_id=news_setup_id, news_event_id=news_event_id,
         )
         return None, decision
     # State anomaly: corrupt accounting (equity/realized/daily PnL absurd) blocks
@@ -476,6 +492,7 @@ def attempt_open(
         audit.record(
             "OPEN_BLOCKED", symbol=symbol, timeframe=timeframe, side=side,
             reason=decision["reason"], snapshot_id=snapshot_id, duplicate=True,
+            signal_id=signal_id, news_setup_id=news_setup_id, news_event_id=news_event_id,
         )
         return None, decision
     # Tekrar-giriş kilidi (2026-07-11) — YALNIZ otomatik sinyal açılışına. Kapanış
@@ -497,6 +514,7 @@ def attempt_open(
                 audit.record(
                     "OPEN_BLOCKED", symbol=symbol, timeframe=timeframe, side=side,
                     reason=rg.get("reason") or "reentry_locked", snapshot_id=snapshot_id,
+                    signal_id=signal_id, news_setup_id=news_setup_id, news_event_id=news_event_id,
                 )
                 decision["allowed"] = False
                 decision["reason"] = rg.get("reason") or "reentry_locked"
@@ -507,6 +525,7 @@ def attempt_open(
         data_verified=data_verified, predicted_confidence=predicted_confidence,
         raw_confidence=raw_confidence, confidence_source=confidence_source,
         timeframe=timeframe, open_reason=open_reason, snapshot_id=snapshot_id,
+        signal_id=signal_id, news_setup_id=news_setup_id, news_event_id=news_event_id,
         scale_in=scale_in, open_dqs=open_dqs, open_risk_action=open_risk_action,
         open_session_action=open_session_action,
         open_session_phase=open_session_phase,
@@ -572,6 +591,9 @@ def close_position(
         lifecycle_status=lifecycle_status,
         open_reason=pos.open_reason,
         snapshot_id=pos.snapshot_id,
+        signal_id=pos.signal_id,
+        news_setup_id=pos.news_setup_id,
+        news_event_id=pos.news_event_id,
         open_dqs=pos.open_dqs,
         open_risk_action=pos.open_risk_action,
         open_blocked_by=getattr(pos, "open_blocked_by", None),

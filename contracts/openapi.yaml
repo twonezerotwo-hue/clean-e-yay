@@ -776,6 +776,32 @@ paths:
                 type: object
                 additionalProperties: true
 
+  /api/v1/learning/external-edge:
+    get:
+      operationId: getLearningExternalEdge
+      summary: Chronological external holdout edge report (paper-safe, read-only)
+      responses:
+        "200":
+          description: OK (status is INSUFFICIENT, UNPROVEN, or READY)
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+
+  /api/v1/learning/forward-test-90d:
+    get:
+      operationId: getLearningForwardTest90d
+      summary: Ninety-day automatic paper forward test (read-only)
+      responses:
+        "200":
+          description: RUNNING or COMPLETE paper-safe metrics
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+
   /api/v1/learning/technical-books-replay:
     get:
       operationId: getLearningTechnicalBooksReplay

@@ -77,6 +77,10 @@ class Position:
     pending_exit_reason: str | None = None  # neden exit bekliyor (fiyat yoksa)
     open_reason: str | None = None          # learning handoff: karar gerekçesi
     snapshot_id: str | None = None          # learning handoff: kaynak snapshot
+    # Canonical identity shared by decision → ticket → notification → position.
+    signal_id: str | None = None
+    news_setup_id: str | None = None
+    news_event_id: str | None = None
     scale_in: bool = False                  # explicit scale-in (default: yok)
     # Signal attribution (additive): karar izi açılışta damgalanır.
     open_dqs: float | None = None           # açılış anındaki DQS
@@ -145,6 +149,9 @@ class Trade:
     lifecycle_status: str = "CLOSED"   # CLOSED (normal) | FORCE_CLOSED (zorla)
     open_reason: str | None = None
     snapshot_id: str | None = None
+    signal_id: str | None = None
+    news_setup_id: str | None = None
+    news_event_id: str | None = None
     # Signal attribution (additive): pozisyondan miras alınan karar izi.
     open_dqs: float | None = None
     open_risk_action: str | None = None
@@ -188,6 +195,9 @@ class ManualReady:
     reason: str | None = None
     fingerprint: str | None = None
     snapshot_id: str | None = None
+    signal_id: str | None = None
+    news_setup_id: str | None = None
+    news_event_id: str | None = None
     rejected_at: str | None = None  # set when owner rejected (→ silent block)
 
 

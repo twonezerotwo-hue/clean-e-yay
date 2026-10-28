@@ -66,6 +66,9 @@ def entry_for(trade: Trade) -> dict:
         "side": trade.side,
         "timeframe": trade.timeframe,
         "opening_signal": {
+            "signal_id": getattr(trade, "signal_id", None),
+            "news_setup_id": getattr(trade, "news_setup_id", None),
+            "news_event_id": getattr(trade, "news_event_id", None),
             "fingerprint": trade.fingerprint,
             "reason": trade.open_reason,
             "snapshot_id": trade.snapshot_id,

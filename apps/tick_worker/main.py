@@ -49,6 +49,7 @@ from packages.notifications import detector as notif_detector
 from packages.ops import heartbeat
 from packages.paper import manual_queue, news_setup, ticket
 from packages.paper import state as paper_state
+from packages.paper.signal_identity import build_signal_id
 from packages.paper.lifecycle import _ensure_daily_anchor, attempt_open, flatten_all
 from packages.paper.lifecycle import tick as price_tick
 from packages.paper.recheck import compute_rechecks
@@ -375,47 +376,16 @@ async def run_once() -> None:
         t_decide = time.monotonic()  # B5 — aşama süresi görünürlüğü
         now = datetime.now(UTC)
 
-        # T1 — kokpit gözlem yüzeyi (recheck önerisi + Trade Ticket kartları +
-        # tick-bazlı bildirim tespiti). Eski API tick motorundan taşındı; prod
-        # tick'i bu worker attığı için orada fiilen ölüydü (ticket listesi hep
-        # boş kalıyordu). Salt-gözlem: karar zincirine dokunmaz; best-effort,
-        # hata tick'i düşürmez.
+        # Recheck state is prepared before the opening pass. Ticket and
+        # notification state is deliberately emitted *after* attempt_open;
+        # otherwise a signal could be audible while RiskGate/session/duplicate
+        # checks rejected the corresponding paper position.
         try:
             rechecks = compute_rechecks(ps.open_positions, decisions)
             ps.last_rechecks = [r.to_dict() for r in rechecks]
             ps.last_recheck_at = now.isoformat()
-            # Read the previous persisted set before replacing it below.
-            seen_ticket_ids = set(_PREV_STATE["ticket_ids"])
-            if not seen_ticket_ids:
-                seen_ticket_ids = {
-                    str(row.get("id"))
-                    for row in (ticket.load_last().get("tickets") or [])
-                    if row.get("status") == "active" and row.get("id")
-                }
-            tickets = ticket.build_tickets_from_decisions(decisions, snap, ps)
-            ticket_dicts = [t.to_dict() for t in tickets]
-            ticket.save_last(ticket_dicts)
-            notifs = []
-            # The worker may restart independently of the API.  The persisted
-            # set above prevents an unchanged signal from being announced as
-            # new after every restart.
-            notifs += notif_detector.detect_new_tickets(seen_ticket_ids, ticket_dicts)
-            notifs += notif_detector.detect_expiring_tickets(ticket_dicts)
-            notifs += notif_detector.detect_recheck_changes(_PREV_STATE["verdicts"], ps.last_rechecks)
-            notifs += notif_detector.detect_risk_gate_change(
-                _PREV_STATE["risk_action"], _risk.action, _risk.reason,
-            )
-            notifs += notif_detector.detect_dqs_drop(
-                _PREV_STATE["dqs"], snap.quality.score if snap.quality else None,
-            )
-            if notifs:
-                append_many(notifs)
-            _PREV_STATE["ticket_ids"] = {t["id"] for t in ticket_dicts if t.get("status") == "active"}
-            _PREV_STATE["verdicts"] = {r["position_id"]: r["verdict"] for r in ps.last_rechecks}
-            _PREV_STATE["risk_action"] = _risk.action
-            _PREV_STATE["dqs"] = snap.quality.score if snap.quality else None
         except Exception:
-            log.exception("gözlem yüzeyi (ticket/recheck/bildirim) üretimi başarısız — tick devam ediyor")
+            log.exception("recheck yüzeyi üretimi başarısız — tick devam ediyor")
 
         # Olay-sonrası takip (salt-gözlem): takvim olayı açıklanınca sonucu
         # başlıklardan çıkarır, beklenen vs gerçekleşen asset tepkisini ölçer,
@@ -445,6 +415,13 @@ async def run_once() -> None:
                 log.exception("conflict gate precompute failed (tick devam ediyor, fail-open)")
                 conflict_by_symbol = {}
 
+        # Keep the ticket linked while the same signal is already open; a
+        # duplicate-open rejection must not make the position's ticket vanish.
+        opened_by_signal: dict[str, str] = {
+            str(getattr(pos, "signal_id", "")): pos.id
+            for pos in ps.open_positions
+            if getattr(pos, "signal_id", None)
+        }
         for d in decisions:
             if d.action in {"blocked", "hold"}:
                 continue
@@ -479,6 +456,16 @@ async def run_once() -> None:
                 )
                 continue
             side = "long" if d.action == "open_long" else "short"
+            news_setup_id = str((news_match or {}).get("setup_id") or "") or None
+            news_event_id = str((news_match or {}).get("event_id") or "") or None
+            signal_id = build_signal_id(
+                symbol=d.symbol,
+                timeframe=d.timeframe,
+                side=side,
+                fingerprint=d.fingerprint,
+                news_setup_id=news_setup_id,
+                news_event_id=news_event_id,
+            )
             # Tek rotalama noktası: session_gate (RiskGate sonrası seans kısıtı) +
             # Faz 8 Conflict Gate — sıralama/öncelik bkz. packages/decision/gates.py.
             routed = gates.apply_gates(
@@ -495,6 +482,9 @@ async def run_once() -> None:
                     reason=routed.reason,
                     fingerprint=d.fingerprint,
                     snapshot_id=snap.snapshot_id,
+                    signal_id=signal_id,
+                    news_setup_id=news_setup_id,
+                    news_event_id=news_event_id,
                 )
                 continue
             # P1 — açılış tek yoldan (attempt_open): duplicate/scale-in politikası +
@@ -518,6 +508,9 @@ async def run_once() -> None:
                     if news_match else d.reason
                 ),
                 snapshot_id=snap.snapshot_id,
+                signal_id=signal_id,
+                news_setup_id=news_setup_id,
+                news_event_id=news_event_id,
                 fingerprint=d.fingerprint,
                 data_verified=verified_flags.get(d.symbol, False),
                 predicted_confidence=d.confidence,
@@ -542,6 +535,7 @@ async def run_once() -> None:
                 **routed.session_attribution,
             )
             if pos is not None:
+                opened_by_signal[signal_id] = pos.id
                 paper_actions += 1
                 log.info(
                     "open: %s %s %s @ %.4f size=%.0f valid_until=%s",
@@ -564,8 +558,47 @@ async def run_once() -> None:
                     rg.get("reason"), "açılış engellendi" if rg.get("active") else "açılışa izin (flag kapalı)",
                 )
 
-        txn.commit()  # T3 — defter mutasyon bölümü biter: revision +1, kilit bırakılır
+        txn.commit()  # T3 — persist the paper mutation before any notification.
         t_commit = time.monotonic()  # B5 — aşama süresi görünürlüğü
+
+        # T1 — one truthful surface: only successfully opened paper positions
+        # create active tickets and audible notifications. Rechecks/risk/DQS
+        # notifications remain observational and are appended alongside them.
+        try:
+            seen_ticket_ids = set(_PREV_STATE["ticket_ids"])
+            if not seen_ticket_ids:
+                seen_ticket_ids = {
+                    str(row.get("id"))
+                    for row in (ticket.load_last().get("tickets") or [])
+                    if row.get("status") == "active" and row.get("id")
+                }
+            tickets = ticket.build_tickets_from_decisions(
+                decisions,
+                snap,
+                ps,
+                only_signal_ids=set(opened_by_signal),
+                position_ids_by_signal=opened_by_signal,
+            )
+            ticket_dicts = [t.to_dict() for t in tickets]
+            ticket.save_last(ticket_dicts)
+            notifs = []
+            notifs += notif_detector.detect_new_tickets(seen_ticket_ids, ticket_dicts)
+            notifs += notif_detector.detect_expiring_tickets(ticket_dicts)
+            notifs += notif_detector.detect_recheck_changes(_PREV_STATE["verdicts"], ps.last_rechecks)
+            notifs += notif_detector.detect_risk_gate_change(
+                _PREV_STATE["risk_action"], _risk.action, _risk.reason,
+            )
+            notifs += notif_detector.detect_dqs_drop(
+                _PREV_STATE["dqs"], snap.quality.score if snap.quality else None,
+            )
+            if notifs:
+                append_many(notifs)
+            _PREV_STATE["ticket_ids"] = {t["id"] for t in ticket_dicts if t.get("status") == "active"}
+            _PREV_STATE["verdicts"] = {r["position_id"]: r["verdict"] for r in ps.last_rechecks}
+            _PREV_STATE["risk_action"] = _risk.action
+            _PREV_STATE["dqs"] = snap.quality.score if snap.quality else None
+        except Exception:
+            log.exception("gözlem yüzeyi (ticket/recheck/bildirim) üretimi başarısız — tick devam ediyor")
 
         # Haber/causal hazırlık kuyruğu: dünya kanıtını ayrı bir gözlem katmanı
         # olarak saklar. Bu çağrı emir açmaz; sonraki tick'te mevcut karar,

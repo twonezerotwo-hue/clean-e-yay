@@ -57,6 +57,14 @@ def test_new_ticket_short_side_label():
     assert "SAT" in out[0].body_short
 
 
+def test_new_ticket_carries_position_and_signal_identity():
+    out = detector.detect_new_tickets(
+        set(), [_ticket(position_id="pos_1", signal_id="sig_1")]
+    )
+    assert out[0].position_id == "pos_1"
+    assert out[0].signal_id == "sig_1"
+
+
 # ---------- detect_expiring_tickets ----------
 
 def test_expiring_ticket_within_window():
