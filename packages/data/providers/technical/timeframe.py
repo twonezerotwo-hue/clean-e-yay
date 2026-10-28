@@ -18,6 +18,7 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 
 from packages.data.providers.technical import candles, fibonacci, indicators, patterns, reversal
+from packages.data.providers.technical.observation import observed_at
 from packages.data.registry import guard_overrides
 from packages.data.registry.loader import load_thresholds
 from packages.data.types import (
@@ -684,8 +685,9 @@ def build_timeframe_result(
         atr=_q(atr_v is not None and n >= cfg.warmup["atr"]),
         adx=_q(adx_t is not None and n >= cfg.warmup["adx"]),
     )
-    stale = bool(bars) and (
-        (now - bars[-1].ts).total_seconds() > STALE_AFTER_SEC.get(timeframe, 172800)
+    observed = observed_at(bars, timeframe)
+    stale = observed is not None and (
+        (now - observed).total_seconds() > STALE_AFTER_SEC.get(timeframe, 172800)
     )
     warnings: list[str] = []
     if not bars:
@@ -888,5 +890,5 @@ def build_timeframe_result(
         chart_pattern_analysis=chart_patterns,
         status=status,
         source=bars[-1].source if bars else "none",
-        ts=bars[-1].ts if bars else now,
+        ts=observed if observed is not None else now,
     )
