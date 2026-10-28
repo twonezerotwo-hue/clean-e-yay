@@ -18,6 +18,10 @@ import uuid
 from datetime import UTC, datetime
 from pathlib import Path
 
+from packages.ops.env import load_repo_dotenv
+
+load_repo_dotenv(skip_pytest=True)
+
 from packages import discovery
 from packages.discovery import sector_rotation
 from packages.learning import (

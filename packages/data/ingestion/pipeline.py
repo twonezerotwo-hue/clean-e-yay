@@ -27,6 +27,7 @@ from packages.data.quality.dqs import apply_extended_gate as dqs_apply_extended_
 from packages.data.quality.dqs import compute as compute_dqs
 from packages.data.quality.dqs import extended_metrics as dqs_extended_metrics
 from packages.data.registry import assets as _asset_registry
+from packages.data.registry import custom_assets as _custom_assets
 from packages.data.types import (
     TIMEFRAMES,
     Catalyst,
@@ -260,7 +261,13 @@ def build_snapshot(symbols: list[str] | None = None) -> MarketSnapshot:
     options = options_provider.get_options(
         opt_syms, realized_vol_by_symbol=realized_1d, now=now
     )
-    quality = compute_dqs(prices, syms)
+    # Runtime keşif/custom varlıklar, kendi fiyatı yokken bütün çekirdek
+    # evreni RiskGate'e kapattırmamalı. Aday snapshot'ta kalır ve açık uyarı
+    # alır; DQS çekirdek karar evreni üzerinden ölçülür.
+    optional_symbols = frozenset(
+        symbol for symbol in syms if _custom_assets.get(symbol) is not None
+    )
+    quality = compute_dqs(prices, syms, optional_symbols=optional_symbols)
     # 2026-07-13 — DQS genişletme (GÖZLEM-YALNIZ: score/status'a girmez; DQS'in
     # fiyat-dışı kör noktası her snapshot'ta görünür olsun).
     quality.extended = dqs_extended_metrics(

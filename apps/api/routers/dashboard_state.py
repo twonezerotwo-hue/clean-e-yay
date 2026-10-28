@@ -39,6 +39,36 @@ def _data_module_health(prov: dict, dqs_status: str, now_iso: str) -> dict:
     return {"status": status, "last_success_at": now_iso, "notes": notes}
 
 
+def _news_module_health(provider_status: dict, prov: dict, now_iso: str) -> dict:
+    """News health derived from the same snapshot that powers the dashboard.
+
+    The old value was a permanent ``demo data`` warning, even when the RSS
+    providers were healthy.  Keeping this read-only and snapshot-scoped avoids
+    inventing a second news probe or letting a UI-only call affect decisions.
+    """
+    if prov.get("mock_warning") or prov.get("test_mock"):
+        return {
+            "status": "degraded",
+            "last_success_at": now_iso,
+            "notes": "Test fixture — TEST_USE_MOCK aktif",
+        }
+    states = {
+        name: str((provider_status.get(name) or {}).get("status", "unknown")).lower()
+        for name in ("news", "geo_news")
+    }
+    if all(state == "ok" for state in states.values()):
+        status, notes = "ok", "live RSS providers"
+    elif any(state in {"ok", "degraded"} for state in states.values()):
+        status = "degraded"
+        bad = ", ".join(f"{name}={state}" for name, state in states.items() if state != "ok")
+        notes = f"RSS kısmi kapsama — {bad or 'kaynak durumu karışık'}"
+    elif states and all(state in {"down", "disabled", "unavailable"} for state in states.values()):
+        status, notes = "down", "RSS sağlayıcıları kullanılamıyor"
+    else:
+        status, notes = "degraded", "RSS sağlayıcı durumu henüz doğrulanmadı"
+    return {"status": status, "last_success_at": now_iso, "notes": notes}
+
+
 @router.get("/dashboard/state")
 def get_dashboard_state() -> dict:
     snap = get_cached_snapshot()
@@ -88,12 +118,7 @@ def get_dashboard_state() -> dict:
         dqs={"status": snap.quality.status, "score": snap.quality.score},
     )
     data_health = _data_module_health(prov, snap.quality.status, now_iso)
-    # News: gerçek haber sağlayıcı yok → demo damgası (her zaman görünür uyarı)
-    news_health = {
-        "status": "degraded",
-        "last_success_at": now_iso,
-        "notes": "demo data — gerçek haber sağlayıcı yok",
-    }
+    news_health = _news_module_health(snap.provider_status, prov, now_iso)
     return {
         "meta": {
             "snapshot_id": snap.snapshot_id,

@@ -1819,6 +1819,8 @@ export interface components {
         NewsWall: {
             /** Format: date-time */
             generated_at?: string | null;
+            /** @description Canonical MarketSnapshot kimliği; Brain/Heart aynı çevrimi gösterir. */
+            snapshot_id?: string;
             headlines: components["schemas"]["NewsHeadline"][];
             count: number;
             coverage?: {
@@ -2834,6 +2836,13 @@ export interface components {
             decision_usage: number;
             fallback_used: boolean;
             notes: string[];
+            /** @description Snapshot'a ait fiyat-dışı kalite eksenleri. Gözlem amaçlıdır; karar skoru ve RiskGate hesabına doğrudan girmez. Ölçülemeyen eksen null'dur. */
+            extended: {
+                technical_bars: number | null;
+                news_diversity: number | null;
+                rotation_coverage: number | null;
+                artifact_freshness: number | null;
+            };
             /** @description Backend-derived presentation value (0-1) for Layer0HumanComputerModel's 3D pulse animation speed — not a decision/risk input. */
             stress_score?: number;
         };

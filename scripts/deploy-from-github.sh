@@ -37,8 +37,8 @@ echo "deploy: web build"
 )
 
 # Öğrenme otonomi flag'leri (Grup B, owner kararı) — PROD .env'de yoksa ekle.
-# Bunlar SIR DEĞİL, davranış toggle'ı: apps.api.main._load_dotenv APP_DIR/.env'i
-# supervisor import'unda yükler. Idempotent (grep -q guard) → deploy'da çoğalmaz;
+# Bunlar SIR DEĞİL, davranış toggle'ı: ortak env yükleyici API ve worker
+# süreçlerinde APP_DIR/.env'i okur. Idempotent (grep -q guard) → deploy'da çoğalmaz;
 # owner .env'de değeri elle değiştirirse (örn. =0) korunur (yalnız YOK ise eklenir).
 # Instance rebuild'de de kalıcı (SSH gerektirmez).
 ensure_env() {  # ensure_env KEY VALUE — yalnız YOK ise ekle (owner elle ezerse korunur)

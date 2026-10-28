@@ -17,6 +17,13 @@ const ROWS = [
   { key: "decision_usage", label: "Decision usage" },
 ] as const;
 
+const EXTENDED_ROWS = [
+  { key: "technical_bars", label: "Teknik barlar" },
+  { key: "news_diversity", label: "Haber çeşitliliği" },
+  { key: "rotation_coverage", label: "Rotasyon kapsamı" },
+  { key: "artifact_freshness", label: "Öğrenme güncelliği" },
+] as const;
+
 const STATUS_TONE: Record<DqsStatus, string> = {
   OK: "bg-signal-up/20 text-signal-up",
   DEGRADED: "bg-amber-400/20 text-amber-400",
@@ -86,6 +93,25 @@ export function DataQualityPanel() {
             {bar(dqs[r.key])}
           </div>
         ))}
+        {dqs.extended ? (
+          <div className="mt-3 border-t border-white/10 pt-2">
+            <p className="mb-1 text-[10px] uppercase tracking-widest text-white/40">
+              Fiyat dışı kalite (gözlem)
+            </p>
+            {EXTENDED_ROWS.map((r) => {
+              const value = dqs.extended?.[r.key];
+              return value == null ? null : (
+                <div key={r.key} className="space-y-0.5">
+                  <div className="flex items-center justify-between">
+                    <span className="text-white/60">{r.label}</span>
+                    <span className="text-white/80 tabular-nums">{value.toFixed(0)}</span>
+                  </div>
+                  {bar(value)}
+                </div>
+              );
+            })}
+          </div>
+        ) : null}
         {dqs.status === "BLOCKED" ? (
           <p className="mt-2 text-[11px] text-signal-down">
             Veri kalitesi yetersiz — yeni karar üretilmiyor. Sağlayıcı

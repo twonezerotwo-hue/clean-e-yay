@@ -6,19 +6,25 @@ description: |
   - simulation_only: paper trading için yeterli, gerçek kararda gate
   - analytics_only: sadece raporlama
 
+  Runtime yönlendirme için tek kaynak provider modülleridir:
+  `packages/data/providers/price/*` ve `packages/data/providers/news/rss.py`.
+  Bu dosya politika/provenance kaydıdır; aşağıdaki feed listesi örnek değil,
+  karar politikasına giren kaynak ailelerini tanımlar. Tam güncel feed sayısı
+  snapshot `news_consensus.feed_inventory` alanından okunur.
+
 sources:
-  - id: btcusd_yfinance
+  - id: btcusd_coingecko
     kind: price
     asset: BTCUSD
-    fetcher: yfinance
+    fetcher: coingecko
     cadence_sec: 180
     decision_usage: verified_required
     fallback_to_mock: false
 
-  - id: ethusd_yfinance
+  - id: ethusd_coingecko
     kind: price
     asset: ETHUSD
-    fetcher: yfinance
+    fetcher: coingecko
     cadence_sec: 180
     decision_usage: verified_required
     fallback_to_mock: false
@@ -26,6 +32,22 @@ sources:
   - id: xauusd_yfinance
     kind: price
     asset: XAUUSD
+    fetcher: yfinance
+    cadence_sec: 180
+    decision_usage: verified_required
+    fallback_to_mock: false
+
+  - id: xagusd_yfinance
+    kind: price
+    asset: XAGUSD
+    fetcher: yfinance
+    cadence_sec: 180
+    decision_usage: verified_required
+    fallback_to_mock: false
+
+  - id: brent_yfinance
+    kind: price
+    asset: BRENT
     fetcher: yfinance
     cadence_sec: 180
     decision_usage: verified_required
@@ -52,6 +74,30 @@ sources:
     asset: VIX
     fetcher: yfinance
     cadence_sec: 180
+    decision_usage: verified_required
+    fallback_to_mock: false
+
+  - id: sp500_yfinance
+    kind: macro
+    asset: SP500
+    fetcher: yfinance
+    cadence_sec: 180
+    decision_usage: analytics_only
+    fallback_to_mock: false
+
+  - id: us02y_fred
+    kind: macro
+    asset: US02Y
+    fetcher: fred
+    cadence_sec: 3600
+    decision_usage: verified_required
+    fallback_to_mock: false
+
+  - id: cpi_fred
+    kind: macro
+    asset: CPI
+    fetcher: fred
+    cadence_sec: 3600
     decision_usage: verified_required
     fallback_to_mock: false
 
@@ -89,16 +135,11 @@ sources:
     fetcher: rss
     cadence_sec: 60
     decision_usage: analytics_only
-    feeds:
-      - https://www.cnbc.com/id/100003114/device/rss/rss.html
-      - https://www.investing.com/rss/news_25.rss
-      - https://www.coindesk.com/arc/outboundfeeds/rss/
+    feed_registry: packages/data/providers/news/rss.py:MARKET_FEEDS
 
   - id: news_geo_rss
     kind: news_geo
     fetcher: rss
     cadence_sec: 60
     decision_usage: analytics_only
-    feeds:
-      - https://feeds.reuters.com/reuters/topNews
-      - https://www.aljazeera.com/xml/rss/all.xml
+    feed_registry: packages/data/providers/news/rss.py:GEO_FEEDS

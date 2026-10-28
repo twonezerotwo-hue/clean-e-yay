@@ -120,9 +120,9 @@ def test_dashboard_state_mode_block_test_fixture() -> None:
     assert body["mode"]["label"] == "SIMULATION"
     # data module_health TEST fixture altında degraded:
     assert body["module_health"]["data"]["status"] == "degraded"
-    # news her zaman demo damgalı:
+    # fixture haber akışı artık açıkça test verisi olarak damgalanır:
     assert body["module_health"]["news"]["status"] == "degraded"
-    assert "demo" in body["module_health"]["news"]["notes"].lower()
+    assert "fixture" in body["module_health"]["news"]["notes"].lower()
 
 
 def test_ai_report_disclaimer_in_simulation() -> None:

@@ -1726,6 +1726,9 @@ components:
       required: [headlines, count, paper_safe, no_execution]
       properties:
         generated_at: { type: string, format: date-time, nullable: true }
+        snapshot_id:
+          type: string
+          description: Canonical MarketSnapshot kimliği; Brain/Heart aynı çevrimi gösterir.
         headlines:
           type: array
           items: { $ref: "#/components/schemas/NewsHeadline" }
@@ -3191,7 +3194,7 @@ components:
 
     DqsBreakdown:
       type: object
-      required: [score, status, freshness, completeness, drift, reconciliation, decision_usage, fallback_used, notes]
+      required: [score, status, freshness, completeness, drift, reconciliation, decision_usage, fallback_used, notes, extended]
       properties:
         score: { type: number }
         status: { type: string, enum: [OK, DEGRADED, BLOCKED] }
@@ -3204,6 +3207,17 @@ components:
         notes:
           type: array
           items: { type: string }
+        extended:
+          type: object
+          description: >
+            Snapshot'a ait fiyat-dışı kalite eksenleri. Gözlem amaçlıdır; karar
+            skoru ve RiskGate hesabına doğrudan girmez. Ölçülemeyen eksen null'dur.
+          required: [technical_bars, news_diversity, rotation_coverage, artifact_freshness]
+          properties:
+            technical_bars: { type: number, nullable: true }
+            news_diversity: { type: number, nullable: true }
+            rotation_coverage: { type: number, nullable: true }
+            artifact_freshness: { type: number, nullable: true }
         stress_score:
           type: number
           description: >

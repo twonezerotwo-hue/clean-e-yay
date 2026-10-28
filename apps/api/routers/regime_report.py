@@ -7,7 +7,7 @@ from packages.consensus.engine import build as build_consensus
 from packages.data.ingestion.pipeline import get_cached_snapshot
 from packages.data.provenance import data_provenance
 from packages.data.providers.news import classify as news_classify
-from packages.data.providers.news import get_provider_status, list_headlines, rss
+from packages.data.providers.news import rss
 from packages.data.registry import assets as asset_registry
 from packages.learning import event_outcomes
 from packages.regime.classifier import classify
@@ -131,28 +131,37 @@ def get_regime_report_current() -> dict:
 
 @router.get("/news/current")
 def get_news_current(limit: int = 48) -> dict:
-    """Heart Haberler sekmesi için geniş, salt-okuma haber duvarı.
+    """Heart Haberler sekmesi için canonical, salt-okuma haber duvarı.
 
-    Bu endpoint karar snapshot'ını veya paper defterini değiştirmez. Snapshot'ın
-    karar yolundaki kısa başlık penceresinden ayrı olarak tüm doğrulanmış market
-    + foreign-affairs RSS gruplarından daha geniş bir görünüm sunar.
+    Haber duvarı artık provider'ı yeniden çağırmaz: karar snapshot'ında görülen
+    başlıkların aynısını kullanır. Böylece Heart, Brain ve karar motoru farklı
+    RSS döngülerinden farklı sonuçlar göstermez. ``limit`` geriye dönük olarak
+    kabul edilir; snapshot penceresi daha küçükse mevcut başlık sayısı kadar
+    döner ve kapsamda açıkça belirtilir.
     """
     safe_limit = max(1, min(int(limit), 96))
-    headlines = list_headlines(safe_limit)
-    generated_at = max((item.ts for item in headlines), default=None)
+    snap = get_cached_snapshot()
+    headlines = list(snap.headlines[:safe_limit])
     return {
-        "generated_at": generated_at.isoformat() if generated_at else None,
+        "generated_at": snap.generated_at.isoformat(),
+        "snapshot_id": snap.snapshot_id,
         "headlines": [_headline_view(item) for item in headlines],
         "count": len(headlines),
         "coverage": {
             "requested_limit": safe_limit,
+            "snapshot_limit": len(snap.headlines),
+            "canonical": True,
             "market_feeds": len(rss.MARKET_FEEDS),
             "foreign_affairs_feeds": sum(
                 1 for feed in rss.GEO_FEEDS
                 if feed["source"] in rss.FOREIGN_AFFAIRS_FEED_SOURCES
             ),
             "geo_feeds": len(rss.GEO_FEEDS),
-            "source_status": get_provider_status(),
+            "source_status": {
+                key: value
+                for key, value in snap.provider_status.items()
+                if key in {"news", "geo_news"}
+            },
         },
         "paper_safe": True,
         "no_execution": True,

@@ -56,6 +56,7 @@ export type NewsHeadline = {
 
 export type NewsWall = {
   generated_at?: string | null;
+  snapshot_id?: string;
   headlines: NewsHeadline[];
   count: number;
   coverage?: Record<string, unknown>;
@@ -994,6 +995,13 @@ export type DqsBreakdown = {
   decision_usage: number;
   fallback_used: boolean;
   notes: string[];
+  /** Fiyat dışı kalite eksenleri; gözlem amaçlıdır ve karar skoruna girmez. */
+  extended: {
+    technical_bars: number | null;
+    news_diversity: number | null;
+    rotation_coverage: number | null;
+    artifact_freshness: number | null;
+  };
   // Layer0HumanComputerModel'in 3D nabız animasyon hızı için backend-türetilmiş
   // sunum değeri (0-1) — karar/risk hesabına girmez.
   stress_score?: number;

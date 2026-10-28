@@ -21,6 +21,12 @@ from dataclasses import asdict
 from datetime import UTC, datetime
 from pathlib import Path
 
+# API and workers must resolve the same provider credentials.  This call is
+# before provider imports/first use and never overrides explicit shell env.
+from packages.ops.env import load_repo_dotenv
+
+load_repo_dotenv(skip_pytest=True)
+
 # httpx üzerinden API'yi çağırmak yerine paketleri doğrudan çağırıyoruz —
 # böylece worker API'ye bağımlı değil.
 from packages.causal.engine import build_shadow

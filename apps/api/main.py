@@ -10,41 +10,12 @@ import os
 import sys
 import time
 from contextlib import asynccontextmanager
-from pathlib import Path
+from packages.ops.env import load_repo_dotenv
 
 
-def _load_dotenv() -> None:
-    """Repo root .env'i yükle — sadece set edilmemiş değişkenler.
-
-    Bağımlılık yok (python-dotenv değil). Format: KEY=VALUE, # comment, boş
-    satır. Quote/escape yok. Mevcut shell env'i override ETMEZ.
-
-    pytest altında HİÇ çalışmaz: conftest env'i izole eder (delenv
-    API_AUTH_TOKEN vb.), ama `importlib.reload(apps.api.main)` yapan bir test
-    bunu yeniden koşup gerçek .env token'ını process'e geri enjekte ederdi →
-    mutation uçları 401 alırdı (2026-07-22, .env geri yüklenince ortaya çıktı).
-    Üretimde (uvicorn) pytest sys.modules'te YOK → davranış bayt-aynı.
-    """
-    if "pytest" in sys.modules:
-        return
-    p = Path(__file__).resolve().parent.parent.parent / ".env"
-    if not p.exists():
-        return
-    try:
-        for raw in p.read_text(encoding="utf-8").splitlines():
-            line = raw.strip()
-            if not line or line.startswith("#") or "=" not in line:
-                continue
-            k, _, v = line.partition("=")
-            k = k.strip()
-            v = v.strip()
-            if k and k not in os.environ:
-                os.environ[k] = v
-    except OSError:
-        pass
-
-
-_load_dotenv()
+# pytest isolation deliberately wins; production processes share the same
+# repository-level provider configuration.
+load_repo_dotenv(skip_pytest=True)
 
 # Windows-only: ProactorEventLoop (Python 3.8+ default on win32) crashes the
 # whole API process when it sees malformed accept events — observed in

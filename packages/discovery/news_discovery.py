@@ -810,15 +810,24 @@ def viewmodel(limit_events: int = 12) -> dict:
         )
     except Exception:
         pool_coverage = {"status": "UNAVAILABLE"}
+    errors = list(stats.get("errors") or [])
+    status = state.get("status") or "UNKNOWN"
+    # A stale ``OK`` marker hid the fact that the last discovery cycle could
+    # not call the local model.  Keep explicit operational states (for
+    # example LOCAL_LLM_OFF/DAILY_CAP), but never present an errored cycle as
+    # healthy.  This is observation-only; no decision or order path changes.
+    if errors and status == "OK":
+        status = "DEGRADED"
     return {
         "generated_at": state.get("generated_at"),
-        "status": state.get("status") or "UNKNOWN",
+        "status": status,
         "events": events,
         "candidates": list(state.get("candidates") or []),
         "stats": {"calls_today": stats.get("calls_today", 0), "screened": stats.get("screened", 0),
                   "pool": (stats.get("pool") or {}).get("items"),
                   "article_enriched": (stats.get("pool") or {}).get("article_enriched", 0),
                   "article_coverage": pool_coverage,
+                  "errors": errors,
                   "rejected": stats.get("rejected") or {}},
     }
 

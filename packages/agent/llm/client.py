@@ -15,7 +15,7 @@ import urllib.error
 import urllib.request
 from collections.abc import Iterator
 from dataclasses import dataclass
-from pathlib import Path
+from packages.ops.env import load_repo_dotenv
 
 GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions"
 OPENROUTER_API_URL = "https://openrouter.ai/api/v1/chat/completions"
@@ -35,21 +35,7 @@ def _load_repo_dotenv_once() -> None:
     _DOTENV_LOADED = True
     if os.environ.get("LLM_LOAD_DOTENV", "true").strip().lower() in {"0", "false", "no"}:
         return
-    path = Path(__file__).resolve().parents[3] / ".env"
-    if not path.exists():
-        return
-    try:
-        for raw in path.read_text(encoding="utf-8").splitlines():
-            line = raw.strip()
-            if not line or line.startswith("#") or "=" not in line:
-                continue
-            key, _, value = line.partition("=")
-            key = key.strip()
-            value = value.strip().strip('"').strip("'")
-            if key and key not in os.environ:
-                os.environ[key] = value
-    except OSError:
-        return
+    load_repo_dotenv()
 
 
 @dataclass

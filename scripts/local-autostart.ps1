@@ -132,13 +132,11 @@ function Ensure-HttpSvc([string]$label, [string]$url, [int]$port, [string]$exe, 
 # ---- shared env for all child services -------------------------------------
 $env:PYTHONPATH = $root
 
-# .env -> process environment, so every child service inherits it (2026-07-21 fix).
-# Only apps/api/main.py calls _load_dotenv(); tick/learning/governor workers never
-# read the file. That silently disabled every owner-approved learning flag and
-# every provider key in exactly the processes that consume them - the API looked
-# configured while the workers ran blind. AWS never hit this because deploy
-# exports the values into the service environment; local had no such step.
-# Set-only-if-absent mirrors _load_dotenv(), so a real env var still wins.
+# .env -> process environment, so every child service inherits it.  The Python
+# API/tick/learning processes also call the shared loader as a safe fallback;
+# this parent-level load keeps supervisor/governor and other child processes
+# aligned as well.  Set-only-if-absent means an explicit environment variable
+# always wins.
 $envFile = Join-Path $root ".env"
 if (Test-Path $envFile) {
     $loaded = 0

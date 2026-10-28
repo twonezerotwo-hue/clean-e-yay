@@ -214,25 +214,42 @@ def apply_extended_gate(report: QualityReport, cfg: dict | None) -> QualityRepor
     return report
 
 
-def compute(quotes: list[PriceQuote], expected: list[str]) -> QualityReport:
+def compute(
+    quotes: list[PriceQuote],
+    expected: list[str],
+    *,
+    optional_symbols: set[str] | frozenset[str] | None = None,
+) -> QualityReport:
+    """Compute quality for the decision-critical price universe.
+
+    Runtime-discovered/custom assets remain visible in the snapshot, but a
+    missing quote for one optional candidate must not close the entire core
+    universe through the global DQS cap.  The omission is reported explicitly
+    in ``notes``.  Callers that omit ``optional_symbols`` retain the original
+    all-symbol behaviour.
+    """
+    optional = set(optional_symbols or ())
+    required = [symbol for symbol in expected if symbol not in optional]
+    decision_quotes = [quote for quote in quotes if quote.symbol not in optional]
+
     # Preserve the isolated mock-only simulation contract.
-    priced = [q for q in quotes if q.price is not None]
+    priced = [q for q in decision_quotes if q.price is not None]
     mock_only = bool(priced) and all(q.status == "MOCK" for q in priced)
 
     # A live quote is usable only with an explicitly verified, OK price.
     trusted = [
-        q for q in quotes
+        q for q in decision_quotes
         if q.price is not None and q.verified and q.status == "OK"
     ]
 
-    fr = _freshness(quotes)
+    fr = _freshness(decision_quotes)
     co = _completeness(
-        quotes if mock_only else trusted,
-        expected,
+        decision_quotes if mock_only else trusted,
+        required,
     )
-    dr = _drift(quotes)
-    rc = _reconciliation(quotes)
-    du, fb = _decision_usage(quotes)
+    dr = _drift(decision_quotes)
+    rc = _reconciliation(decision_quotes)
+    du, fb = _decision_usage(decision_quotes)
     score = round(
         0.20 * fr + 0.30 * co + 0.15 * dr + 0.10 * rc + 0.25 * du,
         1,
@@ -244,8 +261,8 @@ def compute(quotes: list[PriceQuote], expected: list[str]) -> QualityReport:
     if not mock_only:
         if not trusted:
             score = 0.0
-        elif expected:
-            expected_symbols = set(expected)
+        elif required:
+            expected_symbols = set(required)
             trusted_symbols = {q.symbol for q in trusted}
             coverage = 100.0 * len(
                 trusted_symbols & expected_symbols
@@ -254,10 +271,16 @@ def compute(quotes: list[PriceQuote], expected: list[str]) -> QualityReport:
                 score = round(min(score, coverage, 69.9), 1)
     status = _status(score, co)
     notes: list[str] = []
-    missing = [s for s in expected if not any(q.symbol == s and q.price is not None for q in quotes)]
+    missing = [s for s in required if not any(q.symbol == s and q.price is not None for q in quotes)]
     if missing:
         notes.append(f"veri yok: {', '.join(missing)}")
-    unverified = [q.symbol for q in quotes if not q.verified and q.price is not None]
+    optional_missing = [
+        s for s in expected
+        if s in optional and not any(q.symbol == s and q.price is not None for q in quotes)
+    ]
+    if optional_missing:
+        notes.append(f"opsiyonel varlık verisi yok: {', '.join(optional_missing)}")
+    unverified = [q.symbol for q in decision_quotes if not q.verified and q.price is not None]
     if unverified:
         notes.append("doğrulanmamış kaynak (mock/test)")
     if status == "BLOCKED":

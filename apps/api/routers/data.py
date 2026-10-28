@@ -51,6 +51,10 @@ def get_snapshot() -> dict:
             "decision_usage": q.decision_usage,
             "fallback_used": q.fallback_used,
             "notes": list(q.notes),
+            # Fiyat dışı kalite eksenleri (teknik bar, haber çeşitliliği,
+            # rotasyon ve öğrenme artifact tazeliği) karar skoruna gizlice
+            # eklenmez; tek canonical snapshot'ta şeffaf gözlem olarak taşınır.
+            "extended": dict(q.extended or {}),
             # Layer0HumanComputerModel'in 3D nabız animasyon hızı (bpm) için —
             # saf sunum türevi (karar/risk hesabına girmez), frontend artık
             # freshness'tan bunu kendi hesaplamıyor (architecture guard).
