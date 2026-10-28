@@ -7,10 +7,9 @@ description: |
   - analytics_only: sadece raporlama
 
   Runtime yönlendirme için tek kaynak provider modülleridir:
-  `packages/data/providers/price/*` ve `packages/data/providers/news/rss.py`.
-  Bu dosya politika/provenance kaydıdır; aşağıdaki feed listesi örnek değil,
-  karar politikasına giren kaynak ailelerini tanımlar. Tam güncel feed sayısı
-  snapshot `news_consensus.feed_inventory` alanından okunur.
+  `packages/data/providers/*`. Bu dosya politika/provenance kaydıdır; aşağıdaki
+  envanter runtime modüllerinin gerçek kaynağını ve beklenen sayısını gösterir.
+  Snapshot `news_consensus.feed_inventory` alanı aynı kayıtları canlı sayar.
 
 sources:
   - id: btcusd_coingecko
@@ -130,6 +129,66 @@ sources:
     decision_usage: simulation_only
     fallback_to_mock: false
 
+  # ─── Teknik bar sağlayıcıları ─────────────────────────────────
+  # Kraken yalnızca BTC/ETH için herkese açık, salt-okunur birincil canlı
+  # kaynaktır. CoinGecko, Kraken başarısız olduğunda ikincil kaynaktır.
+  - id: btcusd_ohlcv_kraken
+    kind: ohlcv
+    asset: BTCUSD
+    fetcher: kraken
+    cadence_sec: 900
+    decision_usage: verified_required
+    fallback_to_mock: false
+
+  - id: ethusd_ohlcv_kraken
+    kind: ohlcv
+    asset: ETHUSD
+    fetcher: kraken
+    cadence_sec: 900
+    decision_usage: verified_required
+    fallback_to_mock: false
+
+  - id: btcusd_ohlcv_coingecko
+    kind: ohlcv
+    asset: BTCUSD
+    fetcher: coingecko
+    cadence_sec: 2400
+    decision_usage: verified_required
+    fallback_to_mock: false
+
+  - id: ethusd_ohlcv_coingecko
+    kind: ohlcv
+    asset: ETHUSD
+    fetcher: coingecko
+    cadence_sec: 2400
+    decision_usage: verified_required
+    fallback_to_mock: false
+
+  - id: ohlcv_yfinance
+    kind: ohlcv
+    asset: "trade universe"
+    fetcher: yfinance
+    cadence_sec: 900
+    decision_usage: verified_required
+    fallback_to_mock: false
+
+  # Salt-okuma türev göstergeleri; tek başına işlem sinyali üretmez.
+  - id: derivatives_binance
+    kind: derivatives
+    asset: "BTCUSD,ETHUSD"
+    fetcher: binance
+    cadence_sec: 300
+    decision_usage: analytics_only
+    fallback_to_mock: false
+
+  - id: options_deribit
+    kind: options
+    asset: "BTCUSD,ETHUSD"
+    fetcher: deribit
+    cadence_sec: 300
+    decision_usage: analytics_only
+    fallback_to_mock: false
+
   - id: news_general_rss
     kind: news
     fetcher: rss
@@ -143,3 +202,21 @@ sources:
     cadence_sec: 60
     decision_usage: analytics_only
     feed_registry: packages/data/providers/news/rss.py:GEO_FEEDS
+
+# Runtime ile registry arasında sessiz kopma olmaması için makine-okunur
+# envanter. Count değerleri testte provider modüllerinden doğrulanır.
+runtime_inventory:
+  news:
+    market_rss:
+      count: 23
+      registry: packages/data/providers/news/rss.py:MARKET_FEEDS
+    geo_rss:
+      count: 12
+      registry: packages/data/providers/news/rss.py:GEO_FEEDS
+    discovery_topic_feeds:
+      count: 8
+      registry: config/discovery.yaml:news_discovery.extra_feeds
+  providers:
+    ohlcv: [ohlcv_kraken, ohlcv_coingecko, ohlcv_yfinance]
+    derivatives: [derivatives_binance]
+    options: [options_deribit]

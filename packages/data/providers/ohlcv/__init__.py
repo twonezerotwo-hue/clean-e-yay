@@ -8,7 +8,9 @@ Politika ([docs/DATA_POLICY.md]):
   `OHLCV_USE_FIXTURE=true`.
 
 Routing:
-- BTCUSD/ETHUSD → CoinGecko market_chart (15m/1h/1d native).
+- BTCUSD/ETHUSD → Kraken spot OHLCV when enabled, CoinGecko market_chart
+  otherwise (15m/1h/1d native). Kraken is read-only and is the live fallback
+  that prevents a CoinGecko outage from serving old disk bars first.
 - XAU/XAG/DXY/VIX/... → Yahoo chart (15m/1h/1d/1w native).
 - 4h = 1h barlarından resample (her iki kaynak için).
 - 1w = kripto için 1d barlarından resample; yfinance native 1wk.

@@ -83,6 +83,9 @@ ensure_env BACKTEST_CHALLENGER_ENABLED 1
 # karar/skor/paper'a SIFIR temas, asla raise etmez; rollback = flag kapat.
 # Lokal .env'de de =1 (owner kurali: lokal+AWS senkron).
 ensure_env BAR_HISTORY_ENABLED 1
+# Public, read-only crypto OHLCV fallback. CoinGecko remains secondary;
+# this prevents a rate-limit from making technical cells use old disk bars.
+ensure_env EYAY_KRAKEN_OHLCV_ENABLED true
 # D4 per-TF trust kapisi (2026-07-06, owner "10/10" hedefi): canli tf_weights
 # kapisi acildiginda ogrenilmis agirlik yalniz kendi kanitini getirmis TF'lere
 # akar (edge_proven), kanitsiz TF notr. SERTLESTIRME — yeni davranis ACMAZ,
