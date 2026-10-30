@@ -241,6 +241,8 @@ def _isolate_runtime_stores(tmp_path_factory: pytest.TempPathFactory) -> None:
         ("FORWARD_TEST_90D_PATH", "forward_test_90d.json"),
         ("PROVIDER_QUOTA_PATH", "provider_quota.json"),
         ("EXTERNAL_EVIDENCE_PATH", "external_evidence.json"),
+        ("BACKUP_STATUS_PATH", "backup_status.json"),
+        ("BACKUP_DIR", "backups"),
     ):
         os.environ.setdefault(_env, str(runtime / _name))
     # K5 — git'teki config/weights_active.json suite'e sızmasın: testler baseline

@@ -40,6 +40,8 @@ data/state/
 # Kurtarma/gecis yedekleri (data/runtime.bak-YYYYMMDD/) - runtime kadar hassas,
 # ayni sekilde commit edilmez. Desen yoksa "git add -A" sessizce defteri commit eder.
 data/runtime.bak-*/
+# Gunluk durum yedekleri (packages/ops/backup.py) - runtime kadar hassas
+data/backups/
 # Runtime arsivi (sikistirilmis gunlukler) ve yerel kitap OCR korpusu + raporlari:
 # lokal veri, git ile tasinmaz (korpus yoksa kitap kaniti UNAVAILABLE doner).
 data/archive/

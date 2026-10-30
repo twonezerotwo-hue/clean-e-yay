@@ -573,6 +573,17 @@ def run_once() -> dict:
     except Exception as exc:  # defensive — worker patlamamalı
         errors.append(f"external_evidence:{type(exc).__name__}")
 
+    # Kritik durum yedeği (hedef mimari 1. aşama): günde bir kez sıkıştırılmış
+    # kopya + geçici klasöre geri yükleme denemesi. Yalnız okur; karar etkisi yok.
+    try:
+        from packages.ops import backup as runtime_backup
+
+        bk = runtime_backup.run_if_due()
+        if bk.get("ran"):
+            log.info("runtime_backup: %s %s", bk.get("status"), bk.get("archive"))
+    except Exception as exc:  # defensive — worker patlamamalı
+        errors.append(f"runtime_backup:{type(exc).__name__}")
+
     # Haber → karar geçmiş karşılaştırması. Runtime shadow yazımı kapalıdır;
     # eski dosyalar silinmez, yalnızca audit için korunur.
     news_decision_shadow_status = "DISABLED"
