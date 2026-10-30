@@ -19,6 +19,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from packages.ops.store import append_jsonl_rotating, read_jsonl_tail
+from packages.paper.signal_identity import build_audit_id
 
 DEFAULT_PATH = "data/runtime/decision_log.jsonl"
 DEFAULT_MAX_READ = 200
@@ -60,6 +61,10 @@ def entry_for(trade: Trade) -> dict:
     return {
         # Deterministic id (replay-friendly): same trade → same record_id.
         "record_id": f"{trade.id}:{trade.closed_at}",
+        # Karar → açılış/kapanış denetim olayları → bu kayıt: tek birleştirme anahtarı.
+        "audit_id": build_audit_id(
+            trade.snapshot_id, getattr(trade, "decision_id", None), getattr(trade, "signal_id", None)
+        ),
         "recorded_at": datetime.now(UTC).isoformat(),
         "trade_id": trade.id,
         "symbol": trade.symbol,

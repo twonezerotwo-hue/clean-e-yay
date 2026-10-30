@@ -98,6 +98,17 @@ COVERAGE: dict[str, dict] = {
                   "TF nötr kalır — mevcut trust-gate'i kısar, yeni canlı-dokunuş "
                   "eklemez; tf_weights zaten kalibrasyon+owner zincirinde.",
     },
+    "E_YAY_CANONICAL_RUNTIME": {
+        "mechanism": INPUT_HYGIENE, "monitor": None,
+        "reason": "Kanonik canlı karar yolunun süreç bayrağı: yalnız VERİSİ gelmeyen "
+                  "modülü nötr 50 sayar ve hücreyi nötr/hold'a çeker — yalnız kısıtlar "
+                  "(no-boost), açılış yetkisi eklemez; pytest/golden altında kapalı.",
+    },
+    "LEARNING_AUDIT_LEDGER_ONLY": {
+        "mechanism": INPUT_HYGIENE, "monitor": None,
+        "reason": "Öğrenme girdi filtresi: yalnız değişmez paper denetim defterindeki "
+                  "kapanışlar eğitir; öğrenicilerin kendi rollback/watchdog zinciri aynen.",
+    },
     # --- TUNING_PARAM: bir izleyicinin parametresi (1) ---
     "REBALANCE_ROLLBACK_MIN_OUTCOMES": {
         "mechanism": TUNING_PARAM, "monitor": None,

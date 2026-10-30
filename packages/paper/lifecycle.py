@@ -17,6 +17,7 @@ from packages.data.registry.loader import config_provenance, load_thresholds
 from packages.learning import decision_log
 from packages.paper import audit, conviction, execution_sim, reentry_guard, sizing
 from packages.paper.guards import price_sanity, state_anomaly
+from packages.paper.signal_identity import build_audit_id
 from packages.paper.state import PaperState, Position, Trade, utc_iso
 from packages.risk import halt as halt_store
 from packages.risk.trade_economics import (
@@ -380,6 +381,7 @@ def open_position(
         snapshot_id=snapshot_id,
         signal_id=signal_id,
         decision_id=decision_id,
+        audit_id=build_audit_id(snapshot_id, decision_id, signal_id),
         news_setup_id=news_setup_id,
         news_event_id=news_event_id,
         news_evidence_id=news_evidence_id,
@@ -699,6 +701,9 @@ def close_position(
         pnl=trade.pnl_usd,
         lifecycle_status=lifecycle_status,
         snapshot_id=pos.snapshot_id,
+        signal_id=pos.signal_id,
+        decision_id=pos.decision_id,
+        audit_id=build_audit_id(pos.snapshot_id, pos.decision_id, pos.signal_id),
         open_reason=pos.open_reason,
     )
     return trade

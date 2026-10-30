@@ -704,3 +704,34 @@ def test_open_position_uses_tf_targets_when_enabled(monkeypatch):
     # TP = entry + 3750×2.5 = 109375
     assert abs(pos.sl - 96250.0) < 0.5
     assert abs(pos.tp - 109375.0) < 0.5
+
+
+def test_audit_id_links_open_close_and_decision_log(paper_env) -> None:
+    # Karar → açılış → kapanış → öğrenme kaydı tek audit_id ile birleşir.
+    from packages.learning import decision_log
+    from packages.paper import lifecycle
+    from packages.paper.signal_identity import build_audit_id
+
+    audit = paper_env["audit"]
+    ps = paper_env["state"]._initial_state()
+    pos = lifecycle.open_position(
+        ps, symbol="BTCUSD", side="long", entry_price=100.0, size_multiplier=1.0,
+        timeframe="1h", snapshot_id="snap-1", signal_id="sig_abc", decision_id="dec-1",
+    )
+    trade = lifecycle.close_position(ps, pos, exit_price=101.0, reason="TAKE_PROFIT")
+    expected = build_audit_id("snap-1", "dec-1", "sig_abc")
+    events = {e["action"]: e for e in audit.read_recent() if e.get("position_id") == pos.id}
+    opened = events["OPENED"]
+    closed = next(e for a, e in events.items() if a != "OPENED")
+    assert expected and expected.startswith("aud_")
+    assert opened["audit_id"] == closed["audit_id"] == expected
+    # Kapanış olayı artık açılışın sinyal ve karar kimliğini de taşır.
+    assert closed["signal_id"] == "sig_abc" and closed["decision_id"] == "dec-1"
+    assert decision_log.entry_for(trade)["audit_id"] == expected
+
+
+def test_audit_id_is_none_without_identity() -> None:
+    from packages.paper.signal_identity import build_audit_id
+
+    assert build_audit_id(None, None, None) is None
+    assert build_audit_id("s", "d", "g") != build_audit_id("s", "d", "h")

@@ -35,6 +35,23 @@ def build_signal_id(
     return "sig_" + hashlib.sha256(raw.encode("utf-8")).hexdigest()[:16]
 
 
+def build_audit_id(
+    snapshot_id: str | None,
+    decision_id: str | None,
+    signal_id: str | None,
+) -> str | None:
+    """Karar → açılış → kapanış → öğrenme kaydını tek anahtarla bağlar.
+
+    Saklanan yeni bir alan değildir: pozisyon ve işlemin zaten taşıdığı üç
+    kimlikten türetilir, böylece eski kayıtlar için de aynı değer hesaplanır.
+    Üçü de yoksa None.
+    """
+    if not (snapshot_id or decision_id or signal_id):
+        return None
+    raw = "|".join(str(value or "") for value in (snapshot_id, decision_id, signal_id))
+    return "aud_" + hashlib.sha256(raw.encode("utf-8")).hexdigest()[:16]
+
+
 def build_evidence_id(
     *, event_id: str, source_id: str, asset: str, direction: str | None,
     timeframe: str, decision_id: str | None = None,
