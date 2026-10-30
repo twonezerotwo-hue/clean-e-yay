@@ -40,6 +40,8 @@ FILE_SOURCES: tuple[tuple[str, str], ...] = (
 DIR_SOURCES: tuple[tuple[str, str], ...] = (
     ("WEIGHTS_OUTPUT_DIR", "data/runtime/weights"),
 )
+# Karar kaydının yalnız son günleri yedeklenir (arşiv büyümesin).
+RECORD_DAYS = 2
 ARCHIVE_PREFIX = "eyay-runtime-"
 INTERVAL = timedelta(hours=20)
 
@@ -69,6 +71,10 @@ def _sources() -> list[tuple[str, Path]]:
         folder = Path(os.environ.get(env) or default)
         if folder.is_dir():
             out.extend((f"{folder.name}/{p.name}", p) for p in sorted(folder.iterdir()) if p.is_file())
+    record_dir = Path(os.environ.get("DECISION_RECORD_DIR") or "data/runtime/decision_record")
+    if record_dir.is_dir():
+        days = sorted(record_dir.glob("????-??-??.jsonl"))[-RECORD_DAYS:]
+        out.extend((f"decision_record/{p.name}", p) for p in days)
     return out
 
 

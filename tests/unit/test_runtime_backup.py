@@ -36,6 +36,7 @@ def runtime(tmp_path, monkeypatch):
         ("WEIGHTS_OUTPUT_DIR", "weights"),
     ):
         monkeypatch.setenv(env, str(root / name))
+    monkeypatch.setenv("DECISION_RECORD_DIR", str(root / "decision_record"))  # diğer testlerin kaydı sızmasın
     monkeypatch.setenv("BACKUP_DIR", str(tmp_path / "backups"))
     monkeypatch.setenv("BACKUP_STATUS_PATH", str(tmp_path / "backup_status.json"))
     monkeypatch.delenv("BACKUP_RETENTION_DAYS", raising=False)

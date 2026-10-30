@@ -660,6 +660,14 @@ async def run_once() -> None:
                 )
 
         tick_artifact.publish_final(snap, final_results)  # ekran aynı kapı sonucunu okur
+        # Kalıcı karar kaydı (hedef mimari 4. aşama): değişen hücreler + saatlik tam
+        # kopya. Salt kayıt; yazılamazsa tick sürer.
+        try:
+            from packages.decision import record as decision_record
+
+            decision_record.append(snap, decisions, final_results, now=now, risk_action=_risk.action)
+        except Exception:
+            log.exception("karar kaydı yazılamadı (tick devam ediyor)")
         txn.commit()  # T3 — persist the paper mutation before any notification.
         t_commit = time.monotonic()  # B5 — aşama süresi görünürlüğü
 

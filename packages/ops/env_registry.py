@@ -189,6 +189,8 @@ REGISTRY: dict[str, str] = {
     "BACKUP_DIR": "path",
     "BACKUP_STATUS_PATH": "path",
     "BACKUP_RETENTION_DAYS": "behavior",
+    "DECISION_RECORD_DIR": "path",
+    "DECISION_RECORD_RETENTION_DAYS": "behavior",
     "OPS_ALERTS_STATE_PATH": "path",
     "OPS_ALERT_REPEAT_HOURS": "behavior",
     "OPS_ALERT_TICK_SLOW_MS": "behavior",
