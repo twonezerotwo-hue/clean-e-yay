@@ -776,6 +776,7 @@ export type NotificationType =
   | "zone_candidate"
   | "event_outcome"
   | "review_recommendation"
+  | "ops_alert"
   | "recheck_exit_recommend"
   | "recheck_reduce"
   | "risk_gate_changed"

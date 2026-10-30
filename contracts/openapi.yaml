@@ -2374,6 +2374,8 @@ components:
             - event_outcome
             # Haber güdümlü keşif: haber zinciri + teknik teyitli varlık (2026-10-05; işlem önerisi değil).
             - review_recommendation
+            # Operasyon alarmı: tick, veri kaynağı, kota, yedek (2026-10-30; işlem önerisi değil).
+            - ops_alert
         priority:
           type: string
           enum: [critical, high, medium, low]

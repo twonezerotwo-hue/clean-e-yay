@@ -584,6 +584,17 @@ def run_once() -> dict:
     except Exception as exc:  # defensive — worker patlamamalı
         errors.append(f"runtime_backup:{type(exc).__name__}")
 
+    # Operasyon alarmları (hedef mimari 1. aşama): tick, kaynak, kota ve yedek
+    # sorunlarını zile yazar; sessiz hata kalmasın. Salt gözlem, karar etkisi yok.
+    try:
+        from packages.ops import alerts as ops_alerts
+
+        al = ops_alerts.evaluate()
+        if al.get("sent"):
+            log.info("ops_alerts: active=%s sent=%s", al.get("active"), al.get("sent"))
+    except Exception as exc:  # defensive — worker patlamamalı
+        errors.append(f"ops_alerts:{type(exc).__name__}")
+
     # Haber → karar geçmiş karşılaştırması. Runtime shadow yazımı kapalıdır;
     # eski dosyalar silinmez, yalnızca audit için korunur.
     news_decision_shadow_status = "DISABLED"

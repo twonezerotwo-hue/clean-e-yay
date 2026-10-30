@@ -414,7 +414,8 @@ def _notification_headlines() -> list[Headline]:
     except Exception:
         return out
     # İnceleme tavsiyeleri _intel_headlines'ta zincir + teknikle ayrıntılı; burada tekrar edilmez.
-    unread = [n for n in unread if getattr(n, "type", None) != "review_recommendation"]
+    # Operasyon alarmları zilde kalır; yönetici özetindeki işlem uyarılarını itmesin.
+    unread = [n for n in unread if getattr(n, "type", None) not in {"review_recommendation", "ops_alert"}]
     if not unread:
         return out
     for n in unread[:3]:
