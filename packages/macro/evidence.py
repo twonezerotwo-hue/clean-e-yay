@@ -10,6 +10,7 @@ import hashlib
 from datetime import UTC, datetime
 from typing import Any
 
+from packages.data.providers.macro import derived as macro_derived
 from packages.data.providers.news.provenance import source_family, story_key
 from packages.data.registry import assets as asset_registry
 from packages.macro import matrix as surprise_matrix
@@ -196,6 +197,11 @@ def _compatible_rows(left: Any, right: Any) -> bool:
     lreg, rreg = _region(getattr(left, "region", None)), _region(getattr(right, "region", None))
     if lreg and rreg and lreg != rreg:
         return False
+    # Takvim biriminde türetilmiş resmî satır: ölçü, açıklama gecikmesi ve
+    # yayımlanan gerçekleşenle uyum ayrıca aranır (eski satırlar eski kuralla).
+    derived = macro_derived.compatible(left, right)
+    if derived is not None:
+        return derived
     lts, rts = getattr(left, "ts", None), getattr(right, "ts", None)
     if isinstance(lts, datetime) and isinstance(rts, datetime) and abs(lts - rts).days > 45:
         return False

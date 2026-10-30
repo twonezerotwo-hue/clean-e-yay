@@ -318,7 +318,10 @@ def list_releases(*, now: datetime | None = None) -> list[Catalyst]:
     cached = _CACHE
     if cached and datetime.now(UTC).timestamp() - cached[0] < _ttl():
         return list(cached[1])
-    rows = [*_bls_cached(reference), *_fred_releases(reference), *_eia_releases(reference)]
+    from packages.data.providers.macro import derived
+
+    # Takvimle aynı birimde türetilmiş resmî gerçekleşen (yalnız bayrak açıkken).
+    rows = [*_bls_cached(reference), *_fred_releases(reference), *_eia_releases(reference), *derived.releases(reference)]
     # Keep one official row per canonical event/date, preferring BLS over FRED
     # for CPI-like series and EIA over generic oil headlines.
     unique: dict[tuple[str, str], Catalyst] = {}

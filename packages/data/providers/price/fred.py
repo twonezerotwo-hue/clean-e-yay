@@ -162,3 +162,25 @@ def get_history(symbol: str, start: str | None = None) -> list[OHLCVBar]:
         with _LOCK:
             _HISTORY_CACHE[key] = (now, bars)
     return bars
+
+
+def get_series(series_id: str, start: str | None = None) -> list[OHLCVBar]:
+    """Ham FRED seri kimliğiyle geçmiş (ascending); fiyat evrenine sembol eklemez.
+
+    Makro gerçekleşen türetimi (packages/data/providers/macro/derived.py) için.
+    Anahtar yoksa ya da hata varsa [] döner; aynı TTL önbelleği kullanılır."""
+    api_key = os.environ.get("FRED_API_KEY")
+    if not api_key:
+        return []
+    key = (f"series:{series_id}", start or "")
+    ttl = _ttl_sec()
+    now = time.monotonic()
+    with _LOCK:
+        cached = _HISTORY_CACHE.get(key)
+        if cached and (now - cached[0]) < ttl:
+            return cached[1]
+    bars = _fetch_history(series_id, series_id, api_key, start)
+    if bars:
+        with _LOCK:
+            _HISTORY_CACHE[key] = (now, bars)
+    return bars

@@ -621,6 +621,11 @@ def _macro_expectation_compatible(actual: Any, expected: Any) -> bool:
     right_unit = str(getattr(expected, "unit", None) or "").casefold()
     if left_unit != right_unit:
         return False
+    from packages.data.providers.macro import derived as macro_derived
+
+    derived = macro_derived.compatible(actual, expected)
+    if derived is not None:
+        return derived
     left_ts = getattr(actual, "ts", None)
     right_ts = getattr(expected, "ts", None)
     if isinstance(left_ts, datetime) and isinstance(right_ts, datetime):
@@ -633,6 +638,15 @@ def _macro_observations(snapshot: MarketSnapshot) -> tuple[Any, ...]:
     """Join official actuals to calendar expectations without inventing data."""
     rows = [*(getattr(snapshot, "catalysts", ()) or ()), *(getattr(snapshot, "macro_releases", ()) or ())]
     expected_rows = [row for row in rows if getattr(row, "expected", None) is not None]
+    from packages.data.providers.macro import derived as macro_derived
+
+    # Takvim satırı türetilmiş resmî satıra beklenti verdiyse kendi (doğrulanmamış)
+    # sürprizini ayrıca üretmez; aynı açıklama iki kez sayılmaz.
+    consumed = {
+        str(entry).split("=", 1)[1]
+        for row in rows if getattr(row, "source", None) == macro_derived.SOURCE
+        for entry in (getattr(row, "evidence", None) or ()) if str(entry).startswith("expectation_join=")
+    }
     output: list[Any] = []
     used_expectations: set[str] = set()
     seen: set[str] = set()
@@ -663,9 +677,11 @@ def _macro_observations(snapshot: MarketSnapshot) -> tuple[Any, ...]:
 
                     merged = SimpleNamespace(**{**getattr(row, "__dict__", {}), **updates})
                 used_expectations.add(str(getattr(expected, "id", "")))
+                if getattr(row, "source", None) == macro_derived.SOURCE:
+                    consumed.add(str(getattr(expected, "id", "")))
         output.append(merged)
         seen.add(event_id)
-    return tuple(output)
+    return tuple(row for row in output if str(getattr(row, "id", "")) not in consumed)
 
 
 def _macro_surprises(snapshot: MarketSnapshot, now: datetime, config: dict[str, Any]) -> tuple[MacroSurpriseImpact, ...]:
