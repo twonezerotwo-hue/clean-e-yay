@@ -18,8 +18,8 @@ from packages.paper import state as paper_state
 from packages.paper.guards import price_sanity
 from packages.paper.lifecycle import _ensure_daily_anchor, open_position
 from packages.paper.state import PaperState, PendingOrder
-from packages.risk.engine import RiskInput
 from packages.risk.engine import evaluate as evaluate_risk
+from packages.risk.engine import risk_input_from_state
 
 _SIDE = {
     "al": "long", "buy": "long", "long": "long", "uzun": "long",
@@ -114,15 +114,7 @@ def place(
         if guard is not None:
             guard(ps, float(size_usd))
         risk = evaluate_risk(
-            RiskInput(
-                dqs_score=snap.quality.score,
-                equity_usd=ps.equity_usd,
-                peak_equity_usd=ps.peak_equity_usd,
-                daily_pnl_usd=ps.daily_pnl_usd,
-                open_position_count=len(ps.open_positions),
-                daily_anchor_date=ps.daily_anchor_date,
-                mtm_equity_usd=ps.mtm_equity_usd,
-            )
+            risk_input_from_state(ps, snap.quality.score)
         )
         if risk.action in RISK_BLOCKS_NEW_OPEN:
             raise ManualOrderError(

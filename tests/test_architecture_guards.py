@@ -99,6 +99,21 @@ def test_single_riskgate_action_enum() -> None:
     )
 
 
+def test_risk_input_built_only_by_factory() -> None:
+    # Defter durumundan RiskInput yalnız risk_input_from_state ile kurulur;
+    # elle kopyalanan kurulumlar yeni alan eklendiğinde birbirinden kopuyordu.
+    rx = re.compile(r"\bRiskInput\(")
+    offenders: list[str] = []
+    for root in (REPO / "packages", REPO / "apps"):
+        for path in _py_files(root):
+            if path == RISK_ENGINE:
+                continue
+            for i, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+                if rx.search(line):
+                    offenders.append(f"{path.relative_to(REPO).as_posix()}:{i}")
+    assert not offenders, "RiskInput(...) yerine risk_input_from_state kullan: " + ", ".join(offenders)
+
+
 # ── Rule 6: contract-first — generated TS in sync, no friendly type drift ─────
 
 

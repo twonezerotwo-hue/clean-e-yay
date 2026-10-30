@@ -487,7 +487,7 @@ def save(state: PaperState) -> None:
 # API ile tick worker AYRI SÜREÇ olarak aynı dosyayı yazınca son yazan öncekinin
 # değişikliğini silebiliyordu (lost update). Çözüm: bütün mutasyon blokları
 # OS-seviyesi dosya kilidi altında koşar (Windows msvcrt / POSIX flock —
-# governor_worker singleton kilidiyle aynı aile). `revision` sayacı, kilidi
+# eski governor_worker singleton kilidiyle aynı aile). `revision` sayacı, kilidi
 # KULLANMAYAN bir yazar kalırsa (bug) sapmayı commit anında görünür kılar:
 # STATE_CONFLICT audit yazılır (sessiz veri kaybı yerine görünür iz).
 # KURAL: transaction İÇ İÇE AÇILMAZ (aynı süreçte ikinci begin() kilitte bekler).

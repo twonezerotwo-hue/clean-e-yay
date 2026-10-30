@@ -31,7 +31,7 @@ from packages.paper import state as paper_state
 from packages.paper.guards import price_sanity, state_anomaly
 from packages.paper.lifecycle import close_position, max_drawdown_pct
 from packages.risk import halt as halt_store
-from packages.risk.engine import RiskInput
+from packages.risk.engine import risk_input_from_state
 
 router = APIRouter(tags=["paper-trading"])
 
@@ -394,15 +394,7 @@ def approve_manual_ready(manual_id: str) -> dict:
     snap = build_snapshot()
     prices = {q.symbol: q.price for q in snap.prices if q.price is not None}
     with paper_state.transaction("api:manual_ready_approve") as ps:
-        risk_in = RiskInput(
-            dqs_score=snap.quality.score,
-            equity_usd=ps.equity_usd,
-            peak_equity_usd=ps.peak_equity_usd,
-            daily_pnl_usd=ps.daily_pnl_usd,
-            open_position_count=len(ps.open_positions),
-            daily_anchor_date=ps.daily_anchor_date,
-            mtm_equity_usd=ps.mtm_equity_usd,
-        )
+        risk_in = risk_input_from_state(ps, snap.quality.score)
         entry = next((m for m in ps.manual_ready if m.id == manual_id), None)
         result = manual_queue.approve(
             ps, manual_id,

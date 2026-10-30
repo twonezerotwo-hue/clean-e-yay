@@ -26,21 +26,13 @@ from packages.learning import event_outcomes, mistake_memory
 from packages.paper import state as paper_state
 from packages.risk import correlation
 from packages.risk import halt as halt_store
-from packages.risk.engine import RiskInput
+from packages.risk.engine import RiskInput, risk_input_from_state
 
 TOP_CELL_COUNT = 8
 
 
 def _risk_input(ps: paper_state.PaperState, snap: MarketSnapshot) -> RiskInput:
-    return RiskInput(
-        dqs_score=snap.quality.score,
-        equity_usd=ps.equity_usd,
-        peak_equity_usd=ps.peak_equity_usd,
-        daily_pnl_usd=ps.daily_pnl_usd,
-        open_position_count=len(ps.open_positions),
-        daily_anchor_date=ps.daily_anchor_date,
-        mtm_equity_usd=ps.mtm_equity_usd,
-    )
+    return risk_input_from_state(ps, snap.quality.score)
 
 
 def _deep_data_summary(view: dict, snap: MarketSnapshot) -> dict:

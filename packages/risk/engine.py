@@ -12,10 +12,13 @@ owner reset ile kalkar.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Literal
+from typing import TYPE_CHECKING, Literal
 
 from packages.data.registry.loader import load_thresholds
 from packages.risk import halt as halt_store
+
+if TYPE_CHECKING:
+    from packages.paper.state import PaperState
 
 RiskAction = Literal[
     "HOLD",
@@ -51,6 +54,24 @@ class RiskInput:
     # Gerçek PaperState yolları UTC gün çapası taşır. Boş bırakılması legacy
     # çağrıların davranışını korur.
     daily_anchor_date: str | None = None
+
+
+def risk_input_from_state(ps: PaperState, dqs_score: float) -> RiskInput:
+    """Defter durumundan RiskInput — tek kurulum yeri.
+
+    Tick, API, brifing ve manuel emir yolları aynı alanları elle kopyalıyordu;
+    yeni bir alan eklendiğinde kopyalardan biri eksik kalabiliyordu. Bütün
+    çağıranlar buradan kurar; değerler birebir aynıdır.
+    """
+    return RiskInput(
+        dqs_score=dqs_score,
+        equity_usd=ps.equity_usd,
+        peak_equity_usd=ps.peak_equity_usd,
+        daily_pnl_usd=ps.daily_pnl_usd,
+        open_position_count=len(ps.open_positions),
+        daily_anchor_date=ps.daily_anchor_date,
+        mtm_equity_usd=ps.mtm_equity_usd,
+    )
 
 
 @dataclass

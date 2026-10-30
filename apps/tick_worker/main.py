@@ -69,7 +69,7 @@ from packages.paper.lifecycle import tick as price_tick
 from packages.paper.recheck import compute_rechecks
 from packages.paper.signal_identity import build_signal_id
 from packages.risk import halt as halt_store
-from packages.risk.engine import RiskInput
+from packages.risk.engine import risk_input_from_state
 from packages.world_state.engine import build as build_world_state
 
 WORKER_NAME = "tick_worker"
@@ -372,17 +372,7 @@ async def run_once() -> None:
         for cls in closed:
             log.info("close: %s %s pnl=%.2f reason=%s", cls.symbol, cls.side, cls.pnl_usd, cls.close_reason)
 
-        risk_in = RiskInput(
-            dqs_score=snap.quality.score,
-            equity_usd=ps.equity_usd,
-            peak_equity_usd=ps.peak_equity_usd,
-            daily_pnl_usd=ps.daily_pnl_usd,
-            open_position_count=len(ps.open_positions),
-            daily_anchor_date=ps.daily_anchor_date,
-            # S2-1 — MTM gate girdisi (flag risk_gates.mtm_equity_enabled
-            # KAPALIYKEN engine bunu okumaz → davranış birebir eski).
-            mtm_equity_usd=ps.mtm_equity_usd,
-        )
+        risk_in = risk_input_from_state(ps, snap.quality.score)
 
         # G5 — halt durumunu oku/persist et; KILL_SWITCH halt → flatten,
         # yeni trade açma (risk engine halt'i KILL_SWITCH/RISK_REDUCE'a çevirir).
@@ -393,15 +383,7 @@ async def run_once() -> None:
                     "halt flatten: %s %s pnl=%.2f reason=%s",
                     cls.symbol, cls.side, cls.pnl_usd, cls.close_reason,
                 )
-            risk_in = RiskInput(
-                dqs_score=snap.quality.score,
-                equity_usd=ps.equity_usd,
-                peak_equity_usd=ps.peak_equity_usd,
-                daily_pnl_usd=ps.daily_pnl_usd,
-                open_position_count=len(ps.open_positions),
-                daily_anchor_date=ps.daily_anchor_date,
-                mtm_equity_usd=ps.mtm_equity_usd,
-            )
+            risk_in = risk_input_from_state(ps, snap.quality.score)
         if halts:
             log.warning("active halts: %s", [h.type for h in halts])
 

@@ -24,7 +24,7 @@ from packages.ops import heartbeat
 from packages.paper import state as paper_state
 from packages.regime.classifier import classify
 from packages.risk import halt as halt_store
-from packages.risk.engine import RiskInput
+from packages.risk.engine import risk_input_from_state
 
 Tone = Literal["ok", "info", "warn", "alert"]
 
@@ -110,15 +110,7 @@ def _safe_cells(snap, paper_state_obj=None):
     """matrix_view cells — direction/score/timeframe/final_action içerir."""
     try:
         ps = paper_state_obj if paper_state_obj is not None else paper_state.load()
-        risk_in = RiskInput(
-            dqs_score=snap.quality.score,
-            equity_usd=ps.equity_usd,
-            peak_equity_usd=ps.peak_equity_usd,
-            daily_pnl_usd=ps.daily_pnl_usd,
-            open_position_count=len(ps.open_positions),
-            daily_anchor_date=ps.daily_anchor_date,
-            mtm_equity_usd=ps.mtm_equity_usd,
-        )
+        risk_in = risk_input_from_state(ps, snap.quality.score)
         symbols = asset_registry.trade_symbols()
         regime, risk, decisions = decide_matrix(
             symbols,

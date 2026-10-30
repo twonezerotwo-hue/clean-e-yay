@@ -39,8 +39,8 @@ from packages.paper.lifecycle import _TF_SECONDS, _ensure_daily_anchor
 from packages.paper.session_gate import evaluate_open as evaluate_session
 from packages.paper.sizing import compute_size_usd
 from packages.risk import correlation
-from packages.risk.engine import RiskInput
 from packages.risk.engine import evaluate as evaluate_risk
+from packages.risk.engine import risk_input_from_state
 
 OPEN_REASON = "owner_idea"
 DEFAULT_SIZE_MULTIPLIER = 0.25  # base boyut çarpanı (max_position_usd'nin payı); yalnız KÜÇÜLTÜLÜR
@@ -198,11 +198,7 @@ def _portfolio_block(ps: paper_state.PaperState, symbol: str, size_usd: float) -
 def _risk_action(ps: paper_state.PaperState, dqs: float) -> tuple[str, str]:
     _ensure_daily_anchor(ps)
     risk = evaluate_risk(
-        RiskInput(
-            dqs_score=dqs, equity_usd=ps.equity_usd, peak_equity_usd=ps.peak_equity_usd,
-            daily_pnl_usd=ps.daily_pnl_usd, open_position_count=len(ps.open_positions),
-            daily_anchor_date=ps.daily_anchor_date, mtm_equity_usd=ps.mtm_equity_usd,
-        )
+        risk_input_from_state(ps, dqs)
     )
     return risk.action, risk.reason
 

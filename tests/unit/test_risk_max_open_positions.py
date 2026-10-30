@@ -73,3 +73,21 @@ def test_live_yaml_has_the_key():
     from packages.data.registry.loader import load_thresholds
 
     assert int(load_thresholds()["risk_gates"]["max_open_positions"]) == 6
+
+
+def test_risk_input_from_state_copies_ledger_fields() -> None:
+    # Tek fabrika, elle kurulan eski kopyalarla aynı alanları aynı değerle doldurur.
+    from packages.paper.state import PaperState
+
+    ps = PaperState(equity_usd=98_500.0, peak_equity_usd=101_000.0, daily_pnl_usd=-420.0)
+    ps.daily_anchor_date = "2026-10-30"
+    inp = engine.risk_input_from_state(ps, 72.5)
+    assert inp == engine.RiskInput(
+        dqs_score=72.5,
+        equity_usd=98_500.0,
+        peak_equity_usd=101_000.0,
+        daily_pnl_usd=-420.0,
+        open_position_count=len(ps.open_positions),
+        daily_anchor_date="2026-10-30",
+        mtm_equity_usd=ps.mtm_equity_usd,
+    )

@@ -17,7 +17,7 @@ from packages.paper import state as paper_state
 from packages.paper.lifecycle import max_drawdown_pct
 from packages.portfolio import build_portfolio_risk
 from packages.regime.classifier import classify
-from packages.risk.engine import RiskInput, evaluate
+from packages.risk.engine import evaluate, risk_input_from_state
 from packages.world_state.engine import build as build_world_state
 
 router = APIRouter(tags=["dashboard"])
@@ -75,15 +75,7 @@ def get_dashboard_state() -> dict:
     regime = classify(snap)
     ps = paper_state.load()
     risk = evaluate(
-        RiskInput(
-            dqs_score=snap.quality.score,
-            equity_usd=ps.equity_usd,
-            peak_equity_usd=ps.peak_equity_usd,
-            daily_pnl_usd=ps.daily_pnl_usd,
-            open_position_count=len(ps.open_positions),
-            daily_anchor_date=ps.daily_anchor_date,
-            mtm_equity_usd=ps.mtm_equity_usd,
-        )
+        risk_input_from_state(ps, snap.quality.score)
     )
     top_cons = build_consensus(DEFAULT_SYMBOLS[0], snap, regime)
     votes, quorum = build_votes(top_cons, regime, risk)
@@ -177,15 +169,7 @@ def get_agent_quorum_matrix() -> dict:
     regime = classify(snap)
     ps = paper_state.load()
     risk = evaluate(
-        RiskInput(
-            dqs_score=snap.quality.score,
-            equity_usd=ps.equity_usd,
-            peak_equity_usd=ps.peak_equity_usd,
-            daily_pnl_usd=ps.daily_pnl_usd,
-            open_position_count=len(ps.open_positions),
-            daily_anchor_date=ps.daily_anchor_date,
-            mtm_equity_usd=ps.mtm_equity_usd,
-        )
+        risk_input_from_state(ps, snap.quality.score)
     )
     rows = []
     for symbol in asset_registry.trade_symbols():

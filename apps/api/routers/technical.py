@@ -190,15 +190,7 @@ def get_agent_matrix() -> dict:
     snap = get_cached_snapshot()
     ps = paper_state.load()
     risk = risk_engine.evaluate(
-        risk_engine.RiskInput(
-            dqs_score=snap.quality.score,
-            equity_usd=ps.equity_usd,
-            peak_equity_usd=ps.peak_equity_usd,
-            daily_pnl_usd=ps.daily_pnl_usd,
-            open_position_count=len(ps.open_positions),
-            daily_anchor_date=ps.daily_anchor_date,
-            mtm_equity_usd=ps.mtm_equity_usd,
-        )
+        risk_engine.risk_input_from_state(ps, snap.quality.score)
     )
     # Trust-gated live tf_weights: None when calibration hasn't validated yet
     # (strategy-agnostic equal weighting). Defensive — never breaks the read path.
