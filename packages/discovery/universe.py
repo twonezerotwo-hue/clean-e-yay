@@ -51,6 +51,12 @@ def _default_fetch_json(url: str) -> list | dict | None:
     try:
         with urllib.request.urlopen(req, timeout=TIMEOUT_SEC) as resp:
             return json.loads(resp.read().decode("utf-8"))
+    except urllib.error.HTTPError as exc:
+        try:
+            coingecko_auth.note_http_error(exc.code, exc.read(2000).decode("utf-8", "replace"))
+        except Exception:
+            pass
+        return None
     except (urllib.error.URLError, TimeoutError, OSError, json.JSONDecodeError):
         return None
 

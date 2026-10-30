@@ -47,6 +47,11 @@ def _no_tick_artifact_leak() -> None:
     from packages.decision import tick_artifact
     pipeline.reset_tick_snapshot()
     tick_artifact.reset()
+    # CoinGecko: başarısız istek beklemesi ve anahtar duraklatması testler arası sızmasın.
+    from packages.data.providers import coingecko_auth
+    from packages.data.providers.price import coingecko as cg_price
+    cg_price._FAIL_UNTIL = 0.0
+    coingecko_auth.reset_key_pause()
 
 
 @pytest.fixture(autouse=True)

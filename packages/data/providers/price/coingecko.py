@@ -47,6 +47,11 @@ SUPPORTED = custom_assets.DynamicSymbolSet(frozenset(_SYMBOL_MAP.keys()), "coing
 _DEFAULT_TTL_SEC = 900
 _LOCK = threading.Lock()
 _CACHE: dict[str, tuple[float, PriceQuote]] = {}
+# Başarısız toplu istekten sonra bekleme: 429'da her tick yeniden denemek kotayı
+# boşa yakıyordu (2026-10-30: 16 dakikada 145 çağrı). Bu sürede orkestratör
+# yedek zincire geçer.
+_FAIL_BACKOFF_SEC = 600.0
+_FAIL_UNTIL = 0.0
 
 
 def _disk_cache_path(symbol: str) -> Path:
@@ -106,11 +111,8 @@ def _fetch_many(ids: dict[str, str]) -> dict[str, PriceQuote]:
     if not ids or not quota.consume("coingecko"):
         return {}
     url = f"{API}?ids={','.join(sorted(set(ids.values())))}&vs_currencies=usd"
-    req = urllib.request.Request(url, headers=coingecko_auth.headers())
-    try:
-        with urllib.request.urlopen(req, timeout=TIMEOUT_SEC) as resp:
-            data = json.loads(resp.read().decode("utf-8"))
-    except (urllib.error.URLError, TimeoutError, OSError, json.JSONDecodeError):
+    data = _request_json(url)
+    if data is None:
         return {}
     out: dict[str, PriceQuote] = {}
     ts = utcnow()
@@ -130,6 +132,24 @@ def _fetch_many(ids: dict[str, str]) -> dict[str, PriceQuote]:
     return out
 
 
+def _request_json(url: str, *, retry_keyless: bool = True) -> dict | None:
+    req = urllib.request.Request(url, headers=coingecko_auth.headers())
+    try:
+        with urllib.request.urlopen(req, timeout=TIMEOUT_SEC) as resp:
+            return json.loads(resp.read().decode("utf-8"))
+    except urllib.error.HTTPError as exc:
+        try:
+            body = exc.read(2000).decode("utf-8", "replace")
+        except Exception:
+            body = ""
+        # Anahtarın aylık kotası doldu: aynı isteği bir kez anahtarsız genel uçtan dene.
+        if coingecko_auth.note_http_error(exc.code, body) and retry_keyless and quota.consume("coingecko"):
+            return _request_json(url, retry_keyless=False)
+        return None
+    except (urllib.error.URLError, TimeoutError, OSError, json.JSONDecodeError):
+        return None
+
+
 def _fetch(symbol: str, cg_id: str) -> PriceQuote | None:
     return _fetch_many({symbol: cg_id}).get(symbol)
 
@@ -138,6 +158,7 @@ def get_quote(symbol: str) -> PriceQuote | None:
     cg_id = _SYMBOL_MAP.get(symbol) or custom_assets.ticker_for(symbol, "coingecko")
     if cg_id is None:
         return None
+    global _FAIL_UNTIL
     ttl = _ttl_sec()
     now = time.monotonic()
     with _LOCK:
@@ -148,6 +169,8 @@ def get_quote(symbol: str) -> PriceQuote | None:
         if disk is not None:
             _CACHE[symbol] = (now, disk)
             return disk
+        if now < _FAIL_UNTIL:
+            return None  # son toplu istek başarısızdı; bekleme süresi dolmadı
     # Bayat sembolün yanında önbelleği dolmuş öteki CoinGecko sembolleri de aynı
     # istekte yenilenir (tek çağrı); taze olanlar isteğe eklenmez.
     ids = {symbol: cg_id}
@@ -157,6 +180,9 @@ def get_quote(symbol: str) -> PriceQuote | None:
             if other != symbol and not (hit and (now - hit[0]) < ttl):
                 ids[other] = other_id
     quotes = _fetch_many(ids)
+    if not quotes:
+        with _LOCK:
+            _FAIL_UNTIL = now + _FAIL_BACKOFF_SEC
     # Yalnızca başarılı (taze) sonucu cache'le — None'ı cache'leme ki
     # bir sonraki cycle tekrar denesin (stale fallback YOK).
     for sym, quote in quotes.items():

@@ -77,6 +77,10 @@ def _fetch_prices(cg_id: str, days: int) -> list[tuple[float, float]] | None:
         with urllib.request.urlopen(req, timeout=TIMEOUT_SEC) as resp:
             data = json.loads(resp.read().decode("utf-8"))
     except urllib.error.HTTPError as exc:
+        try:
+            coingecko_auth.note_http_error(exc.code, exc.read(2000).decode("utf-8", "replace"))
+        except Exception:
+            pass
         retry_after = exc.headers.get("Retry-After") if exc.headers else None
         try:
             retry_after_value = float(retry_after) if retry_after is not None else None
