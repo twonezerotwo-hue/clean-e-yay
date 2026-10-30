@@ -670,6 +670,8 @@ def _macro_observations(snapshot: MarketSnapshot) -> tuple[Any, ...]:
                     "expected": getattr(expected, "expected", None),
                     "evidence": [*(getattr(row, "evidence", None) or ()), f"expectation_join={getattr(expected, 'id', '')}"],
                 }
+                if getattr(row, "source", None) == macro_derived.SOURCE:
+                    updates["ts"] = getattr(expected, "ts", None) or getattr(row, "ts", None)  # azalma açıklama anından
                 try:
                     merged = row.model_copy(update=updates)
                 except AttributeError:

@@ -159,8 +159,18 @@ def _attach_expectation(row: Catalyst, spec: Spec, calendar_rows: list[Any]) -> 
     best = min(candidates, key=lambda c: abs((c.ts - row.ts).total_seconds()))
     return row.model_copy(update={
         "expected": best.expected,
+        "ts": best.ts,  # sürpriz açıklama anından itibaren azalır; dönem sonu kimlikte
         "evidence": [*row.evidence, f"expectation_join={best.id}"],
     })
+
+
+def period_end(row: Any) -> datetime | None:
+    """Türetilmiş satırın dönem sonu (kimlikten); yoksa satırın zamanı."""
+    try:
+        return datetime.fromisoformat(str(getattr(row, "id", "")).rsplit(":", 1)[1]).replace(hour=12, tzinfo=UTC)
+    except (IndexError, ValueError):
+        ts = getattr(row, "ts", None)
+        return ts if isinstance(ts, datetime) else None
 
 
 def compatible(actual_row: Any, expected_row: Any) -> bool | None:
@@ -172,7 +182,7 @@ def compatible(actual_row: Any, expected_row: Any) -> bool | None:
         return False
     if not _matches(spec, expected_row):
         return False
-    a_ts, e_ts = getattr(actual_row, "ts", None), getattr(expected_row, "ts", None)
+    a_ts, e_ts = period_end(actual_row), getattr(expected_row, "ts", None)
     if not isinstance(a_ts, datetime) or not isinstance(e_ts, datetime):
         return False
     lag = (e_ts.date() - a_ts.date()).days

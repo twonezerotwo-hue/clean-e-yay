@@ -101,6 +101,8 @@ def test_calendar_expectation_attached_without_snapshot_limit(monkeypatch):
         _calendar(actual=None, expected=0.2), _calendar(title="Core CPI (MoM)", actual=None, expected=0.3)])
     rows = {r.title: r for r in derived.releases(datetime(2026, 10, 15, tzinfo=UTC))}
     assert rows["US CPI (MoM)"].expected == 0.2
+    assert rows["US CPI (MoM)"].ts == datetime(2026, 10, 14, 12, 30, tzinfo=UTC)  # azalma açıklama anından
+    assert rows["US CPI (MoM)"].id.endswith(":2026-09-30")                       # dönem kimlikte
     assert rows["US Core CPI (MoM)"].expected == 0.3          # çekirdek satır çekirdek beklentiyi alır
     assert rows["US CPI (YoY)"].expected is None              # ölçüsü uyan beklenti yok
     assert any(e.startswith("expectation_join=") for e in rows["US CPI (MoM)"].evidence)

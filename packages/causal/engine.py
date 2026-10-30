@@ -12,6 +12,7 @@ from packages.data.registry import assets as asset_registry
 from packages.data.registry.loader import load_thresholds
 from packages.decision.conflict_resolver import ConflictInputs
 from packages.decision.conflict_resolver import resolve as resolve_conflict
+from packages.macro import confirm as macro_confirm
 from packages.macro import matrix as surprise_matrix
 from packages.world_state.model import WorldStateSnapshot
 
@@ -187,6 +188,7 @@ def _impact(
     factors: dict[str, float],
     state: WorldStateSnapshot,
     technicals: Mapping[str, object] | None = None,
+    prices: Mapping[str, object] | Iterable[object] | None = None,
 ) -> AssetImpact:
     asset = asset_registry.get(symbol)
     asset_class = asset.asset_class if asset is not None else "other"
@@ -261,7 +263,16 @@ def _impact(
         if use_matrix:
             # Owner tablosu: yön beklentiye göre sürprizden, varlık başına.
             topic = surprise_matrix.topic_for(surprise.topic or surprise.event_type)
-            contribution = float(surprise.effective_strength or 0.0) * surprise_matrix.weight(topic, symbol, asset_class) * surprise_matrix.thesis_weight()
+            # Çapraz teyit: dolar ve varlığın fiyatı açıklamadan sonra tablodaki
+            # yönde değilse katkı düşer (ilk tepki dönerse de).
+            confirm_scale, confirm_state = macro_confirm.assess(
+                event_id=surprise.event_id, topic=topic, normalized=surprise.normalized_surprise,
+                released_at=surprise.published_at, symbol=symbol, asset_class=asset_class,
+                prices_now=prices, now=state.generated_at,
+            )
+            contribution = (float(surprise.effective_strength or 0.0) * surprise_matrix.weight(topic, symbol, asset_class)
+                            * surprise_matrix.thesis_weight() * confirm_scale)
+            macro_surprise_drivers.append(f"macro_confirm:{surprise.event_id}:{confirm_state}")
         else:
             contribution = (
                 surprise.inflation_contribution * float(exposures.get("inflation_pressure", 0.0))
@@ -436,7 +447,7 @@ def build_shadow(
     if not active:
         return CausalShadow(state.generated_at, False, False, state.to_dict(), warnings=("disabled",))
     factors, edges = _propagate(state, config, horizon=None)
-    impacts = tuple(_impact(symbol, factors, state, technicals) for symbol in symbols)
+    impacts = tuple(_impact(symbol, factors, state, technicals, prices) for symbol in symbols)
     horizon_edges: dict[str, tuple[CausalEdge, ...]] = {}
     horizon_impacts: dict[tuple[str, str], AssetImpact] = {}
     if bool((config.get("calibration") or {}).get("apply", False)):
@@ -444,7 +455,7 @@ def build_shadow(
             tf_factors, tf_edges = _propagate(state, config, horizon=timeframe)
             horizon_edges[timeframe] = tf_edges
             for symbol in symbols:
-                horizon_impacts[(symbol, timeframe)] = _impact(symbol, tf_factors, state, technicals)
+                horizon_impacts[(symbol, timeframe)] = _impact(symbol, tf_factors, state, technicals, prices)
     consensus: list[dict[str, object]] = []
     conflict_shadow: list[dict[str, object]] = []
     for impact in impacts:
