@@ -26,6 +26,7 @@ def test_source_registry_runtime_inventory_matches_modules() -> None:
     )
     assert set(inventory["providers"]["ohlcv"]) == {
         "ohlcv_kraken",
+        "ohlcv_binance",
         "ohlcv_coingecko",
         "ohlcv_yfinance",
     }

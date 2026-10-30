@@ -51,7 +51,7 @@ def test_registry_runtime_diff_is_explicit_and_read_only():
 def test_registry_runtime_aliases_match_orchestrator_names():
     report = _registry_runtime_summary(
         {
-            "ohlcv_coingecko": {}, "ohlcv_yfinance": {}, "ohlcv_kraken": {},
+            "ohlcv_coingecko": {}, "ohlcv_yfinance": {}, "ohlcv_kraken": {}, "ohlcv_binance": {},
             "derivatives_binance": {}, "options_deribit": {},
             "macro_bls": {}, "macro_fred": {}, "macro_eia": {},
             "news": {}, "geo_news": {}, "calendar": {}, "calendar_web": {},
