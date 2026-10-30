@@ -151,8 +151,9 @@ def test_matrix_timeframe_risk_multiplier_only_reduces(paper_env, monkeypatch) -
     assert d1d.action == "open_long"
     assert d15.action == "open_long"
     # 15m ×0.25, 1h ×0.5 — hiçbir TF 1d'den büyük olamaz.
-    assert d15.size_multiplier == pytest.approx(d1d.size_multiplier * 0.25, rel=1e-6)
-    assert d1h.size_multiplier == pytest.approx(d1d.size_multiplier * 0.5, rel=1e-6)
+    # Boyut 3 ondalığa yuvarlanır (0.75×0.25 = 0.1875 → 0.188).
+    assert d15.size_multiplier == pytest.approx(d1d.size_multiplier * 0.25, abs=1e-3)
+    assert d1h.size_multiplier == pytest.approx(d1d.size_multiplier * 0.5, abs=1e-3)
     assert d15.size_multiplier <= d1d.size_multiplier
 
 

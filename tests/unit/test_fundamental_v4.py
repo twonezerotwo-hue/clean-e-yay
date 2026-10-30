@@ -18,7 +18,6 @@ import pytest
 
 from packages.consensus import engine as ce
 from packages.data.providers.rotation import flow
-from packages.data.registry.loader import threshold_override
 from packages.learning import macro_backtest as mb
 from packages.regime.classifier import RegimeLayer, RegimeOutput
 
@@ -172,36 +171,21 @@ def _no_touche(tmp_path, monkeypatch):
     monkeypatch.setenv("TF_SCORING_V2_SHADOW_PATH", str(tmp_path / "yok.json"))
 
 
-def test_build_v4_off_is_lower_tier_with_observe(macro_archive):
+def test_build_uses_v4_when_archive_present(macro_archive):
     macro_archive("DXY", _tighten())
     macro_archive("US10Y", _tighten(base=4.0, step=0.02))
     v4_val = ce._fundamental_v4()
-    with threshold_override({"consensus": {"fundamental_v2": True, "fundamental_v4": False}}):
-        res = ce.build("BTCUSD", _snap(), _regime(), "4h")
+    res = ce.build("BTCUSD", _snap(), _regime(), "4h")
     fund = next(m for m in res.modules if m.name == "fundamental")
-    # v2 canlı (Likidite+Rotasyon ort = (55+80)/2 = 67.5), v4 DEĞİL (bayt-aynı)
-    assert fund.score == pytest.approx(67.5)
-    obs = next(w for w in res.warnings if w.startswith("fundamental_v4_observe"))
-    assert f"v4={v4_val:.1f}" in obs and obs.endswith(":used=v2")
+    assert fund.score == pytest.approx(round(v4_val, 2))
+    assert not any(w.startswith("fundamental_fallback") for w in res.warnings)
 
 
-def test_build_v4_on_tops_the_ladder(macro_archive):
-    macro_archive("DXY", _tighten())
-    macro_archive("US10Y", _tighten(base=4.0, step=0.02))
-    v4_val = ce._fundamental_v4()
-    with threshold_override({"consensus": {"fundamental_v2": True, "fundamental_v4": True}}):
-        res = ce.build("BTCUSD", _snap(), _regime(), "4h")
-    fund = next(m for m in res.modules if m.name == "fundamental")
-    assert fund.score == pytest.approx(round(v4_val, 2))  # v4 tepede
-    assert any(w.endswith(":used=v4") for w in res.warnings if w.startswith("fundamental_v4_observe"))
-
-
-def test_build_v4_on_but_no_archive_falls_back(monkeypatch, tmp_path):
+def test_build_no_archive_falls_back_to_v2(monkeypatch, tmp_path):
     monkeypatch.setenv("BAR_HISTORY_ENABLED", "1")
     monkeypatch.setenv("BAR_HISTORY_DIR", str(tmp_path))  # boş → v4 None
     ce._FUND_V4_MEMO["key"] = None
-    with threshold_override({"consensus": {"fundamental_v2": True, "fundamental_v4": True}}):
-        res = ce.build("BTCUSD", _snap(), _regime(), "4h")
+    res = ce.build("BTCUSD", _snap(), _regime(), "4h")
     fund = next(m for m in res.modules if m.name == "fundamental")
-    assert fund.score == pytest.approx(67.5)  # v4 üretemedi → v2'ye düştü
-    assert not any(w.startswith("fundamental_v4_observe") for w in res.warnings)
+    assert fund.score == pytest.approx(67.5)  # v4 üretemedi → v2 (Likidite+Rotasyon)
+    assert "fundamental_fallback:v2:BTCUSD:4h" in res.warnings

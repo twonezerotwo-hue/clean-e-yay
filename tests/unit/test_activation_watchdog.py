@@ -40,11 +40,13 @@ def test_numeric_flag_enabled_reading() -> None:
 
 def test_denetim_flags_registered() -> None:
     """M7-M18 gölge flag'leri REGISTRY'de (aktivasyon izleme altyapısı hazır)."""
+    assert "regime_hysteresis_band" in aw.REGISTRY
+    # Konsensüs bayrakları 2026-10-31 temizliğinde kaldırıldı (tek canlı yol).
     for key in (
         "consensus_dominant_directional", "consensus_quantum_regime_gate",
-        "regime_hysteresis_band", "consensus_fundamental_v4",
+        "consensus_fundamental_v4", "consensus_fundamental_v2", "sentinel_v2",
     ):
-        assert key in aw.REGISTRY
+        assert key not in aw.REGISTRY
 
 
 def test_first_sight_already_on_not_monitored(wd_env) -> None:
@@ -144,7 +146,7 @@ def test_registry_covers_pending_activations() -> None:
     keys = set(aw.REGISTRY)
     assert {
         "news_sentiment_v2", "regime_drop_unavailable_layers",
-        "consensus_fundamental_v2", "sentinel_v2", "correlation_price_returns",
+        "correlation_price_returns",
         "tf_platt", "empirical_pwin",
         "weight_regime_filter", "mistake_memory_v2", "expectancy_r_mode",
         # E serisi — çıkış/stop öğrenme flag'leri (denetim 2026-07-03)

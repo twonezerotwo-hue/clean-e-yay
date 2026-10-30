@@ -3,9 +3,8 @@
 1. Rejim hysteresis (`regime.hysteresis_band`, default 0.0 = bayt-aynı):
    sınır salınımı (64.9→65.1→64.8) rejim flip'i üretmesin; durum dosyası
    REGIME_STATE_PATH (conftest izole), backtest/replay stateful=False.
-2. news ABSTAIN (`consensus.news_abstain`, default false): kanıtsız news
-   50-nötr OY yerine oy KULLANMAZ (düşer + redistribute + kapsama azalır);
-   kapalıyken `news_abstain_observe` kanıt satırı.
+2. news ABSTAIN: kanıtsız news 50-nötr OY yerine oy KULLANMAZ (düşer +
+   redistribute + kapsama azalır), `news_abstain:reason=..` satırı yazılır.
 3. DQS genişletme (`extended_metrics`, flag'siz GÖZLEM): teknik bar / haber
    çeşitliliği / rotasyon kapsaması / artifact tazeliği — score/status'a girmez.
 """
@@ -117,34 +116,20 @@ def _no_artifact(tmp_path, monkeypatch):
     monkeypatch.setenv("TF_SCORING_V2_SHADOW_PATH", str(tmp_path / "yok.json"))
 
 
-def test_news_abstain_off_neutral_vote_with_observe():
-    # Flag artık CANLI (2026-07-13) → kapalı-davranış testi explicit kapatır.
-    with threshold_override({"consensus": {"news_abstain": False}}):
-        res = ce.build("BTCUSD", _snap_cons(), _regime_cons(), "4h")
-    news = next(m for m in res.modules if m.name == "news")
-    assert news.score == pytest.approx(50.0)  # bayt-aynı: nötr oy sürüyor
-    assert any(
-        w.startswith("news_abstain_observe:reason=") and w.endswith(":applied=no")
-        for w in res.warnings
-    )
-
-
-def test_news_abstain_on_drops_module_and_lowers_coverage():
-    with threshold_override({"consensus": {"news_abstain": True}}):
-        res = ce.build("BTCUSD", _snap_cons(), _regime_cons(), "4h")
+def test_news_abstain_drops_module_and_lowers_coverage():
+    res = ce.build("BTCUSD", _snap_cons(), _regime_cons(), "4h")
     assert not any(m.name == "news" for m in res.modules)
-    assert any(w.endswith(":applied=yes") for w in res.warnings if w.startswith("news_abstain_observe"))
+    assert "news_abstain:reason=no_relevant_headlines" in res.warnings
     # Kapsama dürüstçe azaldı (M10 gözlemi devreye girer).
     assert any(w.startswith("coverage_observe") for w in res.warnings)
 
 
 def test_news_abstain_with_relevant_headline_votes_normally():
     h = SimpleNamespace(verified=True, sentiment="bullish", asset_impact={"BTCUSD": 1.0})
-    with threshold_override({"consensus": {"news_abstain": True, "news_symbol_filter": True}}):
-        res = ce.build("BTCUSD", _snap_cons([h]), _regime_cons(), "4h")
+    res = ce.build("BTCUSD", _snap_cons([h]), _regime_cons(), "4h")
     news = next(m for m in res.modules if m.name == "news")
     assert news.score == pytest.approx(75.0)
-    assert not any(w.startswith("news_abstain_observe") for w in res.warnings)
+    assert not any(w.startswith("news_abstain") for w in res.warnings)
 
 
 # ── 3. DQS genişletme ────────────────────────────────────────────────────────

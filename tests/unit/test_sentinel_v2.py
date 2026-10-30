@@ -6,7 +6,6 @@
 - Eksik girdi ağırlığı kalanlara redistribute edilir (yalnız VIX varsa v2 == v1).
 - DATA_POLICY: verified=False veya status!=OK girdi kompozite GİRMEZ.
 - Shock durumunda volatility bileşeni 25 ile tavanlanır.
-- Gözlem satırı `sentinel_v2_observe:v1=..:v2=..` her iki modda da yazılır.
 """
 from __future__ import annotations
 
@@ -17,8 +16,6 @@ import pytest
 from packages.consensus import engine as ce
 from packages.data.registry.loader import threshold_override
 from packages.regime.classifier import RegimeLayer, RegimeOutput
-
-_FLAG_ON = {"sentinel_v2": {"enabled": True}}
 
 
 def _layer(name: str, score: float) -> RegimeLayer:
@@ -100,41 +97,27 @@ def test_v2_no_inputs_returns_none() -> None:
     assert ce._sentinel_v2(regime, _snap(), "BTCUSD", "4h") is None
 
 
-def test_flag_off_live_score_is_v1_with_observe_line() -> None:
+def test_live_score_is_v2_composite() -> None:
     snap = _snap(volatility={"BTCUSD": {"4h": _vol(1.0)}})
     res = ce.build("BTCUSD", snap, _regime(80.0), "4h")
     sent = next(m for m in res.modules if m.name == "sentinel")
-    assert sent.score == pytest.approx(80.0)  # v1 canlı (bayt-aynı)
-    # v2: 80×(0.5/0.75) + 25×(0.25/0.75) = 61.7 — gözlem satırında yan yana
-    assert any(w == "sentinel_v2_observe:v1=80.0:v2=61.7" for w in res.warnings)
-
-
-def test_flag_on_live_score_is_v2() -> None:
-    snap = _snap(volatility={"BTCUSD": {"4h": _vol(1.0)}})
-    with threshold_override(_FLAG_ON):
-        res = ce.build("BTCUSD", snap, _regime(80.0), "4h")
-    sent = next(m for m in res.modules if m.name == "sentinel")
+    # 80×(0.5/0.75) + 25×(0.25/0.75) = 61.7
     assert sent.score == pytest.approx(61.67, abs=0.01)
-    # gözlem satırı iki varyantı göstermeye devam eder (rollback kanıtı)
-    assert any(w == "sentinel_v2_observe:v1=80.0:v2=61.7" for w in res.warnings)
     assert sum(m.weight for m in res.modules) == pytest.approx(1.0, abs=1e-3)
 
 
-def test_flag_on_vix_missing_composite_survives() -> None:
-    """v1 tek göstergesi (VIX) düştüğünde v2 kalan girdilerle yaşar — M4'ün
-    kırılganlık gerekçesinin testi. v1=none → flag kapalı olsa modül düşerdi."""
+def test_vix_missing_composite_survives() -> None:
+    """VIX düştüğünde kompozit kalan girdilerle yaşar (tek göstergeye bağımlılık yok)."""
     regime = RegimeOutput(label="NEUTRAL", layers=[_layer("Likidite", 60.0)])
     snap = _snap(derivatives={"BTCUSD": _deriv(40.0)})
-    with threshold_override(_FLAG_ON):
-        res = ce.build("BTCUSD", snap, regime, "4h")
+    res = ce.build("BTCUSD", snap, regime, "4h")
     sent = next(m for m in res.modules if m.name == "sentinel")
     assert sent.score == pytest.approx(60.0)  # 100−40, ağırlık tümüyle deriv'e
-    assert any(w == "sentinel_v2_observe:v1=none:v2=60.0" for w in res.warnings)
 
 
 def test_custom_weights_from_config() -> None:
     snap = _snap(volatility={"BTCUSD": {"4h": _vol(0.0)}})  # vol bileşeni 50
-    cfg = {"sentinel_v2": {"enabled": True, "weights": {"vix": 0.8, "volatility": 0.2}}}
+    cfg = {"sentinel_v2": {"weights": {"vix": 0.8, "volatility": 0.2}}}
     with threshold_override(cfg):
         res = ce.build("BTCUSD", snap, _regime(80.0), "4h")
     sent = next(m for m in res.modules if m.name == "sentinel")

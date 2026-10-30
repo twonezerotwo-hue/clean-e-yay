@@ -1,10 +1,8 @@
 """Momentum-Likidite rejim katmanı (Basamak-4 CRISIS-maskesi düzeltmesi).
 
 Kök neden: seviye-Likidite formülü 5y'da ≥55'e sıkışıp rejim ortalamasını
-şişiriyor → CRISIS maskeleniyor. Flag açıkken Likidite katmanı DEĞİŞİM-bazlı
-(momentum, M16 v4) → seviye şişmesi kırılır. Default KAPALI = bayt-aynı.
-NOT (M19 birleştirme): tek anahtar artık `consensus.fundamental_v4` (eski
-ayrı `regime.liquidity_momentum` kaldırıldı — fundamental + rejim tek düğme).
+şişiriyor → CRISIS maskeleniyor. Likidite katmanı DEĞİŞİM-bazlı (momentum,
+temel v4 ile aynı formül) → seviye şişmesi kırılır; bar arşivi yoksa seviye formülü.
 """
 from __future__ import annotations
 
@@ -58,41 +56,38 @@ def _liq(snap):
     return rc._liquidity_layer(snap, drop_missing=True)
 
 
-def test_flag_off_is_level_formula(macro_archive):
-    """Flag KAPALIYKEN seviye formülü birebir (arşiv okunmaz). Flag artık
-    CANLI (2026-07-13) → kapalı-davranış testi explicit kapatır."""
-    macro_archive("DXY", _tighten())
-    macro_archive("US10Y", _tighten(base=4.0, step=0.02))
-    with threshold_override({"consensus": {"fundamental_v4": False}}):
-        layer = _liq(_snap(dxy=104.0, us10=4.3))
+def test_no_archive_is_level_formula(monkeypatch, tmp_path):
+    """Bar arşivi yoksa seviye formülü (momentum üretilemez)."""
+    from packages.regime import classifier
+
+    monkeypatch.setattr(classifier, "_archive_liquidity_momentum", lambda: None)
+    layer = _liq(_snap(dxy=104.0, us10=4.3))
     # Seviye: 100 - (104-100)*2 - (4.3-4)*5 = 100-8-1.5 = 90.5
     assert layer.score == pytest.approx(90.5)
     assert "momentum" not in " ".join(layer.evidence)
 
 
-def test_flag_on_uses_momentum(macro_archive):
+def test_uses_momentum(macro_archive):
     from packages.data.providers.rotation import flow
     macro_archive("DXY", _tighten())     # DXY yükseliyor → sıkılaşma
     macro_archive("US10Y", _tighten(base=4.0, step=0.02))
     expected = flow.liquidity_momentum_score(_tighten(), _tighten(base=4.0, step=0.02))
-    with threshold_override({"consensus": {"fundamental_v4": True}}):
-        layer = _liq(_snap(dxy=104.0, us10=4.3))
+    layer = _liq(_snap(dxy=104.0, us10=4.3))
     assert layer.score == pytest.approx(round(expected, 1))
     assert layer.score < 50.0  # sıkılaşma → düşük (seviye 90.5 olurdu — şişme kırıldı)
     assert "momentum" in " ".join(layer.evidence)
 
 
-def test_flag_on_no_archive_falls_back_to_level(monkeypatch, tmp_path):
-    """Flag açık ama arşiv yok → seviye formülüne düşer (dürüst degrade)."""
+def test_empty_archive_falls_back_to_level(monkeypatch, tmp_path):
+    """Arşiv boş → seviye formülüne düşer (dürüst degrade)."""
     monkeypatch.setenv("BAR_HISTORY_ENABLED", "1")
     monkeypatch.setenv("BAR_HISTORY_DIR", str(tmp_path))  # boş
     rc._LIQ_MOM_MEMO["key"] = None
-    with threshold_override({"consensus": {"fundamental_v4": True}}):
-        layer = _liq(_snap(dxy=104.0, us10=4.3))
+    layer = _liq(_snap(dxy=104.0, us10=4.3))
     assert layer.score == pytest.approx(90.5)  # seviye formülü (v4 üretemedi)
 
 
-def test_crisis_visible_with_momentum(macro_archive):
+def test_crisis_visible_with_momentum(macro_archive, monkeypatch):
     """Bütünsel: DXY+faiz güçlü yükseliş + VIX kriz + varlıklar çöküş →
     momentum-Likidite ile rejim CRISIS/DEFENSIVE olabilir (seviye ile OFFENSIVE)."""
     macro_archive("DXY", _tighten(step=0.6))
@@ -107,9 +102,9 @@ def test_crisis_visible_with_momentum(macro_archive):
         technicals={"BTCUSD": SimpleNamespace(score=10.0, rsi=20.0, ema_stack="bearish")},
         rotation=SimpleNamespace(score=15.0, direction="risk_off", evidence=[], status="OK"),
     )
-    with threshold_override({"consensus": {"fundamental_v4": True}, "regime": {"drop_unavailable_layers": True}}):
+    with threshold_override({"regime": {"drop_unavailable_layers": True}}):
         out_mom = rc.classify(snap, stateful=False)
-    with threshold_override({"consensus": {"fundamental_v4": False}, "regime": {"drop_unavailable_layers": True}}):
+        monkeypatch.setattr(rc, "_archive_liquidity_momentum", lambda: None)  # seviye formülü
         out_lvl = rc.classify(snap, stateful=False)
     order = ["CRISIS", "DEFENSIVE", "NEUTRAL", "OFFENSIVE"]
     # Momentum varyantı en az seviye kadar (veya daha) karamsar rejim üretir.

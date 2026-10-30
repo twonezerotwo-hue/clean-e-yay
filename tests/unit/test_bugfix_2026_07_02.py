@@ -22,7 +22,7 @@ def test_confluence_requires_agreement_with_signal_side(monkeypatch):
                 "sentinel": 70.0, "quantum": 60.0}
 
     monkeypatch.setattr(ce, "_touche", lambda *a, **k: (15.0, []))
-    monkeypatch.setattr(ce, "_fundamental", lambda r: 40.0)
+    monkeypatch.setattr(ce, "_fundamental_v4", lambda: 40.0)
     monkeypatch.setattr(ce, "_fundamental_v2", lambda r: 40.0)
     monkeypatch.setattr(ce, "_news", lambda s, sym=None: 60.0)
     monkeypatch.setattr(ce, "_sentinel", lambda r: 70.0)
@@ -44,7 +44,7 @@ def test_confluence_true_when_modules_agree_with_side(monkeypatch):
     from packages.consensus import engine as ce
 
     monkeypatch.setattr(ce, "_touche", lambda *a, **k: (25.0, []))
-    monkeypatch.setattr(ce, "_fundamental", lambda r: 30.0)
+    monkeypatch.setattr(ce, "_fundamental_v4", lambda: 30.0)
     monkeypatch.setattr(ce, "_fundamental_v2", lambda r: 30.0)
     monkeypatch.setattr(ce, "_news", lambda s, sym=None: 40.0)
     monkeypatch.setattr(ce, "_sentinel", lambda r: 60.0)

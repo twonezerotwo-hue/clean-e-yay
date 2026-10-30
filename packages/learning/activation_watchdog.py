@@ -56,14 +56,6 @@ REGISTRY: dict[str, dict] = {
         "label": "Rejim dürüst katman modu (F2-3)",
         "source": ("thresholds", ("regime", "drop_unavailable_layers")),
     },
-    "consensus_fundamental_v2": {
-        "label": "Fundamental v2 (M3)",
-        "source": ("thresholds", ("consensus", "fundamental_v2")),
-    },
-    "sentinel_v2": {
-        "label": "Sentinel v2 stres kompoziti (M4)",
-        "source": ("thresholds", ("sentinel_v2", "enabled")),
-    },
     "correlation_price_returns": {
         "label": "Fiyat-getirisi korelasyonu (F2-2)",
         "source": ("thresholds", ("risk_gates", "correlation_price_returns")),
@@ -139,42 +131,16 @@ REGISTRY: dict[str, dict] = {
     # Dış denetim dalgası (2026-07-13, M7-M18) — bugün kurulan YAML gölge flag'leri
     # açılınca OFF→ON'da baseline damgalansın (E-6 dersi: kayıt ile aktivasyon
     # AYRI deploy — bu kayıt flag'ler OFF iken gider, aktivasyon sonraki deploy).
-    "consensus_dominant_directional": {
-        "label": "Dominant modül yön-katkısı (M9)",
-        "source": ("thresholds", ("consensus", "dominant_directional")),
-    },
-    "consensus_quantum_regime_gate": {
-        "label": "Quantum rejim-kapısı — NEUTRAL'da düşür (challenger kanıtı)",
-        "source": ("thresholds", ("consensus", "quantum_regime_gate")),
-    },
     "regime_hysteresis_band": {
         "label": "Rejim hysteresis — sınır flip'ini engelle (M12)",
         "source": ("thresholds", ("regime", "hysteresis_band")),
-    },
-    "consensus_touche_speaker_tf_only": {
-        "label": "Touche TF-kapısı — kopya yön kesme (M7)",
-        "source": ("thresholds", ("consensus", "touche_speaker_tf_only")),
     },
     "consensus_min_module_coverage": {
         "label": "Modül kapsama tabanı — az veride NO_TRADE (M10)",
         "source": ("thresholds", ("consensus", "min_module_coverage")),
     },
-    "consensus_news_abstain": {
-        "label": "News çekimserliği — kanıtsız news düşür (M13)",
-        "source": ("thresholds", ("consensus", "news_abstain")),
-    },
-    "consensus_enforce_decision_usage": {
-        "label": "Kaynak-politikası uygulaması — kısıtlı modül düşür (M11)",
-        "source": ("thresholds", ("consensus", "enforce_decision_usage")),
-    },
     # NOT: consensus_fundamental_v3 kaydı 2026-07-15'te SÖKÜLDÜ (v3 canlı yoldan
     # kaldırıldı — 5y tezgâh çürüttü; flag artık yok).
-    "consensus_fundamental_v4": {
-        # M19 birleştirme: momentum-Likidite'nin TEK anahtarı — hem consensus
-        # fundamental modülü (M16) hem rejim classifier Likidite katmanı (M18).
-        "label": "Momentum-Likidite (M16+M18 tek flag) — fundamental + rejim",
-        "source": ("thresholds", ("consensus", "fundamental_v4")),
-    },
     # FAZ-2 (2026-07-16) — kayıt flag OFF'ken gider (E-6 deseni: OFF→ON
     # geçişinde arm; kayıt + aktivasyon AYRI deploy olmalı).
     "data_policy_dqs_extended_gate": {

@@ -56,10 +56,7 @@ def evaluate() -> dict[str, Any]:
             "quantum_scorecard": {
                 "mode": "FROZEN_GATED",
                 "enabled": challenger,
-                "live_effect": bool(
-                    _threshold_bool("consensus", "quantum_v2")
-                    and _threshold_bool("consensus", "quantum_regime_gate")
-                ),
+                "live_effect": True,  # quantum v2 + rejim kapısı her zaman uygulanır
                 "allowed_regimes": ["OFFENSIVE"],
                 "reason": "Ters/yetersiz rejim kanıtı nedeniyle ağırlık artırılmaz; yalnız izinli rejimde gözlenir.",
             },

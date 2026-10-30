@@ -130,27 +130,6 @@ def _price(snap: MarketSnapshot, symbol: str) -> float | None:
     return None
 
 
-def _liquidity_momentum_enabled() -> bool:
-    """Momentum-Likidite TEK anahtarı = `consensus.fundamental_v4` (M19 birleştirme).
-
-    2026-07-13 Basamak-4: momentum-Likidite formülü İKİ tüketiciye giriyor —
-    consensus fundamental modülü (M16) VE rejim classifier Likidite katmanı
-    (M18). İkisi de aynı `flow.liquidity_momentum_score`'u kullanıyor; owner
-    "tek düğme" istedi → ayrı `regime.liquidity_momentum` KALDIRILDI, her ikisi
-    de `consensus.fundamental_v4` ile açılır (tek kavram, tek flag). Açıkken
-    Likidite katmanı skoru momentumdan; arşiv yok/yetersiz → seviye formülüne
-    düşer (dürüst degrade). Backtest KANITI: CRISIS 2→232, OFFENSIVE 677→481.
-    Geri-alma = consensus.fundamental_v4: false (tek satır, iki tüketici birden)."""
-    try:
-        from packages.data.registry.loader import load_thresholds
-
-        return bool(
-            (load_thresholds().get("consensus") or {}).get("fundamental_v4", False)
-        )
-    except Exception:
-        return False
-
-
 _LIQ_MOM_MEMO: dict = {"key": None, "val": None}
 
 
@@ -189,17 +168,16 @@ def _liquidity_layer(snap: MarketSnapshot, drop_missing: bool) -> RegimeLayer | 
     cpi = _price(snap, "CPI") or 0.0
     if drop_missing and (dxy_p is None or us10_p is None):
         return None  # F2-3: çekirdek girdi yok — sahte default'la skor üretme
-    # Momentum-Likidite (gölge flag): açıksa Likidite skoru DEĞİŞİM-bazlı gelir
-    # (seviye şişmesini kırar → CRISIS görünür). Arşiv yoksa seviye formülüne düş.
-    if _liquidity_momentum_enabled():
-        mom = _archive_liquidity_momentum()
-        if mom is not None:
-            return RegimeLayer(
-                name="Likidite",
-                score=round(mom, 1),
-                direction=_direction(mom),
-                evidence=[f"DXY+faiz momentum (v4) {mom:.1f}"],
-            )
+    # Momentum-Likidite: Likidite skoru DEĞİŞİM-bazlı gelir (seviye şişmesini
+    # kırar → CRISIS görünür). Bar arşivi yoksa seviye formülüne düşer.
+    mom = _archive_liquidity_momentum()
+    if mom is not None:
+        return RegimeLayer(
+            name="Likidite",
+            score=round(mom, 1),
+            direction=_direction(mom),
+            evidence=[f"DXY+faiz momentum (v4) {mom:.1f}"],
+        )
     dxy = dxy_p if dxy_p is not None else 104.0
     us10y = us10_p if us10_p is not None else 4.3
     us02y = us02_p if us02_p is not None else 4.3

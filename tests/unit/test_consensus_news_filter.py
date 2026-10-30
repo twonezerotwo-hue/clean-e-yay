@@ -43,43 +43,17 @@ def _snap(headlines: list[NewsHeadline]) -> SimpleNamespace:
     return SimpleNamespace(headlines=headlines)
 
 
-@pytest.fixture
-def flag_on(monkeypatch):
-    monkeypatch.setattr(
-        ce, "load_thresholds", lambda: {"consensus": {"news_symbol_filter": True}}
-    )
-
-
-@pytest.fixture
-def flag_off(monkeypatch):
-    monkeypatch.setattr(
-        ce, "load_thresholds", lambda: {"consensus": {"news_symbol_filter": False}}
-    )
-
-
-def test_flag_off_keeps_legacy_global_tally(flag_off) -> None:
-    """Flag kapalı → symbol verilse bile eski global tally birebir."""
-    snap = _snap([
-        _headline("h1", "Bitcoin rally", "bullish", {"BTCUSD": 1.0}),
-        _headline("h2", "Gold falls", "bearish", {"XAUUSD": -1.0}),
-        _headline("h3", "Markets mixed", "neutral", {}),
-    ])
-    # (1 bullish - 1 bearish) / 3 * 25 = 0 → 50.0; symbol argümanı etkisiz.
-    assert ce._news(snap, "XAGUSD") == 50.0
-    assert ce._news(snap) == 50.0
-
-
-def test_flag_on_scores_only_symbol_relevant_headlines(flag_on) -> None:
+def test_scores_only_symbol_relevant_headlines() -> None:
     """BTC haberi XAGUSD skorunu OYNATMAZ; BTCUSD skorunu oynatır."""
     snap = _snap([
         _headline("h1", "Bitcoin rally", "bullish", {"BTCUSD": 1.0}),
         _headline("h2", "Bitcoin adoption grows", "bullish", {"BTCUSD": 1.0}),
     ])
     assert ce._news(snap, "BTCUSD") == 75.0   # mean(+1, +1) × 25 + 50
-    assert ce._news(snap, "XAGUSD") == 50.0   # ilgili başlık yok → nötr
+    assert ce._news(snap, "XAGUSD") is None   # ilgili başlık yok → çekimser (oy yok)
 
 
-def test_flag_on_direction_from_asset_impact_not_sentiment(flag_on) -> None:
+def test_direction_from_asset_impact_not_sentiment() -> None:
     """Hawkish Fed haberi: sentiment bearish ama DXY impact +1 → DXY > 50."""
     snap = _snap([
         _headline("h1", "Fed signals rate hike", "bearish", {"DXY": 1.0}),
@@ -87,15 +61,15 @@ def test_flag_on_direction_from_asset_impact_not_sentiment(flag_on) -> None:
     assert ce._news(snap, "DXY") == 75.0
 
 
-def test_flag_on_unverified_headlines_excluded(flag_on) -> None:
+def test_unverified_headlines_excluded() -> None:
     """DATA_POLICY — verified=False başlık, impact eşleşse bile sayılmaz."""
     snap = _snap([
         _headline("h1", "Bitcoin rally", "bullish", {"BTCUSD": 1.0}, verified=False),
     ])
-    assert ce._news(snap, "BTCUSD") == 50.0
+    assert ce._news(snap, "BTCUSD") is None
 
 
-def test_flag_on_mixed_impacts_average(flag_on) -> None:
+def test_mixed_impacts_average() -> None:
     snap = _snap([
         _headline("h1", "Gold surges on war fears", "bullish", {"XAUUSD": 1.0}),
         _headline("h2", "Gold retreats", "bearish", {"XAUUSD": -1.0}),
@@ -107,5 +81,6 @@ def test_flag_on_mixed_impacts_average(flag_on) -> None:
     assert ce._news(snap, "BRENT") == 25.0
 
 
-def test_flag_on_no_headlines_neutral(flag_on) -> None:
-    assert ce._news(_snap([]), "BTCUSD") == 50.0
+def test_no_headlines_abstains() -> None:
+    assert ce._news(_snap([]), "BTCUSD") is None
+    assert ce._news_evidence_gap(_snap([]), "BTCUSD") == "no_relevant_headlines"

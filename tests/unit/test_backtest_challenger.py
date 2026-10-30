@@ -185,16 +185,12 @@ def test_news_stamped_neutral(monkeypatch, tmp_path):
 
 
 def test_module_contributions_shape():
-    # news_abstain CANLI (2026-07-13): geçmişe haber kurulamaz → news normalde
-    # düşer; bu test SHAPE kanıtı (news dahil 5 modül) → flag'i explicit kapat.
-    from packages.data.registry.loader import threshold_override
-    with threshold_override({"consensus": {"news_abstain": False}}):
-        d = br.reconstruct_decision_at(_full_bars(), _macro(), 79)
+    d = br.reconstruct_decision_at(_full_bars(), _macro(), 79)
     assert d.error is None
     mc = d.module_contributions
     assert mc is not None
-    # news modülü her zaman girer (nötr 50) → shape kanıtı.
-    assert "news" in mc
+    # Geçmişe haber kurulamaz → haber modülü çekimser kalır (nötr-50 uydurulmaz).
+    assert "news" not in mc and "touche" in mc
     for _name, cell in mc.items():
         assert set(cell.keys()) == {"score", "weight", "contribution"}
 

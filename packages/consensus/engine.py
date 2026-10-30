@@ -19,7 +19,6 @@ korunur ve tarih öncesi kararlar byte-stable kalır.
 """
 from __future__ import annotations
 
-import json
 import os
 import sys
 from dataclasses import dataclass, field
@@ -28,7 +27,6 @@ from datetime import UTC, datetime
 from packages.data.ingestion.pipeline import MarketSnapshot
 from packages.data.registry.loader import (
     load_active_weights,
-    load_source_registry,
     load_thresholds,
 )
 from packages.regime.classifier import RegimeOutput
@@ -239,93 +237,6 @@ def _touche_base(
     return t.score, warnings
 
 
-# Teknik oy kaynağı (2026-07-12 owner kararı): tf_scoring_v4 owner formülü
-# BİRİNCİL, touche_backup (v2 rejim-anahtarlı motor) YEDEK. Artifact bu yaştan
-# eskiyse (öğrenme worker'ı durmuşsa) zemin teknik motora düşülür.
-_TOUCHE_SHADOW_MAX_AGE_SEC = 3 * 3600
-
-
-def _touche_v4_enabled() -> bool:
-    """`consensus.touche_v4` owner-flag'i (default KAPALI = zemin motor birebir).
-
-    Açıkken teknik yön oyu kademelidir: tf_scoring_v4 (owner birleşik formülü)
-    BİRİNCİL; v4 çekimserse touche_backup (v2 rejim-anahtarlı motor) konuşur;
-    ikisi de yoksa zemin teknik motor. Geri-alma = bu flag false (tek satır)."""
-    try:
-        return bool(load_thresholds().get("consensus", {}).get("touche_v4", False))
-    except (OSError, KeyError, ValueError, TypeError):
-        return False
-
-
-def _touche_speaker_tf_only_enabled() -> bool:
-    """`consensus.touche_speaker_tf_only` owner-flag'i (default KAPALI = bayt-aynı).
-
-    2026-07-13 dış denetim P0 bulgusu: v4 artifact'ı sembol başına TEK yön taşır
-    (konuşmacı TF: UP→1d, DOWN→4h) ama consensus bu yönü DÖRT timeframe hücresine
-    de kopyalıyordu — aynı sinyalden çoklu pozisyon riski. Açıkken v4/backup oyu
-    yalnız artifact'ın kendi konuşmacı TF hücresinde sayılır; diğer hücreler
-    TF-duyarlı zemin motora düşer (uydurma yön yok). Geri-alma = false."""
-    try:
-        return bool(load_thresholds().get("consensus", {}).get("touche_speaker_tf_only", False))
-    except (OSError, KeyError, ValueError, TypeError):
-        return False
-
-
-def _dir_to_score(d) -> float | None:
-    """Yön (−1..+1) → 0-100 teknik skor (50=nötr). None geçer."""
-    if d is None:
-        return None
-    try:
-        return max(0.0, min(100.0, 50.0 + float(d) * 50.0))
-    except (TypeError, ValueError):
-        return None
-
-
-def _touche_shadow_row(symbol: str) -> tuple[float | None, float | None, str | None]:
-    """Üretici artifact'ından (v4, backup, speaker_tf) üçlüsü → 0-100 + TF etiketi.
-
-    v4 = tf_scoring_v4 owner formülü (BİRİNCİL); backup = touche_backup
-    (EDGE-kanıtlı karne yolu, YEDEK); speaker_tf = üreticinin yönü hangi
-    timeframe için hesapladığı (rejim konuşmacısı). Artifact yok/bayat/bozuk →
-    (None, None, None): çağıran zemin motora düşer (dürüst: uydurma yön yok,
-    öğrenme worker'ı durursa canlı tick bağımsız kalır). Salt-okur; lazy import
-    (yük-zamanı decision→learning bağı yok)."""
-    try:
-        from packages.learning import tf_scoring_shadow
-        path = tf_scoring_shadow.artifact_path()
-        if not path.exists():
-            return None, None, None
-        data = json.loads(path.read_text(encoding="utf-8"))
-        gen = datetime.fromisoformat(str(data.get("generated_at")))
-        if (datetime.now(UTC) - gen).total_seconds() > _TOUCHE_SHADOW_MAX_AGE_SEC:
-            return None, None, None  # öğrenme worker'ı durmuş → zemine düş
-        row = (data.get("per_symbol") or {}).get(symbol) or {}
-        speaker = row.get("speaker_tf")
-        return (
-            _dir_to_score(row.get("direction_v4")),
-            _dir_to_score(row.get("direction_backup")),
-            str(speaker) if speaker else None,
-        )
-    except (OSError, ValueError, TypeError, KeyError):
-        return None, None, None
-
-
-def _touche_shadow(symbol: str) -> tuple[float | None, float | None]:
-    """Geriye-uyum sarmalayıcı: (v4, backup) çifti — speaker_tf'siz eski imza."""
-    v4, backup, _ = _touche_shadow_row(symbol)
-    return v4, backup
-
-
-def _fundamental(regime: RegimeOutput) -> float | None:
-    # likidite + crypto + rotation layer'larının ortalaması
-    layers = [layer for layer in regime.layers if layer.name != "Risk İştahı"]
-    if not layers:
-        # F2-3: makro katman kalmadı (drop_unavailable_layers) — 0/1=0 gibi
-        # saçma skor üretme; modül düşer, ağırlığı redistribute edilir.
-        return None
-    return sum(layer.score for layer in layers) / len(layers)
-
-
 def _fundamental_v2(regime: RegimeOutput) -> float | None:
     """M3 — fundamental v2: Kripto Momentum katmanı HARİÇ (likidite + rotasyon).
 
@@ -385,96 +296,25 @@ def _fundamental_v4() -> float | None:
         return None
 
 
-def _fundamental_v4_enabled() -> bool:
-    """`consensus.fundamental_v4` owner-flag'i (default KAPALI = v3/v2/v1 birebir).
-
-    Açılana kadar v4 skoru her hücrede `fundamental_v4_observe` warning satırıyla
-    SALT-GÖZLEM (owner v4↔mevcut ayrışmasını izler); aktivasyon ayrı owner kararı.
-    Kanıt: macro_backtest ADAY B — merkez düzeldi + tüm hedeflerde genel pozitif."""
-    try:
-        return bool(load_thresholds().get("consensus", {}).get("fundamental_v4", False))
-    except (OSError, KeyError, ValueError, TypeError):
-        return False
-
-
-def _fundamental_v2_enabled() -> bool:
-    """`consensus.fundamental_v2` owner-flag'i (default KAPALI = v1 birebir).
-
-    Aktivasyon ayrı tarihli owner kararı; açılana kadar v2 skoru her hücrede
-    `fundamental_v2_observe` warning satırıyla SALT-GÖZLEM olarak izlenir."""
-    try:
-        return bool(load_thresholds().get("consensus", {}).get("fundamental_v2", False))
-    except (OSError, KeyError, ValueError, TypeError):
-        return False
-
-
-def _news_symbol_filter_enabled() -> bool:
-    """consensus.news_symbol_filter — owner-flag (default KAPALI = eski davranış).
-
-    Açıkken _news yalnız o sembole `asset_impact` taşıyan VERIFIED başlıkları
-    sayar (DATA_POLICY: verified=False consensus'a girmez). Kapalıyken global
-    sentiment tally'si birebir korunur (bozulma yok, tek satır geri dönüş)."""
-    try:
-        return bool(load_thresholds().get("consensus", {}).get("news_symbol_filter", False))
-    except (OSError, KeyError, ValueError, TypeError):
-        return False
-
-
-def _news_abstain_enabled() -> bool:
-    """`consensus.news_abstain` owner-flag'i (default KAPALI = bayt-aynı).
-
-    2026-07-13 dış denetim bulgusu: "haber yok" ile "boğa/ayı dengede" aynı şey
-    değildir — kanıtsız modülün 50 (nötr) OY'u consensus'u yapay etkiler (ağırlığı
-    skoru 50'ye çeker). Açıkken ilgili başlık yoksa news modülü OY KULLANMAZ
-    (None → düşer, ağırlığı _redistribute; kapsama da dürüstçe azalır — M10 ile
-    bileşik). Kapalıyken her boş-kanıt hücresinde `news_abstain_observe` satırı
-    birikir. Geri-alma = false (tek satır)."""
-    try:
-        return bool(load_thresholds().get("consensus", {}).get("news_abstain", False))
-    except (OSError, KeyError, ValueError, TypeError):
-        return False
-
-
 def _news_evidence_gap(snap: MarketSnapshot, symbol: str | None) -> str | None:
-    """News modülünün kanıt boşluğu: ilgili başlık yoksa sebep etiketi, varsa None."""
-    if symbol is not None and _news_symbol_filter_enabled():
-        has = any(h.verified and symbol in h.asset_impact for h in snap.headlines)
-        return None if has else "no_relevant_headlines"
-    if any(h.sentiment for h in snap.headlines):
-        return None
-    return "no_headlines"
+    """Sembole etkili doğrulanmış başlık yoksa sebep etiketi, varsa None."""
+    if symbol is None:
+        return "no_symbol"
+    has = any(h.verified and symbol in h.asset_impact for h in snap.headlines)
+    return None if has else "no_relevant_headlines"
 
 
 def _news(snap: MarketSnapshot, symbol: str | None = None) -> float | None:
-    """Haber modülü skoru (0-100, 50 = nötr).
+    """Haber modülü skoru (0-100, 50 = nötr): yalnız sembole etkili doğrulanmış başlıklar.
 
-    Sembol-ilişkili mod (news_symbol_filter açık + symbol verilmiş): yalnız
-    `headline.asset_impact[symbol]` taşıyan verified başlıklar sayılır; yön
-    global sentiment yerine sembole özgü impact'ten gelir (örn. hawkish Fed
-    haberi bearish sentiment'lidir ama DXY için +1). İlgili başlık yoksa 50
-    (nötr) — asset_impact haritasında olmayan semboller (örn. custom hisseler)
-    alakasız küresel haber gürültüsüyle OYNAMAZ.
-
-    Legacy mod (flag kapalı veya symbol None): tüm başlıkların sentiment
-    tally'si — mevcut davranış birebir."""
-    if symbol is not None and _news_symbol_filter_enabled():
-        vals = [
-            float(h.asset_impact[symbol])
-            for h in snap.headlines
-            if h.verified and symbol in h.asset_impact
-        ]
-        if not vals:
-            # news_abstain açıkken kanıtsız modül OY KULLANMAZ (None → düşer).
-            return None if _news_abstain_enabled() else 50.0
-        return 50.0 + (sum(vals) / len(vals)) * 25.0
-    tally = {"bullish": 0, "bearish": 0, "neutral": 0}
-    for h in snap.headlines:
-        if h.sentiment:
-            tally[h.sentiment] += 1
-    total = sum(tally.values())
-    if not total:
-        return None if _news_abstain_enabled() else 50.0
-    return 50.0 + (tally["bullish"] - tally["bearish"]) / total * 25.0
+    Yön sembole özgü etkiden gelir (ör. şahin Fed haberi DXY için +1). İlgili
+    başlık yoksa modül oy kullanmaz (None → düşer; kanıtsız nötr-50 uydurulmaz)."""
+    if symbol is None:
+        return None
+    vals = [float(h.asset_impact[symbol]) for h in snap.headlines if h.verified and symbol in h.asset_impact]
+    if not vals:
+        return None
+    return 50.0 + (sum(vals) / len(vals)) * 25.0
 
 
 def _sentinel(regime: RegimeOutput) -> float | None:
@@ -518,14 +358,6 @@ def _sentinel_v2_cfg() -> dict:
         return load_thresholds().get("sentinel_v2") or {}
     except (OSError, KeyError, ValueError, TypeError):
         return {}
-
-
-def _sentinel_v2_enabled() -> bool:
-    """`sentinel_v2.enabled` owner-flag'i (default KAPALI = v1 birebir).
-
-    Aktivasyon ayrı tarihli owner kararı; açılana kadar v2 skoru her hücrede
-    `sentinel_v2_observe` warning satırıyla SALT-GÖZLEM olarak izlenir."""
-    return bool(_sentinel_v2_cfg().get("enabled", False))
 
 
 def _sentinel_v2(
@@ -580,19 +412,6 @@ def _quantum(snap: MarketSnapshot) -> float:
     return snap.rotation.score
 
 
-def _quantum_v2_enabled() -> bool:
-    """`consensus.quantum_v2` owner-flag'i (default KAPALI = v1 birebir).
-
-    Açıkken quantum oyu tek makro tilt yerine SEMBOL-BAŞI kesitsel göreceli-güç
-    (para akışı: lider/geride) skorundan gelir (rotation.per_symbol). Kanıtsız
-    (yeterli veri yok) sembolde v1'e düşer. Aktivasyon owner kararı; v2 skoru her
-    hücrede `quantum_v2_observe` satırıyla yan yana."""
-    try:
-        return bool(load_thresholds().get("consensus", {}).get("quantum_v2", False))
-    except (OSError, KeyError, ValueError, TypeError):
-        return False
-
-
 def _quantum_v2(snap: MarketSnapshot, symbol: str) -> float | None:
     """Sembolün kesitsel göreceli-güç (para akışı) skoru (0-100) veya None.
 
@@ -604,73 +423,18 @@ def _quantum_v2(snap: MarketSnapshot, symbol: str) -> float | None:
     return float(val) if val is not None else None
 
 
-def _quantum_regime_gate_enabled() -> bool:
-    """`consensus.quantum_regime_gate` owner-flag'i (default KAPALI = bayt-aynı).
-
-    Kanıt (challenger karnesi, CANLI ölçüm): quantum OFFENSIVE'da pozitif
-    ayrışıyor (sep +0.0142), NEUTRAL'da TERS (sep −0.0106) — göreceli-momentum
-    yatay piyasada "yükselene al" = tepeden almak. Açıkken quantum oyu yalnız
-    izinli rejimlerde sayılır; diğerlerinde modül DÜŞER (ağırlığı _redistribute
-    ile dağılır — nötr-50 uydurulmaz). Geri-alma = false (tek satır)."""
-    try:
-        return bool(load_thresholds().get("consensus", {}).get("quantum_regime_gate", False))
-    except (OSError, KeyError, ValueError, TypeError):
-        return False
-
-
 _QUANTUM_GATE_DEFAULT_REGIMES = ("OFFENSIVE",)
 
 
 def _quantum_gate_allowed_regimes() -> set[str]:
-    """Kapı açıkken quantum'un konuşabildiği rejimler (config; default yalnız
-    OFFENSIVE — kanıtın pozitif olduğu tek rejim)."""
+    """Quantum'un oy kullanabildiği rejimler (config; default yalnız OFFENSIVE —
+    challenger karnesinde kanıtın pozitif olduğu tek rejim; NEUTRAL'da ters)."""
     try:
         raw = load_thresholds().get("consensus", {}).get("quantum_gate_allowed_regimes")
         vals = [str(x).strip().upper() for x in (raw or _QUANTUM_GATE_DEFAULT_REGIMES)]
         return {v for v in vals if v}
     except (OSError, KeyError, ValueError, TypeError):
         return set(_QUANTUM_GATE_DEFAULT_REGIMES)
-
-
-# Kaynak kind → consensus modülü eşlemesi (source_registry `decision_usage`
-# uygulaması). Fiyat/makro kaynakları (verified_required) touche/fundamental/
-# sentinel'i besler — kısıt yalnız rotation→quantum ve news*→news kaynaklarında.
-_KIND_TO_MODULE = {"rotation": "quantum", "news": "news", "news_geo": "news"}
-_RESTRICTED_USAGES = ("analytics_only", "simulation_only")
-
-
-def _enforce_decision_usage_enabled() -> bool:
-    """`consensus.enforce_decision_usage` owner-flag'i (default KAPALI = bayt-aynı).
-
-    2026-07-13 dış denetim P1 bulgusu: source_registry haber kaynaklarını
-    `analytics_only`, rotasyon kaynaklarını `simulation_only` etiketler ama
-    consensus bu politikayı UYGULAMIYORDU — etiket fiilen dokümantasyondu.
-    Açıkken kısıtlı-kaynaklı modüller (news, quantum) yön kararına GİRMEZ
-    (modül düşer, ağırlığı _redistribute; nötr-50 uydurulmaz). Kapalıyken her
-    hücrede `decision_usage_observe` kanıt satırı birikir. Geri-alma = false."""
-    try:
-        return bool(load_thresholds().get("consensus", {}).get("enforce_decision_usage", False))
-    except (OSError, KeyError, ValueError, TypeError):
-        return False
-
-
-def _restricted_modules() -> dict[str, str]:
-    """source_registry'den kısıtlı consensus modülleri: {modül: en-kısıtlı etiket}.
-
-    verified_required = tam karar hakkı; analytics_only/simulation_only karar
-    zincirinde kısıtlı. Modülü besleyen kaynaklardan herhangi biri kısıtlıysa
-    modül o etiketi taşır (analytics_only > simulation_only muhafazakârlığı).
-    Registry okunamazsa boş dict (kısıt uygulanmaz — mevcut davranış)."""
-    try:
-        out: dict[str, str] = {}
-        for src in load_source_registry().get("sources") or []:
-            mod = _KIND_TO_MODULE.get(str(src.get("kind", "")))
-            usage = str(src.get("decision_usage", ""))
-            if mod and usage in _RESTRICTED_USAGES and out.get(mod) != "analytics_only":
-                out[mod] = usage
-        return out
-    except (OSError, ValueError, TypeError, KeyError, AttributeError):
-        return {}
 
 
 def _min_module_coverage() -> float:
@@ -718,21 +482,6 @@ def _timeframe_module_drop(timeframe: str, generated_at: object | None = None) -
         return {str(item).strip().lower() for item in raw if str(item).strip()}
     except (OSError, KeyError, TypeError, ValueError):
         return set()
-
-
-def _dominant_directional_enabled() -> bool:
-    """`consensus.dominant_directional` owner-flag'i (default KAPALI = bayt-aynı).
-
-    2026-07-13 dış denetim bulgusu: legacy dominant `max(score×weight)` bearish
-    modülü HİÇBİR ZAMAN dominant seçemez (skor 5 × ağırlık 0.5 = 2.5, skor 70 ×
-    ağırlık 0.2 = 14 kazanır) — mistake-memory fingerprint'i dersi yanlış modüle
-    yazar. Açıkken dominant nötr-50 merkezli yön katkısıyla seçilir:
-    `max(|score−50| × weight)`. İki hesap her hücrede `dominant_observe`
-    satırıyla yan yana (flag'siz gözlem). Geri-alma = false (tek satır)."""
-    try:
-        return bool(load_thresholds().get("consensus", {}).get("dominant_directional", False))
-    except (OSError, KeyError, ValueError, TypeError):
-        return False
 
 
 MODULE_ORDER = ["touche", "fundamental", "news", "sentinel", "quantum"]
@@ -792,149 +541,44 @@ def build(
     regime: RegimeOutput,
     timeframe: str = "1d",
 ) -> ConsensusResult:
-    # T2 — timeframe yalnızca teknik (touche) modülünü farklılaştırır;
-    # makro/haber/rotasyon katmanları asset-level kalır. Default "1d" ile
-    # mevcut asset-level davranış birebir korunur.
-    # Teknik oy kademesi (2026-07-12 owner kararı): v4 owner formülü BİRİNCİL,
-    # touche_backup (v2 rejim-anahtarlı motor) YEDEK, zemin teknik motor en dip
-    # paraşüt. Varyantlar her zaman gözlem satırında yan yana (owner kanıtı
-    # buradan izler). RiskGate/boyut/manuel kuyruk DEĞİŞMEZ — yalnız yön oyu.
-    touche_base, tf_warnings = _touche(symbol, snap, timeframe)
-    sh_v4, sh_backup, speaker_tf = _touche_shadow_row(symbol)
-    # TF-kapısı (2026-07-13, gölge-önce): artifact sembol başına TEK yön taşır
-    # (konuşmacı TF). Kapı açıkken bu yön yalnız kendi TF hücresinde sayılır;
-    # diğer hücreler TF-duyarlı zemin motora düşer. Gözlem satırı HER ZAMAN
-    # yazılır (kanıt birikir); kapalıyken karar davranışı bayt-aynı.
-    if (
-        speaker_tf
-        and speaker_tf != timeframe
-        and (sh_v4 is not None or sh_backup is not None)
-    ):
-        tf_gate_applied = _touche_speaker_tf_only_enabled()
-        tf_warnings.append(
-            "touche_tf_gate_observe:"
-            f"speaker={speaker_tf}:cell={timeframe}:"
-            f"applied={'yes' if tf_gate_applied else 'no'}"
-        )
-        if tf_gate_applied:
-            sh_v4, sh_backup = None, None  # kopya yön yok → zemin motor konuşur
-    if _touche_v4_enabled() and sh_v4 is not None:
-        touche_score, touche_used = sh_v4, "v4"
-    elif _touche_v4_enabled() and sh_backup is not None:
-        touche_score, touche_used = sh_backup, "backup"
-    else:
-        touche_score, touche_used = touche_base, "base"
-    if sh_v4 is not None or sh_backup is not None:
-        tf_warnings.append(
-            "touche_observe:"
-            f"base={touche_base:.1f}:"
-            f"backup={'none' if sh_backup is None else f'{sh_backup:.1f}'}:"
-            f"v4={'none' if sh_v4 is None else f'{sh_v4:.1f}'}:used={touche_used}"
-        )
+    # Teknik modül yalnız (symbol, timeframe) ile değişir; makro, haber ve
+    # rotasyon katmanları varlık düzeyindedir. Her modülde tek canlı yol vardır.
+    touche_score, tf_warnings = _touche(symbol, snap, timeframe)
     raw = {"touche": touche_score}
-    # Politika gereği oy dışı bırakılan modüller (çekimserlik, rejim kapısı, TF
-    # düşürme, kaynak kısıtı). Bunlar "eksik veri" değildir: ağırlıkları her
-    # zamanki gibi kalanlara dağılır. Eksik modül politikası yalnız verisi
-    # gelmeyen modüllere uygulanır.
+    # Politika gereği oy dışı kalan modüller (haber çekimserliği, rejim kapısı,
+    # TF düşürme). "Eksik veri" sayılmaz: ağırlıkları kalanlara dağılır.
     policy_dropped: set[str] = set()
-    # news ABSTAIN (2026-07-13, gölge-önce): kanıt boşluğu HER ZAMAN gözlem
-    # satırı yazar; flag açıkken kanıtsız news oy kullanmaz (düşer, redistribute).
     news_score = _news(snap, symbol)
-    news_gap = _news_evidence_gap(snap, symbol)
-    if news_gap:
-        tf_warnings.append(
-            f"news_abstain_observe:reason={news_gap}:"
-            f"applied={'yes' if news_score is None else 'no'}"
-        )
     if news_score is not None:
         raw["news"] = news_score
     else:
         policy_dropped.add("news")
-    # F2-3 — fundamental/sentinel katman verisi yoksa (drop_unavailable_layers
-    # açıkken) modül düşer; ağırlığı redistribute edilir (quantum deseniyle aynı).
-    # Flag kapalıyken katmanlar hep dolu → bu iki modül her zaman girer (bayt-aynı).
-    # M3 — fundamental_v2 (Kripto Momentum hariç): flag açıkken v2 canlı, v1
-    # gözlem; kapalıyken v1 canlı (bayt-aynı), v2 gözlem. İki varyant her zaman
-    # warning satırında yan yana — owner aktivasyon kanıtını buradan izler.
-    fund_v1 = _fundamental(regime)
-    fund_v2 = _fundamental_v2(regime)
+        tf_warnings.append(f"news_abstain:reason={_news_evidence_gap(snap, symbol)}")
+    # Temel: v4 (DXY + 10y faiz momentumu); bar arşivi yoksa v2 (likidite + rotasyon).
     fund_v4 = _fundamental_v4()
-    # Kademe: v4 (değişim-bazlı makro v4.1 — 5y tezgâh ADAY B) > v2 > v1.
-    # Hangisi açıksa o canlı; v4 açık ama üretemiyorsa (arşiv yok) alt kademeye
-    # düşer. Tüm flag'ler kapalıyken davranış v2/v1 seçimiyle bayt-aynı.
-    # (v3 rotasyonsuz-Likidite 2026-07-15 SÖKÜLDÜ — 5y tezgâh çürüttü.)
-    if _fundamental_v4_enabled() and fund_v4 is not None:
-        fundamental, fund_used = fund_v4, "v4"
-    elif _fundamental_v2_enabled():
-        fundamental, fund_used = fund_v2, "v2"
-    else:
-        fundamental, fund_used = fund_v1, "v1"
-    if fund_v1 is not None or fund_v2 is not None:
-        tf_warnings.append(
-            "fundamental_v2_observe:"
-            f"v1={'none' if fund_v1 is None else f'{fund_v1:.1f}'}:"
-            f"v2={'none' if fund_v2 is None else f'{fund_v2:.1f}'}"
-        )
-    if fund_v4 is not None:
-        tf_warnings.append(
-            "fundamental_v4_observe:"
-            f"v4={fund_v4:.1f}:"
-            f"v2={'none' if fund_v2 is None else f'{fund_v2:.1f}'}:used={fund_used}"
-        )
+    fundamental = fund_v4 if fund_v4 is not None else _fundamental_v2(regime)
+    if fund_v4 is None and fundamental is not None:
+        tf_warnings.append(f"fundamental_fallback:v2:{symbol}:{timeframe}")
     if fundamental is not None:
         raw["fundamental"] = fundamental
     else:
         tf_warnings.append(f"fundamental_dropped:no_macro_layers:{symbol}:{timeframe}")
-    # M4 — sentinel_v2 (çok-girdili stres kompoziti): flag açıkken v2 canlı,
-    # kapalıyken v1 (yalnız VIX) canlı — bayt-aynı. İki varyant her zaman
-    # warning satırında yan yana (owner aktivasyon kanıtını buradan izler).
-    sent_v1 = _sentinel(regime)
-    sent_v2 = _sentinel_v2(regime, snap, symbol, timeframe)
-    sentinel = sent_v2 if _sentinel_v2_enabled() else sent_v1
-    if sent_v1 is not None or sent_v2 is not None:
-        tf_warnings.append(
-            "sentinel_v2_observe:"
-            f"v1={'none' if sent_v1 is None else f'{sent_v1:.1f}'}:"
-            f"v2={'none' if sent_v2 is None else f'{sent_v2:.1f}'}"
-        )
+    # Sentinel: çok girdili stres kompoziti (VIX + oynaklık + türev + opsiyon).
+    sentinel = _sentinel_v2(regime, snap, symbol, timeframe)
     if sentinel is not None:
         raw["sentinel"] = sentinel
     else:
         tf_warnings.append(f"sentinel_dropped:no_risk_appetite_layer:{symbol}:{timeframe}")
-    # Rotasyon UNAVAILABLE ise quantum modülü düşer; ağırlığı _redistribute
-    # ile diğer modüllere dağıtılır (mock skor karar zincirine girmez).
-    # quantum_v2 — sembol-başı kesitsel göreceli-güç (para akışı): flag açıkken v2
-    # canlı, kapalıyken v1 makro tilt (bayt-aynı). v2 kanıtsız (veri yetersiz)
-    # sembolde v1'e düşer. İki varyant her zaman gözlem satırında yan yana.
+    # Quantum: sembol-başı göreceli güç (veri yoksa makro eğim); yalnız izinli
+    # rejimlerde oy kullanır, aksi halde düşer (nötr-50 uydurulmaz).
     if snap.rotation.status != "UNAVAILABLE":
-        quantum_v1 = _quantum(snap)
-        quantum_v2 = _quantum_v2(snap, symbol)
-        use_q2 = _quantum_v2_enabled() and quantum_v2 is not None
-        q_score = quantum_v2 if use_q2 else quantum_v1
-        # Rejim-kapısı (2026-07-13, gölge-önce): göreceli-momentum yalnız trendli
-        # havada konuşur (kanıt: challenger karnesi — NEUTRAL'da TERS). İzinsiz
-        # rejimde gözlem satırı HER ZAMAN yazılır (kanıt birikir); kapı yalnız
-        # flag açıkken uygulanır (kapalıyken karar davranışı bayt-aynı).
-        gate_allowed = regime.label in _quantum_gate_allowed_regimes()
-        gate_applied = _quantum_regime_gate_enabled() and not gate_allowed
-        if not gate_allowed:
-            tf_warnings.append(
-                "quantum_gate_observe:"
-                f"regime={regime.label}:score={q_score:.1f}:"
-                f"applied={'yes' if gate_applied else 'no'}"
-            )
-        if gate_applied:
-            # Modül düşer → ağırlığı _redistribute ile diğerlerine dağılır
-            # (rotation UNAVAILABLE ile aynı desen; nötr-50 uydurulmaz).
+        q2 = _quantum_v2(snap, symbol)
+        q_score = q2 if q2 is not None else _quantum(snap)
+        if regime.label in _quantum_gate_allowed_regimes():
+            raw["quantum"] = q_score
+        else:
             tf_warnings.append(f"quantum_dropped:regime_gate:{regime.label}:{symbol}")
             policy_dropped.add("quantum")
-        else:
-            raw["quantum"] = q_score
-            if quantum_v2 is not None:
-                tf_warnings.append(
-                    "quantum_v2_observe:"
-                    f"v1={quantum_v1:.1f}:v2={quantum_v2:.1f}:used={'v2' if use_q2 else 'v1'}"
-                )
 
     # Timeframe calibration gate: the current clean cohort marks selected
     # modules inverse on 4h. Keep their scores in the shadow trace, but remove
@@ -951,22 +595,6 @@ def build(
                 f"timeframe_module_drop:{timeframe}:{module}:score={dropped_score:.1f}"
             )
 
-    # Kaynak-politikası (2026-07-13, gölge-önce): source_registry'de kısıtlı
-    # etiketli (analytics_only/simulation_only) kaynakların beslediği modüller.
-    # Gözlem satırı HER ZAMAN (kanıt birikir); düşürme yalnız flag açıkken.
-    restricted = {m: u for m, u in _restricted_modules().items() if m in raw}
-    if restricted:
-        usage_applied = _enforce_decision_usage_enabled()
-        tf_warnings.append(
-            "decision_usage_observe:"
-            + ":".join(f"{m}={u}" for m, u in sorted(restricted.items()))
-            + f":applied={'yes' if usage_applied else 'no'}"
-        )
-        if usage_applied:
-            for m, u in sorted(restricted.items()):
-                raw.pop(m, None)
-                policy_dropped.add(m)
-                tf_warnings.append(f"decision_usage_dropped:{m}:{u}")
     weights_cfg = load_active_weights()
     base = weights_cfg["regimes"].get(regime.label, weights_cfg["regimes"]["NEUTRAL"])
     available = set(raw.keys())
@@ -1011,20 +639,8 @@ def build(
         c = s * wt
         weighted += c
         modules.append(ModuleScore(name=name, score=round(s, 2), weight=round(wt, 4), contribution=round(c, 3)))
-    dominant_legacy = max(modules, key=lambda m: m.contribution).name if modules else ""
-    # Yön-katkılı dominant (nötr-50 merkezli): |skor−50|×ağırlık — bearish modül
-    # de dominant olabilir (legacy `score×weight` bunu yapısal olarak engelliyordu).
-    dominant_dir = (
-        max(modules, key=lambda m: abs((m.score - 50.0) * m.weight)).name
-        if modules else ""
-    )
-    if dominant_dir and dominant_dir != dominant_legacy:
-        # İki hesap ayrıştığında kanıt satırı (flag'siz gözlem; owner aktivasyon
-        # kararını buradan izler). Aynıysa satır yazılmaz (gürültü yok).
-        tf_warnings.append(
-            f"dominant_observe:legacy={dominant_legacy}:directional={dominant_dir}"
-        )
-    dominant = dominant_dir if _dominant_directional_enabled() else dominant_legacy
+    # Baskın modül: nötr-50 merkezli yön katkısı |skor−50|×ağırlık (ayı modül de baskın olabilir).
+    dominant = max(modules, key=lambda m: abs((m.score - 50.0) * m.weight)).name if modules else ""
     final = max(0.0, min(100.0, weighted))
     # Yön etiketi trade aksiyon eşikleriyle aynı banttan (tek kaynak) okunur.
     cons_th = load_thresholds().get("consensus", {})

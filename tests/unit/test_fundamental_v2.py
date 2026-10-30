@@ -13,10 +13,7 @@ from types import SimpleNamespace
 import pytest
 
 from packages.consensus import engine as ce
-from packages.data.registry.loader import threshold_override
 from packages.regime.classifier import RegimeLayer, RegimeOutput
-
-_FLAG_ON = {"consensus": {"fundamental_v2": True}}
 
 
 def _layer(name: str, score: float) -> RegimeLayer:
@@ -45,39 +42,30 @@ _LAYERS = (
 )
 
 
-def test_helpers_v1_vs_v2() -> None:
-    regime = _regime(*_LAYERS)
-    assert ce._fundamental(regime) == pytest.approx(53.3333, abs=1e-3)
-    assert ce._fundamental_v2(regime) == pytest.approx(60.0)
+def test_v2_excludes_crypto_momentum() -> None:
+    assert ce._fundamental_v2(_regime(*_LAYERS)) == pytest.approx(60.0)  # Likidite + Rotasyon
 
 
-def test_flag_off_live_score_is_v1_with_observe_line() -> None:
+def test_live_score_is_v2_when_v4_archive_missing(monkeypatch) -> None:
+    monkeypatch.setattr(ce, "_fundamental_v4", lambda: None)
     res = ce.build("BTCUSD", _snap(), _regime(*_LAYERS), "1d")
     fund = next(m for m in res.modules if m.name == "fundamental")
-    assert fund.score == pytest.approx(53.33, abs=0.01)  # v1 canlı (bayt-aynı)
-    assert any(w == "fundamental_v2_observe:v1=53.3:v2=60.0" for w in res.warnings)
-
-
-def test_flag_on_live_score_is_v2() -> None:
-    with threshold_override(_FLAG_ON):
-        res = ce.build("BTCUSD", _snap(), _regime(*_LAYERS), "1d")
-    fund = next(m for m in res.modules if m.name == "fundamental")
     assert fund.score == pytest.approx(60.0)
-    # gözlem satırı iki varyantı göstermeye devam eder (rollback kanıtı)
-    assert any(w == "fundamental_v2_observe:v1=53.3:v2=60.0" for w in res.warnings)
+    assert "fundamental_fallback:v2:BTCUSD:1d" in res.warnings
 
 
-def test_flag_on_drops_module_when_only_crypto_layer() -> None:
-    """F2-3 dürüst modda yalnız kripto katmanı kalmışsa: v1 yaşar (40), v2
-    katmansız → flag açıkken modül düşer + redistribute."""
+def test_live_score_is_v4_when_archive_present(monkeypatch) -> None:
+    monkeypatch.setattr(ce, "_fundamental_v4", lambda: 22.0)
+    res = ce.build("BTCUSD", _snap(), _regime(*_LAYERS), "1d")
+    assert next(m for m in res.modules if m.name == "fundamental").score == pytest.approx(22.0)
+    assert not any(w.startswith("fundamental_fallback") for w in res.warnings)
+
+
+def test_drops_module_when_only_crypto_layer(monkeypatch) -> None:
+    """Yalnız kripto katmanı kalmışsa v2 katmansız → modül düşer, ağırlık dağılır."""
+    monkeypatch.setattr(ce, "_fundamental_v4", lambda: None)
     regime = _regime(_layer("Risk İştahı", 80.0), _layer("Kripto Momentum", 40.0))
-    with threshold_override(_FLAG_ON):
-        res = ce.build("BTCUSD", _snap(), regime, "1d")
+    res = ce.build("BTCUSD", _snap(), regime, "1d")
     assert "fundamental" not in {m.name for m in res.modules}
     assert any(w.startswith("fundamental_dropped:") for w in res.warnings)
-    assert any(w == "fundamental_v2_observe:v1=40.0:v2=none" for w in res.warnings)
     assert sum(m.weight for m in res.modules) == pytest.approx(1.0, abs=1e-3)
-    # aynı rejimde flag KAPALI → v1 (40.0) canlı kalır (regresyon)
-    res_off = ce.build("BTCUSD", _snap(), regime, "1d")
-    fund = next(m for m in res_off.modules if m.name == "fundamental")
-    assert fund.score == pytest.approx(40.0)
