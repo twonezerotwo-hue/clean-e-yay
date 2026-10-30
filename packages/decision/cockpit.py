@@ -416,7 +416,11 @@ def finalize_matrix_view(
     cells = view.get("cells") or []
     from packages.paper.state_machine import derive_decision_state
 
-    open_symbols = {str(getattr(p, "symbol", "")) for p in (getattr(paper_state, "open_positions", None) or [])}
+    # Açık pozisyon (varlık, zaman dilimi) düzeyinde: 1h pozisyonu 4h hücresini "açık" göstermez.
+    open_keys = {
+        (str(getattr(p, "symbol", "")), str(getattr(p, "timeframe", "") or "1d"))
+        for p in (getattr(paper_state, "open_positions", None) or [])
+    }
     pending = view.get("pending_paper_actions") or _paper_actions(cells)
     readiness = _auto_open_readiness(cells, snap, paper_state, now)
     ready_keys = {
@@ -429,7 +433,7 @@ def finalize_matrix_view(
         if intent not in {"open_long", "open_short"}:
             cell["final_actionable"] = False
             cell["final_execution_ready"] = False
-            state, state_reason = derive_decision_state(cell, open_symbols=open_symbols)
+            state, state_reason = derive_decision_state(cell, open_keys=open_keys)
             cell["lifecycle_state"] = state
             cell["lifecycle_reason"] = state_reason
             continue
@@ -458,9 +462,18 @@ def finalize_matrix_view(
 
         cell["final_actionable"] = final_ready
         cell["final_execution_ready"] = final_ready
+        # Yaşam döngüsü etiketi için kanıtlar kapı sırasından bağımsız ölçülür
+        # (kararı değiştirmez; yalnız hangi teyidin eksik olduğunu adlandırır).
+        symbol, timeframe = str(cell.get("symbol") or ""), str(cell.get("timeframe") or "")
+        tech_confirmed = technical_data_ready(snap, symbol, timeframe) and technical_confirmation_ready(
+            snap, symbol, timeframe, side
+        )[0]
+        news_confirmed = (key in ready_keys) if readiness.get("enabled") and readiness.get("available") else None
         if final_ready:
             cell["paper_action"] = intent
-            state, state_reason = derive_decision_state(cell, open_symbols=open_symbols)
+            state, state_reason = derive_decision_state(
+                cell, open_keys=open_keys, technical_confirmed=tech_confirmed, news_confirmed=news_confirmed
+            )
             cell["lifecycle_state"] = state
             cell["lifecycle_reason"] = state_reason
             continue
@@ -478,7 +491,9 @@ def finalize_matrix_view(
             cell["reason"] = "Teknik veri taze ve doğrulanmış değil; otomatik açılış bekletildi."
         elif final_blocker == "technical_confirmation":
             cell["reason"] = "Teknik göstergeler aynı yönde yeterli teyit vermedi; otomatik açılış bekletildi."
-        state, state_reason = derive_decision_state(cell, open_symbols=open_symbols)
+        state, state_reason = derive_decision_state(
+            cell, open_keys=open_keys, technical_confirmed=tech_confirmed, news_confirmed=news_confirmed
+        )
         cell["lifecycle_state"] = state
         cell["lifecycle_reason"] = state_reason
 
