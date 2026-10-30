@@ -202,6 +202,24 @@ sources:
     decision_usage: verified_required
     fallback_to_mock: false
 
+  # Binance spot (2026-10-30): Kraken'den sonra ikinci gerçek-mum kaynağı;
+  # özel kripto varlıklarda (ör. DODO) CoinGecko'dan önce birincil.
+  - id: btcusd_ohlcv_binance
+    kind: ohlcv
+    asset: BTCUSD
+    fetcher: binance_spot
+    cadence_sec: 900
+    decision_usage: verified_required
+    fallback_to_mock: false
+
+  - id: ethusd_ohlcv_binance
+    kind: ohlcv
+    asset: ETHUSD
+    fetcher: binance_spot
+    cadence_sec: 900
+    decision_usage: verified_required
+    fallback_to_mock: false
+
   - id: btcusd_ohlcv_coingecko
     kind: ohlcv
     asset: BTCUSD
@@ -338,7 +356,7 @@ runtime_inventory:
       count: 8
       registry: config/discovery.yaml:news_discovery.extra_feeds
   providers:
-    ohlcv: [ohlcv_kraken, ohlcv_coingecko, ohlcv_yfinance]
+    ohlcv: [ohlcv_kraken, ohlcv_binance, ohlcv_coingecko, ohlcv_yfinance]
     derivatives: [derivatives_binance]
     options: [options_deribit]
   shadow_transforms: [macro_evidence_canonical, macro_correlation_shadow]

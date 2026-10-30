@@ -24,7 +24,7 @@ def observed_at(bars: list[OHLCVBar], timeframe: Timeframe):
 
     last = bars[-1]
 
-    if last.source == "kraken_spot" and last.verified:
+    if last.source in {"kraken_spot", "binance_spot"} and last.verified:
         return last.ts + timedelta(seconds=SECONDS[timeframe])
 
     return last.ts

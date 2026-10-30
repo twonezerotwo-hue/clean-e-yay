@@ -115,6 +115,11 @@ COVERAGE: dict[str, dict] = {
         "reason": "weight_rollback'in min-outcome eşiği — aç/kapa aktivasyonu değil, "
                   "rollback mekanizmasının ta kendisinin parametresi.",
     },
+    "EYAY_BINANCE_OHLCV_ENABLED": {
+        "mechanism": TUNING_PARAM, "monitor": None,
+        "reason": "Binance spot salt-okuma gerçek mum kaynağı (Kraken'den sonra, CoinGecko'dan "
+                  "önce); emir veya karar yetkisi eklemez.",
+    },
     "EYAY_KRAKEN_OHLCV_ENABLED": {
         "mechanism": TUNING_PARAM, "monitor": None,
         "reason": "CoinGecko rate-limitinde kullanılan salt-okuma OHLCV sağlayıcı "

@@ -189,6 +189,7 @@ def _registry_runtime_summary(provider_status: dict | None) -> dict:
         "coingecko": {"coingecko", "ohlcv_coingecko"},
         "yfinance": {"yfinance", "ohlcv_yfinance", "rotation"},
         "kraken": {"kraken", "ohlcv_kraken"},
+        "binance_spot": {"binance_spot", "ohlcv_binance"},
         "binance": {"binance", "derivatives_binance"},
         "deribit": {"deribit", "options_deribit"},
         "fred": {"fred", "macro_fred"},

@@ -86,6 +86,9 @@ ensure_env BAR_HISTORY_ENABLED 1
 # Public, read-only crypto OHLCV fallback. CoinGecko remains secondary;
 # this prevents a rate-limit from making technical cells use old disk bars.
 ensure_env EYAY_KRAKEN_OHLCV_ENABLED true
+# Binance spot gercek mumlari (owner karari 2026-10-30): kripto barlarinin
+# CoinGecko aylik kotasina bagimliligini kaldirir. Salt okuma; lokal .env=true.
+ensure_env EYAY_BINANCE_OHLCV_ENABLED true
 # D4 per-TF trust kapisi (2026-07-06, owner "10/10" hedefi): canli tf_weights
 # kapisi acildiginda ogrenilmis agirlik yalniz kendi kanitini getirmis TF'lere
 # akar (edge_proven), kanitsiz TF notr. SERTLESTIRME — yeni davranis ACMAZ,

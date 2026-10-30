@@ -25,6 +25,7 @@ import threading
 from datetime import UTC, datetime
 
 from packages.data.providers.ohlcv import (
+    binance,
     cache,
     coingecko,
     fixtures,
@@ -44,7 +45,9 @@ _MAX_BARS: dict[Timeframe, int] = {
     "1w": 400,
 }
 
-_PROVIDER_NAMES = ("ohlcv_coingecko", "ohlcv_yfinance", "ohlcv_kraken")
+_PROVIDER_NAMES = ("ohlcv_coingecko", "ohlcv_yfinance", "ohlcv_kraken", "ohlcv_binance")
+# Gerçek mum (borsa spot) kaynakları: önbellekleri sağlayıcı adına karışmaz.
+_SPOT_SOURCES = frozenset({"kraken_spot", "binance_spot"})
 
 _LOCK = threading.Lock()
 _STATUS: dict[str, dict] = {
@@ -185,6 +188,33 @@ def _provider_for(symbol: str):
     return None, None
 
 
+def _binance_bars(symbol: str, tf: Timeframe) -> list[OHLCVBar]:
+    """Binance spot gerçek mumları: taze güvenilir önbellek → canlı → bayat önbellek."""
+    cached = cache.load(symbol, tf)
+    trusted = (
+        cached is not None
+        and len(cached.bars) >= binance.MIN_BARS
+        and all(b.source == "binance_spot" and b.verified for b in cached.bars)
+    )
+    if trusted and cached.fresh:
+        _mark("ohlcv_binance", ok=True, cache_age_seconds=cached.age_seconds)
+        return cached.bars
+    live = binance.get_bars(symbol, tf)
+    if live is not None:
+        live = live[-_MAX_BARS[tf]:]
+        cache.save(symbol, tf, live)
+        _mark("ohlcv_binance", ok=True)
+        return live
+    _mark("ohlcv_binance", ok=False, error="real_candles_unavailable", symbol=symbol)
+    if trusted and cached.age_seconds <= _MAX_STALE_SEC[tf]:
+        _mark(
+            "ohlcv_binance", ok=False, error="serving_previous_real_candles", error_type="stale_cache",
+            fallback=True, cache_age_seconds=cached.age_seconds, symbol=symbol,
+        )
+        return cached.bars
+    return []
+
+
 def _native_bars(symbol: str, tf: Timeframe) -> list[OHLCVBar]:
     if kraken.enabled_for(symbol):
         cached_kraken = cache.load(symbol, tf)
@@ -228,6 +258,10 @@ def _native_bars(symbol: str, tf: Timeframe) -> list[OHLCVBar]:
                     cache_age_seconds=cached_kraken.age_seconds,
                     symbol=symbol,
                 )
+                # Kraken uzun süre kapalı: aynı nitelikte (gerçek mum) Binance spot
+                # denenir; CoinGecko'ya bilerek düşülmez.
+                if binance.enabled_for(symbol):
+                    return _binance_bars(symbol, tf)
                 return []
             _mark(
                 "ohlcv_kraken",
@@ -240,12 +274,19 @@ def _native_bars(symbol: str, tf: Timeframe) -> list[OHLCVBar]:
             )
             return cached_kraken.bars
 
+    # Binance spot (owner kararı 2026-10-30): Kraken'den sonra, CoinGecko'dan önce
+    # gerçek mum kaynağı; CoinGecko'nun aylık kotasına bağımlılığı kaldırır.
+    if binance.enabled_for(symbol):
+        spot = _binance_bars(symbol, tf)
+        if spot:
+            return spot
+
     provider, name = _provider_for(symbol)
     if provider is None or name is None:
         return []
     cached = cache.load(symbol, tf)
     if cached is not None and any(
-        b.source == "kraken_spot" for b in cached.bars
+        b.source in _SPOT_SOURCES for b in cached.bars
     ):
         cached = None
     if cached is not None and cached.fresh:
@@ -303,11 +344,11 @@ def get_bars(symbol: str, timeframe: str = "1d") -> list[OHLCVBar]:
     tf: Timeframe = timeframe if timeframe in TIMEFRAMES else "1d"  # type: ignore[assignment]
     if is_fixture_mode():
         return fixtures.get_bars(symbol, tf)
-    if tf in ("4h", "1w") and kraken.enabled_for(symbol):
+    if tf in ("4h", "1w") and (kraken.enabled_for(symbol) or binance.enabled_for(symbol)):
         direct = _native_bars(symbol, tf)
 
         if direct and all(
-            b.source == "kraken_spot" and b.verified
+            b.source in _SPOT_SOURCES and b.verified
             for b in direct
         ):
             bars = direct
