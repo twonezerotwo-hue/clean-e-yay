@@ -155,6 +155,15 @@ COVERAGE: dict[str, dict] = {
                   "boyutu KISAR (no-boost). OFF (default)→gölge; ON'da watchdog "
                   "OFF→ON baseline damgalar, post-enable çöküşte DEGRADED önerir.",
     },
+    "OPENROUTER_MODEL": {
+        "mechanism": SHADOW_EXEMPT, "monitor": None,
+        "reason": "YZ anlatıcı modeli (ücretsiz katman); yalnız metin üretir, karar/"
+                  "boyut/RiskGate zincirine girmez.",
+    },
+    "GROQ_MODEL": {
+        "mechanism": SHADOW_EXEMPT, "monitor": None,
+        "reason": "YZ anlatıcı modeli; yalnız metin üretir, karar zincirine girmez.",
+    },
     "API_AUTH_TOKEN": {
         "mechanism": SHADOW_EXEMPT, "monitor": None,
         "reason": "T2 — HTTP yazma-istekleri kilidi (sır; değer GitHub/wrangler "

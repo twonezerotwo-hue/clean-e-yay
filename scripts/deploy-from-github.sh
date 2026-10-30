@@ -107,6 +107,11 @@ set_env TF_SCORING_V2_SHADOW 0
 # senkron). Ayni turde acilan denetim-defteri ogrenme kisiti da esitlenir.
 ensure_env E_YAY_CANONICAL_RUNTIME 1
 ensure_env LEARNING_AUDIT_LEDGER_ONLY 1
+# YZ anlatici modelleri (owner karari 2026-10-30): OpenRouter ucretsiz katmanda
+# (bakiye 0) ucretli model cagrilamaz -> ucretsiz model; Groq fiilen kullanilan
+# modele sabitlenir. Yalniz anlatim; karar zincirine girmez. Lokal .env ile ayni.
+set_env OPENROUTER_MODEL google/gemma-4-31b-it:free
+set_env GROQ_MODEL openai/gpt-oss-120b
 # T2 (2026-07 dis denetim P0-4) — API yazma-istekleri kilidi. Token SIR'dir:
 # degeri git'te DEGIL, GitHub Actions secret'inda yasar (deploy-ec2.yml env ile
 # gecirir). Secret tanimli degilse dokunulmaz -> kilit kapali kalir (bayt-ayni).
