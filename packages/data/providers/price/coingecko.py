@@ -10,6 +10,11 @@ Aylık limit koruması: Demo plan 10.000 çağrı/ay. Spot fiyat sürekli 30sn'd
 sıklığı sabitlenir; cache içindeki taze değer ağ çağrısı yapmadan döner. Aynı
 makinedeki API/tick süreçleri `data/runtime/price_cache` içindeki aynı TTL
 damgasını paylaşır; bu, çoklu worker'ın ücretsiz API kotasını çoğaltmasını önler.
+
+Toplu çağrı (2026-10-30): önbellek bayatlayınca bütün CoinGecko sembolleri tek
+istekte (`ids=a,b,c`) yenilenir; eskiden her sembol ayrı istekti (3 sembol →
+günde 288 çağrı). Her ağ çağrısı `quota.consume("coingecko")` ile sayılır; günlük
+bütçe doluysa çağrı yapılmaz ve DATA_UNAVAILABLE akışı sürer (sahte fiyat yok).
 """
 from __future__ import annotations
 
@@ -22,7 +27,7 @@ import urllib.request
 from datetime import UTC, datetime
 from pathlib import Path
 
-from packages.data.providers import coingecko_auth
+from packages.data.providers import coingecko_auth, quota
 from packages.data.registry import custom_assets
 from packages.data.types import PriceQuote, utcnow
 from packages.ops.store import write_text_atomic
@@ -87,26 +92,46 @@ def _ttl_sec() -> float:
         return float(_DEFAULT_TTL_SEC)
 
 
-def _fetch(symbol: str, cg_id: str) -> PriceQuote | None:
-    url = f"{API}?ids={cg_id}&vs_currencies=usd"
+def _all_ids() -> dict[str, str]:
+    """Bu sağlayıcıdan fiyatı alınan bütün semboller → CoinGecko id."""
+    ids = dict(_SYMBOL_MAP)
+    for asset in custom_assets.all_custom():
+        if asset.provider == "coingecko" and asset.ticker:
+            ids[asset.symbol] = asset.ticker
+    return ids
+
+
+def _fetch_many(ids: dict[str, str]) -> dict[str, PriceQuote]:
+    """Tek istekte birden çok sembol; kota doluysa ya da hata varsa boş döner."""
+    if not ids or not quota.consume("coingecko"):
+        return {}
+    url = f"{API}?ids={','.join(sorted(set(ids.values())))}&vs_currencies=usd"
     req = urllib.request.Request(url, headers=coingecko_auth.headers())
     try:
         with urllib.request.urlopen(req, timeout=TIMEOUT_SEC) as resp:
             data = json.loads(resp.read().decode("utf-8"))
     except (urllib.error.URLError, TimeoutError, OSError, json.JSONDecodeError):
-        return None
-    px = data.get(cg_id, {}).get("usd")
-    if px is None:
-        return None
-    return PriceQuote(
-        symbol=symbol,
-        price=float(px),
-        ts=utcnow(),
-        source="coingecko",
-        verified=True,
-        status="OK",
-        fallback=False,
-    )
+        return {}
+    out: dict[str, PriceQuote] = {}
+    ts = utcnow()
+    for symbol, cg_id in ids.items():
+        px = (data.get(cg_id) or {}).get("usd")
+        if px is None:
+            continue
+        out[symbol] = PriceQuote(
+            symbol=symbol,
+            price=float(px),
+            ts=ts,
+            source="coingecko",
+            verified=True,
+            status="OK",
+            fallback=False,
+        )
+    return out
+
+
+def _fetch(symbol: str, cg_id: str) -> PriceQuote | None:
+    return _fetch_many({symbol: cg_id}).get(symbol)
 
 
 def get_quote(symbol: str) -> PriceQuote | None:
@@ -123,11 +148,19 @@ def get_quote(symbol: str) -> PriceQuote | None:
         if disk is not None:
             _CACHE[symbol] = (now, disk)
             return disk
-    quote = _fetch(symbol, cg_id)
+    # Bayat sembolün yanında önbelleği dolmuş öteki CoinGecko sembolleri de aynı
+    # istekte yenilenir (tek çağrı); taze olanlar isteğe eklenmez.
+    ids = {symbol: cg_id}
+    with _LOCK:
+        for other, other_id in _all_ids().items():
+            hit = _CACHE.get(other)
+            if other != symbol and not (hit and (now - hit[0]) < ttl):
+                ids[other] = other_id
+    quotes = _fetch_many(ids)
     # Yalnızca başarılı (taze) sonucu cache'le — None'ı cache'leme ki
     # bir sonraki cycle tekrar denesin (stale fallback YOK).
-    if quote is not None:
+    for sym, quote in quotes.items():
         with _LOCK:
-            _CACHE[symbol] = (now, quote)
+            _CACHE[sym] = (now, quote)
         _save_disk_cache(quote, now)
-    return quote
+    return quotes.get(symbol)

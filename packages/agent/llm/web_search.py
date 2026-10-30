@@ -87,6 +87,11 @@ def search(
     api_key = os.environ.get("TAVILY_API_KEY", "").strip()
     if not api_key:
         return WebSearchResult(q, "tavily", None, [], error="missing_api_key")
+    from packages.data.providers import quota
+
+    if not quota.consume("tavily"):
+        # Aylık 1000 kredi günlere bölünür; sınır dolunca sohbet kendi haber verisine düşer.
+        return WebSearchResult(q, "tavily", None, [], error="daily_cap")
 
     depth = os.environ.get("TAVILY_SEARCH_DEPTH", "basic").strip().lower()
     if depth not in {"basic", "fast", "ultra-fast", "advanced"}:

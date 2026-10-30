@@ -15,7 +15,7 @@ import urllib.request
 from collections.abc import Callable
 from datetime import UTC, datetime
 
-from packages.data.providers import coingecko_auth
+from packages.data.providers import coingecko_auth, quota
 from packages.data.providers.ohlcv import coingecko as cg_ohlcv
 from packages.data.registry import custom_assets
 from packages.discovery import sector_rotation
@@ -45,6 +45,8 @@ FetchJson = Callable[[str], list | dict | None]
 
 
 def _default_fetch_json(url: str) -> list | dict | None:
+    if not quota.consume("coingecko"):
+        return None  # CoinGecko günlük bütçesi doldu; keşif listesi önbellekten sürer
     req = urllib.request.Request(url, headers=coingecko_auth.headers())
     try:
         with urllib.request.urlopen(req, timeout=TIMEOUT_SEC) as resp:

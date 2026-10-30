@@ -25,6 +25,11 @@ _EIA_GAS_SERIES = "NW2_EPG0_SWO_R48_BCF"
 _USER_AGENT = "clean-e-yay/1.0 (official-macro-shadow)"
 _TIMEOUT_SEC = 6.0
 _DEFAULT_TTL_SEC = 900.0
+# BLS aylık açıklar; anahtarsız uç günde 25 istek verir. 15 dakikada bir sormak
+# kotayı öğlene bitiriyordu (2026-10-30: anahtar geçersiz → anahtarsız uç da
+# doldu). BLS ayrı önbellekte 6 saatte bir sorulur (günde 4 istek).
+_BLS_TTL_SEC = 21600.0
+_BLS_CACHE: tuple[float, list] | None = None
 # Quarterly releases such as GDP and ECI can be more than one quarter old
 # before the next publication.  Keep the latest verified observation instead
 # of dropping it at the 120-day edge; freshness is reported by the snapshot
@@ -93,6 +98,25 @@ def _ttl() -> float:
         return _DEFAULT_TTL_SEC
 
 
+def _bls_ttl() -> float:
+    try:
+        return max(_ttl(), float(os.environ.get("MACRO_BLS_TTL_SEC", _BLS_TTL_SEC)))
+    except (TypeError, ValueError):
+        return _BLS_TTL_SEC
+
+
+def _bls_cached(reference: datetime) -> list:
+    """BLS satırları kendi (uzun) önbelleğinden; başarısız sonuç da önbelleğe girer
+    ki geçersiz anahtar ya da dolu kota uç noktayı her turda yormasın."""
+    global _BLS_CACHE
+    now_ts = datetime.now(UTC).timestamp()
+    if _BLS_CACHE and now_ts - _BLS_CACHE[0] < _bls_ttl():
+        return list(_BLS_CACHE[1])
+    rows = _bls_releases(reference)
+    _BLS_CACHE = (now_ts, list(rows))
+    return rows
+
+
 def _mark(name: str, *, status: str, error: str | None = None, events: int = 0) -> None:
     with _LOCK:
         state = _STATUS[name]
@@ -110,11 +134,12 @@ def get_provider_status() -> dict[str, dict]:
 
 
 def reset_provider_status() -> None:
-    global _CACHE
+    global _CACHE, _BLS_CACHE
     with _LOCK:
         for value in _STATUS.values():
             value.update(status="unknown", last_success_at=None, last_error=None, calls=0, events=0, fallbacks=0)
         _CACHE = None
+        _BLS_CACHE = None
 
 
 def _json_request(url: str, *, payload: dict[str, Any] | None = None) -> dict[str, Any]:
@@ -293,7 +318,7 @@ def list_releases(*, now: datetime | None = None) -> list[Catalyst]:
     cached = _CACHE
     if cached and datetime.now(UTC).timestamp() - cached[0] < _ttl():
         return list(cached[1])
-    rows = [*_bls_releases(reference), *_fred_releases(reference), *_eia_releases(reference)]
+    rows = [*_bls_cached(reference), *_fred_releases(reference), *_eia_releases(reference)]
     # Keep one official row per canonical event/date, preferring BLS over FRED
     # for CPI-like series and EIA over generic oil headlines.
     unique: dict[tuple[str, str], Catalyst] = {}

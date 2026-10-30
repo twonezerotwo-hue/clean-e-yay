@@ -184,6 +184,9 @@ def default_fetch(url: str) -> str:
 # vurur → mükerrer ağ isteği kalkar). Yalnız VARSAYILAN ağ yolu önbelleklenir;
 # enjekte edilen `fetch_fn` (testler) etkilenmez.
 _FEED_CACHE_TTL_SEC = 120.0
+# Google News arama akışları zaten son 1 günü kapsar; 2 dakikada bir sorgulamak
+# Google'ın engelleme riskini büyütür, yeni başlık kazandırmaz (2026-10-30).
+_GOOGLE_NEWS_TTL_SEC = 600.0
 _FEED_CACHE: dict[str, tuple[float, str]] = {}
 _FEED_CACHE_LOCK = threading.Lock()
 
@@ -194,11 +197,15 @@ def reset_cache() -> None:
         _FEED_CACHE.clear()
 
 
+def _feed_ttl(url: str) -> float:
+    return _GOOGLE_NEWS_TTL_SEC if "news.google.com/" in url else _FEED_CACHE_TTL_SEC
+
+
 def _cached_fetch(url: str) -> str:
     now = time.monotonic()
     with _FEED_CACHE_LOCK:
         hit = _FEED_CACHE.get(url)
-        if hit is not None and (now - hit[0]) < _FEED_CACHE_TTL_SEC:
+        if hit is not None and (now - hit[0]) < _feed_ttl(url):
             return hit[1]
     text = default_fetch(url)
     with _FEED_CACHE_LOCK:

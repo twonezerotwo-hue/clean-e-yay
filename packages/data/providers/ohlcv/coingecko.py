@@ -25,7 +25,7 @@ import urllib.error
 import urllib.request
 from datetime import UTC, datetime
 
-from packages.data.providers import coingecko_auth
+from packages.data.providers import coingecko_auth, quota
 from packages.data.registry import custom_assets
 from packages.data.types import OHLCVBar, Timeframe
 
@@ -67,6 +67,10 @@ NATIVE_TFS = frozenset(_TF_PLAN.keys())
 
 def _fetch_prices(cg_id: str, days: int) -> list[tuple[float, float]] | None:
     global _LAST_FETCH_ERROR
+    if not quota.consume("coingecko"):
+        # Ücretsiz günlük bütçe doldu: çağrı yapılmaz, router bayat önbelleğe düşer.
+        _LAST_FETCH_ERROR = {"type": "quota", "message": "CoinGecko günlük çağrı bütçesi doldu"}
+        return None
     url = f"{API}/{cg_id}/market_chart?vs_currency=usd&days={days}"
     req = urllib.request.Request(url, headers=coingecko_auth.headers())
     try:

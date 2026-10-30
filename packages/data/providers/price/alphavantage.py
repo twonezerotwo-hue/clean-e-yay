@@ -13,6 +13,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
+from packages.data.providers import quota
 from packages.data.types import PriceQuote, utcnow
 
 API = "https://www.alphavantage.co/query"
@@ -41,6 +42,8 @@ def _ttl_sec() -> float:
 
 
 def _fetch(symbol: str, from_cur: str, to_cur: str, api_key: str) -> PriceQuote | None:
+    if not quota.consume("alphavantage"):
+        return None  # ücretsiz plan sınırı doldu: zincirde sonraki kaynağa geçilir
     qs = urllib.parse.urlencode(
         {
             "function": "CURRENCY_EXCHANGE_RATE",

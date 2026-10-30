@@ -13,6 +13,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
+from packages.data.providers import quota
 from packages.data.types import PriceQuote, utcnow
 
 API = "https://api.twelvedata.com/price"
@@ -41,6 +42,8 @@ def _ttl_sec() -> float:
 
 
 def _fetch(symbol: str, td_symbol: str, api_key: str) -> PriceQuote | None:
+    if not quota.consume("twelvedata"):
+        return None  # ücretsiz plan sınırı doldu: zincirde sonraki kaynağa geçilir
     qs = urllib.parse.urlencode({"symbol": td_symbol, "apikey": api_key})
     req = urllib.request.Request(
         f"{API}?{qs}", headers={"User-Agent": "clean-e-yay/0.1"}
