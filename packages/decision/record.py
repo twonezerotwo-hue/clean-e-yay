@@ -15,6 +15,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import re
 import threading
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -97,10 +98,14 @@ def _cell(decision: Any, gate: Any) -> dict[str, Any]:
     }
 
 
+_DIGITS = re.compile(r"\d+(?:\.\d+)?")
+
+
 def _key(cell: dict[str, Any]) -> tuple:
     # Skorun küçük oynaması satır üretmez; karar, rota ya da engel değişince yazılır.
-    return (cell["action"], cell["candidate"], cell["direction"], tuple(cell["blocked_by"]),
-            cell["route"], cell["gate_blocker"])
+    # Engel kodlarındaki sayaçlar (ör. "market_closed:15m:4051s") anahtar dışıdır.
+    blocked = tuple(_DIGITS.sub("#", str(item)) for item in cell["blocked_by"])
+    return (cell["action"], cell["candidate"], cell["direction"], blocked, cell["route"], cell["gate_blocker"])
 
 
 def _prune(folder: Path, today: datetime) -> None:

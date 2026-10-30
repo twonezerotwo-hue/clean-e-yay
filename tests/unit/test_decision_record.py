@@ -48,6 +48,14 @@ def test_first_tick_is_checkpoint_with_versions_then_only_changes():
     assert rows[0]["cells"][0]["gate_blocker"] == "technical_confirmation" and rows[0]["cells"][0]["ev"] == -0.2
 
 
+def test_counters_inside_blocker_codes_do_not_create_rows():
+    record.append(SNAP, [_d("XAUUSD", blocked=("market_closed:15m:4051s",))], {}, now=T0)
+    out = record.append(SNAP, [_d("XAUUSD", blocked=("market_closed:15m:4082s",))], {}, now=T0 + timedelta(seconds=30))
+    assert out["kind"] == "none"
+    out = record.append(SNAP, [_d("XAUUSD", blocked=("ev_gate",))], {}, now=T0 + timedelta(seconds=60))
+    assert out["kind"] == "delta"
+
+
 def test_hourly_checkpoint_and_flag_change_force_full_copy(monkeypatch):
     decisions = [_d("BTCUSD")]
     record.append(SNAP, decisions, {}, now=T0)
