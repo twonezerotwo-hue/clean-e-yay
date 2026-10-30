@@ -6,13 +6,12 @@ seviyedir, bu yüzden sürpriz hiç hesaplanamıyordu. Bu modül gerçekleşeni 
 birimde türetir. Satırlar ``source="fred_derived"`` taşır ve yalnız onlara
 `compatible()` uygulanır: ölçü (MoM/YoY/QoQ) aynı olmalı, takvim satırı resmî
 dönemin bilinen açıklama gecikmesi içinde olmalı, takvimde gerçekleşen varsa
-resmîyle uyuşmalı. Yalnız EYAY_MACRO_MATRIX_ENABLED açıkken üretilir.
+resmîyle uyuşmalı.
 """
 from __future__ import annotations
 
 import calendar
 import logging
-import os
 import re
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
@@ -56,11 +55,6 @@ SPECS: tuple[Spec, ...] = (
     Spec("GDP_QOQ", "A191RL1Q225SBEA", "US GDP (QoQ)", "level", "percent", 1.0, True, (20, 35), 1.0, ("gdp",), ("price", "deflator", "sales")),
 )
 _BY_TITLE = {spec.title: spec for spec in SPECS}
-
-
-def enabled() -> bool:
-    """packages.macro.matrix.enabled ile aynı bayrak (döngüsel içe aktarımı önlemek için burada okunur)."""
-    return os.environ.get("EYAY_MACRO_MATRIX_ENABLED", "false").strip().lower() in {"1", "true", "yes", "on"}
 
 
 def measure_of(title: str | None) -> str | None:
@@ -107,8 +101,6 @@ def _transform(values: list[float], how: str, scale: float) -> float | None:
 
 
 def releases(now: datetime | None = None) -> list[Catalyst]:
-    if not enabled():
-        return []
     from packages.data.providers.price import fred
 
     now = now or datetime.now(UTC)

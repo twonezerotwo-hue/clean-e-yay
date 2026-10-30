@@ -258,34 +258,24 @@ def _impact(
     statement_contribution = _clamp(statement_contribution)
     macro_surprise_contribution = 0.0
     macro_surprise_drivers: list[str] = []
-    use_matrix = surprise_matrix.enabled()
     for surprise in state.macro_surprises or ():
-        if use_matrix:
-            # Owner tablosu: yön beklentiye göre sürprizden, varlık başına.
-            topic = surprise_matrix.topic_for(surprise.topic or surprise.event_type)
-            # Çapraz teyit: dolar ve varlığın fiyatı açıklamadan sonra tablodaki
-            # yönde değilse katkı düşer (ilk tepki dönerse de).
-            confirm_scale, confirm_state = macro_confirm.assess(
-                event_id=surprise.event_id, topic=topic, normalized=surprise.normalized_surprise,
-                released_at=surprise.published_at, symbol=symbol, asset_class=asset_class,
-                prices_now=prices, now=state.generated_at,
-            )
-            contribution = (float(surprise.effective_strength or 0.0) * surprise_matrix.weight(topic, symbol, asset_class)
-                            * surprise_matrix.thesis_weight() * confirm_scale)
-            macro_surprise_drivers.append(f"macro_confirm:{surprise.event_id}:{confirm_state}")
-        else:
-            contribution = (
-                surprise.inflation_contribution * float(exposures.get("inflation_pressure", 0.0))
-                + surprise.growth_contribution * float(exposures.get("growth_pressure", 0.0))
-                + surprise.rates_contribution * float(exposures.get("rates_pressure", 0.0))
-                + surprise.oil_contribution * float(exposures.get("energy_supply_risk", exposures.get("growth_pressure", 0.0)))
-            )
+        # Owner tablosu: yön beklentiye göre sürprizden, varlık başına.
+        topic = surprise_matrix.topic_for(surprise.topic or surprise.event_type)
+        # Çapraz teyit: dolar ve varlığın fiyatı açıklamadan sonra tablodaki
+        # yönde değilse katkı düşer (ilk tepki dönerse de).
+        confirm_scale, confirm_state = macro_confirm.assess(
+            event_id=surprise.event_id, topic=topic, normalized=surprise.normalized_surprise,
+            released_at=surprise.published_at, symbol=symbol, asset_class=asset_class,
+            prices_now=prices, now=state.generated_at,
+        )
+        contribution = (float(surprise.effective_strength or 0.0) * surprise_matrix.weight(topic, symbol, asset_class)
+                        * surprise_matrix.thesis_weight() * confirm_scale)
+        macro_surprise_drivers.append(f"macro_confirm:{surprise.event_id}:{confirm_state}")
         macro_surprise_contribution += contribution
         if abs(contribution) > 0.005:
             macro_surprise_drivers.append(f"macro_surprise:{surprise.event_type}:{surprise.event_id}")
     macro_surprise_contribution = _clamp(macro_surprise_contribution)
-    matrix_term = macro_surprise_contribution if use_matrix else 0.0
-    base_thesis_score = _clamp((score or 0.0) + statement_contribution + matrix_term) if score is not None else None
+    base_thesis_score = _clamp((score or 0.0) + statement_contribution + macro_surprise_contribution) if score is not None else None
     # Positioning is a confidence/timing layer only. It must never be allowed
     # to cross or manufacture the causal thesis sign.
     adjusted_score = base_thesis_score

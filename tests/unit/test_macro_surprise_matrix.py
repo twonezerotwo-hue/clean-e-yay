@@ -1,4 +1,4 @@
-"""Tek makro sürpriz tablosu: owner tablosunun yönleri, bayrak kapalıyken davranış aynı."""
+"""Tek makro sürpriz tablosu: owner tablosunun yönleri, nedensellikte varlık başına katkı."""
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
@@ -67,14 +67,6 @@ def _gold(world):
     return next(i for i in build_shadow(world, ["XAUUSD", "BTCUSD"]).impacts if i.symbol == "XAUUSD")
 
 
-def test_flag_off_keeps_old_factor_blend(monkeypatch):
-    monkeypatch.delenv("EYAY_MACRO_MATRIX_ENABLED", raising=False)
-    base = build(_snapshot())
-    hot = build(_snapshot(catalysts=[_hot_cpi()]))
-    assert hot.inflation_pressure > (base.inflation_pressure or 0.0)  # eski davranış: faktöre karışır
-    assert _gold(hot).base_thesis_score == _gold(hot).base_thesis_score  # deterministik
-
-
 def _baseline(monkeypatch):
     from packages.data import snapshot_store
     from packages.macro import confirm
@@ -88,11 +80,8 @@ def _baseline(monkeypatch):
 CONFIRMING = {"DXY": 100.3, "XAUUSD": 1985.0, "BTCUSD": 79000.0}
 
 
-def test_flag_on_hot_cpi_turns_gold_and_btc_down(monkeypatch):
+def test_hot_cpi_turns_gold_and_btc_down(monkeypatch):
     _baseline(monkeypatch)
-    monkeypatch.delenv("EYAY_MACRO_MATRIX_ENABLED", raising=False)
-    old_gold = _gold(build(_snapshot(catalysts=[_hot_cpi()])))
-    monkeypatch.setenv("EYAY_MACRO_MATRIX_ENABLED", "true")
     calm = build(_snapshot())
     hot = build(_snapshot(catalysts=[_hot_cpi()]))
     assert hot.inflation_pressure == calm.inflation_pressure  # faktöre karışmaz
@@ -102,13 +91,10 @@ def test_flag_on_hot_cpi_turns_gold_and_btc_down(monkeypatch):
         assert impacts[symbol].macro_surprise_contribution < 0
         if calm_impacts[symbol].base_thesis_score is not None:
             assert impacts[symbol].base_thesis_score < calm_impacts[symbol].base_thesis_score
-    if old_gold.base_thesis_score is not None:
-        assert impacts["XAUUSD"].base_thesis_score < old_gold.base_thesis_score
 
 
-def test_flag_on_unconfirmed_surprise_adds_nothing(monkeypatch):
+def test_unconfirmed_surprise_adds_nothing(monkeypatch):
     _baseline(monkeypatch)
-    monkeypatch.setenv("EYAY_MACRO_MATRIX_ENABLED", "true")
     hot = build(_snapshot(catalysts=[_hot_cpi()]))
     against = {"DXY": 100.3, "XAUUSD": 2015.0, "BTCUSD": 79000.0}  # altın sıcak CPI'ya rağmen yükseldi
     gold = next(i for i in build_shadow(hot, ["XAUUSD"], prices=against).impacts if i.symbol == "XAUUSD")

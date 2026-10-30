@@ -1,4 +1,4 @@
-"""Takvim biriminde türetilmiş resmî gerçekleşen: dönüşüm, bayrak, eşleştirme kuralları."""
+"""Takvim biriminde türetilmiş resmî gerçekleşen: dönüşüm ve eşleştirme kuralları."""
 from __future__ import annotations
 
 from datetime import UTC, datetime
@@ -52,15 +52,9 @@ def test_transforms():
     assert derived._transform([4.1], "level", 1.0) == 4.1
 
 
-def test_flag_off_produces_nothing(monkeypatch):
-    monkeypatch.delenv("EYAY_MACRO_MATRIX_ENABLED", raising=False)
-    assert derived.releases(datetime(2026, 10, 30, tzinfo=UTC)) == []
-
-
-def test_flag_on_derives_calendar_units(monkeypatch):
+def test_derives_calendar_units(monkeypatch):
     from packages.data.providers.price import fred
 
-    monkeypatch.setenv("EYAY_MACRO_MATRIX_ENABLED", "true")
     quarters = [SimpleNamespace(ts=datetime(2025 + (m // 12), m % 12 + 1, 1, tzinfo=UTC), close=2.0) for m in range(6, 21, 3)]
     series = {"PAYEMS": _months([159_000.0 + 100 * i for i in range(13)] + [159_254.0 + 1200.0]),
               "UNRATE": _months([4.1] * 14), "A191RL1Q225SBEA": quarters}
@@ -95,7 +89,6 @@ def test_calendar_expectation_attached_without_snapshot_limit(monkeypatch):
     from packages.data.providers.calendar import web as web_calendar
     from packages.data.providers.price import fred
 
-    monkeypatch.setenv("EYAY_MACRO_MATRIX_ENABLED", "true")
     monkeypatch.setattr(fred, "get_series", lambda sid, start=None: _months([100.0 + 0.3 * i for i in range(14)]))
     monkeypatch.setattr(web_calendar, "list_catalysts", lambda now=None, horizon_days=2: [
         _calendar(actual=None, expected=0.2), _calendar(title="Core CPI (MoM)", actual=None, expected=0.3)])

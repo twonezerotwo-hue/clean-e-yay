@@ -1,12 +1,11 @@
 """Makro sürpriz → varlık yönü için tek tablo.
 
-`config/macro_surprise_matrix_v1.0.yaml` okunur; nedensellik (bayrakla), makro
-kanıt ve olay-sonrası takip yönü buradan alır. Ağırlık pozitif normalleştirilmiş
+`config/macro_surprise_matrix_v1.0.yaml` okunur; nedensellik, makro kanıt ve
+olay-sonrası takip yönü buradan alır. Ağırlık pozitif normalleştirilmiş
 sürpriz içindir (bkz. dosya başlığı). Ağ çağrısı yok, karar vermez.
 """
 from __future__ import annotations
 
-import os
 from pathlib import Path
 from typing import Any
 
@@ -14,11 +13,6 @@ import yaml
 
 _PATH = Path(__file__).resolve().parents[2] / "config" / "macro_surprise_matrix_v1.0.yaml"
 _CACHE: dict[str, Any] | None = None
-
-
-def enabled() -> bool:
-    """Nedensellik katmanında tablo kullanımı (varsayılan kapalı; owner onayıyla açılır)."""
-    return os.environ.get("EYAY_MACRO_MATRIX_ENABLED", "false").strip().lower() in {"1", "true", "yes", "on"}
 
 
 def _data() -> dict[str, Any]:

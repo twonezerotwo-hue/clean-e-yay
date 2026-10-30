@@ -5,9 +5,9 @@ Strategy (pluggable, deterministic-by-default):
      ``exchange_calendars``) AND the market is a real exchange, use it for
      holiday/early-close-aware sessions (``holiday_verified=True``). Any failure
      or an unsupported exchange code → fall through.
-  2. If ``EYAY_HOLIDAY_TABLE_ENABLED`` is on and the exchange is listed in
-     ``config/exchange_holidays_v1.0.yaml`` (official dates), use that table for
-     holidays and early closes (``holiday_verified=True``). Off by default.
+  2. If the exchange is listed in ``config/exchange_holidays_v1.0.yaml``
+     (official dates), use that table for holidays and early closes
+     (``holiday_verified=True``).
   3. Otherwise use a deterministic fallback: regular weekday sessions only, in
      the market's local timezone via stdlib ``zoneinfo`` (DST-correct). Holidays
      are NOT known → ``holiday_verified=False`` + diagnostic
@@ -22,7 +22,6 @@ holiday-verified sessions.
 from __future__ import annotations
 
 import importlib.util
-import os
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from datetime import time as dt_time
@@ -107,8 +106,8 @@ def resolve_session(market: MarketConfig, now_utc: datetime) -> ResolvedSession:
         if resolved is not None:
             return resolved
 
-    # Official holiday table (flagged; used when the library is absent).
-    if market.kind == "exchange" and holiday_table_enabled():
+    # Official holiday table (used when the library is absent).
+    if market.kind == "exchange":
         resolved = _resolve_with_table(market, now_utc, tz, open_t, close_t)
         if resolved is not None:
             return resolved
@@ -180,10 +179,6 @@ def _resolve_with_library(
     except Exception:
         # Any library/data error → deterministic fallback (caller handles None).
         return None
-
-
-def holiday_table_enabled() -> bool:
-    return os.environ.get("EYAY_HOLIDAY_TABLE_ENABLED", "false").strip().lower() in {"1", "true", "yes", "on"}
 
 
 def _holiday_calendar(exchange: str) -> dict | None:

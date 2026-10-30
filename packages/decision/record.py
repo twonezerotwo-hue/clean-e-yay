@@ -25,7 +25,7 @@ _REPO = Path(__file__).resolve().parents[2]
 _CHECKPOINT_EVERY = timedelta(hours=1)
 # Karar yolunu değiştirebilen bayraklar; değerleri kayıtta sürüm bilgisidir.
 _DECISION_FLAGS = (
-    "E_YAY_CANONICAL_RUNTIME", "EYAY_MACRO_MATRIX_ENABLED", "EYAY_HOLIDAY_TABLE_ENABLED",
+    "E_YAY_CANONICAL_RUNTIME",
     "LEARNING_ADVISOR_APPLY", "TF_SCORING_V2_SHADOW", "LEARNING_AUDIT_LEDGER_ONLY",
 )
 _LOCK = threading.Lock()

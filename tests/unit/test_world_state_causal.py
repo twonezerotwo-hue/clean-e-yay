@@ -148,18 +148,19 @@ def _macro(title: str, actual: float, expected: float, *, event_id: str = "macro
                     actual=actual, expected=expected, historical_surprise_volatility=volatility)
 
 
-def test_macro_surprise_semantics_reach_world_factors():
+def test_macro_surprise_semantics_recorded_not_blended_into_factors():
+    """Sürprizin yönü kaydedilir; dünya faktörlerine karışmaz (varlık yönü tek tablodan)."""
     positive = build(_snapshot(catalysts=[_macro("US CPI", 3.4, 3.0)]))
     negative = build(_snapshot(catalysts=[_macro("US CPI", 2.6, 3.0)]))
     assert positive.macro_surprises[0].inflation_contribution > 0
     assert negative.macro_surprises[0].inflation_contribution < 0
-    assert positive.inflation_pressure > negative.inflation_pressure
+    assert positive.inflation_pressure == negative.inflation_pressure
 
     nfp = build(_snapshot(catalysts=[_macro("Nonfarm Payrolls", 220.0, 180.0, event_id="nfp")]))
     unemployment = build(_snapshot(catalysts=[_macro("Unemployment Rate", 5.0, 4.5, event_id="unemployment")]))
     oil = build(_snapshot(catalysts=[_macro("EIA Crude Oil Inventory", 10.0, 2.0, event_id="oil")]))
-    assert nfp.growth_pressure > 0 and nfp.rates_pressure > 0
-    assert unemployment.growth_pressure < 0
+    assert nfp.macro_surprises[0].growth_contribution > 0
+    assert unemployment.macro_surprises[0].growth_contribution < 0
     assert oil.macro_surprise_oil < 0
 
 

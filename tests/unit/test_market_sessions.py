@@ -86,8 +86,11 @@ def test_weekend_closed(cfg):
     assert us.session_phase == "closed"
 
 
-def test_fallback_marks_holiday_unverified_with_diagnostic(cfg):
-    """Without a calendar lib: holiday status is unverified + diagnostic, never faked."""
+def test_fallback_marks_holiday_unverified_with_diagnostic(cfg, monkeypatch):
+    """Without a calendar lib or holiday table: unverified + diagnostic, never faked."""
+    from packages.market_sessions import calendar_provider
+
+    monkeypatch.setattr(calendar_provider, "_HOLIDAY_CACHE", {})  # tablo yok
     us = _us(asset_context("SPY", MON_MID, cfg))
     assert us.holiday_verified is False
     assert us.is_holiday is None  # unknown — not invented

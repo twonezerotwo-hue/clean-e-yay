@@ -60,10 +60,10 @@ def test_hourly_checkpoint_and_flag_change_force_full_copy(monkeypatch):
     decisions = [_d("BTCUSD")]
     record.append(SNAP, decisions, {}, now=T0)
     assert record.append(SNAP, decisions, {}, now=T0 + timedelta(minutes=61))["kind"] == "checkpoint"
-    monkeypatch.setenv("EYAY_MACRO_MATRIX_ENABLED", "true")
+    monkeypatch.setenv("LEARNING_ADVISOR_APPLY", "1")
     out = record.append(SNAP, decisions, {}, now=T0 + timedelta(minutes=62))
     assert out["kind"] == "checkpoint"
-    assert record.load_day("2026-10-30")[-1]["versions"]["flags"]["EYAY_MACRO_MATRIX_ENABLED"] == "true"
+    assert record.load_day("2026-10-30")[-1]["versions"]["flags"]["LEARNING_ADVISOR_APPLY"] == "1"
 
 
 def test_retention_removes_only_old_day_files(tmp_path):
