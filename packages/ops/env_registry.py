@@ -87,6 +87,7 @@ REGISTRY: dict[str, str] = {
     "COINGECKO_OHLCV_TTL_SEC": "provider",
     "EYAY_KRAKEN_OHLCV_ENABLED": "provider",
     "EYAY_BINANCE_OHLCV_ENABLED": "provider",
+    "EYAY_HOLIDAY_TABLE_ENABLED": "behavior",
     "COINGECKO_PRICE_TTL_SEC": "provider",
     "FINNHUB_TTL_SEC": "provider",
     "FRED_TTL_SEC": "provider",

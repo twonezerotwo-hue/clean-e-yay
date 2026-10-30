@@ -5,7 +5,10 @@ Strategy (pluggable, deterministic-by-default):
      ``exchange_calendars``) AND the market is a real exchange, use it for
      holiday/early-close-aware sessions (``holiday_verified=True``). Any failure
      or an unsupported exchange code → fall through.
-  2. Otherwise use a deterministic fallback: regular weekday sessions only, in
+  2. If ``EYAY_HOLIDAY_TABLE_ENABLED`` is on and the exchange is listed in
+     ``config/exchange_holidays_v1.0.yaml`` (official dates), use that table for
+     holidays and early closes (``holiday_verified=True``). Off by default.
+  3. Otherwise use a deterministic fallback: regular weekday sessions only, in
      the market's local timezone via stdlib ``zoneinfo`` (DST-correct). Holidays
      are NOT known → ``holiday_verified=False`` + diagnostic
      ``exchange_calendar_missing:<exchange>``. We never pretend a fully verified
@@ -19,12 +22,19 @@ holiday-verified sessions.
 from __future__ import annotations
 
 import importlib.util
+import os
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from datetime import time as dt_time
+from pathlib import Path
 from zoneinfo import ZoneInfo
 
+import yaml
+
 from .config import MarketConfig
+
+_HOLIDAY_TABLE_PATH = Path(__file__).resolve().parents[2] / "config" / "exchange_holidays_v1.0.yaml"
+_HOLIDAY_CACHE: dict | None = None
 
 
 @dataclass
@@ -97,6 +107,12 @@ def resolve_session(market: MarketConfig, now_utc: datetime) -> ResolvedSession:
         if resolved is not None:
             return resolved
 
+    # Official holiday table (flagged; used when the library is absent).
+    if market.kind == "exchange" and holiday_table_enabled():
+        resolved = _resolve_with_table(market, now_utc, tz, open_t, close_t)
+        if resolved is not None:
+            return resolved
+
     # Deterministic weekday fallback (DST-correct via zoneinfo; holidays unverified).
     diagnostics = [f"exchange_calendar_missing:{market.exchange}"]
     if market.kind == "futures_global":
@@ -164,3 +180,58 @@ def _resolve_with_library(
     except Exception:
         # Any library/data error → deterministic fallback (caller handles None).
         return None
+
+
+def holiday_table_enabled() -> bool:
+    return os.environ.get("EYAY_HOLIDAY_TABLE_ENABLED", "false").strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _holiday_calendar(exchange: str) -> dict | None:
+    global _HOLIDAY_CACHE
+    if _HOLIDAY_CACHE is None:
+        try:
+            _HOLIDAY_CACHE = yaml.safe_load(_HOLIDAY_TABLE_PATH.read_text(encoding="utf-8")) or {}
+        except (OSError, yaml.YAMLError):
+            _HOLIDAY_CACHE = {}
+    name = (_HOLIDAY_CACHE.get("exchanges") or {}).get(exchange)
+    return (_HOLIDAY_CACHE.get("calendars") or {}).get(name) if name else None
+
+
+def _resolve_with_table(
+    market: MarketConfig, now_utc: datetime, tz: ZoneInfo, open_t: dt_time, close_t: dt_time
+) -> ResolvedSession | None:
+    """Holiday/early-close aware session from the official table. Returns None when
+    the exchange is not listed or the date is past ``covers_until`` (caller falls back)."""
+    cal = _holiday_calendar(market.exchange)
+    today = now_utc.astimezone(tz).date()
+    if not cal or today.isoformat() > str(cal.get("covers_until", "")):
+        return None
+    closed = cal.get("closed") or {}
+    early = cal.get("early_close") or {}
+
+    def window(day):
+        key = day.isoformat()
+        if day.weekday() >= 5 or key in closed:
+            return None
+        end = _parse_hhmm(str(early[key])) if key in early else close_t
+        return _local_window(day, tz, open_t, end)
+
+    today_window = window(today)
+    next_open = None
+    for i in range(0, 12):
+        w = window(today + timedelta(days=i))
+        if w is not None and w[0] > now_utc:
+            next_open = w[0]
+            break
+    diagnostics = ["holiday_verified", "holiday_table"]
+    if today.isoformat() in early:
+        diagnostics.append("early_close")
+    return ResolvedSession(
+        is_open=bool(today_window and today_window[0] <= now_utc < today_window[1]),
+        open_utc=today_window[0] if today_window else None,
+        close_utc=today_window[1] if today_window else None,
+        is_holiday=today.isoformat() in closed,
+        holiday_verified=True,
+        next_open_utc=next_open,
+        diagnostics=diagnostics,
+    )
