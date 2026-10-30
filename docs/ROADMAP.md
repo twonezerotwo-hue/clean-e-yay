@@ -107,6 +107,13 @@ RiskGate → paper lifecycle` zinciridir. Bu override canlı broker eklemez ve
   "Giriş kalitesi v2": `engine` bloğu). `zero_two_canonical` bu karara DAHİL DEĞİL (ayrı terfi).
   Geri alma sırası: `mode: shadow` (legacy uygulanır, karşılaştırma sürer) → `off` → önceki SHA.
 
+## Verilmiş owner kararları (2026-10-30 — haber kapısı)
+
+- Otomatik paper açılışında haber/dünya eşleşmesi zorunlu değil (`auto_open_mode:
+  conflict_reduce`): haber yoksa nötr, ters yönlü haber boyutu yarıya indirir, teyit
+  puan vermez. Teyidi karara artı olarak bağlamak ancak karnesi (teyit > çelişki,
+  yeterli örnek, kümelenmeye dayanıklı) gösterirse ve owner onayıyla (CP5).
+
 ## Açık owner kararları
 
 - **EQ3 `zero_two_canonical`'ı açmak + EQ4 sonrası canlı kanıt:** `zero_two_canonical` CP5

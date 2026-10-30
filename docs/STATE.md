@@ -130,6 +130,23 @@ kapılarında kalan aday küçük boyutla açılabilir. Bu pozisyonlar
 `exploration=true` damgalanır ve `decision_log`'a kapı listesiyle (`blocked_by`)
 yazılır ve EXPLORATION kohortuna düşer: yalnız güven kalibrasyonu (`calibration_trainer`, `tf_calibration`) bunları kullanır, diğer öğreniciler dışarıda bırakır.
 
+## Otomatik açılışta haber/dünya kurulumunun rolü
+
+`news_prepared_setups.auto_open_mode` (`packages/paper/news_setup.py::auto_open_news_effect`,
+tick'in tek çağrı noktası). Owner kararı 2026-10-30: **conflict_reduce** —
+
+- Haber/dünya kurulumu yoksa nötr: teknik teyit + RiskGate + seans yolu aynen işler.
+- Aday ile aynı varlık/TF'de TERS yönlü silahlı kurulum varsa boyut ×
+  `conflict_size_multiplier` (0,5); 0 verilirse engeller.
+- Aynı yönlü eşleşme yalnız kanıt kimliği olarak kaydedilir (`news_confluence:` etiketi);
+  boyut büyütmez.
+
+Gerekçe: 28–30 Ekim'deki `require` modu (aynı yönlü kurulum zorunlu) kanıtsızdı —
+nedensellik kalibrasyonu `INSUFFICIENT` / `shadow_only`; haber öngörüsü karnesinde teyit
+edilen adaylar %43, çelişenler %57 isabet (1 gün, 753 çözüm); kurulum yalnız XAU/BTC/ETH
+için oluşuyor, 16 varlığın 13'ü otomatik açılamıyordu. `require` ve `shadow` modları
+yapılandırmayla geri açılabilir.
+
 ## Öğrenme verisi hijyeni
 
 - `outcomes.learning_grade()` öğrenicilerin tek süzgeci: legacy (regime=UNKNOWN),

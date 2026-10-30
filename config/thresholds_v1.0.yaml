@@ -1316,11 +1316,18 @@ causal_world:
 # yeniden değerlendirir.
 news_prepared_setups:
   enabled: true
-  # Owner activation: automatic PAPER entries require an armed world/news
-  # event and a same-direction technical confirmation. This only filters the
-  # existing RiskGate → session → attempt_open path; it never sends a broker
-  # order and remains PAPER_SAFE / NO_EXECUTION.
-  require_confluence_for_auto_open: true
+  # Otomatik paper açılışında haber/dünya kurulumunun rolü (packages/paper/news_setup.py):
+  #   require         — aynı yönlü silahlı kurulum zorunlu (2026-10-28 – 2026-10-30)
+  #   conflict_reduce — haber yoksa nötr; aday ile TERS yönlü silahlı kurulum varsa
+  #                     boyut × conflict_size_multiplier; aynı yönlü eşleşme yalnız
+  #                     kanıt kimliği (büyütmez)
+  #   shadow          — karara girmez
+  # Owner kararı 2026-10-30: conflict_reduce. Kanıt: nedensellik kalibrasyonu
+  # INSUFFICIENT (shadow_only); haber öngörüsü karnesi teyit %43 / çelişki %57
+  # isabet (1 gün); zorunlu kapı 16 varlığın 13'ünü otomatik açılıştan çıkarıyordu.
+  # Yalnız RiskGate → session → attempt_open yolunu kısıtlar; PAPER_SAFE / NO_EXECUTION.
+  auto_open_mode: conflict_reduce
+  conflict_size_multiplier: 0.5
   min_confidence: 0.55
   min_abs_world_score: 0.15
   min_technical_confirmation: 0.10

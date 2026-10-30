@@ -75,12 +75,34 @@ def _iso(value: datetime) -> str:
     return value.astimezone(UTC).isoformat()
 
 
+# Otomatik paper açılışında haber/dünya kurulumunun rolü:
+#   require         — aynı yönlü silahlı kurulum ZORUNLU (2026-10-28 aktivasyonu)
+#   conflict_reduce — haber yoksa nötr; aday ile TERS yönlü silahlı kurulum varsa boyut
+#                     küçülür; aynı yönlü eşleşme yalnız kanıt kimliği (puan vermez)
+#   shadow          — karara hiç girmez (yalnız ölçülür)
+# Owner kararı 2026-10-30: conflict_reduce. Gerekçe: nedensellik kalibrasyonu
+# INSUFFICIENT (shadow_only); haber öngörüsü karnesinde teyit edilen adaylar %43,
+# çelişenler %57 isabet (1 gün, 753 çözüm); zorunlu kapı 16 varlığın 13'ünü
+# otomatik açılıştan çıkarıyordu.
+AUTO_OPEN_MODES = ("require", "conflict_reduce", "shadow")
+
+
 def _cfg() -> dict[str, Any]:
     raw = load_thresholds().get("news_prepared_setups") or {}
     allowed = raw.get("allowed_confluence_states") or ["STRONG_CONFLUENCE", "MODERATE_CONFLUENCE"]
+    mode = str(raw.get("auto_open_mode") or "").strip().lower()
+    if mode not in AUTO_OPEN_MODES:
+        # Eski anahtar geriye dönük: require_confluence_for_auto_open: true → require.
+        mode = "require" if bool(raw.get("require_confluence_for_auto_open", False)) else "shadow"
+    try:
+        conflict_mult = float(raw.get("conflict_size_multiplier", 0.5))
+    except (TypeError, ValueError):
+        conflict_mult = 0.5
     return {
         "enabled": bool(raw.get("enabled", True)),
-        "require_confluence_for_auto_open": bool(raw.get("require_confluence_for_auto_open", False)),
+        "auto_open_mode": mode,
+        "require_confluence_for_auto_open": mode == "require",
+        "conflict_size_multiplier": max(0.0, min(1.0, conflict_mult)),
         "min_confidence": float(raw.get("min_confidence", 0.55)),
         "min_abs_world_score": float(raw.get("min_abs_world_score", 0.15)),
         "min_technical_confirmation": float(raw.get("min_technical_confirmation", 0.10)),
@@ -90,16 +112,97 @@ def _cfg() -> dict[str, Any]:
     }
 
 
+def auto_open_mode() -> str:
+    """Otomatik açılışta haber kurulumunun rolü (bkz. AUTO_OPEN_MODES)."""
+    cfg = _cfg()
+    return cfg["auto_open_mode"] if cfg["enabled"] else "shadow"
+
+
 def require_confluence_for_auto_open() -> bool:
     """Whether automatic paper entries need a live news+technical setup.
 
-    The flag is intentionally read from the owner config and defaults off when
-    absent, preserving legacy behavior for old installations.  Even when on,
-    this helper only filters candidates; the canonical RiskGate and
-    ``attempt_open`` path remain the final authorities.
+    True only in ``require`` mode. In ``conflict_reduce`` / ``shadow`` the news
+    setup never blocks an entry for lack of evidence; the canonical RiskGate and
+    ``attempt_open`` path remain the final authorities in every mode.
     """
+    return auto_open_mode() == "require"
+
+
+def match_conflict(
+    setups: Iterable[NewsPreparedSetup],
+    *,
+    symbol: str,
+    timeframe: str,
+    side: str,
+    now: datetime | None = None,
+) -> dict[str, Any] | None:
+    """Adayla TERS yönlü, süresi dolmamış silahlı haber kurulumu (en yenisi) ya da None.
+
+    Çelişki dünya görüşünün kendisidir: ters yön + yeterli güven yeter; teknik
+    teyit aranmaz (teknik zaten adayın yönünde)."""
     cfg = _cfg()
-    return bool(cfg["enabled"] and cfg["require_confluence_for_auto_open"])
+    if not cfg["enabled"]:
+        return None
+    now = now or datetime.now(UTC)
+    opposite = "short" if str(side).lower() == "long" else "long"
+    found: list[NewsPreparedSetup] = []
+    for setup in setups:
+        if setup.status != "ARMED" or setup.symbol != symbol or setup.timeframe != timeframe:
+            continue
+        if setup.side != opposite:
+            continue
+        deadline = _parse_time(setup.valid_until)
+        if deadline is not None and deadline <= now:
+            continue
+        if setup.confidence is None or float(setup.confidence) < cfg["min_confidence"]:
+            continue
+        found.append(setup)
+    if not found:
+        return None
+    found.sort(key=lambda item: item.created_at, reverse=True)
+    setup = found[0]
+    return {"setup_id": setup.id, "event_id": setup.event_id, "evidence_id": getattr(setup, "evidence_id", None),
+            "news_title": setup.news_title, "side": setup.side, "confidence": setup.confidence}
+
+
+def auto_open_news_effect(
+    setups: Iterable[NewsPreparedSetup],
+    *,
+    symbol: str,
+    timeframe: str,
+    side: str,
+    price: float | None,
+    data_verified: bool,
+    decision_id: str | None = None,
+    now: datetime | None = None,
+) -> dict[str, Any]:
+    """Otomatik açılış için haber etkisi (tick'in tek çağrı noktası; saf, test edilebilir).
+
+    Döner: ``allow`` (açılış devam eder mi), ``size_multiplier`` (≤1, yalnız küçültür),
+    ``match`` (aynı yönlü kurulum — kanıt kimliği), ``conflict`` (ters yönlü kurulum),
+    ``reason`` (bekletme/küçültme gerekçesi)."""
+    setups = list(setups)
+    mode = auto_open_mode()
+    out: dict[str, Any] = {"mode": mode, "allow": True, "size_multiplier": 1.0, "match": None,
+                           "conflict": None, "reason": None}
+    if mode == "shadow":
+        return out
+    out["match"] = match_confluence(
+        setups, symbol=symbol, timeframe=timeframe, side=side, price=price,
+        data_verified=data_verified, decision_id=decision_id, now=now,
+    )
+    if mode == "require":
+        if out["match"] is None:
+            out.update(allow=False, reason="news_confluence:armed_setup_missing")
+        return out
+    conflict = match_conflict(setups, symbol=symbol, timeframe=timeframe, side=side, now=now)
+    if conflict is not None:
+        mult = _cfg()["conflict_size_multiplier"]
+        out.update(conflict=conflict, size_multiplier=mult,
+                   reason=f"news_conflict:{conflict.get('event_id') or conflict.get('setup_id')}×{mult:g}")
+        if mult <= 0:
+            out["allow"] = False
+    return out
 
 
 def match_confluence(
@@ -511,8 +614,12 @@ def sync(
 
 
 __all__ = [
+    "AUTO_OPEN_MODES",
+    "auto_open_mode",
+    "auto_open_news_effect",
     "is_live",
     "mark_activated",
+    "match_conflict",
     "match_confluence",
     "require_confluence_for_auto_open",
     "sync",

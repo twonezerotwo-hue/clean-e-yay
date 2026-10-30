@@ -180,3 +180,81 @@ def test_news_setup_can_be_activated_in_same_paper_transaction():
     assert setup.status == "ACTIVATED"
     assert setup.last_blocker is None
     assert not mark_activated(state, "missing")
+
+
+# ── Otomatik açılışta haber rolü (owner kararı 2026-10-30: conflict_reduce) ──
+
+def _armed_short_state():
+    state = PaperState(100_000, 100_000)
+    sync(
+        state,
+        causal_shadow=_shadow(),
+        world_state=_evidence(),
+        prices={"BTCUSD": 85_000},
+        decisions=[SimpleNamespace(symbol="BTCUSD", timeframe="1d", action="open_short", decision_id="dec-1")],
+        risk_action="HOLD",
+        snapshot_id="snap-1",
+    )
+    assert state.news_prepared_setups[0].status == "ARMED" and state.news_prepared_setups[0].side == "short"
+    return state
+
+
+def _mode(monkeypatch, **cfg):
+    import packages.paper.news_setup as ns
+
+    monkeypatch.setattr(ns, "load_thresholds", lambda: {"news_prepared_setups": {"enabled": True, **cfg}})
+    return ns
+
+
+def _effect(ns, state, side, **kw):
+    return ns.auto_open_news_effect(state.news_prepared_setups, symbol="BTCUSD", timeframe="1d", side=side,
+                                    price=85_100, data_verified=True, **kw)
+
+
+def test_conflict_reduce_shrinks_size_when_news_points_the_other_way(monkeypatch):
+    ns = _mode(monkeypatch, auto_open_mode="conflict_reduce", conflict_size_multiplier=0.5)
+    out = _effect(ns, _armed_short_state(), "long")
+    assert out["allow"] is True and out["size_multiplier"] == 0.5
+    assert out["conflict"]["side"] == "short" and out["reason"].startswith("news_conflict:")
+    assert out["match"] is None
+
+
+def test_conflict_reduce_same_direction_only_tags_evidence_never_enlarges(monkeypatch):
+    ns = _mode(monkeypatch, auto_open_mode="conflict_reduce")
+    out = _effect(ns, _armed_short_state(), "short")
+    assert out["allow"] is True and out["size_multiplier"] == 1.0
+    assert out["match"] is not None and out["conflict"] is None          # yalnız kanıt kimliği
+
+
+def test_conflict_reduce_without_news_is_neutral(monkeypatch):
+    ns = _mode(monkeypatch, auto_open_mode="conflict_reduce")
+    out = ns.auto_open_news_effect([], symbol="ETHUSD", timeframe="4h", side="long",
+                                   price=3000, data_verified=True)
+    assert out == {"mode": "conflict_reduce", "allow": True, "size_multiplier": 1.0, "match": None,
+                   "conflict": None, "reason": None}
+
+
+def test_conflict_multiplier_zero_blocks(monkeypatch):
+    ns = _mode(monkeypatch, auto_open_mode="conflict_reduce", conflict_size_multiplier=0)
+    assert _effect(ns, _armed_short_state(), "long")["allow"] is False
+
+
+def test_require_mode_blocks_without_same_direction_setup(monkeypatch):
+    ns = _mode(monkeypatch, auto_open_mode="require")
+    state = _armed_short_state()
+    assert _effect(ns, state, "long")["allow"] is False                    # eski 28 Ekim davranışı
+    assert _effect(ns, state, "short")["allow"] is True
+    assert ns.require_confluence_for_auto_open() is True
+
+
+def test_shadow_mode_has_no_effect(monkeypatch):
+    ns = _mode(monkeypatch, auto_open_mode="shadow")
+    out = _effect(ns, _armed_short_state(), "long")
+    assert out["allow"] is True and out["size_multiplier"] == 1.0 and out["conflict"] is None
+
+
+def test_legacy_require_key_still_maps_to_require_mode(monkeypatch):
+    ns = _mode(monkeypatch, require_confluence_for_auto_open=True)
+    assert ns.auto_open_mode() == "require"
+    ns = _mode(monkeypatch)
+    assert ns.auto_open_mode() == "shadow" and ns.require_confluence_for_auto_open() is False

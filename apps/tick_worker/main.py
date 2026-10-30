@@ -531,24 +531,30 @@ async def run_once() -> None:
                     technical_reason or "insufficient same-side confirmations",
                 )
                 continue
-            news_match = None
-            if news_setup.require_confluence_for_auto_open():
-                news_match = news_setup.match_confluence(
-                    ps.news_prepared_setups,
-                    symbol=d.symbol,
-                    timeframe=d.timeframe,
-                    side="long" if d.action == "open_long" else "short",
-                    price=prices.get(d.symbol),
-                    data_verified=verified_flags.get(d.symbol, False),
-                    decision_id=getattr(d, "decision_id", None),
-                    now=now,
+            # Haber/dünya kurulumunun rolü tek noktada (owner kararı 2026-10-30:
+            # conflict_reduce — haber yoksa nötr, TERS yönlü kurulum boyutu küçültür,
+            # aynı yönlü eşleşme yalnız kanıt kimliği). Yalnız kısıtlar; büyütmez.
+            news_effect = news_setup.auto_open_news_effect(
+                ps.news_prepared_setups,
+                symbol=d.symbol,
+                timeframe=d.timeframe,
+                side="long" if d.action == "open_long" else "short",
+                price=prices.get(d.symbol),
+                data_verified=verified_flags.get(d.symbol, False),
+                decision_id=getattr(d, "decision_id", None),
+                now=now,
+            )
+            news_match = news_effect["match"]
+            news_size = float(news_effect["size_multiplier"])
+            if not news_effect["allow"]:
+                log.info(
+                    "news hold: %s %s %s — %s", d.symbol, d.timeframe, d.action, news_effect["reason"],
                 )
-                if news_match is None:
-                    log.info(
-                        "news confluence hold: %s %s %s — armed haber+teknik kurulumu yok",
-                        d.symbol, d.timeframe, d.action,
-                    )
-                    continue
+                continue
+            if news_effect["conflict"] is not None:
+                log.info(
+                    "news conflict reduce: %s %s %s — %s", d.symbol, d.timeframe, d.action, news_effect["reason"],
+                )
             # Paper keşfi negatif EV/güven gevşetmesini yalnız gölgede toplar;
             # otomatik deftere READY kanıtı olmayan hücre yazılmaz. Bu ayrım
             # RiskGate'i değiştirmez ve owner/manual akışını kapatmaz.
@@ -584,9 +590,10 @@ async def run_once() -> None:
             if routed.route == "manual_ready":
                 manual_queue.route_to_manual_ready(
                     ps, symbol=d.symbol, timeframe=d.timeframe, side=side,
-                    size_multiplier=d.size_multiplier * routed.effective_multiplier,
+                    size_multiplier=d.size_multiplier * routed.effective_multiplier * news_size,
                     requested_price=prices.get(d.symbol),
-                    reason=routed.reason,
+                    reason=routed.reason if news_effect["conflict"] is None
+                    else f"{routed.reason} · {news_effect['reason']}",
                     fingerprint=d.fingerprint,
                     snapshot_id=snap.snapshot_id,
                     signal_id=signal_id,
@@ -610,11 +617,15 @@ async def run_once() -> None:
                 symbol=d.symbol,
                 side=side,
                 entry_price=prices.get(d.symbol),
-                size_multiplier=d.size_multiplier * routed.effective_multiplier,
+                size_multiplier=d.size_multiplier * routed.effective_multiplier * news_size,
                 timeframe=d.timeframe,
-                open_reason=(
-                    f"{d.reason} · news_confluence:{news_match.get('event_id') or news_match.get('setup_id')}"
-                    if news_match else d.reason
+                open_reason=" · ".join(
+                    part for part in (
+                        d.reason,
+                        f"news_confluence:{news_match.get('event_id') or news_match.get('setup_id')}"
+                        if news_match else None,
+                        news_effect["reason"] if news_effect["conflict"] is not None else None,
+                    ) if part
                 ),
                 snapshot_id=snap.snapshot_id,
                 signal_id=signal_id,
