@@ -68,6 +68,13 @@ def place(
     limit_price: float | None = None,
     open_reason: str = "owner_manual",
     guard: Callable[[PaperState, float], None] | None = None,
+    snapshot_id: str | None = None,
+    signal_id: str | None = None,
+    decision_id: str | None = None,
+    news_setup_id: str | None = None,
+    news_event_id: str | None = None,
+    news_evidence_id: str | None = None,
+    fingerprint: str | None = None,
 ) -> dict:
     """Owner emri. order_type açıkça verilmezse: fiyat yoksa MARKET, varsa
     LIMIT/STOP (market'e göre çıkarılır). order_type='stop_limit' → entry_price stop
@@ -136,12 +143,18 @@ def place(
             pos = open_position(
                 ps, symbol=sym, side=s, entry_price=float(market), size_multiplier=0.0,
                 manual=True, size_usd_override=float(size_usd), timeframe=timeframe,
-                open_reason=open_reason, snapshot_id=snap.snapshot_id,
+                open_reason=open_reason, snapshot_id=snapshot_id or snap.snapshot_id,
+                signal_id=signal_id, decision_id=decision_id,
+                news_setup_id=news_setup_id, news_event_id=news_event_id,
+                news_evidence_id=news_evidence_id, fingerprint=fingerprint,
                 open_dqs=snap.quality.score, data_verified=True,
             )
             paper_audit.record(
                 "MANUAL_OPEN", position_id=pos.id, symbol=sym, side=s,
                 price_used=pos.entry_price, size=pos.size_usd, reason=open_reason,
+                snapshot_id=pos.snapshot_id, signal_id=pos.signal_id,
+                decision_id=pos.decision_id, news_setup_id=pos.news_setup_id,
+                news_event_id=pos.news_event_id, news_evidence_id=pos.news_evidence_id,
             )
             return {
                 "kind": "market", "position_id": pos.id, "symbol": sym, "side": s,
@@ -166,6 +179,12 @@ def place(
             id=_new_id(sym), symbol=sym, side=s, size_usd=float(size_usd),
             order_type=otype, trigger_price=float(entry_price), limit_price=lp,
             created_at=datetime.now(UTC).isoformat(), timeframe=timeframe, reason="owner_manual",
+            snapshot_id=snapshot_id or snap.snapshot_id,
+            signal_id=signal_id,
+            decision_id=decision_id,
+            news_setup_id=news_setup_id,
+            news_event_id=news_event_id,
+            news_evidence_id=news_evidence_id,
         )
         ps.pending_orders.append(order)
         paper_audit.record(

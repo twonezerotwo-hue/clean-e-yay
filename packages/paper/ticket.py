@@ -8,16 +8,13 @@ size/confidence/checks/why/expiry). Karar zincirine dokunmaz — gözlemleyici.
   - `technical_detail`: 7 bölüm derin veri (collapsed UI + agent deep query)
   - `display`: plain-Türkçe pre-rendered string'ler (UI ve agent için template)
 
-R/R adaptif (`packages/risk/trade_economics.compute_adaptive_targets`):
-  - SL = ATR×1.5
-  - TP = max(SL×3, doğal direnç/destek) but cap at SL×4.5
-  - R/R floor 1:3 — yetersizse ticket `status="insufficient_rr"` (görünmez)
+SL/TP, paper lifecycle ile aynı canonical hedef çözümünden gelir. Böylece
+ticket'teki seviyeler ile gerçekten açılan pozisyonun seviyeleri ayrışmaz.
 
 PAPER_SAFE / NO_EXECUTION — karar üretmez, mevcut state'i sunar.
 """
 from __future__ import annotations
 
-import hashlib
 import json
 import os
 from dataclasses import asdict, dataclass, field
@@ -30,8 +27,9 @@ from packages.decision.engine import TradeDecision, is_execution_ready
 from packages.ops.store import write_text_atomic
 from packages.paper import news_setup, session_gate
 from packages.paper.guards import price_sanity
+from packages.paper.lifecycle import canonical_targets
+from packages.paper.signal_identity import build_signal_id
 from packages.paper.state import PaperState
-from packages.risk.trade_economics import compute_adaptive_targets
 
 # TF süresi (saat) — ticket expires_at için
 _TF_HOURS = {"15m": 0.25, "1h": 1, "4h": 4, "1d": 24, "1w": 168}
@@ -46,6 +44,17 @@ class TradeTicket:
     status: str             # active | insufficient_rr | invalid
     expires_at: str
     ttl_seconds: int
+
+    # One identity shared by decision → ticket → notification → position.
+    # Optional keeps old runtime ticket files and external callers readable.
+    signal_id: str | None = None
+    decision_id: str | None = None
+    position_id: str | None = None
+    news_setup_id: str | None = None
+    news_event_id: str | None = None
+    news_evidence_id: str | None = None
+    # Same snapshot identity consumed by the visual and voice brief.
+    brief_id: str | None = None
 
     summary: dict[str, Any] = field(default_factory=dict)
     technical_detail: dict[str, Any] = field(default_factory=dict)
@@ -206,6 +215,12 @@ def _build_technical_detail(
     snap: MarketSnapshot,
     targets: Any,
     paper_state: PaperState,
+    *,
+    signal_id: str | None = None,
+    decision_id: str | None = None,
+    news_setup_id: str | None = None,
+    news_event_id: str | None = None,
+    news_evidence_id: str | None = None,
 ) -> dict[str, Any]:
     """7 bölüm: konsensüs · piyasa · geçmiş · güvenlik · sizing · kalibrasyon · audit."""
     cons = decision.consensus
@@ -274,6 +289,11 @@ def _build_technical_detail(
             "fingerprint": decision.fingerprint,
             "candidate_action": decision.candidate_action,
             "final_action": decision.action,
+            "signal_id": signal_id,
+            **({"decision_id": decision_id} if decision_id is not None else {}),
+            "news_setup_id": news_setup_id,
+            "news_event_id": news_event_id,
+            **({"news_evidence_id": news_evidence_id} if news_evidence_id is not None else {}),
         },
     }
 
@@ -331,6 +351,13 @@ def build_ticket(
     paper_state: PaperState,
     *,
     base_size_usd: float = 25_000.0,
+    signal_id: str | None = None,
+    decision_id: str | None = None,
+    news_setup_id: str | None = None,
+    news_event_id: str | None = None,
+    news_evidence_id: str | None = None,
+    position_id: str | None = None,
+    brief_id: str | None = None,
 ) -> TradeTicket:
     """Karar + snapshot + state → TradeTicket. Sadece actionable kararlar için.
 
@@ -344,18 +371,16 @@ def build_ticket(
     # Ticket identity describes the signal, not the tick timestamp.  A new
     # timestamp on every worker cycle previously made the same signal look
     # new, which produced duplicate cards and notifications.
-    signal_key = "|".join(
-        str(value or "")
-        for value in (
-            decision.symbol,
-            decision.timeframe,
-            side or decision.action,
-            decision.fingerprint,
-            decision.candidate_action,
-        )
+    signal_id = signal_id or build_signal_id(
+        symbol=decision.symbol,
+        timeframe=decision.timeframe,
+        side=side or decision.action,
+        fingerprint=decision.fingerprint,
+        decision_id=decision_id,
+        news_setup_id=news_setup_id,
+        news_event_id=news_event_id,
     )
-    signal_hash = hashlib.sha1(signal_key.encode("utf-8")).hexdigest()[:10]
-    ticket_id = f"tk_{decision.symbol}_{decision.timeframe}_{signal_hash}"
+    ticket_id = f"tk_{signal_id[4:]}"
 
     if side is None:
         return TradeTicket(
@@ -366,6 +391,13 @@ def build_ticket(
             status="invalid",
             expires_at=expires_at.isoformat(),
             ttl_seconds=int(tf_hours * 3600),
+            signal_id=signal_id,
+            decision_id=decision_id,
+            position_id=position_id,
+            news_setup_id=news_setup_id,
+            news_event_id=news_event_id,
+            news_evidence_id=news_evidence_id,
+            brief_id=brief_id,
         )
 
     # Entry: current price (snapshot prices)
@@ -386,6 +418,13 @@ def build_ticket(
             status="invalid",
             expires_at=expires_at.isoformat(),
             ttl_seconds=int(tf_hours * 3600),
+            signal_id=signal_id,
+            decision_id=decision_id,
+            position_id=position_id,
+            news_setup_id=news_setup_id,
+            news_event_id=news_event_id,
+            news_evidence_id=news_evidence_id,
+            brief_id=brief_id,
             technical_detail={
                 "safety_checks": {
                     "blocked_by": ["price_sanity"],
@@ -402,26 +441,29 @@ def build_ticket(
         tech = snap.technicals.get(decision.symbol)
     atr = float(getattr(tech, "atr", 0) or 0)
 
-    # Support/resistance — for now use snapshot key_levels if available; else None
-    support = None
-    resistance = None
-    # snap.technicals may carry key_levels in newer schema; fallback graceful
-    if tech is not None and hasattr(tech, "key_levels") and tech.key_levels is not None:
-        kl = tech.key_levels
-        support = getattr(kl, "support", None)
-        resistance = getattr(kl, "resistance", None)
-
-    targets = compute_adaptive_targets(
-        side=side,
-        entry=entry,
+    targets = canonical_targets(
+        decision.symbol,
+        side,
+        entry,
+        timeframe=decision.timeframe,
         atr=atr,
-        support=support,
-        resistance=resistance,
+        predicted_confidence=decision.confidence,
+        manual=False,
     )
 
     size_usd = base_size_usd * decision.size_multiplier
     summary = _build_summary(decision, entry, targets, size_usd, paper_state.equity_usd)
-    technical_detail = _build_technical_detail(decision, snap, targets, paper_state)
+    technical_detail = _build_technical_detail(
+        decision,
+        snap,
+        targets,
+        paper_state,
+        signal_id=signal_id,
+        decision_id=decision_id,
+        news_setup_id=news_setup_id,
+        news_event_id=news_event_id,
+        news_evidence_id=news_evidence_id,
+    )
     why = _why_bullets(decision)
     safety = _safety_lines(decision, snap.quality.score if snap.quality else None)
     session = session_gate.evaluate_open(
@@ -473,6 +515,13 @@ def build_ticket(
         status=status,
         expires_at=expires_at.isoformat(),
         ttl_seconds=int(tf_hours * 3600),
+        signal_id=signal_id,
+        decision_id=decision_id,
+        position_id=position_id,
+        news_setup_id=news_setup_id,
+        news_event_id=news_event_id,
+        news_evidence_id=news_evidence_id,
+        brief_id=brief_id,
         summary=summary,
         technical_detail=technical_detail,
         display=display,
@@ -485,6 +534,9 @@ def build_tickets_from_decisions(
     paper_state: PaperState,
     *,
     base_size_usd: float = 25_000.0,
+    only_signal_ids: set[str] | None = None,
+    position_ids_by_signal: dict[str, str] | None = None,
+    brief_id: str | None = None,
 ) -> list[TradeTicket]:
     """Bir tick'in tüm karar matrisinden ticket listesi üret.
 
@@ -520,6 +572,7 @@ def build_tickets_from_decisions(
         # rejected the same candidate because no live news+technical setup was
         # armed.  Such a candidate belongs in observation, not in the audible
         # trade-signal stream.
+        confluence = None
         if news_setup.require_confluence_for_auto_open():
             side = "long" if d.action == "open_long" else "short"
             confluence = news_setup.match_confluence(
@@ -529,10 +582,38 @@ def build_tickets_from_decisions(
                 side=side,
                 price=prices.get(d.symbol),
                 data_verified=verified.get(d.symbol, False),
+                decision_id=getattr(d, "decision_id", None),
             )
             if confluence is None:
                 continue
-        t = build_ticket(d, snap, paper_state, base_size_usd=base_size_usd)
+        side = "long" if d.action == "open_long" else "short"
+        news_setup_id = str((confluence or {}).get("setup_id") or "") or None
+        news_event_id = str((confluence or {}).get("event_id") or "") or None
+        news_evidence_id = str((confluence or {}).get("evidence_id") or "") or None
+        signal_id = build_signal_id(
+            symbol=d.symbol,
+            timeframe=d.timeframe,
+            side=side,
+                fingerprint=getattr(d, "fingerprint", None),
+            decision_id=getattr(d, "decision_id", None),
+            news_setup_id=news_setup_id,
+            news_event_id=news_event_id,
+        )
+        if only_signal_ids is not None and signal_id not in only_signal_ids:
+            continue
+        t = build_ticket(
+            d,
+            snap,
+            paper_state,
+            base_size_usd=base_size_usd,
+            signal_id=signal_id,
+            decision_id=getattr(d, "decision_id", None),
+            news_setup_id=news_setup_id,
+            news_event_id=news_event_id,
+            news_evidence_id=news_evidence_id,
+            position_id=(position_ids_by_signal or {}).get(signal_id),
+            brief_id=brief_id,
+        )
         if t.status != "invalid":
             out.append(t)
     return out

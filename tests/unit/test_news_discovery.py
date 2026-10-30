@@ -40,6 +40,7 @@ CHARTS = {
     "TINY": ({"symbol": "TINY", "instrumentType": "EQUITY", "longName": "Tiny Copper Corp"},
              _bars(close=1.0, volume=1000.0)),
     "^GSPC": ({"symbol": "^GSPC", "instrumentType": "INDEX", "longName": "S&P 500"}, _bars()),
+    "CL=F": ({"symbol": "CL=F", "instrumentType": "FUTURE", "longName": "Crude Oil"}, _bars(close=75.0)),
 }
 SEARCH = {"Antofagasta": [{"symbol": "ANFGF", "type": "EQUITY", "exchange": "PNK", "name": "Antofagasta plc"}],
           "Freeport McMoRan": [{"symbol": "FCX", "type": "EQUITY", "exchange": "NYQ", "name": "Freeport-McMoRan Inc."}]}
@@ -127,7 +128,8 @@ def _resolve(prop, state=None, budget=8):
     net = Net()
     state = state if state is not None else {}
     cfg = nd.config(CFG)
-    out = nd.resolve(prop, state, cfg, NOW, registry=REGISTRY, commodity_by_ticker={"KC=F": "COFFEE"},
+    out = nd.resolve(prop, state, cfg, NOW, registry=REGISTRY,
+                     commodity_by_ticker={"KC=F": "COFFEE", "CL=F": "WTI"},
                      fetch_chart=net.chart, search=net.search, budget=[budget])
     return out, net, state
 
@@ -158,6 +160,11 @@ def test_commodity_future_maps_to_existing_commodity_symbol():
     assert out["status"] == "valid" and out["symbol"] == "COFFEE" and out["asset_type"] == "future"
 
 
+def test_configured_commodity_alias_ignores_provider_display_name():
+    out, _, _ = _resolve({"t": "CL=F", "n": "WTI petrol"})
+    assert out["status"] == "valid" and out["symbol"] == "WTI" and out["asset_type"] == "future"
+
+
 # ---------------- koşu ----------------
 
 def test_run_end_to_end_builds_candidates_and_evidence(store):
@@ -185,6 +192,77 @@ def test_seen_headlines_are_not_resent_and_pool_is_cached(store):
     assert client.calls == 1 and out["llm_calls"] == 0                      # hepsi görüldü
 
 
+def test_cached_pool_enrichment_advances_past_one_shot_marker(monkeypatch):
+    cfg = nd.config({"news_discovery": {"feed_refresh_min": 15,
+                                         "article_enrichment": {"enabled": True, "max_articles_per_refresh": 1}}})
+    state = {
+        "pool": {
+            "fetched_at": (NOW - timedelta(minutes=5)).isoformat(),
+            "article_enrichment_attempted_at": NOW.isoformat(),
+            "items": [
+                {"key": "a", "title": "A", "source": "S", "url": "https://a.example/a",
+                 "ts": NOW.isoformat(), "article_enrichment_attempted_at": None},
+                {"key": "b", "title": "B", "source": "S", "url": "https://b.example/b",
+                 "ts": (NOW - timedelta(minutes=1)).isoformat()},
+            ],
+        }
+    }
+    from packages.data.providers.news.article_enrichment import cache_key
+
+    monkeypatch.setattr(nd, "_enrich_heads", lambda heads, _cfg, _now: {
+        cache_key("https://a.example/a"): {"status": "OK", "excerpt": "article A", "url": "https://a.example/a"},
+    })
+    out = nd._refresh_pool(state, cfg, NOW + timedelta(minutes=1), None)
+    assert out["article_enriched"] == 1
+    assert state["pool"]["items"][0]["article"]["excerpt"] == "article A"
+    assert state["pool"]["items"][1].get("article") is None
+
+
+def test_article_enrichment_uses_production_refresh_limit(monkeypatch):
+    cfg = nd.config({"news_discovery": {"article_enrichment": {
+        "enabled": True, "max_articles_per_refresh": 3,
+        "timeout_seconds": 2, "max_bytes": 1000,
+        "excerpt_chars": 200, "cache_ttl_hours": 1,
+    }}})
+    seen = {}
+
+    def enrich(heads, **kwargs):
+        seen["count"] = len(list(heads))
+        seen.update(kwargs)
+        return {}
+
+    from packages.data.providers.news import article_enrichment
+    monkeypatch.setattr(article_enrichment, "enrich", enrich)
+    heads = [SimpleNamespace(url=f"https://a.example/{i}", ts=NOW, source="S", id=str(i)) for i in range(4)]
+    nd._enrich_heads(heads, cfg, NOW)
+    # The bounded fetcher performs the final slice; the discovery adapter
+    # must pass the production limit through instead of raising on a missing
+    # legacy key.
+    assert seen["count"] == 4
+    assert seen["max_articles"] == 3
+
+
+def test_fresh_feed_refresh_keeps_article_progress(monkeypatch):
+    cfg = nd.config({"news_discovery": {"feed_refresh_min": 15,
+                                         "article_enrichment": {"enabled": True, "max_articles_per_refresh": 1}}})
+    previous = {
+        "pool": {"fetched_at": (NOW - timedelta(minutes=20)).isoformat(), "items": [
+            {"key": "old", "title": "Old", "source": "S", "url": "https://old.example/a",
+             "ts": NOW.isoformat(), "article": {"excerpt": "cached article"},
+             "article_enrichment_attempted_at": NOW.isoformat()},
+        ]}
+    }
+    monkeypatch.setattr(nd, "_enrich_heads", lambda *_args: {})
+
+    def fetch(_feeds, *, geo, max_items):
+        return [SimpleNamespace(title="Old", source="S", url="https://old.example/a", ts=NOW)], 1, None
+
+    nd._refresh_pool(previous, cfg, NOW, fetch)
+    row = previous["pool"]["items"][0]
+    assert row["article"]["excerpt"] == "cached article"
+    assert previous["pool"]["article_enriched"] == 1
+
+
 def test_llm_failure_keeps_headlines_for_retry_and_off_mode_skips(store):
     net = Net()
     out = _run(FakeClient(text=None), net)
@@ -195,6 +273,56 @@ def test_llm_failure_keeps_headlines_for_retry_and_off_mode_skips(store):
     off = nd.run(NOW, discovery_cfg=CFG, client_factory=lambda: None, fetch_group=net.group,
                  fetch_chart=net.chart, search=net.search, registry=REGISTRY)
     assert off["status"] == "LOCAL_LLM_OFF"
+
+
+def test_local_llm_off_uses_safe_deterministic_screening_when_enabled(store):
+    cfg = {
+        **CFG,
+        "news_discovery": {**CFG["news_discovery"], "deterministic_fallback": True},
+        "commodities": {"items": {"COPPER": {"ticker": "HG=F", "label": "Bakır", "keywords": ["copper"]}}},
+    }
+    net = Net(heads=["Chile copper mine strike halts output at Escondida"])
+    out = nd.run(
+        NOW,
+        discovery_cfg=cfg,
+        client_factory=lambda: None,
+        fetch_group=net.group,
+        fetch_chart=net.chart,
+        search=net.search,
+        registry={"HG=F": "COPPER"},
+    )
+    assert out["status"] == "DEGRADED"
+    assert out["events"] == 1 and out["screened"] == 1
+    assert nd.viewmodel()["events"][0]["assets"][0]["status"] == "registry"
+
+
+def test_deterministic_screening_does_not_match_war_inside_warns():
+    assert nd._deterministic_extraction(
+        [{"title": "Analyst warns Bitcoin may fall after the Fed meeting"}],
+        {"commodities": {"items": {}}},
+        max_events=3,
+        max_assets=4,
+    ) == []
+
+
+def test_failed_local_model_uses_extra_fallback_batches_without_retrying_model(store):
+    cfg = {
+        **CFG,
+        "news_discovery": {**CFG["news_discovery"], "deterministic_fallback": True,
+                           "fallback_calls_per_run": 4},
+    }
+    net = Net(heads=[f"Routine market headline {i}" for i in range(7)])
+    out = nd.run(
+        NOW,
+        discovery_cfg=cfg,
+        client_factory=lambda: FakeClient(text=None),
+        fetch_group=net.group,
+        fetch_chart=net.chart,
+        search=net.search,
+        registry=REGISTRY,
+    )
+    assert out["errors"] == ["llm_unavailable"]
+    assert out["screened"] == 7 and out["llm_calls"] == 1
 
 
 def test_candidates_decay_and_expire(store):

@@ -18,13 +18,20 @@ def test_news_wall_is_read_only_and_preserves_multi_country_context(monkeypatch)
         freshness="FRESH",
         ts=datetime(2026, 10, 26, 12, 0, tzinfo=UTC),
     )
-    monkeypatch.setattr(regime_report, "list_headlines", lambda limit: [headline])
-    monkeypatch.setattr(regime_report, "get_provider_status", lambda: {"news": {"status": "ok"}})
+    snap = SimpleNamespace(
+        snapshot_id="snap::canonical",
+        generated_at=datetime(2026, 10, 26, 12, 1, tzinfo=UTC),
+        headlines=[headline],
+        provider_status={"news": {"status": "ok"}, "geo_news": {"status": "ok"}},
+    )
+    monkeypatch.setattr(regime_report, "get_cached_snapshot", lambda: snap)
 
     result = regime_report.get_news_current(200)
 
     assert result["count"] == 1
     assert result["paper_safe"] is True
     assert result["no_execution"] is True
+    assert result["snapshot_id"] == "snap::canonical"
+    assert result["coverage"]["canonical"] is True
     assert result["headlines"][0]["countries"] == ["USA", "Iran", "China", "Russia"]
     assert result["coverage"]["requested_limit"] == 96

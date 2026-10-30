@@ -395,6 +395,18 @@ paths:
               schema:
                 $ref: "#/components/schemas/LearningSummary"
 
+  /api/v1/learning/performance-readiness:
+    get:
+      operationId: getPerformanceReadiness
+      summary: Kanıt-kapılı 90+ performans hazırlık puanı
+      responses:
+        "200":
+          description: Observe-only readiness report
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PerformanceReadiness"
+
   /api/v1/risk/correlation:
     get:
       operationId: getRiskCorrelation
@@ -462,6 +474,18 @@ paths:
       responses:
         "200":
           description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CockpitBrief"
+
+  /api/v1/cockpit/state:
+    get:
+      operationId: getCockpitState
+      summary: Canonical cockpit envelope (tek snapshot/karar/kanıt kimliği; read-only)
+      responses:
+        "200":
+          description: OK — aynı CockpitBrief sözleşmesi, canonical envelope alanlarıyla
           content:
             application/json:
               schema:
@@ -770,6 +794,32 @@ paths:
       responses:
         "200":
           description: OK (tablo yoksa status=NO_TABLE)
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+
+  /api/v1/learning/external-edge:
+    get:
+      operationId: getLearningExternalEdge
+      summary: Chronological external holdout edge report (paper-safe, read-only)
+      responses:
+        "200":
+          description: OK (status is INSUFFICIENT, UNPROVEN, or READY)
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+
+  /api/v1/learning/forward-test-90d:
+    get:
+      operationId: getLearningForwardTest90d
+      summary: Ninety-day automatic paper forward test (read-only)
+      responses:
+        "200":
+          description: RUNNING or COMPLETE paper-safe metrics
           content:
             application/json:
               schema:
@@ -1467,12 +1517,23 @@ components:
         last_successful_tick: { type: string, nullable: true }
         last_learning_run: { type: string, nullable: true }
         provider_summary: { type: object }
+        provider_registry: { type: object, additionalProperties: true }
+        effective_flags: { type: object, additionalProperties: true }
+        news_discovery: { type: object, additionalProperties: true }
+        learning_readiness: { type: object, additionalProperties: true }
+        identity_reconciliation: { type: object, additionalProperties: true }
         dqs_status: { type: string, nullable: true }
         snapshot_store_status: { type: object }
         risk_halt_status: { type: object }
         warnings:
           type: array
           items: { type: string }
+        macro_releases:
+          type: array
+          description: >
+            Resmî yayımlanmış makro gözlemleri. Gölge kanıtıdır; yaklaşan olay
+            risk kapısına otomatik olarak bağlanmaz.
+          items: { $ref: "#/components/schemas/MacroRelease" }
 
     SnapshotMeta:
       type: object
@@ -1681,6 +1742,7 @@ components:
         ts: { type: string, format: date-time }
         title: { type: string }
         title_tr: { type: string }
+        article_summary: { type: string, nullable: true, description: RSS'in yayınladığı sınırlı makale özeti; tam metin kanıtı değil. }
         sentiment: { type: string, enum: [bullish, bearish, neutral] }
         # M1 — v2 (çekim-eki normalize) sınıflandırıcı okuması; salt-gözlem.
         # Flag (news.sentiment_v2) kapalıyken karar zinciri `sentiment`(v1) okur.
@@ -1700,6 +1762,9 @@ components:
       required: [headlines, count, paper_safe, no_execution]
       properties:
         generated_at: { type: string, format: date-time, nullable: true }
+        snapshot_id:
+          type: string
+          description: Canonical MarketSnapshot kimliği; Brain/Heart aynı çevrimi gösterir.
         headlines:
           type: array
           items: { $ref: "#/components/schemas/NewsHeadline" }
@@ -2000,6 +2065,20 @@ components:
           type: string
           nullable: true
           description: P1 — learning handoff; açılışın kaynak snapshot'ı.
+        signal_id:
+          type: string
+          nullable: true
+          description: Canonical signal identity shared by decision/ticket/position.
+        decision_id:
+          type: string
+          nullable: true
+          description: Canonical technical decision identity shared with news evidence.
+        news_setup_id: { type: string, nullable: true }
+        news_event_id: { type: string, nullable: true }
+        news_evidence_id:
+          type: string
+          nullable: true
+          description: Canonical evidence identity shared by news and technical confirmation.
         scale_in:
           type: boolean
           description: P1 — explicit scale-in pozisyonu (default false).
@@ -2061,6 +2140,20 @@ components:
           type: string
           nullable: true
           description: P1 — learning handoff; kaynak snapshot.
+        signal_id:
+          type: string
+          nullable: true
+          description: Canonical signal identity shared by decision/ticket/position.
+        decision_id:
+          type: string
+          nullable: true
+          description: Canonical technical decision identity shared with news evidence.
+        news_setup_id: { type: string, nullable: true }
+        news_event_id: { type: string, nullable: true }
+        news_evidence_id:
+          type: string
+          nullable: true
+          description: Canonical evidence identity shared by news and technical confirmation.
 
     NewsPreparedSetup:
       type: object
@@ -2076,6 +2169,9 @@ components:
         side: { type: string, enum: [long, short] }
         created_at: { type: string, format: date-time }
         valid_until: { type: string, format: date-time }
+        event_id: { type: string, nullable: true }
+        evidence_id: { type: string, nullable: true }
+        decision_id: { type: string, nullable: true }
         status: { type: string, enum: [WAITING_RISK, ARMED, ACTIVATED, EXPIRED, STALE] }
         world_direction: { type: string, nullable: true }
         world_score: { type: number, nullable: true }
@@ -2169,6 +2265,11 @@ components:
         status: { type: string, enum: [active, insufficient_rr, invalid] }
         expires_at: { type: string }
         ttl_seconds: { type: integer }
+        signal_id: { type: string, nullable: true }
+        decision_id: { type: string, nullable: true }
+        news_setup_id: { type: string, nullable: true }
+        news_event_id: { type: string, nullable: true }
+        news_evidence_id: { type: string, nullable: true }
         summary:
           $ref: "#/components/schemas/TradeTicketSummary"
         technical_detail:
@@ -2269,6 +2370,8 @@ components:
         body_long: { type: string }
         ticket_id: { type: string, nullable: true }
         position_id: { type: string, nullable: true }
+        signal_id: { type: string, nullable: true }
+        brief_id: { type: string, nullable: true }
         actions:
           type: array
           items:
@@ -2322,6 +2425,11 @@ components:
         reason: { type: string }
         fingerprint: { type: string }
         snapshot_id: { type: string }
+        signal_id: { type: string, nullable: true }
+        decision_id: { type: string, nullable: true }
+        news_setup_id: { type: string, nullable: true }
+        news_event_id: { type: string, nullable: true }
+        news_evidence_id: { type: string, nullable: true }
         rejected_at: { type: string }
 
     ManualReadyQueue:
@@ -2425,6 +2533,11 @@ components:
             ve eksik atıf kayıtları öğrenme performansından ayrılır; eski ham
             alanlar geriye dönük uyumluluk için korunur.
           $ref: "#/components/schemas/LearningPerformance"
+        performance_readiness:
+          description: >
+            Temiz öğrenme kohortunun 90+ kanıt hazırlığı. Salt gözlem; canlı
+            eşik, ağırlık, RiskGate veya emir akışını değiştirmez.
+          $ref: "#/components/schemas/PerformanceReadiness"
         shadow_routing:
           description: >
             Birleşik gölge kanıtı. Aday giriş ile final kapı sonucunu, yeni asset
@@ -2648,6 +2761,29 @@ components:
           items:
             type: object
             additionalProperties: true
+
+    PerformanceReadiness:
+      type: object
+      required: [score, target_score, status, criteria, blockers, shadow_only, paper_safe, no_execution]
+      properties:
+        score: { type: number }
+        target_score: { type: number }
+        status: { type: string }
+        criteria_passed: { type: integer }
+        criteria_total: { type: integer }
+        blockers:
+          type: array
+          items: { type: string }
+        criteria:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+        shadow_only: { type: boolean }
+        paper_safe: { type: boolean }
+        no_execution: { type: boolean }
+        automatic_activation: { type: boolean }
+        policy: { type: string }
         why_it_matters: { type: string }
         what_to_watch:
           type: array
@@ -3002,8 +3138,13 @@ components:
         action: { type: string, enum: [open_long, open_short, hold, blocked, watch] }
         candidate_action: { type: string, enum: [open_long, open_short, hold, blocked, watch] }
         score: { type: number }
+        consensus_score: { type: number, nullable: true, description: "0-100 yön ekseni; 50 nötr. Kazanma olasılığı değildir." }
+        directional_strength: { type: number, nullable: true, description: "Yön bağımsız sinyal gücü; ayı yönünde skor ters çevrilir." }
+        score_semantics: { type: string, description: "Skorun anlamı; yön ekseni ile kazanma olasılığını ayırır." }
         direction: { type: string, enum: [bullish, bearish, neutral] }
         confidence: { type: number }
+        confidence_source: { type: string }
+        decision_id: { type: string }
         size_multiplier: { type: number }
         reason: { type: string }
         blocked_by:
@@ -3138,6 +3279,13 @@ components:
           description: >
             Compact 'where am I' evidence behind the gate (fib zone / confluence /
             pattern / reversal) — surfaced so the LLM can explain it in plain language.
+        confirmation_signals:
+          type: array
+          nullable: true
+          description: >
+            Live timing confirmations. Null is reserved for legacy replay payloads;
+            neutral signals are not evidence for either side.
+          items: { $ref: "#/components/schemas/ConfirmationSignal" }
         status: { type: string, enum: [OK, DEGRADED] }
         source: { type: string }
         bars_used: { type: integer }
@@ -3165,7 +3313,7 @@ components:
 
     DqsBreakdown:
       type: object
-      required: [score, status, freshness, completeness, drift, reconciliation, decision_usage, fallback_used, notes]
+      required: [score, status, freshness, completeness, drift, reconciliation, decision_usage, fallback_used, notes, extended]
       properties:
         score: { type: number }
         status: { type: string, enum: [OK, DEGRADED, BLOCKED] }
@@ -3178,6 +3326,17 @@ components:
         notes:
           type: array
           items: { type: string }
+        extended:
+          type: object
+          description: >
+            Snapshot'a ait fiyat-dışı kalite eksenleri. Gözlem amaçlıdır; karar
+            skoru ve RiskGate hesabına doğrudan girmez. Ölçülemeyen eksen null'dur.
+          required: [technical_bars, news_diversity, rotation_coverage, artifact_freshness]
+          properties:
+            technical_bars: { type: number, nullable: true }
+            news_diversity: { type: number, nullable: true }
+            rotation_coverage: { type: number, nullable: true }
+            artifact_freshness: { type: number, nullable: true }
         stress_score:
           type: number
           description: >
@@ -3272,6 +3431,28 @@ components:
             v2.7 D5 — haber → catalyst half-life zekâsı (deterministik; LLM yok).
             Yalnızca verified + yarı-ömrü dolmamış impact karar zincirini kısıtlar.
           items: { $ref: "#/components/schemas/CatalystImpact" }
+
+    MacroRelease:
+      type: object
+      description: Resmî yayımlanmış makro gözlem; işlem emri üretmez.
+      required: [id, title, ts, importance, source, verified]
+      properties:
+        id: { type: string }
+        title: { type: string }
+        ts: { type: string, format: date-time }
+        importance: { type: string }
+        region: { type: string, nullable: true }
+        category: { type: string, nullable: true }
+        source: { type: string }
+        verified: { type: boolean }
+        actual: { type: number, nullable: true }
+        expected: { type: number, nullable: true }
+        previous: { type: number, nullable: true }
+        revised: { type: number, nullable: true }
+        unit: { type: string, nullable: true }
+        evidence:
+          type: array
+          items: { type: string }
 
     # ---------------- v2.7 D2 — Crypto Derivatives Intelligence ----------------
 
@@ -3711,12 +3892,46 @@ components:
         timeframe: { $ref: "#/components/schemas/Timeframe" }
         direction: { type: string, enum: [bullish, bearish, neutral] }
         score: { type: number }
+        directional_strength:
+          type: number
+          description: >
+            Direction-normalized strength (0-100). Bearish scores are inverted
+            so every consumer can compare signal strength in the same direction.
         candidate_action: { type: string }
         final_action: { type: string }
         actionable: { type: boolean }
         execution_ready: { type: boolean }
         execution_state: { type: string, enum: [READY, EXPLORATION, BLOCKED, SUSPENDED] }
         status: { type: string, enum: [ACTIONABLE, NOT_ACTIONABLE, SUSPENDED] }
+
+    AutoOpenReadiness:
+      type: object
+      description: >
+        Decision matrix sonrasındaki otomatik paper açılış kapısının salt-okuma
+        görünümü. Haber-teknik confluence kapısı geçilmeden emir/pozisyon oluşmaz.
+      properties:
+        enabled: { type: boolean }
+        available: { type: boolean }
+        candidate_count: { type: integer }
+        ready_count: { type: integer }
+        blocked_count: { type: integer }
+        reason: { type: string, nullable: true }
+        blockers:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+        ready:
+          type: array
+          description: Same-symbol/timeframe/side setups that passed the final
+            paper-only auto-open confluence gate.
+          items:
+            type: object
+            required: [symbol, timeframe, side]
+            properties:
+              symbol: { type: string }
+              timeframe: { type: string }
+              side: { type: string, enum: [long, short] }
 
     AgentBrief:
       type: object
@@ -3748,6 +3963,7 @@ components:
         top_candidates:
           type: array
           items: { $ref: "#/components/schemas/AgentBriefCandidate" }
+        auto_open: { $ref: "#/components/schemas/AutoOpenReadiness" }
         next_watch_conditions:
           type: array
           items: { $ref: "#/components/schemas/WatchCondition" }
@@ -3798,6 +4014,7 @@ components:
       required: [total_trades, wins, losses, breakeven, win_rate, total_pnl, sample_sufficient]
       properties:
         total_trades: { type: integer }
+        verified: { type: integer }
         wins: { type: integer }
         losses: { type: integer }
         breakeven: { type: integer }
@@ -3822,6 +4039,11 @@ components:
         ilk-ekranı besler. Read-only; yeni karar/emir/live çağrı YOK. PAPER_SAFE.
       required: [agent_brief, decision_trace]
       properties:
+        brief_id: { type: string }
+        canonical_ids:
+          type: object
+          description: Tek cockpit snapshot/decision/evidence kimlik zarfı
+          additionalProperties: true
         generated_at: { type: string, format: date-time }
         snapshot_id: { type: string, nullable: true }
         snapshot_generated_at: { type: string, format: date-time, nullable: true }
@@ -3841,6 +4063,7 @@ components:
         decision_matrix: { $ref: "#/components/schemas/DecisionMatrix" }
         paper_state:
           type: object
+          additionalProperties: true
           properties:
             revision: { type: integer, nullable: true }
             open_positions:
@@ -3855,6 +4078,14 @@ components:
                   timeframe: { type: string, nullable: true }
                   size_usd: { type: number }
                   unrealized_pnl_usd: { type: number }
+        trade_tickets:
+          type: object
+          description: Aynı cockpit snapshot'ından üretilen salt-okuma ticket görünümü
+          additionalProperties: true
+        agent_matrix:
+          type: object
+          description: Aynı cockpit snapshot'ından üretilen observe-only agent görünümü
+          additionalProperties: true
         agent_brief: { $ref: "#/components/schemas/AgentBrief" }
         decision_trace: { $ref: "#/components/schemas/DecisionTrace" }
         portfolio_risk: { $ref: "#/components/schemas/PortfolioRiskReport" }
@@ -4496,6 +4727,10 @@ components:
         name: { type: string }
         fired: { type: boolean }
         detail: { type: string }
+        direction:
+          type: string
+          nullable: true
+          enum: [bullish, bearish, neutral]
 
     TechnicalTimeframeSummary:
       type: object
@@ -4787,6 +5022,11 @@ components:
       required: [timeframes, symbols]
       properties:
         risk_action: { type: string, nullable: true }
+        source: { type: string, enum: [agent_shadow] }
+        execution_authority: { type: string, enum: [observe_only] }
+        snapshot_id: { type: string, nullable: true }
+        snapshot_generated_at: { type: string, nullable: true }
+        paper_state_revision: { type: integer, nullable: true }
         timeframes:
           type: array
           items: { type: string, enum: ["15m", "1h", "4h", "1d", "1w"] }
@@ -5707,6 +5947,7 @@ components:
         başlık başlık özet üretir. LLM gerektirmez; karar vermez (observer).
       required: [generated_at, headlines]
       properties:
+        brief_id: { type: string }
         generated_at: { type: string }
         snapshot_id: { type: string, nullable: true }
         regime_label: { type: string, nullable: true }
@@ -5714,6 +5955,15 @@ components:
         executive: { $ref: "#/components/schemas/AgentBriefingExecutive" }
         engine: { $ref: "#/components/schemas/AgentBriefingEngine" }
         dqs: { $ref: "#/components/schemas/AgentBriefingDqs" }
+        snapshot_generated_at: { type: string, nullable: true }
+        paper_state_revision: { type: integer, nullable: true }
+        open_positions:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+        world_brief: { $ref: "#/components/schemas/WorldBrief" }
+        premium_brief: { $ref: "#/components/schemas/PremiumBrief" }
         headlines:
           type: array
           items: { $ref: "#/components/schemas/AgentBriefingHeadline" }

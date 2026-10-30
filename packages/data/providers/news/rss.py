@@ -6,6 +6,8 @@ network fail asla crash etmez, mock'a asla düşülmez (DATA_POLICY).
 from __future__ import annotations
 
 import hashlib
+import html
+import re
 import threading
 import time
 import urllib.request
@@ -265,6 +267,25 @@ _DATE_TAGS = (
 )
 
 
+def _summary_text(item: ET.Element) -> str | None:
+    """RSS/Atom açıklamasını sınırlı, HTML'siz makale özeti olarak döndür."""
+    candidates = [
+        item.find("description"),
+        item.find("summary"),
+        item.find("atom:summary", _NS),
+        item.find("{http://purl.org/rss/1.0/modules/content/}encoded"),
+    ]
+    for element in candidates:
+        if element is None:
+            continue
+        raw = "".join(element.itertext()).strip()
+        clean = html.unescape(re.sub(r"<[^>]+>", " ", raw))
+        clean = re.sub(r"\s+", " ", clean).strip()
+        if len(clean) >= 80:
+            return clean[:2_000]
+    return None
+
+
 def parse_feed(
     xml_text: str,
     source: str,
@@ -330,6 +351,7 @@ def parse_feed(
         region = classify.detect_region(title)
         if geo and region is None:
             continue
+        article_summary = _summary_text(item)
         # M1 — aktif sentiment (flag kapalıyken v1, bayt-aynı); v2 her zaman
         # `sentiment_v2` gözlem alanına yazılır (v1/v2 ayrışması izlenir).
         sentiment = classify.classify_sentiment_active(title)
@@ -343,6 +365,7 @@ def parse_feed(
                     region=region,
                     ts=pub_dt,
                     title=title,
+                    article_summary=article_summary,
                     sentiment=sentiment,
                     sentiment_v2=classify.classify_sentiment_v2(title),
                     asset_impact=classify.classify_asset_impact(title, sentiment),

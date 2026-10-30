@@ -18,6 +18,12 @@ import uuid
 from datetime import UTC, datetime
 from pathlib import Path
 
+from packages.ops.env import load_repo_dotenv
+
+load_repo_dotenv(skip_pytest=True)
+
+# Learning modules read provider/threshold credentials during import.
+# ruff: noqa: E402
 from packages import discovery
 from packages.discovery import sector_rotation
 from packages.learning import (
@@ -552,13 +558,12 @@ def run_once() -> dict:
         news_forecast_status = f"ERROR:{type(exc).__name__}"
         errors.append(f"news_forecast:{type(exc).__name__}")
 
-    # Haber → karar GÖLGE girdisi (owner kararı 2026-10-05, üçüncü tur; aynı kapı): canlı
-    # aday işlemler × haber öngörüsü teyit/çelişki → fiyatla çözülür. ETKİSİZ: karar,
-    # boyut, RiskGate, paper değişmez; bağlanması owner onayı ister (CP5).
+    # Haber → karar geçmiş karşılaştırması. Runtime shadow yazımı kapalıdır;
+    # eski dosyalar silinmez, yalnızca audit için korunur.
     news_decision_shadow_status = "DISABLED"
     try:
-        if discovery.scan_enabled():
-            from packages.discovery import news_decision_shadow
+        from packages.discovery import news_decision_shadow
+        if discovery.scan_enabled() and news_decision_shadow.config().get("enabled", False):
             nds = news_decision_shadow.run()
             news_decision_shadow_status = str(nds.get("status", "UNKNOWN"))
             log.info("news_decision_shadow: created=%s resolved=%s rows=%s",
@@ -968,21 +973,44 @@ def run_once() -> dict:
         paper_canary_status = f"ERROR:{type(exc).__name__}"
         errors.append(f"paper_canary:{type(exc).__name__}")
 
-    # Birleşik gölge kanıtı (ucuz, salt-gözlem). Aday giriş ile final kapı
-    # sonucunu, asset terfi karnesini, haber teyidini, teknik yarışı ve exit
-    # canary'yi tek artifact'ta toplar. Hiçbir kararı/ağırlığı/paper state'i
-    # değiştirmez; worker'ın ağır backtest adımlarını yeniden çalıştırmaz.
-    shadow_routing_status = "ERROR"
+    # External chronological holdout + 90-day paper forward ledger. Both are
+    # read-only evidence artifacts; neither can change weights, gates, or paper
+    # execution. They are intentionally best-effort so the learning worker
+    # remains available if an artifact is temporarily unreadable.
+    external_edge_status = "ERROR"
     try:
-        from packages.learning import shadow_routing
-        shadow_route_result = shadow_routing.run()
-        shadow_routing_status = str(shadow_route_result.get("status", "UNKNOWN"))
-        if shadow_routing_status == "OK":
-            log.info(
-                "shadow_routing: candidates=%s candidate_cells=%s",
-                shadow_route_result.get("candidates"),
-                shadow_route_result.get("candidate_cells"),
-            )
+        from packages.learning import external_edge
+        external_edge_result = external_edge.run_if_due()
+        external_edge_status = str(external_edge_result.get("status", "UNKNOWN"))
+    except Exception as exc:  # defensive — worker patlamamalı
+        external_edge_status = f"ERROR:{type(exc).__name__}"
+        errors.append(f"external_edge:{type(exc).__name__}")
+
+    forward_test_status = "ERROR"
+    try:
+        from packages.learning import forward_test
+        forward_result = forward_test.run()
+        forward_test_status = str(forward_result.get("status", "UNKNOWN"))
+    except Exception as exc:  # defensive — worker patlamamalı
+        forward_test_status = f"ERROR:{type(exc).__name__}"
+        errors.append(f"forward_test_90d:{type(exc).__name__}")
+
+    # Gölge yazıcıları kullanıcı kararıyla kapalıdır. Tarihsel artifact'lar
+    # silinmez; yeni dosya/öneri üretilmez ve öğrenme hesabına katılmaz.
+    shadow_routing_status = "DISABLED"
+    try:
+        from packages.data.registry.loader import load_thresholds
+        shadow_cfg = load_thresholds().get("shadow") or {}
+        if bool(shadow_cfg.get("enabled", False)):
+            from packages.learning import shadow_routing
+            shadow_route_result = shadow_routing.run()
+            shadow_routing_status = str(shadow_route_result.get("status", "UNKNOWN"))
+            if shadow_routing_status == "OK":
+                log.info(
+                    "shadow_routing: candidates=%s candidate_cells=%s",
+                    shadow_route_result.get("candidates"),
+                    shadow_route_result.get("candidate_cells"),
+                )
     except Exception as exc:  # defensive — worker patlamamalı
         shadow_routing_status = f"ERROR:{type(exc).__name__}"
         errors.append(f"shadow_routing:{type(exc).__name__}")
@@ -1048,6 +1076,8 @@ def run_once() -> dict:
         "tf_scoring_v2_shadow_status": tf_scoring_v2_shadow_status,  # D6 v2 gölge skoru (DISABLED=flag OFF)
         "tf_scoring_race_status": tf_scoring_race_status,  # R5 yarış defteri (DISABLED=flag OFF)
         "paper_canary_status": paper_canary_status,  # kanıt-kapılı owner önerisi (salt-gözlem)
+        "external_edge_status": external_edge_status,  # kronolojik dış holdout (read-only)
+        "forward_test_90d_status": forward_test_status,  # 90 günlük paper ileri test
         "shadow_routing_status": shadow_routing_status,  # birleşik gölge kanıtı (salt-gözlem)
         "duration_ms": duration_ms,        # CP1 — perf görünürlüğü
         "over_budget": over_budget,        # CP1 — bütçe aşımı bayrağı

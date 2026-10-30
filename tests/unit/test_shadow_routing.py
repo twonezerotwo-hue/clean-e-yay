@@ -42,3 +42,14 @@ def test_viewmodel_without_artifact_is_explicit(monkeypatch, tmp_path):
     assert view["status"] == "NO_DATA"
     assert view["shadow_only"] is True
     assert view["no_execution"] is True
+
+
+def test_disabled_runtime_does_not_expose_stale_artifact(monkeypatch, tmp_path):
+    path = tmp_path / "shadow.json"
+    path.write_text('{"status":"OK","shadow_only":true,"live_decision_changed":false}', encoding="utf-8")
+    monkeypatch.setenv("SHADOW_ROUTING_PATH", str(path))
+    view = shadow_routing.viewmodel()
+    assert view["status"] == "DISABLED"
+    assert view["runtime_enabled"] is False
+    assert view["historical_read_only"] is True
+    assert view["historical_artifact_available"] is True

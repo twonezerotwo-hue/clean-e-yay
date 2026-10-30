@@ -37,8 +37,8 @@ echo "deploy: web build"
 )
 
 # Öğrenme otonomi flag'leri (Grup B, owner kararı) — PROD .env'de yoksa ekle.
-# Bunlar SIR DEĞİL, davranış toggle'ı: apps.api.main._load_dotenv APP_DIR/.env'i
-# supervisor import'unda yükler. Idempotent (grep -q guard) → deploy'da çoğalmaz;
+# Bunlar SIR DEĞİL, davranış toggle'ı: ortak env yükleyici API ve worker
+# süreçlerinde APP_DIR/.env'i okur. Idempotent (grep -q guard) → deploy'da çoğalmaz;
 # owner .env'de değeri elle değiştirirse (örn. =0) korunur (yalnız YOK ise eklenir).
 # Instance rebuild'de de kalıcı (SSH gerektirmez).
 ensure_env() {  # ensure_env KEY VALUE — yalnız YOK ise ekle (owner elle ezerse korunur)
@@ -76,13 +76,16 @@ ensure_env DISCOVERY_SCAN_ENABLED 1
 # yeniden-kurma verisi otomatik biriksin. Canli agirlik/paper/karara temas ETMEZ
 # (yalniz backtest_challenger dosyalari); B-2 uretim (gunluk interval) + B-3 karne
 # + B-4 terfi degerlendirmesi. Lokal .env'de de =1 (owner kurali: lokal+AWS senkron).
-ensure_env BACKTEST_CHALLENGER_ENABLED 1
+set_env BACKTEST_CHALLENGER_ENABLED 0
 # Bar arsivi aktivasyonu (2026-07-06, owner hedefi "kanit 10/10"): kapanmis barlar
 # kalici JSONL arsivine biriksin (data/runtime/bar_history) -> sinyal karnesi
 # penceresi _MAX_BARS tavanini asar, 15m/1h kaniti haftayla buyur. Salt-veri:
 # karar/skor/paper'a SIFIR temas, asla raise etmez; rollback = flag kapat.
 # Lokal .env'de de =1 (owner kurali: lokal+AWS senkron).
 ensure_env BAR_HISTORY_ENABLED 1
+# Public, read-only crypto OHLCV fallback. CoinGecko remains secondary;
+# this prevents a rate-limit from making technical cells use old disk bars.
+ensure_env EYAY_KRAKEN_OHLCV_ENABLED true
 # D4 per-TF trust kapisi (2026-07-06, owner "10/10" hedefi): canli tf_weights
 # kapisi acildiginda ogrenilmis agirlik yalniz kendi kanitini getirmis TF'lere
 # akar (edge_proven), kanitsiz TF notr. SERTLESTIRME — yeni davranis ACMAZ,
@@ -97,7 +100,7 @@ ensure_env SUBSIGNAL_SCORECARD_ENABLED 1
 # cycle v2 katmanli yon skorunu (karne kanit-cap agirligiyla) canli barlarda
 # uretir → izole artifact. SALT-GOZLEM: canli skora/karara/paper'a ASLA yazmaz
 # (D7 golge yarisin girdisi). Rollback = flag kapat. Lokal .env'de de =1.
-ensure_env TF_SCORING_V2_SHADOW 1
+set_env TF_SCORING_V2_SHADOW 0
 # T2 (2026-07 dis denetim P0-4) — API yazma-istekleri kilidi. Token SIR'dir:
 # degeri git'te DEGIL, GitHub Actions secret'inda yasar (deploy-ec2.yml env ile
 # gecirir). Secret tanimli degilse dokunulmaz -> kilit kapali kalir (bayt-ayni).

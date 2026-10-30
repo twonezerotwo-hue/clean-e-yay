@@ -89,6 +89,7 @@ def test_ticket_notifications_share_news_confluence_gate(monkeypatch) -> None:
         action="open_short",
         symbol="XAGUSD",
         timeframe="15m",
+        candidate_action="open_short",
         risk=SimpleNamespace(action="ALLOW_NORMAL"),
     )
     snapshot = SimpleNamespace(
@@ -103,3 +104,68 @@ def test_ticket_notifications_share_news_confluence_gate(monkeypatch) -> None:
     monkeypatch.setattr(ticket.news_setup, "match_confluence", lambda *_args, **_kwargs: {"setup_id": "s1"})
     monkeypatch.setattr(ticket, "build_ticket", lambda *_args, **_kwargs: SimpleNamespace(status="active"))
     assert len(ticket.build_tickets_from_decisions([decision], snapshot, state)) == 1
+
+
+def test_ticket_technical_detail_keeps_signal_audit_ids() -> None:
+    """A successful ticket must retain the identity used by the opener."""
+    from packages.paper import ticket
+
+    decision = SimpleNamespace(
+        symbol="XAGUSD",
+        timeframe="15m",
+        candidate_action="open_short",
+        action="open_short",
+        consensus=None,
+        fingerprint="fp-1",
+        mistake_verdict={},
+        risk=None,
+        blocked_by=[],
+        derivatives_report={},
+        volatility_report={},
+        catalyst_report={},
+        options_report={},
+        raw_confidence=0.6,
+        confidence=0.6,
+        confidence_source="identity",
+        size_multiplier=0.5,
+    )
+    snap = SimpleNamespace(
+        snapshot_id="snap-1",
+        technicals_by_tf={},
+        technicals={},
+        quality=None,
+    )
+    targets = SimpleNamespace(
+        tp_basis="atr_floor",
+        tp=55.0,
+        sl_basis="atr",
+        sl_distance=1.0,
+        rr=3.0,
+        rr_floor_met=True,
+        notes=[],
+    )
+    state = SimpleNamespace(
+        equity_usd=100_000.0,
+        peak_equity_usd=100_000.0,
+        daily_pnl_usd=0.0,
+        open_positions=[],
+    )
+
+    detail = ticket._build_technical_detail(
+        decision,
+        snap,
+        targets,
+        state,
+        signal_id="sig-1",
+        news_setup_id="setup-1",
+        news_event_id="event-1",
+    )
+    assert detail["audit"] == {
+        "snapshot_id": "snap-1",
+        "fingerprint": "fp-1",
+        "candidate_action": "open_short",
+        "final_action": "open_short",
+        "signal_id": "sig-1",
+        "news_setup_id": "setup-1",
+        "news_event_id": "event-1",
+    }

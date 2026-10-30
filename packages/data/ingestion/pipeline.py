@@ -14,6 +14,7 @@ from datetime import UTC, datetime
 
 from packages.data.providers import calendar as cal_provider
 from packages.data.providers import derivatives as deriv_provider
+from packages.data.providers import macro as macro_provider
 from packages.data.providers import news as news_provider
 from packages.data.providers import ohlcv as ohlcv_provider
 from packages.data.providers import options as options_provider
@@ -27,6 +28,7 @@ from packages.data.quality.dqs import apply_extended_gate as dqs_apply_extended_
 from packages.data.quality.dqs import compute as compute_dqs
 from packages.data.quality.dqs import extended_metrics as dqs_extended_metrics
 from packages.data.registry import assets as _asset_registry
+from packages.data.registry import custom_assets as _custom_assets
 from packages.data.types import (
     TIMEFRAMES,
     Catalyst,
@@ -85,6 +87,10 @@ class MarketSnapshot:
     # Optional provider-neutral published capital-flow observations.  Existing
     # providers may leave this empty; rotation remains an explicit proxy.
     flow_observations: list[dict] = field(default_factory=list)
+    # Official published observations are kept separate from the upcoming
+    # event-risk calendar.  They feed world-state/evidence shadow analysis;
+    # they do not silently become a verified future risk gate.
+    macro_releases: list[Catalyst] = field(default_factory=list)
     # Historical replay provenance.  These are domain watermarks, not aliases
     # for ``generated_at``; unknown provider watermarks remain None.
     market_data_as_of: datetime | None = None
@@ -210,7 +216,7 @@ def build_snapshot(symbols: list[str] | None = None) -> MarketSnapshot:
     # Bağımsız ağ çağrılarını PARALEL çalıştır — seri toplam (~40s, provider'lar
     # yavaşken) yerine en yavaş çağrı kadar (~max). Her provider kendi HTTP
     # timeout'unu (4-8s) zaten uygular; havuz yalnızca eşzamanlılık ekler.
-    with ThreadPoolExecutor(max_workers=5) as _ex:
+    with ThreadPoolExecutor(max_workers=6) as _ex:
         _f_prices = _ex.submit(price_provider.get_quotes, syms)
         # Foreign-affairs coverage is part of the world-state input, not only
         # a UI wall.  Keep a bounded but materially wider window so a fresh
@@ -218,6 +224,7 @@ def build_snapshot(symbols: list[str] | None = None) -> MarketSnapshot:
         # headlines before causal + technical confluence is evaluated.
         _f_news = _ex.submit(news_provider.list_headlines, 48)
         _f_cal = _ex.submit(cal_provider.list_catalysts, 8)
+        _f_macro = _ex.submit(macro_provider.list_releases, now=now)
         _f_rot = _ex.submit(rot_provider.get_rotation)
         _f_deriv = _ex.submit(
             deriv_provider.get_derivatives,
@@ -226,6 +233,7 @@ def build_snapshot(symbols: list[str] | None = None) -> MarketSnapshot:
         prices = _f_prices.result()
         headlines = _f_news.result()
         catalysts = _f_cal.result()
+        macro_releases = _f_macro.result()
         rotation = _f_rot.result()
         derivatives = _f_deriv.result()
 
@@ -260,7 +268,13 @@ def build_snapshot(symbols: list[str] | None = None) -> MarketSnapshot:
     options = options_provider.get_options(
         opt_syms, realized_vol_by_symbol=realized_1d, now=now
     )
-    quality = compute_dqs(prices, syms)
+    # Runtime keşif/custom varlıklar, kendi fiyatı yokken bütün çekirdek
+    # evreni RiskGate'e kapattırmamalı. Aday snapshot'ta kalır ve açık uyarı
+    # alır; DQS çekirdek karar evreni üzerinden ölçülür.
+    optional_symbols = frozenset(
+        symbol for symbol in syms if _custom_assets.get(symbol) is not None
+    )
+    quality = compute_dqs(prices, syms, optional_symbols=optional_symbols)
     # 2026-07-13 — DQS genişletme (GÖZLEM-YALNIZ: score/status'a girmez; DQS'in
     # fiyat-dışı kör noktası her snapshot'ta görünür olsun).
     quality.extended = dqs_extended_metrics(
@@ -340,6 +354,7 @@ def build_snapshot(symbols: list[str] | None = None) -> MarketSnapshot:
         **ohlcv_provider.get_provider_status(),
         **news_provider.get_provider_status(),
         **cal_provider.get_provider_status(),
+        **macro_provider.get_provider_status(),
         **rot_provider.get_provider_status(),
         **deriv_provider.get_provider_status(),
         **vol_provider.get_provider_status(),
@@ -357,7 +372,10 @@ def build_snapshot(symbols: list[str] | None = None) -> MarketSnapshot:
     # Calendar rows may describe a future scheduled release.  Its event time
     # is not an availability watermark; use only past releases or the
     # provider's recorded ingestion time, never a future catalyst timestamp.
-    macro_available_as_of = _latest_timestamp_before(catalysts, now) or _provider_ingestion_for(provider_status, ("calendar",))
+    macro_events = [*catalysts, *macro_releases]
+    macro_available_as_of = _latest_timestamp_before(macro_events, now) or _provider_ingestion_for(
+        provider_status, ("calendar", "macro_bls", "macro_fred", "macro_eia")
+    )
     # No provider-neutral real-flow observations are ingested by this pipeline
     # yet; World-State may still expose the explicit rotation price proxy.
     flow_available_as_of = None
@@ -378,12 +396,12 @@ def build_snapshot(symbols: list[str] | None = None) -> MarketSnapshot:
             has_evidence=bool(headlines),
         ),
         "expectations": _domain_provenance(
-            provider_status, ("news", "geo_news", "calendar"), expectations_as_of,
+            provider_status, ("news", "geo_news", "calendar", "macro_bls", "macro_fred", "macro_eia"), expectations_as_of,
             has_evidence=bool(headlines or catalysts),
         ),
         "macro": _domain_provenance(
-            provider_status, ("calendar",), macro_available_as_of,
-            has_evidence=bool(catalysts),
+            provider_status, ("calendar", "calendar_web", "macro_bls", "macro_fred", "macro_eia"), macro_available_as_of,
+            has_evidence=bool(macro_events),
         ),
         "flow": _domain_provenance(
             provider_status, ("rotation",), flow_available_as_of,
@@ -415,6 +433,7 @@ def build_snapshot(symbols: list[str] | None = None) -> MarketSnapshot:
         flow_available_as_of=flow_available_as_of,
         ingested_at=ingested_at,
         provenance_domains=provenance_domains,
+        macro_releases=macro_releases,
     )
 
 

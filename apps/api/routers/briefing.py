@@ -7,6 +7,8 @@ from __future__ import annotations
 
 from fastapi import APIRouter
 
+from packages.agent.brief_id import build_brief_id
+
 router = APIRouter(tags=["agent"])
 
 
@@ -19,7 +21,14 @@ def get_briefing() -> dict:
 
     cockpit = get_cockpit_brief()
     agent = cockpit.get("agent_brief") or {}
+    # The legacy briefing route, visual panel and voice reader must refer to
+    # the same evidence envelope.  Keep the id deterministic for a given
+    # snapshot/revision instead of letting each surface invent its own brief.
+    brief_id = cockpit.get("brief_id") or build_brief_id(
+        cockpit.get("snapshot_id"), cockpit.get("paper_state_revision")
+    )
     return {
+        "brief_id": brief_id,
         "generated_at": cockpit.get("generated_at"),
         "snapshot_id": cockpit.get("snapshot_id"),
         "snapshot_generated_at": cockpit.get("snapshot_generated_at"),
@@ -40,6 +49,11 @@ def get_briefing() -> dict:
         "executive": cockpit.get("executive"),
         "engine": cockpit.get("engine"),
         "dqs": agent.get("dqs"),
+        # Brain's reporter must expose the same premium/world evidence envelope
+        # as /cockpit/brief.  Keeping these fields on the legacy route avoids a
+        # second formatter in the frontend and keeps spoken/text briefs aligned.
+        "world_brief": cockpit.get("world_brief"),
+        "premium_brief": cockpit.get("premium_brief"),
         # Preserve the legacy AgentBriefing contract while sourcing every row
         # from the same cockpit evidence envelope.
         "headlines": [

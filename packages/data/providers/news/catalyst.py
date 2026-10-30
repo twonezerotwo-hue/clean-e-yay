@@ -14,6 +14,7 @@ Politika ([docs/DATA_POLICY.md], [docs/SAFETY_RULES.md]):
 """
 from __future__ import annotations
 
+import re
 from datetime import datetime, timedelta
 from typing import Final
 
@@ -90,7 +91,16 @@ _OUTAGE_WORDS: Final[tuple[str, ...]] = (
 
 
 def _has(text: str, words: tuple[str, ...]) -> bool:
-    return any(w in text for w in words)
+    for word in words:
+        token = word.strip()
+        # Short acronyms must be whole words: shipping must not match ppi and
+        # FedEx must not match fed.
+        if len(token) <= 4 and token.isalnum():
+            if re.search(rf"(?<![a-z0-9]){re.escape(token)}(?![a-z0-9])", text):
+                return True
+        elif word in text:
+            return True
+    return False
 
 
 def classify_event_type(title: str) -> CatalystEventType:
@@ -334,7 +344,16 @@ def build_impact(
     - actionability yalnızca kısıtlayıcı; surprise yüksekse yükseltilir.
     """
     ref = now or utcnow()
-    title = headline.title
+    # Article bodies are additive evidence.  The fetch/cache layer is read
+    # only here: a missing or blocked page leaves the legacy RSS title path
+    # unchanged and never turns article text into an order by itself.
+    try:
+        from packages.data.providers.news.article_enrichment import context_for
+
+        analysis_text, article = context_for(headline)
+    except Exception:
+        analysis_text, article = headline.title, None
+    title = analysis_text or headline.title
     rumor = is_rumor(title)
     event_type: CatalystEventType = "rumor_unverified" if rumor else classify_event_type(title)
     rule = _RULES[event_type]
@@ -365,6 +384,11 @@ def build_impact(
         f"event_type={event_type}",
         f"yarı-ömür ≈ {half_life}dk · valid_until {valid_until.isoformat()}",
     ]
+    if article and article.get("excerpt"):
+        evidence.append(
+            f"article_evidence={article.get('status', 'OK')} · "
+            f"{int(article.get('word_count') or 0)} kelime"
+        )
     if surprise:
         evidence.append(f"surprise {surprise:+.2f}")
     if rumor:

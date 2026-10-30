@@ -77,6 +77,15 @@ class Position:
     pending_exit_reason: str | None = None  # neden exit bekliyor (fiyat yoksa)
     open_reason: str | None = None          # learning handoff: karar gerekçesi
     snapshot_id: str | None = None          # learning handoff: kaynak snapshot
+    # Canonical identity shared by decision → ticket → notification → position.
+    signal_id: str | None = None
+    # Decision identity shared by the technical decision and its news setup.
+    # Additive; legacy positions load with None.
+    decision_id: str | None = None
+    news_setup_id: str | None = None
+    news_event_id: str | None = None
+    # One evidence identity shared by the world/news thesis and technical decision.
+    news_evidence_id: str | None = None
     scale_in: bool = False                  # explicit scale-in (default: yok)
     # Signal attribution (additive): karar izi açılışta damgalanır.
     open_dqs: float | None = None           # açılış anındaki DQS
@@ -145,6 +154,11 @@ class Trade:
     lifecycle_status: str = "CLOSED"   # CLOSED (normal) | FORCE_CLOSED (zorla)
     open_reason: str | None = None
     snapshot_id: str | None = None
+    signal_id: str | None = None
+    decision_id: str | None = None
+    news_setup_id: str | None = None
+    news_event_id: str | None = None
+    news_evidence_id: str | None = None
     # Signal attribution (additive): pozisyondan miras alınan karar izi.
     open_dqs: float | None = None
     open_risk_action: str | None = None
@@ -188,6 +202,13 @@ class ManualReady:
     reason: str | None = None
     fingerprint: str | None = None
     snapshot_id: str | None = None
+    signal_id: str | None = None
+    # Manual approval must preserve the same decision identity as the
+    # automatic paper path. Legacy queue rows load with None.
+    decision_id: str | None = None
+    news_setup_id: str | None = None
+    news_event_id: str | None = None
+    news_evidence_id: str | None = None
     rejected_at: str | None = None  # set when owner rejected (→ silent block)
 
 
@@ -208,6 +229,9 @@ class NewsPreparedSetup:
     # Dünya olayının kimliği; sembol/TF anahtarı tek başına farklı haberleri
     # birbirine yeniden bağlamasın. Legacy kayıtlar None ile yüklenir.
     event_id: str | None = None
+    # Shared news + technical evidence identity. Legacy setup rows load as None.
+    evidence_id: str | None = None
+    decision_id: str | None = None
     status: str = "WAITING_RISK"  # WAITING_RISK | ARMED | ACTIVATED | EXPIRED | STALE
     world_direction: str | None = None
     world_score: float | None = None
@@ -256,6 +280,13 @@ class PendingOrder:
     # değişince yazılır (spam yok); None = beklemede değil. Legacy kayıtlar None.
     last_held_reason: str | None = None
     limit_price: float | None = None  # stop_limit: tetik (trigger) sonrası dolum fiyatı
+    # Optional decision attribution for owner-created pending orders.
+    snapshot_id: str | None = None
+    signal_id: str | None = None
+    decision_id: str | None = None
+    news_setup_id: str | None = None
+    news_event_id: str | None = None
+    news_evidence_id: str | None = None
 
 
 @dataclass

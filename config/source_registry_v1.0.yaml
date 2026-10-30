@@ -6,19 +6,24 @@ description: |
   - simulation_only: paper trading için yeterli, gerçek kararda gate
   - analytics_only: sadece raporlama
 
+  Runtime yönlendirme için tek kaynak provider modülleridir:
+  `packages/data/providers/*`. Bu dosya politika/provenance kaydıdır; aşağıdaki
+  envanter runtime modüllerinin gerçek kaynağını ve beklenen sayısını gösterir.
+  Snapshot `news_consensus.feed_inventory` alanı aynı kayıtları canlı sayar.
+
 sources:
-  - id: btcusd_yfinance
+  - id: btcusd_coingecko
     kind: price
     asset: BTCUSD
-    fetcher: yfinance
+    fetcher: coingecko
     cadence_sec: 180
     decision_usage: verified_required
     fallback_to_mock: false
 
-  - id: ethusd_yfinance
+  - id: ethusd_coingecko
     kind: price
     asset: ETHUSD
-    fetcher: yfinance
+    fetcher: coingecko
     cadence_sec: 180
     decision_usage: verified_required
     fallback_to_mock: false
@@ -27,6 +32,76 @@ sources:
     kind: price
     asset: XAUUSD
     fetcher: yfinance
+    cadence_sec: 180
+    decision_usage: verified_required
+    fallback_to_mock: false
+
+  - id: xagusd_yfinance
+    kind: price
+    asset: XAGUSD
+    fetcher: yfinance
+    cadence_sec: 180
+    decision_usage: verified_required
+    fallback_to_mock: false
+
+  - id: brent_yfinance
+    kind: price
+    asset: BRENT
+    fetcher: yfinance
+    cadence_sec: 180
+    decision_usage: verified_required
+    fallback_to_mock: false
+
+  - id: wti_yfinance
+    kind: price
+    asset: WTI
+    fetcher: yfinance
+    ticker: CL=F
+    cadence_sec: 180
+    decision_usage: verified_required
+    fallback_to_mock: false
+
+  - id: copper_yfinance
+    kind: price
+    asset: COPPER
+    fetcher: yfinance
+    ticker: HG=F
+    cadence_sec: 180
+    decision_usage: verified_required
+    fallback_to_mock: false
+
+  - id: xle_yfinance
+    kind: price
+    asset: XLE
+    fetcher: yfinance
+    ticker: XLE
+    cadence_sec: 180
+    decision_usage: verified_required
+    fallback_to_mock: false
+
+  - id: xlk_yfinance
+    kind: price
+    asset: XLK
+    fetcher: yfinance
+    ticker: XLK
+    cadence_sec: 180
+    decision_usage: verified_required
+    fallback_to_mock: false
+
+  - id: xlv_yfinance
+    kind: price
+    asset: XLV
+    fetcher: yfinance
+    ticker: XLV
+    cadence_sec: 180
+    decision_usage: verified_required
+    fallback_to_mock: false
+
+  - id: xlp_yfinance
+    kind: price
+    asset: XLP
+    fetcher: yfinance
+    ticker: XLP
     cadence_sec: 180
     decision_usage: verified_required
     fallback_to_mock: false
@@ -52,6 +127,30 @@ sources:
     asset: VIX
     fetcher: yfinance
     cadence_sec: 180
+    decision_usage: verified_required
+    fallback_to_mock: false
+
+  - id: sp500_yfinance
+    kind: macro
+    asset: SP500
+    fetcher: yfinance
+    cadence_sec: 180
+    decision_usage: analytics_only
+    fallback_to_mock: false
+
+  - id: us02y_fred
+    kind: macro
+    asset: US02Y
+    fetcher: fred
+    cadence_sec: 3600
+    decision_usage: verified_required
+    fallback_to_mock: false
+
+  - id: cpi_fred
+    kind: macro
+    asset: CPI
+    fetcher: fred
+    cadence_sec: 3600
     decision_usage: verified_required
     fallback_to_mock: false
 
@@ -84,21 +183,164 @@ sources:
     decision_usage: simulation_only
     fallback_to_mock: false
 
+  # ─── Teknik bar sağlayıcıları ─────────────────────────────────
+  # Kraken yalnızca BTC/ETH için herkese açık, salt-okunur birincil canlı
+  # kaynaktır. CoinGecko, Kraken başarısız olduğunda ikincil kaynaktır.
+  - id: btcusd_ohlcv_kraken
+    kind: ohlcv
+    asset: BTCUSD
+    fetcher: kraken
+    cadence_sec: 900
+    decision_usage: verified_required
+    fallback_to_mock: false
+
+  - id: ethusd_ohlcv_kraken
+    kind: ohlcv
+    asset: ETHUSD
+    fetcher: kraken
+    cadence_sec: 900
+    decision_usage: verified_required
+    fallback_to_mock: false
+
+  - id: btcusd_ohlcv_coingecko
+    kind: ohlcv
+    asset: BTCUSD
+    fetcher: coingecko
+    cadence_sec: 2400
+    decision_usage: verified_required
+    fallback_to_mock: false
+
+  - id: ethusd_ohlcv_coingecko
+    kind: ohlcv
+    asset: ETHUSD
+    fetcher: coingecko
+    cadence_sec: 2400
+    decision_usage: verified_required
+    fallback_to_mock: false
+
+  - id: ohlcv_yfinance
+    kind: ohlcv
+    asset: "trade universe"
+    fetcher: yfinance
+    cadence_sec: 900
+    decision_usage: verified_required
+    fallback_to_mock: false
+
+  # Salt-okuma türev göstergeleri; tek başına işlem sinyali üretmez.
+  - id: derivatives_binance
+    kind: derivatives
+    asset: "BTCUSD,ETHUSD"
+    fetcher: binance
+    cadence_sec: 300
+    decision_usage: analytics_only
+    fallback_to_mock: false
+
+  - id: options_deribit
+    kind: options
+    asset: "BTCUSD,ETHUSD"
+    fetcher: deribit
+    cadence_sec: 300
+    decision_usage: analytics_only
+    fallback_to_mock: false
+
+  # Derived volatility surface produced from the same verified OHLCV snapshot;
+  # it is not an independent price source and cannot open a position alone.
+  - id: volatility_derived
+    kind: derived
+    asset: "trade universe"
+    fetcher: volatility
+    cadence_sec: 30
+    decision_usage: analytics_only
+    fallback_to_mock: false
+
   - id: news_general_rss
     kind: news
     fetcher: rss
     cadence_sec: 60
     decision_usage: analytics_only
-    feeds:
-      - https://www.cnbc.com/id/100003114/device/rss/rss.html
-      - https://www.investing.com/rss/news_25.rss
-      - https://www.coindesk.com/arc/outboundfeeds/rss/
+    feed_registry: packages/data/providers/news/rss.py:MARKET_FEEDS
 
   - id: news_geo_rss
     kind: news_geo
     fetcher: rss
     cadence_sec: 60
     decision_usage: analytics_only
-    feeds:
-      - https://feeds.reuters.com/reuters/topNews
-      - https://www.aljazeera.com/xml/rss/all.xml
+    feed_registry: packages/data/providers/news/rss.py:GEO_FEEDS
+
+  # Public HTML calendar observer.  Rows are unverified consensus evidence;
+  # the existing YAML/official calendar remains the only verified event source.
+  - id: economic_calendar_investing_web
+    kind: calendar
+    fetcher: investing_web_calendar
+    cadence_sec: 900
+    decision_usage: shadow_only
+    fallback_to_mock: false
+
+  - id: macro_extended_web_shadow
+    kind: macro
+    asset: "ADP, ISM PMI, Durable Goods Orders, FOMC statements"
+    fetcher: investing_web_calendar_plus_news
+    cadence_sec: 900
+    decision_usage: shadow_only
+    fallback_to_mock: false
+
+  # Canonical join keys for the additive macro/causal layer.  These are
+  # deterministic transforms over existing snapshot data, not new data feeds.
+  - id: macro_evidence_canonical
+    kind: evidence
+    fetcher: packages.macro.evidence
+    cadence_sec: 60
+    decision_usage: shadow_only
+    fallback_to_mock: false
+
+  - id: macro_correlation_shadow
+    kind: correlation
+    fetcher: packages.macro.correlation
+    cadence_sec: 900
+    decision_usage: shadow_only
+    fallback_to_mock: false
+
+  - id: macro_bls_official
+    kind: macro
+    asset: "US CPI, Core CPI, PPI, NFP, unemployment, JOLTS job openings, Employment Cost Index"
+    fetcher: bls_public_api
+    cadence_sec: 900
+    decision_usage: shadow_only
+    fallback_to_mock: false
+
+  - id: macro_fred_official
+    kind: macro
+    asset: "PCE, Core PCE, GDP, Fed Funds"
+    fetcher: fred
+    cadence_sec: 900
+    decision_usage: shadow_only
+    fallback_to_mock: false
+
+  - id: macro_eia_official
+    kind: macro
+    asset: "US crude inventories, natural-gas storage"
+    fetcher: eia_api
+    cadence_sec: 900
+    decision_usage: shadow_only
+    fallback_to_mock: false
+
+# Runtime ile registry arasında sessiz kopma olmaması için makine-okunur
+# envanter. Count değerleri testte provider modüllerinden doğrulanır.
+runtime_inventory:
+  news:
+    market_rss:
+      count: 23
+      registry: packages/data/providers/news/rss.py:MARKET_FEEDS
+    geo_rss:
+      count: 12
+      registry: packages/data/providers/news/rss.py:GEO_FEEDS
+    discovery_topic_feeds:
+      count: 8
+      registry: config/discovery.yaml:news_discovery.extra_feeds
+  providers:
+    ohlcv: [ohlcv_kraken, ohlcv_coingecko, ohlcv_yfinance]
+    derivatives: [derivatives_binance]
+    options: [options_deribit]
+  shadow_transforms: [macro_evidence_canonical, macro_correlation_shadow]
+  macro_official: [macro_bls_official, macro_fred_official, macro_eia_official]
+  macro_shadow_topics: [ADP, ISM_PMI, DURABLE_GOODS, FOMC_STATEMENTS]

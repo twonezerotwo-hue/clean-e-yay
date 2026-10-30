@@ -415,6 +415,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/learning/performance-readiness": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Kanıt-kapılı 90+ performans hazırlık puanı */
+        get: operations["getPerformanceReadiness"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/risk/correlation": {
         parameters: {
             query?: never;
@@ -509,6 +526,23 @@ export interface paths {
         };
         /** UX1 — Agent Operating Cockpit özeti (AgentBrief + DecisionTrace; read-only) */
         get: operations["getCockpitBrief"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/cockpit/state": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Canonical cockpit envelope (tek snapshot/karar/kanıt kimliği; read-only) */
+        get: operations["getCockpitState"];
         put?: never;
         post?: never;
         delete?: never;
@@ -918,6 +952,40 @@ export interface paths {
         };
         /** Y-6 — Haber olay-çalışması (kaynak×sentiment ileri-getiri karnesi, SALT-GÖZLEM, read-only) */
         get: operations["getLearningNewsEventStudy"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/learning/external-edge": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Chronological external holdout edge report (paper-safe, read-only) */
+        get: operations["getLearningExternalEdge"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/learning/forward-test-90d": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Ninety-day automatic paper forward test (read-only) */
+        get: operations["getLearningForwardTest90d"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1620,10 +1688,27 @@ export interface components {
             last_successful_tick?: string | null;
             last_learning_run?: string | null;
             provider_summary?: Record<string, never>;
+            provider_registry?: {
+                [key: string]: unknown;
+            };
+            effective_flags?: {
+                [key: string]: unknown;
+            };
+            news_discovery?: {
+                [key: string]: unknown;
+            };
+            learning_readiness?: {
+                [key: string]: unknown;
+            };
+            identity_reconciliation?: {
+                [key: string]: unknown;
+            };
             dqs_status?: string | null;
             snapshot_store_status?: Record<string, never>;
             risk_halt_status?: Record<string, never>;
             warnings?: string[];
+            /** @description Resmî yayımlanmış makro gözlemleri. Gölge kanıtıdır; yaklaşan olay risk kapısına otomatik olarak bağlanmaz. */
+            macro_releases?: components["schemas"]["MacroRelease"][];
         };
         SnapshotMeta: {
             snapshot_id: string;
@@ -1770,6 +1855,8 @@ export interface components {
             ts: string;
             title: string;
             title_tr?: string;
+            /** @description RSS'in yayınladığı sınırlı makale özeti; tam metin kanıtı değil. */
+            article_summary?: string | null;
             /** @enum {string} */
             sentiment?: "bullish" | "bearish" | "neutral";
             /** @enum {string|null} */
@@ -1785,6 +1872,8 @@ export interface components {
         NewsWall: {
             /** Format: date-time */
             generated_at?: string | null;
+            /** @description Canonical MarketSnapshot kimliği; Brain/Heart aynı çevrimi gösterir. */
+            snapshot_id?: string;
             headlines: components["schemas"]["NewsHeadline"][];
             count: number;
             coverage?: {
@@ -1990,6 +2079,14 @@ export interface components {
             open_reason?: string | null;
             /** @description P1 — learning handoff; açılışın kaynak snapshot'ı. */
             snapshot_id?: string | null;
+            /** @description Canonical signal identity shared by decision/ticket/position. */
+            signal_id?: string | null;
+            /** @description Canonical technical decision identity shared with news evidence. */
+            decision_id?: string | null;
+            news_setup_id?: string | null;
+            news_event_id?: string | null;
+            /** @description Canonical evidence identity shared by news and technical confirmation. */
+            news_evidence_id?: string | null;
             /** @description P1 — explicit scale-in pozisyonu (default false). */
             scale_in?: boolean;
         };
@@ -2036,6 +2133,14 @@ export interface components {
             open_reason?: string | null;
             /** @description P1 — learning handoff; kaynak snapshot. */
             snapshot_id?: string | null;
+            /** @description Canonical signal identity shared by decision/ticket/position. */
+            signal_id?: string | null;
+            /** @description Canonical technical decision identity shared with news evidence. */
+            decision_id?: string | null;
+            news_setup_id?: string | null;
+            news_event_id?: string | null;
+            /** @description Canonical evidence identity shared by news and technical confirmation. */
+            news_evidence_id?: string | null;
         };
         /** @description Haber/dünya kanıtından üretilen, süreli paper setup niyeti. Emir değildir; mevcut teknik, seans ve RiskGate zinciri izin verirse sonraki tick'te canonical paper açılışıyla eşleşir. */
         NewsPreparedSetup: {
@@ -2048,6 +2153,9 @@ export interface components {
             created_at: string;
             /** Format: date-time */
             valid_until: string;
+            event_id?: string | null;
+            evidence_id?: string | null;
+            decision_id?: string | null;
             /** @enum {string} */
             status: "WAITING_RISK" | "ARMED" | "ACTIVATED" | "EXPIRED" | "STALE";
             world_direction?: string | null;
@@ -2121,6 +2229,11 @@ export interface components {
             status: "active" | "insufficient_rr" | "invalid";
             expires_at: string;
             ttl_seconds: number;
+            signal_id?: string | null;
+            decision_id?: string | null;
+            news_setup_id?: string | null;
+            news_event_id?: string | null;
+            news_evidence_id?: string | null;
             summary?: components["schemas"]["TradeTicketSummary"];
             /** @description 7 bölüm derin veri (konsensüs/piyasa/geçmiş/güvenlik/sizing/kalibrasyon/audit) */
             technical_detail?: {
@@ -2181,6 +2294,8 @@ export interface components {
             body_long?: string;
             ticket_id?: string | null;
             position_id?: string | null;
+            signal_id?: string | null;
+            brief_id?: string | null;
             actions?: {
                 [key: string]: unknown;
             }[];
@@ -2220,6 +2335,11 @@ export interface components {
             reason?: string;
             fingerprint?: string;
             snapshot_id?: string;
+            signal_id?: string | null;
+            decision_id?: string | null;
+            news_setup_id?: string | null;
+            news_event_id?: string | null;
+            news_evidence_id?: string | null;
             rejected_at?: string;
         };
         ManualReadyQueue: {
@@ -2288,6 +2408,8 @@ export interface components {
             cohorts?: components["schemas"]["LearningCohorts"];
             /** @description Premium karar kalitesi özeti. Execution anomaly, çözülemeyen legacy ve eksik atıf kayıtları öğrenme performansından ayrılır; eski ham alanlar geriye dönük uyumluluk için korunur. */
             performance?: components["schemas"]["LearningPerformance"];
+            /** @description Temiz öğrenme kohortunun 90+ kanıt hazırlığı. Salt gözlem; canlı eşik, ağırlık, RiskGate veya emir akışını değiştirmez. */
+            performance_readiness?: components["schemas"]["PerformanceReadiness"];
             /** @description Birleşik gölge kanıtı. Aday giriş ile final kapı sonucunu, yeni asset terfisini, haber teyidini ve exit canary önerilerini gösterir; canlı karar/ağırlık/paper state'ine uygulanmaz. */
             shadow_routing?: {
                 [key: string]: unknown;
@@ -2434,6 +2556,22 @@ export interface components {
             event_timeline?: {
                 [key: string]: unknown;
             }[];
+        };
+        PerformanceReadiness: {
+            score: number;
+            target_score: number;
+            status: string;
+            criteria_passed?: number;
+            criteria_total?: number;
+            blockers: string[];
+            criteria: {
+                [key: string]: unknown;
+            }[];
+            shadow_only: boolean;
+            paper_safe: boolean;
+            no_execution: boolean;
+            automatic_activation?: boolean;
+            policy?: string;
             why_it_matters?: string;
             what_to_watch?: string[];
             invalidators?: string[];
@@ -2444,9 +2582,9 @@ export interface components {
             forecast_bands?: {
                 [key: string]: unknown;
             }[];
-            actionability: string;
+            actionability?: string;
             /** @enum {string} */
-            execution: "NO_EXECUTION";
+            execution?: "NO_EXECUTION";
             evidence_used?: string[];
             missing_data?: string[];
             warnings?: string[];
@@ -2690,9 +2828,17 @@ export interface components {
             /** @enum {string} */
             candidate_action?: "open_long" | "open_short" | "hold" | "blocked" | "watch";
             score?: number;
+            /** @description 0-100 yön ekseni; 50 nötr. Kazanma olasılığı değildir. */
+            consensus_score?: number | null;
+            /** @description Yön bağımsız sinyal gücü; ayı yönünde skor ters çevrilir. */
+            directional_strength?: number | null;
+            /** @description Skorun anlamı; yön ekseni ile kazanma olasılığını ayırır. */
+            score_semantics?: string;
             /** @enum {string} */
             direction?: "bullish" | "bearish" | "neutral";
             confidence?: number;
+            confidence_source?: string;
+            decision_id?: string;
             size_multiplier?: number;
             reason?: string;
             blocked_by?: string[];
@@ -2771,6 +2917,8 @@ export interface components {
             location_gate?: number | null;
             /** @description Compact 'where am I' evidence behind the gate (fib zone / confluence / pattern / reversal) — surfaced so the LLM can explain it in plain language. */
             location_evidence?: string[];
+            /** @description Live timing confirmations. Null is reserved for legacy replay payloads; neutral signals are not evidence for either side. */
+            confirmation_signals?: components["schemas"]["ConfirmationSignal"][] | null;
             /** @enum {string} */
             status: "OK" | "DEGRADED";
             source?: string;
@@ -2800,6 +2948,13 @@ export interface components {
             decision_usage: number;
             fallback_used: boolean;
             notes: string[];
+            /** @description Snapshot'a ait fiyat-dışı kalite eksenleri. Gözlem amaçlıdır; karar skoru ve RiskGate hesabına doğrudan girmez. Ölçülemeyen eksen null'dur. */
+            extended: {
+                technical_bars: number | null;
+                news_diversity: number | null;
+                rotation_coverage: number | null;
+                artifact_freshness: number | null;
+            };
             /** @description Backend-derived presentation value (0-1) for Layer0HumanComputerModel's 3D pulse animation speed — not a decision/risk input. */
             stress_score?: number;
         };
@@ -2863,6 +3018,24 @@ export interface components {
             };
             /** @description v2.7 D5 — haber → catalyst half-life zekâsı (deterministik; LLM yok). Yalnızca verified + yarı-ömrü dolmamış impact karar zincirini kısıtlar. */
             catalyst_impacts?: components["schemas"]["CatalystImpact"][];
+        };
+        /** @description Resmî yayımlanmış makro gözlem; işlem emri üretmez. */
+        MacroRelease: {
+            id: string;
+            title: string;
+            /** Format: date-time */
+            ts: string;
+            importance: string;
+            region?: string | null;
+            category?: string | null;
+            source: string;
+            verified: boolean;
+            actual?: number | null;
+            expected?: number | null;
+            previous?: number | null;
+            revised?: number | null;
+            unit?: string | null;
+            evidence?: string[];
         };
         /**
          * @description squeeze_proxy (0..100) seviyesi — PROXY, gerçek liquidation değil.
@@ -3167,6 +3340,8 @@ export interface components {
             /** @enum {string} */
             direction?: "bullish" | "bearish" | "neutral";
             score?: number;
+            /** @description Direction-normalized strength (0-100). Bearish scores are inverted so every consumer can compare signal strength in the same direction. */
+            directional_strength?: number;
             candidate_action?: string;
             final_action?: string;
             actionable?: boolean;
@@ -3175,6 +3350,25 @@ export interface components {
             execution_state?: "READY" | "EXPLORATION" | "BLOCKED" | "SUSPENDED";
             /** @enum {string} */
             status?: "ACTIONABLE" | "NOT_ACTIONABLE" | "SUSPENDED";
+        };
+        /** @description Decision matrix sonrasındaki otomatik paper açılış kapısının salt-okuma görünümü. Haber-teknik confluence kapısı geçilmeden emir/pozisyon oluşmaz. */
+        AutoOpenReadiness: {
+            enabled?: boolean;
+            available?: boolean;
+            candidate_count?: number;
+            ready_count?: number;
+            blocked_count?: number;
+            reason?: string | null;
+            blockers?: {
+                [key: string]: unknown;
+            }[];
+            /** @description Same-symbol/timeframe/side setups that passed the final paper-only auto-open confluence gate. */
+            ready?: {
+                symbol: string;
+                timeframe: string;
+                /** @enum {string} */
+                side: "long" | "short";
+            }[];
         };
         /** @description UX1 — ilk-ekran tek ana kart: agent şu an ne yapabilir, ana engel ne, ne izliyor. Tüm türetilmiş alanlar backend'de (frontend hesap yapmaz). */
         AgentBrief: {
@@ -3195,6 +3389,7 @@ export interface components {
             open_paper_positions?: number;
             top_blockers?: string[];
             top_candidates?: components["schemas"]["AgentBriefCandidate"][];
+            auto_open?: components["schemas"]["AutoOpenReadiness"];
             next_watch_conditions?: components["schemas"]["WatchCondition"][];
             recommended_stance: string;
             paper_state_summary?: {
@@ -3223,6 +3418,7 @@ export interface components {
         };
         LearningPerformance: {
             total_trades: number;
+            verified?: number;
             wins: number;
             losses: number;
             breakeven: number;
@@ -3242,6 +3438,11 @@ export interface components {
         };
         /** @description UX1 — Agent Operating Cockpit özeti (tek çağrı). AgentBrief + DecisionTrace ilk-ekranı besler. Read-only; yeni karar/emir/live çağrı YOK. PAPER_SAFE. */
         CockpitBrief: {
+            brief_id?: string;
+            /** @description Tek cockpit snapshot/decision/evidence kimlik zarfı */
+            canonical_ids?: {
+                [key: string]: unknown;
+            };
             /** Format: date-time */
             generated_at?: string;
             snapshot_id?: string | null;
@@ -3267,6 +3468,16 @@ export interface components {
                     size_usd: number;
                     unrealized_pnl_usd: number;
                 }[];
+            } & {
+                [key: string]: unknown;
+            };
+            /** @description Aynı cockpit snapshot'ından üretilen salt-okuma ticket görünümü */
+            trade_tickets?: {
+                [key: string]: unknown;
+            };
+            /** @description Aynı cockpit snapshot'ından üretilen observe-only agent görünümü */
+            agent_matrix?: {
+                [key: string]: unknown;
             };
             agent_brief: components["schemas"]["AgentBrief"];
             decision_trace: components["schemas"]["DecisionTrace"];
@@ -3703,6 +3914,8 @@ export interface components {
             name: string;
             fired?: boolean;
             detail?: string;
+            /** @enum {string|null} */
+            direction?: "bullish" | "bearish" | "neutral" | null;
         };
         TechnicalTimeframeSummary: {
             /** @enum {string} */
@@ -3884,6 +4097,13 @@ export interface components {
         /** @description Read-only multi-TF agent pipeline matrix (steps 1–6). Global RiskGate action is applied first; the per-trade cost + R:R gate is final. Frontend renders only. */
         AgentMatrix: {
             risk_action?: string | null;
+            /** @enum {string} */
+            source?: "agent_shadow";
+            /** @enum {string} */
+            execution_authority?: "observe_only";
+            snapshot_id?: string | null;
+            snapshot_generated_at?: string | null;
+            paper_state_revision?: number | null;
             timeframes: ("15m" | "1h" | "4h" | "1d" | "1w")[];
             symbols: components["schemas"]["AgentMatrixRow"][];
         };
@@ -4563,6 +4783,7 @@ export interface components {
         };
         /** @description Raporcu agent — sistem state'ini her cycle tarayıp yönetici özeti + başlık başlık özet üretir. LLM gerektirmez; karar vermez (observer). */
         AgentBriefing: {
+            brief_id?: string;
             generated_at: string;
             snapshot_id?: string | null;
             regime_label?: string | null;
@@ -4570,6 +4791,13 @@ export interface components {
             executive?: components["schemas"]["AgentBriefingExecutive"];
             engine?: components["schemas"]["AgentBriefingEngine"];
             dqs?: components["schemas"]["AgentBriefingDqs"];
+            snapshot_generated_at?: string | null;
+            paper_state_revision?: number | null;
+            open_positions?: {
+                [key: string]: unknown;
+            }[];
+            world_brief?: components["schemas"]["WorldBrief"];
+            premium_brief?: components["schemas"]["PremiumBrief"];
             headlines: components["schemas"]["AgentBriefingHeadline"][];
         };
         /** @enum {string} */
@@ -5202,6 +5430,26 @@ export interface operations {
             };
         };
     };
+    getPerformanceReadiness: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Observe-only readiness report */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PerformanceReadiness"];
+                };
+            };
+        };
+    };
     getRiskCorrelation: {
         parameters: {
             query?: never;
@@ -5312,6 +5560,26 @@ export interface operations {
         requestBody?: never;
         responses: {
             /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CockpitBrief"];
+                };
+            };
+        };
+    };
+    getCockpitState: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK — aynı CockpitBrief sözleşmesi, canonical envelope alanlarıyla */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -5832,6 +6100,50 @@ export interface operations {
         requestBody?: never;
         responses: {
             /** @description OK (tablo yoksa status=NO_TABLE) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+    };
+    getLearningExternalEdge: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK (status is INSUFFICIENT, UNPROVEN, or READY) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+    };
+    getLearningForwardTest90d: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description RUNNING or COMPLETE paper-safe metrics */
             200: {
                 headers: {
                     [name: string]: unknown;

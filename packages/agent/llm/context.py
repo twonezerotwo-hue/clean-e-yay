@@ -20,6 +20,7 @@ from packages.data.ingestion.pipeline import (
 )
 from packages.data.provenance import data_provenance
 from packages.data.registry import assets as asset_registry
+from packages.decision.cockpit import finalize_matrix_view
 from packages.decision.engine import decide_matrix, matrix_view
 from packages.learning import event_outcomes, mistake_memory
 from packages.paper import state as paper_state
@@ -38,6 +39,7 @@ def _risk_input(ps: paper_state.PaperState, snap: MarketSnapshot) -> RiskInput:
         daily_pnl_usd=ps.daily_pnl_usd,
         open_position_count=len(ps.open_positions),
         daily_anchor_date=ps.daily_anchor_date,
+        mtm_equity_usd=ps.mtm_equity_usd,
     )
 
 
@@ -312,6 +314,7 @@ def build_compact_context() -> dict:
         matrix_symbols, snap, risk_in, open_positions=ps.open_positions
     )
     view = matrix_view(regime, risk, decisions, snap, matrix_symbols)
+    view = finalize_matrix_view(view, snap, ps)
 
     halt_state = halt_store.load()
     active_halts = [

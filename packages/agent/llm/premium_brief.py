@@ -192,7 +192,7 @@ def _digest(
     rows = []
     for headline in headlines or ():
         item = _row(headline)
-        rows.append({key: item.get(key) for key in ("id", "source", "ts", "title", "sentiment", "asset_impact")})
+        rows.append({key: item.get(key) for key in ("id", "source", "ts", "title", "sentiment", "asset_impact", "article_excerpt", "article_fetched_at")})
     timeline = []
     for item in world_brief.get("event_timeline") or ():
         row = _row(item)
@@ -324,6 +324,72 @@ def _headline_title(row: Mapping[str, Any]) -> str:
     )
 
 
+def _enrich_headline_rows(headlines: Iterable[Any] | None) -> tuple[dict[str, Any], ...]:
+    """Attach cached article evidence to the one narrative input set.
+
+    Discovery owns bounded fetching; the brief only reads the cache so a
+    blocked publisher cannot delay the UI or decision loop.
+    """
+    source_rows = list(headlines or ())
+    try:
+        from packages.data.providers.news.article_enrichment import cached
+
+        urls = [getattr(item, "url", None) or _row(item).get("url") for item in source_rows]
+        article_rows = cached(urls)
+    except Exception:
+        article_rows = {}
+    output: list[dict[str, Any]] = []
+    for item in source_rows:
+        row = _row(item)
+        url = str(row.get("url") or getattr(item, "url", None) or "").strip()
+        article = article_rows.get(url)
+        if not article and str(row.get("article_summary") or "").strip():
+            summary = str(row.get("article_summary") or "").strip()
+            if len(summary) >= 80:
+                article = {"status": "RSS_SUMMARY", "excerpt": summary[:1200],
+                           "word_count": len(summary.split())}
+        if article and article.get("excerpt"):
+            row["article_excerpt"] = str(article.get("excerpt") or "")[:1200]
+            row["article_status"] = str(article.get("status") or "OK")
+            row["article_word_count"] = int(article.get("word_count") or 0)
+            row["article_fetched_at"] = article.get("fetched_at")
+        output.append(row)
+    return tuple(output)
+
+
+def _article_effect_sentence(row: Mapping[str, Any]) -> str | None:
+    """Summarise what the article body adds, without inventing a quote."""
+    excerpt = str(row.get("article_excerpt") or "").strip()
+    if not excerpt:
+        return None
+    try:
+        from packages.data.providers.news import classify
+
+        text = " ".join(str(row.get(key) or "") for key in ("title", "title_tr", "article_excerpt"))
+        sentiment = classify.classify_sentiment_active(text)
+        impacts = classify.classify_asset_impact(text, sentiment)
+    except Exception:
+        sentiment, impacts = "neutral", {}
+    named = [_asset_name(symbol) for symbol, value in impacts.items() if value]
+    if not named:
+        return "Makale gövdesi okundu; varlık yönü için henüz net bir teyit yok"
+    direction = {"bullish": "yukarı", "bearish": "aşağı"}.get(sentiment, "nötr")
+    return f"Makale gövdesi değerlendirmesi: {', '.join(named[:4])} üzerinde {direction} baskı işareti; fiyat ve teknik teyit bekleniyor"
+
+
+def _article_digest(headlines: Iterable[Any] | None) -> str | None:
+    """Expose a compact Turkish synthesis of cached article bodies."""
+    notes: list[str] = []
+    for item in headlines or ():
+        row = _row(item)
+        note = _article_effect_sentence(row)
+        if note and note not in notes:
+            notes.append(note)
+        if len(notes) >= 3:
+            break
+    return "; ".join(notes) if notes else None
+
+
 def _latest_developments(
     *,
     headlines: Iterable[Any] | None,
@@ -415,7 +481,11 @@ def _latest_developments(
         if topic:
             topic_seen.add(topic)
         source = _compact_text(row.get("source") or "Haber kaynağı", 70)
-        selected.append(f"{source}: {_headline_title(row).rstrip('.!?…')}")
+        article_note = _article_effect_sentence(row)
+        selected.append(
+            f"{source}: {_headline_title(row).rstrip('.!?…')}"
+            + (f" — {article_note}" if article_note else "")
+        )
         if len(selected) >= limit:
             break
     if not selected:
@@ -676,6 +746,28 @@ def _asset_name(value: Any) -> str:
     return _ASSET_NAMES.get(raw.upper(), raw or "belirtilmeyen varlık")
 
 
+def _candidate_strength(row: Mapping[str, Any]) -> float:
+    """Normalize bullish/bearish scores to one investor-facing strength."""
+    try:
+        explicit = row.get("directional_strength")
+        if explicit is not None:
+            return max(0.0, min(100.0, float(explicit)))
+        raw = max(0.0, min(100.0, float(row.get("score") or 0.0)))
+    except (TypeError, ValueError):
+        return 0.0
+    direction = str(row.get("direction") or "").casefold()
+    return 100.0 - raw if direction in {"bearish", "down", "short"} else raw
+
+
+def _directional_threshold() -> float:
+    try:
+        from packages.data.registry.loader import load_thresholds
+
+        return float((load_thresholds().get("consensus") or {}).get("bullish_min", 55))
+    except (TypeError, ValueError, AttributeError):
+        return 55.0
+
+
 def _operational_summary(
     *,
     agent_brief: Mapping[str, Any] | None,
@@ -690,10 +782,31 @@ def _operational_summary(
     """
     brief = dict(agent_brief or {})
     positions = int(brief.get("open_paper_positions") or 0)
+    auto_open = dict(brief.get("auto_open") or {})
     ready = [
         row for row in (brief.get("top_candidates") or [])
         if bool(row.get("execution_ready") or row.get("actionable"))
     ]
+    # A matrix-ready row is not an opened paper position when the worker's
+    # final news-confluence gate is enabled.  Use the canonical gate summary so
+    # the CFO text cannot announce an order that the ledger never contains.
+    if auto_open.get("enabled") and auto_open.get("available"):
+        if int(auto_open.get("ready_count") or 0) == 0:
+            ready = []
+        elif int(auto_open.get("ready_count") or 0) < len(ready):
+            ready_keys = {
+                (item.get("symbol"), item.get("timeframe"), item.get("side"))
+                for item in (auto_open.get("ready") or [])
+            }
+            ready = [
+                row
+                for row in ready
+                if (
+                    row.get("symbol"),
+                    row.get("timeframe"),
+                    "long" if str(row.get("direction")).casefold() in {"bullish", "up", "long"} else "short",
+                ) in ready_keys
+            ]
     raw_blockers = [str(item) for item in (brief.get("top_blockers") or []) if item]
     labels: list[str] = []
     for raw in raw_blockers:
@@ -709,6 +822,8 @@ def _operational_summary(
             labels.append(label)
     if not labels and brief.get("main_blocker", {}).get("label"):
         labels.append(str(brief["main_blocker"]["label"]))
+    if auto_open.get("blocked_count") and "haber–teknik teyit" not in labels:
+        labels.insert(0, "haber–teknik teyit")
     if labels:
         blocker_text = ", ".join(labels[:4])
     else:
@@ -726,13 +841,23 @@ def _operational_summary(
         if candidates:
             candidate = candidates[0]
             direction = "yukarı" if str(candidate.get("direction")).casefold() in {"bullish", "up", "long"} else "aşağı"
-            try:
-                score = float(candidate.get("score") or 0)
-            except (TypeError, ValueError):
-                score = 0.0
+            strength = _candidate_strength(candidate)
+            threshold = _directional_threshold()
+            if strength >= threshold and auto_open.get("blocked_count"):
+                status_text = (
+                    f"sinyal gücü {strength:.0f}/100 ile işlem eşiğini geçti, "
+                    "ancak son haber-teknik kapıda bekliyor"
+                )
+            elif strength >= threshold:
+                status_text = f"sinyal gücü {strength:.0f}/100 ile işlem eşiğini geçti"
+            else:
+                status_text = (
+                    f"sinyal gücü {strength:.0f}/100; işlem eşiğine "
+                    f"{threshold - strength:.1f} puan eksik"
+                )
             opportunity = (
                 f"En yakın aday {_asset_name(candidate.get('symbol'))} için {direction} yönlü; "
-                f"sinyal gücü {score:.0f}/100 ve henüz işlem eşiğini geçmedi."
+                f"{status_text}."
             )
         else:
             opportunity = "Bu çevrimde işlem adayı oluşmadı; yeni haber ve taze fiyat teyidi bekleniyor."
@@ -753,7 +878,12 @@ def _operational_summary(
         portfolio_text = "Portföy boş; uygun aday için son doğrulama bekleniyor."
     else:
         portfolio_text = "Portföy boş; bu çevrimde güvenli açılış koşulu oluşmadı."
-    decision_text = "İşlem adayı var" if ready else "Şu anda işlem açmıyorum"
+    if ready:
+        decision_text = "İşlem adayı var"
+    elif auto_open.get("blocked_count"):
+        decision_text = "Sinyal var ama işlem açılmadı"
+    else:
+        decision_text = "Şu anda işlem açmıyorum"
     return (
         f"{decision_text}. {portfolio_text} "
         f"{opportunity} Bu kararın nedeni: {blocker_text}. {discovery_text}"
@@ -781,6 +911,7 @@ def _cfo_report(
         430,
     )
     developments = _latest_developments(headlines=headlines, world_brief=world_brief)
+    article_digest = _article_digest(headlines)
     shock = _shock_explanation(headlines=headlines, world_brief=world_brief)
     actors = _actor_updates(headlines=headlines, world_brief=world_brief)
     market_moves = _market_move_text()
@@ -805,6 +936,7 @@ def _cfo_report(
         f"Piyasa görünümü: {opening}",
         *([f"Kanıt tabanı: {evidence}"] if evidence else []),
         f"Güncel gelişmeler: {developments}.",
+        *([f"Makale değerlendirmesi: {article_digest}."] if article_digest else []),
         *([f"Fiyat tepkisi: {market_moves}"] if market_moves else []),
         *([f"Aktörler: {actors}."] if actors else []),
         f"Piyasa etkisi: {market}",
@@ -927,7 +1059,7 @@ def build_premium_brief(
 ) -> dict[str, Any]:
     """Return a concise delta report and schedule an AI rewrite if needed."""
     global _AI_FUTURE, _AI_FUTURE_DIGEST, _LAST_AI_DIGEST, _LAST_AI_RESULT, _LAST_DIGEST, _LAST_SIGNIFICANT_KEYS
-    headline_rows = tuple(headlines or ())
+    headline_rows = _enrich_headline_rows(headlines)
     digest = _digest(
         headlines=headline_rows,
         world_brief=world_brief,

@@ -104,6 +104,11 @@ COVERAGE: dict[str, dict] = {
         "reason": "weight_rollback'in min-outcome eşiği — aç/kapa aktivasyonu değil, "
                   "rollback mekanizmasının ta kendisinin parametresi.",
     },
+    "EYAY_KRAKEN_OHLCV_ENABLED": {
+        "mechanism": TUNING_PARAM, "monitor": None,
+        "reason": "CoinGecko rate-limitinde kullanılan salt-okuma OHLCV sağlayıcı "
+                  "seçimi; emir veya karar yetkisi eklemez.",
+    },
     # --- SHADOW_EXEMPT: canlı karara dokunmaz (6) ---
     "DISCOVERY_SCAN_ENABLED": {
         "mechanism": SHADOW_EXEMPT, "monitor": None,

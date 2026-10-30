@@ -134,7 +134,7 @@ export function PaperActionPanel() {
         </ul>
       ) : (
         <p className="text-[11px] text-white/45 mb-2">
-          aktif paper aksiyonu yok — {brief?.can_act ? "giriş mümkün" : "yeni giriş kapalı"}
+          aktif paper aksiyonu yok — {brief?.auto_open?.reason ?? (brief?.can_act ? "giriş mümkün" : "yeni giriş kapalı")}
         </p>
       )}
 

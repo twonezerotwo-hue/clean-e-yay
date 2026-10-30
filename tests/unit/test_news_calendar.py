@@ -53,6 +53,18 @@ def test_parse_feed_extracts_fresh_headline() -> None:
     assert "BTCUSD" in h.asset_impact
 
 
+def test_parse_feed_keeps_rss_article_summary() -> None:
+    now = datetime.now(UTC)
+    xml = f"""<?xml version='1.0'?><rss><channel><item>
+      <title>Oil supply disruption lifts Brent prices</title>
+      <description><![CDATA[The outage reduces exports and may keep energy prices elevated for several sessions.]]></description>
+      <link>https://x/story</link><pubDate>{format_datetime(now - timedelta(minutes=10))}</pubDate>
+    </item></channel></rss>"""
+    out = rss.parse_feed(xml, "MarketWatch", now=now)
+    assert out and out[0].article_summary
+    assert "reduces exports" in out[0].article_summary
+
+
 def test_parse_feed_supports_namespaced_atom_title_and_alternate_link() -> None:
     now = datetime.now(UTC)
     published = format_datetime(now - timedelta(minutes=20))

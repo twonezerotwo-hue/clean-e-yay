@@ -9,6 +9,8 @@
 """
 from __future__ import annotations
 
+from types import SimpleNamespace
+
 import pytest
 from fastapi.testclient import TestClient
 
@@ -82,6 +84,28 @@ def test_provenance_mock_mode_when_runtime_opt_in(monkeypatch) -> None:
     assert prov["mock_warning"] is True
 
 
+def test_custom_asset_ohlcv_degradation_does_not_poison_core_provenance():
+    from packages.data.provenance import _resolve_label
+
+    snap = SimpleNamespace(
+        quality=SimpleNamespace(status="OK"),
+        prices=[],
+        provider_status={
+            "ohlcv_coingecko": {
+                "status": "degraded",
+                "last_fallback_at": "2026-10-29T10:00:00+00:00",
+                "degraded_symbols": ["DODO"],
+            }
+        },
+    )
+    label, _ = _resolve_label(snap, mock_warning=False, test_mock=False)
+    assert label == "LIVE"
+
+    snap.provider_status["ohlcv_coingecko"]["degraded_symbols"] = ["BTCUSD"]
+    label, _ = _resolve_label(snap, mock_warning=False, test_mock=False)
+    assert label == "SIMULATION"
+
+
 def test_provenance_simulation_under_test_fixture() -> None:
     # conftest TEST_USE_MOCK=true set ediyor.
     from packages.data.ingestion import pipeline as pl
@@ -120,9 +144,9 @@ def test_dashboard_state_mode_block_test_fixture() -> None:
     assert body["mode"]["label"] == "SIMULATION"
     # data module_health TEST fixture altında degraded:
     assert body["module_health"]["data"]["status"] == "degraded"
-    # news her zaman demo damgalı:
+    # fixture haber akışı artık açıkça test verisi olarak damgalanır:
     assert body["module_health"]["news"]["status"] == "degraded"
-    assert "demo" in body["module_health"]["news"]["notes"].lower()
+    assert "fixture" in body["module_health"]["news"]["notes"].lower()
 
 
 def test_ai_report_disclaimer_in_simulation() -> None:

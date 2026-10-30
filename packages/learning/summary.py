@@ -6,7 +6,13 @@ from dataclasses import asdict
 from packages.data.registry.loader import active_weights_version
 from packages.learning import cohorts as cohorts_mod
 from packages.learning import outcomes as outcomes_mod
-from packages.learning import rebalance_store, run_store, shadow_routing, signal_quality
+from packages.learning import (
+    performance_readiness,
+    rebalance_store,
+    run_store,
+    shadow_routing,
+    signal_quality,
+)
 from packages.learning.calibration import reliability_bins
 from packages.learning.walkforward import summarize as wf_summarize
 from packages.paper import state as paper_state
@@ -38,7 +44,7 @@ def _performance_snapshot(outcomes: list) -> dict:
         sharpe = round((mean / sd) * (252**0.5), 3) if sd > 0 else 0.0
     else:
         sharpe = None
-    return {
+    result = {
         "total_trades": total,
         "wins": wins,
         "losses": losses,
@@ -47,10 +53,12 @@ def _performance_snapshot(outcomes: list) -> dict:
         "total_pnl": round(sum(pnls), 2),
         "expectancy_r": round(sum(r_vals) / len(r_vals), 4) if r_vals else None,
         "r_sample": len(r_vals),
+        "verified": sum(1 for o in outcomes if o.data_verified),
         "sharpe": sharpe,
         "sample_sufficient": total >= MIN_RELIABLE_TRADES,
         "by_timeframe": outcomes_mod.bucketize(outcomes, lambda o: o.timeframe),
     }
+    return result
 
 
 def _proposal_status() -> str:
@@ -116,7 +124,7 @@ def build_summary() -> dict:
     execution_anomalies = sum(1 for o in outcomes if outcomes_mod.is_execution_anomaly(o))
     legacy_outcomes = sum(1 for o in outcomes if getattr(o, "regime", None) == "UNKNOWN")
 
-    return {
+    result = {
         "total_trades": total,
         "breakeven_trades": breakeven,  # F1-2 additive — BE görünür, loss değil
         "expectancy_r": expectancy_r,   # F1-1 additive — R-katı ortalama
@@ -165,6 +173,11 @@ def build_summary() -> dict:
             **clean_performance,
             "excluded_from_learning": max(0, total - len(learning_outcomes)),
             "provenance_incomplete": provenance_incomplete,
+            "provenance_quarantine": {
+                "count": provenance_incomplete,
+                "retained_for_audit": True,
+                "included_in_learning": False,
+            },
             "execution_anomalies": execution_anomalies,
             "legacy_outcomes": legacy_outcomes,
         },
@@ -173,3 +186,9 @@ def build_summary() -> dict:
         # Birleşik gölge kanıtı: yalnız gözlem, canlı karar/ağırlık/paper etkisi yok.
         "shadow_routing": shadow_routing.viewmodel(),
     }
+    # Tek, additive performans karnesi: yalnız gözlem; canlı karar zincirine
+    # bağlanmaz. Ham/legacy metrikler geriye dönük uyumluluk için korunur.
+    result["performance_readiness"] = performance_readiness.evaluate(
+        result["performance"], result
+    )
+    return result

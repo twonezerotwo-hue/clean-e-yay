@@ -20,6 +20,8 @@ _SYMBOL_MAP = {
     "XAUUSD": "GC=F",       # Gold futures
     "XAGUSD": "SI=F",       # Silver futures
     "BRENT":  "BZ=F",       # Brent crude
+    "WTI":    "CL=F",       # West Texas Intermediate crude
+    "COPPER": "HG=F",       # COMEX copper futures
     "NATGAS": "NG=F",        # Henry Hub natural-gas futures
     "SUGAR":  "SB=F",        # Sugar No. 11 futures
     "CVX":    "CVX",         # Chevron

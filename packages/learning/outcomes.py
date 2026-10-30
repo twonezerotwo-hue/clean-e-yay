@@ -8,6 +8,8 @@ PAPER_SAFE / NO_EXECUTION: yalnızca okuma + türetme; emir/karar üretmez.
 """
 from __future__ import annotations
 
+import os
+import sys
 from dataclasses import asdict, dataclass, field
 from datetime import datetime
 
@@ -195,7 +197,7 @@ def build_outcome(t: Trade) -> CanonicalOutcome:
         blocked_by=list(getattr(t, "open_blocked_by", None) or []),
         gates_applied=[],
         snapshot_id=getattr(t, "snapshot_id", None),
-        decision_id=None,
+        decision_id=getattr(t, "decision_id", None) or getattr(t, "signal_id", None),
         data_verified=verified,
         source_quality="verified" if verified else "unverified",
         paper_only=True,
@@ -274,7 +276,7 @@ def build_outcome_from_log_entry(entry: dict) -> CanonicalOutcome:
         blocked_by=list(opening.get("blocked_by") or []),
         gates_applied=[],
         snapshot_id=opening.get("snapshot_id"),
-        decision_id=None,
+        decision_id=opening.get("decision_id") or opening.get("signal_id") or entry.get("decision_id"),
         data_verified=verified,
         source_quality="verified" if verified else "unverified",
         paper_only=True,
@@ -351,11 +353,21 @@ def learning_grade(
     #
     # H7: temizlik öncesi çıkış hatalarının ürettiği kayıplar (execution_anomaly)
     # hiçbir öğreniciye girmez.
-    return [o for o in outcomes
+    graded = [o for o in outcomes
             if getattr(o, "regime", None) not in LEGACY_REGIMES
             and (include_exploration or not is_exploration(o))
             and not is_execution_anomaly(o)
             and bool(getattr(o, "provenance_complete", True))]
+    if (
+        "pytest" not in sys.modules
+        and os.environ.get("LEARNING_AUDIT_LEDGER_ONLY", "").strip().lower()
+        in {"1", "true", "yes", "on"}
+    ):
+        from packages.paper import audit as paper_audit
+
+        closed = paper_audit.closed_trade_ids()
+        graded = [o for o in graded if o.trade_id and o.trade_id in closed]
+    return graded
 
 
 def is_exploration(o: object) -> bool:

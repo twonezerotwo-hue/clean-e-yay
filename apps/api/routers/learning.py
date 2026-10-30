@@ -30,6 +30,8 @@ from packages.learning import (
     evidence_bus,
     exit_backtest,
     exit_forensics,
+    external_edge,
+    forward_test,
     guard_safety,
     historical_edge,
     missed_opportunity,
@@ -63,6 +65,16 @@ router = APIRouter(tags=["learning"])
 @router.get("/learning/summary")
 def get_learning_summary() -> dict:
     return build_summary()
+
+
+@router.get("/learning/performance-readiness")
+def get_performance_readiness() -> dict:
+    """Observe-only 90+ readiness score for the clean learning cohort.
+
+    This endpoint reports evidence and blockers; it never changes a threshold,
+    weight, RiskGate state, paper position, or broker execution mode.
+    """
+    return build_summary()["performance_readiness"]
 
 
 @router.get("/learning/calibration")
@@ -614,6 +626,22 @@ def get_backtest_challenger() -> dict:
     B-4 terfi durumu. Canlı ağırlık/paper/karara ASLA dokunmaz. Flag
     BACKTEST_CHALLENGER_ENABLED kapalıysa enabled=false + boş görünüm."""
     return challenger_trainer.viewmodel()
+
+
+@router.get("/learning/external-edge")
+def get_external_edge() -> dict:
+    """Chronological external holdout edge report (read-only, paper-safe).
+
+    The holdout is measured from the isolated challenger stream and is never
+    promoted automatically into weights or execution.
+    """
+    return external_edge.viewmodel()
+
+
+@router.get("/learning/forward-test-90d")
+def get_forward_test_90d() -> dict:
+    """Ninety-day automatic-paper forward test (read-only, no execution)."""
+    return forward_test.viewmodel()
 
 
 @router.get("/learning/technical-books-replay")

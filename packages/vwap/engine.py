@@ -78,7 +78,7 @@ def analyze(bars: list[OHLCVBar], *, timeframe: str, current_price: float | None
         diag.append("invalid_current_price")
         return VWAPAnalysis(timeframe=timeframe, validity="unavailable", diagnostics=diag)
 
-    session_vwap = indicators.vwap(window)
+    session_vwap = indicators.session_vwap(window)
     if session_vwap is None or session_vwap <= 0:
         diag.append("vwap_unavailable_missing_volume")
         return VWAPAnalysis(timeframe=timeframe, validity="weak", diagnostics=diag)
@@ -97,7 +97,7 @@ def analyze(bars: list[OHLCVBar], *, timeframe: str, current_price: float | None
         prior_locations = []
         for idx in range(start, len(window) - 1):
             sub = window[: idx + 1]
-            v = indicators.vwap(sub)
+            v = indicators.session_vwap(sub)
             if v and v > 0:
                 prior_locations.append(_location(window[idx].close, v, eps))
         if prior_locations:

@@ -90,6 +90,7 @@ news_discovery:
   max_headline_age_hours: 12
   headlines_per_call: 15        # bir YZ çağrısında taranan başlık (ölçüm: ~12 sn)
   calls_per_run: 1              # öğrenme turu başına (5 dk) → saatte ~180 başlık
+  fallback_calls_per_run: 4     # Ollama yoksa kuyruğu kilitlemeden 60 başlık gözlemle
   max_calls_per_day: 300
   max_output_tokens: 700
   max_events_per_call: 4
@@ -100,11 +101,15 @@ news_discovery:
   max_candidates: 15
   min_scan_strength: 20         # teknik analize girmek için en düşük haber gücü (yukarı yön)
   min_dollar_volume: 5000000    # hisse/ETF/kripto günlük işlem hacmi alt sınırı ($)
+  deterministic_fallback: true  # Ollama yoksa yalnız başlıkta açık varlığı gözlem olarak çıkar
   # Makale kanıtı: yalnız keşif yenilemesinde, sınırlı ve önbellekli; karar/emir
-  # yoluna doğrudan bağlanmaz. Kaynak erişilemezse RSS başlığı korunur.
+  # yoluna doğrudan bağlanmaz. Kaynak erişilemezse RSS özeti, o da yoksa başlık korunur.
   article_enrichment:
     enabled: true
-    max_articles_per_refresh: 8
+    # Four bounded fetch workers keep one learning cycle below its 60s budget
+    # while draining the current headline pool instead of enriching only the
+    # first handful of URLs.
+    max_articles_per_refresh: 16
     timeout_seconds: 5
     max_bytes: 500000
     excerpt_chars: 1200
@@ -121,12 +126,10 @@ news_discovery:
     - { source: "Ticaret politikası", url: "https://news.google.com/rss/search?q=when:1d+(tariff+OR+sanctions+OR+%22export+ban%22)&hl=en-US&gl=US&ceid=US:en" }
     - { source: "Google Business", url: "https://news.google.com/rss/headlines/section/topic/BUSINESS?hl=en-US&gl=US&ceid=US:en" }
 
-# Haber → karar GÖLGE girdisi (owner kararı 2026-10-05, üçüncü tur) —
-# packages/discovery/news_decision_shadow.py. Canlı aday işlem × haber öngörüsü
-# teyit/çelişki fiyatla çözülür. ETKİSİZ: affect_decision kodda sabit false; karara
-# bağlanması karne + owner onayı ister (CP5).
+# Haber → karar geçmiş karşılaştırma modülü. Runtime yazımı kapalıdır; mevcut
+# eski kayıtlar yalnızca audit/rapor için okunabilir.
 news_decision_shadow:
-  enabled: true
+  enabled: false
   min_strength: 20        # bu güçten zayıf haber öngörüsü sayılmaz
   horizons_hours: [4, 24]
   dedupe_hours: 4         # aynı sembol/TF/yön/ilişki için tekrar damgalama aralığı

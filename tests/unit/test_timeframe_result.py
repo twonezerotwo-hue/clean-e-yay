@@ -122,3 +122,14 @@ def test_same_closed_input_same_output():
     a = tf.build_timeframe_result("BTCUSD", "1d", bars, now=_now_for(bars))
     b = tf.build_timeframe_result("BTCUSD", "1d", bars, now=_now_for(bars))
     assert a.model_dump_json() == b.model_dump_json()
+
+
+def test_bearish_key_levels_are_short_side_symmetric():
+    bars = _bars(260, step=-0.5, start=400.0, tf_label="4h", spacing_h=4)
+    result = tf.build_timeframe_result("BTCUSD", "4h", bars, now=_now_for(bars))
+    assert result.timeframe_summary.bias == "BEARISH"
+    assert result.key_levels.stop_reference is not None
+    assert result.key_levels.target_reference is not None
+    entry = bars[-1].close
+    assert result.key_levels.stop_reference > entry
+    assert result.key_levels.target_reference < entry

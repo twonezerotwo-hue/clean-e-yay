@@ -2,8 +2,9 @@
 
 RSS titles remain the primary feed contract.  This module only adds a small,
 read-only evidence layer for a bounded number of links during the discovery
-refresh.  It never raises into the ingestion or decision path and it never
-turns article prose into an order by itself.
+refresh; publisher blocks fall back to the feed's bounded RSS summary. It
+never raises into the ingestion or decision path and it never turns article
+prose into an order by itself.
 """
 from __future__ import annotations
 
@@ -204,7 +205,7 @@ def enrich(
             candidates.append((headline, url))
     candidates = candidates[: max(0, int(max_articles))]
     fetcher = fetch or _default_fetch
-    to_fetch: list[tuple[str, Any, str, dict[str, Any]]] = []
+    to_fetch: list[tuple[str, Any, str, dict[str, Any], str | None]] = []
     for headline, url in candidates:
         key = cache_key(url)
         old = rows.get(key) if isinstance(rows.get(key), dict) else None
@@ -220,21 +221,35 @@ def enrich(
             "headline_id": str(getattr(headline, "id", "") or ""),
             "fetched_at": _iso(now),
         }
+        summary = str(getattr(headline, "article_summary", "") or "").strip()
         if not allowed_url(url):
-            row = {**base, "status": "SKIPPED_URL"}
+            row = ({**base, "status": "RSS_SUMMARY", "excerpt": summary[:excerpt_chars],
+                    "description": summary[:500], "word_count": len(summary.split())}
+                   if len(summary) >= 80 else {**base, "status": "SKIPPED_URL"})
             rows[key] = row
             out[key] = row
         else:
-            to_fetch.append((key, headline, url, base))
+            to_fetch.append((key, headline, url, base, summary if len(summary) >= 80 else None))
 
-    def _fetch_one(item: tuple[str, Any, str, dict[str, Any]]) -> tuple[str, dict[str, Any]]:
-        key, _headline, url, base = item
+    def _fetch_one(item: tuple[str, Any, str, dict[str, Any], str | None]) -> tuple[str, dict[str, Any]]:
+        key, _headline, url, base, summary = item
         try:
             raw = fetcher(url, float(timeout_seconds), int(max_bytes))
             parsed = _parse_article(raw, int(excerpt_chars), int(max_bytes))
-            row = {**base, **(parsed or {}), "status": "OK" if parsed else "PARSE_ERROR"}
+            if parsed:
+                row = {**base, **parsed, "status": "OK"}
+            elif summary:
+                row = {**base, "status": "RSS_SUMMARY", "excerpt": summary[:excerpt_chars],
+                       "description": summary[:500], "word_count": len(summary.split())}
+            else:
+                row = {**base, "status": "PARSE_ERROR"}
         except Exception as exc:
-            row = {**base, "status": "FETCH_ERROR", "error": type(exc).__name__}
+            if summary:
+                row = {**base, "status": "RSS_SUMMARY", "excerpt": summary[:excerpt_chars],
+                       "description": summary[:500], "word_count": len(summary.split()),
+                       "fetch_error": type(exc).__name__}
+            else:
+                row = {**base, "status": "FETCH_ERROR", "error": type(exc).__name__}
         return key, row
 
     # Article retrieval is off the decision path. A small pool prevents a
@@ -260,7 +275,7 @@ def coverage(headlines: Iterable[Any]) -> dict[str, Any]:
     urls = [str(getattr(h, "url", None) or "").strip() for h in headlines]
     urls = [u for u in urls if u]
     cached = [rows.get(cache_key(url)) for url in urls if isinstance(rows.get(cache_key(url)), dict)]
-    ok = [row for row in cached if row.get("status") in {"OK", "CACHED"} and row.get("excerpt")]
+    ok = [row for row in cached if row.get("status") in {"OK", "CACHED", "RSS_SUMMARY"} and row.get("excerpt")]
     return {
         "headline_urls": len(urls),
         "cached_articles": len(ok),
@@ -282,4 +297,31 @@ def cached(urls: Iterable[Any]) -> dict[str, dict[str, Any]]:
     return out
 
 
-__all__ = ["allowed_url", "cache_key", "cached", "coverage", "enrich"]
+def context_for(headline: Any, *, article_rows: Mapping[str, Mapping[str, Any]] | None = None) -> tuple[str, dict[str, Any] | None]:
+    """Return the bounded text available for deterministic article analysis.
+
+    RSS title remains the primary identity.  A cached article excerpt is an
+    additive evidence source only; this helper never performs network I/O and
+    therefore cannot stall or bypass the existing decision path.
+    """
+    title = str(getattr(headline, "title", "") or "").strip()
+    title_tr = str(getattr(headline, "title_tr", "") or "").strip()
+    url = str(getattr(headline, "url", "") or "").strip()
+    rows = article_rows if article_rows is not None else cached([url])
+    row = rows.get(url) if url else None
+    excerpt = str((row or {}).get("excerpt", "") or "").strip()
+    if not excerpt:
+        summary = str(getattr(headline, "article_summary", "") or "").strip()
+        if len(summary) >= 80:
+            excerpt = summary[:_DEFAULT_EXCERPT_CHARS]
+            row = {
+                "status": "RSS_SUMMARY",
+                "url": url or None,
+                "excerpt": excerpt,
+                "word_count": len(summary.split()),
+            }
+    parts = [part for part in (title, title_tr, excerpt) if part]
+    return " ".join(parts), dict(row) if isinstance(row, Mapping) else None
+
+
+__all__ = ["allowed_url", "cache_key", "cached", "context_for", "coverage", "enrich"]

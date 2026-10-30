@@ -12,8 +12,9 @@ import os
 import urllib.error
 import urllib.request
 from dataclasses import dataclass
-from pathlib import Path
 from typing import Any
+
+from packages.ops.env import load_repo_dotenv
 
 TAVILY_SEARCH_URL = "https://api.tavily.com/search"
 TIMEOUT_SEC = 8.0
@@ -48,21 +49,7 @@ def _load_repo_dotenv_once() -> None:
     load_flag = os.environ.get("TAVILY_LOAD_DOTENV", os.environ.get("LLM_LOAD_DOTENV", "true"))
     if load_flag.strip().lower() in {"0", "false", "no"}:
         return
-    path = Path(__file__).resolve().parents[3] / ".env"
-    if not path.exists():
-        return
-    try:
-        for raw in path.read_text(encoding="utf-8").splitlines():
-            line = raw.strip()
-            if not line or line.startswith("#") or "=" not in line:
-                continue
-            key, _, value = line.partition("=")
-            key = key.strip()
-            value = value.strip().strip('"').strip("'")
-            if key and key not in os.environ:
-                os.environ[key] = value
-    except OSError:
-        return
+    load_repo_dotenv()
 
 
 def _safe_int(value: str | None, default: int, *, min_value: int, max_value: int) -> int:

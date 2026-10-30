@@ -100,6 +100,65 @@ def _recent_bars_for_stop(symbol: str, timeframe: str, count: int = 15) -> list:
     return list(cached.bars)[-count:]
 
 
+def canonical_targets(
+    symbol: str,
+    side: str,
+    entry_price: float,
+    timeframe: str = "1d",
+    atr: float | None = None,
+    predicted_confidence: float | None = None,
+    *,
+    manual: bool = False,
+):
+    """Resolve the single SL/TP policy shared by tickets and lifecycle.
+
+    A ticket is an explanation of the position that will be opened; it must
+    never show levels different from the levels persisted by ``open_position``.
+    Structural stops remain first choice, with the exact same TF/fixed fallback
+    chain used by the paper lifecycle.
+    """
+    targets = None
+    sscfg = _structural_stop_cfg()
+    if sscfg.get("enabled", False):
+        bars = _recent_bars_for_stop(symbol, timeframe)
+        if bars:
+            structural = compute_structural_targets(
+                symbol,
+                side,
+                entry_price,
+                highs=[float(b.high) for b in bars],
+                lows=[float(b.low) for b in bars],
+                timeframe=timeframe,
+                atr=atr,
+                predicted_confidence=predicted_confidence,
+                manual=manual,
+                lookback=int(sscfg.get("lookback", 10)),
+                buffer_pct=float(sscfg.get("buffer_pct", 0.001)),
+            )
+            if structural.sl_basis != "invalid":
+                targets = structural
+    if targets is None:
+        if tf_targets_enabled():
+            targets = compute_tf_targets(
+                symbol,
+                side,
+                entry_price,
+                timeframe=timeframe,
+                atr=atr,
+                predicted_confidence=predicted_confidence,
+                manual=manual,
+            )
+        else:
+            targets = compute_fixed_targets(
+                symbol,
+                side,
+                entry_price,
+                predicted_confidence=predicted_confidence,
+                manual=manual,
+            )
+    return targets
+
+
 def _last_closed_close(
     symbol: str, timeframe: str, now: datetime, opened_at: str | None = None
 ) -> float | None:
@@ -187,6 +246,11 @@ def open_position(
     timeframe: str = "1d",
     open_reason: str | None = None,
     snapshot_id: str | None = None,
+    signal_id: str | None = None,
+    decision_id: str | None = None,
+    news_setup_id: str | None = None,
+    news_event_id: str | None = None,
+    news_evidence_id: str | None = None,
     scale_in: bool = False,
     open_dqs: float | None = None,
     open_risk_action: str | None = None,
@@ -215,32 +279,15 @@ def open_position(
     # P2 parça-2 — YAPISAL stop yerleşimi (flag default OFF → aşağıdaki ATR motoru,
     # bayt-aynı). Açıkken sl = son N-bar dip/tepe (owner "son dip altı"); yapı
     # geçersiz/bar yok → ATR motoruna düşer (uydurma seviye yok).
-    targets = None
-    sscfg = _structural_stop_cfg()
-    if sscfg.get("enabled", False):
-        _bars = _recent_bars_for_stop(symbol, timeframe)
-        if _bars:
-            _st = compute_structural_targets(
-                symbol, side, entry_price,
-                highs=[float(b.high) for b in _bars],
-                lows=[float(b.low) for b in _bars],
-                timeframe=timeframe, atr=atr,
-                predicted_confidence=predicted_confidence, manual=manual,
-                lookback=int(sscfg.get("lookback", 10)),
-                buffer_pct=float(sscfg.get("buffer_pct", 0.001)),
-            )
-            if _st.sl_basis != "invalid":
-                targets = _st
-    if targets is None:
-        if tf_targets_enabled():
-            targets = compute_tf_targets(
-                symbol, side, entry_price, timeframe=timeframe, atr=atr,
-                predicted_confidence=predicted_confidence, manual=manual,
-            )
-        else:
-            targets = compute_fixed_targets(
-                symbol, side, entry_price, predicted_confidence=predicted_confidence, manual=manual,
-            )
+    targets = canonical_targets(
+        symbol,
+        side,
+        entry_price,
+        timeframe=timeframe,
+        atr=atr,
+        predicted_confidence=predicted_confidence,
+        manual=manual,
+    )
     sl, tp = targets.sl, targets.tp
     if size_usd_override is not None:
         # Owner manuel emir: tam dolar tutarı (kademe/sizing baypas).
@@ -288,6 +335,11 @@ def open_position(
         pending_exit_reason=None,
         open_reason=open_reason,
         snapshot_id=snapshot_id,
+        signal_id=signal_id,
+        decision_id=decision_id,
+        news_setup_id=news_setup_id,
+        news_event_id=news_event_id,
+        news_evidence_id=news_evidence_id,
         scale_in=bool(scale_in),
         open_dqs=open_dqs,
         open_risk_action=open_risk_action,
@@ -326,6 +378,11 @@ def open_position(
         reason=open_reason,
         fingerprint=fingerprint,
         snapshot_id=snapshot_id,
+        signal_id=signal_id,
+        decision_id=decision_id,
+        news_setup_id=news_setup_id,
+        news_event_id=news_event_id,
+        news_evidence_id=news_evidence_id,
         scale_in=bool(scale_in),
         # TF-farkında trailing shadow (eski düz değer paraşüt + kıyas): canlı
         # kullanılan vs eski-düz. Flag OFF iken ikisi eşit (bayt-aynı gözlem).
@@ -383,6 +440,11 @@ def attempt_open(
     scale_in: bool = False,
     open_reason: str | None = None,
     snapshot_id: str | None = None,
+    signal_id: str | None = None,
+    decision_id: str | None = None,
+    news_setup_id: str | None = None,
+    news_event_id: str | None = None,
+    news_evidence_id: str | None = None,
     fingerprint: str | None = None,
     data_verified: bool = False,
     predicted_confidence: float | None = None,
@@ -416,6 +478,8 @@ def attempt_open(
     audit.record(
         "OPEN_ATTEMPT", symbol=symbol, timeframe=timeframe, side=side,
         price_used=entry_price, reason=open_reason, snapshot_id=snapshot_id,
+        signal_id=signal_id, decision_id=decision_id, news_setup_id=news_setup_id, news_event_id=news_event_id,
+        news_evidence_id=news_evidence_id,
         scale_in=bool(scale_in),
     )
     if entry_price is None or entry_price <= 0:
@@ -423,6 +487,8 @@ def attempt_open(
         audit.record(
             "OPEN_BLOCKED", symbol=symbol, timeframe=timeframe, side=side,
             reason="no_price", snapshot_id=snapshot_id,
+            signal_id=signal_id, decision_id=decision_id, news_setup_id=news_setup_id, news_event_id=news_event_id,
+            news_evidence_id=news_evidence_id,
         )
         return None, decision
     # Price sanity (absolute bounds): cross-pair contamination / absurd price must
@@ -436,6 +502,8 @@ def attempt_open(
             "OPEN_BLOCKED", symbol=symbol, timeframe=timeframe, side=side,
             reason="price_insane", detail=sane_reason, price_used=entry_price,
             snapshot_id=snapshot_id,
+            signal_id=signal_id, decision_id=decision_id, news_setup_id=news_setup_id, news_event_id=news_event_id,
+            news_evidence_id=news_evidence_id,
         )
         return None, decision
     # A zero multiplier is a valid non-entry decision, never a valid paper
@@ -453,6 +521,8 @@ def attempt_open(
             side=side,
             reason="zero_size",
             snapshot_id=snapshot_id,
+            signal_id=signal_id, decision_id=decision_id, news_setup_id=news_setup_id, news_event_id=news_event_id,
+            news_evidence_id=news_evidence_id,
         )
         return None, decision
     # State anomaly: corrupt accounting (equity/realized/daily PnL absurd) blocks
@@ -466,7 +536,7 @@ def attempt_open(
         audit.record(
             "OPEN_BLOCKED", symbol=symbol, timeframe=timeframe, side=side,
             reason="state_anomaly", detail="; ".join(anomaly.reasons),
-            snapshot_id=snapshot_id,
+            snapshot_id=snapshot_id, decision_id=decision_id,
         )
         return None, decision
     decision = evaluate_open(
@@ -476,6 +546,7 @@ def attempt_open(
         audit.record(
             "OPEN_BLOCKED", symbol=symbol, timeframe=timeframe, side=side,
             reason=decision["reason"], snapshot_id=snapshot_id, duplicate=True,
+            signal_id=signal_id, news_setup_id=news_setup_id, news_event_id=news_event_id,
         )
         return None, decision
     # Tekrar-giriş kilidi (2026-07-11) — YALNIZ otomatik sinyal açılışına. Kapanış
@@ -497,6 +568,8 @@ def attempt_open(
                 audit.record(
                     "OPEN_BLOCKED", symbol=symbol, timeframe=timeframe, side=side,
                     reason=rg.get("reason") or "reentry_locked", snapshot_id=snapshot_id,
+                    signal_id=signal_id, decision_id=decision_id, news_setup_id=news_setup_id, news_event_id=news_event_id,
+            news_evidence_id=news_evidence_id,
                 )
                 decision["allowed"] = False
                 decision["reason"] = rg.get("reason") or "reentry_locked"
@@ -507,6 +580,8 @@ def attempt_open(
         data_verified=data_verified, predicted_confidence=predicted_confidence,
         raw_confidence=raw_confidence, confidence_source=confidence_source,
         timeframe=timeframe, open_reason=open_reason, snapshot_id=snapshot_id,
+        signal_id=signal_id, decision_id=decision_id, news_setup_id=news_setup_id, news_event_id=news_event_id,
+        news_evidence_id=news_evidence_id,
         scale_in=scale_in, open_dqs=open_dqs, open_risk_action=open_risk_action,
         open_session_action=open_session_action,
         open_session_phase=open_session_phase,
@@ -572,6 +647,11 @@ def close_position(
         lifecycle_status=lifecycle_status,
         open_reason=pos.open_reason,
         snapshot_id=pos.snapshot_id,
+        signal_id=pos.signal_id,
+        decision_id=pos.decision_id,
+        news_setup_id=pos.news_setup_id,
+        news_event_id=pos.news_event_id,
+        news_evidence_id=pos.news_evidence_id,
         open_dqs=pos.open_dqs,
         open_risk_action=pos.open_risk_action,
         open_blocked_by=getattr(pos, "open_blocked_by", None),
@@ -608,6 +688,7 @@ def close_position(
         state.peak_equity_usd = state.equity_usd
     audit.record(
         _FORCE_AUDIT_ACTION.get(reason, "CLOSED"),
+        trade_id=trade.id,
         position_id=pos.id,
         symbol=pos.symbol,
         timeframe=pos.timeframe,
@@ -765,11 +846,20 @@ def trigger_pending_orders(
             size_usd_override=float(o.size_usd),
             timeframe=o.timeframe,
             open_reason=f"pending_{o.order_type}",
+            snapshot_id=getattr(o, "snapshot_id", None),
+            signal_id=getattr(o, "signal_id", None),
+            decision_id=getattr(o, "decision_id", None),
+            news_setup_id=getattr(o, "news_setup_id", None),
+            news_event_id=getattr(o, "news_event_id", None),
+            news_evidence_id=getattr(o, "news_evidence_id", None),
         )
         state.pending_orders = [x for x in state.pending_orders if x.id != o.id]
         audit.record(
             "PENDING_FILLED", position_id=pos.id, symbol=o.symbol, side=o.side,
             price_used=pos.entry_price, size=pos.size_usd, reason=o.order_type,
+            snapshot_id=pos.snapshot_id, signal_id=pos.signal_id,
+            decision_id=pos.decision_id, news_setup_id=pos.news_setup_id,
+            news_event_id=pos.news_event_id, news_evidence_id=pos.news_evidence_id,
         )
         opened.append(pos)
     return opened

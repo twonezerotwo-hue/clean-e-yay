@@ -14,16 +14,16 @@ yazılır.
 """
 from __future__ import annotations
 
-import json
 import os
 import uuid
 from datetime import UTC, datetime
 from pathlib import Path
 
-from packages.ops.store import read_jsonl_tail
+from packages.ops.store import append_jsonl_rotating, read_jsonl_tail
 
 DEFAULT_PATH = "data/runtime/paper_audit.jsonl"
 DEFAULT_MAX_READ = 200
+DEFAULT_MAX_BYTES = 32 * 1024 * 1024
 
 # Bilinen audit aksiyonları (openapi enum ile senkron tutulur).
 ACTIONS = (
@@ -61,9 +61,7 @@ def record(action: str, **fields: object) -> dict:
             event[k] = v
     try:
         p = _path()
-        p.parent.mkdir(parents=True, exist_ok=True)
-        with p.open("a", encoding="utf-8") as f:
-            f.write(json.dumps(event, ensure_ascii=False, default=str) + "\n")
+        append_jsonl_rotating(p, event, max_bytes=DEFAULT_MAX_BYTES)
     except OSError:
         pass  # audit ASLA lifecycle'ı kesmez
     return event
@@ -89,4 +87,17 @@ def summary(limit: int = DEFAULT_MAX_READ) -> dict:
     }
 
 
-__all__ = ["ACTIONS", "read_recent", "record", "summary"]
+def closed_trade_ids(limit: int = DEFAULT_MAX_READ) -> set[str]:
+    """Trade ids with an immutable paper close event."""
+    ids: set[str] = set()
+    for event in read_recent(limit):
+        if str(event.get("action", "")) in {
+            "CLOSED", "KILL_SWITCH_EXIT", "RISK_REDUCE_EXIT", "TIME_STOP_EXPIRED"
+        }:
+            trade_id = event.get("trade_id")
+            if trade_id:
+                ids.add(str(trade_id))
+    return ids
+
+
+__all__ = ["ACTIONS", "closed_trade_ids", "read_recent", "record", "summary"]

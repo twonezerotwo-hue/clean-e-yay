@@ -47,6 +47,9 @@ class Notification:
     body_long: str
     ticket_id: str | None = None
     position_id: str | None = None
+    signal_id: str | None = None
+    # Same snapshot/state identity used by the visual and voice brief.
+    brief_id: str | None = None
     actions: list[dict[str, str]] = field(default_factory=list)
     ack: bool = False
 
@@ -75,6 +78,8 @@ def _read_all() -> list[Notification]:
                     body_long=str(d.get("body_long", "")),
                     ticket_id=d.get("ticket_id"),
                     position_id=d.get("position_id"),
+                    signal_id=d.get("signal_id"),
+                    brief_id=d.get("brief_id"),
                     actions=list(d.get("actions", [])),
                     ack=bool(d.get("ack", False)),
                 ))

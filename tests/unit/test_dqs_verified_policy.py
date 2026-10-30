@@ -110,3 +110,29 @@ def test_verified_flag_without_ok_status_not_trusted():
     assert result.completeness == 50.0
     assert result.score <= 50.0
     assert result.status != "OK"
+
+
+def test_missing_optional_custom_asset_does_not_cap_core_dqs():
+    quotes = [
+        PriceQuote(
+            symbol="BTCUSD",
+            price=100.0,
+            ts=datetime.now(UTC),
+            source="coingecko",
+            verified=True,
+            status="OK",
+        ),
+        PriceQuote(
+            symbol="SKYAI",
+            price=None,
+            ts=datetime.now(UTC),
+            source="coingecko",
+            verified=False,
+            status="DATA_UNAVAILABLE",
+        ),
+    ]
+    result = compute(quotes, ["BTCUSD", "SKYAI"], optional_symbols={"SKYAI"})
+    assert result.status == "OK"
+    assert result.score >= 99.0
+    assert result.completeness == 100.0
+    assert any("opsiyonel" in note and "SKYAI" in note for note in result.notes)

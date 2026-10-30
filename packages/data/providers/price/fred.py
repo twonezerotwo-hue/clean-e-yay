@@ -29,6 +29,10 @@ _SYMBOL_MAP = {
     "US10Y": "DGS10",
     "US02Y": "DGS2",
     "CPI":   "CPIAUCSL",
+    "PCE": "PCEPI",
+    "CORE_PCE": "PCEPILFE",
+    "GDP": "GDP",
+    "FEDFUNDS": "FEDFUNDS",
 }
 
 SUPPORTED = frozenset(_SYMBOL_MAP.keys())

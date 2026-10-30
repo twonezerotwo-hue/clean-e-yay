@@ -89,6 +89,7 @@ def config(discovery_cfg: Mapping[str, Any] | None = None) -> dict[str, Any]:
         "max_headline_age_hours": float(raw.get("max_headline_age_hours", 12)),
         "headlines_per_call": int(raw.get("headlines_per_call", 15)),
         "calls_per_run": int(raw.get("calls_per_run", 1)),
+        "fallback_calls_per_run": int(raw.get("fallback_calls_per_run", 4)),
         "max_calls_per_day": int(raw.get("max_calls_per_day", 300)),
         "max_output_tokens": int(raw.get("max_output_tokens", 700)),
         "max_events_per_call": int(raw.get("max_events_per_call", 4)),
@@ -100,6 +101,10 @@ def config(discovery_cfg: Mapping[str, Any] | None = None) -> dict[str, Any]:
         "min_scan_strength": int(raw.get("min_scan_strength", 20)),
         "min_dollar_volume": float(raw.get("min_dollar_volume", 5_000_000)),
         "min_daily_bars": int(raw.get("min_daily_bars", 31)),
+        # LLM unavailable olduğunda yalnız başlıkta açıkça geçen, kayıtlı veya
+        # konfigüre edilmiş varlıkları dar bir kuralla tarar. Bu yol işlem açmaz;
+        # adayın yine Yahoo/registry doğrulamasından geçmesi gerekir.
+        "deterministic_fallback": bool(raw.get("deterministic_fallback", False)),
         "extra_feeds": [dict(f) for f in raw.get("extra_feeds") or [] if f and f.get("url")],
         # Opt-in in code so isolated tests/older deployments never make a new
         # network request; production enables it explicitly in discovery.yaml.
@@ -171,13 +176,21 @@ def _enrich_heads(heads: Iterable[Any], cfg: Mapping[str, Any], now: datetime) -
     try:
         from packages.data.providers.news import article_enrichment
 
+        # Keep the config name canonical.  ``max_articles`` was an old
+        # implementation-only spelling; reading it here silently disabled
+        # enrichment because the production config uses
+        # ``max_articles_per_refresh``.
+        max_articles = article_cfg.get(
+            "max_articles_per_refresh",
+            article_cfg.get("max_articles", 8),
+        )
         return article_enrichment.enrich(
             sorted(heads, key=lambda item: getattr(item, "ts", None) or now, reverse=True),
-            max_articles=article_cfg["max_articles"],
-            timeout_seconds=article_cfg["timeout_seconds"],
-            max_bytes=article_cfg["max_bytes"],
-            excerpt_chars=article_cfg["excerpt_chars"],
-            cache_ttl_hours=article_cfg["cache_ttl_hours"],
+            max_articles=int(max_articles),
+            timeout_seconds=float(article_cfg.get("timeout_seconds", 5)),
+            max_bytes=int(article_cfg.get("max_bytes", 500_000)),
+            excerpt_chars=int(article_cfg.get("excerpt_chars", 1_200)),
+            cache_ttl_hours=float(article_cfg.get("cache_ttl_hours", 6)),
             now=now,
         )
     except Exception:
@@ -186,30 +199,110 @@ def _enrich_heads(heads: Iterable[Any], cfg: Mapping[str, Any], now: datetime) -
         return {}
 
 
+_ARTICLE_FIELDS = ("status", "title", "description", "excerpt", "word_count", "fetched_at", "url")
+
+
+def _attach_article(item: dict[str, Any], article: Mapping[str, Any] | None) -> None:
+    """Copy only bounded article fields into the discovery artifact."""
+    if article:
+        item["article"] = {key: article.get(key) for key in _ARTICLE_FIELDS}
+
+
+def _enrich_pool_items(pool: dict[str, Any], cfg: Mapping[str, Any], now: datetime) -> dict[str, int]:
+    """Incrementally enrich missing RSS articles without starving the queue.
+
+    The old one-shot marker made the first eight URLs permanent winners: once
+    ``article_enrichment_attempted_at`` existed, the remaining pool could never
+    be retried.  Each refresh now advances through missing URLs; a failed URL
+    is cooled down for the same cache TTL, so publisher blocks do not create a
+    hot retry loop.
+    """
+    article_cfg = dict(cfg.get("article_enrichment") or {})
+    items = [item for item in (pool.get("items") or []) if isinstance(item, dict)]
+    if not article_cfg.get("enabled"):
+        return {"article_enriched": 0, "article_pending": 0, "article_failed": 0}
+    cooldown = timedelta(hours=float(article_cfg.get("cache_ttl_hours", 6)))
+    candidates: list[tuple[datetime | None, datetime, dict[str, Any]]] = []
+    for item in items:
+        url = str(item.get("url") or "").strip()
+        if not url or str((item.get("article") or {}).get("excerpt") or "").strip():
+            continue
+        attempted = _parse(item.get("article_enrichment_attempted_at"))
+        if attempted is not None and now - attempted < cooldown:
+            continue
+        ts = _parse(item.get("ts")) or datetime.min.replace(tzinfo=UTC)
+        candidates.append((attempted, ts, item))
+    # Never-attempted links go first; after the first pass, oldest attempts win.
+    candidates.sort(key=lambda row: (row[0] is not None, row[0] or datetime.min.replace(tzinfo=UTC), -row[1].timestamp()))
+    max_articles = article_cfg.get(
+        "max_articles_per_refresh",
+        article_cfg.get("max_articles", 8),
+    )
+    selected = candidates[: max(0, int(max_articles))]
+    if selected:
+        heads = [SimpleNamespace(id=item.get("key"), source=item.get("source"), url=item.get("url"),
+                                 ts=_parse(item.get("ts")), title=item.get("title"),
+                                 article_summary=item.get("article_summary"))
+                 for _attempted, _ts, item in selected]
+        article_rows = _enrich_heads(heads, cfg, now)
+        from packages.data.providers.news import article_enrichment
+
+        for _attempted, _ts, item in selected:
+            item["article_enrichment_attempted_at"] = _iso(now)
+            url = str(item.get("url") or "").strip()
+            _attach_article(item, article_rows.get(article_enrichment.cache_key(url)) if url else None)
+    # Cache reads are cheap and must not depend on which eight URLs were
+    # selected for network work this cycle. Otherwise already-enriched pages
+    # disappear from the prompt until their turn comes around again.
+    try:
+        from packages.data.providers.news import article_enrichment
+
+        cached_rows = article_enrichment.cached(item.get("url") for item in items)
+        for item in items:
+            url = str(item.get("url") or "").strip()
+            if url and url in cached_rows:
+                _attach_article(item, cached_rows[url])
+    except Exception:
+        pass
+    pool["article_enrichment_attempted_at"] = _iso(now)
+    enriched = sum(1 for item in items if str((item.get("article") or {}).get("excerpt") or "").strip())
+    pending = sum(1 for item in items if item.get("url") and not str((item.get("article") or {}).get("excerpt") or "").strip())
+    failed = sum(1 for item in items if str((item.get("article") or {}).get("status") or "") in {"FETCH_ERROR", "PARSE_ERROR", "SKIPPED_URL"})
+    pool["article_enriched"] = enriched
+    pool["article_pending"] = pending
+    pool["article_failed"] = failed
+    return {"article_enriched": enriched, "article_pending": pending, "article_failed": failed}
+
+
+def _attach_articles_to_events(state: dict[str, Any]) -> None:
+    """Backfill cached article evidence onto already analysed events."""
+    events = [event for event in (state.get("events") or []) if isinstance(event, dict)]
+    urls = [event.get("url") for event in events if event.get("url")]
+    if not urls:
+        return
+    try:
+        from packages.data.providers.news import article_enrichment
+
+        rows = article_enrichment.cached(urls)
+    except Exception:
+        return
+    for event in events:
+        url = str(event.get("url") or "").strip()
+        row = rows.get(url)
+        if row:
+            event["article"] = {key: row.get(key) for key in _ARTICLE_FIELDS}
+
+
 def _refresh_pool(state: dict, cfg: Mapping[str, Any], now: datetime, fetch_group: FetchGroupFn | None) -> dict:
     pool = dict(state.get("pool") or {})
     fetched = _parse(pool.get("fetched_at"))
     if fetched is not None and now - fetched < timedelta(minutes=cfg["feed_refresh_min"]):
-        if (cfg.get("article_enrichment") or {}).get("enabled") and not pool.get("article_enrichment_attempted_at"):
-            from packages.data.providers.news import article_enrichment
-
-            cached_heads = [SimpleNamespace(id=item.get("key"), source=item.get("source"),
-                                             url=item.get("url"), ts=_parse(item.get("ts")),
-                                             title=item.get("title"))
-                            for item in pool.get("items") or [] if item.get("url")]
-            article_rows = _enrich_heads(cached_heads, cfg, now)
-            for item in pool.get("items") or []:
-                url = str(item.get("url") or "").strip()
-                article = article_rows.get(article_enrichment.cache_key(url)) if url else None
-                if article:
-                    item["article"] = {k: article.get(k) for k in
-                                       ("status", "title", "description", "excerpt", "word_count", "fetched_at", "url")}
-            pool["article_enriched"] = sum(1 for item in pool.get("items") or []
-                                           if (item.get("article") or {}).get("excerpt"))
-            pool["article_enrichment_attempted_at"] = _iso(now)
-            state["pool"] = pool
+        _enrich_pool_items(pool, cfg, now)
+        state["pool"] = pool
         return {"status": "CACHED", "items": len(pool.get("items") or []),
-                "article_enriched": pool.get("article_enriched", 0)}
+                "article_enriched": pool.get("article_enriched", 0),
+                "article_pending": pool.get("article_pending", 0),
+                "article_failed": pool.get("article_failed", 0)}
     if fetch_group is None:
         from packages.data.providers.news import rss
 
@@ -217,8 +310,11 @@ def _refresh_pool(state: dict, cfg: Mapping[str, Any], now: datetime, fetch_grou
     # geo=False: jeopolitik kaynaklarda da bölge süzgeci yok — sonucu olan her olay aday.
     heads, ok, err = fetch_group(_feeds(cfg), geo=False, max_items=cfg["per_feed"])
     items: dict[str, dict] = {}
-    article_rows = _enrich_heads(heads, cfg, now)
-    from packages.data.providers.news import article_enrichment
+    prior_by_url = {
+        str(item.get("url")): item
+        for item in (pool.get("items") or [])
+        if isinstance(item, dict) and item.get("url")
+    }
     from packages.data.providers.news.provenance import source_family
     for h in heads:
         title = str(getattr(h, "title", "") or "").strip()
@@ -232,18 +328,25 @@ def _refresh_pool(state: dict, cfg: Mapping[str, Any], now: datetime, fetch_grou
         # Keep same-story confirmations from independent families as distinct
         # queue entries.  Repeated copies from one family still collapse.
         item_key = f"{story_key}:{family}"
-        article = article_rows.get(article_enrichment.cache_key(url)) if url and article_rows else None
         item = {"key": item_key, "story_key": story_key, "source_family": family,
-                "title": title[:240], "source": source, "ts": _iso(ts), "url": url}
-        if article:
-            item["article"] = {k: article.get(k) for k in
-                               ("status", "title", "description", "excerpt", "word_count", "fetched_at", "url")}
+                "title": title[:240], "source": source, "ts": _iso(ts), "url": url,
+                "article_summary": getattr(h, "article_summary", None)}
+        prior = prior_by_url.get(url)
+        if prior:
+            if prior.get("article"):
+                item["article"] = prior["article"]
+            if prior.get("article_enrichment_attempted_at"):
+                item["article_enrichment_attempted_at"] = prior["article_enrichment_attempted_at"]
+            if prior.get("article_summary") and not item.get("article_summary"):
+                item["article_summary"] = prior["article_summary"]
         items.setdefault(item_key, item)
     state["pool"] = {"fetched_at": _iso(now), "items": list(items.values()), "feeds_ok": ok, "last_error": err,
-                     "article_enriched": sum(1 for item in items.values() if (item.get("article") or {}).get("excerpt")),
-                     "article_enrichment_attempted_at": _iso(now)}
+                     "article_enriched": 0, "article_pending": 0, "article_failed": 0}
+    _enrich_pool_items(state["pool"], cfg, now)
     return {"status": "FETCHED", "items": len(items), "feeds_ok": ok,
-            "article_enriched": state["pool"]["article_enriched"]}
+            "article_enriched": state["pool"]["article_enriched"],
+            "article_pending": state["pool"]["article_pending"],
+            "article_failed": state["pool"]["article_failed"]}
 
 
 # Olay değil yorum/tahmin olan başlıklar YZ'ye hiç gitmez (2026-10-05 canlı bulgu: "XRP Is
@@ -286,6 +389,8 @@ def _pending(state: Mapping[str, Any], cfg: Mapping[str, Any], now: datetime) ->
 def _prompt_item(item: Mapping[str, Any]) -> str:
     """Format one title plus bounded article evidence for the local model."""
     excerpt = str((item.get("article") or {}).get("excerpt") or "").strip()
+    if not excerpt:
+        excerpt = str(item.get("article_summary") or "").strip()
     if excerpt:
         return f"{item['title']} | Makale kanıtı: {excerpt[:700]}"
     return str(item["title"])
@@ -323,6 +428,101 @@ _PROMPT = (
     '{{"e":[{{"h":<başlık no>,"c":"<sonuç, ≤14 kelime>","a":[{{"t":"<sembol>","n":"<varlık adı>",'
     '"m":"<mekanizma, ≤10 kelime>","d":"up|down","k":"low|med|high"}}]}}]}}'
 )
+
+_DIRECT_ASSETS: tuple[tuple[str, str, str], ...] = (
+    ("gold", "GC=F", "Altın"),
+    ("silver", "SI=F", "Gümüş"),
+    ("brent", "BZ=F", "Brent petrol"),
+    ("wti", "CL=F", "WTI petrol"),
+    ("crude oil", "CL=F", "WTI petrol"),
+    ("bitcoin", "BTC-USD", "Bitcoin"),
+    ("ethereum", "ETH-USD", "Ethereum"),
+    ("dollar index", "DX-Y.NYB", "ABD doları"),
+    ("dxy", "DX-Y.NYB", "ABD doları"),
+    ("s&p 500", "^GSPC", "S&P 500"),
+    ("nasdaq", "QQQ", "Nasdaq teknoloji hisseleri"),
+)
+_SUPPLY_SHOCK_TERMS = (
+    "attack", "strike", "sanction", "blockade", "disruption", "disrupt",
+    "shortage", "war", "conflict", "closure", "halts", "halted", "cut",
+    "saldırı", "grev", "yaptırım", "abluka", "kesinti", "kıtlık", "savaş",
+)
+_SUPPLY_RELIEF_TERMS = (
+    "ceasefire", "peace", "reopen", "reopening", "production rises", "output rises",
+    "exports rise", "supply deal", "ateşkes", "barış", "üretim art",
+)
+
+
+def _contains_term(text: str, term: str) -> bool:
+    """Match a word (and safe English inflections), not a substring.
+
+    Without boundaries ``war`` matched the ``war`` in ``warns`` and turned an
+    analyst opinion into a false geopolitical shock.  The fallback is
+    intentionally conservative because it is used when the local model is
+    unavailable.
+    """
+    value = str(text or "").casefold()
+    needle = str(term or "").casefold().strip()
+    if not needle:
+        return False
+    if " " in needle:
+        return needle in value
+    if any(ord(ch) > 127 for ch in needle):
+        return bool(re.search(rf"(?<!\w){re.escape(needle)}", value))
+    return bool(re.search(rf"(?<![a-z]){re.escape(needle)}(?:s|ed|ing)?(?![a-z])", value))
+
+
+def _contains_any_term(text: str, terms: Iterable[str]) -> bool:
+    return any(_contains_term(text, term) for term in terms)
+
+
+def _deterministic_extraction(
+    batch: list[dict], discovery_cfg: Mapping[str, Any], *, max_events: int, max_assets: int,
+) -> list[dict]:
+    """Local model unavailable olduğunda güvenli, başlıkla sınırlı keşif.
+
+    Bu bir karar/işlem yolu değildir: yalnızca başlıkta açıkça geçen varlığı
+    aday olarak çıkarır. Resolver aynı sembol, geçmiş ve likidite kapılarını
+    aynen uygular; belirsiz başlıklar sessizce atlanır.
+    """
+    commodity_items = dict((discovery_cfg.get("commodities") or {}).get("items") or {})
+    out: list[dict] = []
+    for index, item in enumerate(batch, 1):
+        title = str(item.get("title") or "").strip()
+        lower = title.casefold()
+        if not title or is_speculative(title):
+            continue
+        if _contains_any_term(lower, _SUPPLY_SHOCK_TERMS):
+            direction, mechanism = "up", "arz kesintisi veya jeopolitik risk"
+        elif _contains_any_term(lower, _SUPPLY_RELIEF_TERMS):
+            direction, mechanism = "down", "arz rahatlaması veya gerilim azalması"
+        else:
+            continue
+        assets: list[dict] = []
+        seen: set[str] = set()
+        for symbol, meta in commodity_items.items():
+            meta = dict(meta or {})
+            ticker = str(meta.get("ticker") or "").strip().upper()
+            label = str(meta.get("label") or symbol)
+            keywords = [str(k).casefold() for k in (meta.get("keywords") or [])]
+            terms = (*keywords, label.casefold(), symbol.casefold())
+            if ticker and _contains_any_term(lower, terms):
+                assets.append({"t": ticker, "n": label, "d": direction, "k": "med", "m": mechanism})
+                seen.add(ticker)
+        for keyword, ticker, name in _DIRECT_ASSETS:
+            if _contains_term(lower, keyword) and ticker not in seen:
+                assets.append({"t": ticker, "n": name, "d": direction, "k": "med", "m": mechanism})
+                seen.add(ticker)
+        if assets:
+            asset_names = [str(a.get("n") or "varlık") for a in assets]
+            out.append({
+                "h": index,
+                "c": f"{asset_names[0]} için {mechanism}" if len(assets) == 1 else "Haber arz ve risk beklentisini değiştiriyor",
+                "a": assets[:max_assets],
+            })
+        if len(out) >= max_events:
+            break
+    return out
 
 
 def _default_client() -> Any:
@@ -493,7 +693,16 @@ def resolve(proposal: Mapping[str, Any], state: dict, cfg: Mapping[str, Any], no
     if budget[0] <= 0:
         return {"status": "deferred", "ticker": ticker, "name": llm_name, "reason": "kota"}
     budget[0] -= 1
-    info, reason = _check(ticker, llm_name, fetch_chart(ticker), cfg)
+    # Configured commodity futures are authoritative aliases (e.g. CL=F →
+    # WTI); Yahoo may call the same contract "Crude Oil". Do not reject a
+    # valid configured future only because its display name differs.
+    info, reason = _check(
+        ticker,
+        llm_name,
+        fetch_chart(ticker),
+        cfg,
+        name_check=ticker not in commodity_by_ticker,
+    )
     if info is None and reason in ("sembol_yok", "ad_uyusmuyor") and llm_name:
         for q in search(llm_name) or []:
             t2 = str(q.get("symbol") or "").upper()
@@ -625,6 +834,9 @@ def run(
     state = _load()
     _prune(state, cfg, now)
     pool = _refresh_pool(state, cfg, now, fetch_group)
+    # Existing events can gain article evidence on a later bounded refresh;
+    # this is additive and never re-runs or changes their prior decision.
+    _attach_articles_to_events(state)
 
     client = (client_factory or _default_client)()
     calls = dict(state.get("calls") or {})
@@ -634,6 +846,10 @@ def run(
              "registry": 0, "rejected": {}, "errors": []}
     status = "OK"
     if client is None:
+        status = "DEGRADED" if cfg["deterministic_fallback"] else "LOCAL_LLM_OFF"
+    if client is None and not cfg["deterministic_fallback"]:
+        # Without the opt-in deterministic path, keep headlines unconsumed so
+        # a later local-model recovery can analyze them with the full prompt.
         status = "LOCAL_LLM_OFF"
     elif calls["n"] >= cfg["max_calls_per_day"]:
         status = "DAILY_CAP"
@@ -676,32 +892,70 @@ def run(
                                                    ("proposed_ticker", "direction", "confidence", "mechanism")}}
         pending = _pending(state, cfg, now)
         per_call = cfg["headlines_per_call"]
-        for i in range(cfg["calls_per_run"]):
+        fallback_mode = client is None
+        run_calls = (
+            cfg["fallback_calls_per_run"]
+            if cfg["deterministic_fallback"] and fallback_mode
+            else cfg["calls_per_run"]
+        )
+        i = 0
+        while i < run_calls:
             batch = pending[i * per_call:(i + 1) * per_call]
+            i += 1
             if not batch or calls["n"] >= cfg["max_calls_per_day"]:
                 break
             prompt = _PROMPT.format(
                 titles="\n".join(f"{j + 1}. {_prompt_item(it)}" for j, it in enumerate(batch)),
                 max_events=cfg["max_events_per_call"], max_assets=cfg["max_assets_per_event"],
             )
-            try:
-                comp = client.complete(SYSTEM, prompt, cfg["max_output_tokens"], 0.1, json_mode=True)
-            except Exception as exc:  # yerel model hatası turu düşürmez
-                stats["errors"].append(f"llm:{type(exc).__name__}")
-                break
-            calls["n"] += 1
-            stats["llm_calls"] += 1
+            if fallback_mode:
+                comp = None
+            else:
+                try:
+                    comp = client.complete(SYSTEM, prompt, cfg["max_output_tokens"], 0.1, json_mode=True)
+                except Exception as exc:  # yerel model hatası turu düşürmez
+                    comp = None
+                    stats["errors"].append(f"llm:{type(exc).__name__}")
+                calls["n"] += 1
+                stats["llm_calls"] += 1
+            parsed = None
             if comp is None:
-                stats["errors"].append("llm_unavailable")
-                break  # başlıklar 'görüldü' sayılmaz → sonraki turda yeniden denenir
-            parsed = parse_extraction(comp.text, len(batch), max_events=cfg["max_events_per_call"],
-                                      max_assets=cfg["max_assets_per_event"])
-            for it in batch:
-                state["seen"][it["key"]] = _iso(now)
-            stats["screened"] += len(batch)
+                if client is not None and not fallback_mode:
+                    stats["errors"].append("llm_unavailable")
+                    if cfg["deterministic_fallback"]:
+                        # Do not spend the remaining per-run budget retrying a
+                        # dead local model; continue screening with the safe
+                        # deterministic path instead.
+                        fallback_mode = True
+                        run_calls = max(run_calls, cfg["fallback_calls_per_run"])
+                if cfg["deterministic_fallback"]:
+                    parsed = _deterministic_extraction(
+                        batch, discovery_cfg, max_events=cfg["max_events_per_call"],
+                        max_assets=cfg["max_assets_per_event"],
+                    )
+                    if parsed:
+                        status = "DEGRADED"
+                        if "deterministic_fallback" not in stats["errors"]:
+                            stats["errors"].append("deterministic_fallback")
+                if parsed is None:
+                    if cfg["deterministic_fallback"]:
+                        # Safe fallback başlıkta açık bir varlık bulamadıysa
+                        # kuyruğu kilitleme; sonraki tur bir sonraki başlık
+                        # grubuna ilerlesin. Yeni akış yine pool'da tutulur.
+                        for it in batch:
+                            state["seen"][it["key"]] = _iso(now)
+                        stats["screened"] += len(batch)
+                        continue
+                    break  # başlıklar 'görüldü' sayılmaz → sonraki turda yeniden denenir
+            else:
+                parsed = parse_extraction(comp.text, len(batch), max_events=cfg["max_events_per_call"],
+                                          max_assets=cfg["max_assets_per_event"])
             if parsed is None:
                 stats["errors"].append("unparsed")
                 continue
+            for it in batch:
+                state["seen"][it["key"]] = _iso(now)
+            stats["screened"] += len(batch)
             for ev in parsed:
                 head = batch[ev["h"] - 1]
                 assets = []
@@ -714,10 +968,12 @@ def run(
                 state["events"].append({
                     "id": head["key"], "title": head["title"], "source": head["source"], "ts": head["ts"],
                     "consequence": ev["c"], "assets": assets, "analyzed_at": _iso(now),
-                    "model": getattr(comp, "model", None),
+                    "model": getattr(comp, "model", None) if comp is not None else "deterministic-fallback",
                     "article": head.get("article"), "url": head.get("url"),
                 })
                 stats["events"] += 1
+    if stats["errors"] and status == "OK":
+        status = "DEGRADED"
     state["calls"] = calls
     state["generated_at"] = _iso(now)
     state["status"] = status
@@ -804,21 +1060,89 @@ def viewmodel(limit_events: int = 12) -> dict:
     try:
         from packages.data.providers.news import article_enrichment
 
+        pool_for_coverage = state.get("pool") or {}
+        pool_for_coverage_items = (
+            pool_for_coverage.get("items")
+            if isinstance(pool_for_coverage, dict)
+            else pool_for_coverage
+        )
         pool_coverage = article_enrichment.coverage(
             SimpleNamespace(url=item.get("url"))
-            for item in (state.get("pool") or {}).get("items") or []
+            for item in pool_for_coverage_items or []
         )
     except Exception:
         pool_coverage = {"status": "UNAVAILABLE"}
+    errors = list(stats.get("errors") or [])
+    status = state.get("status") or "UNKNOWN"
+    pool_state = state.get("pool") or {}
+    # Older runtime files stored the pool directly as a list.  Keep the
+    # reader backward-compatible so a stale cache cannot hide discovery health
+    # behind an AttributeError.
+    raw_pool_items = pool_state.get("items") if isinstance(pool_state, dict) else pool_state
+    pool_items = [item for item in raw_pool_items or [] if isinstance(item, dict)]
+    # The old view only exposed the last worker cycle.  That made a healthy
+    # discovery ledger look empty (`screened=0/events=0`) whenever the latest
+    # cycle was cache-only or the local model was unavailable.  Keep the cycle
+    # counters for compatibility and add ledger totals so health surfaces can
+    # distinguish "no work happened" from "the ledger has no evidence".
+    all_events = [event for event in state.get("events") or [] if isinstance(event, dict)]
+    all_assets = [asset for event in all_events for asset in event.get("assets") or [] if isinstance(asset, dict)]
+    ledger_totals = {
+        "headlines_in_pool": len(pool_items),
+        "events_total": len(all_events),
+        "assets_proposed_total": len(all_assets),
+        "assets_resolved_total": sum(1 for asset in all_assets if asset.get("status") in {"valid", "registry", "rejected"}),
+        "assets_valid_total": sum(1 for asset in all_assets if asset.get("status") in {"valid", "registry"}),
+        "candidates_total": len(state.get("candidates") or []),
+        "last_cycle_screened": int(stats.get("screened") or 0),
+        "last_cycle_events": int(stats.get("events") or 0),
+        "last_cycle_proposed": int(stats.get("proposed") or 0),
+    }
+    live_article_enriched = sum(1 for item in pool_items if str((item.get("article") or {}).get("excerpt") or "").strip())
+    live_article_pending = sum(1 for item in pool_items if item.get("url") and not str((item.get("article") or {}).get("excerpt") or "").strip())
+    live_article_failed = sum(1 for item in pool_items if str((item.get("article") or {}).get("status") or "") in {"FETCH_ERROR", "PARSE_ERROR", "SKIPPED_URL"})
+    # Older persisted pools may predate per-item article fields; the read-only
+    # cache coverage is still authoritative for what is already available.
+    cached_count = int(pool_coverage.get("cached_articles") or 0) if isinstance(pool_coverage, dict) else 0
+    live_article_enriched = max(live_article_enriched, cached_count)
+    live_article_pending = max(0, int(pool_coverage.get("headline_urls") or len(pool_items)) - live_article_enriched)
+    # A stale ``OK`` marker hid the fact that the last discovery cycle could
+    # not call the local model.  Keep explicit operational states (for
+    # example LOCAL_LLM_OFF/DAILY_CAP), but never present an errored cycle as
+    # healthy.  This is observation-only; no decision or order path changes.
+    if errors and status == "OK":
+        status = "DEGRADED"
+    try:
+        from packages.discovery.scanner import scan_enabled
+
+        scan_flag = bool(scan_enabled())
+    except Exception:
+        scan_flag = False
+    generated = _parse(state.get("generated_at"))
+    age_seconds = None if generated is None else max(0.0, (datetime.now(UTC) - generated).total_seconds())
+    scheduler = {
+        "news_discovery_enabled": bool(config().get("enabled", False)),
+        "learning_scan_enabled": scan_flag,
+        "last_run_at": state.get("generated_at"),
+        "age_seconds": round(age_seconds, 1) if age_seconds is not None else None,
+        "status": status,
+    }
     return {
         "generated_at": state.get("generated_at"),
-        "status": state.get("status") or "UNKNOWN",
+        "status": status,
         "events": events,
         "candidates": list(state.get("candidates") or []),
         "stats": {"calls_today": stats.get("calls_today", 0), "screened": stats.get("screened", 0),
-                  "pool": (stats.get("pool") or {}).get("items"),
-                  "article_enriched": (stats.get("pool") or {}).get("article_enriched", 0),
+                  "pool": ((stats.get("pool") or {}).get("items")
+                           if isinstance(stats.get("pool") or {}, dict)
+                           else stats.get("pool")),
+                  "ledger_totals": ledger_totals,
+                  "scheduler": scheduler,
+                  "article_enriched": live_article_enriched,
+                  "article_pending": live_article_pending,
+                  "article_failed": live_article_failed,
                   "article_coverage": pool_coverage,
+                  "errors": errors,
                   "rejected": stats.get("rejected") or {}},
     }
 

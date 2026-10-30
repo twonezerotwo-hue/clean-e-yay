@@ -27,8 +27,8 @@ import type { AgentMatrixRow } from "@/types/generated/api";
 
 // T2 step 7 — multi-TF agent pipeline yüzeyi: consensus (per-TF bias + hizalama)
 // → AgentDecision (aksiyon + entry TF + ×size) → cost/R:R ekonomi kapısı. Tüm
-// değerler backend ViewModel'inden gelir; frontend hesap yapmaz. EVIDENCE-only:
-// panel trade açmaz; RiskGate finaldir, üst TF yalnız scale-down.
+// değerler backend ViewModel'inden gelir; frontend hesap yapmaz. Bu panel
+// yalnızca gölgedir; canlı karar ve paper açılışı bu panelden çıkmaz.
 
 function decisionTitle(row: AgentMatrixRow): string {
   const d = row.decision;
@@ -142,8 +142,8 @@ export function AgentMatrixPanel() {
   return (
     <PanelFrame id="agent_matrix">
       <PanelHeader
-        title="Agent Matrisi"
-        subtitle="multi-TF consensus → karar → cost/R:R"
+        title="Agent Matrisi · GÖLGE"
+        subtitle="kanıt karşılaştırması · emir üretmez"
         actions={
           suspended ? (
             <span className="rounded px-1.5 py-0.5 bg-signal-down/20 text-signal-down uppercase tracking-wide text-[10px]">
@@ -167,7 +167,7 @@ export function AgentMatrixPanel() {
                 <th key={tf} className="p-1 font-normal">{tf}</th>
               ))}
               <th className="p-1 font-normal">Hizalama</th>
-              <th className="p-1 font-normal">Karar</th>
+              <th className="p-1 font-normal">Gölge karar</th>
               <th className="p-1 font-normal">Ekonomi</th>
               <th className="p-1 font-normal">Yapı</th>
             </tr>
@@ -180,7 +180,7 @@ export function AgentMatrixPanel() {
         </table>
       </div>
       <p className="mt-2 text-[10px] text-white/35">
-        per-TF bias (▲/▼/·) → hizalama (NEUTRAL seyreltir) → AgentDecision
+        GÖLGE: canlı karar değildir · per-TF bias (▲/▼/·) → hizalama (NEUTRAL seyreltir) → AgentDecision
         (SCOUT/CONFIRM/WATCH…) · cost+R:R kapısı SCOUT&apos;u WATCH&apos;a düşürebilir
         · CT = countertrend (asla otomatik full giriş) · RiskGate finaldir.
       </p>

@@ -95,6 +95,7 @@ def activate(
             requested_price=prices.get(symbol),
             reason=f"shadow_activation:{action}",
             snapshot_id=snapshot_id,
+            decision_id=getattr(decision, "decision_id", None),
         )
         if entry is not None:
             queued.append(

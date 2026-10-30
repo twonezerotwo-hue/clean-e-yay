@@ -192,11 +192,10 @@ Okuma (owner kararı 2026-10-05, üçüncü tur — ayrı panel YOK):
 - **İnceleme tavsiyesi bildirimi:** haberden bulunmuş fikir + haber öngörüsü yukarı
   (güç ≥ `review.min_news_strength`) + teknik `WOULD_OPEN_LONG` → `review_recommendation`
   (zil + anlık uyarı; varlık başına 24 saatte bir; işlem önerisi değildir).
-- **Gölge karar girdisi** (`packages/discovery/news_decision_shadow.py`): canlı matrisin
-  aday işlemleri (open_long/open_short) × haber öngörüsü teyit/çelişki
-  `NEWS_DECISION_SHADOW_PATH`'e yazılır, 4sa/1g sonra adayın yönü tuttu mu diye çözülür.
-  Etkisiz (`affect_decision` kodda sabit false); canlı matriste haber modülü zaten
-  `analytics_only`.
+- **Gölge karar girdisi** (`packages/discovery/news_decision_shadow.py`) tarihsel
+  artifact'ları okuyabilir; yeni runtime yazımı kapalıdır. Haber–teknik kararın
+  aktif yolu yalnız canonical `decide_matrix` + RiskGate'tir. Eski kayıtlar
+  silinmez, fakat yeni karara veya öğrenme hesabına girmez.
 - Ham veri: `GET /api/v1/ideas`. Dünya Özeti'nin detayı Soul katmanında.
 - **Owner onaylı paper açma (Brain bannerı):** Brain'de hologramın altındaki "Yeni Asset Fikri"
   bannerı Heart panelindeki fikirleri (`useIdeas()`) 3 sn arayla sırayla gösterir (üzerine gelince/eylemden sonra durur); `ONAYLA ve KAĞIT İŞLEMİ AÇ`

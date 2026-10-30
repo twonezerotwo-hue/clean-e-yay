@@ -68,7 +68,7 @@ def test_candidate_assets_share_price_and_ohlcv_source_mapping() -> None:
 
     # Discovery adayının panelde görünür olup paper ön-kontrolünde kaybolmaması
     # için spot fiyat ve teknik bar aynı sembolü kapsamalıdır.
-    candidates = ("CVX", "NATGAS", "SUGAR", "XLV", "XLP")
+    candidates = ("CVX", "NATGAS", "SUGAR", "WTI", "COPPER", "XLE", "XLK", "XLV", "XLP")
     assert all(symbol in price.yfinance.SUPPORTED for symbol in candidates)
     assert all(symbol in ohlcv_yfinance.SUPPORTED for symbol in candidates)
 

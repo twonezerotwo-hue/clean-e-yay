@@ -202,6 +202,22 @@ def build_consensus(headlines: Iterable[Any], *, now: datetime | None = None) ->
     """
     now = now or datetime.now(UTC)
     rows = [h for h in headlines if getattr(h, "verified", False)]
+    # Article pages are optional, cached evidence.  Read the cache once per
+    # report so the same bounded article text is used by every consumer.
+    try:
+        from packages.data.providers.news import classify
+        from packages.data.providers.news.article_enrichment import context_for
+
+        context_for_fn = context_for
+        _article_cache = None
+        urls = [getattr(h, "url", None) for h in rows if getattr(h, "url", None)]
+        from packages.data.providers.news.article_enrichment import cached
+
+        _article_cache = cached(urls)
+    except Exception:
+        classify = None
+        context_for_fn = None
+        _article_cache = {}
     stories: dict[str, dict[str, Any]] = {}
     assets: dict[str, dict[str, Any]] = defaultdict(lambda: {
         "bullish_stories": set(), "bearish_stories": set(), "neutral_stories": set(),
@@ -219,7 +235,48 @@ def build_consensus(headlines: Iterable[Any], *, now: datetime | None = None) ->
         bucket["families"].add(family)
         bucket["proxy"] = bucket["proxy"] or is_proxy_source(getattr(h, "source", None))
         bucket["headlines"] += 1
-        for symbol, impact in (getattr(h, "asset_impact", None) or {}).items():
+        article_text = title
+        article = None
+        if context_for_fn is not None:
+            try:
+                article_text, article = context_for_fn(h, article_rows=_article_cache)
+            except Exception:
+                article_text = title
+        article_impacts: dict[str, float] = {}
+        if classify is not None and article and article.get("excerpt"):
+            try:
+                sentiment = classify.classify_sentiment_active(article_text)
+                article_impacts = classify.classify_asset_impact(article_text, sentiment)
+                bucket.setdefault("article_evidence", []).append({
+                    "status": str(article.get("status") or "OK"),
+                    "word_count": int(article.get("word_count") or 0),
+                    "excerpt": _clean(article.get("excerpt"))[:360],
+                })
+            except Exception:
+                article_impacts = {}
+        headline_impacts = dict(getattr(h, "asset_impact", None) or {})
+        for symbol, impact in article_impacts.items():
+            # Keep a title direction when present, but preserve a distinct
+            # article direction so contradictory body evidence is visible as
+            # MIXED instead of silently overwritten.
+            if symbol in headline_impacts and _direction(impact) != _direction(headline_impacts.get(symbol)):
+                bucket.setdefault("article_conflicts", []).append(str(symbol))
+        # Keep both layers visible.  A body that contradicts its headline must
+        # become a same-story conflict, never an overwrite of the RSS signal.
+        for symbol, impact in headline_impacts.items():
+            direction = _direction(impact)
+            bucket["directions"][symbol].add(direction)
+            a = assets[str(symbol)]
+            a["all_families"].add(family)
+            if direction == "bullish":
+                a["bullish_stories"].add(key)
+                a["bullish_families"].add(family)
+            elif direction == "bearish":
+                a["bearish_stories"].add(key)
+                a["bearish_families"].add(family)
+            else:
+                a["neutral_stories"].add(key)
+        for symbol, impact in article_impacts.items():
             direction = _direction(impact)
             bucket["directions"][symbol].add(direction)
             a = assets[str(symbol)]
@@ -245,6 +302,9 @@ def build_consensus(headlines: Iterable[Any], *, now: datetime | None = None) ->
             "headline_count": item["headlines"],
             "asset_directions": directions,
             "same_story_conflict": any(len(values) > 1 for values in directions.values()),
+            "article_evidence": sorted(item.get("excerpt", "") for item in item.get("article_evidence", [])),
+            "article_word_count": sum(item.get("word_count", 0) for item in item.get("article_evidence", [])),
+            "article_conflicts": sorted(set(item.get("article_conflicts", []))),
         })
     asset_rows = []
     for symbol, item in sorted(assets.items()):
@@ -276,6 +336,10 @@ def build_consensus(headlines: Iterable[Any], *, now: datetime | None = None) ->
     source_labels = {_clean(getattr(h, "source", "unknown")) for h in rows}
     families = {source_family(getattr(h, "source", None), title=getattr(h, "title", None), url=getattr(h, "url", None)) for h in rows}
     proxy_count = sum(1 for h in rows if is_proxy_source(getattr(h, "source", None)))
+    article_evidence = [
+        item for item in story_rows
+        if item.get("article_word_count") or item.get("article_evidence")
+    ]
     return {
         "generated_at": now.isoformat(),
         "headline_count": len(rows),
@@ -284,13 +348,18 @@ def build_consensus(headlines: Iterable[Any], *, now: datetime | None = None) ->
         "proxy_headline_count": proxy_count,
         "proxy_share": round(proxy_count / len(rows), 3) if rows else 0.0,
         "story_count": len(stories),
+        "article_enriched_stories": len(article_evidence),
+        "article_evidence_words": sum(int(item.get("article_word_count") or 0) for item in article_evidence),
         "newest_headline_at": newest,
         "stories": sorted(story_rows, key=lambda row: row["title"]),
         "assets": asset_rows,
         "policy": {
             "conflict_handling": "MIXED → no direction is selected; evidence remains visible",
             "independence_rule": "same publisher/proxy family counts once",
-            "decision_effect": "observe_only",
+            # News setup + technical confirmation is the canonical paper gate;
+            # the separate causal shadow remains observation-only.
+            "decision_effect": "paper_confluence_gate",
+            "causal_shadow_effect": "observe_only",
         },
     }
 

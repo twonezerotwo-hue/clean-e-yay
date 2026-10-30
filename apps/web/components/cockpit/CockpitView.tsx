@@ -1179,6 +1179,8 @@ export function CockpitView() {
   const ticketOwnerApproval = ticketExecutionState === "OWNER_APPROVAL";
   const unrealizedPnl = paperState?.unrealized_pnl_usd ?? 0;
   const hasOpenPositions = openPaperPositions > 0;
+  const autoOpenReason =
+    brief.auto_open?.reason ?? brief.auto_open?.blockers?.[0]?.reason ?? null;
   const newSignalNote = activeTicket
     ? `yeni sinyal: ${activeTicket.symbol} ${activeTicket.side.toUpperCase()}`
     : null;
@@ -1194,7 +1196,7 @@ export function CockpitView() {
     ? newSignalNote ?? "Yeni sinyal yok — motor adayları izliyor."
     : activeTicket
       ? ticketExecutionReason ?? `${activeTicket.timeframe} · ${activeTicket.display.confidence_text}`
-      : brief.main_blocker.detail ?? brief.main_blocker.label ?? brief.recommended_stance;
+      : autoOpenReason ?? brief.main_blocker.detail ?? brief.main_blocker.label ?? brief.recommended_stance;
   const decisionTone = hasOpenPositions
     ? unrealizedPnl >= 0
       ? "text-emerald-200"

@@ -162,8 +162,17 @@ export function AgentBriefPanel() {
                     <span className={DIRECTION_COLOR[c.direction ?? "neutral"]}>
                       {c.direction ?? "—"}
                     </span>
-                    <span className="tabular-nums text-white/45">
-                      {Math.round(c.score ?? 0)}
+                    <span
+                      className="tabular-nums text-white/45"
+                      title="Yön skoru 0–100 eksenidir; güven olasılığı değildir."
+                    >
+                      yön {Math.round(c.consensus_score ?? c.score ?? 0)}
+                    </span>
+                    <span
+                      className="tabular-nums text-white/35"
+                      title="Yön bağımsız sinyal gücü; ayı yönünde skor ters çevrilir."
+                    >
+                      güç {c.directional_strength == null ? "—" : Math.round(c.directional_strength)}
                     </span>
                     <span
                       className={

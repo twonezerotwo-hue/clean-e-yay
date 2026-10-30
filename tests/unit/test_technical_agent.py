@@ -75,7 +75,7 @@ def test_technical_agent_abstain_on_empty():
 def test_technical_agent_caution_on_conflict():
     per_tf = {
         "1d": _result("1d", 1.0),                  # BULLISH
-        "1h": _result("1h", -1.0, spacing_h=1),    # BEARISH
+        "1h": _result("1h", -0.1, spacing_h=1),    # BEARISH
     }
     out = technical_agent.evaluate("BTCUSD", per_tf)
     assert out.stance == "CAUTION"

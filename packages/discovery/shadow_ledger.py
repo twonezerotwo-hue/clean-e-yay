@@ -274,6 +274,9 @@ def process_run(
                 "regime": res.get("regime"),
                 "opened_at": now.isoformat(),
                 "ttl_hours": ttl_hours(cfg, tf),
+                "evidence_id": res.get("evidence_id"),
+                "market_data": dict(res.get("market_data") or {}),
+                "technical_confirmation": bool(res.get("bullish_tfs")),
             }
             _append(open_ev)
             active[open_ev["id"]] = open_ev
@@ -304,6 +307,8 @@ def candidate_summary(limit: int = REPLAY_MAX_READ) -> dict:
             "n_signals": 0, "resolved": 0,
             "missed_win": 0, "avoided_loss": 0, "expired": 0,
             "r_sum": 0.0, "timeframes": set(), "last_signal_at": None,
+            "evidence_ids": set(), "price_verified": False,
+            "technical_bars_verified": 0, "liquidity_verified": False,
         })
 
     for ev in events:
@@ -315,6 +320,14 @@ def candidate_summary(limit: int = REPLAY_MAX_READ) -> dict:
             s["n_signals"] += 1
             s["timeframes"].add(str(ev.get("timeframe") or "?"))
             s["last_signal_at"] = ev.get("opened_at")
+            if ev.get("evidence_id"):
+                s["evidence_ids"].add(str(ev["evidence_id"]))
+            market = ev.get("market_data") or {}
+            s["price_verified"] = s["price_verified"] or bool(market.get("price_verified"))
+            s["liquidity_verified"] = s["liquidity_verified"] or bool(market.get("liquidity_verified"))
+            s["technical_bars_verified"] = max(
+                int(s["technical_bars_verified"]), int(market.get("technical_bars_verified") or 0)
+            )
         elif ev.get("event") == "resolve":
             oc = ev.get("outcome")
             if oc in ("missed_win", "avoided_loss", "expired"):
@@ -338,5 +351,10 @@ def candidate_summary(limit: int = REPLAY_MAX_READ) -> dict:
             "avg_r": round(s["r_sum"] / n, 3) if n else None,
             "timeframes": sorted(s["timeframes"]),
             "last_signal_at": s["last_signal_at"],
+            "evidence_count": len(s["evidence_ids"]),
+            "price_verified": bool(s["price_verified"]),
+            "liquidity_verified": bool(s["liquidity_verified"]),
+            "technical_bars_verified": int(s["technical_bars_verified"]),
+            "telemetry_version": 1,
         }
     return {"active_n": len(active), "candidates": out}

@@ -175,7 +175,10 @@ export function HologramAssetIdeaBanner() {
   // Pasif ön-durumları (ör. veri bekleniyor) düğme gibi göstermeyiz. Kullanıcı
   // yalnızca gerçekten onaylayabileceği bir paper işlemi olduğunda aksiyon görür.
   const showPaperAction = Boolean(view && (view.button.tone === "ready" || phase !== "idle"));
-  const showReason = Boolean(view?.reason && view.button.tone !== "muted");
+  // Muted buttons are still meaningful outcomes (stale signal, missing price,
+  // risk gate).  Hiding their reason made an owner click look like a silent
+  // no-op, so every idle non-open state now explains its actual blocker.
+  const showReason = Boolean(view?.reason && phase === "idle" && !opened);
 
   return (
     <PanelFrame id="hologram_asset_idea" className="hologram-idea-banner shrink-0 !border-accent-cyan/25 !bg-[linear-gradient(135deg,rgba(4,28,38,0.92),rgba(5,12,20,0.96))] !p-3 sm:!p-3.5 [&_header]:!mb-2.5 [&_h3]:whitespace-nowrap">

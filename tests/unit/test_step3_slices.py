@@ -154,6 +154,23 @@ def test_extended_metrics_technical_bars():
     t_thin = SimpleNamespace(status="OK", bars_used=17)
     m = dqs.extended_metrics(technicals_by_tf={"BTCUSD": {"4h": t_full, "1d": t_thin}})
     assert m["technical_bars"] == pytest.approx(50.0)  # 1/2 hücre tam-bar
+    assert m["technical_session_coverage"] == pytest.approx(50.0)
+
+
+def test_extended_metrics_does_not_penalize_closed_market_history(monkeypatch):
+    t_closed = SimpleNamespace(status="DEGRADED", bars_used=300)
+    closed = SimpleNamespace(
+        relevant_markets=("NYSE",), any_relevant_market_open=False,
+        session_risk="closed",
+    )
+    monkeypatch.setattr(
+        "packages.market_sessions.asset_context", lambda symbol, now: closed,
+    )
+    m = dqs.extended_metrics(
+        technicals_by_tf={"XLE": {"15m": t_closed}},
+    )
+    assert m["technical_bars"] == pytest.approx(100.0)
+    assert m["technical_session_coverage"] == pytest.approx(100.0)
 
 
 def test_extended_metrics_news_diversity_and_rotation():
@@ -180,5 +197,6 @@ def test_extended_metrics_never_touches_score():
 def test_extended_metrics_empty_inputs_all_none():
     m = dqs.extended_metrics()
     assert m["technical_bars"] is None
+    assert m["technical_session_coverage"] is None
     assert m["news_diversity"] is None
     assert m["rotation_coverage"] is None

@@ -48,7 +48,8 @@ function cellTitle(c: TimeframeDecision): string {
   const lines = [
     `${c.symbol} ${c.timeframe}`,
     `candidate: ${c.candidate_action ?? "?"} → final: ${c.action}`,
-    `score ${c.score ?? "—"} · ${c.direction ?? "—"} · size ×${c.size_multiplier ?? 0}`,
+    `yön ${c.consensus_score ?? c.score ?? "—"} · güç ${c.directional_strength ?? "—"} · ${c.direction ?? "—"} · size ×${c.size_multiplier ?? 0}`,
+    `güven ${c.confidence == null ? "—" : `${Math.round(c.confidence * 100)}%`} · kaynak ${c.confidence_source ?? "—"}`,
     `paper: ${c.paper_action ?? "none"} · ${c.status ?? ""} · execution: ${c.execution_state ?? "—"}`,
   ];
   if (c.blocked_by?.length) lines.push(`blocked_by: ${c.blocked_by.join(", ")}`);
@@ -97,7 +98,9 @@ function MatrixCell({
             ] ?? c.action
           )}
         </div>
-        <div className="tabular-nums opacity-80">{Math.round(c.score ?? 0)}</div>
+        <div className="tabular-nums opacity-80">
+          {c.consensus_score == null ? "—" : Math.round(c.consensus_score)}
+        </div>
         {globalSuspended ? null : (
           <>
             <div className="text-[8px] uppercase tracking-wider opacity-70">

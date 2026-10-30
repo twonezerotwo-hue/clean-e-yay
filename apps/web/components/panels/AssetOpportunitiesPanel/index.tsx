@@ -33,7 +33,15 @@ const STATUS_TONE: Record<IdeaStatus, string> = {
   AWAITING_APPROVAL: "border-accent-cyan/40 bg-accent-cyan/10 text-accent-cyan",
 };
 
-function AssetOpportunityCard({ idea, onOpen }: { idea: Idea; onOpen?: (symbol: string) => void }) {
+function AssetOpportunityCard({
+  idea,
+  onOpen,
+  autoReady = false,
+}: {
+  idea: Idea;
+  onOpen?: (symbol: string) => void;
+  autoReady?: boolean;
+}) {
   const dir = ideaDirection(idea.news?.direction);
   const confidence = idea.technical?.confidence;
   const timeframe = idea.technical?.entry_timeframe;
@@ -116,7 +124,11 @@ function AssetOpportunityCard({ idea, onOpen }: { idea: Idea; onOpen?: (symbol: 
         className={`mt-1 text-[10px] leading-4 ${paperReady ? "text-emerald-200/75" : "text-amber-200/65"}`}
         title={idea.paper_open?.reason ?? undefined}
       >
-        {paperReady ? "Paper onayına hazır" : `Paper bekliyor: ${idea.paper_open?.reason ?? "güncel doğrulama gerekli"}`}
+        {paperReady
+          ? autoReady
+            ? "Paper + otomatik kapı hazır"
+            : "Paper onayına hazır · otomatik akışta değil"
+          : `Paper bekliyor: ${idea.paper_open?.reason ?? "güncel doğrulama gerekli"}`}
       </p>
 
       <div className="mt-1.5 flex items-center justify-between gap-2">
@@ -151,11 +163,15 @@ function NewsEvidenceStrip({ consensus }: { consensus?: NewsConsensusView }) {
   const coverageText = coverage?.coverage_pct != null
     ? `makale ${coverage.coverage_pct.toFixed(1)}%`
     : null;
+  const articleProgress = processing?.article_enriched != null
+    ? `okunan ${processing.article_enriched}${processing.article_pending != null ? ` · bekleyen ${processing.article_pending}` : ""}`
+    : null;
   const values = [
     families != null ? `${families} bağımsız kaynak` : null,
     stories != null ? `${stories} öykü` : null,
     conflicts ? `${conflicts} çelişkili` : null,
     coverageText,
+    articleProgress,
     ideaBoard?.directional != null ? `${ideaBoard.directional} yönlü fikir` : null,
     inventory?.unique_feed_urls != null ? `${inventory.unique_feed_urls} haber akışı` : null,
     forecast?.directional_forecasts != null ? `${forecast.directional_forecasts} yönlü öngörü` : null,
@@ -182,6 +198,7 @@ export function AssetOpportunitiesPanel({
 
   // Sembol bazında tekilleştir — aynı aday için duplicate kart oluşmaz (Brain bannerıyla ortak seçici).
   const ideas = useMemo(() => dedupeIdeas(data), [data]);
+  const autoReadyRows = cockpit?.agent_brief?.auto_open?.ready ?? [];
 
   return (
     <PanelFrame id="asset_opportunities" className="h-full">
@@ -212,9 +229,22 @@ export function AssetOpportunitiesPanel({
         <EmptyState message="Henüz yeni asset keşfedilmedi." />
       ) : (
         <div className="grid grid-cols-1 gap-2">
-          {ideas.map((idea) => (
-            <AssetOpportunityCard key={idea.symbol} idea={idea} onOpen={onOpenSymbol} />
-          ))}
+          {ideas.map((idea) => {
+            const autoReady = autoReadyRows.some(
+              (row) =>
+                row.symbol === idea.symbol &&
+                row.timeframe === idea.paper_open?.timeframe &&
+                row.side === idea.paper_open?.side,
+            );
+            return (
+              <AssetOpportunityCard
+                key={idea.symbol}
+                idea={idea}
+                autoReady={autoReady}
+                onOpen={onOpenSymbol}
+              />
+            );
+          })}
         </div>
       )}
     </PanelFrame>

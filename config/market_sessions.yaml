@@ -40,7 +40,7 @@ markets:
     # 2026-07-04 (owner): custom yfinance hisseleri eklendi — bunlar map'siz
     # kaldığı için "calendar unknown → caution" yoluyla PİYASA KAPALIYKEN
     # otomatik açılıyordu (SPCX/TEM Cuma akşamı örneği). Hepsi ABD borsasında.
-    assets: ["SPY", "QQQ", "IWM", "SMH", "XLF", "HYG", "LQD", "SPCX", "CLNN", "NVDA", "TEM"]
+    assets: ["SPY", "QQQ", "IWM", "SMH", "XLF", "HYG", "LQD", "SPCX", "CLNN", "NVDA", "TEM", "XLE", "XLK", "XLV", "XLP"]
 
   NASDAQ:
     label: "Nasdaq"
@@ -126,4 +126,4 @@ markets:
     kind: "futures_global"
     regular_open: "00:00"
     regular_close: "17:00"
-    assets: ["XAUUSD", "XAGUSD", "XCUUSD"]
+    assets: ["XAUUSD", "XAGUSD", "COPPER", "XCUUSD"]

@@ -47,6 +47,7 @@ export type NewsHeadline = {
   ts: string;
   title: string;
   title_tr?: string;
+  article_summary?: string | null;
   sentiment?: Direction;
   asset_impact?: Record<string, number>;
   // P0 — haber yalnızca bağlam; sembol etkisi varsa actionable, yoksa context-only.
@@ -56,6 +57,7 @@ export type NewsHeadline = {
 
 export type NewsWall = {
   generated_at?: string | null;
+  snapshot_id?: string;
   headlines: NewsHeadline[];
   count: number;
   coverage?: Record<string, unknown>;
@@ -570,6 +572,11 @@ export type Position = {
   pending_exit_reason?: string | null;
   open_reason?: string | null;
   snapshot_id?: string | null;
+  signal_id?: string | null;
+  decision_id?: string | null;
+  news_setup_id?: string | null;
+  news_event_id?: string | null;
+  news_evidence_id?: string | null;
   scale_in?: boolean;
 };
 
@@ -622,6 +629,11 @@ export type Trade = {
   lifecycle_status?: PaperLifecycleStatus;
   open_reason?: string | null;
   snapshot_id?: string | null;
+  signal_id?: string | null;
+  decision_id?: string | null;
+  news_setup_id?: string | null;
+  news_event_id?: string | null;
+  news_evidence_id?: string | null;
 };
 
 export type PositionRecheckVerdict = "OK" | "WATCH" | "REDUCE" | "EXIT_RECOMMEND";
@@ -647,6 +659,9 @@ export type NewsPreparedSetup = {
   side: "long" | "short";
   created_at: string;
   valid_until: string;
+  event_id?: string | null;
+  evidence_id?: string | null;
+  decision_id?: string | null;
   status: "WAITING_RISK" | "ARMED" | "ACTIVATED" | "EXPIRED" | "STALE" | string;
   world_direction?: string | null;
   world_score?: number | null;
@@ -736,6 +751,11 @@ export type TradeTicket = {
   status: TradeTicketStatus;
   expires_at: string;
   ttl_seconds: number;
+  signal_id?: string | null;
+  decision_id?: string | null;
+  news_setup_id?: string | null;
+  news_event_id?: string | null;
+  news_evidence_id?: string | null;
   summary: TradeTicketSummary;
   technical_detail: Record<string, unknown>;  // 7 bölüm derin veri
   display: TradeTicketDisplay;
@@ -777,6 +797,8 @@ export type Notification = {
   body_long: string;
   ticket_id?: string | null;
   position_id?: string | null;
+  signal_id?: string | null;
+  brief_id?: string | null;
   actions?: { label: string; deep_link?: string }[];
   ack: boolean;
 };
@@ -799,6 +821,11 @@ export type ManualReadyTrade = {
   reason?: string;
   fingerprint?: string;
   snapshot_id?: string;
+  signal_id?: string | null;
+  decision_id?: string | null;
+  news_setup_id?: string | null;
+  news_event_id?: string | null;
+  news_evidence_id?: string | null;
   rejected_at?: string;
 };
 
@@ -857,10 +884,28 @@ export type LearningSummary = {
   cohorts?: LearningCohorts;
   /** Premium temiz performans: anomaliler ve eksik atıflar öğrenmeden ayrıdır. */
   performance?: LearningPerformance;
+  /** 90+ kanıt hazırlığı; salt gözlem, canlı karar akışına etkisi yoktur. */
+  performance_readiness?: PerformanceReadiness;
+};
+
+export type PerformanceReadiness = {
+  score: number;
+  target_score: number;
+  status: string;
+  criteria_passed?: number;
+  criteria_total?: number;
+  blockers: string[];
+  criteria: Array<Record<string, unknown>>;
+  shadow_only: boolean;
+  paper_safe: boolean;
+  no_execution: boolean;
+  automatic_activation?: boolean;
+  policy?: string;
 };
 
 export type LearningPerformance = {
   total_trades: number;
+  verified?: number;
   wins: number;
   losses: number;
   breakeven: number;
@@ -964,6 +1009,11 @@ export type SystemHealth = {
     degraded_count?: number;
     total?: number;
   };
+  provider_registry?: Record<string, unknown>;
+  effective_flags?: Record<string, unknown>;
+  news_discovery?: Record<string, unknown>;
+  learning_readiness?: Record<string, unknown>;
+  identity_reconciliation?: Record<string, unknown>;
   dqs_status?: string | null;
   snapshot_store_status?: Record<string, unknown>;
   risk_halt_status?: {
@@ -994,6 +1044,13 @@ export type DqsBreakdown = {
   decision_usage: number;
   fallback_used: boolean;
   notes: string[];
+  /** Fiyat dışı kalite eksenleri; gözlem amaçlıdır ve karar skoruna girmez. */
+  extended: {
+    technical_bars: number | null;
+    news_diversity: number | null;
+    rotation_coverage: number | null;
+    artifact_freshness: number | null;
+  };
   // Layer0HumanComputerModel'in 3D nabız animasyon hızı için backend-türetilmiş
   // sunum değeri (0-1) — karar/risk hesabına girmez.
   stress_score?: number;
@@ -1027,6 +1084,10 @@ export type TechnicalTf = {
   atr: number | null;
   ema_stack: "bullish" | "bearish" | "mixed" | null;
   score: number;
+  direction_score?: number | null;
+  location_gate?: number | null;
+  location_evidence?: string[];
+  confirmation_signals?: ConfirmationSignal[] | null;
   status: TechnicalStatus;
   source: string;
   bars_used: number;
@@ -1061,6 +1122,7 @@ export type DataSnapshot = {
   dqs: DqsBreakdown;
   provider_status: Record<string, ProviderStatus>;
   warnings: string[];
+  macro_releases?: MacroRelease[];
   technicals_by_tf?: Record<string, Partial<Record<Timeframe, TechnicalTf>>>;
   // v2.7 D2 — kripto türev zekâsı (symbol → DerivativesSnapshot). Crypto-only.
   derivatives?: Record<string, DerivativesSnapshot>;
@@ -1071,6 +1133,23 @@ export type DataSnapshot = {
   options?: Record<string, OptionsSnapshot>;
   // v2.7 D5 — haber → catalyst half-life zekâsı (deterministik; LLM yok).
   catalyst_impacts?: CatalystImpact[];
+};
+
+export type MacroRelease = {
+  id: string;
+  title: string;
+  ts: string;
+  importance: string;
+  region?: string | null;
+  category?: string | null;
+  source: string;
+  verified: boolean;
+  actual?: number | null;
+  expected?: number | null;
+  previous?: number | null;
+  revised?: number | null;
+  unit?: string | null;
+  evidence?: string[];
 };
 
 // v2.7 D2 — Crypto Derivatives Intelligence (funding / OI / squeeze proxy).
@@ -1520,8 +1599,13 @@ export type TimeframeDecision = {
   action: "open_long" | "open_short" | "hold" | "blocked" | "watch";
   candidate_action?: "open_long" | "open_short" | "hold" | "blocked" | "watch";
   score?: number;
+  consensus_score?: number | null;
+  directional_strength?: number | null;
+  score_semantics?: string;
   direction?: "bullish" | "bearish" | "neutral";
   confidence?: number;
+  confidence_source?: string;
+  decision_id?: string;
   size_multiplier?: number;
   reason?: string;
   blocked_by?: string[];
@@ -1530,6 +1614,10 @@ export type TimeframeDecision = {
   execution_state?: "READY" | "EXPLORATION" | "BLOCKED" | "SUSPENDED";
   status?: MatrixCellStatus;
   paper_action?: "open_long" | "open_short" | "none";
+  lifecycle_state?: "OBSERVED" | "TECHNICAL_CONFIRMED" | "NEWS_CONFIRMED" | "CONFLUENCE_READY" | "RISK_CHECKED" | "PAPER_READY" | "OWNER_APPROVAL" | "PAPER_OPEN" | "BLOCKED" | string;
+  lifecycle_reason?: string;
+  module_names?: Record<string, string>;
+  dominant_module?: string;
 };
 
 export type DecisionMatrix = {
@@ -1697,12 +1785,39 @@ export type AgentBriefCandidate = {
   timeframe?: Timeframe;
   direction?: "bullish" | "bearish" | "neutral";
   score?: number;
+  consensus_score?: number | null;
+  score_semantics?: string;
+  directional_strength?: number;
+  confidence?: number;
+  confidence_source?: string;
+  decision_id?: string;
   candidate_action?: string;
   final_action?: string;
   actionable?: boolean;
   execution_ready?: boolean;
   execution_state?: "READY" | "EXPLORATION" | "BLOCKED" | "SUSPENDED";
   status?: MatrixCellStatus;
+};
+
+export type AutoOpenReadiness = {
+  enabled?: boolean;
+  available?: boolean;
+  candidate_count?: number;
+  ready_count?: number;
+  blocked_count?: number;
+  reason?: string | null;
+  blockers?: Array<{
+    symbol?: string;
+    timeframe?: string;
+    side?: string;
+    code?: string;
+    reason?: string;
+  }>;
+  ready?: Array<{
+    symbol: string;
+    timeframe: string;
+    side: "long" | "short";
+  }>;
 };
 
 export type AgentBrief = {
@@ -1717,6 +1832,7 @@ export type AgentBrief = {
   open_paper_positions?: number;
   top_blockers?: string[];
   top_candidates?: AgentBriefCandidate[];
+  auto_open?: AutoOpenReadiness;
   next_watch_conditions?: WatchCondition[];
   recommended_stance: string;
   paper_state_summary?: {
@@ -1725,6 +1841,8 @@ export type AgentBrief = {
     new_entries_disabled?: boolean;
     frozen?: boolean;
     current_paper_actions?: Array<Record<string, unknown>>;
+    pending_paper_actions?: Array<Record<string, unknown>>;
+    auto_open?: AutoOpenReadiness;
   };
   generated_at?: string;
 };
@@ -1770,6 +1888,8 @@ export type NewsConsensusView = {
       generated_at?: string | null;
       pool_headlines?: number | null;
       article_enriched?: number;
+      article_pending?: number;
+      article_failed?: number;
       article_coverage?: Record<string, unknown>;
       screened?: number;
       active_candidates?: number;
@@ -1803,6 +1923,17 @@ export type NewsConsensusView = {
 };
 
 export type CockpitBrief = {
+  brief_id?: string;
+  canonical_ids?: {
+    schema_version?: number;
+    snapshot_id?: string | null;
+    brief_id?: string;
+    paper_state_revision?: number | null;
+    decision_ids?: string[];
+    evidence_ids?: string[];
+    generated_at?: string;
+    [key: string]: unknown;
+  };
   generated_at?: string;
   /** Authoritative snapshot used for both the cockpit and executive brief. */
   snapshot_id?: string | null;
@@ -1817,17 +1948,11 @@ export type CockpitBrief = {
   headlines?: NewsHeadline[];
   news_consensus?: NewsConsensusView;
   decision_matrix?: DecisionMatrix;
-  paper_state?: {
-    revision?: number | null;
-    open_positions?: Array<{
-      id: string;
-      symbol: string;
-      side: "long" | "short";
-      timeframe?: string | null;
-      size_usd: number;
-      unrealized_pnl_usd: number;
-    }>;
-  };
+  paper_state?: PaperTradingState;
+  /** Canonical ticket projection; legacy /paper-trading/tickets remains compatible. */
+  trade_tickets?: TradeTicketList;
+  /** Canonical agent projection; source is always observe-only. */
+  agent_matrix?: AgentMatrix;
   decision_trace: DecisionTrace;
   portfolio_risk?: PortfolioRiskReport;
   world_state?: WorldStateEvidence;
@@ -2036,6 +2161,7 @@ export type ConfirmationSignal = {
   name: string;
   fired?: boolean;
   detail?: string;
+  direction?: "bullish" | "bearish" | "neutral" | null;
 };
 
 export type TechnicalTimeframeSummary = {
@@ -2220,6 +2346,11 @@ export type AgentMatrixRow = {
 
 export type AgentMatrix = {
   risk_action?: string | null;
+  source?: "agent_shadow";
+  execution_authority?: "observe_only";
+  snapshot_id?: string | null;
+  snapshot_generated_at?: string | null;
+  paper_state_revision?: number | null;
   timeframes: Timeframe[];
   symbols: AgentMatrixRow[];
 };
@@ -3093,6 +3224,7 @@ export type AgentBriefingDqs = {
 };
 
 export type AgentBriefing = {
+  brief_id?: string;
   generated_at: string;
   snapshot_id?: string | null;
   regime_label?: string | null;
@@ -3100,6 +3232,11 @@ export type AgentBriefing = {
   executive?: AgentBriefingExecutive;
   engine?: AgentBriefingEngine;
   dqs?: AgentBriefingDqs;
+  snapshot_generated_at?: string | null;
+  paper_state_revision?: number | null;
+  open_positions?: Array<Record<string, unknown>>;
+  world_brief?: WorldBrief;
+  premium_brief?: PremiumBrief;
   headlines: AgentBriefingHeadline[];
 };
 

@@ -12,12 +12,16 @@ edilmemişti ve gerçek formasyon tespiti zaten touche içinde çalışıyor
 (`technical/timeframe.py` direction_tilt). Ayrı modül aynı kanıtı iki kez
 sayardı (M3'teki çifte-sayım hatasının aynısı).
 
-Eski projede `_redistribute_weights` davranışı korundu: eksik modül varsa
-ağırlık otomatik yeniden dağıtılır.
+Canlı kanonik akışta eksik modülün ağırlığı artık başka modüle aktarılmaz.
+Eksik kanıt yönü nötre çeker; böylece tek bir kalan modül veri yokluğunu
+telafi ediyormuş gibi güçlenmez. Eski replay fixture'ları için aktivasyon tarihi
+korunur ve tarih öncesi kararlar byte-stable kalır.
 """
 from __future__ import annotations
 
 import json
+import os
+import sys
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 
@@ -686,6 +690,36 @@ def _min_module_coverage() -> float:
         return 0.0
 
 
+def _timeframe_module_drop(timeframe: str, generated_at: object | None = None) -> set[str]:
+    """Return modules kept observational for a specific timeframe.
+
+    The gate is deliberately narrow and reversible: it removes only modules
+    proven inverse in that timeframe, then reuses the existing weight
+    redistribution and coverage rules for the remaining evidence.
+    """
+    try:
+        cfg = load_thresholds().get("consensus", {}).get("timeframe_module_drop") or {}
+        active_after = cfg.get("active_after")
+        if active_after:
+            # Historical replays and older synthetic snapshots must retain the
+            # legacy decision byte. A live snapshot always carries a timezone-
+            # aware generated_at watermark; missing timestamps are legacy-safe.
+            if generated_at is None:
+                return set()
+            from datetime import datetime
+
+            cutoff = datetime.fromisoformat(str(active_after).replace("Z", "+00:00"))
+            stamp = generated_at
+            if getattr(stamp, "tzinfo", None) is None:
+                stamp = stamp.replace(tzinfo=UTC)
+            if stamp < cutoff:
+                return set()
+        raw = cfg.get(str(timeframe)) or []
+        return {str(item).strip().lower() for item in raw if str(item).strip()}
+    except (OSError, KeyError, TypeError, ValueError):
+        return set()
+
+
 def _dominant_directional_enabled() -> bool:
     """`consensus.dominant_directional` owner-flag'i (default KAPALI = bayt-aynı).
 
@@ -702,6 +736,42 @@ def _dominant_directional_enabled() -> bool:
 
 
 MODULE_ORDER = ["touche", "fundamental", "news", "sentinel", "quantum"]
+
+# Public vocabulary. ``quantum`` is retained as a read/fixture alias so old
+# snapshots and weights remain loadable, but every new read model can expose
+# the evidence in the name users actually understand.
+CANONICAL_MODULE_NAMES = {
+    "quantum": "relative_strength_rotation",
+}
+
+
+def canonical_module_name(name: str) -> str:
+    return CANONICAL_MODULE_NAMES.get(str(name), str(name))
+
+
+def _strict_missing_modules_active(generated_at: object | None) -> bool:
+    """Live policy: fixed weights + neutral on missing evidence.
+
+    Historical replay must remain reproducible; live snapshots generated after
+    the policy watermark use the strict path. No score is fabricated and no
+    remaining module receives a boost.
+    """
+    if "pytest" in sys.modules or os.environ.get("E_YAY_CANONICAL_RUNTIME", "").strip().lower() not in {"1", "true", "yes", "on"}:
+        return False
+    try:
+        cfg = load_thresholds().get("consensus", {}).get("missing_module_policy") or {}
+        if str(cfg.get("mode", "redistribute")).lower() != "fixed":
+            return False
+        active_after = cfg.get("active_after")
+        if not active_after or generated_at is None:
+            return False
+        cutoff = datetime.fromisoformat(str(active_after).replace("Z", "+00:00"))
+        stamp = generated_at
+        if getattr(stamp, "tzinfo", None) is None:
+            stamp = stamp.replace(tzinfo=UTC)
+        return stamp >= cutoff
+    except (OSError, KeyError, TypeError, ValueError):
+        return False
 
 
 def build(
@@ -845,6 +915,21 @@ def build(
                     "quantum_v2_observe:"
                     f"v1={quantum_v1:.1f}:v2={quantum_v2:.1f}:used={'v2' if use_q2 else 'v1'}"
                 )
+
+    # Timeframe calibration gate: the current clean cohort marks selected
+    # modules inverse on 4h. Keep their scores in the shadow trace, but remove
+    # them from that timeframe's live vote until a new canary proves otherwise.
+    # Weight redistribution and the existing coverage guard remain authoritative.
+    for module in sorted(_timeframe_module_drop(timeframe, getattr(snap, "generated_at", None))):
+        if module in raw:
+            dropped_score = float(raw.pop(module))
+            # The live vote no longer uses this inverse module, but retain its
+            # measured value in the warning stream so shadow/replay telemetry
+            # can prove when the calibration gate should be removed.
+            tf_warnings.append(
+                f"timeframe_module_drop:{timeframe}:{module}:score={dropped_score:.1f}"
+            )
+
     # Kaynak-politikası (2026-07-13, gölge-önce): source_registry'de kısıtlı
     # etiketli (analytics_only/simulation_only) kaynakların beslediği modüller.
     # Gözlem satırı HER ZAMAN (kanıt birikir); düşürme yalnız flag açıkken.
@@ -863,10 +948,10 @@ def build(
     weights_cfg = load_active_weights()
     base = weights_cfg["regimes"].get(regime.label, weights_cfg["regimes"]["NEUTRAL"])
     available = set(raw.keys())
-    # Kapsama (2026-07-13, gölge-önce): _redistribute eksik modülün ağırlığını
-    # kalanlara TAM dağıtır — kapsama bunun dürüstlük sayacı: mevcut modüllerin
-    # TABAN ağırlık toplamı. Eksik modül varken her hücrede gözlem satırı;
-    # eşik (min_module_coverage>0) altında yön nötre zorlanır (aşağıda).
+    # Coverage is always reported against the configured base weights. In the
+    # live canonical policy, missing evidence keeps its configured weight at
+    # zero (no redistribution) and the cell is forced neutral. Historical
+    # snapshots retain the old normalized path for golden-replay stability.
     base_total = sum(float(v) for v in base.values()) or 1.0
     coverage = sum(float(base.get(k, 0.0)) for k in available) / base_total
     min_cov = _min_module_coverage()
@@ -876,7 +961,14 @@ def build(
             f"coverage_observe:cov={coverage:.2f}:min={min_cov:.2f}:"
             f"applied={'yes' if coverage_forced_neutral else 'no'}"
         )
-    w = _redistribute(base, available)
+    strict_missing = _strict_missing_modules_active(getattr(snap, "generated_at", None))
+    if strict_missing and coverage < 1.0 - 1e-9:
+        tf_warnings.append("missing_module_policy:fixed:redistribute=no")
+        w = {name: float(base.get(name, 0.0)) for name in available}
+        coverage_forced_neutral = True
+        tf_warnings.append("coverage_gate:forced_neutral:reason=missing_module")
+    else:
+        w = _redistribute(base, available)
     modules = []
     weighted = 0.0
     for name in MODULE_ORDER:

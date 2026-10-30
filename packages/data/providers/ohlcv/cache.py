@@ -2,7 +2,10 @@
 
 - Yol: `OHLCV_CACHE_DIR` env (default `data/runtime/ohlcv/`).
 - Dosya: `{symbol}_{tf}.json` → {"symbol","timeframe","fetched_at","bars"}.
-- TTL TF'e orantılıdır (15m→5dk ... 1d→6sa). TTL geçmiş cache "stale"
+- TTL TF'e orantılıdır (15m→5dk ... 1d→6sa). CoinGecko'nun processler arası
+  throttling penceresi daha uzun olduğundan kripto cache'i provider TTL'sinden
+  kısa tutulmaz; aksi halde her worker aynı eski diski yeniden doğrulatıp
+  rate-limit sonrası stale fallback üretir. TTL geçmiş cache "stale"
   sayılır; orchestrator live fetch başarısızsa stale cache'e döner
   (gerçek ama eski veri — TF freshness kuralı DEGRADED işaretler).
 - Sadece live path yazar; fixture/test modu cache'e dokunmaz.
@@ -45,7 +48,16 @@ class CachedBars:
     @property
     def fresh(self) -> bool:
         tf = self.bars[0].timeframe if self.bars else "1d"
-        return self.age_seconds < CACHE_TTL_SEC.get(tf, 900)
+        ttl = CACHE_TTL_SEC.get(tf, 900)
+        # CoinGecko's in-memory throttle is process-local. Use the same lower
+        # bound for disk reads, while retaining the longer daily/weekly TTLs.
+        if self.bars and any("coingecko" in b.source for b in self.bars):
+            try:
+                provider_ttl = float(os.environ.get("COINGECKO_OHLCV_TTL_SEC", "2400"))
+            except (TypeError, ValueError):
+                provider_ttl = 2400.0
+            ttl = max(ttl, provider_ttl)
+        return self.age_seconds < ttl
 
 
 def load(symbol: str, timeframe: Timeframe) -> CachedBars | None:

@@ -13,6 +13,7 @@ from packages.data.ingestion.pipeline import get_cached_snapshot
 from packages.data.provenance import data_provenance
 from packages.data.registry import assets as asset_registry
 from packages.decision import paper_policy, shadow
+from packages.decision.cockpit import finalize_matrix_view
 from packages.decision.engine import decide_matrix, matrix_view
 from packages.paper import state as paper_state
 from packages.risk.engine import RiskInput
@@ -32,6 +33,7 @@ def get_decision_matrix() -> dict:
         daily_pnl_usd=ps.daily_pnl_usd,
         open_position_count=len(ps.open_positions),
         daily_anchor_date=ps.daily_anchor_date,
+        mtm_equity_usd=ps.mtm_equity_usd,
     )
     regime, risk, decisions = decide_matrix(
         matrix_symbols,
@@ -41,6 +43,7 @@ def get_decision_matrix() -> dict:
         paper_exploration=paper_policy.enabled(),
     )
     view = matrix_view(regime, risk, decisions, snap, matrix_symbols)
+    view = finalize_matrix_view(view, snap, ps)
     view["mode"] = data_provenance(snap)
     # Version envelope: consumers can reject a matrix that belongs to a
     # different market snapshot or paper-state revision instead of mixing it

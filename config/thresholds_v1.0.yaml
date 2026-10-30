@@ -2,6 +2,12 @@ version: "1.0.0"
 created_at: "2026-06-11"
 
 consensus:
+  # Canonical live policy: an unavailable module never lends its weight to
+  # another module. Historical replay before this watermark keeps the legacy
+  # normalization so golden fixtures remain byte-identical.
+  missing_module_policy:
+    mode: fixed
+    active_after: "2026-10-30T00:00:00+00:00"
   # 2026-06-20: 60/40 → 55/45 (strong 70/30 → 65/35). Sebep: TF
   # segmentasyonu 4×5=20 hücre üretiyordu ama hepsi 50-55 bandında
   # kilitleniyordu; eşik geçilemiyor, sinyal yok. weights_v1.1'le
@@ -55,7 +61,9 @@ consensus:
   # (n=406) vs zemin %44 (n=503). Not: fark istatistiksel olarak anlamlı değil
   # (z≈1.5); öneri 30 gün daha ölçmekti, owner canlıya almayı seçti. Kural aynı:
   # karne V4_BEHIND derse owner'a sorulur, geri-alma = false (tek satır).
-  touche_v4: true
+  # Gölge TF artifact'ı yeni runtime'da üretilmediği için tek aktif teknik
+  # karar kaynağı temel touche motorudur; bayat v4 dosyası karar veremez.
+  touche_v4: false
   # quantum v2 — sembol-başı kesitsel GÖRECELİ-GÜÇ (para akışı) skoru. false
   # (DEFAULT) → v1 birebir: tek makro risk-on tilt herkese aynı girer (ölü yük).
   # true → v2: her sembol akranlarına göre lider/geride notu alır (oynaklık-adil,
@@ -83,6 +91,15 @@ consensus:
   # activation_watchdog izliyor.
   quantum_regime_gate: true
   quantum_gate_allowed_regimes: ["OFFENSIVE"]
+  # 4h calibration repair (2026-10-29): clean outcomes show fundamental and
+  # quantum contributions are inverse on this timeframe. Keep both visible in
+  # shadow telemetry but remove them from the 4h live vote; other timeframes
+  # retain the legacy path. Empty/missing entries mean no module is removed.
+  timeframe_module_drop:
+    # Do not rewrite historical replay/golden decisions; activate only on
+    # snapshots generated after this repair is deployed.
+    active_after: "2026-10-29T00:00:00+00:00"
+    "4h": [fundamental, quantum]
   # touche TF-KAPISI (2026-07-13, gölge-önce kuruldu). Dış denetim P0 bulgusu:
   # v4 artifact'ı sembol başına TEK yön taşır (konuşmacı TF: UP→1d, DOWN→4h)
   # ama consensus bu yönü 15m/1h/4h/1d hücrelerinin DÖRDÜNE de kopyalıyordu —
@@ -449,6 +466,18 @@ timeframe_targets:
   "1h":  { sl_atr_mult: 1.2, rr: 1.8, sl_pct_floor: 0.010, sl_pct_cap: 0.035 }
   "4h":  { sl_atr_mult: 1.5, rr: 2.0, sl_pct_floor: 0.015, sl_pct_cap: 0.050 }
   "1d":  { sl_atr_mult: 1.5, rr: 2.5, sl_pct_floor: 0.020, sl_pct_cap: 0.080 }
+
+# Otomatik kâğıt açılışında teknik teyit — skor tek başına yeterli değildir.
+# Aynı yönde en az iki teyit yoksa sinyal yalnızca izleme/öğrenme olarak kalır.
+# confirmation_signals bulunmayan eski replay snapshot'ları geriye dönük uyumlu
+# tutulur; canlı snapshot'larda bu alan her zaman üretilir.
+technical_entry_gate:
+  enabled: true
+  min_confirmations: 2
+  # 4h has the weakest directional evidence; require one extra independent
+  # same-side technical confirmation without changing 15m/1h/1d behavior.
+  min_confirmations_by_timeframe:
+    "4h": 3
 
 # Giriş kalitesi v2 — YÖN ≠ GİRİŞ ZAMANLAMASI (2026-10-12, owner talebi). Konsensüs
 # skoru yalnızca "hangi yön tercih ediliyor"u söyler; bu katman "yön doğru olsa bile
@@ -1184,27 +1213,17 @@ trade_economics:
   min_net_edge_bps: 20
   min_rr: 1.5
 
-# Step 9 — controlled activation. The NEW agent pipeline (agent_pipeline) runs in
-# OBSERVATION mode alongside the live decide_matrix engine: each tick its decision is
-# logged next to the live decision for comparison, but affect_decision:false means it
-# NEVER mutates paper. Owner watches the shadow log, then flips affect_decision:true
-# (Phase B) to let it influence — still RiskGate-final, manual_ready_only, scale-down.
-#   enabled         : run the shadow pipeline each tick (observe-only side effect: a log line)
-#   affect_decision : false → pure observation; true (Phase B) → shadow may route entries
-#                     to manual_ready (never auto-open). Until Phase B is wired, true is a no-op.
-#   manual_ready_only: when activated, shadow entries ONLY queue to manual_ready (never attempt_open)
+# Step 9 — legacy shadow records are retained for audit/replay only. Runtime
+# decision and learning paths do not write or activate shadow entries. The
+# modules remain importable so historical files can be inspected or archived;
+# they are not an execution route.
 shadow:
-  enabled: true
-  # AKTİF (2026-07-16 FAZ-2 "erken açılış", ROADMAP_10_10 Dalga-2 kararı):
-  # yeni zincirin girişleri YALNIZ manual_ready kuyruğuna düşer (oto-açılış
-  # YOK; onay anında RiskGate yeniden koşar; size ≤1.0 clamp). Amaç: CP5
-  # (decide_matrix emekliliği) forward kanıtını bugünden biriktirmek.
-  # Geri-alma: affect_decision: false (tek satır).
-  affect_decision: true
+  enabled: false
+  affect_decision: false
   manual_ready_only: true
 
-# World State + Causal Intelligence — additive, shadow-only evidence layer.
-# decision_apply remains false so the legacy decision/risk path is unchanged.
+# World State + Causal Intelligence — read-only context for reports. It does not
+# write shadow decisions or alter the live decision/risk path.
 causal_world:
   enabled: true
   config_version: v1.0

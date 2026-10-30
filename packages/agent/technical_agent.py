@@ -62,7 +62,7 @@ def evaluate(
     biases = {r.timeframe_summary.bias for _, r in valid}
     conflict = "BULLISH" in biases and "BEARISH" in biases
 
-    if degraded > len(valid):
+    if degraded:
         stance = "DEGRADED"
     elif conflict or (strength is not None and strength < _STRENGTH_FLOOR):
         stance = "CAUTION"

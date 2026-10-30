@@ -9,7 +9,6 @@ from __future__ import annotations
 import json
 import math
 import os
-import urllib.error
 import urllib.parse
 import urllib.request
 from datetime import UTC, datetime
@@ -159,14 +158,10 @@ def get_bars(
     try:
         payload = _fetch(symbol, timeframe)
         bars = _parse(payload, symbol, timeframe)
-    except (
-        urllib.error.URLError,
-        TimeoutError,
-        OSError,
-        ValueError,
-        TypeError,
-        KeyError,
-    ):
+    except Exception:
+        # Provider boundary: an unexpected public-API/decoder error must mark
+        # this source unavailable so the orchestrator can use its next source
+        # or an explicitly degraded cache, never crash a snapshot.
         return None
 
     # Do not upgrade a technical timeframe unless its

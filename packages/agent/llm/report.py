@@ -13,9 +13,9 @@ from __future__ import annotations
 
 from dataclasses import asdict, dataclass, field
 
+from packages.agent import canonical_context as ctx_mod
 from packages.agent.llm import budget, cache
 from packages.agent.llm import client as llm_client
-from packages.agent.llm import context as ctx_mod
 from packages.agent.llm.guard import SYSTEM_RULES
 from packages.decision.cockpit import compute_main_blocker
 
@@ -431,7 +431,7 @@ def build_persona_sections(ctx: dict | None = None) -> tuple[list[dict], dict]:
     no_actionable_decision modunda da bölümler üretilir — ama actionability
     her personada 'no_actionable_decision' der (LLM'e de bağlamla gider).
     """
-    ctx = ctx or ctx_mod.build_compact_context()
+    ctx = ctx or ctx_mod.build_canonical_context()
     digest = ctx_mod.context_digest(ctx)
     mode = llm_client.get_mode()
     cache_key = f"report|{mode}|{digest}"

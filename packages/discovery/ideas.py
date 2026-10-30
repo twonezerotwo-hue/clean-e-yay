@@ -89,20 +89,41 @@ def _market_info(art: Mapping[str, Any]) -> dict[str, dict]:
     return out
 
 
-def _price_provenance(symbol: str, info: Mapping[str, Any]) -> dict:
-    """Discovery/paper source contract; no provider call and no auto-promotion."""
+def _price_provenance(symbol: str, info: Mapping[str, Any], quote: Any = None) -> dict:
+    """Discovery/paper source contract; current quote is the only live price.
+
+    The discovery scanner deliberately does not fetch execution quotes.  The
+    idea run supplies one current quote from the canonical price orchestrator;
+    an old scanner value remains display context only and can never satisfy
+    the paper price gate.
+    """
     try:
         from packages.data.providers import price as price_provider
 
         provider = price_provider.live_source_for(symbol)
     except Exception:
         provider = None
+    current_price = getattr(quote, "price", None) if quote is not None else None
+    current_ok = (
+        str(getattr(quote, "status", "")).upper() == "OK"
+        and bool(getattr(quote, "verified", False))
+        and isinstance(current_price, (int, float))
+        and float(current_price) > 0
+    )
+    quote_ts = getattr(quote, "ts", None) if current_ok else None
+    if quote_ts is not None and hasattr(quote_ts, "isoformat"):
+        quote_ts = quote_ts.isoformat()
+    elif quote_ts is not None:
+        quote_ts = str(quote_ts)
     return {
         "provider": provider,
         "provider_id": info.get("provider_id") or info.get("ticker") or symbol,
-        "mapped_for_paper": provider is not None,
+        "mapped_for_paper": provider is not None and current_ok,
         "discovery_price": info.get("price"),
         "discovery_seen_at": info.get("last_seen"),
+        "current_price": float(current_price) if current_ok else None,
+        "current_price_at": quote_ts,
+        "current_price_verified": current_ok,
     }
 
 
@@ -180,7 +201,8 @@ def _pending_proposals() -> dict[str, str]:
 
 def build_ideas(art: Mapping[str, Any], shadow_cands: Mapping[str, Any], forecasts: Mapping[str, Any],
                 pending: Mapping[str, str], promotion_min: int = 20,
-                chains: Mapping[str, list[dict]] | None = None) -> list[dict]:
+                chains: Mapping[str, list[dict]] | None = None,
+                current_quotes: Mapping[str, Any] | None = None) -> list[dict]:
     market = _market_info(art)
     results = dict(art.get("results") or {})
     keys = {s for s, r in results.items() if r.get("verdict") == "WOULD_OPEN_LONG" and s in market}
@@ -223,7 +245,7 @@ def build_ideas(art: Mapping[str, Any], shadow_cands: Mapping[str, Any], forecas
             "market": {"chg_7d_pct": info.get("chg_7d_pct"), "chg_30d_pct": info.get("chg_30d_pct")},
             # Salt-okuma kaynağı: keşif fiyatı ile paper kaynağı aynı değildir;
             # ayrımı görünür tut, evrene otomatik varlık ekleme.
-            "source": _price_provenance(sym, info),
+            "source": _price_provenance(sym, info, (current_quotes or {}).get(sym)),
             "news_chain": list(chains.get(sym) or []),
             "risk_notes": notes,
         })
@@ -397,7 +419,36 @@ def run(
     forecasts = forecasts if forecasts is not None else news_forecast.load_forecasts()
     pending = pending if pending is not None else _pending_proposals()
     promo_min = int(((scanner.load_config().get("promotion") or {}).get("min_resolved_decisive")) or 20)
-    ideas = build_ideas(art, shadow_cands, forecasts, pending, promo_min)
+    # Use the same canonical price orchestrator as paper pre-validation.  A
+    # missing quote stays missing; scanner prices are not promoted implicitly.
+    current_quotes: dict[str, Any] = {}
+    try:
+        from packages.data.providers import price as price_provider
+
+        market = _market_info(art)
+        results = dict(art.get("results") or {})
+        symbols = sorted(
+            {
+                symbol
+                for symbol, result in results.items()
+                if symbol in market and result.get("verdict") == "WOULD_OPEN_LONG"
+            }
+            | {
+                symbol
+                for symbol, forecast in forecasts.items()
+                if symbol in market
+                and forecast.get("direction") == "up"
+                and float(forecast.get("strength") or 0) >= STRONG_NEWS
+            }
+        )
+        current_quotes = {
+            str(item.symbol): item
+            for item in price_provider.get_quotes(symbols)
+            if getattr(item, "symbol", None)
+        }
+    except Exception:
+        current_quotes = {}
+    ideas = build_ideas(art, shadow_cands, forecasts, pending, promo_min, current_quotes=current_quotes)
 
     state = _load()
     evals: dict[str, dict] = dict(state.get("evaluations") or {})

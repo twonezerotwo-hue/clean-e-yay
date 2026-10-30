@@ -13,16 +13,16 @@ PAPER_SAFE / NO_EXECUTION: only records; never opens/sizes/decides.
 """
 from __future__ import annotations
 
-import json
 import os
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from packages.ops.store import read_jsonl_tail
+from packages.ops.store import append_jsonl_rotating, read_jsonl_tail
 
 DEFAULT_PATH = "data/runtime/decision_log.jsonl"
 DEFAULT_MAX_READ = 200
+DEFAULT_MAX_BYTES = 32 * 1024 * 1024
 EXECUTION_MODE = "PAPER"  # NO_EXECUTION contract — attribution is paper-only.
 
 if TYPE_CHECKING:
@@ -66,6 +66,11 @@ def entry_for(trade: Trade) -> dict:
         "side": trade.side,
         "timeframe": trade.timeframe,
         "opening_signal": {
+            "signal_id": getattr(trade, "signal_id", None),
+            "decision_id": getattr(trade, "decision_id", None),
+            "news_setup_id": getattr(trade, "news_setup_id", None),
+            "news_event_id": getattr(trade, "news_event_id", None),
+            "news_evidence_id": getattr(trade, "news_evidence_id", None),
             "fingerprint": trade.fingerprint,
             "reason": trade.open_reason,
             "snapshot_id": trade.snapshot_id,
@@ -156,9 +161,7 @@ def record_close(trade: Trade) -> dict:
     entry = entry_for(trade)
     try:
         p = _path()
-        p.parent.mkdir(parents=True, exist_ok=True)
-        with p.open("a", encoding="utf-8") as f:
-            f.write(json.dumps(entry, ensure_ascii=False, default=str) + "\n")
+        append_jsonl_rotating(p, entry, max_bytes=DEFAULT_MAX_BYTES)
     except OSError as exc:
         # attribution ASLA lifecycle'ı kesmez — yine de iz bırakmaya çalış.
         _warn_write_failure(trade, exc)
