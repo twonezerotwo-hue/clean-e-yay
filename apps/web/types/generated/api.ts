@@ -1109,6 +1109,30 @@ export type OHLCVBar = {
   verified?: boolean;
 };
 
+/** Dış kanıt katmanı kaynağı (salt-kanıt; karara girmez). */
+export type ExternalEvidenceSource = {
+  status?: "ok" | "error";
+  stale?: boolean;
+  error?: string | null;
+  attempted_at?: string;
+  fetched_at?: string | null;
+  data?: unknown;
+  [key: string]: unknown;
+};
+
+/** GET /api/v1/data/external-evidence — FRED, Hazine TGA, CFTC COT, GDELT, Korku/Açgözlülük. */
+export type ExternalEvidence = {
+  available: boolean;
+  generated_at?: string | null;
+  decision_usage: "evidence_only";
+  sources: Record<string, ExternalEvidenceSource>;
+  net_liquidity?: {
+    value_musd?: number;
+    formula?: string;
+    inputs?: Record<string, unknown>;
+  } | null;
+};
+
 export type DataSnapshot = {
   meta: {
     snapshot_id: string;

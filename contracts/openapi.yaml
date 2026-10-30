@@ -503,6 +503,18 @@ paths:
               schema:
                 $ref: "#/components/schemas/DataSnapshot"
 
+  /api/v1/data/external-evidence:
+    get:
+      operationId: getExternalEvidence
+      summary: Dış kanıt katmanı — FRED kredi/likidite + takvim, Hazine TGA, CFTC COT, GDELT tonu, Korku/Açgözlülük (salt-kanıt, karara girmez)
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ExternalEvidence"
+
   /api/v1/learning/calibration:
     get:
       operationId: getLearningCalibration
@@ -3372,6 +3384,40 @@ components:
         dqs_status: { type: string }
         label: { type: string }
         advisory: { type: string }
+
+    ExternalEvidenceSource:
+      type: object
+      properties:
+        status: { type: string, enum: [ok, error] }
+        stale: { type: boolean }
+        error: { type: string, nullable: true }
+        attempted_at: { type: string, format: date-time }
+        fetched_at: { type: string, format: date-time, nullable: true }
+        data:
+          description: Kaynağa özgü yük (seri, takvim satırları, COT pozisyonları, ton, endeks).
+          nullable: true
+      additionalProperties: true
+
+    ExternalEvidence:
+      type: object
+      required: [available, decision_usage, sources]
+      properties:
+        available: { type: boolean }
+        generated_at: { type: string, format: date-time, nullable: true }
+        decision_usage:
+          type: string
+          enum: [evidence_only]
+        sources:
+          type: object
+          additionalProperties:
+            $ref: "#/components/schemas/ExternalEvidenceSource"
+        net_liquidity:
+          type: object
+          nullable: true
+          properties:
+            value_musd: { type: number }
+            formula: { type: string }
+            inputs: { type: object, additionalProperties: true }
 
     DataSnapshot:
       type: object

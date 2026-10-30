@@ -184,6 +184,7 @@ REGISTRY: dict[str, str] = {
     "PAPER_STATE_PATH": "path",
     "PRICE_CACHE_DIR": "path",
     "PROVIDER_QUOTA_PATH": "path",
+    "EXTERNAL_EVIDENCE_PATH": "path",
     "PHYSICAL_COMMODITIES_CONFIG_PATH": "path",
     "REBALANCE_STORE_PATH": "path",
     "REFLECTION_PATH": "path",

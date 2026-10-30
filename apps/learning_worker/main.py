@@ -558,6 +558,21 @@ def run_once() -> dict:
         news_forecast_status = f"ERROR:{type(exc).__name__}"
         errors.append(f"news_forecast:{type(exc).__name__}")
 
+    # Dış kanıt katmanı (owner kararı 2026-10-30): FRED kredi/likidite + takvim,
+    # Hazine TGA, CFTC COT, GDELT tonu, Korku/Açgözlülük. Kaynak başına kendi
+    # aralığıyla yenilenir; SALT-KANIT — karar/boyut/RiskGate değişmez.
+    try:
+        from packages.data.providers import evidence as external_evidence
+
+        ev = external_evidence.refresh()
+        log.info(
+            "external_evidence: %s net_liquidity=%s",
+            {k: v.get("status") for k, v in (ev.get("sources") or {}).items()},
+            (ev.get("net_liquidity") or {}).get("value_musd"),
+        )
+    except Exception as exc:  # defensive — worker patlamamalı
+        errors.append(f"external_evidence:{type(exc).__name__}")
+
     # Haber → karar geçmiş karşılaştırması. Runtime shadow yazımı kapalıdır;
     # eski dosyalar silinmez, yalnızca audit için korunur.
     news_decision_shadow_status = "DISABLED"

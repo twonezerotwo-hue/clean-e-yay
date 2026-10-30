@@ -10,10 +10,24 @@ from fastapi import APIRouter
 
 from packages.data.ingestion.pipeline import DEFAULT_SYMBOLS, get_cached_snapshot
 from packages.data.provenance import data_provenance
+from packages.data.providers import evidence as external_evidence
 from packages.data.providers import macro as macro_provider
 from packages.paper import state as paper_state
 
 router = APIRouter(tags=["data"])
+
+
+@router.get("/data/external-evidence")
+def get_external_evidence() -> dict:
+    """Dış kanıt katmanı (salt-okuma; karara girmez). Öğrenme turu üretir."""
+    data = external_evidence.load()
+    return {
+        "available": bool(data),
+        "generated_at": data.get("generated_at"),
+        "decision_usage": "evidence_only",
+        "sources": data.get("sources") or {},
+        "net_liquidity": data.get("net_liquidity"),
+    }
 
 
 @router.get("/data/snapshot")

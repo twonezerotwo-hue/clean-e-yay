@@ -568,6 +568,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/data/external-evidence": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Dış kanıt katmanı — FRED kredi/likidite + takvim, Hazine TGA, CFTC COT, GDELT tonu, Korku/Açgözlülük (salt-kanıt, karara girmez) */
+        get: operations["getExternalEvidence"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/learning/calibration": {
         parameters: {
             query?: never;
@@ -2980,6 +2997,37 @@ export interface components {
             dqs_status?: string;
             label: string;
             advisory?: string;
+        };
+        ExternalEvidenceSource: {
+            /** @enum {string} */
+            status?: "ok" | "error";
+            stale?: boolean;
+            error?: string | null;
+            /** Format: date-time */
+            attempted_at?: string;
+            /** Format: date-time */
+            fetched_at?: string | null;
+            /** @description Kaynağa özgü yük (seri, takvim satırları, COT pozisyonları, ton, endeks). */
+            data?: unknown;
+        } & {
+            [key: string]: unknown;
+        };
+        ExternalEvidence: {
+            available: boolean;
+            /** Format: date-time */
+            generated_at?: string | null;
+            /** @enum {string} */
+            decision_usage: "evidence_only";
+            sources: {
+                [key: string]: components["schemas"]["ExternalEvidenceSource"];
+            };
+            net_liquidity?: {
+                value_musd?: number;
+                formula?: string;
+                inputs?: {
+                    [key: string]: unknown;
+                };
+            } | null;
         };
         DataSnapshot: {
             meta: {
@@ -5606,6 +5654,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DataSnapshot"];
+                };
+            };
+        };
+    };
+    getExternalEvidence: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExternalEvidence"];
                 };
             };
         };

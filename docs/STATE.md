@@ -165,6 +165,25 @@ Teknik teyit (`technical_entry_gate`) farklı gösterge GRUBU sayar: momentum
 (MACD histogramı + RSI), trend (EMA dizilimi), konum (VWAP). 15m/1h/1d iki grup,
 4h üç grubun hepsini ister; yalnız momentumla geçilmez (owner kararı 2026-10-30).
 
+## Dış kaynaklar, kotalar ve kanıt katmanı (owner kararı 2026-10-30)
+
+Ücretsiz kotalar `packages/data/providers/quota.py` ile korunur (günlük/dakikalık
+sayaç, `data/runtime/provider_quota.json`, UTC gün dönümü): CoinGecko 300/gün,
+AlphaVantage 20/gün, TwelveData 700/gün 7/dk, Finnhub 50/dk, Tavily 30/gün. Sınır
+doluysa çağrı yapılmaz; önbellek ya da zincirde sonraki kaynak kullanılır. CoinGecko
+fiyatları tek istekte toplanır; BLS 6 saatte bir, Google News 10 dakikada bir sorulur.
+
+Kripto barları: Kraken (BTC/ETH) → Binance spot (`EYAY_BINANCE_OHLCV_ENABLED`;
+anahtarsız, kapanmış mumlar) → CoinGecko. Özel kripto varlıklar (DODO) Binance'ten.
+
+Dış kanıt katmanı (`packages/data/providers/evidence`, öğrenme turunda kaynak başına
+aralıkla): FRED kredi/stres/likidite serileri ve 14 günlük açıklama takvimi, Hazine
+TGA, net likidite (Fed bilançosu − TGA − ters repo), CFTC COT, GDELT tonu,
+Korku/Açgözlülük. `GET /api/v1/data/external-evidence`. **Karara girmez**
+(`decision_usage: evidence_only`); rejim/konsensüse bağlanması ayrı owner kararı.
+
+YZ anlatıcı modelleri: OpenRouter `google/gemma-4-31b-it:free`, Groq `openai/gpt-oss-120b`.
+
 ## Otomatik açılışta haber/dünya kurulumunun rolü
 
 `news_prepared_setups.auto_open_mode` (`packages/paper/news_setup.py::auto_open_news_effect`,
