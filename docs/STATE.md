@@ -130,6 +130,33 @@ kapılarında kalan aday küçük boyutla açılabilir. Bu pozisyonlar
 `exploration=true` damgalanır ve `decision_log`'a kapı listesiyle (`blocked_by`)
 yazılır ve EXPLORATION kohortuna düşer: yalnız güven kalibrasyonu (`calibration_trainer`, `tf_calibration`) bunları kullanır, diğer öğreniciler dışarıda bırakır.
 
+## Ekran tick'in anını okur (2026-10-30)
+
+Tick snapshot'ı kurunca `pipeline.publish_tick_snapshot` ile, karar matrisini
+`decision.tick_artifact.publish` ile süreç içinde yayınlar. `get_cached_snapshot()`
+(varsayılan sembol seti) taze tick snapshot'ını döner; cockpit, `/decision/matrix`,
+brifing ve YZ bağlamı `decide_matrix_for` ile aynı snapshot için tick'in kararını
+kullanır, kararı yeniden hesaplamaz. Tick 180 sn yayınlamazsa eski 30 sn'lik
+stale-while-revalidate önbelleği devreye girer. Denetim zinciri: açılış/kapanış
+denetim olayları ve `decision_log` kaydı aynı `audit_id`'yi taşır (snapshot, karar
+ve sinyal kimliğinden türetilir).
+
+## Konsensüste eksik modül (owner kararı 2026-10-30)
+
+`consensus.missing_module_policy: fixed` yalnız `E_YAY_CANONICAL_RUNTIME=1`
+süreçlerde ve filigrandan sonraki snapshot'larda geçerli (pytest/golden altında
+kapalı; lokal ve AWS deploy betiği ikisi de =1). Bilinçli oy dışı bırakmalar
+(haber çekimserliği, quantum rejim kapısı, TF düşürme, kaynak kısıtı) eksik
+SAYILMAZ, ağırlıkları kalanlara dağılır. Verisi gelmeyen modül kendi ağırlığıyla
+nötr 50 sayılır ve hücre nötre zorlanır. Kapsama kapısı yönü nötre zorladıysa
+karar `hold` olur (`coverage_gate:forced_neutral`). Bulgu: politika 30 Ekim
+00:00 UTC'de bilinçli düşürmeleri de eksik sayıyordu; 80 hücre nötr, skorlar ayı
+yönüne kaymış, "neutral signal" gerekçeli 5 short açılmıştı.
+
+Teknik teyit (`technical_entry_gate`) farklı gösterge GRUBU sayar: momentum
+(MACD histogramı + RSI), trend (EMA dizilimi), konum (VWAP). 15m/1h/1d iki grup,
+4h üç grubun hepsini ister; yalnız momentumla geçilmez (owner kararı 2026-10-30).
+
 ## Otomatik açılışta haber/dünya kurulumunun rolü
 
 `news_prepared_setups.auto_open_mode` (`packages/paper/news_setup.py::auto_open_news_effect`,

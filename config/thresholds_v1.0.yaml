@@ -473,6 +473,8 @@ timeframe_targets:
 # tutulur; canlı snapshot'larda bu alan her zaman üretilir.
 technical_entry_gate:
   enabled: true
+  # Sayi farkli gosterge GRUBUdur (momentum: MACD+RSI, trend: EMA dizilimi,
+  # konum: VWAP); ayni grubun iki okumasi tek teyittir (owner karari 2026-10-30).
   min_confirmations: 2
   # 4h has the weakest directional evidence; require one extra independent
   # same-side technical confirmation without changing 15m/1h/1d behavior.

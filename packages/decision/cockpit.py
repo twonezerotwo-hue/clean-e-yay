@@ -238,6 +238,24 @@ def technical_data_ready(snap: Any, symbol: str, timeframe: str) -> bool:
     return str(getattr(tech, "status", "")).upper() == "OK"
 
 
+# Aynı şeyi ölçen göstergeler tek teyit sayılır (owner kararı 2026-10-30):
+# MACD histogramı ve RSI ikisi de momentumdur; kapı yalnız momentumla geçilmez.
+# Gereken sayı farklı GRUP sayısıdır; tanınmayan gösterge kendi grubudur.
+CONFIRMATION_GROUPS = {
+    "macd_histogram_positive": "momentum",
+    "rsi_above_50": "momentum",
+    "ema_stack_bullish": "trend",
+    "above_vwap": "location",
+}
+
+
+def _confirmation_group(signal: Any, index: int) -> str:
+    name = getattr(signal, "name", None)
+    if not name:
+        return f"#{index}"  # adsız (eski fixture) sinyal kendi grubudur
+    return CONFIRMATION_GROUPS.get(str(name), str(name))
+
+
 def technical_confirmation_ready(
     snap: Any, symbol: str, timeframe: str, side: str, *, min_confirmations: int | None = None
 ) -> tuple[bool, str | None]:
@@ -246,6 +264,8 @@ def technical_confirmation_ready(
     Older replay/synthetic snapshots do not carry ``confirmation_signals``;
     those remain backward compatible. Live technical cells do carry the list,
     so an empty or opposing list cannot silently pass the final gate.
+    Confirmations are counted per indicator group (see CONFIRMATION_GROUPS),
+    so two momentum readings count once.
     """
     by_tf = getattr(snap, "technicals_by_tf", None) or {}
     tech = (by_tf.get(symbol) or {}).get(timeframe)
@@ -280,11 +300,19 @@ def technical_confirmation_ready(
     if any(value is not None for value in directional):
         # Live signals carry explicit bullish/bearish/neutral semantics; neutral
         # is not evidence for either side.
-        aligned = sum(1 for value in directional if value == wanted)
+        groups = {
+            _confirmation_group(signal, i)
+            for i, signal in enumerate(signals)
+            if getattr(signal, "direction", None) == wanted
+        }
     else:
         # Legacy replay fixtures predate the tri-state field.
-        fired = sum(1 for signal in signals if bool(getattr(signal, "fired", False)))
-        aligned = fired if wanted == "bullish" else len(signals) - fired
+        groups = {
+            _confirmation_group(signal, i)
+            for i, signal in enumerate(signals)
+            if bool(getattr(signal, "fired", False)) == (wanted == "bullish")
+        }
+    aligned = len(groups)
     return (aligned >= required, None if aligned >= required else f"technical_confirmation:{aligned}/{required}")
 
 

@@ -505,3 +505,33 @@ def test_cockpit_all_cells_suspended_share_global_gate():
     m = r.json()
     if m.get("suspended"):
         assert all(c["status"] == "SUSPENDED" for c in m["cells"])
+
+
+def _signals_snap(tf: str, names_dirs: list[tuple[str, str]]):
+    sigs = [SimpleNamespace(name=n, direction=d, fired=d == "bullish") for n, d in names_dirs]
+    return SimpleNamespace(
+        technicals_by_tf={"XAGUSD": {tf: SimpleNamespace(status="OK", confirmation_signals=sigs)}},
+        technicals={},
+    )
+
+
+def test_momentum_pair_counts_as_one_confirmation():
+    # MACD ve RSI aynı momentumu ölçer: ikisi tek başına 2 teyit sayılmaz.
+    snap = _signals_snap("1h", [("macd_histogram_positive", "bullish"), ("rsi_above_50", "bullish"),
+                                ("ema_stack_bullish", "neutral"), ("above_vwap", "bearish")])
+    ok, reason = technical_confirmation_ready(snap, "XAGUSD", "1h", "long")
+    assert not ok and reason == "technical_confirmation:1/2"
+
+
+def test_momentum_plus_trend_passes_two_groups():
+    snap = _signals_snap("1h", [("macd_histogram_positive", "bullish"), ("ema_stack_bullish", "bullish")])
+    assert technical_confirmation_ready(snap, "XAGUSD", "1h", "long")[0]
+
+
+def test_4h_needs_all_three_groups():
+    two_groups = _signals_snap("4h", [("macd_histogram_positive", "bearish"), ("rsi_above_50", "bearish"),
+                                      ("above_vwap", "bearish"), ("ema_stack_bullish", "bullish")])
+    assert not technical_confirmation_ready(two_groups, "XAGUSD", "4h", "short")[0]
+    three_groups = _signals_snap("4h", [("rsi_above_50", "bearish"), ("ema_stack_bullish", "bearish"),
+                                        ("above_vwap", "bearish")])
+    assert technical_confirmation_ready(three_groups, "XAGUSD", "4h", "short")[0]
