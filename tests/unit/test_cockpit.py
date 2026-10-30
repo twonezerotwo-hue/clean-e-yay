@@ -213,6 +213,7 @@ def test_agent_brief_actionable_when_open():
 def test_auto_open_readiness_exposes_final_news_gate(monkeypatch):
     """Matrix READY must not be reported as an opened paper action."""
     monkeypatch.setattr(news_setup, "require_confluence_for_auto_open", lambda: True)
+    monkeypatch.setattr(news_setup, "auto_open_mode", lambda: "require")
     monkeypatch.setattr(news_setup, "match_confluence", lambda *_args, **_kwargs: None)
     cells = [{
         "symbol": "XAGUSD",
@@ -237,6 +238,7 @@ def test_auto_open_readiness_exposes_final_news_gate(monkeypatch):
 def test_finalize_matrix_view_removes_pre_gate_paper_action(monkeypatch):
     """All read surfaces must expose final paper intent, not a pre-gate intent."""
     monkeypatch.setattr(news_setup, "require_confluence_for_auto_open", lambda: True)
+    monkeypatch.setattr(news_setup, "auto_open_mode", lambda: "require")
     monkeypatch.setattr(news_setup, "match_confluence", lambda *_args, **_kwargs: None)
     view = _view(
         risk_action="HOLD",

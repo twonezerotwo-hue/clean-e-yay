@@ -14,9 +14,16 @@ PAPER_SAFE / NO_EXECUTION — bu modül emir/karar üretmez, yalnızca matrix_vi
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from types import SimpleNamespace
 from typing import Any
 
+from packages.decision import final_gate, tick_artifact
 from packages.decision.engine import directional_strength_from_score
+from packages.decision.final_gate import (  # noqa: F401 — eski içe aktarma yolu
+    CONFIRMATION_GROUPS,
+    technical_confirmation_ready,
+    technical_data_ready,
+)
 from packages.paper import news_setup
 
 # Enum literal'leri openapi (CockpitBrief) ile birebir senkron tutulur.
@@ -229,93 +236,6 @@ def _open_position_actions(open_positions: list[Any]) -> list[dict]:
     ]
 
 
-def technical_data_ready(snap: Any, symbol: str, timeframe: str) -> bool:
-    """Return true only for a complete, non-degraded technical cell."""
-    by_tf = getattr(snap, "technicals_by_tf", None) or {}
-    tech = (by_tf.get(symbol) or {}).get(timeframe)
-    if tech is None:
-        tech = (getattr(snap, "technicals", None) or {}).get(symbol)
-    return str(getattr(tech, "status", "")).upper() == "OK"
-
-
-# Aynı şeyi ölçen göstergeler tek teyit sayılır (owner kararı 2026-10-30):
-# MACD histogramı ve RSI ikisi de momentumdur; kapı yalnız momentumla geçilmez.
-# Gereken sayı farklı GRUP sayısıdır; tanınmayan gösterge kendi grubudur.
-CONFIRMATION_GROUPS = {
-    "macd_histogram_positive": "momentum",
-    "rsi_above_50": "momentum",
-    "ema_stack_bullish": "trend",
-    "above_vwap": "location",
-}
-
-
-def _confirmation_group(signal: Any, index: int) -> str:
-    name = getattr(signal, "name", None)
-    if not name:
-        return f"#{index}"  # adsız (eski fixture) sinyal kendi grubudur
-    return CONFIRMATION_GROUPS.get(str(name), str(name))
-
-
-def technical_confirmation_ready(
-    snap: Any, symbol: str, timeframe: str, side: str, *, min_confirmations: int | None = None
-) -> tuple[bool, str | None]:
-    """Require same-side indicator confirmations for automatic paper opening.
-
-    Older replay/synthetic snapshots do not carry ``confirmation_signals``;
-    those remain backward compatible. Live technical cells do carry the list,
-    so an empty or opposing list cannot silently pass the final gate.
-    Confirmations are counted per indicator group (see CONFIRMATION_GROUPS),
-    so two momentum readings count once.
-    """
-    by_tf = getattr(snap, "technicals_by_tf", None) or {}
-    tech = (by_tf.get(symbol) or {}).get(timeframe)
-    if tech is None:
-        tech = (getattr(snap, "technicals", None) or {}).get(symbol)
-    if tech is None or str(getattr(tech, "status", "")).upper() != "OK":
-        return False, "technical_data"
-    signals = getattr(tech, "confirmation_signals", None)
-    if signals is None:
-        return True, None
-    try:
-        from packages.data.registry.loader import load_thresholds
-        cfg = load_thresholds().get("technical_entry_gate") or {}
-        if not bool(cfg.get("enabled", True)):
-            return True, None
-    except Exception:
-        cfg = {}
-    signals = list(signals or [])
-    if not signals:
-        return False, "technical_confirmation"
-    required = min_confirmations
-    if required is None:
-        per_timeframe = cfg.get("min_confirmations_by_timeframe") or {}
-        required = per_timeframe.get(timeframe, cfg.get("min_confirmations", 2))
-    try:
-        required = int(required)
-    except (TypeError, ValueError):
-        required = 2
-    required = max(1, int(required))
-    wanted = "bullish" if str(side).casefold() == "long" else "bearish"
-    directional = [getattr(signal, "direction", None) for signal in signals]
-    if any(value is not None for value in directional):
-        # Live signals carry explicit bullish/bearish/neutral semantics; neutral
-        # is not evidence for either side.
-        groups = {
-            _confirmation_group(signal, i)
-            for i, signal in enumerate(signals)
-            if getattr(signal, "direction", None) == wanted
-        }
-    else:
-        # Legacy replay fixtures predate the tri-state field.
-        groups = {
-            _confirmation_group(signal, i)
-            for i, signal in enumerate(signals)
-            if bool(getattr(signal, "fired", False)) == (wanted == "bullish")
-        }
-    aligned = len(groups)
-    return (aligned >= required, None if aligned >= required else f"technical_confirmation:{aligned}/{required}")
-
-
 def _auto_open_readiness(
     cells: list[dict],
     snap: Any,
@@ -428,6 +348,30 @@ def _auto_open_readiness(
     }
 
 
+_FINAL_BLOCKER_REASONS = {
+    "news_confluence": "Teknik aday var; aynı varlık, zaman dilimi ve yönde canlı ARMED haber-teknik kurulumu yok.",
+    "news_conflict": "Ters yönlü canlı haber kurulumu otomatik açılışı engelledi.",
+    "technical_data": "Teknik veri taze ve doğrulanmış değil; otomatik açılış bekletildi.",
+    "technical_confirmation": "Teknik göstergeler aynı yönde yeterli teyit vermedi; otomatik açılış bekletildi.",
+    "session_gate": "Seans ya da conflict gate otomatik açılışı engelledi.",
+}
+
+
+def _final_gate_context(view: dict, snap: Any, now: datetime) -> dict[str, Any]:
+    """Tick yayını yokken son kapının ihtiyaç duyduğu bağlam (conflict gate ön
+    hesabı olmadan; o kapı bu durumda fail-open kalır)."""
+    from packages.decision import conflict_gate
+
+    prices = {q.symbol: q.price for q in (getattr(snap, "prices", None) or []) if q.price is not None}
+    verified = {q.symbol: bool(getattr(q, "verified", False)) for q in (getattr(snap, "prices", None) or [])}
+    return {
+        "prices": prices,
+        "verified": verified,
+        "regime": SimpleNamespace(label=str(view.get("regime") or "")),
+        "gate_cfg": conflict_gate.load_config(),
+    }
+
+
 def finalize_matrix_view(
     view: dict,
     snap: Any,
@@ -450,15 +394,16 @@ def finalize_matrix_view(
         for p in (getattr(paper_state, "open_positions", None) or [])
     }
     pending = view.get("pending_paper_actions") or _paper_actions(cells)
+    # Haber-teknik kurulum görünümü (yalnız require modunda kapı; ekranda bilgi).
     readiness = _auto_open_readiness(cells, snap, paper_state, now)
-    ready_keys = {
-        (row.get("symbol"), row.get("timeframe"), row.get("side"))
-        for row in readiness.get("ready") or []
-    }
+    # Son kapı tek yerde (final_gate). Tick bu snapshot için sonucu yayınladıysa
+    # ekran onu gösterir; yoksa aynı fonksiyon hücre verisiyle çalışır.
+    published = tick_artifact.final_for(snap)
+    fallback: dict[str, Any] | None = None
     for cell in cells:
         intent = cell.get("paper_action_intent", cell.get("paper_action"))
         cell["paper_action_intent"] = intent
-        if intent not in {"open_long", "open_short"}:
+        if intent not in final_gate.CANDIDATE_ACTIONS:
             cell["final_actionable"] = False
             cell["final_execution_ready"] = False
             state, state_reason = derive_decision_state(cell, open_keys=open_keys)
@@ -466,61 +411,48 @@ def finalize_matrix_view(
             cell["lifecycle_reason"] = state_reason
             continue
 
-        side = "long" if intent == "open_long" else "short"
-        key = (cell.get("symbol"), cell.get("timeframe"), side)
-        technical_ready = bool(cell.get("execution_ready", cell.get("actionable")))
-        final_ready = technical_ready
-        final_blocker = None
-        if not technical_ready:
-            final_blocker = "execution_gate"
-        elif not technical_data_ready(snap, str(cell.get("symbol") or ""), str(cell.get("timeframe") or "")):
-            final_ready = False
-            final_blocker = "technical_data"
-        elif not technical_confirmation_ready(
-            snap,
-            str(cell.get("symbol") or ""),
-            str(cell.get("timeframe") or ""),
-            side,
-        )[0]:
-            final_ready = False
-            final_blocker = "technical_confirmation"
-        elif readiness.get("enabled") and readiness.get("available") and key not in ready_keys:
-            final_ready = False
-            final_blocker = "news_confluence"
-
-        cell["final_actionable"] = final_ready
-        cell["final_execution_ready"] = final_ready
-        # Yaşam döngüsü etiketi için kanıtlar kapı sırasından bağımsız ölçülür
-        # (kararı değiştirmez; yalnız hangi teyidin eksik olduğunu adlandırır).
         symbol, timeframe = str(cell.get("symbol") or ""), str(cell.get("timeframe") or "")
-        tech_confirmed = technical_data_ready(snap, symbol, timeframe) and technical_confirmation_ready(
-            snap, symbol, timeframe, side
-        )[0]
-        news_confirmed = (key in ready_keys) if readiness.get("enabled") and readiness.get("available") else None
-        if final_ready:
-            cell["paper_action"] = intent
-            state, state_reason = derive_decision_state(
-                cell, open_keys=open_keys, technical_confirmed=tech_confirmed, news_confirmed=news_confirmed
+        result = published.get((symbol, timeframe)) if published is not None else None
+        if result is None:
+            if fallback is None:
+                fallback = _final_gate_context(view, snap, now)
+            result = final_gate.evaluate(
+                SimpleNamespace(
+                    symbol=symbol,
+                    timeframe=timeframe,
+                    action=intent,
+                    decision_id=cell.get("decision_id"),
+                    risk=SimpleNamespace(action=(view.get("risk_gate") or {}).get("action", "HOLD")),
+                ),
+                snap=snap,
+                setups=getattr(paper_state, "news_prepared_setups", None) or [],
+                prices=fallback["prices"],
+                verified_flags=fallback["verified"],
+                now=now,
+                regime=fallback["regime"],
+                gate_cfg=fallback["gate_cfg"],
+                conflict_by_symbol={},
+                execution_ready=bool(cell.get("execution_ready", cell.get("actionable"))),
             )
-            cell["lifecycle_state"] = state
-            cell["lifecycle_reason"] = state_reason
-            continue
 
-        cell["paper_action"] = "none"
-        cell["execution_state"] = "BLOCKED"
-        if final_blocker and final_blocker not in (cell.get("blocked_by") or []):
-            cell.setdefault("blocked_by", []).append(final_blocker)
-        if final_blocker == "news_confluence":
-            cell["reason"] = (
-                "Teknik aday var; aynı varlık, zaman dilimi ve yönde canlı "
-                "ARMED haber-teknik kurulumu yok."
+        cell["final_execution_ready"] = result.route != "block"
+        cell["final_actionable"] = result.route == "open"
+        cell["paper_action"] = intent if result.route == "open" else "none"
+        if result.route == "manual_ready":
+            cell["reason"] = "Tüm kapılar geçti; seans/conflict gate açılışı owner onayına yönlendirdi" + (
+                f" ({result.reason})." if result.reason else "."
             )
-        elif final_blocker == "technical_data":
-            cell["reason"] = "Teknik veri taze ve doğrulanmış değil; otomatik açılış bekletildi."
-        elif final_blocker == "technical_confirmation":
-            cell["reason"] = "Teknik göstergeler aynı yönde yeterli teyit vermedi; otomatik açılış bekletildi."
+        elif result.route == "block":
+            cell["execution_state"] = "BLOCKED"
+            if result.blocker and result.blocker not in (cell.get("blocked_by") or []):
+                cell.setdefault("blocked_by", []).append(result.blocker)
+            if result.blocker in _FINAL_BLOCKER_REASONS:
+                cell["reason"] = _FINAL_BLOCKER_REASONS[result.blocker]
         state, state_reason = derive_decision_state(
-            cell, open_keys=open_keys, technical_confirmed=tech_confirmed, news_confirmed=news_confirmed
+            cell,
+            open_keys=open_keys,
+            technical_confirmed=result.technical_confirmed,
+            news_confirmed=result.news_matched,
         )
         cell["lifecycle_state"] = state
         cell["lifecycle_reason"] = state_reason

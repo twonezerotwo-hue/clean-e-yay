@@ -141,6 +141,14 @@ stale-while-revalidate önbelleği devreye girer. Denetim zinciri: açılış/ka
 denetim olayları ve `decision_log` kaydı aynı `audit_id`'yi taşır (snapshot, karar
 ve sinyal kimliğinden türetilir).
 
+Son kapı tek fonksiyondur (`packages/decision/final_gate.py::evaluate`). Sıra: yürütmeye
+hazır (decide_matrix kapıları, RiskGate dahil) → teknik veri → teknik teyit (grup sayımı)
+→ haber etkisi (çelişkide ×0,5; require modunda zorunlu) → seans + conflict gate rotası
+(block / manual_ready / open). Tick her aday için bir kez çalıştırır ve sonucu
+`tick_artifact.publish_final` ile yayınlar; `finalize_matrix_view` aynı snapshot için bu
+sonucu gösterir, yayın yoksa aynı fonksiyonu hücre verisiyle çalıştırır (conflict gate ön
+hesabı olmadan, fail-open). Owner onayına yönlenen hücre `OWNER_APPROVAL` görünür.
+
 ## Konsensüste eksik modül (owner kararı 2026-10-30)
 
 `consensus.missing_module_policy: fixed` yalnız `E_YAY_CANONICAL_RUNTIME=1`

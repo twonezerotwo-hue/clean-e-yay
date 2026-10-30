@@ -94,6 +94,7 @@ def test_finalize_marks_only_the_open_timeframe(monkeypatch):
 def test_finalize_names_missing_news_setup(monkeypatch):
     # Teknik teyit var, haber-teknik kurulumu yok → karar yine kapalı, etiket eksik kanıtı söyler.
     monkeypatch.setattr(news_setup, "require_confluence_for_auto_open", lambda: True)
+    monkeypatch.setattr(news_setup, "auto_open_mode", lambda: "require")
     monkeypatch.setattr(news_setup, "match_confluence", lambda *_a, **_k: None)
     cell = {
         "symbol": "XAGUSD", "timeframe": "1h", "action": "open_long", "execution_ready": True,

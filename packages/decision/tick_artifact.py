@@ -27,6 +27,8 @@ class TickMatrix:
 
 _LOCK = threading.Lock()
 _LATEST: TickMatrix | None = None
+# Son kapı sonuçları: (snapshot_id, {(symbol, timeframe): FinalGate}).
+_FINAL: tuple[str, dict[tuple[str, str], Any]] | None = None
 
 
 def publish(
@@ -58,11 +60,31 @@ def latest() -> TickMatrix | None:
     return _LATEST
 
 
+def publish_final(snap: Any, results: dict[tuple[str, str], Any]) -> None:
+    """Tick'in bu snapshot için son kapı sonuçlarını yayımla (yalnız tick çağırır)."""
+    global _FINAL
+    snapshot_id = str(getattr(snap, "snapshot_id", "") or "")
+    if not snapshot_id:
+        return
+    with _LOCK:
+        _FINAL = (snapshot_id, dict(results))
+
+
+def final_for(snap: Any) -> dict[tuple[str, str], Any] | None:
+    """Aynı snapshot için tick'in son kapı sonuçları; yoksa None."""
+    item = _FINAL
+    snapshot_id = str(getattr(snap, "snapshot_id", "") or "")
+    if item is None or not snapshot_id or item[0] != snapshot_id:
+        return None
+    return item[1]
+
+
 def reset() -> None:
     """Testler arası sızıntıyı önlemek için (conftest)."""
-    global _LATEST
+    global _LATEST, _FINAL
     with _LOCK:
         _LATEST = None
+        _FINAL = None
 
 
 def decide_matrix_for(
@@ -95,4 +117,4 @@ def decide_matrix_for(
     )
 
 
-__all__ = ["TickMatrix", "decide_matrix_for", "latest", "publish", "reset"]
+__all__ = ["TickMatrix", "decide_matrix_for", "final_for", "latest", "publish", "publish_final", "reset"]

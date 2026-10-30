@@ -41,7 +41,7 @@ from packages.data.registry import assets as asset_registry
 from packages.decision import (
     agent_pipeline,
     conflict_gate,
-    gates,
+    final_gate,
     paper_policy,
     shadow,
     shadow_activation,
@@ -49,10 +49,8 @@ from packages.decision import (
 )
 from packages.decision.cockpit import (
     finalize_matrix_view,
-    technical_confirmation_ready,
-    technical_data_ready,
 )
-from packages.decision.engine import decide_matrix, is_execution_ready, matrix_view
+from packages.decision.engine import decide_matrix, matrix_view
 from packages.learning import (
     calibration_audit,
     event_outcomes,
@@ -499,68 +497,61 @@ async def run_once() -> None:
             for pos in ps.open_positions
             if getattr(pos, "signal_id", None)
         }
+        # Son kapı tek yerde (packages.decision.final_gate): yürütmeye hazır →
+        # teknik veri → teknik teyit → haber etkisi → seans/conflict gate rotası.
+        # Sonuçlar yayınlanır; ekran aynı kapı sonucunu gösterir.
+        final_results: dict[tuple[str, str], final_gate.FinalGate] = {}
         for d in decisions:
-            if d.action in {"blocked", "hold"}:
+            fg = final_gate.evaluate(
+                d,
+                snap=snap,
+                setups=ps.news_prepared_setups,
+                prices=prices,
+                verified_flags=verified_flags,
+                now=now,
+                regime=_regime,
+                gate_cfg=gate_cfg,
+                conflict_by_symbol=conflict_by_symbol,
+            )
+            final_results[(d.symbol, d.timeframe)] = fg
+            if fg.blocker == "no_candidate":
                 continue
-            if d.action not in {"open_long", "open_short"}:
+            if fg.blocker == "execution_gate":
+                log.info(
+                    "execution hold: %s %s %s state=%s ev=%s blocked_by=%s",
+                    d.symbol, d.timeframe, d.action,
+                    fg.detail.get("execution_state"), d.expected_value, d.blocked_by,
+                )
                 continue
-            if not technical_data_ready(snap, d.symbol, d.timeframe):
+            if fg.blocker == "technical_data":
                 log.info(
                     "technical data hold: %s %s %s — technical cell degraded or stale",
                     d.symbol, d.timeframe, d.action,
                 )
                 continue
-            technical_ok, technical_reason = technical_confirmation_ready(
-                snap,
-                d.symbol,
-                d.timeframe,
-                "long" if d.action == "open_long" else "short",
-            )
-            if not technical_ok:
+            if fg.blocker == "technical_confirmation":
                 log.info(
                     "technical confirmation hold: %s %s %s — %s",
-                    d.symbol,
-                    d.timeframe,
-                    d.action,
-                    technical_reason or "insufficient same-side confirmations",
+                    d.symbol, d.timeframe, d.action, fg.reason,
                 )
                 continue
-            # Haber/dünya kurulumunun rolü tek noktada (owner kararı 2026-10-30:
-            # conflict_reduce — haber yoksa nötr, TERS yönlü kurulum boyutu küçültür,
-            # aynı yönlü eşleşme yalnız kanıt kimliği). Yalnız kısıtlar; büyütmez.
-            news_effect = news_setup.auto_open_news_effect(
-                ps.news_prepared_setups,
-                symbol=d.symbol,
-                timeframe=d.timeframe,
-                side="long" if d.action == "open_long" else "short",
-                price=prices.get(d.symbol),
-                data_verified=verified_flags.get(d.symbol, False),
-                decision_id=getattr(d, "decision_id", None),
-                now=now,
-            )
-            news_match = news_effect["match"]
-            news_size = float(news_effect["size_multiplier"])
-            if not news_effect["allow"]:
-                log.info(
-                    "news hold: %s %s %s — %s", d.symbol, d.timeframe, d.action, news_effect["reason"],
-                )
+            # Haber/dünya kurulumunun rolü (owner kararı 2026-10-30: conflict_reduce —
+            # haber yoksa nötr, TERS yönlü kurulum boyutu küçültür, aynı yönlü eşleşme
+            # yalnız kanıt kimliği). Yalnız kısıtlar; büyütmez.
+            news_effect = fg.news_effect or {}
+            news_match = news_effect.get("match")
+            news_size = float(news_effect.get("size_multiplier", 1.0))
+            if fg.blocker in {"news_confluence", "news_conflict"}:
+                log.info("news hold: %s %s %s — %s", d.symbol, d.timeframe, d.action, fg.reason)
                 continue
-            if news_effect["conflict"] is not None:
+            if news_effect.get("conflict") is not None:
                 log.info(
                     "news conflict reduce: %s %s %s — %s", d.symbol, d.timeframe, d.action, news_effect["reason"],
                 )
-            # Paper keşfi negatif EV/güven gevşetmesini yalnız gölgede toplar;
-            # otomatik deftere READY kanıtı olmayan hücre yazılmaz. Bu ayrım
-            # RiskGate'i değiştirmez ve owner/manual akışını kapatmaz.
-            if not is_execution_ready(d):
-                log.info(
-                    "execution hold: %s %s %s state=%s ev=%s blocked_by=%s",
-                    d.symbol, d.timeframe, d.action,
-                    "EXPLORATION" if any(str(b).startswith("paper_exploration:") for b in d.blocked_by) else "BLOCKED",
-                    d.expected_value, d.blocked_by,
-                )
+            if fg.route == "block":  # seans ya da conflict gate
                 continue
-            side = "long" if d.action == "open_long" else "short"
+            routed = fg.gate
+            side = fg.side
             news_setup_id = str((news_match or {}).get("setup_id") or "") or None
             news_event_id = str((news_match or {}).get("event_id") or "") or None
             news_evidence_id = str((news_match or {}).get("evidence_id") or "") or None
@@ -573,14 +564,6 @@ async def run_once() -> None:
                 news_setup_id=news_setup_id,
                 news_event_id=news_event_id,
             )
-            # Tek rotalama noktası: session_gate (RiskGate sonrası seans kısıtı) +
-            # Faz 8 Conflict Gate — sıralama/öncelik bkz. packages/decision/gates.py.
-            routed = gates.apply_gates(
-                d, side=side, now=now, regime=_regime,
-                gate_cfg=gate_cfg, conflict_by_symbol=conflict_by_symbol,
-            )
-            if routed.route == "block":
-                continue
             if routed.route == "manual_ready":
                 manual_queue.route_to_manual_ready(
                     ps, symbol=d.symbol, timeframe=d.timeframe, side=side,
@@ -676,6 +659,7 @@ async def run_once() -> None:
                     rg.get("reason"), "açılış engellendi" if rg.get("active") else "açılışa izin (flag kapalı)",
                 )
 
+        tick_artifact.publish_final(snap, final_results)  # ekran aynı kapı sonucunu okur
         txn.commit()  # T3 — persist the paper mutation before any notification.
         t_commit = time.monotonic()  # B5 — aşama süresi görünürlüğü
 
