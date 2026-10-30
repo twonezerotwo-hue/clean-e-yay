@@ -17,7 +17,8 @@ from packages.data.ingestion.pipeline import get_cached_snapshot
 from packages.data.registry import assets as asset_registry
 from packages.decision import paper_policy
 from packages.decision.cockpit import finalize_matrix_view
-from packages.decision.engine import decide_matrix, matrix_view
+from packages.decision.engine import matrix_view
+from packages.decision.tick_artifact import decide_matrix_for
 from packages.learning import event_outcomes
 from packages.notifications import list_recent as list_notifications
 from packages.ops import heartbeat
@@ -112,7 +113,7 @@ def _safe_cells(snap, paper_state_obj=None):
         ps = paper_state_obj if paper_state_obj is not None else paper_state.load()
         risk_in = risk_input_from_state(ps, snap.quality.score)
         symbols = asset_registry.trade_symbols()
-        regime, risk, decisions = decide_matrix(
+        regime, risk, decisions = decide_matrix_for(
             symbols,
             snap,
             risk_in,

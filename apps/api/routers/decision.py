@@ -14,7 +14,8 @@ from packages.data.provenance import data_provenance
 from packages.data.registry import assets as asset_registry
 from packages.decision import paper_policy, shadow
 from packages.decision.cockpit import finalize_matrix_view
-from packages.decision.engine import decide_matrix, matrix_view
+from packages.decision.engine import matrix_view
+from packages.decision.tick_artifact import decide_matrix_for
 from packages.paper import state as paper_state
 from packages.risk.engine import risk_input_from_state
 
@@ -27,7 +28,7 @@ def get_decision_matrix() -> dict:
     ps = paper_state.load()
     matrix_symbols = asset_registry.trade_symbols()
     risk_in = risk_input_from_state(ps, snap.quality.score)
-    regime, risk, decisions = decide_matrix(
+    regime, risk, decisions = decide_matrix_for(
         matrix_symbols,
         snap,
         risk_in,

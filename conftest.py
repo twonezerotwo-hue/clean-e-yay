@@ -40,6 +40,16 @@ os.environ.setdefault(
 
 
 @pytest.fixture(autouse=True)
+def _no_tick_artifact_leak() -> None:
+    """Tick'in süreç-içi yayını (snapshot + karar matrisi) testler arası sızmasın:
+    tick koşan bir testten sonra API testleri kendi fixture snapshot'ını görmeli."""
+    from packages.data.ingestion import pipeline
+    from packages.decision import tick_artifact
+    pipeline.reset_tick_snapshot()
+    tick_artifact.reset()
+
+
+@pytest.fixture(autouse=True)
 def _entry_quality_off_by_default(monkeypatch: pytest.MonkeyPatch) -> None:
     """Giriş kalitesi v2 canlı config'te SHADOW; unit testlerin çoğu bağlam üretimi/ek rapor
     olmadan baseline'ı varsayar. Default KAPAT (yalnız mode()/zero_two_canonical() okuyucuları);

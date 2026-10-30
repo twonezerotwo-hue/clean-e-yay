@@ -35,7 +35,7 @@ load_repo_dotenv(skip_pytest=True)
 from packages.agent.brief_id import build_brief_id
 from packages.causal.engine import build_shadow
 from packages.data import snapshot_store
-from packages.data.ingestion.pipeline import build_snapshot
+from packages.data.ingestion.pipeline import build_snapshot, publish_tick_snapshot
 from packages.data.provenance import data_provenance
 from packages.data.registry import assets as asset_registry
 from packages.decision import (
@@ -45,6 +45,7 @@ from packages.decision import (
     paper_policy,
     shadow,
     shadow_activation,
+    tick_artifact,
 )
 from packages.decision.cockpit import (
     finalize_matrix_view,
@@ -349,6 +350,7 @@ async def run_once() -> None:
     txn = None  # T3 — istisna yolunda abort için görünür olmalı
     try:
         snap = build_snapshot()
+        publish_tick_snapshot(snap)  # ekran/YZ aynı anı okur (aynı süreç)
         t_snap = time.monotonic()  # B5 — aşama süresi görünürlüğü
         # Canonical pre-decision world context.  World/news evidence is built
         # from the same immutable snapshot before the paper route is entered;
@@ -396,6 +398,16 @@ async def run_once() -> None:
             open_positions=ps.open_positions,
             paper_exploration=paper_policy.enabled(),
             persist_regime=True,  # H10 — rejim hafızasının tek yazarı tick
+        )
+        # Okuma yüzeyleri (cockpit, matris, brifing, YZ) aynı snapshot için bu
+        # kararı kullanır; kararı yeniden hesaplamazlar.
+        tick_artifact.publish(
+            snap,
+            MATRIX_SYMBOLS,
+            paper_exploration=paper_policy.enabled(),
+            regime=_regime,
+            risk=_risk,
+            decisions=decisions,
         )
         decisions_generated = len(decisions)
         t_decide = time.monotonic()  # B5 — aşama süresi görünürlüğü

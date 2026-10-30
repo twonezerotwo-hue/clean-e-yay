@@ -35,7 +35,8 @@ from packages.decision.cockpit import (
     decision_trace_view,
     finalize_matrix_view,
 )
-from packages.decision.engine import decide_matrix, matrix_view
+from packages.decision.engine import matrix_view
+from packages.decision.tick_artifact import decide_matrix_for
 from packages.learning import tf_weight_trainer
 from packages.paper import news_setup
 from packages.paper import state as paper_state
@@ -59,7 +60,7 @@ def _build_cockpit_brief() -> dict:
     ps = paper_state.load()
     matrix_symbols = asset_registry.trade_symbols()
     risk_in = risk_input_from_state(ps, snap.quality.score)
-    regime, risk, decisions = decide_matrix(
+    regime, risk, decisions = decide_matrix_for(
         matrix_symbols,
         snap,
         risk_in,

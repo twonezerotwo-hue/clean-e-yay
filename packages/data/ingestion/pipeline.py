@@ -443,6 +443,31 @@ _TTL_SEC = 30.0
 _REFRESHING: set[str] = set()
 _REFRESH_LOCK = threading.Lock()
 
+# Tick'in karar verdiği snapshot. Supervisor'da tick ve API aynı süreçtedir;
+# ekran, brifing ve YZ ayrı bir an kurmak yerine bunu okur. Tick takılırsa
+# (yayın bayatlarsa) eski önbellek yoluna düşülür; ekran hiç beklemez.
+_TICK_SNAPSHOT: tuple[float, MarketSnapshot] | None = None
+_TICK_MAX_AGE_SEC = 180.0
+
+
+def publish_tick_snapshot(snap: MarketSnapshot) -> None:
+    """Tick yeni snapshot'ı kurduğunda çağırır (yalnız tick yazar)."""
+    global _TICK_SNAPSHOT
+    _TICK_SNAPSHOT = (time.monotonic(), snap)
+
+
+def latest_tick_snapshot(max_age_sec: float = _TICK_MAX_AGE_SEC) -> MarketSnapshot | None:
+    item = _TICK_SNAPSHOT
+    if item is None or (time.monotonic() - item[0]) > max_age_sec:
+        return None
+    return item[1]
+
+
+def reset_tick_snapshot() -> None:
+    """Testler arası sızıntıyı önlemek için (conftest)."""
+    global _TICK_SNAPSHOT
+    _TICK_SNAPSHOT = None
+
 
 def _refresh_async(key: str, symbols: list[str] | None) -> None:
     """Arka planda yeniden derle; başarısızsa eski cache korunur (mock yok)."""
@@ -460,7 +485,14 @@ def get_cached_snapshot(symbols: list[str] | None = None) -> MarketSnapshot:
     """Stale-while-revalidate: taze cache anında döner; bayatsa ESKİ kopya yine
     anında döner ve yenileme ARKA PLANDA yapılır — istek hiçbir zaman
     build_snapshot'ı beklemez. Yalnızca cache hiç yoksa (ilk çağrı) senkron derler.
-    Bu, canlı provider yavaşladığında cockpit/brief'in donmasını engeller."""
+    Bu, canlı provider yavaşladığında cockpit/brief'in donmasını engeller.
+
+    Varsayılan sembol setinde tick'in taze snapshot'ı varsa o döner: ekran tick'in
+    karar verdiği anı görür, aynı veri ikinci kez çekilmez."""
+    if symbols is None:
+        tick_snap = latest_tick_snapshot()
+        if tick_snap is not None:
+            return tick_snap
     key = "|".join(symbols or DEFAULT_SYMBOLS)
     now = time.monotonic()
     cached = _CACHE.get(key)

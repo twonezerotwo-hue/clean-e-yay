@@ -20,8 +20,10 @@ from packages.data.ingestion.pipeline import (
 )
 from packages.data.provenance import data_provenance
 from packages.data.registry import assets as asset_registry
+from packages.decision import paper_policy
 from packages.decision.cockpit import finalize_matrix_view
-from packages.decision.engine import decide_matrix, matrix_view
+from packages.decision.engine import matrix_view
+from packages.decision.tick_artifact import decide_matrix_for
 from packages.learning import event_outcomes, mistake_memory
 from packages.paper import state as paper_state
 from packages.risk import correlation
@@ -302,8 +304,13 @@ def build_compact_context() -> dict:
     ps = paper_state.load()
     matrix_symbols = asset_registry.trade_symbols()
     risk_in = _risk_input(ps, snap)
-    regime, risk, decisions = decide_matrix(
-        matrix_symbols, snap, risk_in, open_positions=ps.open_positions
+    # Tick ve cockpit ile aynı keşif bayrağı: YZ aynı kararı anlatır.
+    regime, risk, decisions = decide_matrix_for(
+        matrix_symbols,
+        snap,
+        risk_in,
+        open_positions=ps.open_positions,
+        paper_exploration=paper_policy.enabled(),
     )
     view = matrix_view(regime, risk, decisions, snap, matrix_symbols)
     view = finalize_matrix_view(view, snap, ps)
