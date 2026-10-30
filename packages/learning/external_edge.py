@@ -13,9 +13,9 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+from packages.data.registry.loader import load_thresholds
 from packages.learning import backtest_recon
 from packages.ops.store import write_text_atomic
-from packages.data.registry.loader import load_thresholds
 
 DEFAULT_PATH = "data/runtime/external_edge.json"
 MIN_HOLDOUT = 100

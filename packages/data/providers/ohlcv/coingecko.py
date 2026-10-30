@@ -39,6 +39,7 @@ TIMEOUT_SEC = 6.0
 _DEFAULT_OHLCV_TTL_SEC = 2400
 _THROTTLE_LOCK = threading.Lock()
 _BARS_CACHE: dict[tuple[str, str], tuple[float, list[OHLCVBar]]] = {}
+_LAST_FETCH_ERROR: dict[str, object] = {}
 
 
 def _ohlcv_ttl_sec() -> float:
@@ -65,15 +66,36 @@ NATIVE_TFS = frozenset(_TF_PLAN.keys())
 
 
 def _fetch_prices(cg_id: str, days: int) -> list[tuple[float, float]] | None:
+    global _LAST_FETCH_ERROR
     url = f"{API}/{cg_id}/market_chart?vs_currency=usd&days={days}"
     req = urllib.request.Request(url, headers=coingecko_auth.headers())
     try:
         with urllib.request.urlopen(req, timeout=TIMEOUT_SEC) as resp:
             data = json.loads(resp.read().decode("utf-8"))
-    except (urllib.error.URLError, TimeoutError, OSError, json.JSONDecodeError):
+    except urllib.error.HTTPError as exc:
+        retry_after = exc.headers.get("Retry-After") if exc.headers else None
+        try:
+            retry_after_value = float(retry_after) if retry_after is not None else None
+        except (TypeError, ValueError):
+            retry_after_value = None
+        _LAST_FETCH_ERROR = {
+            "type": f"http_{exc.code}",
+            "message": f"CoinGecko HTTP {exc.code}",
+            "retry_after": retry_after_value,
+        }
+        return None
+    except urllib.error.URLError as exc:
+        _LAST_FETCH_ERROR = {"type": "network", "message": str(exc.reason)[:200]}
+        return None
+    except (TimeoutError, OSError) as exc:
+        _LAST_FETCH_ERROR = {"type": "timeout_or_os", "message": str(exc)[:200]}
+        return None
+    except json.JSONDecodeError:
+        _LAST_FETCH_ERROR = {"type": "invalid_json", "message": "CoinGecko invalid JSON"}
         return None
     prices = data.get("prices")
     if not isinstance(prices, list) or not prices:
+        _LAST_FETCH_ERROR = {"type": "empty_payload", "message": "CoinGecko returned no prices"}
         return None
     out: list[tuple[float, float]] = []
     for row in prices:
@@ -82,7 +104,15 @@ def _fetch_prices(cg_id: str, days: int) -> list[tuple[float, float]] | None:
         except (TypeError, ValueError, IndexError):
             continue
         out.append((ts_ms / 1000.0, px))
-    return out or None
+    if not out:
+        _LAST_FETCH_ERROR = {"type": "invalid_payload", "message": "CoinGecko prices were invalid"}
+        return None
+    _LAST_FETCH_ERROR = {}
+    return out
+
+
+def last_fetch_error() -> dict[str, object]:
+    return dict(_LAST_FETCH_ERROR)
 
 
 def _points_to_bars(
@@ -136,6 +166,7 @@ def fetch_by_ticker(cg_id: str, symbol: str, timeframe: Timeframe) -> list[OHLCV
         if cached and (now - cached[0]) < ttl:
             return cached[1]
     days, bucket_sec, source = plan
+    _LAST_FETCH_ERROR.clear()
     points = _fetch_prices(cg_id, days)
     if points is None:
         return None

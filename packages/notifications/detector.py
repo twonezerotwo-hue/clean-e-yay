@@ -67,6 +67,7 @@ def detect_new_tickets(
             ticket_id=tid,
             position_id=t.get("position_id"),
             signal_id=t.get("signal_id"),
+            brief_id=t.get("brief_id"),
         ))
     return out
 

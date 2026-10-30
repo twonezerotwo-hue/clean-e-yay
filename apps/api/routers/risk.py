@@ -27,6 +27,7 @@ def _risk_input(ps: paper_state.PaperState) -> RiskInput:
         daily_pnl_usd=ps.daily_pnl_usd,
         open_position_count=len(ps.open_positions),
         daily_anchor_date=ps.daily_anchor_date,
+        mtm_equity_usd=ps.mtm_equity_usd,
     )
 
 

@@ -14,6 +14,8 @@ import time
 
 from fastapi import APIRouter
 
+from apps.api.routers.paper_trading import _serialize_state as serialize_paper_state
+from packages.agent.brief_id import build_brief_id
 from packages.agent.briefing import _engine_health as agent_engine_health
 from packages.agent.briefing import build_executive
 from packages.agent.llm.premium_brief import build_premium_brief
@@ -27,11 +29,17 @@ from packages.data.providers.news import get_provider_status
 from packages.data.providers.news import rss as news_rss
 from packages.data.providers.news.provenance import build_consensus
 from packages.data.registry import assets as asset_registry
-from packages.decision import paper_policy
-from packages.decision.cockpit import agent_brief_view, decision_trace_view
+from packages.decision import agent_pipeline, paper_policy
+from packages.decision.cockpit import (
+    agent_brief_view,
+    decision_trace_view,
+    finalize_matrix_view,
+)
 from packages.decision.engine import decide_matrix, matrix_view
+from packages.learning import tf_weight_trainer
 from packages.paper import news_setup
 from packages.paper import state as paper_state
+from packages.paper import ticket as paper_ticket
 from packages.portfolio import build_portfolio_risk
 from packages.risk import halt as halt_store
 from packages.risk.engine import RiskInput
@@ -57,6 +65,7 @@ def _build_cockpit_brief() -> dict:
         daily_pnl_usd=ps.daily_pnl_usd,
         open_position_count=len(ps.open_positions),
         daily_anchor_date=ps.daily_anchor_date,
+        mtm_equity_usd=ps.mtm_equity_usd,
     )
     regime, risk, decisions = decide_matrix(
         matrix_symbols,
@@ -66,6 +75,7 @@ def _build_cockpit_brief() -> dict:
         paper_exploration=paper_policy.enabled(),
     )
     view = matrix_view(regime, risk, decisions, snap, matrix_symbols)
+    view = finalize_matrix_view(view, snap, ps)
     # The embedded matrix carries the same provenance as its parent envelope;
     # clients can reject a stale standalone response instead of merging it.
     view["snapshot_id"] = getattr(snap, "id", None) or getattr(snap, "snapshot_id", None)
@@ -169,6 +179,7 @@ def _build_cockpit_brief() -> dict:
             "countries": list(news_classify.detect_regions(headline.title)),
             "ts": headline.ts.isoformat(),
             "title": headline.title,
+            "article_summary": getattr(headline, "article_summary", None),
             # API polling is hot-path; full local translation is performed for
             # the executive brief only. This deterministic fallback keeps the
             # headline list responsive when a new feed brings many titles.
@@ -228,6 +239,8 @@ def _build_cockpit_brief() -> dict:
                 "generated_at": discovery_view.get("generated_at"),
                 "pool_headlines": (discovery_view.get("stats") or {}).get("pool"),
                 "article_enriched": (discovery_view.get("stats") or {}).get("article_enriched", 0),
+                "article_pending": (discovery_view.get("stats") or {}).get("article_pending", 0),
+                "article_failed": (discovery_view.get("stats") or {}).get("article_failed", 0),
                 "article_coverage": (discovery_view.get("stats") or {}).get("article_coverage"),
                 "screened": (discovery_view.get("stats") or {}).get("screened", 0),
                 "active_candidates": len(discovery_view.get("candidates") or []),
@@ -279,31 +292,89 @@ def _build_cockpit_brief() -> dict:
         agent_brief=agent_brief,
         decision_matrix=view,
     )
+    # Canonical projections: the frontend hooks select these slices from this
+    # envelope instead of fetching separate snapshots. Optional diagnostics
+    # fail closed and never make the core brief unavailable.
+    canonical_paper_state = serialize_paper_state(ps)
+    canonical_tickets = paper_ticket.load_last()
+    try:
+        tf_weights = tf_weight_trainer.resolve_live_tf_weights()
+    except Exception:
+        tf_weights = None
+    try:
+        agent_views = agent_pipeline.build_agent_matrix(
+            matrix_symbols, risk_action=risk.action, tf_weights=tf_weights
+        )
+        canonical_agent_matrix = agent_pipeline.matrix_viewmodel(
+            agent_views, risk_action=risk.action
+        )
+        canonical_agent_matrix.update(
+            {
+                "source": "agent_shadow",
+                "execution_authority": "observe_only",
+                "snapshot_id": getattr(snap, "snapshot_id", None),
+                "snapshot_generated_at": snap.generated_at.isoformat(),
+                "paper_state_revision": ps.revision,
+            }
+        )
+    except Exception:
+        canonical_agent_matrix = {
+            "risk_action": risk.action,
+            "timeframes": [],
+            "symbols": [],
+            "source": "agent_shadow",
+            "execution_authority": "observe_only",
+            "snapshot_id": getattr(snap, "snapshot_id", None),
+            "paper_state_revision": ps.revision,
+            "error": "agent_matrix_unavailable",
+        }
+    brief_id = build_brief_id(
+        getattr(snap, "id", None) or getattr(snap, "snapshot_id", None),
+        getattr(ps, "revision", None),
+    )
+    # One identity envelope for every first-screen consumer.  Panels may
+    # render different slices, but they must not invent a second snapshot or
+    # silently merge another tick's evidence.
+    evidence_ids = sorted({
+        str(item.evidence_id)
+        for item in ps.news_prepared_setups
+        if getattr(item, "evidence_id", None)
+    })
+    decision_ids = sorted({
+        str(item.decision_id)
+        for item in decisions
+        if getattr(item, "decision_id", None)
+    })
+    canonical_ids = {
+        "schema_version": 1,
+        "snapshot_id": getattr(snap, "id", None) or getattr(snap, "snapshot_id", None),
+        "brief_id": brief_id,
+        "paper_state_revision": getattr(ps, "revision", None),
+        "decision_ids": decision_ids,
+        "evidence_ids": evidence_ids,
+        "generated_at": view["generated_at"],
+    }
+    # Additive identity: all renderers can now prove they read the same
+    # snapshot/state pair.  Narrative contents remain unchanged.
+    agent_brief = {**agent_brief, "brief_id": brief_id}
+    executive = {**executive, "brief_id": brief_id}
+    premium_brief = {**premium_brief, "brief_id": brief_id}
     return {
         "generated_at": view["generated_at"],
         "snapshot_id": getattr(snap, "id", None) or getattr(snap, "snapshot_id", None),
         "snapshot_generated_at": snap.generated_at.isoformat(),
         "paper_state_revision": getattr(ps, "revision", None),
+        "brief_id": brief_id,
+        "canonical_ids": canonical_ids,
         "mode": provenance,
         "engine": engine,
         "prices": prices,
         "headlines": headlines,
         "news_consensus": news_consensus,
         "decision_matrix": view,
-        "paper_state": {
-            "revision": ps.revision,
-            "open_positions": [
-                {
-                    "id": position.id,
-                    "symbol": position.symbol,
-                    "side": position.side,
-                    "timeframe": position.timeframe,
-                    "size_usd": position.size_usd,
-                    "unrealized_pnl_usd": round(position.unrealized_pnl_usd, 2),
-                }
-                for position in ps.open_positions
-            ],
-        },
+        "paper_state": canonical_paper_state,
+        "trade_tickets": canonical_tickets,
+        "agent_matrix": canonical_agent_matrix,
         "agent_brief": agent_brief,
         "executive": executive,
         "decision_trace": decision_trace_view(view, snap),
@@ -365,3 +436,16 @@ def get_cockpit_brief() -> dict:
     with _BRIEF_CACHE_LOCK:
         _BRIEF_CACHE = (time.monotonic(), result)
     return result
+
+
+@router.get("/cockpit/state")
+def get_cockpit_state() -> dict:
+    """Canonical cockpit read model.
+
+    ``/cockpit/brief`` remains as a backwards-compatible alias.  New clients
+    use this route so Brain, Heart, Soul and Conscious can consume one
+    snapshot/decision/brief envelope instead of merging independent polls.
+    The route is read-only and intentionally shares the exact cache and
+    builder; it cannot create a second decision path.
+    """
+    return get_cockpit_brief()

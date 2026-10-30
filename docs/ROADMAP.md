@@ -9,6 +9,13 @@ Tek kural: **sistemin çalışması bozulmaz.** Her PR tek tema; silme PR'ları 
 replay'de bayt-aynı olmak zorunda; mantık düzeltmeleri farkı PR açıklamasında
 listeler. Temizlik boyunca yeni özellik, yeni flag, yeni veri kaynağı eklenmez.
 
+### Güncel owner override — gölge runtime kapalı
+
+Yeni shadow/challenger/TF yarış yazıcıları çalıştırılmaz; mevcut artifact'lar
+yalnızca denetim ve geri dönüş için tutulur. Aktif karar yolu `decide_matrix →
+RiskGate → paper lifecycle` zinciridir. Bu override canlı broker eklemez ve
+`PAPER_SAFE / NO_EXECUTION` kurallarını değiştirmez.
+
 | Faz | İçerik | Durum |
 | --- | --- | --- |
 | 0 | Golden replay, sözleşme ratchet'i, CI drift + tsc, sabit `--basetemp` | Hazır |

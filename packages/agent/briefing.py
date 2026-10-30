@@ -16,6 +16,7 @@ from packages.agent.localization import localize_headline, localize_text
 from packages.data.ingestion.pipeline import get_cached_snapshot
 from packages.data.registry import assets as asset_registry
 from packages.decision import paper_policy
+from packages.decision.cockpit import finalize_matrix_view
 from packages.decision.engine import decide_matrix, matrix_view
 from packages.learning import event_outcomes
 from packages.notifications import list_recent as list_notifications
@@ -116,6 +117,7 @@ def _safe_cells(snap, paper_state_obj=None):
             daily_pnl_usd=ps.daily_pnl_usd,
             open_position_count=len(ps.open_positions),
             daily_anchor_date=ps.daily_anchor_date,
+            mtm_equity_usd=ps.mtm_equity_usd,
         )
         symbols = asset_registry.trade_symbols()
         regime, risk, decisions = decide_matrix(
@@ -126,6 +128,7 @@ def _safe_cells(snap, paper_state_obj=None):
             paper_exploration=paper_policy.enabled(),
         )
         view = matrix_view(regime, risk, decisions, snap, symbols)
+        view = finalize_matrix_view(view, snap, ps)
         return view.get("cells") or []
     except Exception:
         return []
@@ -153,8 +156,8 @@ def _market_headlines(snap, cells) -> list[Headline]:
         ))
 
     actionable = _actionable_cells(cells)
-    top = max(actionable or cells, key=lambda c: c.get("score") or 0)
-    score = top.get("score") or 0
+    top = max(actionable or cells, key=_directional_strength)
+    score = _directional_strength(top)
     sym = top.get("symbol", "?")
     tf = top.get("timeframe", "?")
     thr = SCORE_DIRECTIONAL
@@ -574,6 +577,12 @@ def _directional_strength(cell: dict) -> float:
     compared the raw score to the bullish threshold, so a valid short and its
     chat/ticket surfaces described different states.
     """
+    canonical = cell.get("directional_strength")
+    if canonical is not None:
+        try:
+            return max(0.0, min(100.0, float(canonical)))
+        except (TypeError, ValueError):
+            pass
     try:
         score = max(0.0, min(100.0, float(cell.get("score") or 0.0)))
     except (TypeError, ValueError):
@@ -877,10 +886,27 @@ def _executive(
         elif st == "degraded":
             deg.append(name)
 
-    # Score eşiğini aşan her hücre işlem sinyali değildir. Önce final kararı
-    # gerçekten girişe açık hücreyi seç; yoksa en yüksek skoru yalnızca aday
-    # olarak anlat. Böylece concentration/EV/entry-quality blokları gizlenmez.
+    # Score eşiğini aşan her hücre işlem sinyali değildir. Decision matrix'in
+    # ardından tick worker'ın uyguladığı haber-teknik kapısı da aynı read modelde
+    # görünür olmalı; aksi halde brief sinyal derken defter boş kalır.
+    from packages.decision.cockpit import _auto_open_readiness
+
+    auto_open = _auto_open_readiness(cells, snap, ps)
     actionable = _actionable_cells(cells)
+    if auto_open["enabled"] and auto_open["available"]:
+        ready_keys = {
+            (row["symbol"], row["timeframe"], row["side"])
+            for row in auto_open["ready"]
+        }
+        actionable = [
+            cell
+            for cell in actionable
+            if (
+                cell.get("symbol"),
+                cell.get("timeframe"),
+                "long" if cell.get("action") == "open_long" else "short",
+            ) in ready_keys
+        ]
     top_actionable = max(actionable, key=_directional_strength) if actionable else None
     top = top_actionable or (max(cells, key=_directional_strength) if cells else None)
     top_score = _directional_strength(top) if top else 0.0
@@ -992,6 +1018,26 @@ def _executive(
             f"kör noktası var. Şu an {market_clause}. {_sentence_start(regime_clause)}; {pos_clause}."
         )
         recommendation = "Veri kaynakları düzelene kadar yeni pozisyonlara temkinli yaklaşmak doğru olur."
+    elif (
+        auto_open["enabled"]
+        and auto_open["available"]
+        and auto_open["blocked_count"]
+        and not top_actionable
+        and _actionable_cells(cells)
+    ):
+        stance, label_, tone = "watching", "HABER-TEKNİK TEYİT BEKLENİYOR", "info"
+        headline = f"Sinyal var ama işlem açılmadı — {market_clause}."
+        narrative = (
+            f"{_sentence_start(regime_clause)}, {risk_clause}; {pos_clause}. "
+            "Karar matrisi teknik olarak aday gösterdi, fakat otomatik kâğıt açılışının "
+            "son kapısı olan aynı varlık, zaman dilimi ve yönde canlı ARMED haber-teknik "
+            "kurulumu bulunmadı. Bu yüzden sinyal yalnızca izlemeye alındı. "
+            f"{_sentence_start(event_clause)}."
+        )
+        recommendation = (
+            "Haber yönü ile teknik teyit aynı kuruluma bağlandığında kâğıt pozisyonu "
+            "otomatik olarak yeniden değerlendirilir; mevcut durumda emir açılmadı."
+        )
     elif gap <= 0 and top_actionable:
         stance, label_, tone = "signal", "SİNYAL VAR", "ok"
         headline = f"İşlem sinyali oluştu — {market_clause}."

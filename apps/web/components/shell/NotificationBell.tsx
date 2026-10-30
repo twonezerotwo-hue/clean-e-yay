@@ -10,6 +10,8 @@ import {
   useAckNotification,
   useChat,
   useNotifications,
+  usePaperTradingState,
+  useTradeTickets,
 } from "@/lib/queries/hooks";
 import type { ChatResponse, Notification, NotificationPriority } from "@/types/generated/api";
 import { normalizeVoiceText } from "@/lib/voiceText";
@@ -101,11 +103,13 @@ function NotifRow({
   onAck,
   onAsk,
   onSpeak,
+  ticketStatus,
 }: {
   n: Notification;
   onAck: (id: string) => void;
   onAsk: (n: Notification) => void;
   onSpeak: (n: Notification) => void;
+  ticketStatus?: string;
 }) {
   const cls = priorityColor(n.priority);
   return (
@@ -114,6 +118,11 @@ function NotifRow({
         <div className="truncate text-xs font-medium text-white/85">{n.title}</div>
         <div className="shrink-0 font-mono text-[10px] text-white/40">{relTime(n.ts)}</div>
       </div>
+      {ticketStatus ? (
+        <div className="mb-1 text-[9px] font-mono uppercase tracking-wider text-amber-200/65">
+          {ticketStatus}
+        </div>
+      ) : null}
       <div className="text-[11px] leading-snug text-white/60">{n.body_short}</div>
       <div className="mt-2 flex flex-wrap gap-1.5">
         {!n.ack ? (
@@ -185,6 +194,8 @@ function ChatBubble({ item }: { item: AssistantMessage }) {
 
 export function NotificationBell() {
   const { data } = useNotifications();
+  const { data: ticketData } = useTradeTickets();
+  const { data: paperState } = usePaperTradingState();
   const chat = useChat();
   const ackMutation = useAckNotification();
   const ackAllMutation = useAckAllNotifications();
@@ -219,6 +230,19 @@ export function NotificationBell() {
   const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
 
   const items: Notification[] = data?.notifications ?? [];
+  const activeTicketIds = useMemo(
+    () => new Set((ticketData?.tickets ?? []).filter((ticket) => ticket.status === "active").map((ticket) => ticket.id)),
+    [ticketData?.tickets],
+  );
+  const openPositionKeys = useMemo(
+    () =>
+      new Set(
+        (paperState?.open_positions ?? []).map(
+          (position) => `${position.symbol}|${position.timeframe ?? ""}|${position.side}`,
+        ),
+      ),
+    [paperState?.open_positions],
+  );
   const unread = data?.unread_count ?? 0;
   const assistantBrief = useMemo(() => latestNotificationBrief(items, unread), [items, unread]);
   const visibleItems = useMemo(
@@ -592,6 +616,27 @@ export function NotificationBell() {
                     onAck={(id) => ackMutation.mutate(id)}
                     onAsk={askAboutNotification}
                     onSpeak={speakNotification}
+                    ticketStatus={
+                      n.type === "ticket_created"
+                        ? n.ticket_id
+                          ? ticketData
+                            ? activeTicketIds.has(n.ticket_id)
+                              ? (() => {
+                                  const ticket = ticketData.tickets.find((item) => item.id === n.ticket_id);
+                                  const key = ticket
+                                    ? `${ticket.symbol}|${ticket.timeframe}|${ticket.side}`
+                                    : "";
+                                  return paperState
+                                    ? openPositionKeys.has(key)
+                                      ? "aktif ticket · pozisyon açık"
+                                      : "aktif ticket · pozisyon henüz yok"
+                                    : "aktif ticket · pozisyon durumu bekleniyor";
+                                })()
+                              : "artık aktif değil · pozisyon yok"
+                            : "ticket durumu bekleniyor"
+                          : "geçmiş kayıt · ticket bağı yok"
+                        : undefined
+                    }
                   />
                 ))
               )}

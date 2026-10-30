@@ -27,6 +27,7 @@ def _headline_view(headline) -> dict:
         "ts": headline.ts.isoformat(),
         "title": headline.title,
         "title_tr": headline.title_tr,
+        "article_summary": getattr(headline, "article_summary", None),
         "sentiment": headline.sentiment,
         "sentiment_v2": headline.sentiment_v2,
         "asset_impact": headline.asset_impact,

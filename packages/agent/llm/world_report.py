@@ -406,6 +406,10 @@ def _headline_rows(headlines: Iterable[Any] | None) -> list[dict[str, Any]]:
         }
         url = str(row.get("url") or "").strip()
         article = article_rows.get(url)
+        if not article and str(row.get("article_summary") or "").strip():
+            summary = str(row.get("article_summary") or "").strip()
+            if len(summary) >= 80:
+                article = {"status": "RSS_SUMMARY", "excerpt": summary[:600]}
         if article:
             output["article_excerpt"] = str(article.get("excerpt") or "")[:600]
             output["article_status"] = str(article.get("status") or "OK")

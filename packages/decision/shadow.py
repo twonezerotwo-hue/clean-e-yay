@@ -6,11 +6,12 @@ comparison. This is OBSERVATION ONLY: nothing here opens, sizes, or queues a tra
 and `observe()` never receives or mutates paper state.
 
 The single invariant that governs activation is `affects_paper(cfg)` —
-`enabled and affect_decision`. In Phase A (this module) it is wired nowhere that
-mutates paper; the worker only calls `observe()` + `record()`. Phase B will add an
-`activate()` path that, when `affect_decision` is true, routes shadow entries to
-the manual_ready queue ONLY (never an auto-open) — RiskGate stays the final
-authority, upper-TF only scales down, and `manual_ready_only` is honoured.
+`enabled and affect_decision`. In the current Phase A implementation it is
+still wired nowhere that mutates paper; the worker only calls `observe()` +
+`record()`. A future owner-approved Phase B may add an `activate()` path that,
+when this gate is true, routes shadow entries to the manual_ready queue ONLY
+(never an auto-open) — RiskGate stays the final authority, upper-TF only scales
+down, and `manual_ready_only` is honoured.
 
 Storage mirrors `learning/decision_log.py`: append-only JSONL, best-effort writes
 that never raise, corrupt lines skipped on read, `SHADOW_LOG_PATH` env override.
@@ -93,8 +94,8 @@ def load_config() -> ShadowConfig:
 def affects_paper(cfg: ShadowConfig) -> bool:
     """The ONE gate for activation: shadow may touch paper only when BOTH flags set.
 
-    Phase A keeps `affect_decision` false, so this is always false and the worker
-    runs observe-only. Phase B's `activate()` will guard on exactly this.
+    The worker currently has no mutation route even when this requested gate is
+    true; Phase B's future `activate()` must guard on exactly this value.
     """
     return cfg.enabled and cfg.affect_decision
 

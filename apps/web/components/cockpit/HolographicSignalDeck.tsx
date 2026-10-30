@@ -53,6 +53,23 @@ function round(n: number | null | undefined): number {
   return Math.round(n ?? 0);
 }
 
+/**
+ * Backend scores are directional (a bearish score is lower by design), while
+ * this deck displays signal strength.  Prefer the canonical normalized value
+ * and keep a safe fallback for older snapshots that do not carry it yet.
+ */
+function signalStrength(candidate: {
+  score?: number;
+  directional_strength?: number;
+  direction?: Direction | string;
+}): number {
+  if (candidate.directional_strength != null && Number.isFinite(candidate.directional_strength)) {
+    return candidate.directional_strength;
+  }
+  const raw = candidate.score ?? 50;
+  return candidate.direction === "bearish" ? 100 - raw : raw;
+}
+
 function scoreTone(value: number): string {
   if (value >= 75) return "text-emerald-300";
   if (value >= 55) return "text-teal-300";
@@ -80,6 +97,7 @@ type SignalCell = {
   timeframe?: Timeframe;
   direction?: Direction;
   score?: number;
+  directional_strength?: number;
   candidate_action?: string;
   final_action?: string;
   action?: TimeframeDecision["action"];
@@ -131,7 +149,7 @@ function pickDeckRows(
   }
 
   const bestByScore = (items: AgentBriefCandidate[]): AgentBriefCandidate =>
-    items.reduce((a, b) => ((b.score ?? 0) > (a.score ?? 0) ? b : a));
+    items.reduce((a, b) => (signalStrength(b) > signalStrength(a) ? b : a));
   const sortByTf = (items: AgentBriefCandidate[]): AgentBriefCandidate[] =>
     [...items].sort((a, b) => tfIndex(a.timeframe) - tfIndex(b.timeframe));
 
@@ -145,6 +163,7 @@ function pickDeckRows(
       timeframe: cell.timeframe,
       direction: cell.direction,
       score: cell.score,
+      directional_strength: (cell as TimeframeDecision & { directional_strength?: number }).directional_strength,
       candidate_action: cell.candidate_action ?? cell.action,
       final_action: cell.action,
       actionable: cell.actionable,
@@ -195,7 +214,7 @@ function pickDeckRows(
   });
   // Custom (kullanıcı-eklenen) assetler skoru düşük olsa da HER ZAMAN gösterilir;
   // geri kalan keşfedilen semboller skor sırasıyla kalan kapasiteyi doldurur.
-  const byScoreDesc = (a: DeckRow, b: DeckRow) => (b.best.score ?? 0) - (a.best.score ?? 0);
+  const byScoreDesc = (a: DeckRow, b: DeckRow) => signalStrength(b.best) - signalStrength(a.best);
   const customRows = remaining.filter((r) => customSymbols?.has(r.symbol)).sort(byScoreDesc);
   const otherRows = remaining.filter((r) => !customSymbols?.has(r.symbol)).sort(byScoreDesc);
   // Taban kapasite 6; PRIMARY + custom toplamı daha büyükse hepsini kapsar —
@@ -533,7 +552,7 @@ function DeckCard({
   removable?: boolean;
   onRemove?: () => void;
 }) {
-  const value = round(row.best.score);
+  const value = round(signalStrength(row.best));
   const status = statusBadge(row.best);
   const action = actionBadge(row.best);
   const direction = (row.best.direction ?? "neutral") as Direction;
@@ -757,7 +776,7 @@ function TfMatrix({ rows }: { rows: AgentBriefCandidate[] }) {
         </thead>
         <tbody>
           {sorted.map((r, i) => {
-            const v = round(r.score);
+            const v = round(signalStrength(r));
             const d = (r.direction ?? "neutral") as Direction;
             return (
               <tr key={`${r.timeframe ?? "?"}-${i}`} className="border-t border-white/5">
@@ -1299,7 +1318,7 @@ export function HolographicSignalDeck({ brief }: { brief: AgentBrief }) {
             {compactDeck && mobileCardBackOpen && activeRow ? (
               <MobileSignalCardBack
                 row={activeRow}
-                score={round(active?.score)}
+                score={round(active ? signalStrength(active) : undefined)}
                 tech={tech}
                 evidence={effectiveEvidence}
                 effectiveTf={effectiveTf}
@@ -1398,7 +1417,7 @@ export function HolographicSignalDeck({ brief }: { brief: AgentBrief }) {
                   {activeAction.label}
                 </span>
               </div>
-              <ScoreRing score={round(active?.score)} size={58} active />
+              <ScoreRing score={round(active ? signalStrength(active) : undefined)} size={58} active />
             </div>
 
             {/* Price */}

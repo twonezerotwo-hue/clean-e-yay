@@ -20,6 +20,7 @@ Kota: koşu başına `scan.per_run` aday, round-robin cursor — tik'e sıfır e
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 from collections.abc import Callable
@@ -208,7 +209,19 @@ def _analyze(
         "per_tf": per_tf,
         "verdict": "NO_SIGNAL",
         "reasons": [],
+        "evidence_id": hashlib.sha256(
+            f"discovery|{symbol}|{now.isoformat()}".encode()
+        ).hexdigest()[:20],
+        "market_data": {
+            "price_provider": "coingecko" if cand.get("kind") == "crypto" else "yfinance",
+            "price_verified": False,
+            "liquidity_verified": None,
+            "technical_bars_verified": 0,
+        },
     }
+    result["market_data"]["technical_bars_verified"] = sum(
+        int(row.get("bars") or 0) for row in per_tf.values() if row.get("status") != "NO_DATA"
+    )
 
     bullish = [
         tf for tf in TFS
@@ -265,6 +278,13 @@ def _analyze(
         "expected_value": round(ev, 4),
         "p_source": "empirical" if (emp is not None and empirical_pwin.enabled()) else "calibrated",
         "bullish_tfs": bullish,
+    })
+    result["market_data"].update({
+        "price_verified": True,
+        # Discovery does not yet have a canonical liquidity snapshot for every
+        # new asset.  Keep this explicitly false rather than inferring it from
+        # a quote; promotion will therefore remain owner-gated.
+        "liquidity_verified": bool(cand.get("liquidity_verified", False)),
     })
     return result
 

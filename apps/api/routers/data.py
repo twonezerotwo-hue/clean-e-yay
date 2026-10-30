@@ -10,6 +10,7 @@ from fastapi import APIRouter
 
 from packages.data.ingestion.pipeline import DEFAULT_SYMBOLS, get_cached_snapshot
 from packages.data.provenance import data_provenance
+from packages.data.providers import macro as macro_provider
 from packages.paper import state as paper_state
 
 router = APIRouter(tags=["data"])
@@ -62,6 +63,33 @@ def get_snapshot() -> dict:
         },
         "provider_status": snap.provider_status,
         "warnings": list(snap.warnings),
+        # Official published macro observations are additive shadow evidence.
+        # They are separate from upcoming calendar risk events so a recent
+        # release cannot silently become a future event gate.
+        "macro_releases": [
+            {
+                "id": item.id,
+                "title": item.title,
+                "ts": item.ts.isoformat(),
+                "importance": item.importance,
+                "region": item.region,
+                "category": item.category,
+                "source": item.source,
+                "verified": item.verified,
+                "actual": item.actual,
+                "expected": item.expected,
+                "previous": item.previous,
+                "revised": item.revised,
+                "unit": item.unit,
+                "evidence": list(item.evidence),
+            }
+            for item in (snap.macro_releases or [])
+        ],
+        # Configured-versus-observed inventory keeps the dashboard honest:
+        # coverage=1.0 does not mean every macro family has a live release.
+        "macro_inventory": macro_provider.coverage(
+            list(snap.macro_releases or []), list(snap.catalysts or [])
+        ),
         # v2.7 D2 — kripto türev zekâsı (funding/OI/squeeze proxy). symbol → snapshot.
         # squeeze_proxy GERÇEK liquidation değildir (is_proxy=true).
         "derivatives": {

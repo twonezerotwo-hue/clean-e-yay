@@ -162,6 +162,21 @@ def _one_hour_analysis(performance: Mapping[str, Any], entry_report: Mapping[str
     }
 
 
+def _timeframe_canary(
+    performance: Mapping[str, Any], exit_report: Mapping[str, Any]
+) -> dict[str, Any]:
+    """Expose the 1h/4h entry+stop shadow gates as one stable artifact.
+
+    This is deliberately report-only: it does not alter the live timeframe
+    weights, RiskGate, or paper opener.  Keeping both horizons next to each
+    other prevents a single aggregate score from hiding a weak timeframe.
+    """
+    return {
+        timeframe: _timing_gate(timeframe, performance, exit_report)
+        for timeframe in ("1h", "4h")
+    }
+
+
 def _news_gate(idea: Mapping[str, Any], forecasts: Mapping[str, Any]) -> dict[str, Any]:
     news = dict(idea.get("news") or {})
     if not news:
@@ -199,17 +214,23 @@ def _source_gate(idea: Mapping[str, Any]) -> dict[str, Any]:
     source = dict(idea.get("source") or {})
     technical = dict(idea.get("technical") or {})
     provider = source.get("provider")
-    price = _num(source.get("discovery_price"))
+    # A scanner observation may be hours old (or absent).  Only the current
+    # quote from the canonical provider can satisfy the paper pre-check.
+    price = _num(source.get("current_price"))
     reasons: list[str] = []
     if not source.get("mapped_for_paper") or not provider:
         reasons.append("paper_price_provider_unmapped")
     if price is None or price <= 0:
         reasons.append("current_discovery_price_missing")
+    if not bool(source.get("current_price_verified")):
+        reasons.append("current_discovery_price_unverified")
     return {
         "pass": not reasons,
         "status": "READY" if not reasons else "WAITING_EVIDENCE",
         "evidence": {"provider": provider, "provider_id": source.get("provider_id"), "price": price,
                      "mapped_for_paper": bool(source.get("mapped_for_paper")),
+                     "current_price_verified": bool(source.get("current_price_verified")),
+                     "discovery_price": _num(source.get("discovery_price")),
                      "technical_entry": _num(technical.get("entry"))},
         "blocked_by": reasons,
         "scope": "price_source_required",
@@ -234,6 +255,8 @@ def _technical_gate(idea: Mapping[str, Any]) -> dict[str, Any]:
         reasons.append("technical_expected_value_negative_or_missing")
     if not ta.get("bias"):
         reasons.append("technical_confirmation_missing")
+    if not list(ta.get("confirmations") or []):
+        reasons.append("technical_indicator_confirmation_missing")
     return {
         "pass": not reasons,
         "status": "READY" if not reasons else "WAITING_EVIDENCE",
@@ -381,8 +404,10 @@ def build_report(
             "status": "SHADOW_ONLY",
             "entry_exit_quality": dict(entry_report),
             "exit_backtest": {"per_timeframe": exit_report.get("per_tf_best") or {},
-                               "best_config": (exit_report.get("best_configs") or [None])[0]},
+                               "best_config": (exit_report.get("best_configs") or [None])[0],
+                               "activation": "SHADOW_ONLY"},
         },
+        "timeframe_canary": _timeframe_canary(performance, exit_report),
         "one_hour_analysis": _one_hour_analysis(performance, entry_report),
         "news_consensus": _news_consensus(forecasts),
         "asset_readiness": {

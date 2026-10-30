@@ -34,7 +34,9 @@ def _parse(value: Any) -> datetime | None:
 
 def _auto(o: object) -> bool:
     reason = str(getattr(o, "open_reason", "") or "").lower()
-    return not reason.startswith(("owner", "manual")) and not bool(getattr(o, "exploration", False))
+    if reason.startswith(("owner", "manual")) or bool(getattr(o, "exploration", False)):
+        return False
+    return True
 
 
 def _metrics(outcomes: list[object]) -> dict[str, Any]:
@@ -48,7 +50,7 @@ def _metrics(outcomes: list[object]) -> dict[str, Any]:
         equity += value
         peak = max(peak, equity)
         max_dd = max(max_dd, peak - equity)
-    r_values = [float(getattr(o, "r_multiple")) for o in closed if getattr(o, "r_multiple", None) is not None]
+    r_values = [float(o.r_multiple) for o in closed if getattr(o, "r_multiple", None) is not None]
     return {
         "closed": len(closed),
         "open_or_unresolved": len(outcomes) - len(closed),
@@ -76,11 +78,15 @@ def run(*, now: datetime | None = None, outcomes: list[object] | None = None) ->
     end = min(now, target)
     all_outcomes = outcomes if outcomes is not None else outcomes_from_state()
     scoped = []
+    excluded_incomplete = 0
     for o in all_outcomes:
         if not _auto(o):
             continue
         opened = _parse(getattr(o, "opened_at", None))
         if opened is None or opened < started or opened > end:
+            continue
+        if getattr(o, "data_verified", None) is False or getattr(o, "provenance_complete", None) is False:
+            excluded_incomplete += 1
             continue
         scoped.append(o)
     metrics = _metrics(scoped)
@@ -101,7 +107,8 @@ def run(*, now: datetime | None = None, outcomes: list[object] | None = None) ->
         "target_end": target.isoformat(),
         "elapsed_days": max(0.0, min(90.0, (now - started).total_seconds() / 86_400)),
         "remaining_days": max(0.0, (target - now).total_seconds() / 86_400),
-        "scope": "automatic paper outcomes only; owner/manual and exploration excluded",
+        "scope": "clean automatic paper outcomes only; owner/manual, exploration and incomplete provenance excluded",
+        "excluded_incomplete": excluded_incomplete,
         "metrics": metrics,
         "minimum_closed_required": MIN_CLOSED,
         "promotion_ready": promotion_ready,

@@ -25,13 +25,13 @@ from packages.learning import (
     council_scorecard,
     dataset_health,
     edge_report,
-    external_edge,
-    forward_test,
     empirical_pwin,
     entry_exit_quality,
     evidence_bus,
     exit_backtest,
     exit_forensics,
+    external_edge,
+    forward_test,
     guard_safety,
     historical_edge,
     missed_opportunity,
@@ -65,6 +65,16 @@ router = APIRouter(tags=["learning"])
 @router.get("/learning/summary")
 def get_learning_summary() -> dict:
     return build_summary()
+
+
+@router.get("/learning/performance-readiness")
+def get_performance_readiness() -> dict:
+    """Observe-only 90+ readiness score for the clean learning cohort.
+
+    This endpoint reports evidence and blockers; it never changes a threshold,
+    weight, RiskGate state, paper position, or broker execution mode.
+    """
+    return build_summary()["performance_readiness"]
 
 
 @router.get("/learning/calibration")

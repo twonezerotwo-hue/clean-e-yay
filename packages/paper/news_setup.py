@@ -17,6 +17,7 @@ from typing import Any
 
 from packages.data.registry import assets as asset_registry
 from packages.data.registry.loader import load_thresholds
+from packages.paper.signal_identity import build_evidence_id
 from packages.paper.state import NewsPreparedSetup, PaperState
 
 _RISK_BLOCKS = {"KILL_SWITCH", "RISK_REDUCE", "NO_POSITION_INCREASE"}
@@ -47,6 +48,27 @@ def view(setup: NewsPreparedSetup, now: datetime | None = None) -> dict[str, Any
         data["status"] = "EXPIRED"
         data["last_blocker"] = "news_setup_expired"
     return data
+
+
+def mark_activated(state: PaperState, setup_id: str | None, *, now: datetime | None = None) -> bool:
+    """Mark the exact setup used by a newly opened paper position.
+
+    The worker now prepares and opens inside one transaction.  Keeping this
+    tiny transition explicit prevents a just-opened position from appearing
+    as ``ARMED`` until the next tick, while leaving all opening authority in
+    ``attempt_open``.
+    """
+    if not setup_id:
+        return False
+    stamp = _iso(now or datetime.now(UTC))
+    for setup in state.news_prepared_setups:
+        if str(getattr(setup, "id", "")) != str(setup_id):
+            continue
+        setup.status = "ACTIVATED"
+        setup.last_blocker = None
+        setup.last_checked_at = stamp
+        return True
+    return False
 
 
 def _iso(value: datetime) -> str:
@@ -88,6 +110,8 @@ def match_confluence(
     side: str,
     price: float | None,
     data_verified: bool,
+    decision_id: str | None = None,
+    evidence_id: str | None = None,
     now: datetime | None = None,
 ) -> dict[str, Any] | None:
     """Return the newest live setup that agrees with the technical decision.
@@ -108,6 +132,13 @@ def match_confluence(
         if setup.status != "ARMED":
             continue
         if setup.symbol != symbol or setup.timeframe != timeframe or setup.side != required_side:
+            continue
+        # Haber kurulumu aynı teknik kararın kanıtı olmalı. Eski çağrılar
+        # decision_id vermediğinde geriye dönük okunabilirlik korunur; yeni
+        # karar/ticket yolları kimlik eşleşmesini zorunlu tutar.
+        if decision_id is not None and str(getattr(setup, "decision_id", "") or "") != str(decision_id):
+            continue
+        if evidence_id is not None and str(getattr(setup, "evidence_id", "") or "") != str(evidence_id):
             continue
         deadline = _parse_time(setup.valid_until)
         if deadline is not None and deadline <= now:
@@ -130,7 +161,9 @@ def match_confluence(
     setup = candidates[0]
     return {
         "setup_id": setup.id,
+        "decision_id": getattr(setup, "decision_id", None),
         "event_id": setup.event_id,
+        "evidence_id": getattr(setup, "evidence_id", None),
         "news_title": setup.news_title,
         "confluence_state": setup.confluence_state,
         "technical_confirmation": setup.technical_confirmation,
@@ -219,6 +252,31 @@ def _event_context_for_symbol(
             return (
                 event_id, event_type, title[:240], _parse_time(event.get("valid_until")), evidence[:8]
             )
+    # Dünya grafiği, başlıkta sembol adı geçmese bile olayı bu varlığa
+    # bağlayabilir (ör. boğaz/enerji şoku → petrol). Yalnız tek bir doğrulanmış
+    # grafik olayı varsa kullan; birden fazla olayda yanlış haber bağlamamak
+    # için kurulum üretme.
+    graph = world_state.get("graph_context") or {}
+    affected = {str(item).upper() for item in (graph.get("affected_assets") or ())}
+    matched_ids = {
+        str(row.get("event_id") or "")
+        for row in (graph.get("event_matches") or ())
+        if isinstance(row, Mapping) and str(row.get("status") or "").upper() == "MATCHED"
+    }
+    graph_events = [
+        event for event in events
+        if str(event.get("event_id") or event.get("id") or "") in matched_ids
+    ]
+    if symbol.upper() in affected and len(graph_events) == 1:
+        event = graph_events[0]
+        evidence = [str(item) for item in (event.get("evidence") or ()) if item]
+        event_id = str(event.get("event_id") or event.get("id") or "world-event")
+        event_type = str(event.get("event_type") or "WORLD_EVENT")
+        title = next((e.strip() for e in evidence if e.strip() and not _EVIDENCE_TAG.match(e)), "")
+        title = title or event_type.replace("_", " ").title()
+        return (
+            event_id, event_type, title[:240], _parse_time(event.get("valid_until")), evidence[:8]
+        )
     if len(events) == 1:
         # There is no competing event to mis-bind. The causal consensus and
         # its confidence still gate setup creation; this fallback only keeps a
@@ -350,6 +408,20 @@ def sync(
         if price is None or price <= 0:
             continue
         forecast = forecasts.get((symbol, "1d")) or forecasts.get((symbol, "1w")) or {}
+        decision = decisions_by_key.get((symbol, timeframe))
+        decision_id = None
+        if decision is not None and str(getattr(decision, "action", "")) in {"open_long", "open_short"}:
+            decision_side = "long" if getattr(decision, "action", "") == "open_long" else "short"
+            if decision_side == side:
+                decision_id = getattr(decision, "decision_id", None)
+        evidence_id = build_evidence_id(
+            event_id=event_id,
+            source_id=f"world:{event_type}",
+            asset=symbol,
+            direction="BULLISH" if side == "long" else "BEARISH",
+            timeframe=timeframe,
+            decision_id=decision_id,
+        )
         key = (symbol, timeframe, side)
         setup = existing.get(key)
         if setup is not None and (
@@ -377,6 +449,8 @@ def sync(
                 created_at=_iso(now),
                 valid_until=_iso(valid_until),
                 event_id=event_id,
+                evidence_id=evidence_id,
+                decision_id=decision_id,
                 world_direction="BULLISH" if side == "long" else "BEARISH",
                 world_score=world_score,
                 confidence=confidence,
@@ -394,6 +468,7 @@ def sync(
             counts["created"] += 1
         else:
             setup.event_id = event_id
+            setup.evidence_id = evidence_id
             setup.valid_until = _iso(valid_until)
             setup.news_title = title
             setup.current_price = price
@@ -403,10 +478,10 @@ def sync(
             setup.confluence_state = str(row.get("confluence_state") or setup.confluence_state or "UNKNOWN")
             setup.last_checked_at = _iso(now)
             setup.snapshot_id = snapshot_id
+            setup.decision_id = decision_id
             counts["updated"] += 1
 
         setup.last_checked_at = _iso(now)
-        decision = decisions_by_key.get((symbol, timeframe))
         if key in open_keys:
             if setup.status != "ACTIVATED":
                 setup.status = "ACTIVATED"
@@ -435,4 +510,11 @@ def sync(
     return counts
 
 
-__all__ = ["is_live", "match_confluence", "require_confluence_for_auto_open", "sync", "view"]
+__all__ = [
+    "is_live",
+    "mark_activated",
+    "match_confluence",
+    "require_confluence_for_auto_open",
+    "sync",
+    "view",
+]

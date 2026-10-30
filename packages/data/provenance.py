@@ -14,6 +14,28 @@ from packages.data.ingestion.pipeline import MarketSnapshot
 from packages.data.providers import price as price_provider
 
 
+def _core_ohlcv_degraded(name: str, meta: dict) -> bool:
+    """Return whether an OHLCV failure touches the configured decision universe.
+
+    Discovery/custom symbols are deliberately allowed to remain degraded in
+    their own technical cell without relabelling every verified core asset as
+    simulation.  A provider that does not expose symbol scope keeps the old
+    conservative behaviour.
+    """
+    if not name.startswith("ohlcv_"):
+        return True
+    symbols = meta.get("degraded_symbols")
+    if not isinstance(symbols, (list, tuple, set)) or not symbols:
+        return True
+    try:
+        from packages.data.registry.assets import configured_trade_symbols
+
+        core = {str(symbol).upper() for symbol in configured_trade_symbols()}
+    except (OSError, ValueError, TypeError):
+        return True
+    return not {str(symbol).upper() for symbol in symbols}.isdisjoint(core)
+
+
 def _resolve_label(snap: MarketSnapshot, mock_warning: bool, test_mock: bool) -> tuple[str, str]:
     if mock_warning:
         return (
@@ -39,6 +61,27 @@ def _resolve_label(snap: MarketSnapshot, mock_warning: bool, test_mock: bool) ->
         return (
             "SIMULATION",
             "Doğrulanmamış kaynak var; karar live sayılmaz.",
+        )
+    # A single stale technical cell is already a per-cell final-gate blocker;
+    # do not relabel the whole market as simulation for it.  Provider fallback
+    # is promoted here only when the provider explicitly recorded stale data.
+    degraded_providers = sorted(
+        name
+        for name, meta in (snap.provider_status or {}).items()
+        if isinstance(meta, dict)
+        and str(meta.get("status") or "").lower() in {"degraded", "down"}
+        and _core_ohlcv_degraded(name, meta)
+        and (
+            meta.get("last_fallback_at")
+            or meta.get("last_error_type") in {"stale_cache", "stale_cache_expired"}
+        )
+    )
+    if degraded_providers:
+        return (
+            "SIMULATION",
+            "Bazı teknik/veri hücreleri taze ve doğrulanmış değil ("
+            + "sağlayıcı: " + ", ".join(degraded_providers[:3])
+            + "); karar live sayılmaz.",
         )
     if snap.quality.status == "DEGRADED":
         return (

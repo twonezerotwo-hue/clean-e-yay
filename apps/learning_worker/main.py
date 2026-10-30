@@ -22,6 +22,8 @@ from packages.ops.env import load_repo_dotenv
 
 load_repo_dotenv(skip_pytest=True)
 
+# Learning modules read provider/threshold credentials during import.
+# ruff: noqa: E402
 from packages import discovery
 from packages.discovery import sector_rotation
 from packages.learning import (
@@ -556,13 +558,12 @@ def run_once() -> dict:
         news_forecast_status = f"ERROR:{type(exc).__name__}"
         errors.append(f"news_forecast:{type(exc).__name__}")
 
-    # Haber → karar GÖLGE girdisi (owner kararı 2026-10-05, üçüncü tur; aynı kapı): canlı
-    # aday işlemler × haber öngörüsü teyit/çelişki → fiyatla çözülür. ETKİSİZ: karar,
-    # boyut, RiskGate, paper değişmez; bağlanması owner onayı ister (CP5).
+    # Haber → karar geçmiş karşılaştırması. Runtime shadow yazımı kapalıdır;
+    # eski dosyalar silinmez, yalnızca audit için korunur.
     news_decision_shadow_status = "DISABLED"
     try:
-        if discovery.scan_enabled():
-            from packages.discovery import news_decision_shadow
+        from packages.discovery import news_decision_shadow
+        if discovery.scan_enabled() and news_decision_shadow.config().get("enabled", False):
             nds = news_decision_shadow.run()
             news_decision_shadow_status = str(nds.get("status", "UNKNOWN"))
             log.info("news_decision_shadow: created=%s resolved=%s rows=%s",
@@ -994,21 +995,22 @@ def run_once() -> dict:
         forward_test_status = f"ERROR:{type(exc).__name__}"
         errors.append(f"forward_test_90d:{type(exc).__name__}")
 
-    # Birleşik gölge kanıtı (ucuz, salt-gözlem). Aday giriş ile final kapı
-    # sonucunu, asset terfi karnesini, haber teyidini, teknik yarışı ve exit
-    # canary'yi tek artifact'ta toplar. Hiçbir kararı/ağırlığı/paper state'i
-    # değiştirmez; worker'ın ağır backtest adımlarını yeniden çalıştırmaz.
-    shadow_routing_status = "ERROR"
+    # Gölge yazıcıları kullanıcı kararıyla kapalıdır. Tarihsel artifact'lar
+    # silinmez; yeni dosya/öneri üretilmez ve öğrenme hesabına katılmaz.
+    shadow_routing_status = "DISABLED"
     try:
-        from packages.learning import shadow_routing
-        shadow_route_result = shadow_routing.run()
-        shadow_routing_status = str(shadow_route_result.get("status", "UNKNOWN"))
-        if shadow_routing_status == "OK":
-            log.info(
-                "shadow_routing: candidates=%s candidate_cells=%s",
-                shadow_route_result.get("candidates"),
-                shadow_route_result.get("candidate_cells"),
-            )
+        from packages.data.registry.loader import load_thresholds
+        shadow_cfg = load_thresholds().get("shadow") or {}
+        if bool(shadow_cfg.get("enabled", False)):
+            from packages.learning import shadow_routing
+            shadow_route_result = shadow_routing.run()
+            shadow_routing_status = str(shadow_route_result.get("status", "UNKNOWN"))
+            if shadow_routing_status == "OK":
+                log.info(
+                    "shadow_routing: candidates=%s candidate_cells=%s",
+                    shadow_route_result.get("candidates"),
+                    shadow_route_result.get("candidate_cells"),
+                )
     except Exception as exc:  # defensive — worker patlamamalı
         shadow_routing_status = f"ERROR:{type(exc).__name__}"
         errors.append(f"shadow_routing:{type(exc).__name__}")

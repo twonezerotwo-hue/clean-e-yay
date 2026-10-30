@@ -197,6 +197,7 @@ def get_agent_matrix() -> dict:
             daily_pnl_usd=ps.daily_pnl_usd,
             open_position_count=len(ps.open_positions),
             daily_anchor_date=ps.daily_anchor_date,
+            mtm_equity_usd=ps.mtm_equity_usd,
         )
     )
     # Trust-gated live tf_weights: None when calibration hasn't validated yet
@@ -208,4 +209,16 @@ def get_agent_matrix() -> dict:
     views = agent_pipeline.build_agent_matrix(
         asset_registry.trade_symbols(), risk_action=risk.action, tf_weights=tf_weights,
     )
-    return agent_pipeline.matrix_viewmodel(views, risk_action=risk.action)
+    result = agent_pipeline.matrix_viewmodel(views, risk_action=risk.action)
+    # This pipeline is intentionally observe-only. Keep its provenance beside
+    # the rows so the UI cannot present a shadow action as a live paper intent.
+    result.update(
+        {
+            "source": "agent_shadow",
+            "execution_authority": "observe_only",
+            "snapshot_id": snap.snapshot_id,
+            "snapshot_generated_at": snap.generated_at.isoformat(),
+            "paper_state_revision": ps.revision,
+        }
+    )
+    return result

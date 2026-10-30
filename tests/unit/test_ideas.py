@@ -82,6 +82,22 @@ def test_candidate_set_and_scores(board):
     assert copper["components"]["news"] == 13.8 and copper["technical"]["verdict"] == "NO_DATA"  # 55/100*25, 1 ondalık
 
 
+def test_price_provenance_uses_verified_current_quote_not_scanner_value():
+    from types import SimpleNamespace
+
+    info = {"provider_id": "XLE", "price": 1.0, "last_seen": "old"}
+    quote = SimpleNamespace(price=68.45, status="OK", verified=True,
+                            ts=datetime(2026, 10, 29, 12, 0, tzinfo=UTC))
+    source = ideas._price_provenance("XLE", info, quote)
+    assert source["mapped_for_paper"] is True
+    assert source["current_price"] == 68.45
+    assert source["discovery_price"] == 1.0
+
+    stale_only = ideas._price_provenance("XLE", info)
+    assert stale_only["mapped_for_paper"] is False
+    assert stale_only["current_price"] is None
+
+
 @pytest.mark.parametrize("text,verdict", [
     (GOOD, "STRONG"),
     ("**Hüküm:** izle\nTez: belirsiz\nRiskler:\n- oynak", "WATCH"),

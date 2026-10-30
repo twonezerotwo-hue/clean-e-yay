@@ -3,7 +3,14 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { api, type ChartTimeframe, type UpdateRiskPlanRequest } from "@/lib/api/client";
-import type { ChatTurn } from "@/types/generated/api";
+import type {
+  AgentMatrix,
+  ChatTurn,
+  CockpitBrief,
+  DecisionMatrix,
+  PaperTradingState,
+  TradeTicketList,
+} from "@/types/generated/api";
 import { usePanelQueryPolicy } from "@/lib/panel-runtime";
 import { qk } from "./keys";
 
@@ -76,9 +83,10 @@ export const useAIReport = () => {
 export const usePaperTradingState = () => {
   const policy = usePanelQueryPolicy(15_000);
   return useQuery({
-    queryKey: qk.paperTradingState,
-    queryFn: api.paperTradingState,
-    staleTime: 10_000,
+    queryKey: qk.cockpitBrief,
+    queryFn: api.cockpitBrief,
+    select: (brief: CockpitBrief) => brief.paper_state as PaperTradingState,
+    staleTime: 15_000,
     ...policy,
   });
 };
@@ -740,8 +748,9 @@ export const useRiskCorrelation = () => {
 export const useDecisionMatrix = () => {
   const policy = usePanelQueryPolicy(30_000);
   return useQuery({
-    queryKey: qk.decisionMatrix,
-    queryFn: api.decisionMatrix,
+    queryKey: qk.cockpitBrief,
+    queryFn: api.cockpitBrief,
+    select: (brief: CockpitBrief) => brief.decision_matrix as DecisionMatrix,
     staleTime: 15_000,
     ...policy,
   });
@@ -750,8 +759,9 @@ export const useDecisionMatrix = () => {
 export const useAgentMatrix = () => {
   const policy = usePanelQueryPolicy(30_000);
   return useQuery({
-    queryKey: qk.agentMatrix,
-    queryFn: api.agentMatrix,
+    queryKey: qk.cockpitBrief,
+    queryFn: api.cockpitBrief,
+    select: (brief: CockpitBrief) => brief.agent_matrix as AgentMatrix,
     staleTime: 15_000,
     ...policy,
   });
@@ -866,9 +876,10 @@ export const useChat = () =>
 export const useTradeTickets = () => {
   const policy = usePanelQueryPolicy(15_000);
   return useQuery({
-    queryKey: qk.tradeTickets,
-    queryFn: api.tradeTickets,
-    staleTime: 10_000,
+    queryKey: qk.cockpitBrief,
+    queryFn: api.cockpitBrief,
+    select: (brief: CockpitBrief) => brief.trade_tickets as TradeTicketList,
+    staleTime: 15_000,
     ...policy,
   });
 };

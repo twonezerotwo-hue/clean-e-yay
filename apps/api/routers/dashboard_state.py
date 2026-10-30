@@ -82,6 +82,7 @@ def get_dashboard_state() -> dict:
             daily_pnl_usd=ps.daily_pnl_usd,
             open_position_count=len(ps.open_positions),
             daily_anchor_date=ps.daily_anchor_date,
+            mtm_equity_usd=ps.mtm_equity_usd,
         )
     )
     top_cons = build_consensus(DEFAULT_SYMBOLS[0], snap, regime)
@@ -183,6 +184,7 @@ def get_agent_quorum_matrix() -> dict:
             daily_pnl_usd=ps.daily_pnl_usd,
             open_position_count=len(ps.open_positions),
             daily_anchor_date=ps.daily_anchor_date,
+            mtm_equity_usd=ps.mtm_equity_usd,
         )
     )
     rows = []

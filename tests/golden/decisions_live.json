@@ -1,5 +1,5 @@
 {
- "dqs": 69.0,
+ "dqs": 60.0,
  "frozen_now": "2026-09-15T13:07:00+00:00",
  "scenarios": {
   "daily_loss_breach": {
@@ -192,6 +192,96 @@
      "candidate_action": "open_long",
      "confidence": 0.0,
      "confidence_source": "identity",
+     "consensus_score": 83.0,
+     "expected_value": null,
+     "fingerprint": "COPPER|v2|15m|NEUTRAL|bullish|S80|X|touche",
+     "raw_confidence": 0.66,
+     "reason": "Risk kapısı: RISK_REDUCE",
+     "risk_action": "RISK_REDUCE",
+     "size_multiplier": 0.0,
+     "symbol": "COPPER",
+     "timeframe": "15m"
+    },
+    {
+     "action": "hold",
+     "blocked_by": [
+      "risk_gate:RISK_REDUCE"
+     ],
+     "candidate_action": "open_long",
+     "confidence": 0.0,
+     "confidence_source": "identity",
+     "consensus_score": 80.2,
+     "expected_value": null,
+     "fingerprint": "COPPER|v2|1d|NEUTRAL|bullish|S80|X|touche",
+     "raw_confidence": 0.604,
+     "reason": "Risk kapısı: RISK_REDUCE",
+     "risk_action": "RISK_REDUCE",
+     "size_multiplier": 0.0,
+     "symbol": "COPPER",
+     "timeframe": "1d"
+    },
+    {
+     "action": "hold",
+     "blocked_by": [
+      "risk_gate:RISK_REDUCE"
+     ],
+     "candidate_action": "open_long",
+     "confidence": 0.0,
+     "confidence_source": "identity",
+     "consensus_score": 65.0,
+     "expected_value": null,
+     "fingerprint": "COPPER|v2|1h|NEUTRAL|bullish|S65|X|sentinel",
+     "raw_confidence": 0.3,
+     "reason": "Risk kapısı: RISK_REDUCE",
+     "risk_action": "RISK_REDUCE",
+     "size_multiplier": 0.0,
+     "symbol": "COPPER",
+     "timeframe": "1h"
+    },
+    {
+     "action": "hold",
+     "blocked_by": [
+      "risk_gate:RISK_REDUCE"
+     ],
+     "candidate_action": "open_long",
+     "confidence": 0.0,
+     "confidence_source": "identity",
+     "consensus_score": 70.5,
+     "expected_value": null,
+     "fingerprint": "COPPER|v2|1w|NEUTRAL|bullish|S65|X|touche",
+     "raw_confidence": 0.41,
+     "reason": "Risk kapısı: RISK_REDUCE",
+     "risk_action": "RISK_REDUCE",
+     "size_multiplier": 0.0,
+     "symbol": "COPPER",
+     "timeframe": "1w"
+    },
+    {
+     "action": "hold",
+     "blocked_by": [
+      "risk_gate:RISK_REDUCE"
+     ],
+     "candidate_action": "open_long",
+     "confidence": 0.0,
+     "confidence_source": "identity",
+     "consensus_score": 66.4,
+     "expected_value": null,
+     "fingerprint": "COPPER|v2|4h|NEUTRAL|bullish|S65|X|sentinel",
+     "raw_confidence": 0.328,
+     "reason": "Risk kapısı: RISK_REDUCE",
+     "risk_action": "RISK_REDUCE",
+     "size_multiplier": 0.0,
+     "symbol": "COPPER",
+     "timeframe": "4h"
+    },
+    {
+     "action": "hold",
+     "blocked_by": [
+      "risk_gate:RISK_REDUCE"
+     ],
+     "candidate_action": "open_long",
+     "confidence": 0.0,
+     "confidence_source": "identity",
      "consensus_score": 71.9,
      "expected_value": null,
      "fingerprint": "ETHUSD|v2|15m|NEUTRAL|bullish|S65|X|touche",
@@ -228,10 +318,10 @@
      "candidate_action": "open_long",
      "confidence": 0.0,
      "confidence_source": "identity",
-     "consensus_score": 67.6,
+     "consensus_score": 64.0,
      "expected_value": null,
-     "fingerprint": "ETHUSD|v2|1h|NEUTRAL|bullish|S65|X|sentinel",
-     "raw_confidence": 0.352,
+     "fingerprint": "ETHUSD|v2|1h|NEUTRAL|bullish|S55|X|sentinel",
+     "raw_confidence": 0.28,
      "reason": "Risk kapısı: RISK_REDUCE",
      "risk_action": "RISK_REDUCE",
      "size_multiplier": 0.0,
@@ -282,6 +372,96 @@
      "candidate_action": "open_long",
      "confidence": 0.0,
      "confidence_source": "identity",
+     "consensus_score": 64.1,
+     "expected_value": null,
+     "fingerprint": "WTI|v2|15m|NEUTRAL|bullish|S55|X|sentinel",
+     "raw_confidence": 0.282,
+     "reason": "Risk kapısı: RISK_REDUCE",
+     "risk_action": "RISK_REDUCE",
+     "size_multiplier": 0.0,
+     "symbol": "WTI",
+     "timeframe": "15m"
+    },
+    {
+     "action": "hold",
+     "blocked_by": [
+      "risk_gate:RISK_REDUCE"
+     ],
+     "candidate_action": "open_long",
+     "confidence": 0.0,
+     "confidence_source": "identity",
+     "consensus_score": 59.2,
+     "expected_value": null,
+     "fingerprint": "WTI|v2|1d|NEUTRAL|bullish|S55|X|sentinel",
+     "raw_confidence": 0.184,
+     "reason": "Risk kapısı: RISK_REDUCE",
+     "risk_action": "RISK_REDUCE",
+     "size_multiplier": 0.0,
+     "symbol": "WTI",
+     "timeframe": "1d"
+    },
+    {
+     "action": "hold",
+     "blocked_by": [
+      "risk_gate:RISK_REDUCE"
+     ],
+     "candidate_action": "hold",
+     "confidence": 0.0,
+     "confidence_source": "identity",
+     "consensus_score": 49.2,
+     "expected_value": null,
+     "fingerprint": "WTI|v2|1h|NEUTRAL|neutral|S50|X|touche",
+     "raw_confidence": 0.016,
+     "reason": "Risk kapısı: RISK_REDUCE",
+     "risk_action": "RISK_REDUCE",
+     "size_multiplier": 0.0,
+     "symbol": "WTI",
+     "timeframe": "1h"
+    },
+    {
+     "action": "hold",
+     "blocked_by": [
+      "risk_gate:RISK_REDUCE"
+     ],
+     "candidate_action": "open_long",
+     "confidence": 0.0,
+     "confidence_source": "identity",
+     "consensus_score": 69.2,
+     "expected_value": null,
+     "fingerprint": "WTI|v2|1w|NEUTRAL|bullish|S65|X|sentinel",
+     "raw_confidence": 0.384,
+     "reason": "Risk kapısı: RISK_REDUCE",
+     "risk_action": "RISK_REDUCE",
+     "size_multiplier": 0.0,
+     "symbol": "WTI",
+     "timeframe": "1w"
+    },
+    {
+     "action": "hold",
+     "blocked_by": [
+      "risk_gate:RISK_REDUCE"
+     ],
+     "candidate_action": "open_long",
+     "confidence": 0.0,
+     "confidence_source": "identity",
+     "consensus_score": 59.9,
+     "expected_value": null,
+     "fingerprint": "WTI|v2|4h|NEUTRAL|bullish|S55|X|sentinel",
+     "raw_confidence": 0.198,
+     "reason": "Risk kapısı: RISK_REDUCE",
+     "risk_action": "RISK_REDUCE",
+     "size_multiplier": 0.0,
+     "symbol": "WTI",
+     "timeframe": "4h"
+    },
+    {
+     "action": "hold",
+     "blocked_by": [
+      "risk_gate:RISK_REDUCE"
+     ],
+     "candidate_action": "open_long",
+     "confidence": 0.0,
+     "confidence_source": "identity",
      "consensus_score": 80.8,
      "expected_value": null,
      "fingerprint": "XAGUSD|v2|15m|NEUTRAL|bullish|S80|X|touche",
@@ -318,10 +498,10 @@
      "candidate_action": "open_long",
      "confidence": 0.0,
      "confidence_source": "identity",
-     "consensus_score": 67.3,
+     "consensus_score": 63.9,
      "expected_value": null,
-     "fingerprint": "XAGUSD|v2|1h|NEUTRAL|bullish|S65|X|sentinel",
-     "raw_confidence": 0.346,
+     "fingerprint": "XAGUSD|v2|1h|NEUTRAL|bullish|S55|X|sentinel",
+     "raw_confidence": 0.278,
      "reason": "Risk kapısı: RISK_REDUCE",
      "risk_action": "RISK_REDUCE",
      "size_multiplier": 0.0,
@@ -354,10 +534,10 @@
      "candidate_action": "open_long",
      "confidence": 0.0,
      "confidence_source": "identity",
-     "consensus_score": 71.3,
+     "consensus_score": 71.2,
      "expected_value": null,
      "fingerprint": "XAGUSD|v2|4h|NEUTRAL|bullish|S65|X|touche",
-     "raw_confidence": 0.426,
+     "raw_confidence": 0.424,
      "reason": "Risk kapısı: RISK_REDUCE",
      "risk_action": "RISK_REDUCE",
      "size_multiplier": 0.0,
@@ -452,6 +632,366 @@
      "risk_action": "RISK_REDUCE",
      "size_multiplier": 0.0,
      "symbol": "XAUUSD",
+     "timeframe": "4h"
+    },
+    {
+     "action": "hold",
+     "blocked_by": [
+      "risk_gate:RISK_REDUCE"
+     ],
+     "candidate_action": "hold",
+     "confidence": 0.0,
+     "confidence_source": "identity",
+     "consensus_score": 52.5,
+     "expected_value": null,
+     "fingerprint": "XLE|v2|15m|NEUTRAL|neutral|S50|X|sentinel",
+     "raw_confidence": 0.05,
+     "reason": "Risk kapısı: RISK_REDUCE",
+     "risk_action": "RISK_REDUCE",
+     "size_multiplier": 0.0,
+     "symbol": "XLE",
+     "timeframe": "15m"
+    },
+    {
+     "action": "hold",
+     "blocked_by": [
+      "risk_gate:RISK_REDUCE"
+     ],
+     "candidate_action": "open_long",
+     "confidence": 0.0,
+     "confidence_source": "identity",
+     "consensus_score": 71.6,
+     "expected_value": null,
+     "fingerprint": "XLE|v2|1d|NEUTRAL|bullish|S65|X|touche",
+     "raw_confidence": 0.432,
+     "reason": "Risk kapısı: RISK_REDUCE",
+     "risk_action": "RISK_REDUCE",
+     "size_multiplier": 0.0,
+     "symbol": "XLE",
+     "timeframe": "1d"
+    },
+    {
+     "action": "hold",
+     "blocked_by": [
+      "risk_gate:RISK_REDUCE"
+     ],
+     "candidate_action": "open_long",
+     "confidence": 0.0,
+     "confidence_source": "identity",
+     "consensus_score": 83.6,
+     "expected_value": null,
+     "fingerprint": "XLE|v2|1h|NEUTRAL|bullish|S80|X|touche",
+     "raw_confidence": 0.672,
+     "reason": "Risk kapısı: RISK_REDUCE",
+     "risk_action": "RISK_REDUCE",
+     "size_multiplier": 0.0,
+     "symbol": "XLE",
+     "timeframe": "1h"
+    },
+    {
+     "action": "hold",
+     "blocked_by": [
+      "risk_gate:RISK_REDUCE"
+     ],
+     "candidate_action": "hold",
+     "confidence": 0.0,
+     "confidence_source": "identity",
+     "consensus_score": 48.9,
+     "expected_value": null,
+     "fingerprint": "XLE|v2|1w|NEUTRAL|neutral|S50|X|touche",
+     "raw_confidence": 0.022,
+     "reason": "Risk kapısı: RISK_REDUCE",
+     "risk_action": "RISK_REDUCE",
+     "size_multiplier": 0.0,
+     "symbol": "XLE",
+     "timeframe": "1w"
+    },
+    {
+     "action": "hold",
+     "blocked_by": [
+      "risk_gate:RISK_REDUCE"
+     ],
+     "candidate_action": "open_long",
+     "confidence": 0.0,
+     "confidence_source": "identity",
+     "consensus_score": 65.3,
+     "expected_value": null,
+     "fingerprint": "XLE|v2|4h|NEUTRAL|bullish|S65|X|sentinel",
+     "raw_confidence": 0.306,
+     "reason": "Risk kapısı: RISK_REDUCE",
+     "risk_action": "RISK_REDUCE",
+     "size_multiplier": 0.0,
+     "symbol": "XLE",
+     "timeframe": "4h"
+    },
+    {
+     "action": "hold",
+     "blocked_by": [
+      "risk_gate:RISK_REDUCE"
+     ],
+     "candidate_action": "open_long",
+     "confidence": 0.0,
+     "confidence_source": "identity",
+     "consensus_score": 57.9,
+     "expected_value": null,
+     "fingerprint": "XLK|v2|15m|NEUTRAL|bullish|S55|X|sentinel",
+     "raw_confidence": 0.158,
+     "reason": "Risk kapısı: RISK_REDUCE",
+     "risk_action": "RISK_REDUCE",
+     "size_multiplier": 0.0,
+     "symbol": "XLK",
+     "timeframe": "15m"
+    },
+    {
+     "action": "hold",
+     "blocked_by": [
+      "risk_gate:RISK_REDUCE"
+     ],
+     "candidate_action": "hold",
+     "confidence": 0.0,
+     "confidence_source": "identity",
+     "consensus_score": 47.6,
+     "expected_value": null,
+     "fingerprint": "XLK|v2|1d|NEUTRAL|neutral|S50|X|touche",
+     "raw_confidence": 0.048,
+     "reason": "Risk kapısı: RISK_REDUCE",
+     "risk_action": "RISK_REDUCE",
+     "size_multiplier": 0.0,
+     "symbol": "XLK",
+     "timeframe": "1d"
+    },
+    {
+     "action": "hold",
+     "blocked_by": [
+      "risk_gate:RISK_REDUCE"
+     ],
+     "candidate_action": "open_long",
+     "confidence": 0.0,
+     "confidence_source": "identity",
+     "consensus_score": 80.5,
+     "expected_value": null,
+     "fingerprint": "XLK|v2|1h|NEUTRAL|bullish|S80|X|touche",
+     "raw_confidence": 0.61,
+     "reason": "Risk kapısı: RISK_REDUCE",
+     "risk_action": "RISK_REDUCE",
+     "size_multiplier": 0.0,
+     "symbol": "XLK",
+     "timeframe": "1h"
+    },
+    {
+     "action": "hold",
+     "blocked_by": [
+      "risk_gate:RISK_REDUCE"
+     ],
+     "candidate_action": "open_long",
+     "confidence": 0.0,
+     "confidence_source": "identity",
+     "consensus_score": 79.8,
+     "expected_value": null,
+     "fingerprint": "XLK|v2|1w|NEUTRAL|bullish|S65|X|touche",
+     "raw_confidence": 0.596,
+     "reason": "Risk kapısı: RISK_REDUCE",
+     "risk_action": "RISK_REDUCE",
+     "size_multiplier": 0.0,
+     "symbol": "XLK",
+     "timeframe": "1w"
+    },
+    {
+     "action": "hold",
+     "blocked_by": [
+      "risk_gate:RISK_REDUCE"
+     ],
+     "candidate_action": "open_long",
+     "confidence": 0.0,
+     "confidence_source": "identity",
+     "consensus_score": 75.1,
+     "expected_value": null,
+     "fingerprint": "XLK|v2|4h|NEUTRAL|bullish|S65|X|touche",
+     "raw_confidence": 0.502,
+     "reason": "Risk kapısı: RISK_REDUCE",
+     "risk_action": "RISK_REDUCE",
+     "size_multiplier": 0.0,
+     "symbol": "XLK",
+     "timeframe": "4h"
+    },
+    {
+     "action": "hold",
+     "blocked_by": [
+      "risk_gate:RISK_REDUCE"
+     ],
+     "candidate_action": "open_long",
+     "confidence": 0.0,
+     "confidence_source": "identity",
+     "consensus_score": 63.9,
+     "expected_value": null,
+     "fingerprint": "XLP|v2|15m|NEUTRAL|bullish|S55|X|sentinel",
+     "raw_confidence": 0.278,
+     "reason": "Risk kapısı: RISK_REDUCE",
+     "risk_action": "RISK_REDUCE",
+     "size_multiplier": 0.0,
+     "symbol": "XLP",
+     "timeframe": "15m"
+    },
+    {
+     "action": "hold",
+     "blocked_by": [
+      "risk_gate:RISK_REDUCE"
+     ],
+     "candidate_action": "open_long",
+     "confidence": 0.0,
+     "confidence_source": "identity",
+     "consensus_score": 58.4,
+     "expected_value": null,
+     "fingerprint": "XLP|v2|1d|NEUTRAL|bullish|S55|X|sentinel",
+     "raw_confidence": 0.168,
+     "reason": "Risk kapısı: RISK_REDUCE",
+     "risk_action": "RISK_REDUCE",
+     "size_multiplier": 0.0,
+     "symbol": "XLP",
+     "timeframe": "1d"
+    },
+    {
+     "action": "hold",
+     "blocked_by": [
+      "risk_gate:RISK_REDUCE"
+     ],
+     "candidate_action": "open_long",
+     "confidence": 0.0,
+     "confidence_source": "identity",
+     "consensus_score": 58.6,
+     "expected_value": null,
+     "fingerprint": "XLP|v2|1h|NEUTRAL|bullish|S55|X|sentinel",
+     "raw_confidence": 0.172,
+     "reason": "Risk kapısı: RISK_REDUCE",
+     "risk_action": "RISK_REDUCE",
+     "size_multiplier": 0.0,
+     "symbol": "XLP",
+     "timeframe": "1h"
+    },
+    {
+     "action": "hold",
+     "blocked_by": [
+      "risk_gate:RISK_REDUCE"
+     ],
+     "candidate_action": "open_long",
+     "confidence": 0.0,
+     "confidence_source": "identity",
+     "consensus_score": 64.3,
+     "expected_value": null,
+     "fingerprint": "XLP|v2|1w|NEUTRAL|bullish|S55|X|sentinel",
+     "raw_confidence": 0.286,
+     "reason": "Risk kapısı: RISK_REDUCE",
+     "risk_action": "RISK_REDUCE",
+     "size_multiplier": 0.0,
+     "symbol": "XLP",
+     "timeframe": "1w"
+    },
+    {
+     "action": "hold",
+     "blocked_by": [
+      "risk_gate:RISK_REDUCE"
+     ],
+     "candidate_action": "hold",
+     "confidence": 0.0,
+     "confidence_source": "identity",
+     "consensus_score": 52.2,
+     "expected_value": null,
+     "fingerprint": "XLP|v2|4h|NEUTRAL|neutral|S50|X|sentinel",
+     "raw_confidence": 0.044,
+     "reason": "Risk kapısı: RISK_REDUCE",
+     "risk_action": "RISK_REDUCE",
+     "size_multiplier": 0.0,
+     "symbol": "XLP",
+     "timeframe": "4h"
+    },
+    {
+     "action": "hold",
+     "blocked_by": [
+      "risk_gate:RISK_REDUCE"
+     ],
+     "candidate_action": "open_long",
+     "confidence": 0.0,
+     "confidence_source": "identity",
+     "consensus_score": 83.2,
+     "expected_value": null,
+     "fingerprint": "XLV|v2|15m|NEUTRAL|bullish|S80|X|touche",
+     "raw_confidence": 0.664,
+     "reason": "Risk kapısı: RISK_REDUCE",
+     "risk_action": "RISK_REDUCE",
+     "size_multiplier": 0.0,
+     "symbol": "XLV",
+     "timeframe": "15m"
+    },
+    {
+     "action": "hold",
+     "blocked_by": [
+      "risk_gate:RISK_REDUCE"
+     ],
+     "candidate_action": "open_long",
+     "confidence": 0.0,
+     "confidence_source": "identity",
+     "consensus_score": 58.8,
+     "expected_value": null,
+     "fingerprint": "XLV|v2|1d|NEUTRAL|bullish|S55|X|sentinel",
+     "raw_confidence": 0.176,
+     "reason": "Risk kapısı: RISK_REDUCE",
+     "risk_action": "RISK_REDUCE",
+     "size_multiplier": 0.0,
+     "symbol": "XLV",
+     "timeframe": "1d"
+    },
+    {
+     "action": "hold",
+     "blocked_by": [
+      "risk_gate:RISK_REDUCE"
+     ],
+     "candidate_action": "open_long",
+     "confidence": 0.0,
+     "confidence_source": "identity",
+     "consensus_score": 83.6,
+     "expected_value": null,
+     "fingerprint": "XLV|v2|1h|NEUTRAL|bullish|S80|X|touche",
+     "raw_confidence": 0.672,
+     "reason": "Risk kapısı: RISK_REDUCE",
+     "risk_action": "RISK_REDUCE",
+     "size_multiplier": 0.0,
+     "symbol": "XLV",
+     "timeframe": "1h"
+    },
+    {
+     "action": "hold",
+     "blocked_by": [
+      "risk_gate:RISK_REDUCE"
+     ],
+     "candidate_action": "open_long",
+     "confidence": 0.0,
+     "confidence_source": "identity",
+     "consensus_score": 64.9,
+     "expected_value": null,
+     "fingerprint": "XLV|v2|1w|NEUTRAL|bullish|S55|X|sentinel",
+     "raw_confidence": 0.298,
+     "reason": "Risk kapısı: RISK_REDUCE",
+     "risk_action": "RISK_REDUCE",
+     "size_multiplier": 0.0,
+     "symbol": "XLV",
+     "timeframe": "1w"
+    },
+    {
+     "action": "hold",
+     "blocked_by": [
+      "risk_gate:RISK_REDUCE"
+     ],
+     "candidate_action": "open_long",
+     "confidence": 0.0,
+     "confidence_source": "identity",
+     "consensus_score": 66.9,
+     "expected_value": null,
+     "fingerprint": "XLV|v2|4h|NEUTRAL|bullish|S65|X|sentinel",
+     "raw_confidence": 0.338,
+     "reason": "Risk kapısı: RISK_REDUCE",
+     "risk_action": "RISK_REDUCE",
+     "size_multiplier": 0.0,
+     "symbol": "XLV",
      "timeframe": "4h"
     }
    ],
@@ -648,6 +1188,96 @@
      "candidate_action": "open_long",
      "confidence": 0.0,
      "confidence_source": "identity",
+     "consensus_score": 83.0,
+     "expected_value": null,
+     "fingerprint": "COPPER|v2|15m|NEUTRAL|bullish|S80|X|touche",
+     "raw_confidence": 0.66,
+     "reason": "Risk kapısı: KILL_SWITCH",
+     "risk_action": "KILL_SWITCH",
+     "size_multiplier": 0.0,
+     "symbol": "COPPER",
+     "timeframe": "15m"
+    },
+    {
+     "action": "blocked",
+     "blocked_by": [
+      "risk_gate:KILL_SWITCH"
+     ],
+     "candidate_action": "open_long",
+     "confidence": 0.0,
+     "confidence_source": "identity",
+     "consensus_score": 80.2,
+     "expected_value": null,
+     "fingerprint": "COPPER|v2|1d|NEUTRAL|bullish|S80|X|touche",
+     "raw_confidence": 0.604,
+     "reason": "Risk kapısı: KILL_SWITCH",
+     "risk_action": "KILL_SWITCH",
+     "size_multiplier": 0.0,
+     "symbol": "COPPER",
+     "timeframe": "1d"
+    },
+    {
+     "action": "blocked",
+     "blocked_by": [
+      "risk_gate:KILL_SWITCH"
+     ],
+     "candidate_action": "open_long",
+     "confidence": 0.0,
+     "confidence_source": "identity",
+     "consensus_score": 65.0,
+     "expected_value": null,
+     "fingerprint": "COPPER|v2|1h|NEUTRAL|bullish|S65|X|sentinel",
+     "raw_confidence": 0.3,
+     "reason": "Risk kapısı: KILL_SWITCH",
+     "risk_action": "KILL_SWITCH",
+     "size_multiplier": 0.0,
+     "symbol": "COPPER",
+     "timeframe": "1h"
+    },
+    {
+     "action": "blocked",
+     "blocked_by": [
+      "risk_gate:KILL_SWITCH"
+     ],
+     "candidate_action": "open_long",
+     "confidence": 0.0,
+     "confidence_source": "identity",
+     "consensus_score": 70.5,
+     "expected_value": null,
+     "fingerprint": "COPPER|v2|1w|NEUTRAL|bullish|S65|X|touche",
+     "raw_confidence": 0.41,
+     "reason": "Risk kapısı: KILL_SWITCH",
+     "risk_action": "KILL_SWITCH",
+     "size_multiplier": 0.0,
+     "symbol": "COPPER",
+     "timeframe": "1w"
+    },
+    {
+     "action": "blocked",
+     "blocked_by": [
+      "risk_gate:KILL_SWITCH"
+     ],
+     "candidate_action": "open_long",
+     "confidence": 0.0,
+     "confidence_source": "identity",
+     "consensus_score": 66.4,
+     "expected_value": null,
+     "fingerprint": "COPPER|v2|4h|NEUTRAL|bullish|S65|X|sentinel",
+     "raw_confidence": 0.328,
+     "reason": "Risk kapısı: KILL_SWITCH",
+     "risk_action": "KILL_SWITCH",
+     "size_multiplier": 0.0,
+     "symbol": "COPPER",
+     "timeframe": "4h"
+    },
+    {
+     "action": "blocked",
+     "blocked_by": [
+      "risk_gate:KILL_SWITCH"
+     ],
+     "candidate_action": "open_long",
+     "confidence": 0.0,
+     "confidence_source": "identity",
      "consensus_score": 71.9,
      "expected_value": null,
      "fingerprint": "ETHUSD|v2|15m|NEUTRAL|bullish|S65|X|touche",
@@ -684,10 +1314,10 @@
      "candidate_action": "open_long",
      "confidence": 0.0,
      "confidence_source": "identity",
-     "consensus_score": 67.6,
+     "consensus_score": 64.0,
      "expected_value": null,
-     "fingerprint": "ETHUSD|v2|1h|NEUTRAL|bullish|S65|X|sentinel",
-     "raw_confidence": 0.352,
+     "fingerprint": "ETHUSD|v2|1h|NEUTRAL|bullish|S55|X|sentinel",
+     "raw_confidence": 0.28,
      "reason": "Risk kapısı: KILL_SWITCH",
      "risk_action": "KILL_SWITCH",
      "size_multiplier": 0.0,
@@ -738,6 +1368,96 @@
      "candidate_action": "open_long",
      "confidence": 0.0,
      "confidence_source": "identity",
+     "consensus_score": 64.1,
+     "expected_value": null,
+     "fingerprint": "WTI|v2|15m|NEUTRAL|bullish|S55|X|sentinel",
+     "raw_confidence": 0.282,
+     "reason": "Risk kapısı: KILL_SWITCH",
+     "risk_action": "KILL_SWITCH",
+     "size_multiplier": 0.0,
+     "symbol": "WTI",
+     "timeframe": "15m"
+    },
+    {
+     "action": "blocked",
+     "blocked_by": [
+      "risk_gate:KILL_SWITCH"
+     ],
+     "candidate_action": "open_long",
+     "confidence": 0.0,
+     "confidence_source": "identity",
+     "consensus_score": 59.2,
+     "expected_value": null,
+     "fingerprint": "WTI|v2|1d|NEUTRAL|bullish|S55|X|sentinel",
+     "raw_confidence": 0.184,
+     "reason": "Risk kapısı: KILL_SWITCH",
+     "risk_action": "KILL_SWITCH",
+     "size_multiplier": 0.0,
+     "symbol": "WTI",
+     "timeframe": "1d"
+    },
+    {
+     "action": "blocked",
+     "blocked_by": [
+      "risk_gate:KILL_SWITCH"
+     ],
+     "candidate_action": "hold",
+     "confidence": 0.0,
+     "confidence_source": "identity",
+     "consensus_score": 49.2,
+     "expected_value": null,
+     "fingerprint": "WTI|v2|1h|NEUTRAL|neutral|S50|X|touche",
+     "raw_confidence": 0.016,
+     "reason": "Risk kapısı: KILL_SWITCH",
+     "risk_action": "KILL_SWITCH",
+     "size_multiplier": 0.0,
+     "symbol": "WTI",
+     "timeframe": "1h"
+    },
+    {
+     "action": "blocked",
+     "blocked_by": [
+      "risk_gate:KILL_SWITCH"
+     ],
+     "candidate_action": "open_long",
+     "confidence": 0.0,
+     "confidence_source": "identity",
+     "consensus_score": 69.2,
+     "expected_value": null,
+     "fingerprint": "WTI|v2|1w|NEUTRAL|bullish|S65|X|sentinel",
+     "raw_confidence": 0.384,
+     "reason": "Risk kapısı: KILL_SWITCH",
+     "risk_action": "KILL_SWITCH",
+     "size_multiplier": 0.0,
+     "symbol": "WTI",
+     "timeframe": "1w"
+    },
+    {
+     "action": "blocked",
+     "blocked_by": [
+      "risk_gate:KILL_SWITCH"
+     ],
+     "candidate_action": "open_long",
+     "confidence": 0.0,
+     "confidence_source": "identity",
+     "consensus_score": 59.9,
+     "expected_value": null,
+     "fingerprint": "WTI|v2|4h|NEUTRAL|bullish|S55|X|sentinel",
+     "raw_confidence": 0.198,
+     "reason": "Risk kapısı: KILL_SWITCH",
+     "risk_action": "KILL_SWITCH",
+     "size_multiplier": 0.0,
+     "symbol": "WTI",
+     "timeframe": "4h"
+    },
+    {
+     "action": "blocked",
+     "blocked_by": [
+      "risk_gate:KILL_SWITCH"
+     ],
+     "candidate_action": "open_long",
+     "confidence": 0.0,
+     "confidence_source": "identity",
      "consensus_score": 80.8,
      "expected_value": null,
      "fingerprint": "XAGUSD|v2|15m|NEUTRAL|bullish|S80|X|touche",
@@ -774,10 +1494,10 @@
      "candidate_action": "open_long",
      "confidence": 0.0,
      "confidence_source": "identity",
-     "consensus_score": 67.3,
+     "consensus_score": 63.9,
      "expected_value": null,
-     "fingerprint": "XAGUSD|v2|1h|NEUTRAL|bullish|S65|X|sentinel",
-     "raw_confidence": 0.346,
+     "fingerprint": "XAGUSD|v2|1h|NEUTRAL|bullish|S55|X|sentinel",
+     "raw_confidence": 0.278,
      "reason": "Risk kapısı: KILL_SWITCH",
      "risk_action": "KILL_SWITCH",
      "size_multiplier": 0.0,
@@ -810,10 +1530,10 @@
      "candidate_action": "open_long",
      "confidence": 0.0,
      "confidence_source": "identity",
-     "consensus_score": 71.3,
+     "consensus_score": 71.2,
      "expected_value": null,
      "fingerprint": "XAGUSD|v2|4h|NEUTRAL|bullish|S65|X|touche",
-     "raw_confidence": 0.426,
+     "raw_confidence": 0.424,
      "reason": "Risk kapısı: KILL_SWITCH",
      "risk_action": "KILL_SWITCH",
      "size_multiplier": 0.0,
@@ -908,6 +1628,366 @@
      "risk_action": "KILL_SWITCH",
      "size_multiplier": 0.0,
      "symbol": "XAUUSD",
+     "timeframe": "4h"
+    },
+    {
+     "action": "blocked",
+     "blocked_by": [
+      "risk_gate:KILL_SWITCH"
+     ],
+     "candidate_action": "hold",
+     "confidence": 0.0,
+     "confidence_source": "identity",
+     "consensus_score": 52.5,
+     "expected_value": null,
+     "fingerprint": "XLE|v2|15m|NEUTRAL|neutral|S50|X|sentinel",
+     "raw_confidence": 0.05,
+     "reason": "Risk kapısı: KILL_SWITCH",
+     "risk_action": "KILL_SWITCH",
+     "size_multiplier": 0.0,
+     "symbol": "XLE",
+     "timeframe": "15m"
+    },
+    {
+     "action": "blocked",
+     "blocked_by": [
+      "risk_gate:KILL_SWITCH"
+     ],
+     "candidate_action": "open_long",
+     "confidence": 0.0,
+     "confidence_source": "identity",
+     "consensus_score": 71.6,
+     "expected_value": null,
+     "fingerprint": "XLE|v2|1d|NEUTRAL|bullish|S65|X|touche",
+     "raw_confidence": 0.432,
+     "reason": "Risk kapısı: KILL_SWITCH",
+     "risk_action": "KILL_SWITCH",
+     "size_multiplier": 0.0,
+     "symbol": "XLE",
+     "timeframe": "1d"
+    },
+    {
+     "action": "blocked",
+     "blocked_by": [
+      "risk_gate:KILL_SWITCH"
+     ],
+     "candidate_action": "open_long",
+     "confidence": 0.0,
+     "confidence_source": "identity",
+     "consensus_score": 83.6,
+     "expected_value": null,
+     "fingerprint": "XLE|v2|1h|NEUTRAL|bullish|S80|X|touche",
+     "raw_confidence": 0.672,
+     "reason": "Risk kapısı: KILL_SWITCH",
+     "risk_action": "KILL_SWITCH",
+     "size_multiplier": 0.0,
+     "symbol": "XLE",
+     "timeframe": "1h"
+    },
+    {
+     "action": "blocked",
+     "blocked_by": [
+      "risk_gate:KILL_SWITCH"
+     ],
+     "candidate_action": "hold",
+     "confidence": 0.0,
+     "confidence_source": "identity",
+     "consensus_score": 48.9,
+     "expected_value": null,
+     "fingerprint": "XLE|v2|1w|NEUTRAL|neutral|S50|X|touche",
+     "raw_confidence": 0.022,
+     "reason": "Risk kapısı: KILL_SWITCH",
+     "risk_action": "KILL_SWITCH",
+     "size_multiplier": 0.0,
+     "symbol": "XLE",
+     "timeframe": "1w"
+    },
+    {
+     "action": "blocked",
+     "blocked_by": [
+      "risk_gate:KILL_SWITCH"
+     ],
+     "candidate_action": "open_long",
+     "confidence": 0.0,
+     "confidence_source": "identity",
+     "consensus_score": 65.3,
+     "expected_value": null,
+     "fingerprint": "XLE|v2|4h|NEUTRAL|bullish|S65|X|sentinel",
+     "raw_confidence": 0.306,
+     "reason": "Risk kapısı: KILL_SWITCH",
+     "risk_action": "KILL_SWITCH",
+     "size_multiplier": 0.0,
+     "symbol": "XLE",
+     "timeframe": "4h"
+    },
+    {
+     "action": "blocked",
+     "blocked_by": [
+      "risk_gate:KILL_SWITCH"
+     ],
+     "candidate_action": "open_long",
+     "confidence": 0.0,
+     "confidence_source": "identity",
+     "consensus_score": 57.9,
+     "expected_value": null,
+     "fingerprint": "XLK|v2|15m|NEUTRAL|bullish|S55|X|sentinel",
+     "raw_confidence": 0.158,
+     "reason": "Risk kapısı: KILL_SWITCH",
+     "risk_action": "KILL_SWITCH",
+     "size_multiplier": 0.0,
+     "symbol": "XLK",
+     "timeframe": "15m"
+    },
+    {
+     "action": "blocked",
+     "blocked_by": [
+      "risk_gate:KILL_SWITCH"
+     ],
+     "candidate_action": "hold",
+     "confidence": 0.0,
+     "confidence_source": "identity",
+     "consensus_score": 47.6,
+     "expected_value": null,
+     "fingerprint": "XLK|v2|1d|NEUTRAL|neutral|S50|X|touche",
+     "raw_confidence": 0.048,
+     "reason": "Risk kapısı: KILL_SWITCH",
+     "risk_action": "KILL_SWITCH",
+     "size_multiplier": 0.0,
+     "symbol": "XLK",
+     "timeframe": "1d"
+    },
+    {
+     "action": "blocked",
+     "blocked_by": [
+      "risk_gate:KILL_SWITCH"
+     ],
+     "candidate_action": "open_long",
+     "confidence": 0.0,
+     "confidence_source": "identity",
+     "consensus_score": 80.5,
+     "expected_value": null,
+     "fingerprint": "XLK|v2|1h|NEUTRAL|bullish|S80|X|touche",
+     "raw_confidence": 0.61,
+     "reason": "Risk kapısı: KILL_SWITCH",
+     "risk_action": "KILL_SWITCH",
+     "size_multiplier": 0.0,
+     "symbol": "XLK",
+     "timeframe": "1h"
+    },
+    {
+     "action": "blocked",
+     "blocked_by": [
+      "risk_gate:KILL_SWITCH"
+     ],
+     "candidate_action": "open_long",
+     "confidence": 0.0,
+     "confidence_source": "identity",
+     "consensus_score": 79.8,
+     "expected_value": null,
+     "fingerprint": "XLK|v2|1w|NEUTRAL|bullish|S65|X|touche",
+     "raw_confidence": 0.596,
+     "reason": "Risk kapısı: KILL_SWITCH",
+     "risk_action": "KILL_SWITCH",
+     "size_multiplier": 0.0,
+     "symbol": "XLK",
+     "timeframe": "1w"
+    },
+    {
+     "action": "blocked",
+     "blocked_by": [
+      "risk_gate:KILL_SWITCH"
+     ],
+     "candidate_action": "open_long",
+     "confidence": 0.0,
+     "confidence_source": "identity",
+     "consensus_score": 75.1,
+     "expected_value": null,
+     "fingerprint": "XLK|v2|4h|NEUTRAL|bullish|S65|X|touche",
+     "raw_confidence": 0.502,
+     "reason": "Risk kapısı: KILL_SWITCH",
+     "risk_action": "KILL_SWITCH",
+     "size_multiplier": 0.0,
+     "symbol": "XLK",
+     "timeframe": "4h"
+    },
+    {
+     "action": "blocked",
+     "blocked_by": [
+      "risk_gate:KILL_SWITCH"
+     ],
+     "candidate_action": "open_long",
+     "confidence": 0.0,
+     "confidence_source": "identity",
+     "consensus_score": 63.9,
+     "expected_value": null,
+     "fingerprint": "XLP|v2|15m|NEUTRAL|bullish|S55|X|sentinel",
+     "raw_confidence": 0.278,
+     "reason": "Risk kapısı: KILL_SWITCH",
+     "risk_action": "KILL_SWITCH",
+     "size_multiplier": 0.0,
+     "symbol": "XLP",
+     "timeframe": "15m"
+    },
+    {
+     "action": "blocked",
+     "blocked_by": [
+      "risk_gate:KILL_SWITCH"
+     ],
+     "candidate_action": "open_long",
+     "confidence": 0.0,
+     "confidence_source": "identity",
+     "consensus_score": 58.4,
+     "expected_value": null,
+     "fingerprint": "XLP|v2|1d|NEUTRAL|bullish|S55|X|sentinel",
+     "raw_confidence": 0.168,
+     "reason": "Risk kapısı: KILL_SWITCH",
+     "risk_action": "KILL_SWITCH",
+     "size_multiplier": 0.0,
+     "symbol": "XLP",
+     "timeframe": "1d"
+    },
+    {
+     "action": "blocked",
+     "blocked_by": [
+      "risk_gate:KILL_SWITCH"
+     ],
+     "candidate_action": "open_long",
+     "confidence": 0.0,
+     "confidence_source": "identity",
+     "consensus_score": 58.6,
+     "expected_value": null,
+     "fingerprint": "XLP|v2|1h|NEUTRAL|bullish|S55|X|sentinel",
+     "raw_confidence": 0.172,
+     "reason": "Risk kapısı: KILL_SWITCH",
+     "risk_action": "KILL_SWITCH",
+     "size_multiplier": 0.0,
+     "symbol": "XLP",
+     "timeframe": "1h"
+    },
+    {
+     "action": "blocked",
+     "blocked_by": [
+      "risk_gate:KILL_SWITCH"
+     ],
+     "candidate_action": "open_long",
+     "confidence": 0.0,
+     "confidence_source": "identity",
+     "consensus_score": 64.3,
+     "expected_value": null,
+     "fingerprint": "XLP|v2|1w|NEUTRAL|bullish|S55|X|sentinel",
+     "raw_confidence": 0.286,
+     "reason": "Risk kapısı: KILL_SWITCH",
+     "risk_action": "KILL_SWITCH",
+     "size_multiplier": 0.0,
+     "symbol": "XLP",
+     "timeframe": "1w"
+    },
+    {
+     "action": "blocked",
+     "blocked_by": [
+      "risk_gate:KILL_SWITCH"
+     ],
+     "candidate_action": "hold",
+     "confidence": 0.0,
+     "confidence_source": "identity",
+     "consensus_score": 52.2,
+     "expected_value": null,
+     "fingerprint": "XLP|v2|4h|NEUTRAL|neutral|S50|X|sentinel",
+     "raw_confidence": 0.044,
+     "reason": "Risk kapısı: KILL_SWITCH",
+     "risk_action": "KILL_SWITCH",
+     "size_multiplier": 0.0,
+     "symbol": "XLP",
+     "timeframe": "4h"
+    },
+    {
+     "action": "blocked",
+     "blocked_by": [
+      "risk_gate:KILL_SWITCH"
+     ],
+     "candidate_action": "open_long",
+     "confidence": 0.0,
+     "confidence_source": "identity",
+     "consensus_score": 83.2,
+     "expected_value": null,
+     "fingerprint": "XLV|v2|15m|NEUTRAL|bullish|S80|X|touche",
+     "raw_confidence": 0.664,
+     "reason": "Risk kapısı: KILL_SWITCH",
+     "risk_action": "KILL_SWITCH",
+     "size_multiplier": 0.0,
+     "symbol": "XLV",
+     "timeframe": "15m"
+    },
+    {
+     "action": "blocked",
+     "blocked_by": [
+      "risk_gate:KILL_SWITCH"
+     ],
+     "candidate_action": "open_long",
+     "confidence": 0.0,
+     "confidence_source": "identity",
+     "consensus_score": 58.8,
+     "expected_value": null,
+     "fingerprint": "XLV|v2|1d|NEUTRAL|bullish|S55|X|sentinel",
+     "raw_confidence": 0.176,
+     "reason": "Risk kapısı: KILL_SWITCH",
+     "risk_action": "KILL_SWITCH",
+     "size_multiplier": 0.0,
+     "symbol": "XLV",
+     "timeframe": "1d"
+    },
+    {
+     "action": "blocked",
+     "blocked_by": [
+      "risk_gate:KILL_SWITCH"
+     ],
+     "candidate_action": "open_long",
+     "confidence": 0.0,
+     "confidence_source": "identity",
+     "consensus_score": 83.6,
+     "expected_value": null,
+     "fingerprint": "XLV|v2|1h|NEUTRAL|bullish|S80|X|touche",
+     "raw_confidence": 0.672,
+     "reason": "Risk kapısı: KILL_SWITCH",
+     "risk_action": "KILL_SWITCH",
+     "size_multiplier": 0.0,
+     "symbol": "XLV",
+     "timeframe": "1h"
+    },
+    {
+     "action": "blocked",
+     "blocked_by": [
+      "risk_gate:KILL_SWITCH"
+     ],
+     "candidate_action": "open_long",
+     "confidence": 0.0,
+     "confidence_source": "identity",
+     "consensus_score": 64.9,
+     "expected_value": null,
+     "fingerprint": "XLV|v2|1w|NEUTRAL|bullish|S55|X|sentinel",
+     "raw_confidence": 0.298,
+     "reason": "Risk kapısı: KILL_SWITCH",
+     "risk_action": "KILL_SWITCH",
+     "size_multiplier": 0.0,
+     "symbol": "XLV",
+     "timeframe": "1w"
+    },
+    {
+     "action": "blocked",
+     "blocked_by": [
+      "risk_gate:KILL_SWITCH"
+     ],
+     "candidate_action": "open_long",
+     "confidence": 0.0,
+     "confidence_source": "identity",
+     "consensus_score": 66.9,
+     "expected_value": null,
+     "fingerprint": "XLV|v2|4h|NEUTRAL|bullish|S65|X|sentinel",
+     "raw_confidence": 0.338,
+     "reason": "Risk kapısı: KILL_SWITCH",
+     "risk_action": "KILL_SWITCH",
+     "size_multiplier": 0.0,
+     "symbol": "XLV",
      "timeframe": "4h"
     }
    ],
@@ -1104,6 +2184,96 @@
      "candidate_action": "open_long",
      "confidence": 0.0,
      "confidence_source": "identity",
+     "consensus_score": 83.0,
+     "expected_value": null,
+     "fingerprint": "COPPER|v2|15m|NEUTRAL|bullish|S80|X|touche",
+     "raw_confidence": 0.66,
+     "reason": "Risk kapısı: KILL_SWITCH",
+     "risk_action": "KILL_SWITCH",
+     "size_multiplier": 0.0,
+     "symbol": "COPPER",
+     "timeframe": "15m"
+    },
+    {
+     "action": "blocked",
+     "blocked_by": [
+      "risk_gate:KILL_SWITCH"
+     ],
+     "candidate_action": "open_long",
+     "confidence": 0.0,
+     "confidence_source": "identity",
+     "consensus_score": 80.2,
+     "expected_value": null,
+     "fingerprint": "COPPER|v2|1d|NEUTRAL|bullish|S80|X|touche",
+     "raw_confidence": 0.604,
+     "reason": "Risk kapısı: KILL_SWITCH",
+     "risk_action": "KILL_SWITCH",
+     "size_multiplier": 0.0,
+     "symbol": "COPPER",
+     "timeframe": "1d"
+    },
+    {
+     "action": "blocked",
+     "blocked_by": [
+      "risk_gate:KILL_SWITCH"
+     ],
+     "candidate_action": "open_long",
+     "confidence": 0.0,
+     "confidence_source": "identity",
+     "consensus_score": 65.0,
+     "expected_value": null,
+     "fingerprint": "COPPER|v2|1h|NEUTRAL|bullish|S65|X|sentinel",
+     "raw_confidence": 0.3,
+     "reason": "Risk kapısı: KILL_SWITCH",
+     "risk_action": "KILL_SWITCH",
+     "size_multiplier": 0.0,
+     "symbol": "COPPER",
+     "timeframe": "1h"
+    },
+    {
+     "action": "blocked",
+     "blocked_by": [
+      "risk_gate:KILL_SWITCH"
+     ],
+     "candidate_action": "open_long",
+     "confidence": 0.0,
+     "confidence_source": "identity",
+     "consensus_score": 70.5,
+     "expected_value": null,
+     "fingerprint": "COPPER|v2|1w|NEUTRAL|bullish|S65|X|touche",
+     "raw_confidence": 0.41,
+     "reason": "Risk kapısı: KILL_SWITCH",
+     "risk_action": "KILL_SWITCH",
+     "size_multiplier": 0.0,
+     "symbol": "COPPER",
+     "timeframe": "1w"
+    },
+    {
+     "action": "blocked",
+     "blocked_by": [
+      "risk_gate:KILL_SWITCH"
+     ],
+     "candidate_action": "open_long",
+     "confidence": 0.0,
+     "confidence_source": "identity",
+     "consensus_score": 66.4,
+     "expected_value": null,
+     "fingerprint": "COPPER|v2|4h|NEUTRAL|bullish|S65|X|sentinel",
+     "raw_confidence": 0.328,
+     "reason": "Risk kapısı: KILL_SWITCH",
+     "risk_action": "KILL_SWITCH",
+     "size_multiplier": 0.0,
+     "symbol": "COPPER",
+     "timeframe": "4h"
+    },
+    {
+     "action": "blocked",
+     "blocked_by": [
+      "risk_gate:KILL_SWITCH"
+     ],
+     "candidate_action": "open_long",
+     "confidence": 0.0,
+     "confidence_source": "identity",
      "consensus_score": 71.9,
      "expected_value": null,
      "fingerprint": "ETHUSD|v2|15m|NEUTRAL|bullish|S65|X|touche",
@@ -1140,10 +2310,10 @@
      "candidate_action": "open_long",
      "confidence": 0.0,
      "confidence_source": "identity",
-     "consensus_score": 67.6,
+     "consensus_score": 64.0,
      "expected_value": null,
-     "fingerprint": "ETHUSD|v2|1h|NEUTRAL|bullish|S65|X|sentinel",
-     "raw_confidence": 0.352,
+     "fingerprint": "ETHUSD|v2|1h|NEUTRAL|bullish|S55|X|sentinel",
+     "raw_confidence": 0.28,
      "reason": "Risk kapısı: KILL_SWITCH",
      "risk_action": "KILL_SWITCH",
      "size_multiplier": 0.0,
@@ -1194,6 +2364,96 @@
      "candidate_action": "open_long",
      "confidence": 0.0,
      "confidence_source": "identity",
+     "consensus_score": 64.1,
+     "expected_value": null,
+     "fingerprint": "WTI|v2|15m|NEUTRAL|bullish|S55|X|sentinel",
+     "raw_confidence": 0.282,
+     "reason": "Risk kapısı: KILL_SWITCH",
+     "risk_action": "KILL_SWITCH",
+     "size_multiplier": 0.0,
+     "symbol": "WTI",
+     "timeframe": "15m"
+    },
+    {
+     "action": "blocked",
+     "blocked_by": [
+      "risk_gate:KILL_SWITCH"
+     ],
+     "candidate_action": "open_long",
+     "confidence": 0.0,
+     "confidence_source": "identity",
+     "consensus_score": 59.2,
+     "expected_value": null,
+     "fingerprint": "WTI|v2|1d|NEUTRAL|bullish|S55|X|sentinel",
+     "raw_confidence": 0.184,
+     "reason": "Risk kapısı: KILL_SWITCH",
+     "risk_action": "KILL_SWITCH",
+     "size_multiplier": 0.0,
+     "symbol": "WTI",
+     "timeframe": "1d"
+    },
+    {
+     "action": "blocked",
+     "blocked_by": [
+      "risk_gate:KILL_SWITCH"
+     ],
+     "candidate_action": "hold",
+     "confidence": 0.0,
+     "confidence_source": "identity",
+     "consensus_score": 49.2,
+     "expected_value": null,
+     "fingerprint": "WTI|v2|1h|NEUTRAL|neutral|S50|X|touche",
+     "raw_confidence": 0.016,
+     "reason": "Risk kapısı: KILL_SWITCH",
+     "risk_action": "KILL_SWITCH",
+     "size_multiplier": 0.0,
+     "symbol": "WTI",
+     "timeframe": "1h"
+    },
+    {
+     "action": "blocked",
+     "blocked_by": [
+      "risk_gate:KILL_SWITCH"
+     ],
+     "candidate_action": "open_long",
+     "confidence": 0.0,
+     "confidence_source": "identity",
+     "consensus_score": 69.2,
+     "expected_value": null,
+     "fingerprint": "WTI|v2|1w|NEUTRAL|bullish|S65|X|sentinel",
+     "raw_confidence": 0.384,
+     "reason": "Risk kapısı: KILL_SWITCH",
+     "risk_action": "KILL_SWITCH",
+     "size_multiplier": 0.0,
+     "symbol": "WTI",
+     "timeframe": "1w"
+    },
+    {
+     "action": "blocked",
+     "blocked_by": [
+      "risk_gate:KILL_SWITCH"
+     ],
+     "candidate_action": "open_long",
+     "confidence": 0.0,
+     "confidence_source": "identity",
+     "consensus_score": 59.9,
+     "expected_value": null,
+     "fingerprint": "WTI|v2|4h|NEUTRAL|bullish|S55|X|sentinel",
+     "raw_confidence": 0.198,
+     "reason": "Risk kapısı: KILL_SWITCH",
+     "risk_action": "KILL_SWITCH",
+     "size_multiplier": 0.0,
+     "symbol": "WTI",
+     "timeframe": "4h"
+    },
+    {
+     "action": "blocked",
+     "blocked_by": [
+      "risk_gate:KILL_SWITCH"
+     ],
+     "candidate_action": "open_long",
+     "confidence": 0.0,
+     "confidence_source": "identity",
      "consensus_score": 80.8,
      "expected_value": null,
      "fingerprint": "XAGUSD|v2|15m|NEUTRAL|bullish|S80|X|touche",
@@ -1230,10 +2490,10 @@
      "candidate_action": "open_long",
      "confidence": 0.0,
      "confidence_source": "identity",
-     "consensus_score": 67.3,
+     "consensus_score": 63.9,
      "expected_value": null,
-     "fingerprint": "XAGUSD|v2|1h|NEUTRAL|bullish|S65|X|sentinel",
-     "raw_confidence": 0.346,
+     "fingerprint": "XAGUSD|v2|1h|NEUTRAL|bullish|S55|X|sentinel",
+     "raw_confidence": 0.278,
      "reason": "Risk kapısı: KILL_SWITCH",
      "risk_action": "KILL_SWITCH",
      "size_multiplier": 0.0,
@@ -1266,10 +2526,10 @@
      "candidate_action": "open_long",
      "confidence": 0.0,
      "confidence_source": "identity",
-     "consensus_score": 71.3,
+     "consensus_score": 71.2,
      "expected_value": null,
      "fingerprint": "XAGUSD|v2|4h|NEUTRAL|bullish|S65|X|touche",
-     "raw_confidence": 0.426,
+     "raw_confidence": 0.424,
      "reason": "Risk kapısı: KILL_SWITCH",
      "risk_action": "KILL_SWITCH",
      "size_multiplier": 0.0,
@@ -1364,6 +2624,366 @@
      "risk_action": "KILL_SWITCH",
      "size_multiplier": 0.0,
      "symbol": "XAUUSD",
+     "timeframe": "4h"
+    },
+    {
+     "action": "blocked",
+     "blocked_by": [
+      "risk_gate:KILL_SWITCH"
+     ],
+     "candidate_action": "hold",
+     "confidence": 0.0,
+     "confidence_source": "identity",
+     "consensus_score": 52.5,
+     "expected_value": null,
+     "fingerprint": "XLE|v2|15m|NEUTRAL|neutral|S50|X|sentinel",
+     "raw_confidence": 0.05,
+     "reason": "Risk kapısı: KILL_SWITCH",
+     "risk_action": "KILL_SWITCH",
+     "size_multiplier": 0.0,
+     "symbol": "XLE",
+     "timeframe": "15m"
+    },
+    {
+     "action": "blocked",
+     "blocked_by": [
+      "risk_gate:KILL_SWITCH"
+     ],
+     "candidate_action": "open_long",
+     "confidence": 0.0,
+     "confidence_source": "identity",
+     "consensus_score": 71.6,
+     "expected_value": null,
+     "fingerprint": "XLE|v2|1d|NEUTRAL|bullish|S65|X|touche",
+     "raw_confidence": 0.432,
+     "reason": "Risk kapısı: KILL_SWITCH",
+     "risk_action": "KILL_SWITCH",
+     "size_multiplier": 0.0,
+     "symbol": "XLE",
+     "timeframe": "1d"
+    },
+    {
+     "action": "blocked",
+     "blocked_by": [
+      "risk_gate:KILL_SWITCH"
+     ],
+     "candidate_action": "open_long",
+     "confidence": 0.0,
+     "confidence_source": "identity",
+     "consensus_score": 83.6,
+     "expected_value": null,
+     "fingerprint": "XLE|v2|1h|NEUTRAL|bullish|S80|X|touche",
+     "raw_confidence": 0.672,
+     "reason": "Risk kapısı: KILL_SWITCH",
+     "risk_action": "KILL_SWITCH",
+     "size_multiplier": 0.0,
+     "symbol": "XLE",
+     "timeframe": "1h"
+    },
+    {
+     "action": "blocked",
+     "blocked_by": [
+      "risk_gate:KILL_SWITCH"
+     ],
+     "candidate_action": "hold",
+     "confidence": 0.0,
+     "confidence_source": "identity",
+     "consensus_score": 48.9,
+     "expected_value": null,
+     "fingerprint": "XLE|v2|1w|NEUTRAL|neutral|S50|X|touche",
+     "raw_confidence": 0.022,
+     "reason": "Risk kapısı: KILL_SWITCH",
+     "risk_action": "KILL_SWITCH",
+     "size_multiplier": 0.0,
+     "symbol": "XLE",
+     "timeframe": "1w"
+    },
+    {
+     "action": "blocked",
+     "blocked_by": [
+      "risk_gate:KILL_SWITCH"
+     ],
+     "candidate_action": "open_long",
+     "confidence": 0.0,
+     "confidence_source": "identity",
+     "consensus_score": 65.3,
+     "expected_value": null,
+     "fingerprint": "XLE|v2|4h|NEUTRAL|bullish|S65|X|sentinel",
+     "raw_confidence": 0.306,
+     "reason": "Risk kapısı: KILL_SWITCH",
+     "risk_action": "KILL_SWITCH",
+     "size_multiplier": 0.0,
+     "symbol": "XLE",
+     "timeframe": "4h"
+    },
+    {
+     "action": "blocked",
+     "blocked_by": [
+      "risk_gate:KILL_SWITCH"
+     ],
+     "candidate_action": "open_long",
+     "confidence": 0.0,
+     "confidence_source": "identity",
+     "consensus_score": 57.9,
+     "expected_value": null,
+     "fingerprint": "XLK|v2|15m|NEUTRAL|bullish|S55|X|sentinel",
+     "raw_confidence": 0.158,
+     "reason": "Risk kapısı: KILL_SWITCH",
+     "risk_action": "KILL_SWITCH",
+     "size_multiplier": 0.0,
+     "symbol": "XLK",
+     "timeframe": "15m"
+    },
+    {
+     "action": "blocked",
+     "blocked_by": [
+      "risk_gate:KILL_SWITCH"
+     ],
+     "candidate_action": "hold",
+     "confidence": 0.0,
+     "confidence_source": "identity",
+     "consensus_score": 47.6,
+     "expected_value": null,
+     "fingerprint": "XLK|v2|1d|NEUTRAL|neutral|S50|X|touche",
+     "raw_confidence": 0.048,
+     "reason": "Risk kapısı: KILL_SWITCH",
+     "risk_action": "KILL_SWITCH",
+     "size_multiplier": 0.0,
+     "symbol": "XLK",
+     "timeframe": "1d"
+    },
+    {
+     "action": "blocked",
+     "blocked_by": [
+      "risk_gate:KILL_SWITCH"
+     ],
+     "candidate_action": "open_long",
+     "confidence": 0.0,
+     "confidence_source": "identity",
+     "consensus_score": 80.5,
+     "expected_value": null,
+     "fingerprint": "XLK|v2|1h|NEUTRAL|bullish|S80|X|touche",
+     "raw_confidence": 0.61,
+     "reason": "Risk kapısı: KILL_SWITCH",
+     "risk_action": "KILL_SWITCH",
+     "size_multiplier": 0.0,
+     "symbol": "XLK",
+     "timeframe": "1h"
+    },
+    {
+     "action": "blocked",
+     "blocked_by": [
+      "risk_gate:KILL_SWITCH"
+     ],
+     "candidate_action": "open_long",
+     "confidence": 0.0,
+     "confidence_source": "identity",
+     "consensus_score": 79.8,
+     "expected_value": null,
+     "fingerprint": "XLK|v2|1w|NEUTRAL|bullish|S65|X|touche",
+     "raw_confidence": 0.596,
+     "reason": "Risk kapısı: KILL_SWITCH",
+     "risk_action": "KILL_SWITCH",
+     "size_multiplier": 0.0,
+     "symbol": "XLK",
+     "timeframe": "1w"
+    },
+    {
+     "action": "blocked",
+     "blocked_by": [
+      "risk_gate:KILL_SWITCH"
+     ],
+     "candidate_action": "open_long",
+     "confidence": 0.0,
+     "confidence_source": "identity",
+     "consensus_score": 75.1,
+     "expected_value": null,
+     "fingerprint": "XLK|v2|4h|NEUTRAL|bullish|S65|X|touche",
+     "raw_confidence": 0.502,
+     "reason": "Risk kapısı: KILL_SWITCH",
+     "risk_action": "KILL_SWITCH",
+     "size_multiplier": 0.0,
+     "symbol": "XLK",
+     "timeframe": "4h"
+    },
+    {
+     "action": "blocked",
+     "blocked_by": [
+      "risk_gate:KILL_SWITCH"
+     ],
+     "candidate_action": "open_long",
+     "confidence": 0.0,
+     "confidence_source": "identity",
+     "consensus_score": 63.9,
+     "expected_value": null,
+     "fingerprint": "XLP|v2|15m|NEUTRAL|bullish|S55|X|sentinel",
+     "raw_confidence": 0.278,
+     "reason": "Risk kapısı: KILL_SWITCH",
+     "risk_action": "KILL_SWITCH",
+     "size_multiplier": 0.0,
+     "symbol": "XLP",
+     "timeframe": "15m"
+    },
+    {
+     "action": "blocked",
+     "blocked_by": [
+      "risk_gate:KILL_SWITCH"
+     ],
+     "candidate_action": "open_long",
+     "confidence": 0.0,
+     "confidence_source": "identity",
+     "consensus_score": 58.4,
+     "expected_value": null,
+     "fingerprint": "XLP|v2|1d|NEUTRAL|bullish|S55|X|sentinel",
+     "raw_confidence": 0.168,
+     "reason": "Risk kapısı: KILL_SWITCH",
+     "risk_action": "KILL_SWITCH",
+     "size_multiplier": 0.0,
+     "symbol": "XLP",
+     "timeframe": "1d"
+    },
+    {
+     "action": "blocked",
+     "blocked_by": [
+      "risk_gate:KILL_SWITCH"
+     ],
+     "candidate_action": "open_long",
+     "confidence": 0.0,
+     "confidence_source": "identity",
+     "consensus_score": 58.6,
+     "expected_value": null,
+     "fingerprint": "XLP|v2|1h|NEUTRAL|bullish|S55|X|sentinel",
+     "raw_confidence": 0.172,
+     "reason": "Risk kapısı: KILL_SWITCH",
+     "risk_action": "KILL_SWITCH",
+     "size_multiplier": 0.0,
+     "symbol": "XLP",
+     "timeframe": "1h"
+    },
+    {
+     "action": "blocked",
+     "blocked_by": [
+      "risk_gate:KILL_SWITCH"
+     ],
+     "candidate_action": "open_long",
+     "confidence": 0.0,
+     "confidence_source": "identity",
+     "consensus_score": 64.3,
+     "expected_value": null,
+     "fingerprint": "XLP|v2|1w|NEUTRAL|bullish|S55|X|sentinel",
+     "raw_confidence": 0.286,
+     "reason": "Risk kapısı: KILL_SWITCH",
+     "risk_action": "KILL_SWITCH",
+     "size_multiplier": 0.0,
+     "symbol": "XLP",
+     "timeframe": "1w"
+    },
+    {
+     "action": "blocked",
+     "blocked_by": [
+      "risk_gate:KILL_SWITCH"
+     ],
+     "candidate_action": "hold",
+     "confidence": 0.0,
+     "confidence_source": "identity",
+     "consensus_score": 52.2,
+     "expected_value": null,
+     "fingerprint": "XLP|v2|4h|NEUTRAL|neutral|S50|X|sentinel",
+     "raw_confidence": 0.044,
+     "reason": "Risk kapısı: KILL_SWITCH",
+     "risk_action": "KILL_SWITCH",
+     "size_multiplier": 0.0,
+     "symbol": "XLP",
+     "timeframe": "4h"
+    },
+    {
+     "action": "blocked",
+     "blocked_by": [
+      "risk_gate:KILL_SWITCH"
+     ],
+     "candidate_action": "open_long",
+     "confidence": 0.0,
+     "confidence_source": "identity",
+     "consensus_score": 83.2,
+     "expected_value": null,
+     "fingerprint": "XLV|v2|15m|NEUTRAL|bullish|S80|X|touche",
+     "raw_confidence": 0.664,
+     "reason": "Risk kapısı: KILL_SWITCH",
+     "risk_action": "KILL_SWITCH",
+     "size_multiplier": 0.0,
+     "symbol": "XLV",
+     "timeframe": "15m"
+    },
+    {
+     "action": "blocked",
+     "blocked_by": [
+      "risk_gate:KILL_SWITCH"
+     ],
+     "candidate_action": "open_long",
+     "confidence": 0.0,
+     "confidence_source": "identity",
+     "consensus_score": 58.8,
+     "expected_value": null,
+     "fingerprint": "XLV|v2|1d|NEUTRAL|bullish|S55|X|sentinel",
+     "raw_confidence": 0.176,
+     "reason": "Risk kapısı: KILL_SWITCH",
+     "risk_action": "KILL_SWITCH",
+     "size_multiplier": 0.0,
+     "symbol": "XLV",
+     "timeframe": "1d"
+    },
+    {
+     "action": "blocked",
+     "blocked_by": [
+      "risk_gate:KILL_SWITCH"
+     ],
+     "candidate_action": "open_long",
+     "confidence": 0.0,
+     "confidence_source": "identity",
+     "consensus_score": 83.6,
+     "expected_value": null,
+     "fingerprint": "XLV|v2|1h|NEUTRAL|bullish|S80|X|touche",
+     "raw_confidence": 0.672,
+     "reason": "Risk kapısı: KILL_SWITCH",
+     "risk_action": "KILL_SWITCH",
+     "size_multiplier": 0.0,
+     "symbol": "XLV",
+     "timeframe": "1h"
+    },
+    {
+     "action": "blocked",
+     "blocked_by": [
+      "risk_gate:KILL_SWITCH"
+     ],
+     "candidate_action": "open_long",
+     "confidence": 0.0,
+     "confidence_source": "identity",
+     "consensus_score": 64.9,
+     "expected_value": null,
+     "fingerprint": "XLV|v2|1w|NEUTRAL|bullish|S55|X|sentinel",
+     "raw_confidence": 0.298,
+     "reason": "Risk kapısı: KILL_SWITCH",
+     "risk_action": "KILL_SWITCH",
+     "size_multiplier": 0.0,
+     "symbol": "XLV",
+     "timeframe": "1w"
+    },
+    {
+     "action": "blocked",
+     "blocked_by": [
+      "risk_gate:KILL_SWITCH"
+     ],
+     "candidate_action": "open_long",
+     "confidence": 0.0,
+     "confidence_source": "identity",
+     "consensus_score": 66.9,
+     "expected_value": null,
+     "fingerprint": "XLV|v2|4h|NEUTRAL|bullish|S65|X|sentinel",
+     "raw_confidence": 0.338,
+     "reason": "Risk kapısı: KILL_SWITCH",
+     "risk_action": "KILL_SWITCH",
+     "size_multiplier": 0.0,
+     "symbol": "XLV",
      "timeframe": "4h"
     }
    ],
@@ -1555,6 +3175,97 @@
      "timeframe": "4h"
     },
     {
+     "action": "open_long",
+     "blocked_by": [
+      "entry_quality_v2:reduce",
+      "sizing_layers"
+     ],
+     "candidate_action": "open_long",
+     "confidence": 0.66,
+     "confidence_source": "identity",
+     "consensus_score": 83.0,
+     "expected_value": 0.55,
+     "fingerprint": "COPPER|v2|15m|NEUTRAL|bullish|S80|X|touche",
+     "raw_confidence": 0.66,
+     "reason": "bullish signal · dominant=touche · tf:15m×0.25",
+     "risk_action": "HOLD",
+     "size_multiplier": 0.045,
+     "symbol": "COPPER",
+     "timeframe": "15m"
+    },
+    {
+     "action": "hold",
+     "blocked_by": [
+      "entry_quality_v2:entry_quality"
+     ],
+     "candidate_action": "open_long",
+     "confidence": 0.604,
+     "confidence_source": "identity",
+     "consensus_score": 80.2,
+     "expected_value": null,
+     "fingerprint": "COPPER|v2|1d|NEUTRAL|bullish|S80|X|touche",
+     "raw_confidence": 0.604,
+     "reason": "Giriş kalitesi: COPPER 1d open_long yönü korunuyor ama şimdi girilmez (kalite 0.4171, dönüş riski 0.0) — WAIT",
+     "risk_action": "HOLD",
+     "size_multiplier": 0.0,
+     "symbol": "COPPER",
+     "timeframe": "1d"
+    },
+    {
+     "action": "hold",
+     "blocked_by": [
+      "ev_gate"
+     ],
+     "candidate_action": "open_long",
+     "confidence": 0.3,
+     "confidence_source": "identity",
+     "consensus_score": 65.0,
+     "expected_value": -0.26,
+     "fingerprint": "COPPER|v2|1h|NEUTRAL|bullish|S65|X|sentinel",
+     "raw_confidence": 0.3,
+     "reason": "Negatif EV: -0.26R (p=0.30, RR=1.8)",
+     "risk_action": "HOLD",
+     "size_multiplier": 0.0,
+     "symbol": "COPPER",
+     "timeframe": "1h"
+    },
+    {
+     "action": "hold",
+     "blocked_by": [
+      "concentration_guard"
+     ],
+     "candidate_action": "open_long",
+     "confidence": 0.41,
+     "confidence_source": "identity",
+     "consensus_score": 70.5,
+     "expected_value": null,
+     "fingerprint": "COPPER|v2|1w|NEUTRAL|bullish|S65|X|touche",
+     "raw_confidence": 0.41,
+     "reason": "concentration: COPPER üzerinde zaten 1 LONG açık (1% equity) — aynı-yön yığını engellendi",
+     "risk_action": "HOLD",
+     "size_multiplier": 0.0,
+     "symbol": "COPPER",
+     "timeframe": "1w"
+    },
+    {
+     "action": "hold",
+     "blocked_by": [
+      "ev_gate"
+     ],
+     "candidate_action": "open_long",
+     "confidence": 0.328,
+     "confidence_source": "identity",
+     "consensus_score": 66.4,
+     "expected_value": -0.116,
+     "fingerprint": "COPPER|v2|4h|NEUTRAL|bullish|S65|X|sentinel",
+     "raw_confidence": 0.328,
+     "reason": "Negatif EV: -0.12R (p=0.33, RR=2.0)",
+     "risk_action": "HOLD",
+     "size_multiplier": 0.0,
+     "symbol": "COPPER",
+     "timeframe": "4h"
+    },
+    {
      "action": "hold",
      "blocked_by": [
       "ev_gate"
@@ -1593,16 +3304,16 @@
     {
      "action": "hold",
      "blocked_by": [
-      "ev_gate"
+      "confidence_floor"
      ],
      "candidate_action": "open_long",
-     "confidence": 0.352,
+     "confidence": 0.28,
      "confidence_source": "identity",
-     "consensus_score": 67.6,
-     "expected_value": -0.1144,
-     "fingerprint": "ETHUSD|v2|1h|NEUTRAL|bullish|S65|X|sentinel",
-     "raw_confidence": 0.352,
-     "reason": "Negatif EV: -0.11R (p=0.35, RR=1.8)",
+     "consensus_score": 64.0,
+     "expected_value": null,
+     "fingerprint": "ETHUSD|v2|1h|NEUTRAL|bullish|S55|X|sentinel",
+     "raw_confidence": 0.28,
+     "reason": "Düşük güven: p(win) %28 < taban %30",
      "risk_action": "HOLD",
      "size_multiplier": 0.0,
      "symbol": "ETHUSD",
@@ -1645,6 +3356,94 @@
     {
      "action": "hold",
      "blocked_by": [
+      "confidence_floor"
+     ],
+     "candidate_action": "open_long",
+     "confidence": 0.282,
+     "confidence_source": "identity",
+     "consensus_score": 64.1,
+     "expected_value": null,
+     "fingerprint": "WTI|v2|15m|NEUTRAL|bullish|S55|X|sentinel",
+     "raw_confidence": 0.282,
+     "reason": "Düşük güven: p(win) %28 < taban %30",
+     "risk_action": "HOLD",
+     "size_multiplier": 0.0,
+     "symbol": "WTI",
+     "timeframe": "15m"
+    },
+    {
+     "action": "hold",
+     "blocked_by": [
+      "confidence_floor"
+     ],
+     "candidate_action": "open_long",
+     "confidence": 0.184,
+     "confidence_source": "identity",
+     "consensus_score": 59.2,
+     "expected_value": null,
+     "fingerprint": "WTI|v2|1d|NEUTRAL|bullish|S55|X|sentinel",
+     "raw_confidence": 0.184,
+     "reason": "Düşük güven: p(win) %18 < taban %30",
+     "risk_action": "HOLD",
+     "size_multiplier": 0.0,
+     "symbol": "WTI",
+     "timeframe": "1d"
+    },
+    {
+     "action": "hold",
+     "blocked_by": [],
+     "candidate_action": "hold",
+     "confidence": 0.016,
+     "confidence_source": "identity",
+     "consensus_score": 49.2,
+     "expected_value": null,
+     "fingerprint": "WTI|v2|1h|NEUTRAL|neutral|S50|X|touche",
+     "raw_confidence": 0.016,
+     "reason": "Consensus eşiği aşılmadı",
+     "risk_action": "HOLD",
+     "size_multiplier": 0.0,
+     "symbol": "WTI",
+     "timeframe": "1h"
+    },
+    {
+     "action": "hold",
+     "blocked_by": [
+      "timeframe_policy:no_paper_execution"
+     ],
+     "candidate_action": "open_long",
+     "confidence": 0.384,
+     "confidence_source": "identity",
+     "consensus_score": 69.2,
+     "expected_value": null,
+     "fingerprint": "WTI|v2|1w|NEUTRAL|bullish|S65|X|sentinel",
+     "raw_confidence": 0.384,
+     "reason": "timeframe 1w (strategic): paper execution kapalı — sadece bias",
+     "risk_action": "HOLD",
+     "size_multiplier": 0.0,
+     "symbol": "WTI",
+     "timeframe": "1w"
+    },
+    {
+     "action": "hold",
+     "blocked_by": [
+      "confidence_floor"
+     ],
+     "candidate_action": "open_long",
+     "confidence": 0.198,
+     "confidence_source": "identity",
+     "consensus_score": 59.9,
+     "expected_value": null,
+     "fingerprint": "WTI|v2|4h|NEUTRAL|bullish|S55|X|sentinel",
+     "raw_confidence": 0.198,
+     "reason": "Düşük güven: p(win) %20 < taban %30",
+     "risk_action": "HOLD",
+     "size_multiplier": 0.0,
+     "symbol": "WTI",
+     "timeframe": "4h"
+    },
+    {
+     "action": "hold",
+     "blocked_by": [
       "entry_quality_v2:entry_quality"
      ],
      "candidate_action": "open_long",
@@ -1681,16 +3480,16 @@
     {
      "action": "hold",
      "blocked_by": [
-      "ev_gate"
+      "confidence_floor"
      ],
      "candidate_action": "open_long",
-     "confidence": 0.346,
+     "confidence": 0.278,
      "confidence_source": "identity",
-     "consensus_score": 67.3,
-     "expected_value": -0.1312,
-     "fingerprint": "XAGUSD|v2|1h|NEUTRAL|bullish|S65|X|sentinel",
-     "raw_confidence": 0.346,
-     "reason": "Negatif EV: -0.13R (p=0.35, RR=1.8)",
+     "consensus_score": 63.9,
+     "expected_value": null,
+     "fingerprint": "XAGUSD|v2|1h|NEUTRAL|bullish|S55|X|sentinel",
+     "raw_confidence": 0.278,
+     "reason": "Düşük güven: p(win) %28 < taban %30",
      "risk_action": "HOLD",
      "size_multiplier": 0.0,
      "symbol": "XAGUSD",
@@ -1722,15 +3521,15 @@
       "sizing_layers"
      ],
      "candidate_action": "open_long",
-     "confidence": 0.426,
+     "confidence": 0.424,
      "confidence_source": "identity",
-     "consensus_score": 71.3,
-     "expected_value": 0.178,
+     "consensus_score": 71.2,
+     "expected_value": 0.172,
      "fingerprint": "XAGUSD|v2|4h|NEUTRAL|bullish|S65|X|touche",
-     "raw_confidence": 0.426,
+     "raw_confidence": 0.424,
      "reason": "bullish signal · dominant=touche",
      "risk_action": "HOLD",
-     "size_multiplier": 0.126,
+     "size_multiplier": 0.123,
      "symbol": "XAGUSD",
      "timeframe": "4h"
     },
@@ -1816,6 +3615,360 @@
      "risk_action": "HOLD",
      "size_multiplier": 0.0,
      "symbol": "XAUUSD",
+     "timeframe": "4h"
+    },
+    {
+     "action": "hold",
+     "blocked_by": [],
+     "candidate_action": "hold",
+     "confidence": 0.05,
+     "confidence_source": "identity",
+     "consensus_score": 52.5,
+     "expected_value": null,
+     "fingerprint": "XLE|v2|15m|NEUTRAL|neutral|S50|X|sentinel",
+     "raw_confidence": 0.05,
+     "reason": "Consensus eşiği aşılmadı",
+     "risk_action": "HOLD",
+     "size_multiplier": 0.0,
+     "symbol": "XLE",
+     "timeframe": "15m"
+    },
+    {
+     "action": "open_long",
+     "blocked_by": [
+      "entry_quality_v2:reduce",
+      "kelly_cap",
+      "sizing_layers"
+     ],
+     "candidate_action": "open_long",
+     "confidence": 0.432,
+     "confidence_source": "identity",
+     "consensus_score": 71.6,
+     "expected_value": 0.412,
+     "fingerprint": "XLE|v2|1d|NEUTRAL|bullish|S65|X|touche",
+     "raw_confidence": 0.432,
+     "reason": "bullish signal · dominant=touche",
+     "risk_action": "HOLD",
+     "size_multiplier": 0.187,
+     "symbol": "XLE",
+     "timeframe": "1d"
+    },
+    {
+     "action": "hold",
+     "blocked_by": [
+      "entry_quality_v2:entry_quality"
+     ],
+     "candidate_action": "open_long",
+     "confidence": 0.672,
+     "confidence_source": "identity",
+     "consensus_score": 83.6,
+     "expected_value": null,
+     "fingerprint": "XLE|v2|1h|NEUTRAL|bullish|S80|X|touche",
+     "raw_confidence": 0.672,
+     "reason": "Giriş kalitesi: XLE 1h open_long yönü korunuyor ama şimdi girilmez (kalite 0.2412, dönüş riski 0.0) — WAIT",
+     "risk_action": "HOLD",
+     "size_multiplier": 0.0,
+     "symbol": "XLE",
+     "timeframe": "1h"
+    },
+    {
+     "action": "hold",
+     "blocked_by": [],
+     "candidate_action": "hold",
+     "confidence": 0.022,
+     "confidence_source": "identity",
+     "consensus_score": 48.9,
+     "expected_value": null,
+     "fingerprint": "XLE|v2|1w|NEUTRAL|neutral|S50|X|touche",
+     "raw_confidence": 0.022,
+     "reason": "Consensus eşiği aşılmadı",
+     "risk_action": "HOLD",
+     "size_multiplier": 0.0,
+     "symbol": "XLE",
+     "timeframe": "1w"
+    },
+    {
+     "action": "hold",
+     "blocked_by": [
+      "ev_gate"
+     ],
+     "candidate_action": "open_long",
+     "confidence": 0.306,
+     "confidence_source": "identity",
+     "consensus_score": 65.3,
+     "expected_value": -0.182,
+     "fingerprint": "XLE|v2|4h|NEUTRAL|bullish|S65|X|sentinel",
+     "raw_confidence": 0.306,
+     "reason": "Negatif EV: -0.18R (p=0.31, RR=2.0)",
+     "risk_action": "HOLD",
+     "size_multiplier": 0.0,
+     "symbol": "XLE",
+     "timeframe": "4h"
+    },
+    {
+     "action": "hold",
+     "blocked_by": [
+      "confidence_floor"
+     ],
+     "candidate_action": "open_long",
+     "confidence": 0.158,
+     "confidence_source": "identity",
+     "consensus_score": 57.9,
+     "expected_value": null,
+     "fingerprint": "XLK|v2|15m|NEUTRAL|bullish|S55|X|sentinel",
+     "raw_confidence": 0.158,
+     "reason": "Düşük güven: p(win) %16 < taban %30",
+     "risk_action": "HOLD",
+     "size_multiplier": 0.0,
+     "symbol": "XLK",
+     "timeframe": "15m"
+    },
+    {
+     "action": "hold",
+     "blocked_by": [],
+     "candidate_action": "hold",
+     "confidence": 0.048,
+     "confidence_source": "identity",
+     "consensus_score": 47.6,
+     "expected_value": null,
+     "fingerprint": "XLK|v2|1d|NEUTRAL|neutral|S50|X|touche",
+     "raw_confidence": 0.048,
+     "reason": "Consensus eşiği aşılmadı",
+     "risk_action": "HOLD",
+     "size_multiplier": 0.0,
+     "symbol": "XLK",
+     "timeframe": "1d"
+    },
+    {
+     "action": "hold",
+     "blocked_by": [
+      "entry_quality_v2:entry_quality"
+     ],
+     "candidate_action": "open_long",
+     "confidence": 0.61,
+     "confidence_source": "identity",
+     "consensus_score": 80.5,
+     "expected_value": null,
+     "fingerprint": "XLK|v2|1h|NEUTRAL|bullish|S80|X|touche",
+     "raw_confidence": 0.61,
+     "reason": "Giriş kalitesi: XLK 1h open_long yönü korunuyor ama şimdi girilmez (kalite 0.1556, dönüş riski 0.0) — WAIT",
+     "risk_action": "HOLD",
+     "size_multiplier": 0.0,
+     "symbol": "XLK",
+     "timeframe": "1h"
+    },
+    {
+     "action": "hold",
+     "blocked_by": [
+      "timeframe_policy:no_paper_execution"
+     ],
+     "candidate_action": "open_long",
+     "confidence": 0.596,
+     "confidence_source": "identity",
+     "consensus_score": 79.8,
+     "expected_value": null,
+     "fingerprint": "XLK|v2|1w|NEUTRAL|bullish|S65|X|touche",
+     "raw_confidence": 0.596,
+     "reason": "timeframe 1w (strategic): paper execution kapalı — sadece bias",
+     "risk_action": "HOLD",
+     "size_multiplier": 0.0,
+     "symbol": "XLK",
+     "timeframe": "1w"
+    },
+    {
+     "action": "hold",
+     "blocked_by": [
+      "entry_quality_v2:entry_quality"
+     ],
+     "candidate_action": "open_long",
+     "confidence": 0.502,
+     "confidence_source": "identity",
+     "consensus_score": 75.1,
+     "expected_value": null,
+     "fingerprint": "XLK|v2|4h|NEUTRAL|bullish|S65|X|touche",
+     "raw_confidence": 0.502,
+     "reason": "Giriş kalitesi: XLK 4h open_long yönü korunuyor ama şimdi girilmez (kalite 0.1555, dönüş riski 0.0) — WAIT",
+     "risk_action": "HOLD",
+     "size_multiplier": 0.0,
+     "symbol": "XLK",
+     "timeframe": "4h"
+    },
+    {
+     "action": "hold",
+     "blocked_by": [
+      "confidence_floor"
+     ],
+     "candidate_action": "open_long",
+     "confidence": 0.278,
+     "confidence_source": "identity",
+     "consensus_score": 63.9,
+     "expected_value": null,
+     "fingerprint": "XLP|v2|15m|NEUTRAL|bullish|S55|X|sentinel",
+     "raw_confidence": 0.278,
+     "reason": "Düşük güven: p(win) %28 < taban %30",
+     "risk_action": "HOLD",
+     "size_multiplier": 0.0,
+     "symbol": "XLP",
+     "timeframe": "15m"
+    },
+    {
+     "action": "hold",
+     "blocked_by": [
+      "confidence_floor"
+     ],
+     "candidate_action": "open_long",
+     "confidence": 0.168,
+     "confidence_source": "identity",
+     "consensus_score": 58.4,
+     "expected_value": null,
+     "fingerprint": "XLP|v2|1d|NEUTRAL|bullish|S55|X|sentinel",
+     "raw_confidence": 0.168,
+     "reason": "Düşük güven: p(win) %17 < taban %30",
+     "risk_action": "HOLD",
+     "size_multiplier": 0.0,
+     "symbol": "XLP",
+     "timeframe": "1d"
+    },
+    {
+     "action": "hold",
+     "blocked_by": [
+      "confidence_floor"
+     ],
+     "candidate_action": "open_long",
+     "confidence": 0.172,
+     "confidence_source": "identity",
+     "consensus_score": 58.6,
+     "expected_value": null,
+     "fingerprint": "XLP|v2|1h|NEUTRAL|bullish|S55|X|sentinel",
+     "raw_confidence": 0.172,
+     "reason": "Düşük güven: p(win) %17 < taban %30",
+     "risk_action": "HOLD",
+     "size_multiplier": 0.0,
+     "symbol": "XLP",
+     "timeframe": "1h"
+    },
+    {
+     "action": "hold",
+     "blocked_by": [
+      "confidence_floor"
+     ],
+     "candidate_action": "open_long",
+     "confidence": 0.286,
+     "confidence_source": "identity",
+     "consensus_score": 64.3,
+     "expected_value": null,
+     "fingerprint": "XLP|v2|1w|NEUTRAL|bullish|S55|X|sentinel",
+     "raw_confidence": 0.286,
+     "reason": "Düşük güven: p(win) %29 < taban %30",
+     "risk_action": "HOLD",
+     "size_multiplier": 0.0,
+     "symbol": "XLP",
+     "timeframe": "1w"
+    },
+    {
+     "action": "hold",
+     "blocked_by": [],
+     "candidate_action": "hold",
+     "confidence": 0.044,
+     "confidence_source": "identity",
+     "consensus_score": 52.2,
+     "expected_value": null,
+     "fingerprint": "XLP|v2|4h|NEUTRAL|neutral|S50|X|sentinel",
+     "raw_confidence": 0.044,
+     "reason": "Consensus eşiği aşılmadı",
+     "risk_action": "HOLD",
+     "size_multiplier": 0.0,
+     "symbol": "XLP",
+     "timeframe": "4h"
+    },
+    {
+     "action": "hold",
+     "blocked_by": [
+      "entry_quality_v2:entry_quality"
+     ],
+     "candidate_action": "open_long",
+     "confidence": 0.664,
+     "confidence_source": "identity",
+     "consensus_score": 83.2,
+     "expected_value": null,
+     "fingerprint": "XLV|v2|15m|NEUTRAL|bullish|S80|X|touche",
+     "raw_confidence": 0.664,
+     "reason": "Giriş kalitesi: XLV 15m open_long yönü korunuyor ama şimdi girilmez (kalite 0.1505, dönüş riski 0.0) — WAIT",
+     "risk_action": "HOLD",
+     "size_multiplier": 0.0,
+     "symbol": "XLV",
+     "timeframe": "15m"
+    },
+    {
+     "action": "hold",
+     "blocked_by": [
+      "confidence_floor"
+     ],
+     "candidate_action": "open_long",
+     "confidence": 0.176,
+     "confidence_source": "identity",
+     "consensus_score": 58.8,
+     "expected_value": null,
+     "fingerprint": "XLV|v2|1d|NEUTRAL|bullish|S55|X|sentinel",
+     "raw_confidence": 0.176,
+     "reason": "Düşük güven: p(win) %18 < taban %30",
+     "risk_action": "HOLD",
+     "size_multiplier": 0.0,
+     "symbol": "XLV",
+     "timeframe": "1d"
+    },
+    {
+     "action": "hold",
+     "blocked_by": [
+      "entry_quality_v2:entry_quality"
+     ],
+     "candidate_action": "open_long",
+     "confidence": 0.672,
+     "confidence_source": "identity",
+     "consensus_score": 83.6,
+     "expected_value": null,
+     "fingerprint": "XLV|v2|1h|NEUTRAL|bullish|S80|X|touche",
+     "raw_confidence": 0.672,
+     "reason": "Giriş kalitesi: XLV 1h open_long yönü korunuyor ama şimdi girilmez (kalite 0.2313, dönüş riski 0.0) — WAIT",
+     "risk_action": "HOLD",
+     "size_multiplier": 0.0,
+     "symbol": "XLV",
+     "timeframe": "1h"
+    },
+    {
+     "action": "hold",
+     "blocked_by": [
+      "confidence_floor"
+     ],
+     "candidate_action": "open_long",
+     "confidence": 0.298,
+     "confidence_source": "identity",
+     "consensus_score": 64.9,
+     "expected_value": null,
+     "fingerprint": "XLV|v2|1w|NEUTRAL|bullish|S55|X|sentinel",
+     "raw_confidence": 0.298,
+     "reason": "Düşük güven: p(win) %30 < taban %30",
+     "risk_action": "HOLD",
+     "size_multiplier": 0.0,
+     "symbol": "XLV",
+     "timeframe": "1w"
+    },
+    {
+     "action": "hold",
+     "blocked_by": [
+      "ev_gate"
+     ],
+     "candidate_action": "open_long",
+     "confidence": 0.338,
+     "confidence_source": "identity",
+     "consensus_score": 66.9,
+     "expected_value": -0.086,
+     "fingerprint": "XLV|v2|4h|NEUTRAL|bullish|S65|X|sentinel",
+     "raw_confidence": 0.338,
+     "reason": "Negatif EV: -0.09R (p=0.34, RR=2.0)",
+     "risk_action": "HOLD",
+     "size_multiplier": 0.0,
+     "symbol": "XLV",
      "timeframe": "4h"
     }
    ],
@@ -2010,6 +4163,97 @@
      "action": "open_long",
      "blocked_by": [
       "entry_quality_v2:reduce",
+      "sizing_layers"
+     ],
+     "candidate_action": "open_long",
+     "confidence": 0.66,
+     "confidence_source": "identity",
+     "consensus_score": 83.0,
+     "expected_value": 0.55,
+     "fingerprint": "COPPER|v2|15m|NEUTRAL|bullish|S80|X|touche",
+     "raw_confidence": 0.66,
+     "reason": "bullish signal · dominant=touche · tf:15m×0.25",
+     "risk_action": "HOLD",
+     "size_multiplier": 0.045,
+     "symbol": "COPPER",
+     "timeframe": "15m"
+    },
+    {
+     "action": "hold",
+     "blocked_by": [
+      "entry_quality_v2:entry_quality"
+     ],
+     "candidate_action": "open_long",
+     "confidence": 0.604,
+     "confidence_source": "identity",
+     "consensus_score": 80.2,
+     "expected_value": null,
+     "fingerprint": "COPPER|v2|1d|NEUTRAL|bullish|S80|X|touche",
+     "raw_confidence": 0.604,
+     "reason": "Giriş kalitesi: COPPER 1d open_long yönü korunuyor ama şimdi girilmez (kalite 0.4171, dönüş riski 0.0) — WAIT",
+     "risk_action": "HOLD",
+     "size_multiplier": 0.0,
+     "symbol": "COPPER",
+     "timeframe": "1d"
+    },
+    {
+     "action": "hold",
+     "blocked_by": [
+      "concentration_guard"
+     ],
+     "candidate_action": "open_long",
+     "confidence": 0.3,
+     "confidence_source": "identity",
+     "consensus_score": 65.0,
+     "expected_value": null,
+     "fingerprint": "COPPER|v2|1h|NEUTRAL|bullish|S65|X|sentinel",
+     "raw_confidence": 0.3,
+     "reason": "concentration: COPPER üzerinde zaten 1 LONG açık (1% equity) — aynı-yön yığını engellendi",
+     "risk_action": "HOLD",
+     "size_multiplier": 0.0,
+     "symbol": "COPPER",
+     "timeframe": "1h"
+    },
+    {
+     "action": "hold",
+     "blocked_by": [
+      "concentration_guard"
+     ],
+     "candidate_action": "open_long",
+     "confidence": 0.41,
+     "confidence_source": "identity",
+     "consensus_score": 70.5,
+     "expected_value": null,
+     "fingerprint": "COPPER|v2|1w|NEUTRAL|bullish|S65|X|touche",
+     "raw_confidence": 0.41,
+     "reason": "concentration: COPPER üzerinde zaten 1 LONG açık (1% equity) — aynı-yön yığını engellendi",
+     "risk_action": "HOLD",
+     "size_multiplier": 0.0,
+     "symbol": "COPPER",
+     "timeframe": "1w"
+    },
+    {
+     "action": "hold",
+     "blocked_by": [
+      "concentration_guard"
+     ],
+     "candidate_action": "open_long",
+     "confidence": 0.328,
+     "confidence_source": "identity",
+     "consensus_score": 66.4,
+     "expected_value": null,
+     "fingerprint": "COPPER|v2|4h|NEUTRAL|bullish|S65|X|sentinel",
+     "raw_confidence": 0.328,
+     "reason": "concentration: COPPER üzerinde zaten 1 LONG açık (1% equity) — aynı-yön yığını engellendi",
+     "risk_action": "HOLD",
+     "size_multiplier": 0.0,
+     "symbol": "COPPER",
+     "timeframe": "4h"
+    },
+    {
+     "action": "open_long",
+     "blocked_by": [
+      "entry_quality_v2:reduce",
       "paper_exploration:ev_gate",
       "kelly_cap",
       "sizing_layers"
@@ -2051,12 +4295,12 @@
       "concentration_guard"
      ],
      "candidate_action": "open_long",
-     "confidence": 0.352,
+     "confidence": 0.28,
      "confidence_source": "identity",
-     "consensus_score": 67.6,
+     "consensus_score": 64.0,
      "expected_value": null,
-     "fingerprint": "ETHUSD|v2|1h|NEUTRAL|bullish|S65|X|sentinel",
-     "raw_confidence": 0.352,
+     "fingerprint": "ETHUSD|v2|1h|NEUTRAL|bullish|S55|X|sentinel",
+     "raw_confidence": 0.28,
      "reason": "concentration: ETHUSD üzerinde zaten 1 LONG açık (1% equity) — aynı-yön yığını engellendi",
      "risk_action": "HOLD",
      "size_multiplier": 0.0,
@@ -2098,6 +4342,96 @@
      "timeframe": "4h"
     },
     {
+     "action": "open_long",
+     "blocked_by": [
+      "paper_exploration:confidence_floor",
+      "paper_exploration:ev_gate",
+      "kelly_cap"
+     ],
+     "candidate_action": "open_long",
+     "confidence": 0.282,
+     "confidence_source": "identity",
+     "consensus_score": 64.1,
+     "expected_value": -0.395,
+     "fingerprint": "WTI|v2|15m|NEUTRAL|bullish|S55|X|sentinel",
+     "raw_confidence": 0.282,
+     "reason": "bullish signal · dominant=sentinel · tf:15m×0.25",
+     "risk_action": "HOLD",
+     "size_multiplier": 0.0,
+     "symbol": "WTI",
+     "timeframe": "15m"
+    },
+    {
+     "action": "hold",
+     "blocked_by": [
+      "confidence_floor"
+     ],
+     "candidate_action": "open_long",
+     "confidence": 0.184,
+     "confidence_source": "identity",
+     "consensus_score": 59.2,
+     "expected_value": null,
+     "fingerprint": "WTI|v2|1d|NEUTRAL|bullish|S55|X|sentinel",
+     "raw_confidence": 0.184,
+     "reason": "Düşük güven: p(win) %18 < taban %30",
+     "risk_action": "HOLD",
+     "size_multiplier": 0.0,
+     "symbol": "WTI",
+     "timeframe": "1d"
+    },
+    {
+     "action": "hold",
+     "blocked_by": [],
+     "candidate_action": "hold",
+     "confidence": 0.016,
+     "confidence_source": "identity",
+     "consensus_score": 49.2,
+     "expected_value": null,
+     "fingerprint": "WTI|v2|1h|NEUTRAL|neutral|S50|X|touche",
+     "raw_confidence": 0.016,
+     "reason": "Consensus eşiği aşılmadı",
+     "risk_action": "HOLD",
+     "size_multiplier": 0.0,
+     "symbol": "WTI",
+     "timeframe": "1h"
+    },
+    {
+     "action": "hold",
+     "blocked_by": [
+      "timeframe_policy:no_paper_execution"
+     ],
+     "candidate_action": "open_long",
+     "confidence": 0.384,
+     "confidence_source": "identity",
+     "consensus_score": 69.2,
+     "expected_value": null,
+     "fingerprint": "WTI|v2|1w|NEUTRAL|bullish|S65|X|sentinel",
+     "raw_confidence": 0.384,
+     "reason": "timeframe 1w (strategic): paper execution kapalı — sadece bias",
+     "risk_action": "HOLD",
+     "size_multiplier": 0.0,
+     "symbol": "WTI",
+     "timeframe": "1w"
+    },
+    {
+     "action": "hold",
+     "blocked_by": [
+      "confidence_floor"
+     ],
+     "candidate_action": "open_long",
+     "confidence": 0.198,
+     "confidence_source": "identity",
+     "consensus_score": 59.9,
+     "expected_value": null,
+     "fingerprint": "WTI|v2|4h|NEUTRAL|bullish|S55|X|sentinel",
+     "raw_confidence": 0.198,
+     "reason": "Düşük güven: p(win) %20 < taban %30",
+     "risk_action": "HOLD",
+     "size_multiplier": 0.0,
+     "symbol": "WTI",
+     "timeframe": "4h"
+    },
+    {
      "action": "hold",
      "blocked_by": [
       "entry_quality_v2:entry_quality"
@@ -2136,16 +4470,17 @@
     {
      "action": "open_long",
      "blocked_by": [
+      "paper_exploration:confidence_floor",
       "paper_exploration:ev_gate",
       "kelly_cap"
      ],
      "candidate_action": "open_long",
-     "confidence": 0.346,
+     "confidence": 0.278,
      "confidence_source": "identity",
-     "consensus_score": 67.3,
-     "expected_value": -0.1312,
-     "fingerprint": "XAGUSD|v2|1h|NEUTRAL|bullish|S65|X|sentinel",
-     "raw_confidence": 0.346,
+     "consensus_score": 63.9,
+     "expected_value": -0.3216,
+     "fingerprint": "XAGUSD|v2|1h|NEUTRAL|bullish|S55|X|sentinel",
+     "raw_confidence": 0.278,
      "reason": "bullish signal · dominant=sentinel · tf:1h×0.5",
      "risk_action": "HOLD",
      "size_multiplier": 0.0,
@@ -2178,15 +4513,15 @@
       "sizing_layers"
      ],
      "candidate_action": "open_long",
-     "confidence": 0.426,
+     "confidence": 0.424,
      "confidence_source": "identity",
-     "consensus_score": 71.3,
-     "expected_value": 0.178,
+     "consensus_score": 71.2,
+     "expected_value": 0.172,
      "fingerprint": "XAGUSD|v2|4h|NEUTRAL|bullish|S65|X|touche",
-     "raw_confidence": 0.426,
+     "raw_confidence": 0.424,
      "reason": "bullish signal · dominant=touche",
      "risk_action": "HOLD",
-     "size_multiplier": 0.126,
+     "size_multiplier": 0.123,
      "symbol": "XAGUSD",
      "timeframe": "4h"
     },
@@ -2273,6 +4608,363 @@
      "size_multiplier": 0.0,
      "symbol": "XAUUSD",
      "timeframe": "4h"
+    },
+    {
+     "action": "hold",
+     "blocked_by": [],
+     "candidate_action": "hold",
+     "confidence": 0.05,
+     "confidence_source": "identity",
+     "consensus_score": 52.5,
+     "expected_value": null,
+     "fingerprint": "XLE|v2|15m|NEUTRAL|neutral|S50|X|sentinel",
+     "raw_confidence": 0.05,
+     "reason": "Consensus eşiği aşılmadı",
+     "risk_action": "HOLD",
+     "size_multiplier": 0.0,
+     "symbol": "XLE",
+     "timeframe": "15m"
+    },
+    {
+     "action": "open_long",
+     "blocked_by": [
+      "entry_quality_v2:reduce",
+      "kelly_cap",
+      "sizing_layers"
+     ],
+     "candidate_action": "open_long",
+     "confidence": 0.432,
+     "confidence_source": "identity",
+     "consensus_score": 71.6,
+     "expected_value": 0.412,
+     "fingerprint": "XLE|v2|1d|NEUTRAL|bullish|S65|X|touche",
+     "raw_confidence": 0.432,
+     "reason": "bullish signal · dominant=touche",
+     "risk_action": "HOLD",
+     "size_multiplier": 0.187,
+     "symbol": "XLE",
+     "timeframe": "1d"
+    },
+    {
+     "action": "hold",
+     "blocked_by": [
+      "entry_quality_v2:entry_quality"
+     ],
+     "candidate_action": "open_long",
+     "confidence": 0.672,
+     "confidence_source": "identity",
+     "consensus_score": 83.6,
+     "expected_value": null,
+     "fingerprint": "XLE|v2|1h|NEUTRAL|bullish|S80|X|touche",
+     "raw_confidence": 0.672,
+     "reason": "Giriş kalitesi: XLE 1h open_long yönü korunuyor ama şimdi girilmez (kalite 0.2412, dönüş riski 0.0) — WAIT",
+     "risk_action": "HOLD",
+     "size_multiplier": 0.0,
+     "symbol": "XLE",
+     "timeframe": "1h"
+    },
+    {
+     "action": "hold",
+     "blocked_by": [],
+     "candidate_action": "hold",
+     "confidence": 0.022,
+     "confidence_source": "identity",
+     "consensus_score": 48.9,
+     "expected_value": null,
+     "fingerprint": "XLE|v2|1w|NEUTRAL|neutral|S50|X|touche",
+     "raw_confidence": 0.022,
+     "reason": "Consensus eşiği aşılmadı",
+     "risk_action": "HOLD",
+     "size_multiplier": 0.0,
+     "symbol": "XLE",
+     "timeframe": "1w"
+    },
+    {
+     "action": "open_long",
+     "blocked_by": [
+      "paper_exploration:ev_gate",
+      "kelly_cap"
+     ],
+     "candidate_action": "open_long",
+     "confidence": 0.306,
+     "confidence_source": "identity",
+     "consensus_score": 65.3,
+     "expected_value": -0.182,
+     "fingerprint": "XLE|v2|4h|NEUTRAL|bullish|S65|X|sentinel",
+     "raw_confidence": 0.306,
+     "reason": "bullish signal · dominant=sentinel",
+     "risk_action": "HOLD",
+     "size_multiplier": 0.0,
+     "symbol": "XLE",
+     "timeframe": "4h"
+    },
+    {
+     "action": "hold",
+     "blocked_by": [
+      "confidence_floor"
+     ],
+     "candidate_action": "open_long",
+     "confidence": 0.158,
+     "confidence_source": "identity",
+     "consensus_score": 57.9,
+     "expected_value": null,
+     "fingerprint": "XLK|v2|15m|NEUTRAL|bullish|S55|X|sentinel",
+     "raw_confidence": 0.158,
+     "reason": "Düşük güven: p(win) %16 < taban %30",
+     "risk_action": "HOLD",
+     "size_multiplier": 0.0,
+     "symbol": "XLK",
+     "timeframe": "15m"
+    },
+    {
+     "action": "hold",
+     "blocked_by": [],
+     "candidate_action": "hold",
+     "confidence": 0.048,
+     "confidence_source": "identity",
+     "consensus_score": 47.6,
+     "expected_value": null,
+     "fingerprint": "XLK|v2|1d|NEUTRAL|neutral|S50|X|touche",
+     "raw_confidence": 0.048,
+     "reason": "Consensus eşiği aşılmadı",
+     "risk_action": "HOLD",
+     "size_multiplier": 0.0,
+     "symbol": "XLK",
+     "timeframe": "1d"
+    },
+    {
+     "action": "hold",
+     "blocked_by": [
+      "entry_quality_v2:entry_quality"
+     ],
+     "candidate_action": "open_long",
+     "confidence": 0.61,
+     "confidence_source": "identity",
+     "consensus_score": 80.5,
+     "expected_value": null,
+     "fingerprint": "XLK|v2|1h|NEUTRAL|bullish|S80|X|touche",
+     "raw_confidence": 0.61,
+     "reason": "Giriş kalitesi: XLK 1h open_long yönü korunuyor ama şimdi girilmez (kalite 0.1556, dönüş riski 0.0) — WAIT",
+     "risk_action": "HOLD",
+     "size_multiplier": 0.0,
+     "symbol": "XLK",
+     "timeframe": "1h"
+    },
+    {
+     "action": "hold",
+     "blocked_by": [
+      "timeframe_policy:no_paper_execution"
+     ],
+     "candidate_action": "open_long",
+     "confidence": 0.596,
+     "confidence_source": "identity",
+     "consensus_score": 79.8,
+     "expected_value": null,
+     "fingerprint": "XLK|v2|1w|NEUTRAL|bullish|S65|X|touche",
+     "raw_confidence": 0.596,
+     "reason": "timeframe 1w (strategic): paper execution kapalı — sadece bias",
+     "risk_action": "HOLD",
+     "size_multiplier": 0.0,
+     "symbol": "XLK",
+     "timeframe": "1w"
+    },
+    {
+     "action": "hold",
+     "blocked_by": [
+      "entry_quality_v2:entry_quality"
+     ],
+     "candidate_action": "open_long",
+     "confidence": 0.502,
+     "confidence_source": "identity",
+     "consensus_score": 75.1,
+     "expected_value": null,
+     "fingerprint": "XLK|v2|4h|NEUTRAL|bullish|S65|X|touche",
+     "raw_confidence": 0.502,
+     "reason": "Giriş kalitesi: XLK 4h open_long yönü korunuyor ama şimdi girilmez (kalite 0.1555, dönüş riski 0.0) — WAIT",
+     "risk_action": "HOLD",
+     "size_multiplier": 0.0,
+     "symbol": "XLK",
+     "timeframe": "4h"
+    },
+    {
+     "action": "hold",
+     "blocked_by": [
+      "ev_gate"
+     ],
+     "candidate_action": "open_long",
+     "confidence": 0.278,
+     "confidence_source": "identity",
+     "consensus_score": 63.9,
+     "expected_value": -0.405,
+     "fingerprint": "XLP|v2|15m|NEUTRAL|bullish|S55|X|sentinel",
+     "raw_confidence": 0.278,
+     "reason": "Negatif EV: -0.40R (p=0.28, RR=1.5)",
+     "risk_action": "HOLD",
+     "size_multiplier": 0.0,
+     "symbol": "XLP",
+     "timeframe": "15m"
+    },
+    {
+     "action": "hold",
+     "blocked_by": [
+      "confidence_floor"
+     ],
+     "candidate_action": "open_long",
+     "confidence": 0.168,
+     "confidence_source": "identity",
+     "consensus_score": 58.4,
+     "expected_value": null,
+     "fingerprint": "XLP|v2|1d|NEUTRAL|bullish|S55|X|sentinel",
+     "raw_confidence": 0.168,
+     "reason": "Düşük güven: p(win) %17 < taban %30",
+     "risk_action": "HOLD",
+     "size_multiplier": 0.0,
+     "symbol": "XLP",
+     "timeframe": "1d"
+    },
+    {
+     "action": "hold",
+     "blocked_by": [
+      "confidence_floor"
+     ],
+     "candidate_action": "open_long",
+     "confidence": 0.172,
+     "confidence_source": "identity",
+     "consensus_score": 58.6,
+     "expected_value": null,
+     "fingerprint": "XLP|v2|1h|NEUTRAL|bullish|S55|X|sentinel",
+     "raw_confidence": 0.172,
+     "reason": "Düşük güven: p(win) %17 < taban %30",
+     "risk_action": "HOLD",
+     "size_multiplier": 0.0,
+     "symbol": "XLP",
+     "timeframe": "1h"
+    },
+    {
+     "action": "hold",
+     "blocked_by": [
+      "timeframe_policy:no_paper_execution"
+     ],
+     "candidate_action": "open_long",
+     "confidence": 0.286,
+     "confidence_source": "identity",
+     "consensus_score": 64.3,
+     "expected_value": null,
+     "fingerprint": "XLP|v2|1w|NEUTRAL|bullish|S55|X|sentinel",
+     "raw_confidence": 0.286,
+     "reason": "timeframe 1w (strategic): paper execution kapalı — sadece bias",
+     "risk_action": "HOLD",
+     "size_multiplier": 0.0,
+     "symbol": "XLP",
+     "timeframe": "1w"
+    },
+    {
+     "action": "hold",
+     "blocked_by": [],
+     "candidate_action": "hold",
+     "confidence": 0.044,
+     "confidence_source": "identity",
+     "consensus_score": 52.2,
+     "expected_value": null,
+     "fingerprint": "XLP|v2|4h|NEUTRAL|neutral|S50|X|sentinel",
+     "raw_confidence": 0.044,
+     "reason": "Consensus eşiği aşılmadı",
+     "risk_action": "HOLD",
+     "size_multiplier": 0.0,
+     "symbol": "XLP",
+     "timeframe": "4h"
+    },
+    {
+     "action": "hold",
+     "blocked_by": [
+      "entry_quality_v2:entry_quality"
+     ],
+     "candidate_action": "open_long",
+     "confidence": 0.664,
+     "confidence_source": "identity",
+     "consensus_score": 83.2,
+     "expected_value": null,
+     "fingerprint": "XLV|v2|15m|NEUTRAL|bullish|S80|X|touche",
+     "raw_confidence": 0.664,
+     "reason": "Giriş kalitesi: XLV 15m open_long yönü korunuyor ama şimdi girilmez (kalite 0.1505, dönüş riski 0.0) — WAIT",
+     "risk_action": "HOLD",
+     "size_multiplier": 0.0,
+     "symbol": "XLV",
+     "timeframe": "15m"
+    },
+    {
+     "action": "hold",
+     "blocked_by": [
+      "confidence_floor"
+     ],
+     "candidate_action": "open_long",
+     "confidence": 0.176,
+     "confidence_source": "identity",
+     "consensus_score": 58.8,
+     "expected_value": null,
+     "fingerprint": "XLV|v2|1d|NEUTRAL|bullish|S55|X|sentinel",
+     "raw_confidence": 0.176,
+     "reason": "Düşük güven: p(win) %18 < taban %30",
+     "risk_action": "HOLD",
+     "size_multiplier": 0.0,
+     "symbol": "XLV",
+     "timeframe": "1d"
+    },
+    {
+     "action": "hold",
+     "blocked_by": [
+      "entry_quality_v2:entry_quality"
+     ],
+     "candidate_action": "open_long",
+     "confidence": 0.672,
+     "confidence_source": "identity",
+     "consensus_score": 83.6,
+     "expected_value": null,
+     "fingerprint": "XLV|v2|1h|NEUTRAL|bullish|S80|X|touche",
+     "raw_confidence": 0.672,
+     "reason": "Giriş kalitesi: XLV 1h open_long yönü korunuyor ama şimdi girilmez (kalite 0.2313, dönüş riski 0.0) — WAIT",
+     "risk_action": "HOLD",
+     "size_multiplier": 0.0,
+     "symbol": "XLV",
+     "timeframe": "1h"
+    },
+    {
+     "action": "hold",
+     "blocked_by": [
+      "concentration_guard"
+     ],
+     "candidate_action": "open_long",
+     "confidence": 0.298,
+     "confidence_source": "identity",
+     "consensus_score": 64.9,
+     "expected_value": null,
+     "fingerprint": "XLV|v2|1w|NEUTRAL|bullish|S55|X|sentinel",
+     "raw_confidence": 0.298,
+     "reason": "concentration: XLV üzerinde zaten 1 LONG açık (0% equity) — aynı-yön yığını engellendi",
+     "risk_action": "HOLD",
+     "size_multiplier": 0.0,
+     "symbol": "XLV",
+     "timeframe": "1w"
+    },
+    {
+     "action": "open_long",
+     "blocked_by": [
+      "paper_exploration:ev_gate",
+      "kelly_cap",
+      "sizing_layers"
+     ],
+     "candidate_action": "open_long",
+     "confidence": 0.338,
+     "confidence_source": "identity",
+     "consensus_score": 66.9,
+     "expected_value": -0.086,
+     "fingerprint": "XLV|v2|4h|NEUTRAL|bullish|S65|X|sentinel",
+     "raw_confidence": 0.338,
+     "reason": "bullish signal · dominant=sentinel",
+     "risk_action": "HOLD",
+     "size_multiplier": 0.006,
+     "symbol": "XLV",
+     "timeframe": "4h"
     }
    ],
    "regime": "NEUTRAL",
@@ -2284,6 +4976,12 @@
   "ETHUSD",
   "XAUUSD",
   "XAGUSD",
-  "BRENT"
+  "BRENT",
+  "WTI",
+  "COPPER",
+  "XLE",
+  "XLK",
+  "XLV",
+  "XLP"
  ]
 }

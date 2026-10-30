@@ -5,6 +5,7 @@ Hepsi yetersiz veri durumunda None döner; asla uydurma değer üretmez
 """
 from __future__ import annotations
 
+from datetime import UTC
 from itertools import pairwise
 
 from packages.data.types import OHLCVBar
@@ -201,6 +202,24 @@ def vwap(bars: list[OHLCVBar]) -> float | None:
     if vol <= 0:
         return None
     return pv / vol
+
+
+def session_vwap(bars: list[OHLCVBar]) -> float | None:
+    """VWAP for the most recent UTC session/day in ``bars``.
+
+    The generic :func:`vwap` remains available for anchored/rolling evidence.
+    Intraday direction confirmation must reset at the session boundary; using
+    several prior days in the same value makes ``above_vwap`` non-stationary.
+    """
+    if not bars:
+        return None
+    last = bars[-1].ts
+    last_day = (last if last.tzinfo is not None else last.replace(tzinfo=UTC)).astimezone(UTC).date()
+    return vwap([
+        bar for bar in bars
+        if (bar.ts if bar.ts.tzinfo is not None else bar.ts.replace(tzinfo=UTC))
+        .astimezone(UTC).date() == last_day
+    ])
 
 
 def bollinger_width(closes: list[float], period: int = 20, mult: float = 2.0) -> float | None:

@@ -11,9 +11,9 @@ import hashlib
 import re
 import time
 
+from packages.agent import canonical_context as ctx_mod
 from packages.agent.llm import budget, cache, guard, system_memory, web_search
 from packages.agent.llm import client as llm_client
-from packages.agent.llm import context as ctx_mod
 from packages.notifications import list_recent as list_notifications
 
 _SYMBOL_ALIASES = {
@@ -1352,7 +1352,7 @@ def _prepare(message: str, history: list[dict] | None) -> dict:
     answer() ve stream_answer() aynı hazırlığı paylaşır; fallback dallarında hep
     buradaki grounded kullanılır, ikinci çağrı YAPILMAZ (manuel emir çifte açılmasın).
     """
-    ctx = ctx_mod.build_compact_context()
+    ctx = ctx_mod.build_canonical_context()
     grounded, evidence = _grounded_answer(message, ctx)
     live_evidence = any(e.startswith("web:tavily") or e.startswith("web:http") for e in evidence)
     hist_msgs = _history_messages(history)

@@ -29,6 +29,10 @@ load_repo_dotenv(skip_pytest=True)
 
 # httpx üzerinden API'yi çağırmak yerine paketleri doğrudan çağırıyoruz —
 # böylece worker API'ye bağımlı değil.
+# Provider imports intentionally follow dotenv loading so credentials are
+# available during module initialization.
+# ruff: noqa: E402
+from packages.agent.brief_id import build_brief_id
 from packages.causal.engine import build_shadow
 from packages.data import snapshot_store
 from packages.data.ingestion.pipeline import build_snapshot
@@ -41,6 +45,11 @@ from packages.decision import (
     paper_policy,
     shadow,
     shadow_activation,
+)
+from packages.decision.cockpit import (
+    finalize_matrix_view,
+    technical_confirmation_ready,
+    technical_data_ready,
 )
 from packages.decision.engine import decide_matrix, is_execution_ready, matrix_view
 from packages.learning import (
@@ -55,10 +64,10 @@ from packages.notifications import detector as notif_detector
 from packages.ops import heartbeat
 from packages.paper import manual_queue, news_setup, ticket
 from packages.paper import state as paper_state
-from packages.paper.signal_identity import build_signal_id
 from packages.paper.lifecycle import _ensure_daily_anchor, attempt_open, flatten_all
 from packages.paper.lifecycle import tick as price_tick
 from packages.paper.recheck import compute_rechecks
+from packages.paper.signal_identity import build_signal_id
 from packages.risk import halt as halt_store
 from packages.risk.engine import RiskInput
 from packages.world_state.engine import build as build_world_state
@@ -130,11 +139,15 @@ def _causal_reconstruction_payload(snap) -> dict:
     }
 
 
-# S1-4 — OPSİYONEL sağlayıcılar: bazı ağlardan kalıcı erişilemeyen yan
-# kaynaklar (Deribit bölgesel engelli). Bunların arızası tek başına worker'ı
-# DEGRADED yapmaz (alarm yorgunluğu gerçek arızayı maskeler); sebep yine
-# degraded_reasons'ta listelenir, provider_status'ta görünür kalır.
-OPTIONAL_PROVIDERS = frozenset({"options_deribit"})
+# S1-4 — gözlemsel/opsiyonel sağlayıcılar: karar yolunda zorunlu olmayan
+# kaynakların erişim sorunu worker'ı DEGRADED yapmaz. DQS ve teknik veri
+# kapıları yine kendi tazelik/doğrulama kurallarıyla çalışır; kaynak adı
+# heartbeat degraded_reasons'ta ve system-health görünümünde kalır.
+OPTIONAL_PROVIDERS = frozenset({
+    "options_deribit",
+    "macro_bls",
+    "ohlcv_coingecko",
+})
 
 
 def _degraded_providers(snap) -> tuple[list[str], list[str]]:
@@ -223,8 +236,21 @@ def _acquire_single_instance() -> None:
                 raise RuntimeError(f"stale tick_worker lock cannot be removed: {LOCK_PATH}") from exc
 
 
-def _snapshot_record(snap, view: dict, risk, ps) -> dict:
+def _snapshot_record(
+    snap,
+    view: dict,
+    risk,
+    ps,
+    *,
+    world_state=None,
+    causal_evidence=None,
+) -> dict:
     """R1 — disk snapshot store payload'u (gerçek state; sahte backtest yok)."""
+    canonical_evidence = {
+        "snapshot_id": snap.snapshot_id,
+        "world_state": world_state.to_dict() if world_state is not None else None,
+        "causal": causal_evidence.to_dict() if causal_evidence is not None else None,
+    }
     return {
         "schema_version": snapshot_store.SCHEMA_VERSION,
         "snapshot_id": snap.snapshot_id,
@@ -245,6 +271,10 @@ def _snapshot_record(snap, view: dict, risk, ps) -> dict:
             "warnings": list(snap.warnings)[:8],
         },
         "causal_reconstruction": _causal_reconstruction_payload(snap),
+        # Canonical evidence is persisted beside (not instead of) the legacy
+        # reconstruction payload so replay consumers can read one as-of world
+        # and causal context without rebuilding a different tick.
+        "canonical_evidence": canonical_evidence,
         "decision_matrix": view,
         "risk_state": {
             "action": risk.action,
@@ -320,6 +350,13 @@ async def run_once() -> None:
     try:
         snap = build_snapshot()
         t_snap = time.monotonic()  # B5 — aşama süresi görünürlüğü
+        # Canonical pre-decision world context.  World/news evidence is built
+        # from the same immutable snapshot before the paper route is entered;
+        # the causal fusion below still consumes the current tick's technical
+        # decisions because its technical-confirmation field is decision-aware.
+        # This removes the old one-tick lag without creating a second snapshot
+        # or a second decision engine.
+        news_world = build_world_state(snap)
         # T3 — defter mutasyon bölümü (oku→kapat/aç→yaz) süreçler-arası kilit
         # altında: API'nin owner mutasyonlarıyla yarışta kayıt kaybolmaz.
         # Snapshot (ağ) kilitten ÖNCE alınır; commit ilk save noktasında.
@@ -381,6 +418,46 @@ async def run_once() -> None:
         decisions_generated = len(decisions)
         t_decide = time.monotonic()  # B5 — aşama süresi görünürlüğü
         now = datetime.now(UTC)
+        causal_evidence = None
+
+        # Canonical news/causal preparation belongs before the execution route.
+        # The previous order committed the paper book first and refreshed this
+        # queue afterwards, so a fresh event could only support a position on
+        # the next tick.  Keep the same RiskGate/attempt_open path, but arm the
+        # current snapshot inside the existing transaction first.
+        try:
+            news_legacy = {
+                f"{d.symbol}|{d.timeframe}": {
+                    "score": d.consensus.score,
+                    "direction": d.consensus.direction,
+                    "timeframe": d.timeframe,
+                }
+                for d in decisions
+            }
+            news_shadow = build_shadow(
+                news_world,
+                MATRIX_SYMBOLS,
+                technicals=snap.technicals_by_tf or snap.technicals,
+                prices={quote.symbol: quote for quote in snap.prices},
+                volatility=snap.volatility,
+                legacy_scores=news_legacy,
+            )
+            causal_evidence = news_shadow
+            news_setup.sync(
+                ps,
+                causal_shadow=news_shadow.to_dict(),
+                world_state=news_world.to_dict(),
+                prices=prices,
+                decisions=decisions,
+                risk_action=_risk.action,
+                snapshot_id=snap.snapshot_id,
+                now=now,
+            )
+        except Exception:
+            # News preparation is restrictive context, never a reason to take
+            # the worker down.  RiskGate and technical readiness remain the
+            # final authorities if the optional evidence path is unavailable.
+            log.exception("news prepared setup refresh failed before execution (tick devam ediyor)")
 
         # Recheck state is prepared before the opening pass. Ticket and
         # notification state is deliberately emitted *after* attempt_open;
@@ -433,6 +510,27 @@ async def run_once() -> None:
                 continue
             if d.action not in {"open_long", "open_short"}:
                 continue
+            if not technical_data_ready(snap, d.symbol, d.timeframe):
+                log.info(
+                    "technical data hold: %s %s %s — technical cell degraded or stale",
+                    d.symbol, d.timeframe, d.action,
+                )
+                continue
+            technical_ok, technical_reason = technical_confirmation_ready(
+                snap,
+                d.symbol,
+                d.timeframe,
+                "long" if d.action == "open_long" else "short",
+            )
+            if not technical_ok:
+                log.info(
+                    "technical confirmation hold: %s %s %s — %s",
+                    d.symbol,
+                    d.timeframe,
+                    d.action,
+                    technical_reason or "insufficient same-side confirmations",
+                )
+                continue
             news_match = None
             if news_setup.require_confluence_for_auto_open():
                 news_match = news_setup.match_confluence(
@@ -442,6 +540,7 @@ async def run_once() -> None:
                     side="long" if d.action == "open_long" else "short",
                     price=prices.get(d.symbol),
                     data_verified=verified_flags.get(d.symbol, False),
+                    decision_id=getattr(d, "decision_id", None),
                     now=now,
                 )
                 if news_match is None:
@@ -464,11 +563,13 @@ async def run_once() -> None:
             side = "long" if d.action == "open_long" else "short"
             news_setup_id = str((news_match or {}).get("setup_id") or "") or None
             news_event_id = str((news_match or {}).get("event_id") or "") or None
+            news_evidence_id = str((news_match or {}).get("evidence_id") or "") or None
             signal_id = build_signal_id(
                 symbol=d.symbol,
                 timeframe=d.timeframe,
                 side=side,
                 fingerprint=d.fingerprint,
+                decision_id=getattr(d, "decision_id", None),
                 news_setup_id=news_setup_id,
                 news_event_id=news_event_id,
             )
@@ -489,8 +590,10 @@ async def run_once() -> None:
                     fingerprint=d.fingerprint,
                     snapshot_id=snap.snapshot_id,
                     signal_id=signal_id,
+                    decision_id=getattr(d, "decision_id", None),
                     news_setup_id=news_setup_id,
                     news_event_id=news_event_id,
+                    news_evidence_id=news_evidence_id,
                 )
                 continue
             # P1 — açılış tek yoldan (attempt_open): duplicate/scale-in politikası +
@@ -515,8 +618,10 @@ async def run_once() -> None:
                 ),
                 snapshot_id=snap.snapshot_id,
                 signal_id=signal_id,
+                decision_id=getattr(d, "decision_id", None),
                 news_setup_id=news_setup_id,
                 news_event_id=news_event_id,
+                news_evidence_id=news_evidence_id,
                 fingerprint=d.fingerprint,
                 data_verified=verified_flags.get(d.symbol, False),
                 predicted_confidence=d.confidence,
@@ -543,6 +648,8 @@ async def run_once() -> None:
             if pos is not None:
                 opened_by_signal[signal_id] = pos.id
                 paper_actions += 1
+                if news_match:
+                    news_setup.mark_activated(ps, news_setup_id, now=now)
                 log.info(
                     "open: %s %s %s @ %.4f size=%.0f valid_until=%s",
                     pos.symbol, pos.timeframe, pos.side, pos.entry_price, pos.size_usd,
@@ -570,6 +677,7 @@ async def run_once() -> None:
         # T1 — one truthful surface: only successfully opened paper positions
         # create active tickets and audible notifications. Rechecks/risk/DQS
         # notifications remain observational and are appended alongside them.
+        observer_failed = False
         try:
             seen_ticket_ids = set(_PREV_STATE["ticket_ids"])
             if not seen_ticket_ids:
@@ -584,6 +692,10 @@ async def run_once() -> None:
                 ps,
                 only_signal_ids=set(opened_by_signal),
                 position_ids_by_signal=opened_by_signal,
+                brief_id=build_brief_id(
+                    getattr(snap, "snapshot_id", None),
+                    getattr(ps, "revision", None),
+                ),
             )
             ticket_dicts = [t.to_dict() for t in tickets]
             ticket.save_last(ticket_dicts)
@@ -604,43 +716,8 @@ async def run_once() -> None:
             _PREV_STATE["risk_action"] = _risk.action
             _PREV_STATE["dqs"] = snap.quality.score if snap.quality else None
         except Exception:
+            observer_failed = True
             log.exception("gözlem yüzeyi (ticket/recheck/bildirim) üretimi başarısız — tick devam ediyor")
-
-        # Haber/causal hazırlık kuyruğu: dünya kanıtını ayrı bir gözlem katmanı
-        # olarak saklar. Bu çağrı emir açmaz; sonraki tick'te mevcut karar,
-        # seans ve RiskGate zinciri izin verirse normal attempt_open yolu pozisyon
-        # açar ve kuyruk girdisi ACTIVATED olarak işaretlenir.
-        try:
-            news_world = build_world_state(snap)
-            news_legacy = {
-                f"{d.symbol}|{d.timeframe}": {
-                    "score": d.consensus.score,
-                    "direction": d.consensus.direction,
-                    "timeframe": d.timeframe,
-                }
-                for d in decisions
-            }
-            news_shadow = build_shadow(
-                news_world,
-                MATRIX_SYMBOLS,
-                technicals=snap.technicals_by_tf or snap.technicals,
-                prices={quote.symbol: quote for quote in snap.prices},
-                volatility=snap.volatility,
-                legacy_scores=news_legacy,
-            )
-            with paper_state.transaction("tick:news_prepared_setups") as ps_news:
-                news_setup.sync(
-                    ps_news,
-                    causal_shadow=news_shadow.to_dict(),
-                    world_state=news_world.to_dict(),
-                    prices=prices,
-                    decisions=decisions,
-                    risk_action=_risk.action,
-                    snapshot_id=snap.snapshot_id,
-                    now=now,
-                )
-        except Exception:
-            log.exception("news prepared setup refresh failed (tick devam ediyor)")
 
         # Step 9 — controlled activation (OBSERVATION mode). Run the NEW agent
         # pipeline in shadow and persist a comparison vs. the live engine. Runs
@@ -713,8 +790,18 @@ async def run_once() -> None:
         # ASLA tick'i patlatmaz; başarısızsa loglanır ve döngü devam eder.
         try:
             view = matrix_view(_regime, _risk, decisions, snap, MATRIX_SYMBOLS)
+            view = finalize_matrix_view(view, snap, ps)
             view["mode"] = data_provenance(snap)
-            sid = snapshot_store.record(_snapshot_record(snap, view, _risk, ps))
+            sid = snapshot_store.record(
+                _snapshot_record(
+                    snap,
+                    view,
+                    _risk,
+                    ps,
+                    world_state=news_world,
+                    causal_evidence=causal_evidence,
+                )
+            )
             if sid:
                 snapshots_written = 1
                 log.info("snapshot stored: %s (count=%d)", sid, snapshot_store.count())
@@ -731,10 +818,13 @@ async def run_once() -> None:
         reasons.extend(f"halt:{h.type}" for h in halts)
         reasons.extend(f"provider:{n}" for n in crit_providers)
         reasons.extend(f"provider_optional:{n}" for n in opt_providers)
+        if observer_failed:
+            reasons.append("observer:ticket_notification")
         degraded = (
             str(snap.quality.status) in {"BLOCKED", "DEGRADED"}
             or bool(halts)
             or bool(crit_providers)
+            or observer_failed
         )
         _log_stage_timings(t0, t_snap, t_decide, t_commit, time.monotonic())
         heartbeat.record(

@@ -46,3 +46,17 @@ def test_enrich_skips_missing_and_private_urls(tmp_path, monkeypatch):
     row = next(iter(rows.values()))
     assert row["status"] == "SKIPPED_URL"
     assert ae.coverage([_headline(None)])["status"] == "EMPTY"
+
+
+def test_enrich_keeps_rss_summary_when_publisher_blocks(tmp_path, monkeypatch):
+    monkeypatch.setenv("NEWS_ARTICLE_CACHE_PATH", str(tmp_path / "articles.json"))
+    monkeypatch.setattr(ae, "allowed_url", lambda url: True)
+    summary = "A confirmed supply disruption is expected to reduce exports and lift energy prices across the region."
+    headline = SimpleNamespace(id="h2", source="Example", url="https://news.example.test/blocked",
+                               article_summary=summary)
+    rows = ae.enrich([headline], now=NOW, fetch=lambda *_: (_ for _ in ()).throw(RuntimeError("blocked")))
+    row = next(iter(rows.values()))
+    assert row["status"] == "RSS_SUMMARY"
+    assert row["excerpt"] == summary
+    assert row["fetch_error"] == "RuntimeError"
+    assert ae.coverage([headline])["coverage_pct"] == 100.0

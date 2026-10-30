@@ -25,6 +25,12 @@ assets:
   # Yalnızca likidite sepeti (snapshot evreninde değil; OHLCV'den on-demand).
   SP500:  { label: "Hisseler",    kind: risk,      asset_class: equity,        roles: [liquidity] }
   BRENT:  { label: "Brent",       kind: commodity, asset_class: energy,        roles: [liquidity, trade] }
+  WTI:    { label: "WTI Petrol",  kind: commodity, asset_class: energy,        roles: [trade] }
+  COPPER: { label: "Bakır",       kind: commodity, asset_class: industrial_metals, roles: [trade] }
+  XLE:    { label: "Enerji Sektörü", kind: risk, asset_class: equity,           roles: [trade] }
+  XLK:    { label: "Teknoloji Sektörü", kind: risk, asset_class: equity,        roles: [trade] }
+  XLV:    { label: "Sağlık Sektörü", kind: risk, asset_class: equity,           roles: [trade] }
+  XLP:    { label: "Temel Tüketim", kind: risk, asset_class: equity,            roles: [trade] }
   TLT:    { label: "Tahvil",      kind: safe,      asset_class: rates,         roles: [liquidity] }
   HYG:    { label: "HY Credit",   kind: risk,      asset_class: credit,        roles: [liquidity] }
   LQD:    { label: "IG Credit",   kind: safe,      asset_class: credit,        roles: [liquidity] }

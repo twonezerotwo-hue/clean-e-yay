@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter
 
-from packages.agent.llm import context as llm_context
+from packages.agent import canonical_context as llm_context
 from packages.agent.llm import report as llm_report
 from packages.agent.narrative import build_narrative
 from packages.consensus.engine import build as build_consensus
@@ -50,7 +50,7 @@ def get_ai_report_current() -> dict:
         key_signals = [disclaimer, *key_signals]
 
     # v2.6 — persona katmanı (narrative-only; decision path'e yazmaz).
-    ctx = llm_context.build_compact_context()
+    ctx = llm_context.build_canonical_context()
     no_action = llm_context.no_actionable_decision(ctx)
     if no_action:
         verdict = "no_trade"

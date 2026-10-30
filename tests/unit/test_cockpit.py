@@ -22,13 +22,17 @@ from fastapi.testclient import TestClient
 from apps.api.main import app
 from apps.api.routers.paper_trading import _time_stop_status
 from packages.decision.cockpit import (
+    _auto_open_readiness,
     agent_brief_view,
     compute_data_mode,
     compute_main_blocker,
     compute_status,
     decision_trace_view,
+    finalize_matrix_view,
     next_watch_conditions,
+    technical_confirmation_ready,
 )
+from packages.paper import news_setup
 from packages.paper.state import Position
 
 client = TestClient(app)
@@ -192,13 +196,189 @@ def test_agent_brief_actionable_when_open():
     ]
     brief = agent_brief_view(
         _view(risk_action="HOLD", suspended=False, cells=cells),
-        _snap(), SimpleNamespace(open_positions=[]),
+        SimpleNamespace(
+            **_snap().__dict__,
+            technicals_by_tf={"BTCUSD": {"4h": SimpleNamespace(status="OK")}},
+            technicals={},
+        ),
+        SimpleNamespace(open_positions=[]),
         {"label": "LIVE", "dqs_status": "OK"}, halt_active=False,
     )
     assert brief["status"] == "ACTIONABLE"
     assert brief["can_act"] is True
     assert brief["main_blocker"]["code"] == "NONE"
     assert brief["data_mode"] == "LIVE_VERIFIED"
+
+
+def test_auto_open_readiness_exposes_final_news_gate(monkeypatch):
+    """Matrix READY must not be reported as an opened paper action."""
+    monkeypatch.setattr(news_setup, "require_confluence_for_auto_open", lambda: True)
+    monkeypatch.setattr(news_setup, "match_confluence", lambda *_args, **_kwargs: None)
+    cells = [{
+        "symbol": "XAGUSD",
+        "timeframe": "15m",
+        "action": "open_short",
+        "execution_ready": True,
+        "actionable": True,
+    }]
+    snap = SimpleNamespace(
+        prices=[SimpleNamespace(symbol="XAGUSD", price=31.2, verified=True)],
+        technicals_by_tf={"XAGUSD": {"15m": SimpleNamespace(status="OK")}},
+        technicals={},
+    )
+    state = SimpleNamespace(news_prepared_setups=[])
+    readiness = _auto_open_readiness(cells, snap, state)
+    assert readiness["candidate_count"] == 1
+    assert readiness["ready_count"] == 0
+    assert readiness["blocked_count"] == 1
+    assert readiness["blockers"][0]["code"] == "news_confluence"
+
+
+def test_finalize_matrix_view_removes_pre_gate_paper_action(monkeypatch):
+    """All read surfaces must expose final paper intent, not a pre-gate intent."""
+    monkeypatch.setattr(news_setup, "require_confluence_for_auto_open", lambda: True)
+    monkeypatch.setattr(news_setup, "match_confluence", lambda *_args, **_kwargs: None)
+    view = _view(
+        risk_action="HOLD",
+        suspended=False,
+        cells=[{
+            "symbol": "XAGUSD",
+            "timeframe": "15m",
+            "action": "open_short",
+            "execution_ready": True,
+            "actionable": True,
+            "paper_action": "open_short",
+            "blocked_by": [],
+        }],
+    )
+    snap = SimpleNamespace(
+        snapshot_id="snap-1",
+        prices=[SimpleNamespace(symbol="XAGUSD", price=31.2, verified=True)],
+        technicals_by_tf={"XAGUSD": {"15m": SimpleNamespace(status="OK")}},
+        technicals={},
+    )
+    state = SimpleNamespace(news_prepared_setups=[], revision=4)
+
+    result = finalize_matrix_view(view, snap, state)
+    cell = result["cells"][0]
+    assert cell["paper_action_intent"] == "open_short"
+    assert cell["paper_action"] == "none"
+    assert cell["final_execution_ready"] is False
+    assert "news_confluence" in cell["blocked_by"]
+    assert result["paper_actions"] == []
+    assert result["pending_paper_actions"][0]["paper_action"] == "open_short"
+
+
+def test_finalize_matrix_view_blocks_degraded_technical_cell(monkeypatch):
+    monkeypatch.setattr(news_setup, "require_confluence_for_auto_open", lambda: False)
+    view = _view(
+        risk_action="HOLD",
+        suspended=False,
+        cells=[{
+            "symbol": "DODO",
+            "timeframe": "15m",
+            "action": "open_long",
+            "execution_ready": True,
+            "actionable": True,
+            "paper_action": "open_long",
+            "blocked_by": [],
+        }],
+    )
+    snap = SimpleNamespace(
+        snapshot_id="snap-2",
+        prices=[SimpleNamespace(symbol="DODO", price=1.0, verified=True)],
+        technicals_by_tf={"DODO": {"15m": SimpleNamespace(status="DEGRADED")}},
+        technicals={},
+    )
+    state = SimpleNamespace(news_prepared_setups=[], revision=5)
+
+    cell = finalize_matrix_view(view, snap, state)["cells"][0]
+    assert cell["paper_action"] == "none"
+    assert cell["final_execution_ready"] is False
+    assert "technical_data" in cell["blocked_by"]
+
+
+def test_technical_confirmation_requires_same_side_indicators():
+    snap = SimpleNamespace(
+        technicals_by_tf={
+            "XAGUSD": {
+                "1h": SimpleNamespace(
+                    status="OK",
+                    confirmation_signals=[
+                        SimpleNamespace(fired=True),
+                        SimpleNamespace(fired=False),
+                        SimpleNamespace(fired=True),
+                    ],
+                )
+            }
+        },
+        technicals={},
+    )
+    assert technical_confirmation_ready(snap, "XAGUSD", "1h", "long")[0]
+    assert not technical_confirmation_ready(snap, "XAGUSD", "1h", "short")[0]
+
+
+def test_4h_requires_three_same_side_confirmations(monkeypatch):
+    """The calibrated 4h path is stricter; other TFs keep the legacy default."""
+    snap = SimpleNamespace(
+        technicals_by_tf={
+            "XAGUSD": {
+                "4h": SimpleNamespace(
+                    status="OK",
+                    confirmation_signals=[
+                        SimpleNamespace(fired=True),
+                        SimpleNamespace(fired=True),
+                        SimpleNamespace(fired=False),
+                    ],
+                ),
+                "1h": SimpleNamespace(
+                    status="OK",
+                    confirmation_signals=[
+                        SimpleNamespace(fired=True),
+                        SimpleNamespace(fired=True),
+                    ],
+                ),
+            }
+        },
+        technicals={},
+    )
+    assert not technical_confirmation_ready(snap, "XAGUSD", "4h", "long")[0]
+    assert technical_confirmation_ready(snap, "XAGUSD", "1h", "long")[0]
+
+
+def test_finalize_matrix_view_blocks_unconfirmed_direction(monkeypatch):
+    monkeypatch.setattr(news_setup, "require_confluence_for_auto_open", lambda: False)
+    view = _view(
+        risk_action="HOLD",
+        suspended=False,
+        cells=[{
+            "symbol": "XAGUSD",
+            "timeframe": "1h",
+            "action": "open_long",
+            "execution_ready": True,
+            "actionable": True,
+            "paper_action": "open_long",
+            "blocked_by": [],
+        }],
+    )
+    snap = SimpleNamespace(
+        snapshot_id="snap-confirmation",
+        technicals_by_tf={
+            "XAGUSD": {
+                "1h": SimpleNamespace(
+                    status="OK",
+                    confirmation_signals=[SimpleNamespace(fired=True)],
+                )
+            }
+        },
+        technicals={},
+        prices=[],
+    )
+    state = SimpleNamespace(news_prepared_setups=[], revision=1)
+    cell = finalize_matrix_view(view, snap, state)["cells"][0]
+    assert cell["paper_action"] == "none"
+    assert cell["final_execution_ready"] is False
+    assert "technical_confirmation" in cell["blocked_by"]
 
 
 # ---------------- next_watch_conditions ----------------
@@ -286,6 +466,7 @@ def test_cockpit_brief_endpoint():
     # üretilir; ayrı /agent/briefing cache'ine düşmemelidir.
     assert body.get("snapshot_id")
     assert body.get("paper_state_revision") is not None
+    assert body.get("brief_id")
     assert body.get("executive", {}).get("headline")
     assert body["decision_matrix"]["snapshot_id"] == body["snapshot_id"]
     assert body["decision_matrix"]["paper_state_revision"] == body["paper_state_revision"]
@@ -294,12 +475,28 @@ def test_cockpit_brief_endpoint():
     assert isinstance(body.get("headlines"), list)
 
 
+def test_cockpit_state_is_the_same_canonical_envelope():
+    state = client.get("/api/v1/cockpit/state")
+    brief = client.get("/api/v1/cockpit/brief")
+    assert state.status_code == 200
+    assert brief.status_code == 200
+    state_body = state.json()
+    brief_body = brief.json()
+    ids = state_body["canonical_ids"]
+    assert ids["snapshot_id"] == state_body["snapshot_id"]
+    assert ids["brief_id"] == state_body["brief_id"]
+    assert ids["paper_state_revision"] == state_body["paper_state_revision"]
+    assert state_body["snapshot_id"] == brief_body["snapshot_id"]
+    assert state_body["brief_id"] == brief_body["brief_id"]
+
+
 def test_legacy_agent_briefing_reuses_cockpit_envelope():
     cockpit = client.get("/api/v1/cockpit/brief")
     legacy = client.get("/api/v1/agent/briefing")
     assert cockpit.status_code == legacy.status_code == 200
     assert legacy.json()["snapshot_id"] == cockpit.json()["snapshot_id"]
     assert legacy.json()["paper_state_revision"] == cockpit.json()["paper_state_revision"]
+    assert legacy.json()["brief_id"] == cockpit.json()["brief_id"]
 
 
 def test_cockpit_all_cells_suspended_share_global_gate():

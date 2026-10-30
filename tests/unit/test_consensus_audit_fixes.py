@@ -157,3 +157,18 @@ def test_dominant_no_observe_when_agreeing(artifact):
         res = ce.build("BTCUSD", _snap(80.0), _regime(), "4h")
     if res.dominant_module == "touche":
         assert not any(w.startswith("dominant_observe") for w in res.warnings)
+
+
+def test_4h_calibration_drop_is_live_only_and_traceable(artifact):
+    """4h inverse modules leave the live vote, with their scores auditable."""
+    snap_4h = _snap(60.0, "4h")
+    snap_4h.generated_at = datetime.now(UTC)
+    snap_1h = _snap(60.0, "1h")
+    snap_1h.generated_at = datetime.now(UTC)
+    with threshold_override({"consensus": {"timeframe_module_drop": {"4h": ["fundamental"]}}}):
+        four_hour = ce.build("BTCUSD", snap_4h, _regime(), "4h")
+        one_hour = ce.build("BTCUSD", snap_1h, _regime(), "1h")
+
+    assert "fundamental" not in {m.name for m in four_hour.modules}
+    assert any(w.startswith("timeframe_module_drop:4h:fundamental:score=") for w in four_hour.warnings)
+    assert "fundamental" in {m.name for m in one_hour.modules}

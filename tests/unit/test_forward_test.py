@@ -42,3 +42,27 @@ def test_forward_test_preserves_start_and_excludes_manual(tmp_path, monkeypatch)
     assert report["started_at"].startswith("2026-01-01")
     assert report["metrics"]["closed"] == 1
     assert report["promotion_ready"] is False
+
+
+def test_forward_test_excludes_incomplete_provenance_from_clean_cohort(tmp_path, monkeypatch):
+    monkeypatch.setenv("FORWARD_TEST_90D_PATH", str(tmp_path / "forward.json"))
+    start = datetime(2026, 1, 1, tzinfo=UTC)
+    forward_test.run(now=start, outcomes=[])
+    report = forward_test.run(
+        now=start + timedelta(days=1),
+        outcomes=[
+            _outcome(start + timedelta(hours=1), 5.0),
+            SimpleNamespace(
+                opened_at=(start + timedelta(hours=2)).isoformat(),
+                closed_at=(start + timedelta(hours=3)).isoformat(),
+                pnl=100.0,
+                r_multiple=4.0,
+                data_verified=True,
+                provenance_complete=False,
+                open_reason="signal",
+                exploration=False,
+            ),
+        ],
+    )
+    assert report["metrics"]["closed"] == 1
+    assert report["excluded_incomplete"] == 1

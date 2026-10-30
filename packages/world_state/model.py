@@ -135,6 +135,9 @@ class FlowObservation:
     freshness_seconds: float | None = None
     confidence: float = 0.0
     coverage: float = 0.0
+    # Independent evidence weight.  A price-derived proxy is not independent
+    # from technical returns, so it is capped before entering causal factors.
+    independence_weight: float = 1.0
     evidence: tuple[str, ...] = ()
 
     def to_dict(self) -> dict[str, Any]:
@@ -220,6 +223,9 @@ class WorldStateSnapshot:
     geopolitical_events: tuple[GeopoliticalEvent, ...] = ()
     statements: tuple[PolicyStatement, ...] = ()
     macro_surprises: tuple[MacroSurpriseImpact, ...] = ()
+    # Canonical event/source/asset/technical identity.  Shadow-only metadata;
+    # it does not authorize or alter a paper decision.
+    macro_evidence: tuple[dict[str, Any], ...] = ()
     macro_surprise_inflation: float | None = None
     macro_surprise_growth: float | None = None
     macro_surprise_rates: float | None = None

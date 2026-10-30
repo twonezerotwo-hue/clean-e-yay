@@ -107,7 +107,33 @@ def read_jsonl_tail(path: str | os.PathLike, limit: int) -> list[dict]:
     return out
 
 
+def append_jsonl_rotating(
+    path: str | os.PathLike,
+    record: dict[str, Any],
+    *,
+    max_bytes: int,
+    archive_suffix: str = ".1",
+) -> None:
+    """Append one JSONL record and rotate the previous generation at a cap.
+
+    Rotation is recoverable (``file.1`` is retained), best-effort and atomic at
+    the line level.  It prevents audit/learning logs from growing without
+    bound while keeping the existing read-tail contracts intact.
+    """
+    target = Path(path)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    if max_bytes > 0 and target.exists() and target.stat().st_size >= max_bytes:
+        archive = target.with_name(target.name + archive_suffix)
+        with contextlib.suppress(OSError):
+            archive.unlink()
+        with contextlib.suppress(OSError):
+            target.replace(archive)
+    with target.open("a", encoding="utf-8") as fh:
+        fh.write(json.dumps(record, ensure_ascii=False, default=str) + "\n")
+
+
 __all__ = [
+    "append_jsonl_rotating",
     "read_jsonl_tail",
     "read_tail_lines",
     "replace_with_retry",

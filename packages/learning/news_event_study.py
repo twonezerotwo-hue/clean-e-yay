@@ -412,6 +412,7 @@ def causal_event_study(
         return _forward_return_pct(bars, event_ts, steps)
     buckets: dict[str, list[tuple[float, float]]] = {}
     factor_rows: list[dict] = []
+    correlation_rows: list[dict] = []
     pending = 0
     for event in rows:
         predictions = event.get("asset_predictions") or {}
@@ -457,6 +458,13 @@ def causal_event_study(
                 if actual is None:
                     pending += 1
                     continue
+                correlation_rows.append({
+                    "asset": str(asset),
+                    "direction": "bullish" if direction > 0 else "bearish" if direction < 0 else "neutral",
+                    "outcome_return": float(actual),
+                    "regime": event.get("regime") or "UNKNOWN",
+                    "timeframe": horizon,
+                })
                 for channel in channels or {"aggregate": 1.0}:
                     key = f"{event_type}|{region}|{channel}|{asset}|{horizon}"
                     buckets.setdefault(key, []).append((direction, float(actual)))
@@ -469,6 +477,7 @@ def causal_event_study(
             __import__("packages.learning.causal_calibration", fromlist=["write_recommendations"]).write_recommendations(factor_rows)
         except Exception:
             pass
+    from packages.macro.correlation import rolling_regime_correlation
     table = {
         "generated_at": now.isoformat(),
         "engine": "causal_event_study_v1",
@@ -476,6 +485,7 @@ def causal_event_study(
         "pending": pending,
         "buckets": {key: _causal_bucket(values, min_n) for key, values in sorted(buckets.items())},
         "factor_calibration": factor_calibration,
+        "regime_correlations": rolling_regime_correlation(correlation_rows),
         "shadow_only": True,
         "auto_promotion": False,
     }

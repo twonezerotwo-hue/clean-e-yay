@@ -49,6 +49,12 @@ def test_world_state_reuses_flow_and_keeps_scale_bounded():
     assert world.macro_sources["US10Y"]["source_type"] == "UNAVAILABLE"
 
 
+def test_price_flow_proxy_is_marked_non_independent_and_discounted():
+    world = build(_snapshot())
+    assert world.flow_state["usd"]["source_type"] == "PRICE_FLOW_PROXY"
+    assert world.flow_state["usd"]["independence_weight"] == 0.35
+
+
 def test_world_state_carries_topology_context_without_changing_factor_semantics():
     now = datetime.now(UTC)
     headline = SimpleNamespace(
@@ -105,6 +111,38 @@ def test_headline_taxonomy_and_valid_until_are_independent_of_legacy_prefix():
     assert expired.geopolitical_events[0].severity == 0.0
 
 
+def test_article_body_can_supply_geopolitical_event_context(monkeypatch):
+    from packages.data.providers.news import article_enrichment
+
+    now = datetime.now(UTC)
+    url = "https://example.test/article"
+    monkeypatch.setattr(
+        article_enrichment,
+        "cached",
+        lambda _urls: {
+            url: {
+                "status": "OK",
+                "url": url,
+                "excerpt": "A blockade near the Strait of Hormuz disrupts shipping.",
+                "word_count": 9,
+            }
+        },
+    )
+    headline = SimpleNamespace(
+        id="article-geo",
+        title="Shipping update",
+        title_tr=None,
+        url=url,
+        verified=True,
+        ts=now,
+        source="Reuters",
+        region="Middle East",
+    )
+    world = build(_snapshot(headlines=[headline]))
+    assert world.geopolitical_events
+    assert world.geopolitical_events[0].event_type == "CHOKEPOINT_DISRUPTION"
+
+
 def _macro(title: str, actual: float, expected: float, *, event_id: str = "macro-1", volatility: float | None = 1.0) -> Catalyst:
     return Catalyst(id=event_id, ts=datetime.now(UTC), title=title, source="calendar", verified=True,
                     actual=actual, expected=expected, historical_surprise_volatility=volatility)
@@ -132,6 +170,31 @@ def test_macro_surprise_fallback_is_marked_lower_confidence_and_asset_visible():
     assert surprise.numeric_confidence < 1.0
     impact = build_shadow(world, ["BTCUSD"]).impacts[0]
     assert impact.macro_surprise_contribution is not None
+
+
+def test_official_macro_release_joins_calendar_expectation():
+    now = datetime.now(UTC)
+    official = Catalyst(
+        id="bls-cpi",
+        ts=now,
+        title="US CPI",
+        source="bls_official",
+        verified=True,
+        actual=3.4,
+        unit="percent",
+    )
+    calendar = Catalyst(
+        id="calendar-cpi",
+        ts=now,
+        title="Consumer Price Index",
+        source="calendar",
+        verified=False,
+        expected=3.0,
+        unit="percent",
+    )
+    world = build(_snapshot(catalysts=[official, calendar], generated_at=now))
+    assert len(world.macro_surprises) == 1
+    assert world.macro_surprises[0].raw_surprise == 0.4
 
 
 def test_positioning_never_flips_thesis_sign():
@@ -198,6 +261,14 @@ def test_causal_shadow_is_evidence_only_and_bounded():
     assert len(shadow.edges) > 0
     assert {item.symbol for item in shadow.impacts} == {"XAUUSD", "BTCUSD", "SP500"}
     assert all(item.direction_score is None or -1.0 <= item.direction_score <= 1.0 for item in shadow.impacts)
+
+
+def test_causal_apply_request_stays_locked_until_forward_test(monkeypatch, tmp_path):
+    monkeypatch.setenv("FORWARD_TEST_90D_PATH", str(tmp_path / "missing-forward.json"))
+    world = build(_snapshot())
+    shadow = build_shadow(world, ["BTCUSD"], decision_apply=True)
+    assert shadow.decision_apply is False
+    assert "causal_decision_locked_until_forward_test_90d" in shadow.warnings
 
 
 def test_causal_shadow_forecasts_are_additive_and_not_decision_inputs():

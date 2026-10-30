@@ -34,6 +34,7 @@ from packages.learning import promotion_rail as rail
 _DEFAULTS = {
     "min_resolved_decisive": 20,
     "min_timeframes": 2,
+    "min_resolved_evidence": 20,
 }
 
 
@@ -47,6 +48,9 @@ def cfg() -> dict:
             ),
             "min_timeframes": max(
                 1, int(raw.get("min_timeframes", _DEFAULTS["min_timeframes"]))
+            ),
+            "min_resolved_evidence": max(
+                1, int(raw.get("min_resolved_evidence", _DEFAULTS["min_resolved_evidence"]))
             ),
         }
     except (OSError, KeyError, ValueError, TypeError):
@@ -70,6 +74,26 @@ def _evaluate_candidate(sym: str, sc: dict, c: dict) -> dict:
         },
         "ci_disjoint": rail.wilson_check(missed, decisive, rate_key="cf_win_rate"),
     }
+    # New records carry explicit market/provenance telemetry.  Legacy injected
+    # fixtures without these fields keep their historical unit-test semantics;
+    # persisted candidates with partial telemetry are intentionally NOT ready.
+    telemetry_present = "telemetry_version" in sc
+    checks["market_and_provenance"] = {
+        "evidence_count": int(sc.get("evidence_count") or 0),
+        "price_verified": bool(sc.get("price_verified")),
+        "liquidity_verified": bool(sc.get("liquidity_verified")),
+        "technical_bars_verified": int(sc.get("technical_bars_verified") or 0),
+        "required_evidence": c["min_resolved_evidence"],
+        "pass": (
+            not telemetry_present
+            or (
+                int(sc.get("evidence_count") or 0) >= c["min_resolved_evidence"]
+                and bool(sc.get("price_verified"))
+                and bool(sc.get("liquidity_verified"))
+                and int(sc.get("technical_bars_verified") or 0) > 0
+            )
+        ),
+    }
     return {
         "symbol": sym,
         "status": rail.status_of(checks),
@@ -79,6 +103,9 @@ def _evaluate_candidate(sym: str, sc: dict, c: dict) -> dict:
         "expired": int(sc.get("expired") or 0),
         "avg_r": sc.get("avg_r"),
         "timeframes": tfs,
+        "promotion_readiness": "legacy_telemetry" if not telemetry_present else (
+            "ready" if checks["market_and_provenance"]["pass"] else "missing_market_or_provenance"
+        ),
     }
 
 

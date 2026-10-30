@@ -121,6 +121,35 @@ def test_resample_1d_to_1w_iso_week_buckets() -> None:
     assert out[0].source == "resampled:1d"
 
 
+def test_resample_excludes_incomplete_bucket_when_requested() -> None:
+    base = datetime(2026, 6, 10, 0, 0, tzinfo=UTC)
+    bars = [
+        _bar("XAUUSD", "1h", base + timedelta(hours=i),
+             o=100.0, h=101.0, lo=99.0, c=100.0, v=10.0)
+        for i in range(5)
+    ]
+    out = resample.resample(
+        bars,
+        "4h",
+        closed_only=True,
+        now=base + timedelta(hours=4),
+    )
+    assert len(out) == 1
+    assert out[0].ts == base
+
+
+def test_session_vwap_resets_at_utc_day() -> None:
+    base = datetime(2026, 6, 10, 23, 0, tzinfo=UTC)
+    bars = [
+        _bar("XAUUSD", "1h", base, 100.0, 101.0, 99.0, 100.0, 100.0),
+        _bar("XAUUSD", "1h", base + timedelta(hours=1), 200.0, 201.0, 199.0, 200.0, 1.0),
+        _bar("XAUUSD", "1h", base + timedelta(hours=2), 201.0, 202.0, 200.0, 201.0, 1.0),
+    ]
+    # The first bar belongs to the prior day and must not dominate the new
+    # session's volume-weighted value.
+    assert indicators.session_vwap(bars) == pytest.approx(200.5)
+
+
 # ---------------- compute_snapshot ----------------
 
 def test_insufficient_bars_yields_none_fields_degraded() -> None:
@@ -165,6 +194,7 @@ def test_fixture_bars_produce_full_snapshot() -> None:
         assert snap.macd is not None
         assert snap.atr is not None and snap.atr >= 0
         assert snap.ema_stack in {"bullish", "bearish", "mixed"}
+        assert snap.confirmation_signals
         assert 0 <= snap.score <= 100
         assert snap.status == "OK"
 
@@ -235,16 +265,27 @@ def test_cache_hit_skips_provider_and_stale_fallback(
     assert calls["n"] == 1  # ikinci çağrı TTL içinde cache'ten geldi
     assert len(b1) == len(b2) == 60
 
-    # TTL'i bayatlat + provider'ı öldür → stale cache servis edilir.
+    # TTL'i bayatlat + provider'ı öldür → teknik tazelik sınırını aşan cache
+    # artık hesaplamaya girmez; sistem güvenli biçimde boş döner.
     cache_file = tmp_path / "ohlcv" / "BTCUSD_1h.json"
     raw = json.loads(cache_file.read_text())
     raw["fetched_at"] = (datetime.now(UTC) - timedelta(hours=6)).isoformat()
     cache_file.write_text(json.dumps(raw))
     monkeypatch.setattr(runtime_ohlcv.coingecko, "get_bars", lambda s, tf: None)
     b3 = runtime_ohlcv.get_bars("BTCUSD", "1h")
-    assert len(b3) == 60
+    assert b3 == []
     status = runtime_ohlcv.get_provider_status()
     assert status["ohlcv_coingecko"]["fallbacks"] >= 1
+    assert status["ohlcv_coingecko"]["last_error_type"] == "stale_cache_expired"
+
+
+def test_recent_fallback_is_visible_after_later_symbol_success(runtime_ohlcv) -> None:
+    # A snapshot can contain a fallback for one symbol followed by a clean
+    # response for another.  The provider status must remain degraded for that
+    # cycle rather than hiding the fallback behind the later success.
+    runtime_ohlcv._mark("ohlcv_coingecko", ok=False, error="stale", fallback=True)
+    runtime_ohlcv._mark("ohlcv_coingecko", ok=True)
+    assert runtime_ohlcv.get_provider_status()["ohlcv_coingecko"]["status"] == "degraded"
 
 
 def test_resampled_tfs_derive_from_native(runtime_ohlcv, monkeypatch) -> None:

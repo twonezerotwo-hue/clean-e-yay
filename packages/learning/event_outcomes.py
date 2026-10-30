@@ -54,6 +54,9 @@ _FAMILY_WORDS: dict[str, tuple[str, ...]] = {
                   "enflasyon", "tüfe"),
     "central_bank": ("fomc", "federal reserve", "fed ", "fed's", "powell", "rate decision",
                      "minutes"),
+    "manufacturing": ("ism", "manufacturing pmi", "services pmi", "pmi"),
+    "durable_goods": ("durable goods", "durable-goods", "durable orders"),
+    "private_jobs": ("adp", "private payroll", "private employment"),
 }
 _US_MARKERS = ("u.s.", "us ", "u.s ", "american", "wall st", "treasury", "fed", "nasdaq",
                "s&p", "dow", "abd")
@@ -74,6 +77,12 @@ _OUTCOME_LABEL = {
     ("inflation", "high"): "YÜKSEK / sıcak",
     ("central_bank", "low"): "GÜVERCİN",
     ("central_bank", "high"): "ŞAHİN",
+    ("manufacturing", "low"): "ZAYIF sanayi verisi",
+    ("manufacturing", "high"): "GÜÇLÜ sanayi verisi",
+    ("durable_goods", "low"): "ZAYIF sipariş verisi",
+    ("durable_goods", "high"): "GÜÇLÜ sipariş verisi",
+    ("private_jobs", "low"): "ZAYIF özel istihdam",
+    ("private_jobs", "high"): "GÜÇLÜ özel istihdam",
 }
 
 
@@ -120,6 +129,12 @@ def family_of(event: Mapping[str, Any]) -> str:
         return "inflation"
     if any(k in text for k in ("fomc", "fed", "faiz")):
         return "central_bank"
+    if any(k in text for k in ("adp", "private payroll", "private employment")):
+        return "private_jobs"
+    if any(k in text for k in ("durable goods", "durable-goods", "durable orders")):
+        return "durable_goods"
+    if any(k in text for k in ("ism", "manufacturing pmi", "services pmi", "pmi")):
+        return "manufacturing"
     return "other"
 
 

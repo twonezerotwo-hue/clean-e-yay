@@ -290,6 +290,18 @@ def test_live_quote_missing_at_order_time_is_data_unavailable_not_a_fake_price(e
     assert positions() == []
 
 
+def test_board_verdict_blocks_when_snapshot_has_no_current_quote(env, monkeypatch):
+    monkeypatch.setattr(idea_order.snapshot_store, "latest", lambda: {
+        "generated_at": (_now() - timedelta(seconds=10)).isoformat(),
+        "data_snapshot": {"prices": []},
+        "dqs": {"score": 90.0},
+    })
+    view = idea_order.annotate_board({"generated_at": _now().isoformat(), "ideas": [make_idea()]})
+    verdict = view["ideas"][0]["paper_open"]
+    assert verdict["state"] == "DATA_UNAVAILABLE"
+    assert "güncel fiyat yok" in verdict["reason"]
+
+
 def test_insane_quote_is_refused(env, monkeypatch):
     monkeypatch.setattr(idea_order.price_sanity, "price_sane_with_ohlcv_reason",
                         lambda *a, **k: "ohlcv:1h_jump_40pct_gt_10pct")

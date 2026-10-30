@@ -6,7 +6,7 @@ decision. It reuses the snapshot's verified news/catalyst and rotation outputs.
 from __future__ import annotations
 
 import math
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from packages.data.ingestion.pipeline import MarketSnapshot
@@ -70,6 +70,7 @@ def _flow_observations(snapshot: MarketSnapshot, rotation: Any, now: datetime) -
                     freshness_seconds=float(item["freshness_seconds"]) if item.get("freshness_seconds") is not None else None,
                     confidence=float(item.get("confidence") or 0.0),
                     coverage=float(item.get("coverage") or 0.0),
+                    independence_weight=float(item.get("independence_weight") if item.get("independence_weight") is not None else 1.0),
                     evidence=tuple(str(x) for x in item.get("evidence") or ()),
                 )
             except (TypeError, ValueError):
@@ -95,6 +96,7 @@ def _flow_observations(snapshot: MarketSnapshot, rotation: Any, now: datetime) -
             freshness_seconds=max(0.0, (now - getattr(snapshot, "generated_at", now)).total_seconds()) if getattr(snapshot, "generated_at", None) else None,
             confidence=0.35,
             coverage=1.0,
+            independence_weight=0.35,
             evidence=("price-based rotation; not published fund flow",),
         ))
 
@@ -112,6 +114,7 @@ def _flow_observations(snapshot: MarketSnapshot, rotation: Any, now: datetime) -
             "source": obs.source,
             "confidence": obs.confidence,
             "coverage": obs.coverage,
+            "independence_weight": obs.independence_weight,
             "freshness_seconds": obs.freshness_seconds,
             "evidence": list(obs.evidence),
         }
@@ -123,7 +126,19 @@ def _flow_observations(snapshot: MarketSnapshot, rotation: Any, now: datetime) -
 def _selected_flow(flow_state: dict[str, dict[str, Any]], axis: str, fallback: float | None) -> float | None:
     item = flow_state.get(axis) or {}
     value = item.get("value")
-    return _clamp(float(value)) if value is not None else fallback
+    if value is None:
+        return fallback
+    # Do not count the same price return once as technical evidence and again
+    # as independent capital flow.  Published flow/positioning can retain its
+    # full weight; price-only rotation is explicitly discounted.
+    try:
+        weight = float(item.get("independence_weight", 1.0) or 0.0)
+    except (TypeError, ValueError):
+        weight = 1.0
+    if str(item.get("source_type") or "").upper() == "PRICE_FLOW_PROXY":
+        weight = max(0.0, min(1.0, weight))
+        return _clamp(float(value) * weight)
+    return _clamp(float(value))
 
 
 def _expectations(snapshot: MarketSnapshot, statements: tuple[PolicyStatement, ...], now: datetime) -> tuple[ExpectationState, ...]:
@@ -216,8 +231,15 @@ def _mean(values: list[float | None]) -> float | None:
     return _clamp(sum(present) / len(present)) if present else None
 
 
-def _headline_text(headline: Any) -> str:
-    return " ".join(str(getattr(headline, key, "") or "") for key in ("title", "title_tr"))
+def _headline_text(headline: Any, article_rows: dict[str, dict[str, Any]] | None = None) -> str:
+    title = " ".join(str(getattr(headline, key, "") or "") for key in ("title", "title_tr"))
+    try:
+        from packages.data.providers.news.article_enrichment import context_for
+
+        text, _article = context_for(headline, article_rows=article_rows)
+        return text or title
+    except Exception:
+        return title
 
 
 def _story_key(text: str) -> str:
@@ -297,6 +319,12 @@ def _event_channels(event_type: str, text: str) -> tuple[str, ...]:
 
 def _geo_events(snapshot: MarketSnapshot, now: datetime, config: dict[str, Any]) -> tuple[GeopoliticalEvent, ...]:
     by_id = {getattr(item, "headline_id", ""): item for item in snapshot.catalyst_impacts}
+    try:
+        from packages.data.providers.news.article_enrichment import cached
+
+        article_rows = cached(getattr(item, "url", None) for item in snapshot.headlines)
+    except Exception:
+        article_rows = {}
     grouped: dict[str, list[tuple[Any, Any]]] = {}
     for headline in snapshot.headlines:
         impact = by_id.get(getattr(headline, "id", ""))
@@ -304,18 +332,20 @@ def _geo_events(snapshot: MarketSnapshot, now: datetime, config: dict[str, Any])
         # Taxonomy is headline-first.  The legacy catalyst impact is useful
         # evidence, but an absent/unknown prefix must never hide a geopolitical
         # event from the causal shadow.
-        text = _headline_text(headline)
+        text = _headline_text(headline, article_rows)
         if (not text.strip() or
                 _event_taxonomy(text, event_type) == "UNKNOWN"):
             continue
-        grouped.setdefault(_story_key(_headline_text(headline)), []).append((headline, impact))
+        # Article prose informs taxonomy, but not identity; syndication must
+        # still collapse by the canonical RSS title.
+        grouped.setdefault(_story_key(_headline_text(headline, {})), []).append((headline, impact))
 
     events: list[GeopoliticalEvent] = []
     source_cfg = config.get("source") or {}
     decay_cfg = config.get("decay") or {}
     for rows in grouped.values():
         headline, impact = rows[0]
-        title = _headline_text(headline)
+        title = _headline_text(headline, article_rows)
         lower = title.casefold()
         event_type = _event_taxonomy(title, getattr(impact, "event_type", "unknown"))
         threat_only = any(word in lower for word in ("threat", "could", "may", "might", "iddia", "tehdit"))
@@ -323,12 +353,12 @@ def _geo_events(snapshot: MarketSnapshot, now: datetime, config: dict[str, Any])
         families = {
             _source_family(
                 getattr(row, "source", None),
-                title=_headline_text(row),
+                title=_headline_text(row, article_rows),
                 url=getattr(row, "url", None),
             )
             for row, _ in rows
         }
-        official = any(_official_source(getattr(row, "source", None), _headline_text(row)) for row in verified_rows)
+        official = any(_official_source(getattr(row, "source", None), _headline_text(row, article_rows)) for row in verified_rows)
         confirmed = bool(verified_rows) and not threat_only
         ts = getattr(headline, "ts", None)
         age = max(0.0, (now - ts).total_seconds()) if ts else None
@@ -392,7 +422,7 @@ def _geo_events(snapshot: MarketSnapshot, now: datetime, config: dict[str, Any])
                 expired=expired,
                 channels=channels,
                 channel_strengths=channel_strengths,
-                evidence=tuple(_headline_text(row)[:240] for row, _ in rows[:4]),
+                evidence=tuple(_headline_text(row, article_rows)[:240] for row, _ in rows[:4]),
             )
         )
     return tuple(events)
@@ -404,8 +434,14 @@ def _statements(snapshot: MarketSnapshot, now: datetime, config: dict[str, Any])
     authority_cfg = config.get("statement_authority") or {}
     previous: dict[str, list[float]] = {}
     signatures: set[tuple[str, int]] = set()
+    try:
+        from packages.data.providers.news.article_enrichment import cached
+
+        article_rows = cached(getattr(item, "url", None) for item in snapshot.headlines)
+    except Exception:
+        article_rows = {}
     for headline in sorted(snapshot.headlines, key=lambda item: getattr(item, "ts", now)):
-        text = _headline_text(headline)
+        text = _headline_text(headline, article_rows)
         lower = text.casefold()
         if not any(word in lower for word in keywords):
             continue
@@ -513,13 +549,22 @@ def normalized_surprise(actual: float | None, expected: float | None, historical
 def _macro_topic(title: str) -> tuple[str, str] | None:
     value = title.casefold()
     rules = (
-        (("core cpi", "cpi", "pce", "inflation"), ("inflation", "inflation")),
+        (("core pce", "core personal consumption"), ("inflation", "inflation")),
+        (("pce", "personal consumption expenditures"), ("inflation", "inflation")),
+        (("core cpi", "core consumer price"), ("inflation", "inflation")),
+        (("cpi", "consumer price", "inflation"), ("inflation", "inflation")),
+        (("ppi", "producer price"), ("inflation", "inflation")),
         (("unemployment", "jobless rate"), ("unemployment", "growth")),
+        (("jolts", "job openings", "job opening"), ("jolts", "growth")),
+        (("employment cost", "eci", "wage"), ("eci", "growth")),
         (("nonfarm", "nfp", "payroll", "jobs", "employment"), ("jobs", "growth")),
+        (("adp", "private payroll", "private employment"), ("jobs", "growth")),
         (("gdp", "gross domestic"), ("gdp", "growth")),
-        (("pmi", "retail sales", "industrial production"), ("growth", "growth")),
+        (("ism", "manufacturing pmi", "services pmi", "pmi", "retail sales", "industrial production", "consumer confidence"), ("growth", "growth")),
+        (("durable goods", "durable-goods", "durable orders"), ("growth", "growth")),
         (("fed", "fomc", "rate decision", "interest rate"), ("policy_rate", "rates")),
         (("oil inventory", "crude inventory", "eia inventory"), ("oil_inventory", "oil")),
+        (("natural gas storage", "gas storage", "underground storage"), ("natural_gas_storage", "oil")),
     )
     for keywords, result in rules:
         if any(keyword in value for keyword in keywords):
@@ -527,11 +572,107 @@ def _macro_topic(title: str) -> tuple[str, str] | None:
     return None
 
 
+def _macro_join_topic(title: str) -> str | None:
+    """Provider-neutral topic used only to join actuals to expectations."""
+    value = title.casefold()
+    rules = (
+        (("core pce", "core personal consumption"), "core_pce"),
+        (("pce", "personal consumption expenditures"), "pce"),
+        (("core cpi", "core consumer price"), "core_cpi"),
+        (("cpi", "consumer price"), "cpi"),
+        (("ppi", "producer price"), "ppi"),
+        (("nonfarm", "nfp", "payroll"), "nfp"),
+        (("adp", "private payroll", "private employment"), "adp"),
+        (("unemployment", "jobless rate"), "unemployment"),
+        (("jolts", "job openings", "job opening"), "jolts"),
+        (("employment cost", "eci", "wage"), "eci"),
+        (("gdp", "gross domestic"), "gdp"),
+        (("ism", "manufacturing pmi", "services pmi"), "ism_pmi"),
+        (("durable goods", "durable-goods", "durable orders"), "durable_goods"),
+        (("fed funds", "federal funds", "fomc", "rate decision"), "fed_policy"),
+        (("crude inventory", "oil inventory", "eia"), "oil_inventory"),
+        (("natural gas storage", "gas storage", "underground storage"), "natural_gas_storage"),
+        (("pmi",), "pmi"),
+        (("retail sales",), "retail_sales"),
+        (("industrial production",), "industrial_production"),
+        (("consumer confidence",), "consumer_confidence"),
+    )
+    for needles, topic in rules:
+        if any(needle in value for needle in needles):
+            return topic
+    return None
+
+
+def _macro_expectation_compatible(actual: Any, expected: Any) -> bool:
+    """Guard the actual/forecast join against unit and stale-event mistakes."""
+    if _macro_join_topic(str(getattr(actual, "title", ""))) != _macro_join_topic(str(getattr(expected, "title", ""))):
+        return False
+    # Country/currency is part of the event identity.  A US CPI actual must
+    # never consume a Canada/Euro-area CPI forecast simply because the title
+    # contains the same keyword.  Treat common US aliases as equivalent.
+    def _region(value: Any) -> str:
+        text = str(value or "").casefold().strip()
+        return {"usd": "us", "usa": "us", "u.s.": "us", "united states": "us"}.get(text, text)
+
+    left_region, right_region = _region(getattr(actual, "region", None)), _region(getattr(expected, "region", None))
+    if left_region and right_region and left_region != right_region:
+        return False
+    left_unit = str(getattr(actual, "unit", None) or "").casefold()
+    right_unit = str(getattr(expected, "unit", None) or "").casefold()
+    if left_unit != right_unit:
+        return False
+    left_ts = getattr(actual, "ts", None)
+    right_ts = getattr(expected, "ts", None)
+    if isinstance(left_ts, datetime) and isinstance(right_ts, datetime):
+        if abs(left_ts - right_ts) > timedelta(days=45):
+            return False
+    return True
+
+
+def _macro_observations(snapshot: MarketSnapshot) -> tuple[Any, ...]:
+    """Join official actuals to calendar expectations without inventing data."""
+    rows = [*(getattr(snapshot, "catalysts", ()) or ()), *(getattr(snapshot, "macro_releases", ()) or ())]
+    expected_rows = [row for row in rows if getattr(row, "expected", None) is not None]
+    output: list[Any] = []
+    used_expectations: set[str] = set()
+    seen: set[str] = set()
+    for row in rows:
+        event_id = str(getattr(row, "id", "") or "")
+        if not event_id or event_id in seen:
+            continue
+        merged = row
+        if getattr(row, "actual", None) is not None and getattr(row, "expected", None) is None:
+            candidates = [
+                item for item in expected_rows
+                if item is not row
+                and str(getattr(item, "id", "")) not in used_expectations
+                and _macro_expectation_compatible(row, item)
+            ]
+            if candidates:
+                row_ts = getattr(row, "ts", None)
+                candidates.sort(key=lambda item: abs((getattr(item, "ts", row_ts) - row_ts).total_seconds()) if isinstance(row_ts, datetime) and isinstance(getattr(item, "ts", None), datetime) else 0.0)
+                expected = candidates[0]
+                updates = {
+                    "expected": getattr(expected, "expected", None),
+                    "evidence": [*(getattr(row, "evidence", None) or ()), f"expectation_join={getattr(expected, 'id', '')}"],
+                }
+                try:
+                    merged = row.model_copy(update=updates)
+                except AttributeError:
+                    from types import SimpleNamespace
+
+                    merged = SimpleNamespace(**{**getattr(row, "__dict__", {}), **updates})
+                used_expectations.add(str(getattr(expected, "id", "")))
+        output.append(merged)
+        seen.add(event_id)
+    return tuple(output)
+
+
 def _macro_surprises(snapshot: MarketSnapshot, now: datetime, config: dict[str, Any]) -> tuple[MacroSurpriseImpact, ...]:
     half_lives = config.get("macro_surprise_half_life_minutes") or {}
     result: list[MacroSurpriseImpact] = []
     seen: set[str] = set()
-    for catalyst in getattr(snapshot, "catalysts", ()) or ():
+    for catalyst in _macro_observations(snapshot):
         event_id = str(getattr(catalyst, "id", ""))
         actual = getattr(catalyst, "actual", None)
         expected = getattr(catalyst, "expected", None)
@@ -714,6 +855,7 @@ def build(snapshot: MarketSnapshot, *, now: datetime | None = None) -> WorldStat
             "source": "world_state_derived" if axis == "defensive" else None,
             "confidence": 0.0 if flows.get(axis) is None else 0.35,
             "coverage": 0.0 if flows.get(axis) is None else 1.0,
+            "independence_weight": 0.35 if flows.get(axis) is not None else 0.0,
             "freshness_seconds": None,
             "evidence": [],
         })
@@ -794,6 +936,7 @@ def build(snapshot: MarketSnapshot, *, now: datetime | None = None) -> WorldStat
         "source": "world_state_derived",
         "confidence": 0.35 if defensive is not None else 0.0,
         "coverage": 1.0 if defensive is not None else 0.0,
+        "independence_weight": 0.35 if defensive is not None else 0.0,
         "freshness_seconds": None,
         "evidence": ["treasury/usd/metals composite"] if defensive is not None else [],
     }
@@ -825,6 +968,8 @@ def build(snapshot: MarketSnapshot, *, now: datetime | None = None) -> WorldStat
         flow_regime = "MIXED"
     else:
         flow_regime = "UNKNOWN"
+    from packages.macro.evidence import build_macro_evidence
+    macro_evidence = build_macro_evidence(snapshot, regime=flow_regime)
     domain_coverage = [flow_coverage, macro_coverage, geo_coverage, statement_coverage, positioning_coverage]
     coverage = round(sum(domain_coverage) / len(domain_coverage), 4)
     quality_score = float(getattr(snapshot.quality, "score", 0.0) or 0.0) / 100.0
@@ -876,6 +1021,7 @@ def build(snapshot: MarketSnapshot, *, now: datetime | None = None) -> WorldStat
         geopolitical_events=events,
         statements=statements,
         macro_surprises=macro_surprises,
+        macro_evidence=macro_evidence,
         macro_surprise_inflation=surprise_inflation,
         macro_surprise_growth=surprise_growth,
         macro_surprise_rates=surprise_rates,

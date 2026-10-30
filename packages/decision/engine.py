@@ -27,7 +27,7 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass, field
 from typing import Literal
 
-from packages.consensus.engine import ConsensusResult
+from packages.consensus.engine import ConsensusResult, canonical_module_name
 from packages.consensus.engine import build as build_consensus
 from packages.data.ingestion.pipeline import MarketSnapshot
 from packages.data.providers import technical as tech_provider
@@ -137,8 +137,21 @@ class TradeDecision:
     # fields never participate in action, size, or RiskGate decisions.
     decision_id: str = ""
     confidence_breakdown: dict = field(default_factory=dict)
+    # Canonical score vocabulary.  ``score`` remains in the public matrix for
+    # backwards compatibility, but consumers must use these explicit fields
+    # instead of treating a directional axis as a win probability.
+    consensus_score: float | None = None
+    directional_strength: float | None = None
+    score_semantics: str = "direction_axis_50_neutral"
 
     def __post_init__(self) -> None:
+        score = getattr(self.consensus, "score", None)
+        if self.consensus_score is None and score is not None:
+            self.consensus_score = round(float(score), 1)
+        if self.directional_strength is None and score is not None:
+            self.directional_strength = round(
+                directional_strength_from_score(score, getattr(self.consensus, "direction", None)), 1
+            )
         if not self.decision_id:
             self.decision_id = stable_decision_id(
                 {
@@ -196,6 +209,22 @@ def _candidate_from_score(score: float, th: dict) -> tuple[Action, float]:
     if score <= th["bearish_max"]:
         return "open_short", 1.0
     return "hold", 0.0
+
+
+def directional_strength_from_score(score: float, direction: str | None = None) -> float:
+    """Normalize the 0-100 directional axis to a side-independent strength.
+
+    A bearish score of 35 is a 65-strength signal, not a 35-strength signal.
+    Keep this conversion in the decision layer so every read model uses the
+    same meaning.
+    """
+    try:
+        value = max(0.0, min(100.0, float(score)))
+    except (TypeError, ValueError):
+        value = 50.0
+    if str(direction or "").casefold() in {"bearish", "down"}:
+        return 100.0 - value
+    return value
 
 
 def _regime_multiplier(label: str) -> float:
@@ -1435,8 +1464,29 @@ def matrix_view(
                 "action": d.action,
                 "candidate_action": d.candidate_action,
                 "score": d.consensus.score,
+                "consensus_score": d.consensus_score,
+                # Make score semantics impossible to misread in API/UI:
+                # direction_score is an axis around 50, while calibrated_p_win
+                # is populated only when a fitted probability exists.
+                "direction_score": d.consensus_score,
+                "calibrated_p_win": (
+                    d.confidence
+                    if bool((d.confidence_breakdown or {}).get("is_win_probability"))
+                    else None
+                ),
+                "directional_strength": d.directional_strength,
+                "score_semantics": d.score_semantics,
                 "direction": d.consensus.direction,
                 "confidence": d.confidence,
+                "confidence_source": d.confidence_source,
+                # Canonical public vocabulary; legacy module keys remain in
+                # stored fingerprints for replay compatibility.
+                "module_names": {
+                    str(m.name): canonical_module_name(str(m.name))
+                    for m in (getattr(d.consensus, "modules", None) or [])
+                },
+                "dominant_module": canonical_module_name(d.consensus.dominant_module),
+                "decision_id": d.decision_id,
                 "size_multiplier": d.size_multiplier,
                 "reason": d.reason,
                 "blocked_by": list(d.blocked_by),
@@ -1478,6 +1528,8 @@ def matrix_view(
     )
     return {
         "generated_at": datetime.now(UTC).isoformat(),
+        "snapshot_id": getattr(snap, "snapshot_id", None),
+        "snapshot_generated_at": getattr(snap, "generated_at", None),
         "symbols": list(symbols),
         "timeframes": tfs,
         "regime": regime.label,

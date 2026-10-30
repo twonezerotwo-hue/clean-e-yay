@@ -82,6 +82,16 @@ def trade_symbols() -> list[str]:
     return symbols_by_role("trade")
 
 
+def configured_trade_symbols() -> list[str]:
+    """Static trade universe used for data-quality coverage denominators.
+
+    Runtime discovery/custom assets stay visible and are still eligible for
+    their own restrictive gates, but they must not make the configured
+    decision universe look stale when they have no stable history yet.
+    """
+    return [a.symbol for a in _load_yaml() if "trade" in a.roles]
+
+
 def liquidity_basket() -> list[tuple[str, str, str]]:
     """(symbol, label, kind) — Küresel Likidite Rotasyon sepeti (yaml sırasıyla)."""
     return [(a.symbol, a.label, a.kind) for a in by_role("liquidity")]

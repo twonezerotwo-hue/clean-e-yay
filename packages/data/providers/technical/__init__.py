@@ -112,17 +112,9 @@ def compute_snapshot(
     ][:3]
 
     observed = observed_at(bars, timeframe)
-    stale = observed is not None and (
-        (now - observed).total_seconds() > STALE_AFTER_SEC[timeframe]
-    )
-    degraded = (
-        not bars
-        or stale
-        or rsi_v is None
-        or macd_norm is None
-        or atr_v is None
-        or ema_stack is None
-    )
+    # The canonical timeframe builder owns data-quality semantics.  Keeping a
+    # second, stricter formula here made panel and decision status disagree.
+    degraded = tf_result.data_quality.status != "OK"
     return TechnicalSnapshot(
         symbol=symbol,
         timeframe=timeframe,
@@ -134,6 +126,7 @@ def compute_snapshot(
         direction_score=round(direction_score, 2) if direction_score is not None else None,
         location_gate=round(location_gate, 3) if location_gate is not None else None,
         location_evidence=location_evidence,
+        confirmation_signals=tf_result.confirmation_signals,
         ts=observed if observed is not None else now,
         status="DEGRADED" if degraded else "OK",
         source=bars[-1].source if bars else "none",

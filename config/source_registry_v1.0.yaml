@@ -52,6 +52,60 @@ sources:
     decision_usage: verified_required
     fallback_to_mock: false
 
+  - id: wti_yfinance
+    kind: price
+    asset: WTI
+    fetcher: yfinance
+    ticker: CL=F
+    cadence_sec: 180
+    decision_usage: verified_required
+    fallback_to_mock: false
+
+  - id: copper_yfinance
+    kind: price
+    asset: COPPER
+    fetcher: yfinance
+    ticker: HG=F
+    cadence_sec: 180
+    decision_usage: verified_required
+    fallback_to_mock: false
+
+  - id: xle_yfinance
+    kind: price
+    asset: XLE
+    fetcher: yfinance
+    ticker: XLE
+    cadence_sec: 180
+    decision_usage: verified_required
+    fallback_to_mock: false
+
+  - id: xlk_yfinance
+    kind: price
+    asset: XLK
+    fetcher: yfinance
+    ticker: XLK
+    cadence_sec: 180
+    decision_usage: verified_required
+    fallback_to_mock: false
+
+  - id: xlv_yfinance
+    kind: price
+    asset: XLV
+    fetcher: yfinance
+    ticker: XLV
+    cadence_sec: 180
+    decision_usage: verified_required
+    fallback_to_mock: false
+
+  - id: xlp_yfinance
+    kind: price
+    asset: XLP
+    fetcher: yfinance
+    ticker: XLP
+    cadence_sec: 180
+    decision_usage: verified_required
+    fallback_to_mock: false
+
   - id: dxy_fred
     kind: macro
     asset: DXY
@@ -189,6 +243,16 @@ sources:
     decision_usage: analytics_only
     fallback_to_mock: false
 
+  # Derived volatility surface produced from the same verified OHLCV snapshot;
+  # it is not an independent price source and cannot open a position alone.
+  - id: volatility_derived
+    kind: derived
+    asset: "trade universe"
+    fetcher: volatility
+    cadence_sec: 30
+    decision_usage: analytics_only
+    fallback_to_mock: false
+
   - id: news_general_rss
     kind: news
     fetcher: rss
@@ -202,6 +266,63 @@ sources:
     cadence_sec: 60
     decision_usage: analytics_only
     feed_registry: packages/data/providers/news/rss.py:GEO_FEEDS
+
+  # Public HTML calendar observer.  Rows are unverified consensus evidence;
+  # the existing YAML/official calendar remains the only verified event source.
+  - id: economic_calendar_investing_web
+    kind: calendar
+    fetcher: investing_web_calendar
+    cadence_sec: 900
+    decision_usage: shadow_only
+    fallback_to_mock: false
+
+  - id: macro_extended_web_shadow
+    kind: macro
+    asset: "ADP, ISM PMI, Durable Goods Orders, FOMC statements"
+    fetcher: investing_web_calendar_plus_news
+    cadence_sec: 900
+    decision_usage: shadow_only
+    fallback_to_mock: false
+
+  # Canonical join keys for the additive macro/causal layer.  These are
+  # deterministic transforms over existing snapshot data, not new data feeds.
+  - id: macro_evidence_canonical
+    kind: evidence
+    fetcher: packages.macro.evidence
+    cadence_sec: 60
+    decision_usage: shadow_only
+    fallback_to_mock: false
+
+  - id: macro_correlation_shadow
+    kind: correlation
+    fetcher: packages.macro.correlation
+    cadence_sec: 900
+    decision_usage: shadow_only
+    fallback_to_mock: false
+
+  - id: macro_bls_official
+    kind: macro
+    asset: "US CPI, Core CPI, PPI, NFP, unemployment, JOLTS job openings, Employment Cost Index"
+    fetcher: bls_public_api
+    cadence_sec: 900
+    decision_usage: shadow_only
+    fallback_to_mock: false
+
+  - id: macro_fred_official
+    kind: macro
+    asset: "PCE, Core PCE, GDP, Fed Funds"
+    fetcher: fred
+    cadence_sec: 900
+    decision_usage: shadow_only
+    fallback_to_mock: false
+
+  - id: macro_eia_official
+    kind: macro
+    asset: "US crude inventories, natural-gas storage"
+    fetcher: eia_api
+    cadence_sec: 900
+    decision_usage: shadow_only
+    fallback_to_mock: false
 
 # Runtime ile registry arasında sessiz kopma olmaması için makine-okunur
 # envanter. Count değerleri testte provider modüllerinden doğrulanır.
@@ -220,3 +341,6 @@ runtime_inventory:
     ohlcv: [ohlcv_kraken, ohlcv_coingecko, ohlcv_yfinance]
     derivatives: [derivatives_binance]
     options: [options_deribit]
+  shadow_transforms: [macro_evidence_canonical, macro_correlation_shadow]
+  macro_official: [macro_bls_official, macro_fred_official, macro_eia_official]
+  macro_shadow_topics: [ADP, ISM_PMI, DURABLE_GOODS, FOMC_STATEMENTS]

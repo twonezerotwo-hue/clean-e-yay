@@ -13,6 +13,7 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Literal
 
+from packages.data.registry import assets as asset_registry
 from packages.data.types import PriceQuote
 
 QualityStatus = Literal["OK", "DEGRADED", "BLOCKED"]
@@ -125,21 +126,56 @@ def extended_metrics(
     Kapsam eksenleri: 0-100 (yüksek = sağlıklı); None = ölçülemedi."""
     out: dict[str, float | None] = {
         "technical_bars": None,
+        "technical_session_coverage": None,
         "news_diversity": None,
         "rotation_coverage": None,
         "artifact_freshness": None,
     }
     # Teknik bar kalitesi: (sembol × TF) hücrelerinin yüzde kaçı tam-bar (≥200)
-    # ve OK statüde. Kısıtlı bar = zayıf indikatör tabanı (RSI/trend güvensiz).
+    # ve indikatör tabanı hazır. Piyasa kapalıyken intraday son barın stale
+    # olması beklenen bir durumdur; bunu ayrı `technical_session_coverage`
+    # ekseninde gösteririz, tarihçe yeterliyse bar kalitesini düşürmeyiz.
     try:
-        cells = [t for by_tf in (technicals_by_tf or {}).values() for t in by_tf.values()]
+        # Discovery/custom assets are intentionally not in this denominator:
+        # this axis measures the decision universe, not every exploratory
+        # series that happens to be present in the snapshot.
+        trade_symbols = set(asset_registry.configured_trade_symbols())
+        cells = [
+            (symbol, t)
+            for symbol, by_tf in (technicals_by_tf or {}).items()
+            if symbol in trade_symbols
+            for t in by_tf.values()
+        ]
         if cells:
+            current = now or datetime.now(UTC)
+
+            def _closed_session(symbol: str) -> bool:
+                try:
+                    from packages.market_sessions import asset_context
+
+                    ctx = asset_context(symbol, current)
+                    return bool(
+                        ctx.relevant_markets
+                        and not ctx.any_relevant_market_open
+                        and ctx.session_risk != "unknown"
+                    )
+                except (OSError, TypeError, ValueError):
+                    return False
+
             full = sum(
-                1 for t in cells
-                if getattr(t, "status", "") == "OK"
-                and int(getattr(t, "bars_used", 0) or 0) >= 200
+                1 for symbol, t in cells
+                if int(getattr(t, "bars_used", 0) or 0) >= 200
+                and (
+                    getattr(t, "status", "") == "OK"
+                    or _closed_session(symbol)
+                )
             )
             out["technical_bars"] = round(100.0 * full / len(cells), 1)
+            # A closed exchange cannot publish a new intraday candle. The
+            # same closed-session allowance is reflected in this separate
+            # coverage axis; entry freshness/status remains unchanged in the
+            # technical snapshot and still blocks stale data.
+            out["technical_session_coverage"] = round(100.0 * full / len(cells), 1)
     except (TypeError, ValueError, AttributeError):
         pass
     # Haber kaynak çeşitliliği: verified başlıklardaki FARKLI kaynak sayısı

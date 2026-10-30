@@ -10,8 +10,8 @@ import os
 import sys
 import time
 from contextlib import asynccontextmanager
-from packages.ops.env import load_repo_dotenv
 
+from packages.ops.env import load_repo_dotenv
 
 # pytest isolation deliberately wins; production processes share the same
 # repository-level provider configuration.

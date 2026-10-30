@@ -26,6 +26,17 @@ DEFAULT_TIMEFRAME: Timeframe = "1d"
 PriceStatus = Literal["OK", "DATA_UNAVAILABLE", "MOCK"]
 
 
+class ConfirmationSignal(BaseModel):
+    """A timing gate ('triggered or not'), separate from score magnitude."""
+
+    name: str
+    fired: bool = False
+    detail: str = ""
+    # Tri-state direction prevents a neutral/missing trigger from being counted
+    # as bearish merely because it is not bullish.
+    direction: Direction | None = None
+
+
 class PriceQuote(BaseModel):
     """Tek fiyat noktası.
 
@@ -88,6 +99,9 @@ class TechnicalSnapshot(BaseModel):
     # plain language ("bearish momentum but sitting on support — don't short here").
     location_gate: float | None = None
     location_evidence: list[str] = Field(default_factory=list)
+    # Live pipeline projection of the canonical timeframe timing gates.  None
+    # is reserved for legacy replay payloads; live snapshots populate it.
+    confirmation_signals: list[ConfirmationSignal] | None = None
     ts: datetime = Field(default_factory=utcnow)
     # T1 additive — bar yetersiz/stale ise DEGRADED; alanlar None kalır.
     status: TechnicalStatus = "OK"
@@ -249,16 +263,6 @@ class TechnicalConfluenceZone(BaseModel):
     price: float
     kind: Literal["support", "resistance"]
     components: list[str] = Field(default_factory=list)
-
-
-class ConfirmationSignal(BaseModel):
-    """A TIMING gate ('triggered or not') — separate from scoring (no double count).
-    The same EMA/volume magnitude is scored once in score_overview; here we only
-    say whether a trigger fired (section 4.4)."""
-
-    name: str
-    fired: bool = False
-    detail: str = ""
 
 
 class TechnicalTimeframeSummary(BaseModel):
@@ -446,6 +450,9 @@ class NewsHeadline(BaseModel):
     ts: datetime
     title: str
     title_tr: str | None = None
+    # RSS sağlayıcısının yayınladığı sınırlı açıklama. Tam makale erişilemezse
+    # haber bağlamını korur; tek başına emir üretmez.
+    article_summary: str | None = None
     sentiment: Sentiment | None = None
     # M1 — v2 (çekim-eki normalize) sınıflandırıcının okuması; SALT-GÖZLEM.
     # `news.sentiment_v2` flag'i KAPALIYKEN karar zinciri `sentiment`(v1) okur;
@@ -482,7 +489,10 @@ class Catalyst(BaseModel):
     actual: float | None = None
     expected: float | None = None
     previous: float | None = None
+    revised: float | None = None
+    unit: str | None = None
     historical_surprise_volatility: float | None = None
+    evidence: list[str] = Field(default_factory=list)
 
 
 # v2.7 D5 — Catalyst half-life intelligence. Haber → catalyst sınıflandırması.

@@ -2,8 +2,8 @@
 
 Politika ([docs/DATA_POLICY.md]):
 - Runtime'da **mock/fixture bar yasaktır**. Live provider başarısız olursa
-  önce disk cache'teki (stale de olsa) gerçek veri kullanılır; o da yoksa
-  boş liste döner → technicals None + DEGRADED.
+  yalnız teknik tazelik sınırı içindeki gerçek cache kullanılır; daha eski
+  cache hesaplamaya girmez ve boş liste döner → technicals None + DEGRADED.
 - Fixture barlar yalnızca test/dev path: `TEST_USE_MOCK=true` veya açık
   `OHLCV_USE_FIXTURE=true`.
 
@@ -51,12 +51,32 @@ _STATUS: dict[str, dict] = {
     name: {
         "status": "unknown",
         "last_success_at": None,
+        "last_fallback_at": None,
         "last_error": None,
+        "last_error_type": None,
+        "last_retry_after": None,
+        "last_cache_age_seconds": None,
         "calls": 0,
         "fallbacks": 0,
+        # Internal per-symbol scope; exported as a JSON-safe list below.
+        "degraded_symbols": set(),
     }
     for name in _PROVIDER_NAMES
 }
+
+# A stale bar may be retained for replay/diagnostics, but it must not remain
+# in a technical calculation after the same freshness boundary used by the
+# technical provider.  Returning an empty series here makes the existing
+# technical snapshot and final paper gate fail closed instead of scoring old
+# candles as if they were current.
+_MAX_STALE_SEC: dict[Timeframe, int] = {
+    "15m": 1800,
+    "1h": 7200,
+    "4h": 28800,
+    "1d": 172800,
+    "1w": 864000,
+}
+_RECENT_FALLBACK_WINDOW_SEC = 120.0
 
 
 def _truthy(v: str | None) -> bool:
@@ -70,7 +90,17 @@ def is_fixture_mode() -> bool:
     )
 
 
-def _mark(name: str, *, ok: bool, error: str | None = None, fallback: bool = False) -> None:
+def _mark(
+    name: str,
+    *,
+    ok: bool,
+    error: str | None = None,
+    error_type: str | None = None,
+    retry_after: float | None = None,
+    fallback: bool = False,
+    cache_age_seconds: float | None = None,
+    symbol: str | None = None,
+) -> None:
     with _LOCK:
         st = _STATUS[name]
         st["calls"] += 1
@@ -78,17 +108,56 @@ def _mark(name: str, *, ok: bool, error: str | None = None, fallback: bool = Fal
             st["status"] = "ok"
             st["last_success_at"] = datetime.now(UTC).isoformat()
             st["last_error"] = None
+            st["last_error_type"] = None
+            st["last_retry_after"] = None
         else:
             st["status"] = "degraded"
             if error:
                 st["last_error"] = error
+            if error_type:
+                st["last_error_type"] = error_type
+            st["last_retry_after"] = retry_after
+        if cache_age_seconds is not None:
+            st["last_cache_age_seconds"] = round(float(cache_age_seconds), 1)
         if fallback:
             st["fallbacks"] += 1
+            st["last_fallback_at"] = datetime.now(UTC).isoformat()
+        if symbol and not ok:
+            st["degraded_symbols"].add(str(symbol).upper())
 
 
 def get_provider_status() -> dict[str, dict]:
     with _LOCK:
-        return {k: dict(v) for k, v in _STATUS.items()}
+        out = {k: dict(v) for k, v in _STATUS.items()}
+    for info in out.values():
+        if isinstance(info.get("degraded_symbols"), set):
+            info["degraded_symbols"] = sorted(info["degraded_symbols"])
+    # A provider can have a successful request for one symbol and a stale
+    # fallback for another in the same snapshot.  The last event wins; do not
+    # let the later success hide the fallback from health/provenance views.
+    for info in out.values():
+        success = str(info.get("last_success_at") or "")
+        fallback = str(info.get("last_fallback_at") or "")
+        recent_fallback = False
+        if fallback:
+            try:
+                recent_fallback = (
+                    datetime.now(UTC)
+                    - datetime.fromisoformat(fallback)
+                ).total_seconds() <= _RECENT_FALLBACK_WINDOW_SEC
+            except (TypeError, ValueError):
+                recent_fallback = False
+        # A later successful symbol must not hide a stale fallback that
+        # happened in the same snapshot.  The short window also lets the
+        # provider recover to OK after a clean subsequent cycle instead of
+        # leaving a historical fallback stuck forever.
+        if fallback and (recent_fallback or not success or fallback >= success):
+            info["status"] = "degraded"
+            if not info.get("last_error_type"):
+                info["last_error_type"] = "stale_cache"
+            if not info.get("last_error"):
+                info["last_error"] = "serving stale cache"
+    return out
 
 
 def reset_provider_status() -> None:
@@ -97,9 +166,14 @@ def reset_provider_status() -> None:
             v.update(
                 status="unknown",
                 last_success_at=None,
+                last_fallback_at=None,
                 last_error=None,
+                last_error_type=None,
+                last_retry_after=None,
+                last_cache_age_seconds=None,
                 calls=0,
                 fallbacks=0,
+                degraded_symbols=set(),
             )
 
 
@@ -125,6 +199,7 @@ def _native_bars(symbol: str, tf: Timeframe) -> list[OHLCVBar]:
         )
 
         if trusted_cache and cached_kraken.fresh:
+            _mark("ohlcv_kraken", ok=True, cache_age_seconds=cached_kraken.age_seconds)
             return cached_kraken.bars
 
         live_kraken = kraken.get_bars(symbol, tf)
@@ -139,14 +214,29 @@ def _native_bars(symbol: str, tf: Timeframe) -> list[OHLCVBar]:
             "ohlcv_kraken",
             ok=False,
             error="real_candles_unavailable",
+            symbol=symbol,
         )
 
         if trusted_cache:
+            if cached_kraken.age_seconds > _MAX_STALE_SEC[tf]:
+                _mark(
+                    "ohlcv_kraken",
+                    ok=False,
+                    error="stale cache exceeds technical freshness",
+                    error_type="stale_cache_expired",
+                    fallback=True,
+                    cache_age_seconds=cached_kraken.age_seconds,
+                    symbol=symbol,
+                )
+                return []
             _mark(
                 "ohlcv_kraken",
                 ok=False,
                 error="serving_previous_real_candles",
+                error_type="stale_cache",
                 fallback=True,
+                cache_age_seconds=cached_kraken.age_seconds,
+                symbol=symbol,
             )
             return cached_kraken.bars
 
@@ -159,6 +249,7 @@ def _native_bars(symbol: str, tf: Timeframe) -> list[OHLCVBar]:
     ):
         cached = None
     if cached is not None and cached.fresh:
+        _mark(name, ok=True, cache_age_seconds=cached.age_seconds)
         return cached.bars
     try:
         bars = provider.get_bars(symbol, tf)
@@ -171,10 +262,37 @@ def _native_bars(symbol: str, tf: Timeframe) -> list[OHLCVBar]:
         _mark(name, ok=True)
         cache.save(symbol, tf, bars)
         return bars
-    _mark(name, ok=False, error=error)
+    provider_meta = provider.last_fetch_error() if hasattr(provider, "last_fetch_error") else {}
+    _mark(
+        name,
+        ok=False,
+        error=(provider_meta or {}).get("message") or error,
+        error_type=(provider_meta or {}).get("type"),
+        retry_after=(provider_meta or {}).get("retry_after"),
+        symbol=symbol,
+    )
     if cached is not None:
         # Stale ama gerçek veri — TF freshness kuralı DEGRADED işaretler.
-        _mark(name, ok=False, error="serving stale cache", fallback=True)
+        if cached.age_seconds > _MAX_STALE_SEC[tf]:
+            _mark(
+                name,
+                ok=False,
+                error="stale cache exceeds technical freshness",
+                error_type="stale_cache_expired",
+                fallback=True,
+                cache_age_seconds=cached.age_seconds,
+                symbol=symbol,
+            )
+            return []
+        _mark(
+            name,
+            ok=False,
+            error="serving stale cache",
+            error_type="stale_cache",
+            fallback=True,
+            cache_age_seconds=cached.age_seconds,
+            symbol=symbol,
+        )
         return cached.bars
     return []
 

@@ -370,6 +370,28 @@ def viewmodel() -> dict[str, Any]:
             "paper_safe": True,
             "no_execution": True,
         }
+    # The artifact is intentionally retained for audit/replay, but a previous
+    # run must not make a disabled runtime route look active in the dashboard.
+    # Keep the legacy response keys for contract compatibility and expose the
+    # effective state explicitly.
+    try:
+        from packages.data.registry.loader import load_thresholds
+
+        enabled = bool((load_thresholds().get("shadow") or {}).get("enabled", False))
+    except (OSError, KeyError, TypeError, ValueError):
+        enabled = False
+    if not enabled:
+        return {
+            "status": "DISABLED",
+            "engine": ENGINE,
+            "shadow_only": True,
+            "runtime_enabled": False,
+            "historical_read_only": True,
+            "historical_artifact_available": True,
+            "live_decision_changed": False,
+            "paper_safe": True,
+            "no_execution": True,
+        }
     return report
 
 

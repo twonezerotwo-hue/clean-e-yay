@@ -18,7 +18,15 @@ from pydantic import BaseModel, Field
 from packages.data.ingestion.pipeline import build_snapshot
 from packages.notifications import list_recent, mark_ack, mark_all_ack, unread_count
 from packages.paper import audit as paper_audit
-from packages.paper import idea_order, maintenance, manual_order, manual_queue, news_setup, ticket
+from packages.paper import (
+    idea_order,
+    maintenance,
+    manual_order,
+    manual_queue,
+    news_setup,
+    reconciliation,
+    ticket,
+)
 from packages.paper import state as paper_state
 from packages.paper.guards import price_sanity, state_anomaly
 from packages.paper.lifecycle import close_position, max_drawdown_pct
@@ -77,6 +85,11 @@ def _serialize_state(ps: paper_state.PaperState) -> dict:
     new_entries_disabled = bool(halt_store.active_halts())
     anomaly = state_anomaly.detect_state(ps)
     total_exposure_usd = round(sum(p.size_usd for p in ps.open_positions), 2)
+    identity_reconciliation = reconciliation.reconcile(
+        tickets=ticket.load_last(),
+        positions=[asdict(p) for p in ps.open_positions],
+        notifications=[n.to_dict() for n in list_recent(limit=200)],
+    )
     return {
         "revision": ps.revision,
         "generated_at": now.isoformat(),
@@ -94,6 +107,7 @@ def _serialize_state(ps: paper_state.PaperState) -> dict:
         "duplicate_warning": _duplicate_warning(ps),
         "audit_summary": paper_audit.summary(),
         "recent_audit_events": paper_audit.read_recent(20),
+        "identity_reconciliation": identity_reconciliation,
         "manual_ready_count": len(ps.manual_ready),
         "news_prepared_setups_count": len(
             [s for s in ps.news_prepared_setups if news_setup.is_live(s, now)]
@@ -387,6 +401,7 @@ def approve_manual_ready(manual_id: str) -> dict:
             daily_pnl_usd=ps.daily_pnl_usd,
             open_position_count=len(ps.open_positions),
             daily_anchor_date=ps.daily_anchor_date,
+            mtm_equity_usd=ps.mtm_equity_usd,
         )
         entry = next((m for m in ps.manual_ready if m.id == manual_id), None)
         result = manual_queue.approve(

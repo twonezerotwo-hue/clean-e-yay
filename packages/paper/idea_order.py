@@ -221,6 +221,29 @@ def _data_block(symbol: str, tf: str, latest: dict | None, now: datetime) -> str
     age = (now - stamp).total_seconds()
     if age > DEFAULT_TICK_STALE_SEC:
         return f"sistem verisi eski ({_human_age(now - stamp)}) — güncel veri bekleniyor"
+    # A source/old OHLCV cache alone is not enough for a market paper fill.
+    # The opener uses the current snapshot quote; keep the read-only verdict
+    # identical so the button cannot advertise READY and then fail silently.
+    if "prices" in (latest or {}):
+        price_rows = (latest or {}).get("prices")
+    elif "data_snapshot" in (latest or {}):
+        price_rows = ((latest or {}).get("data_snapshot") or {}).get("prices")
+    else:
+        price_rows = None
+    if price_rows is not None:
+        quote = next(
+            (
+                row
+                for row in (price_rows or [])
+                if isinstance(row, dict)
+                and str(row.get("symbol") or "").upper() == symbol.upper()
+            ),
+            None,
+        )
+        if quote is None or float(quote.get("price") or 0.0) <= 0:
+            return f"{symbol} için güncel fiyat yok — işlem açılamaz (uydurma fiyat yok)"
+        if "verified" in quote and not bool(quote.get("verified")):
+            return f"{symbol} için fiyat doğrulanmadı — doğrulanmış veri bekleniyor"
     return None
 
 

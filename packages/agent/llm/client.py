@@ -15,6 +15,7 @@ import urllib.error
 import urllib.request
 from collections.abc import Iterator
 from dataclasses import dataclass
+
 from packages.ops.env import load_repo_dotenv
 
 GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions"

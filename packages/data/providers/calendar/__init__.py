@@ -76,7 +76,14 @@ def _mark(*, ok: bool, error: str | None = None) -> None:
 
 def get_provider_status() -> dict[str, dict]:
     with _LOCK:
-        return {k: dict(v) for k, v in _STATUS.items()}
+        status = {k: dict(v) for k, v in _STATUS.items()}
+    try:
+        from packages.data.providers.calendar import web as web_calendar
+
+        status.update(web_calendar.get_provider_status())
+    except Exception:
+        pass
+    return status
 
 
 def reset_provider_status() -> None:
@@ -89,6 +96,12 @@ def reset_provider_status() -> None:
                 calls=0,
                 fallbacks=0,
             )
+    try:
+        from packages.data.providers.calendar import web as web_calendar
+
+        web_calendar.reset_provider_status()
+    except Exception:
+        pass
 
 
 # ---------------------------------------------------------------------------
@@ -194,13 +207,41 @@ def list_catalysts(
             )
         )
 
-    if not out:
-        _mark(ok=False, error="no upcoming events in calendar")
+    # Public web calendar is an explicitly unverified shadow source.  It is
+    # additive to the YAML calendar and never changes ``verified`` to True.
+    # Supplying yaml_path is used by tests/replays and must remain deterministic.
+    yaml_events = list(out)
+    web_events: list[Catalyst] = []
+    if yaml_path is None:
+        try:
+            from packages.data.providers.calendar import web as web_calendar
+
+            web_events = web_calendar.list_catalysts(now=now, horizon_days=horizon_days)
+        except Exception:
+            # A public page is optional evidence; it must never break the
+            # existing calendar provider or the snapshot pipeline.
+            web_events = []
+
+    merged: list[Catalyst] = []
+    seen: set[tuple[str, str]] = set()
+    for item in [*yaml_events, *web_events]:
+        key = (item.ts.isoformat(), item.title.strip().casefold())
+        if key in seen:
+            continue
+        seen.add(key)
+        merged.append(item)
+
+    # Keep the legacy provider status honest: a web-only result is not a
+    # verified macro calendar watermark.
+    if yaml_events:
+        _mark(ok=True)
+    else:
+        _mark(ok=False, error="no verified upcoming events in calendar")
+    if not merged:
         return []
 
-    out.sort(key=lambda c: c.ts)
-    _mark(ok=True)
-    return out[:limit]
+    merged.sort(key=lambda c: c.ts)
+    return merged[:limit]
 
 
 # ---------------------------------------------------------------------------

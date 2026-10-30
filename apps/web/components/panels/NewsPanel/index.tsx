@@ -7,7 +7,7 @@ import { PanelHeader } from "@/components/shell/PanelHeader";
 import { LoadingState } from "@/components/shell/LoadingState";
 import { EmptyState } from "@/components/shell/EmptyState";
 import { MobileFlipCard } from "@/components/cockpit/MobileFlipCard";
-import { useCockpitBrief, useNewsCurrent, useRegimeReport } from "@/lib/queries/hooks";
+import { useCockpitBrief, useDataSnapshot, useNewsCurrent, useRegimeReport } from "@/lib/queries/hooks";
 import { headlineImpactBadges } from "@/lib/selectors/regime";
 import { fmtRelative } from "@/lib/format";
 import { DIRECTION_COLOR } from "@/lib/constants";
@@ -110,11 +110,15 @@ export function NewsPanel({ defaultView = "list" }: NewsPanelProps) {
   const wall = useNewsCurrent();
   const cockpit = useCockpitBrief();
   const regime = useRegimeReport();
+  const snapshot = useDataSnapshot();
   const [focus, setFocus] = useState<(typeof FOCUS_COUNTRIES)[number]["id"]>("ALL");
-  const sourceItems = wall.data?.headlines?.length
-    ? wall.data.headlines
-    : cockpit.data?.headlines?.length
-      ? cockpit.data.headlines
+  // Prefer the authoritative cockpit envelope so Heart and Brain render the
+  // same snapshot/ordering.  The standalone news wall remains a safe fallback
+  // while the cockpit cycle is loading or unavailable.
+  const sourceItems = cockpit.data?.headlines?.length
+    ? cockpit.data.headlines
+    : wall.data?.headlines?.length
+      ? wall.data.headlines
       : regime.data?.headlines ?? [];
   const allItems = useMemo(() => sourceItems.slice(0, 96), [sourceItems]);
   const items = useMemo(
@@ -135,6 +139,7 @@ export function NewsPanel({ defaultView = "list" }: NewsPanelProps) {
   const liveSetups = (cockpit.data?.news_prepared_setups ?? []).filter((setup) =>
     setup.status === "ARMED" || setup.status === "WAITING_RISK",
   );
+  const macroReleases = (snapshot.data?.macro_releases ?? []).slice(0, 5);
   return (
     <>
     <div className="h-full">
@@ -192,6 +197,25 @@ export function NewsPanel({ defaultView = "list" }: NewsPanelProps) {
           ? `Haber + teknik teyit: ${liveSetups.length} aday RiskGate için izleniyor · emir yalnız paper-safe kapıdan geçer.`
           : "Haber + grafik teyidi birlikte oluştuğunda aday hazırlanır; haber tek başına emir üretmez."}
       </div>
+      {macroReleases.length ? (
+        <div className="mb-2 rounded border border-amber-300/15 bg-amber-300/[0.03] px-2 py-1.5">
+          <div className="mb-1 text-[9px] uppercase tracking-widest text-amber-200/60">
+            Resmî makro gerçekleşenler · gölge kanıt
+          </div>
+          <div className="space-y-1 text-[10px] text-white/70">
+            {macroReleases.map((release) => (
+              <div key={release.id} className="flex items-center gap-2">
+                <span className="min-w-0 flex-1 truncate">{release.title}</span>
+                <span className="font-mono text-amber-100/80">{release.actual ?? "—"}</span>
+                {release.previous != null ? (
+                  <span className="font-mono text-white/35">önce {release.previous}</span>
+                ) : null}
+                <span className="text-emerald-200/60">doğrulandı</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : null}
       {isLoading ? (
         <LoadingState />
       ) : !hasItems ? (

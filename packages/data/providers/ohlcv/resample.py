@@ -6,7 +6,8 @@ Yöntem (T1):
   bar ts'i haftanın Pazartesi 00:00 UTC'sidir.
 - open = bucket'ın ilk barının open'ı, high = max, low = min,
   close = son barın close'u, volume = toplam (hepsi None ise None).
-- Son (oluşmakta olan) bucket dahildir — gerçek, kısmi mum.
+- Varsayılan olarak yalnızca kapanmış bucket'lar döner; oluşmakta olan mum
+  teknik karar zincirine girmez.
 - `source = "resampled:<base_tf>"`; verified = tüm üye barlar verified ise.
 """
 from __future__ import annotations
@@ -19,6 +20,8 @@ _BUCKET_SECONDS: dict[str, int] = {"15m": 900, "1h": 3600, "4h": 14400}
 
 
 def _bucket_start(ts: datetime, target_tf: Timeframe) -> datetime:
+    if ts.tzinfo is None:
+        ts = ts.replace(tzinfo=UTC)
     if target_tf == "1w":
         # ISO hafta: Pazartesi 00:00 UTC
         day = ts.astimezone(UTC)
@@ -29,8 +32,18 @@ def _bucket_start(ts: datetime, target_tf: Timeframe) -> datetime:
     return datetime.fromtimestamp((epoch // sec) * sec, tz=UTC)
 
 
-def resample(bars: list[OHLCVBar], target_tf: Timeframe) -> list[OHLCVBar]:
-    """Sıralı (veya sırasız) alt-TF barlarını target_tf barlarına çevirir."""
+def resample(
+    bars: list[OHLCVBar],
+    target_tf: Timeframe,
+    *,
+    closed_only: bool = True,
+    now: datetime | None = None,
+) -> list[OHLCVBar]:
+    """Alt TF barlarını target_tf'e çevirir.
+
+    ``closed_only`` teknik analiz için güvenli varsayılandır. Kısmi üst TF mum
+    her tick'te değişebildiği için yön, stop ve teyit üretiminde kullanılamaz.
+    """
     if not bars:
         return []
     base_tf = bars[0].timeframe
@@ -38,6 +51,19 @@ def resample(bars: list[OHLCVBar], target_tf: Timeframe) -> list[OHLCVBar]:
     groups: dict[datetime, list[OHLCVBar]] = {}
     for b in ordered:
         groups.setdefault(_bucket_start(b.ts, target_tf), []).append(b)
+    if closed_only:
+        now = now or datetime.now(UTC)
+        if now.tzinfo is None:
+            now = now.replace(tzinfo=UTC)
+        duration = timedelta(days=7) if target_tf == "1w" else timedelta(
+            seconds=_BUCKET_SECONDS[target_tf]
+        )
+        now_utc = now.astimezone(UTC)
+        groups = {
+            start: members
+            for start, members in groups.items()
+            if start + duration <= now_utc
+        }
     out: list[OHLCVBar] = []
     for start in sorted(groups):
         members = groups[start]

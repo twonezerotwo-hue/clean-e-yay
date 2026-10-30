@@ -779,7 +779,9 @@ export const api = {
     fetchJSON<ConflictGateStatus>("/api/v1/learning/conflict-gate-status"),
   conflictGateValidation: () =>
     fetchJSON<ConflictGateValidationReport>("/api/v1/learning/conflict-gate-validation"),
-  cockpitBrief: () => fetchJSON<CockpitBrief>("/api/v1/cockpit/brief"),
+  // Canonical cockpit envelope.  `/cockpit/brief` remains server-side as a
+  // compatibility alias for older clients and integrations.
+  cockpitBrief: () => fetchJSON<CockpitBrief>("/api/v1/cockpit/state"),
   replayStatus: () => fetchJSON<ReplayStatus>("/api/v1/replay/status"),
   replayBacktest: () => fetchJSON<ReplayBacktest>("/api/v1/replay/backtest"),
   replaySnapshot: (snapshotId: string) =>

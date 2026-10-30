@@ -16,6 +16,9 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from typing import Any
 
+from packages.decision.engine import directional_strength_from_score
+from packages.paper import news_setup
+
 # Enum literal'leri openapi (CockpitBrief) ile birebir senkron tutulur.
 AGENT_STATUSES = ("ACTIONABLE", "NO_ACTION", "WATCHING", "FROZEN", "BLOCKED")
 MAIN_BLOCKER_CODES = ("DQS_BLOCKED", "HALT", "PROVIDER_DOWN", "RISK_GATE", "NONE")
@@ -41,6 +44,7 @@ _GATE_LABELS: dict[str, str] = {
     "options_risk": "Options",
     "correlation": "Correlation",
     "timeframe_policy": "TimeframePolicy",
+    "technical_confirmation": "TechnicalConfirmation",
     "1w_bias": "1wBias",
     "event_risk": "EventRisk",
 }
@@ -135,23 +139,35 @@ def _expired_time_stops(open_positions: list[Any], now: datetime) -> int:
 
 
 def _top_candidates(cells: list[dict], limit: int = 6) -> list[dict]:
-    """En güçlü kanaatli hücreler (|score-50| sıralı) — candidate→final açık."""
-    ranked = sorted(cells, key=lambda c: -abs(float(c.get("score", 50)) - 50))
+    """En güçlü yön hücreleri — candidate→final ayrımı açık."""
+    def _strength(cell: dict) -> float:
+        value = cell.get("directional_strength")
+        if value is not None:
+            try:
+                return float(value)
+            except (TypeError, ValueError):
+                pass
+        try:
+            return float(directional_strength_from_score(float(cell.get("score", 50)), cell.get("direction")))
+        except (TypeError, ValueError):
+            return 50.0
+
+    ranked = sorted(cells, key=lambda c: -_strength(c))
     out = []
     for c in ranked[:limit]:
-        try:
-            raw_score = max(0.0, min(100.0, float(c.get("score", 50))))
-        except (TypeError, ValueError):
-            raw_score = 50.0
-        direction = str(c.get("direction") or "").casefold()
-        strength = 100.0 - raw_score if direction in {"bearish", "down"} else raw_score
+        strength = _strength(c)
         out.append(
             {
                 "symbol": c.get("symbol"),
                 "timeframe": c.get("timeframe"),
                 "direction": c.get("direction"),
                 "score": c.get("score"),
+                "consensus_score": c.get("consensus_score", c.get("score")),
+                "score_semantics": c.get("score_semantics", "direction_axis_50_neutral"),
                 "directional_strength": round(strength, 1),
+                "confidence": c.get("confidence"),
+                "confidence_source": c.get("confidence_source"),
+                "decision_id": c.get("decision_id"),
                 "candidate_action": c.get("candidate_action"),
                 "final_action": c.get("action"),
                 "actionable": bool(c.get("actionable")),
@@ -191,6 +207,288 @@ def _paper_actions(cells: list[dict]) -> list[dict]:
         for c in cells
         if c.get("paper_action") not in (None, "none")
     ]
+
+
+def _open_position_actions(open_positions: list[Any]) -> list[dict]:
+    """Return only actions that are backed by an actually open paper position.
+
+    ``_paper_actions`` is the decision-matrix projection and therefore contains
+    *intended* actions.  Mixing that list into ``current_paper_actions`` made
+    the cockpit claim that an order existed when the tick worker had held it at
+    the final news-confluence gate.
+    """
+    return [
+        {
+            "symbol": getattr(position, "symbol", None),
+            "timeframe": getattr(position, "timeframe", "1d"),
+            "paper_action": f"open_{getattr(position, 'side', '')}",
+            "position_id": getattr(position, "id", None),
+        }
+        for position in open_positions
+        if getattr(position, "symbol", None)
+    ]
+
+
+def technical_data_ready(snap: Any, symbol: str, timeframe: str) -> bool:
+    """Return true only for a complete, non-degraded technical cell."""
+    by_tf = getattr(snap, "technicals_by_tf", None) or {}
+    tech = (by_tf.get(symbol) or {}).get(timeframe)
+    if tech is None:
+        tech = (getattr(snap, "technicals", None) or {}).get(symbol)
+    return str(getattr(tech, "status", "")).upper() == "OK"
+
+
+def technical_confirmation_ready(
+    snap: Any, symbol: str, timeframe: str, side: str, *, min_confirmations: int | None = None
+) -> tuple[bool, str | None]:
+    """Require same-side indicator confirmations for automatic paper opening.
+
+    Older replay/synthetic snapshots do not carry ``confirmation_signals``;
+    those remain backward compatible. Live technical cells do carry the list,
+    so an empty or opposing list cannot silently pass the final gate.
+    """
+    by_tf = getattr(snap, "technicals_by_tf", None) or {}
+    tech = (by_tf.get(symbol) or {}).get(timeframe)
+    if tech is None:
+        tech = (getattr(snap, "technicals", None) or {}).get(symbol)
+    if tech is None or str(getattr(tech, "status", "")).upper() != "OK":
+        return False, "technical_data"
+    signals = getattr(tech, "confirmation_signals", None)
+    if signals is None:
+        return True, None
+    try:
+        from packages.data.registry.loader import load_thresholds
+        cfg = load_thresholds().get("technical_entry_gate") or {}
+        if not bool(cfg.get("enabled", True)):
+            return True, None
+    except Exception:
+        cfg = {}
+    signals = list(signals or [])
+    if not signals:
+        return False, "technical_confirmation"
+    required = min_confirmations
+    if required is None:
+        per_timeframe = cfg.get("min_confirmations_by_timeframe") or {}
+        required = per_timeframe.get(timeframe, cfg.get("min_confirmations", 2))
+    try:
+        required = int(required)
+    except (TypeError, ValueError):
+        required = 2
+    required = max(1, int(required))
+    wanted = "bullish" if str(side).casefold() == "long" else "bearish"
+    directional = [getattr(signal, "direction", None) for signal in signals]
+    if any(value is not None for value in directional):
+        # Live signals carry explicit bullish/bearish/neutral semantics; neutral
+        # is not evidence for either side.
+        aligned = sum(1 for value in directional if value == wanted)
+    else:
+        # Legacy replay fixtures predate the tri-state field.
+        fired = sum(1 for signal in signals if bool(getattr(signal, "fired", False)))
+        aligned = fired if wanted == "bullish" else len(signals) - fired
+    return (aligned >= required, None if aligned >= required else f"technical_confirmation:{aligned}/{required}")
+
+
+def _auto_open_readiness(
+    cells: list[dict],
+    snap: Any,
+    paper_state: Any,
+    now: datetime | None = None,
+) -> dict[str, Any]:
+    """Project the worker's final paper-open gate into the read model.
+
+    The tick worker deliberately requires a live, same-symbol/timeframe/side
+    ``ARMED`` news+technical setup.  The decision matrix is calculated before
+    that gate, so exposing matrix ``READY`` as if it were an opened position is
+    misleading.  This helper is read-only and calls the canonical matcher; it
+    never creates a setup or mutates paper state.
+    """
+    candidates = [
+        cell
+        for cell in cells
+        if cell.get("action") in {"open_long", "open_short"}
+        and bool(cell.get("execution_ready", cell.get("actionable")))
+    ]
+    try:
+        required = news_setup.require_confluence_for_auto_open()
+    except Exception:
+        # Observability must not take down the cockpit if a malformed optional
+        # threshold is encountered.  The worker remains the decision authority.
+        required = False
+
+    setups = getattr(paper_state, "news_prepared_setups", None)
+    quotes = {
+        str(getattr(quote, "symbol", "")): quote
+        for quote in (getattr(snap, "prices", None) or [])
+    }
+    ready: list[dict] = []
+    blockers: list[dict] = []
+    for cell in candidates:
+        symbol = str(cell.get("symbol") or "")
+        timeframe = str(cell.get("timeframe") or "")
+        side = "long" if cell.get("action") == "open_long" else "short"
+        if not technical_data_ready(snap, symbol, timeframe):
+            blockers.append({
+                "symbol": symbol,
+                "timeframe": timeframe,
+                "side": side,
+                "code": "technical_data",
+                "reason": "Teknik veri taze ve doğrulanmış değil.",
+            })
+            continue
+        technical_ok, _technical_reason = technical_confirmation_ready(snap, symbol, timeframe, side)
+        if not technical_ok:
+            blockers.append({
+                "symbol": symbol,
+                "timeframe": timeframe,
+                "side": side,
+                "code": "technical_confirmation",
+                "reason": "Aynı yönde yeterli teknik teyit yok.",
+            })
+            continue
+        if not required:
+            ready.append({"symbol": symbol, "timeframe": timeframe, "side": side})
+            continue
+        if setups is None:
+            blockers.append({
+                "symbol": symbol,
+                "timeframe": timeframe,
+                "side": side,
+                "code": "news_confluence",
+                "reason": "Haber-teknik kurulum verisi henüz hazır değil.",
+            })
+            continue
+        quote = quotes.get(symbol)
+        match = news_setup.match_confluence(
+            setups,
+            symbol=symbol,
+            timeframe=timeframe,
+            side=side,
+            price=getattr(quote, "price", None),
+            data_verified=bool(getattr(quote, "verified", False)),
+            decision_id=cell.get("decision_id"),
+            now=now,
+        )
+        if match is not None:
+            ready.append({"symbol": symbol, "timeframe": timeframe, "side": side})
+            continue
+        blockers.append(
+            {
+                "symbol": symbol,
+                "timeframe": timeframe,
+                "side": side,
+                "code": "news_confluence",
+                "reason": (
+                    "Aynı varlık, zaman dilimi ve yönde canlı ARMED "
+                    "haber-teknik kurulumu yok."
+                ),
+            }
+        )
+
+    return {
+        "enabled": bool(required),
+        "available": setups is not None,
+        "candidate_count": len(candidates),
+        "ready_count": len(ready),
+        "blocked_count": len(blockers),
+        "ready": ready,
+        "blockers": blockers,
+        "reason": (
+            "Otomatik kâğıt açılışı için haber-teknik kurulumu bekleniyor."
+            if blockers and not ready
+            else None
+        ),
+    }
+
+
+def finalize_matrix_view(
+    view: dict,
+    snap: Any,
+    paper_state: Any,
+    now: datetime | None = None,
+) -> dict:
+    """Apply the worker's final paper-open gate to a read-only matrix.
+
+    ``matrix_view`` is intentionally pure and remains the technical/risk
+    projection used by replay tests.  API, brief and LLM surfaces must use this
+    projection before they call something an actionable paper entry.
+    """
+    now = now or datetime.now(UTC)
+    cells = view.get("cells") or []
+    from packages.paper.state_machine import derive_decision_state
+
+    open_symbols = {str(getattr(p, "symbol", "")) for p in (getattr(paper_state, "open_positions", None) or [])}
+    pending = view.get("pending_paper_actions") or _paper_actions(cells)
+    readiness = _auto_open_readiness(cells, snap, paper_state, now)
+    ready_keys = {
+        (row.get("symbol"), row.get("timeframe"), row.get("side"))
+        for row in readiness.get("ready") or []
+    }
+    for cell in cells:
+        intent = cell.get("paper_action_intent", cell.get("paper_action"))
+        cell["paper_action_intent"] = intent
+        if intent not in {"open_long", "open_short"}:
+            cell["final_actionable"] = False
+            cell["final_execution_ready"] = False
+            state, state_reason = derive_decision_state(cell, open_symbols=open_symbols)
+            cell["lifecycle_state"] = state
+            cell["lifecycle_reason"] = state_reason
+            continue
+
+        side = "long" if intent == "open_long" else "short"
+        key = (cell.get("symbol"), cell.get("timeframe"), side)
+        technical_ready = bool(cell.get("execution_ready", cell.get("actionable")))
+        final_ready = technical_ready
+        final_blocker = None
+        if not technical_ready:
+            final_blocker = "execution_gate"
+        elif not technical_data_ready(snap, str(cell.get("symbol") or ""), str(cell.get("timeframe") or "")):
+            final_ready = False
+            final_blocker = "technical_data"
+        elif not technical_confirmation_ready(
+            snap,
+            str(cell.get("symbol") or ""),
+            str(cell.get("timeframe") or ""),
+            side,
+        )[0]:
+            final_ready = False
+            final_blocker = "technical_confirmation"
+        elif readiness.get("enabled") and readiness.get("available") and key not in ready_keys:
+            final_ready = False
+            final_blocker = "news_confluence"
+
+        cell["final_actionable"] = final_ready
+        cell["final_execution_ready"] = final_ready
+        if final_ready:
+            cell["paper_action"] = intent
+            state, state_reason = derive_decision_state(cell, open_symbols=open_symbols)
+            cell["lifecycle_state"] = state
+            cell["lifecycle_reason"] = state_reason
+            continue
+
+        cell["paper_action"] = "none"
+        cell["execution_state"] = "BLOCKED"
+        if final_blocker and final_blocker not in (cell.get("blocked_by") or []):
+            cell.setdefault("blocked_by", []).append(final_blocker)
+        if final_blocker == "news_confluence":
+            cell["reason"] = (
+                "Teknik aday var; aynı varlık, zaman dilimi ve yönde canlı "
+                "ARMED haber-teknik kurulumu yok."
+            )
+        elif final_blocker == "technical_data":
+            cell["reason"] = "Teknik veri taze ve doğrulanmış değil; otomatik açılış bekletildi."
+        elif final_blocker == "technical_confirmation":
+            cell["reason"] = "Teknik göstergeler aynı yönde yeterli teyit vermedi; otomatik açılış bekletildi."
+        state, state_reason = derive_decision_state(cell, open_symbols=open_symbols)
+        cell["lifecycle_state"] = state
+        cell["lifecycle_reason"] = state_reason
+
+    view["auto_open"] = readiness
+    view["pending_paper_actions"] = pending
+    view["paper_actions"] = _paper_actions(cells)
+    view["final_gate_applied"] = True
+    view["final_gate_snapshot_id"] = getattr(snap, "snapshot_id", None)
+    view["final_gate_paper_state_revision"] = getattr(paper_state, "revision", None)
+    return view
 
 
 def next_watch_conditions(
@@ -299,6 +597,7 @@ def agent_brief_view(
 ) -> dict:
     """AgentBriefView — ilk ekranın tek ana kartı (özet beyin)."""
     now = datetime.now(UTC)
+    view = finalize_matrix_view(view, snap, paper_state, now)
     cells = view.get("cells") or []
     risk_gate = view.get("risk_gate") or {}
     risk_action = risk_gate.get("action")
@@ -317,29 +616,66 @@ def agent_brief_view(
         halt_active=halt_active,
         provider_down=provider_down,
     )
-    can_act = (not suspended) and any(
-        c.get("execution_ready", c.get("actionable")) for c in cells
-    )
-    status = compute_status(blocker["code"], can_act)
     data_mode = compute_data_mode(provenance, dqs_status)
 
     open_positions = list(getattr(paper_state, "open_positions", []) or [])
     open_n = len(open_positions)
     expired = _expired_time_stops(open_positions, now)
-    paper_actions = _paper_actions(cells)
+    pending_paper_actions = view.get("pending_paper_actions") or []
+    current_paper_actions = _open_position_actions(open_positions)
+    auto_open = view.get("auto_open") or _auto_open_readiness(cells, snap, paper_state, now)
+    matrix_can_act = any(c.get("final_execution_ready", False) for c in cells)
+    # ``can_act`` must describe the same final gate as the tick worker, not
+    # merely the pre-gate decision matrix.
+    can_act = (not suspended) and matrix_can_act and not (
+        auto_open["enabled"]
+        and auto_open["available"]
+        and auto_open["ready_count"] == 0
+        and auto_open["candidate_count"] > 0
+    )
+    status = compute_status(blocker["code"], can_act)
     candidates = _top_candidates(cells)
     watch = next_watch_conditions(view, snap, open_positions, now)
     top_blockers = _blocked_by_reasons(cells)[:6]
 
-    actionable_n = sum(1 for c in cells if c.get("execution_ready", c.get("actionable")))
+    matrix_actionable_n = sum(
+        1 for c in cells if c.get("execution_ready", c.get("actionable"))
+    )
+    actionable_n = (
+        auto_open["ready_count"]
+        if auto_open["enabled"] and auto_open["available"]
+        else matrix_actionable_n
+    )
     exploration_n = sum(1 for c in cells if c.get("execution_state") == "EXPLORATION")
-    if blocker["code"] == "NONE":
-        summary = (
-            f"Agent {status}. Engel yok; {actionable_n} hücre hazır"
-            + (f", {exploration_n} keşif" if exploration_n else "")
-            + ", "
-            f"{len(candidates)} aday izleniyor."
+    if auto_open["blocked_count"]:
+        # The matrix blockers describe the pre-gate decision.  Add the final
+        # worker gate so the user sees why a READY-looking signal did not open.
+        top_blockers = ["news_confluence", *top_blockers]
+        top_blockers = list(dict.fromkeys(top_blockers))[:6]
+        watch.insert(
+            0,
+            {
+                "key": "news_confluence",
+                "label": "Aynı yönde canlı haber-teknik teyit oluşsun",
+                "detail": (
+                    f"{auto_open['blocked_count']} aday ARMED haber kurulumu olmadığı için bekliyor"
+                ),
+            },
         )
+    if blocker["code"] == "NONE":
+        if auto_open["blocked_count"] and actionable_n == 0:
+            summary = (
+                f"Agent {status}. {matrix_actionable_n} teknik sinyal var, ancak "
+                "otomatik kâğıt açılışı haber-teknik kurulumu bekliyor; "
+                f"{len(candidates)} aday izleniyor."
+            )
+        else:
+            summary = (
+                f"Agent {status}. Engel yok; {actionable_n} hücre hazır"
+                + (f", {exploration_n} keşif" if exploration_n else "")
+                + ", "
+                f"{len(candidates)} aday izleniyor."
+            )
     else:
         summary = (
             f"Agent {status}. Ana engel: {blocker['label']}"
@@ -363,6 +699,7 @@ def agent_brief_view(
         "open_paper_positions": open_n,
         "top_blockers": top_blockers,
         "top_candidates": candidates,
+        "auto_open": auto_open,
         "next_watch_conditions": watch,
         "recommended_stance": _STANCE.get(status, ""),
         "paper_state_summary": {
@@ -370,7 +707,11 @@ def agent_brief_view(
             "expired_time_stops": expired,
             "new_entries_disabled": suspended,
             "frozen": blocker["code"] == "HALT",
-            "current_paper_actions": paper_actions,
+            # current = ledger-backed positions; pending = decision-matrix
+            # intents that still have to pass the worker's final gates.
+            "current_paper_actions": current_paper_actions,
+            "pending_paper_actions": pending_paper_actions,
+            "auto_open": auto_open,
         },
         "generated_at": now.isoformat(),
     }

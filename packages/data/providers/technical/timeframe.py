@@ -515,6 +515,8 @@ def _key_levels(
     atr_v: float | None,
     atr_pct: float | None,
     cfg: TechnicalConfig,
+    *,
+    side: str = "long",
 ) -> TechnicalKeyLevels:
     support = resistance = stop_ref = target_ref = None
     if pivots is not None and current is not None and current > 0:
@@ -524,13 +526,22 @@ def _key_levels(
         support = max(below) if below else None
         resistance = min(above) if above else None
     if atr_v is not None and current is not None and current > 0:
-        # Long-oriented reference (evidence only): nearest support, else ATR buffer.
-        base_stop = support if support is not None else current - cfg.stop_atr_mult * atr_v
-        if base_stop is not None and base_stop < current:
-            stop_ref = base_stop
-            risk = current - stop_ref
-            if risk > 0:
-                target_ref = current + cfg.target_rr * risk
+        if side.casefold() == "short":
+            # Short invalidation is above entry; target is below entry.  The
+            # previous implementation always emitted long-side references.
+            base_stop = resistance if resistance is not None else current + cfg.stop_atr_mult * atr_v
+            if base_stop > current:
+                stop_ref = base_stop
+                risk = stop_ref - current
+                if risk > 0:
+                    target_ref = current - cfg.target_rr * risk
+        else:
+            base_stop = support if support is not None else current - cfg.stop_atr_mult * atr_v
+            if base_stop < current:
+                stop_ref = base_stop
+                risk = current - stop_ref
+                if risk > 0:
+                    target_ref = current + cfg.target_rr * risk
     return TechnicalKeyLevels(
         support=round(support, 6) if support is not None else None,
         resistance=round(resistance, 6) if resistance is not None else None,
@@ -624,22 +635,42 @@ def _confirmations(
         hist = macd_t[2]
         sigs.append(
             ConfirmationSignal(
-                name="macd_histogram_positive", fired=hist > 0, detail=f"hist={hist:.6f}"
+                name="macd_histogram_positive",
+                fired=hist > 0,
+                detail=f"hist={hist:.6f}",
+                direction="bullish" if hist > 0 else "bearish" if hist < 0 else "neutral",
             )
         )
     if rsi_v is not None:
         sigs.append(
-            ConfirmationSignal(name="rsi_above_50", fired=rsi_v > 50.0, detail=f"rsi={rsi_v:.1f}")
+            ConfirmationSignal(
+                name="rsi_above_50",
+                fired=rsi_v > 50.0,
+                detail=f"rsi={rsi_v:.1f}",
+                direction="bullish" if rsi_v > 50.0 else "bearish" if rsi_v < 50.0 else "neutral",
+            )
         )
     if ema_stack is not None:
         sigs.append(
             ConfirmationSignal(
-                name="ema_stack_bullish", fired=ema_stack == "bullish", detail=ema_stack
+                name="ema_stack_bullish",
+                fired=ema_stack == "bullish",
+                detail=ema_stack,
+                direction=(
+                    "bullish" if ema_stack == "bullish"
+                    else "bearish" if ema_stack == "bearish"
+                    else "neutral"
+                ),
             )
         )
     if vwap_v is not None and current is not None:
         sigs.append(
-            ConfirmationSignal(name="above_vwap", fired=current > vwap_v, detail=f"vwap={vwap_v:.4f}")
+            ConfirmationSignal(
+                name="above_vwap",
+                fired=current > vwap_v,
+                detail=f"vwap={vwap_v:.4f}",
+                direction="bullish" if current > vwap_v else "bearish" if current < vwap_v else "neutral",
+            )
         )
     return sigs
 
@@ -669,7 +700,9 @@ def build_timeframe_result(
     emas = [indicators.ema(closes, p) for p in _EMA_PERIODS]
     bb_w = indicators.bollinger_width(closes)
     pivots = indicators.swing_pivots(bars, left=cfg.pivot_left, right=cfg.pivot_right)
-    vwap_v = indicators.vwap(bars) if timeframe in INTRADAY_TF else None
+    # Intraday VWAP resets at the latest UTC session; a multi-day rolling VWAP
+    # is useful evidence but is not a valid same-session trigger.
+    vwap_v = indicators.session_vwap(bars) if timeframe in INTRADAY_TF else None
 
     macd_norm = macd_t[2] / current * 100.0 if (macd_t is not None and current and current > 0) else None
     # ATR-relative MACD histogram for the momentum score (price-relative was inert).
@@ -699,7 +732,9 @@ def build_timeframe_result(
     ):
         if q == "INSUFFICIENT_HISTORY":
             warnings.append(f"insufficient_history:{name}")
-    core_ok = iq.rsi == "OK" and iq.atr == "OK"
+    # Direction and timing consume RSI, MACD and EMA stack; treating only RSI+
+    # ATR as "OK" allowed an incomplete technical cell to enter the live path.
+    core_ok = all(getattr(iq, name) == "OK" for name in ("rsi", "macd", "ema200", "atr"))
     status = "OK" if (bars and not stale and core_ok) else "DEGRADED"
 
     # ── fibonacci (per-TF semantics: only 1D / 4H) ────────────────────────────
@@ -714,7 +749,9 @@ def build_timeframe_result(
     chart_patterns = patterns.detect(bars, left=cfg.pivot_left, right=cfg.pivot_right)
 
     # ── structure first (location is read BEFORE the momentum trigger) ────────
-    key_levels = _key_levels(current, pivots, atr_v, atr_pct, cfg)
+    # First pass supplies structure to confluence. Stop/target are recomputed
+    # after the directional bias is known so short setups remain symmetric.
+    structure_levels = _key_levels(current, pivots, atr_v, atr_pct, cfg)
     trend = _trend_strength(adx_t, cfg)
     vol_regime = _volatility_regime(adx_v, bb_w, cfg)
     market_regime = _market_regime(adx_v, vol_regime, cfg)  # Faz 4 — model anahtarı
@@ -741,11 +778,11 @@ def build_timeframe_result(
                     elliott_levels.append(("elliott_target", mid))
 
     zones_base = _confluence_zones(
-        current, atr_pct, key_levels.support, key_levels.resistance, vwap_v, fib
+        current, atr_pct, structure_levels.support, structure_levels.resistance, vwap_v, fib
     )
     zones_with_elliott = (
         _confluence_zones(
-            current, atr_pct, key_levels.support, key_levels.resistance, vwap_v, fib,
+            current, atr_pct, structure_levels.support, structure_levels.resistance, vwap_v, fib,
             extra_levels=elliott_levels,
         )
         if elliott_levels
@@ -761,15 +798,15 @@ def build_timeframe_result(
     if pivots is not None and current is not None and current > 0:
         _tol = _clamp(atr_pct if atr_pct is not None else 1.0, 0.25, 2.0)
         _highs, _lows = pivots
-        if key_levels.support is not None and key_levels.support > 0:
+        if structure_levels.support is not None and structure_levels.support > 0:
             sr_touches["support"] = sum(
                 1 for lvl in _lows
-                if abs(lvl - key_levels.support) / key_levels.support * 100.0 <= _tol
+                if abs(lvl - structure_levels.support) / structure_levels.support * 100.0 <= _tol
             )
-        if key_levels.resistance is not None and key_levels.resistance > 0:
+        if structure_levels.resistance is not None and structure_levels.resistance > 0:
             sr_touches["resistance"] = sum(
                 1 for lvl in _highs
-                if abs(lvl - key_levels.resistance) / key_levels.resistance * 100.0 <= _tol
+                if abs(lvl - structure_levels.resistance) / structure_levels.resistance * 100.0 <= _tol
             )
 
     # T-4 — kilit seviyede mum teyidi: tespit her zaman (gözlem); skora girmesi
@@ -805,6 +842,14 @@ def build_timeframe_result(
     )
     strength = _strength_score(adx_v, direction)
     bias = _bias(direction, cfg)
+    key_levels = _key_levels(
+        current,
+        pivots,
+        atr_v,
+        atr_pct,
+        cfg,
+        side="short" if bias == "BEARISH" else "long",
+    )
 
     evidence: list[str] = []
     if direction is not None:
