@@ -61,10 +61,13 @@ def test_official_actual_and_calendar_expectation_share_one_event_id():
     snap.macro_releases = []
     snap.catalysts.append(shadow)
     rows = build_macro_evidence(snap, regime="MIXED")
-    assert len(rows) == 1
-    assert rows[0]["actual"] == 3.1
-    assert rows[0]["expected"] == 3.0
-    assert "+" in rows[0]["source_id"]
+    # Sürpriz varken tablodaki tüm CPI varlıkları satır alır; hepsi tek olay kimliğinde.
+    assert len({r["event_id"] for r in rows}) == 1
+    dxy = next(r for r in rows if r["asset"] == "DXY")
+    assert dxy["actual"] == 3.1
+    assert dxy["expected"] == 3.0
+    assert dxy["direction"] == "bullish"  # owner tablosu: CPI beklentiden yüksek → DXY ↑
+    assert "+" in dxy["source_id"]
 
 
 def test_different_units_do_not_create_fake_surprise():

@@ -30,6 +30,7 @@ from packages.data import snapshot_store
 from packages.data.providers import calendar as calendar_provider
 from packages.data.providers.news import classify
 from packages.data.registry.loader import load_thresholds
+from packages.macro import matrix as surprise_matrix
 from packages.notifications import Notification, make_id
 from packages.ops.store import write_text_atomic
 
@@ -203,8 +204,12 @@ def _outcome(record: dict, headlines: Iterable[Any], cfg: dict, now: datetime) -
     elif direction == "mixed":
         oc["label"] = "KARIŞIK (başlıklar çelişiyor)"
     if direction in {"low", "high"} and record["family"] != "other":
-        sign = 1 if direction == "low" else -1
-        record["expected"] = {s: d * sign for s, d in cfg["expected_low"].items()}
+        topic = surprise_matrix.topic_for(record["family"])
+        if topic is not None:
+            record["expected"] = surprise_matrix.expected_signs(topic, positive=direction == "high")
+        else:
+            sign = 1 if direction == "low" else -1
+            record["expected"] = {s: d * sign for s, d in cfg["expected_low"].items()}
     else:
         record["expected"] = {}
 

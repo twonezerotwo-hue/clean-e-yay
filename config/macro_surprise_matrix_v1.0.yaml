@@ -1,0 +1,59 @@
+# Makro surpriz -> ilk tepki yonu (owner tablosu, 2026-10-30). Tek dogruluk kaynagi:
+# nedensellik (EYAY_MACRO_MATRIX_ENABLED ile), makro kanit ve olay-sonrasi takip
+# buradan okur.
+#
+# Agirlik POZITIF normallestirilmis surpriz icindir: beklentiden yuksek enflasyon,
+# beklentiden guclu buyume/istihdam, beklenenden sahin Fed, beklentiden DUSUK
+# issizlik, beklentiden DUSUK petrol stoku, beklentiden YUKSEK gaz stoku.
+# (flip_raw_surprise: issizlik ve petrol stokunda ham surprizin isareti cevrilir.)
+# +1 yukselir, -1 duser, 0.5 zayif/kosullu, 0 belirsiz. Garanti degil; olay
+# calismasi isabeti olcer, duzeltme owner onayiyla yapilir.
+version: "1.0"
+# Nedensellik tezine eklenirken surpriz katkisinin olcegi (bayrak acikken).
+thesis_weight: 0.35
+flip_raw_surprise: [unemployment, oil_inventory]
+aliases:
+  core_pce: inflation
+  pce: inflation
+  core_cpi: inflation
+  cpi: inflation
+  ppi: inflation
+  nfp: jobs
+  adp: jobs
+  private_jobs: jobs
+  ism_pmi: growth
+  manufacturing: growth
+  durable_goods: growth
+  fed_policy: policy_rate
+  central_bank: policy_rate
+topics:
+  inflation:
+    symbols: {XAUUSD: -1, XAGUSD: -0.5, BRENT: 0, WTI: 0, COPPER: 0, SP500: -0.5, XLK: -1, NVDA: -1, XLV: 0, DXY: 1, US10Y: 1, VIX: 0.5}
+    classes: {crypto: -1, equity: -0.5}
+  jobs:
+    symbols: {XAUUSD: -1, XAGUSD: 0, BRENT: 0.5, WTI: 0.5, SP500: 0, XLK: 0, NVDA: 0, XLV: 0, DXY: 1, US10Y: 1}
+    classes: {crypto: 0, energy: 0.5}
+  unemployment:
+    symbols: {XAUUSD: -0.5, XAGUSD: 0, BRENT: 1, WTI: 1, DXY: 0.5, US10Y: 0.5}
+    classes: {crypto: 0, energy: 1}
+  jolts:
+    symbols: {XAUUSD: -0.5, BRENT: 0.5, WTI: 0.5, DXY: 0.5, US10Y: 0.5}
+    classes: {energy: 0.5}
+  eci:
+    symbols: {XAUUSD: -0.5, XLK: -0.5, NVDA: -0.5, DXY: 0.5, US10Y: 0.5}
+    classes: {crypto: -0.5, equity: -0.5}
+  gdp:
+    symbols: {XAUUSD: 0, XAGUSD: 0.5, BRENT: 1, WTI: 1, COPPER: 1, SP500: 1, XLK: 1, NVDA: 1, XLV: 0.5, DXY: 0.5, US10Y: 0.5}
+    classes: {crypto: 0, energy: 1, industrial_metals: 1, equity: 1}
+  growth:
+    symbols: {XAUUSD: 0, XAGUSD: 1, BRENT: 1, WTI: 1, COPPER: 1, SP500: 1, XLK: 1, NVDA: 1, XLV: 0, DXY: 0.5, US10Y: 0.5}
+    classes: {crypto: 0, energy: 1, industrial_metals: 1, equity: 1}
+  policy_rate:
+    symbols: {XAUUSD: -1, XAGUSD: -1, BRENT: -0.5, WTI: -0.5, COPPER: -0.5, SP500: -1, XLK: -1, NVDA: -1, XLV: -0.5, DXY: 1, US10Y: 1, VIX: 1}
+    classes: {crypto: -1, equity: -1, energy: -0.5}
+  oil_inventory:
+    symbols: {BRENT: 1, WTI: 1}
+    classes: {}
+  natural_gas_storage:
+    symbols: {NATGAS: -1}
+    classes: {}

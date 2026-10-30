@@ -11,6 +11,8 @@ from datetime import UTC, datetime
 from typing import Any
 
 from packages.data.providers.news.provenance import source_family, story_key
+from packages.data.registry import assets as asset_registry
+from packages.macro import matrix as surprise_matrix
 from packages.paper.signal_identity import build_evidence_id
 
 _ASSET_ALIASES: tuple[tuple[tuple[str, ...], tuple[str, ...]], ...] = (
@@ -267,19 +269,24 @@ def build_macro_evidence(snapshot: Any, *, regime: str = "UNKNOWN", decision_id:
         revised = getattr(official or primary, "revised", None)
         surprise = _surprise(actual, expected)
         # Numeric surprise is a signal only when it is explicitly available;
-        # it is never converted into a default value.
-        if surprise is not None and channel in {"inflation_rates", "growth_labor", "monetary_policy"}:
-            if surprise > 0 and channel == "inflation_rates":
-                base = "bearish"
-            elif surprise < 0 and channel == "inflation_rates":
-                base = "bullish"
+        # it is never converted into a default value. Its asset direction comes
+        # from the single owner table (packages/macro/matrix.py).
+        topic = surprise_matrix.topic_for(_event_topic(str(getattr(official or primary, "title", ""))))
         assets = _assets(text, tuple(
             asset for item in items for asset in (getattr(item, "affected_assets", None) or ())
         ))
+        if surprise is not None and topic is not None:
+            assets = tuple(dict.fromkeys((*assets, *surprise_matrix.symbols(topic))))
         if not assets:
             continue
         for asset in assets:
-            direction = _asset_direction(base, asset)
+            if surprise is not None and topic is not None:
+                registered = asset_registry.get(asset)
+                signed = surprise * surprise_matrix.raw_sign(topic) * surprise_matrix.weight(
+                    topic, asset, registered.asset_class if registered is not None else None)
+                direction = "bullish" if signed > 0 else "bearish" if signed < 0 else None
+            else:
+                direction = _asset_direction(base, asset)
             for timeframe, confirmation, score, current_regime in _technical(snapshot, asset, regime, direction):
                 source_id = "+".join(families)
                 evidence_id = build_evidence_id(event_id=event_id, source_id=source_id, asset=asset, direction=direction, timeframe=timeframe, decision_id=decision_id)

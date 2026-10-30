@@ -71,15 +71,18 @@ def test_lifecycle_baseline_outcome_reaction_and_single_notification(cal):
     eo.track(prices=moved, headlines=heads, now=REL + timedelta(minutes=16), calendar_path=cal)
     notes = eo.track(prices=moved, headlines=heads, now=REL + timedelta(minutes=61), calendar_path=cal)
     assert len(notes) == 1 and notes[0].title.startswith("Tepki (1 saat)")
-    assert "3/3" in notes[0].body_short
+    # Owner tablosu (config/macro_surprise_matrix_v1.0.yaml): NFP'de BTC "±" →
+    # beklenen yön sayılmaz; altın ve dolar sayılır.
+    assert "2/2" in notes[0].body_short
 
     vm = eo.viewmodel(now=REL + timedelta(minutes=62), calendar_path=cal)
     rec = vm["recent"][0]
     assert rec["status"] == "MEASURING"
     assert rec["outcome"]["direction"] == "low"
     assert rec["expected"]["DXY"] == -1 and rec["expected"]["XAUUSD"] == 1
+    assert "BTCUSD" not in rec["expected"]
     assert rec["realized"]["15m"]["moves"]["DXY"] == pytest.approx(-0.2)
-    assert rec["realized"]["15m"]["hits"]["hit"] == 3
+    assert rec["realized"]["15m"]["hits"]["hit"] == 2
     bucket = vm["summary"]["buckets"][0]
     assert (bucket["family"], bucket["direction"]) == ("jobs", "low")
     assert bucket["horizons"]["1h"]["hit_rate"] == 1.0

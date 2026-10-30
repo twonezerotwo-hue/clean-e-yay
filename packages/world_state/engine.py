@@ -891,10 +891,15 @@ def build(snapshot: MarketSnapshot, *, now: datetime | None = None) -> WorldStat
     surprise_growth = _mean([item.growth_contribution for item in macro_surprises])
     surprise_rates = _mean([item.rates_contribution for item in macro_surprises])
     surprise_oil = _mean([item.oil_contribution for item in macro_surprises])
-    inflation = _blend_pressure(_mean([cpi_signal, energy_risk, sanctions, flows["energy"] if flows["energy"] is not None and flows["energy"] > 0 else None]), surprise_inflation)
-    growth = _blend_pressure(_mean([equity, -trade if trade is not None else None]), surprise_growth, 0.75)
-    rates = _blend_pressure(rates, surprise_rates)
-    oil_pressure = _blend_pressure(flows["energy"], surprise_oil)
+    # Tek sürpriz tablosu açıkken (EYAY_MACRO_MATRIX_ENABLED) sürpriz faktörlere
+    # karıştırılmaz; varlık başına yön nedensellik katmanında tablodan eklenir.
+    from packages.macro import matrix as surprise_matrix
+
+    blend = not surprise_matrix.enabled()
+    inflation = _blend_pressure(_mean([cpi_signal, energy_risk, sanctions, flows["energy"] if flows["energy"] is not None and flows["energy"] > 0 else None]), surprise_inflation if blend else None)
+    growth = _blend_pressure(_mean([equity, -trade if trade is not None else None]), surprise_growth if blend else None, 0.75)
+    rates = _blend_pressure(rates, surprise_rates if blend else None)
+    oil_pressure = _blend_pressure(flows["energy"], surprise_oil if blend else None)
     interaction_by_channel: dict[str, list[float]] = {}
     for interaction in interactions:
         interaction_by_channel.setdefault(interaction.channel, []).append(interaction.contribution)
