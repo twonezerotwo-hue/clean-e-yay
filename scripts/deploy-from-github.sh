@@ -101,6 +101,12 @@ ensure_env SUBSIGNAL_SCORECARD_ENABLED 1
 # uretir → izole artifact. SALT-GOZLEM: canli skora/karara/paper'a ASLA yazmaz
 # (D7 golge yarisin girdisi). Rollback = flag kapat. Lokal .env'de de =1.
 set_env TF_SCORING_V2_SHADOW 0
+# Kanonik canli karar yolu (2026-10-30): eksik veri modulu notr 50 sayilir ve
+# hucre notre zorlanir (missing_module_policy: fixed). Lokal .env'de =1; AWS'te
+# deploy betigi yazmadigi icin eski yolda kaliyordu (owner kurali: lokal+AWS
+# senkron). Ayni turde acilan denetim-defteri ogrenme kisiti da esitlenir.
+ensure_env E_YAY_CANONICAL_RUNTIME 1
+ensure_env LEARNING_AUDIT_LEDGER_ONLY 1
 # T2 (2026-07 dis denetim P0-4) — API yazma-istekleri kilidi. Token SIR'dir:
 # degeri git'te DEGIL, GitHub Actions secret'inda yasar (deploy-ec2.yml env ile
 # gecirir). Secret tanimli degilse dokunulmaz -> kilit kapali kalir (bayt-ayni).

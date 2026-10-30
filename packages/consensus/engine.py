@@ -749,6 +749,18 @@ def canonical_module_name(name: str) -> str:
     return CANONICAL_MODULE_NAMES.get(str(name), str(name))
 
 
+def _canonical_runtime_enabled() -> bool:
+    """Canlı süreç bayrağı (E_YAY_CANONICAL_RUNTIME).
+
+    pytest ve golden replay altında kapalıdır ki geçmiş tekrar üretilebilir
+    kalsın. Canlı yolu sınayan testler yalnız bu fonksiyonu monkeypatch'ler;
+    politika mantığının geri kalanı aynen koşar.
+    """
+    if "pytest" in sys.modules:
+        return False
+    return os.environ.get("E_YAY_CANONICAL_RUNTIME", "").strip().lower() in {"1", "true", "yes", "on"}
+
+
 def _strict_missing_modules_active(generated_at: object | None) -> bool:
     """Live policy: fixed weights + neutral on missing evidence.
 
@@ -756,7 +768,7 @@ def _strict_missing_modules_active(generated_at: object | None) -> bool:
     the policy watermark use the strict path. No score is fabricated and no
     remaining module receives a boost.
     """
-    if "pytest" in sys.modules or os.environ.get("E_YAY_CANONICAL_RUNTIME", "").strip().lower() not in {"1", "true", "yes", "on"}:
+    if not _canonical_runtime_enabled():
         return False
     try:
         cfg = load_thresholds().get("consensus", {}).get("missing_module_policy") or {}
@@ -820,6 +832,11 @@ def build(
             f"v4={'none' if sh_v4 is None else f'{sh_v4:.1f}'}:used={touche_used}"
         )
     raw = {"touche": touche_score}
+    # Politika gereği oy dışı bırakılan modüller (çekimserlik, rejim kapısı, TF
+    # düşürme, kaynak kısıtı). Bunlar "eksik veri" değildir: ağırlıkları her
+    # zamanki gibi kalanlara dağılır. Eksik modül politikası yalnız verisi
+    # gelmeyen modüllere uygulanır.
+    policy_dropped: set[str] = set()
     # news ABSTAIN (2026-07-13, gölge-önce): kanıt boşluğu HER ZAMAN gözlem
     # satırı yazar; flag açıkken kanıtsız news oy kullanmaz (düşer, redistribute).
     news_score = _news(snap, symbol)
@@ -831,6 +848,8 @@ def build(
         )
     if news_score is not None:
         raw["news"] = news_score
+    else:
+        policy_dropped.add("news")
     # F2-3 — fundamental/sentinel katman verisi yoksa (drop_unavailable_layers
     # açıkken) modül düşer; ağırlığı redistribute edilir (quantum deseniyle aynı).
     # Flag kapalıyken katmanlar hep dolu → bu iki modül her zaman girer (bayt-aynı).
@@ -908,6 +927,7 @@ def build(
             # Modül düşer → ağırlığı _redistribute ile diğerlerine dağılır
             # (rotation UNAVAILABLE ile aynı desen; nötr-50 uydurulmaz).
             tf_warnings.append(f"quantum_dropped:regime_gate:{regime.label}:{symbol}")
+            policy_dropped.add("quantum")
         else:
             raw["quantum"] = q_score
             if quantum_v2 is not None:
@@ -921,6 +941,7 @@ def build(
     # them from that timeframe's live vote until a new canary proves otherwise.
     # Weight redistribution and the existing coverage guard remain authoritative.
     for module in sorted(_timeframe_module_drop(timeframe, getattr(snap, "generated_at", None))):
+        policy_dropped.add(module)
         if module in raw:
             dropped_score = float(raw.pop(module))
             # The live vote no longer uses this inverse module, but retain its
@@ -944,6 +965,7 @@ def build(
         if usage_applied:
             for m, u in sorted(restricted.items()):
                 raw.pop(m, None)
+                policy_dropped.add(m)
                 tf_warnings.append(f"decision_usage_dropped:{m}:{u}")
     weights_cfg = load_active_weights()
     base = weights_cfg["regimes"].get(regime.label, weights_cfg["regimes"]["NEUTRAL"])
@@ -961,16 +983,26 @@ def build(
             f"coverage_observe:cov={coverage:.2f}:min={min_cov:.2f}:"
             f"applied={'yes' if coverage_forced_neutral else 'no'}"
         )
+    # Verisi gelmeyen modüller (politika düşürmesi değil). Sabit-ağırlık
+    # politikasında bunlar kendi ağırlıklarıyla nötr 50 sayılır: ölçek korunur,
+    # yön uydurulmaz, kalan modüllere ağırlık şişirilmez ve hücre nötre zorlanır.
+    data_missing = sorted(
+        name for name in base
+        if name not in available and name not in policy_dropped and float(base.get(name, 0.0)) > 0
+    )
+    neutral_fill: dict[str, float] = {}
     strict_missing = _strict_missing_modules_active(getattr(snap, "generated_at", None))
-    if strict_missing and coverage < 1.0 - 1e-9:
-        tf_warnings.append("missing_module_policy:fixed:redistribute=no")
-        w = {name: float(base.get(name, 0.0)) for name in available}
+    if strict_missing and data_missing:
+        voting = _redistribute(base, available | set(data_missing))
+        w = {name: voting[name] for name in available}
+        neutral_fill = {name: voting[name] for name in data_missing}
+        tf_warnings.append("missing_module_policy:fixed:neutral_fill=" + ",".join(data_missing))
         coverage_forced_neutral = True
         tf_warnings.append("coverage_gate:forced_neutral:reason=missing_module")
     else:
         w = _redistribute(base, available)
     modules = []
-    weighted = 0.0
+    weighted = 50.0 * sum(neutral_fill.values())
     for name in MODULE_ORDER:
         if name not in raw:
             continue

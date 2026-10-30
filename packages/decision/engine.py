@@ -551,6 +551,13 @@ def _decide_core(
         return _hold(
             reason="Consensus eşiği aşılmadı",
         )
+    # Kapsama kapısı yönü nötre zorladıysa skor tek başına pozisyon açmaz
+    # (owner kararı 2026-10-30): "neutral signal" gerekçeli açılış olmaz.
+    if any(str(w).startswith("coverage_gate:forced_neutral") for w in (cons.warnings or [])):
+        return _hold(
+            reason="Kapsama kapısı: kanıt tabanı eksik, yön nötr; açılış yapılmaz",
+            blocked_by=["coverage_gate:forced_neutral"],
+        )
 
     # ----- Giriş kalitesi v2 — YÖN ≠ GİRİŞ ZAMANLAMASI (YALNIZ KISITLAYICI) -----
     # Konsensüs yönü korunur; "şimdi girmek mantıklı mı" ayrıca ölçülür. Kötü giriş →
