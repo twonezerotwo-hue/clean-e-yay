@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter
 
-from packages.ops import metrics, registry
+from packages.ops import compliance, metrics, registry
 from packages.ops.system_health import build_system_health
 
 router = APIRouter(tags=["system"])
@@ -29,3 +29,9 @@ def get_system_metrics() -> dict:
 def get_system_registry() -> dict:
     """Model, sinyal ve ajan sürümleri (salt okuma)."""
     return registry.snapshot()
+
+
+@router.get("/system/compliance")
+def get_system_compliance(limit: int = compliance.DEFAULT_LIMIT) -> dict:
+    """Denetim ve uyum kaydı: son komutlar + hash zinciri doğrulaması (salt okuma)."""
+    return compliance.report(limit)

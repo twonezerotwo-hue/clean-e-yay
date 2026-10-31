@@ -1528,6 +1528,24 @@ export type SystemRegistry = {
   history?: Record<string, Record<string, unknown>[]>;
 };
 
+export type ComplianceLog = {
+  total: number;
+  chain_ok: boolean;
+  broken_at?: number | null;
+  outcomes: Record<string, number>;
+  entries: {
+    at?: string;
+    actor?: string;
+    method?: string;
+    path?: string;
+    query?: string;
+    status?: number;
+    outcome?: string;
+    prev?: string;
+    hash?: string;
+  }[];
+};
+
 export type CorrelationState = {
   threshold: number;
   max_cluster_pct: number;

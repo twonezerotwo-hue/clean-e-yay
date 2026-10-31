@@ -59,6 +59,7 @@ from apps.api.routers import (  # noqa: E402
     technical,
     voice,
 )
+from packages.ops import compliance  # noqa: E402
 
 _START_TS = time.monotonic()
 
@@ -98,6 +99,21 @@ def create_app() -> FastAPI:
             if not secrets.compare_digest(got, f"Bearer {expected}"):
                 return JSONResponse(status_code=401, content={"detail": "unauthorized"})
         return await call_next(request)
+
+    # st_audit — her yazma komutu hash zincirli denetim kaydına (yalnız kayıt).
+    @app.middleware("http")
+    async def _compliance_log(request, call_next):
+        response = await call_next(request)
+        if compliance.is_command(request.method, request.url.path):
+            authed = bool(os.environ.get("API_AUTH_TOKEN", "").strip()) and response.status_code != 401
+            compliance.record(
+                actor="owner" if authed else "local",
+                method=request.method,
+                path=request.url.path,
+                query=request.url.query,
+                status=response.status_code,
+            )
+        return response
     # Local dev: DEV_CORS=true → tüm origin'ler. Aksi halde whitelist:
     # 4000 (web) portu + env'den ek origin (CORS_EXTRA_ORIGINS, virgülle).
     extra = os.environ.get("CORS_EXTRA_ORIGINS", "").strip()

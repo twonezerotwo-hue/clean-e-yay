@@ -57,6 +57,20 @@ paths:
               schema:
                 $ref: "#/components/schemas/SystemRegistry"
 
+  /api/v1/system/compliance:
+    get:
+      operationId: getSystemCompliance
+      summary: Denetim ve uyum kaydı — son komutlar ve hash zinciri doğrulaması
+      parameters:
+        - { name: limit, in: query, required: false, schema: { type: integer, default: 100 } }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ComplianceLog"
+
   /api/v1/regime-report/current:
     get:
       operationId: getRegimeReportCurrent
@@ -3068,6 +3082,30 @@ components:
           additionalProperties:
             type: array
             items: { type: object }
+
+    ComplianceLog:
+      type: object
+      description: Her yazma komutu (yetkisiz denemeler dahil) hash zincirli eklemeli kayıtta.
+      required: [total, chain_ok, outcomes, entries]
+      properties:
+        total: { type: integer }
+        chain_ok: { type: boolean }
+        broken_at: { type: integer, nullable: true }
+        outcomes: { type: object, additionalProperties: { type: integer } }
+        entries:
+          type: array
+          items:
+            type: object
+            properties:
+              at: { type: string }
+              actor: { type: string }
+              method: { type: string }
+              path: { type: string }
+              query: { type: string }
+              status: { type: integer }
+              outcome: { type: string }
+              prev: { type: string }
+              hash: { type: string }
 
     PortfolioRiskReport:
       type: object

@@ -26,6 +26,7 @@ def runtime(tmp_path, monkeypatch):
         ("PAPER_STATE_PATH", "paper_state.json"),
         ("DECISION_LOG_PATH", "decision_log.jsonl"),
         ("PAPER_AUDIT_PATH", "paper_audit.jsonl"),
+        ("COMPLIANCE_LOG_PATH", "compliance_log.jsonl"),
         ("RISK_HALT_PATH", "risk_halts.json"),
         ("WEIGHTS_MANIFEST_PATH", "weights_active.json"),
         ("AGENT_MODE_STORE_PATH", "agent_mode.json"),

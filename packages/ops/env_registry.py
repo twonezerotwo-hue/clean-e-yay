@@ -179,6 +179,7 @@ REGISTRY: dict[str, str] = {
     "OHLCV_CACHE_DIR": "path",
     "PAPER_ARCHIVE_DIR": "path",
     "PAPER_AUDIT_PATH": "path",
+    "COMPLIANCE_LOG_PATH": "path",
     "PAPER_CANARY_PATH": "path",
     "PAPER_STATE_PATH": "path",
     "PRICE_CACHE_DIR": "path",

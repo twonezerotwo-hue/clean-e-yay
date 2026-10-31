@@ -72,6 +72,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/system/compliance": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Denetim ve uyum kaydı — son komutlar ve hash zinciri doğrulaması */
+        get: operations["getSystemCompliance"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/regime-report/current": {
         parameters: {
             query?: never;
@@ -2832,6 +2849,26 @@ export interface components {
                 [key: string]: Record<string, never>[];
             };
         };
+        /** @description Her yazma komutu (yetkisiz denemeler dahil) hash zincirli eklemeli kayıtta. */
+        ComplianceLog: {
+            total: number;
+            chain_ok: boolean;
+            broken_at?: number | null;
+            outcomes: {
+                [key: string]: number;
+            };
+            entries: {
+                at?: string;
+                actor?: string;
+                method?: string;
+                path?: string;
+                query?: string;
+                status?: number;
+                outcome?: string;
+                prev?: string;
+                hash?: string;
+            }[];
+        };
         /** @description Read-only paper-ledger exposure view; no rebalance or execution. */
         PortfolioRiskReport: {
             /** Format: date-time */
@@ -5104,6 +5141,28 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SystemRegistry"];
+                };
+            };
+        };
+    };
+    getSystemCompliance: {
+        parameters: {
+            query?: {
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ComplianceLog"];
                 };
             };
         };

@@ -187,6 +187,7 @@ def _isolate_runtime_stores(tmp_path_factory: pytest.TempPathFactory) -> None:
         ("BACKUP_DIR", "backups"),
         ("OPS_ALERTS_STATE_PATH", "ops_alerts_state.json"),
         ("DECISION_RECORD_DIR", "decision_record"),
+        ("COMPLIANCE_LOG_PATH", "compliance_log.jsonl"),
     ):
         os.environ.setdefault(_env, str(runtime / _name))
     # K5 — git'teki config/weights_active.json suite'e sızmasın: testler baseline
