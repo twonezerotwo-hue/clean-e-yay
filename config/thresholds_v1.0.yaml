@@ -27,6 +27,17 @@ consensus:
   # Quantum (sembol-başı göreceli güç) yalnız bu rejimlerde oy kullanır; challenger
   # karnesinde NEUTRAL'da ters, OFFENSIVE'da pozitif ölçüldü.
   quantum_gate_allowed_regimes: ["OFFENSIVE"]
+  # Temel (makro likidite: DXY + 10y faiz momentumu; yüksek = gevşeme) ve sentinel
+  # (risk iştahı; yüksek = sakin) varlıktan bağımsız TEK sayı üretir. Varlığa yön
+  # bu tabloyla verilir (2026-10-31): 1 aynı yön, -1 ters, 0.5 zayıf, 0 oy yok.
+  # Sıkılaşma kripto/hisse/altın için olumsuz, dolar ve faiz için olumlu; sakin
+  # piyasa risk varlıkları için olumlu, güvenli liman (altın) için zayıf olumsuz.
+  asset_sensitivity:
+    fundamental: {default: 1.0, crypto: 1.0, equity: 1.0, precious_metal: 1.0, energy: 0.5, industrial_metals: 0.5, fx: -1.0, rates: -1.0}
+    sentinel: {default: 1.0, crypto: 1.0, equity: 1.0, precious_metal: -0.5, energy: 0.5, industrial_metals: 0.5, fx: -0.5, rates: -0.5}
+  # Makro bağlam kısa vadeli hücreyi yönetmesin: temel modülün 50'den sapması
+  # zaman dilimine göre ölçeklenir (haftalar-aylar ölçeğinde bilgi).
+  context_timeframe_scale: {"15m": 0.25, "1h": 0.5, "4h": 0.75, "1d": 1.0, "1w": 1.0}
   # 4h calibration repair (2026-10-29): clean outcomes show fundamental and
   # quantum contributions are inverse on this timeframe. Keep both visible in
   # shadow telemetry but remove them from the 4h live vote; other timeframes

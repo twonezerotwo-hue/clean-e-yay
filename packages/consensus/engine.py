@@ -25,6 +25,7 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 
 from packages.data.ingestion.pipeline import MarketSnapshot
+from packages.data.registry import assets as asset_registry
 from packages.data.registry.loader import (
     load_active_weights,
     load_thresholds,
@@ -63,6 +64,23 @@ def _direction(s: float, bullish_min: float = 55.0, bearish_max: float = 45.0) -
     if s <= bearish_max:
         return "bearish"
     return "neutral"
+
+
+def _oriented(module: str, score: float, symbol: str, timeframe: str) -> float:
+    """Varlıktan bağımsız bağlam skorunu varlığın yönüne ve zaman dilimine çevirir.
+
+    Temel ve sentinel tek sayı üretir; işaret varlık sınıfından gelir (ör. sıkılaşma
+    kripto için olumsuz, dolar için olumlu). Temel modülün sapması kısa zaman
+    diliminde küçültülür (makro bağlam 15 dakikalık hücreyi yönetmez)."""
+    cfg = load_thresholds().get("consensus") or {}
+    table = (cfg.get("asset_sensitivity") or {}).get(module) or {}
+    asset = asset_registry.get(symbol)
+    asset_class = asset.asset_class if asset is not None else None
+    sign = float(table.get(symbol, table.get(asset_class, table.get("default", 1.0))))
+    scale = 1.0
+    if module == "fundamental":
+        scale = float((cfg.get("context_timeframe_scale") or {}).get(str(timeframe), 1.0))
+    return max(0.0, min(100.0, 50.0 + (float(score) - 50.0) * sign * scale))
 
 
 def _redistribute(weights: dict[str, float], available: set[str]) -> dict[str, float]:
@@ -560,13 +578,13 @@ def build(
     if fund_v4 is None and fundamental is not None:
         tf_warnings.append(f"fundamental_fallback:v2:{symbol}:{timeframe}")
     if fundamental is not None:
-        raw["fundamental"] = fundamental
+        raw["fundamental"] = _oriented("fundamental", fundamental, symbol, timeframe)
     else:
         tf_warnings.append(f"fundamental_dropped:no_macro_layers:{symbol}:{timeframe}")
     # Sentinel: çok girdili stres kompoziti (VIX + oynaklık + türev + opsiyon).
     sentinel = _sentinel_v2(regime, snap, symbol, timeframe)
     if sentinel is not None:
-        raw["sentinel"] = sentinel
+        raw["sentinel"] = _oriented("sentinel", sentinel, symbol, timeframe)
     else:
         tf_warnings.append(f"sentinel_dropped:no_risk_appetite_layer:{symbol}:{timeframe}")
     # Quantum: sembol-başı göreceli güç (veri yoksa makro eğim); yalnız izinli

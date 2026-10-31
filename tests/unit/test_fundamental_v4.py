@@ -175,7 +175,7 @@ def test_build_uses_v4_when_archive_present(macro_archive):
     macro_archive("DXY", _tighten())
     macro_archive("US10Y", _tighten(base=4.0, step=0.02))
     v4_val = ce._fundamental_v4()
-    res = ce.build("BTCUSD", _snap(), _regime(), "4h")
+    res = ce.build("BTCUSD", _snap(), _regime(), "1d")
     fund = next(m for m in res.modules if m.name == "fundamental")
     assert fund.score == pytest.approx(round(v4_val, 2))
     assert not any(w.startswith("fundamental_fallback") for w in res.warnings)
@@ -185,7 +185,7 @@ def test_build_no_archive_falls_back_to_v2(monkeypatch, tmp_path):
     monkeypatch.setenv("BAR_HISTORY_ENABLED", "1")
     monkeypatch.setenv("BAR_HISTORY_DIR", str(tmp_path))  # boş → v4 None
     ce._FUND_V4_MEMO["key"] = None
-    res = ce.build("BTCUSD", _snap(), _regime(), "4h")
+    res = ce.build("BTCUSD", _snap(), _regime(), "1d")
     fund = next(m for m in res.modules if m.name == "fundamental")
     assert fund.score == pytest.approx(67.5)  # v4 üretemedi → v2 (Likidite+Rotasyon)
-    assert "fundamental_fallback:v2:BTCUSD:4h" in res.warnings
+    assert "fundamental_fallback:v2:BTCUSD:1d" in res.warnings
