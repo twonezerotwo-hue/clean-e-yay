@@ -269,7 +269,7 @@ def _live_impact(action: str) -> CatalystImpact:
     )
 
 
-@pytest.mark.usefixtures("neutral_context")
+@pytest.mark.usefixtures("supportive_context")
 def test_matrix_caution_catalyst_reduces_size(paper_env) -> None:
     from packages.data.ingestion.pipeline import build_snapshot
     from packages.decision.engine import decide_matrix
@@ -290,7 +290,7 @@ def test_matrix_caution_catalyst_reduces_size(paper_env) -> None:
     assert dec[0].size_multiplier < base_dec[0].size_multiplier
 
 
-@pytest.mark.usefixtures("neutral_context")
+@pytest.mark.usefixtures("supportive_context")
 def test_matrix_block_catalyst_stops_open(paper_env) -> None:
     from packages.data.ingestion.pipeline import build_snapshot
     from packages.decision.engine import decide_matrix, matrix_view
@@ -310,7 +310,7 @@ def test_matrix_block_catalyst_stops_open(paper_env) -> None:
     )
 
 
-@pytest.mark.usefixtures("neutral_context")
+@pytest.mark.usefixtures("supportive_context")
 def test_matrix_rumor_does_not_block(paper_env) -> None:
     from packages.data.ingestion.pipeline import build_snapshot
     from packages.decision.engine import decide_matrix

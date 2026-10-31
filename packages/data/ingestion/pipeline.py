@@ -106,15 +106,12 @@ class MarketSnapshot:
 
 
 def _build_entry_contexts(symbols: list[str]) -> dict[str, dict[str, dict]]:
-    """symbol → tf → entry_context (yalnız `entry_quality_v2.mode != off`).
+    """symbol → tf → entry_context (giriş kalitesi kapısının girdisi).
 
     Barlar OHLCV önbelleğinden gelir (ağ yok, `get_snapshot` ile aynı pencere).
     Tek hücrenin hatası yalnız o hücreyi boş bırakır — karar zinciri etkilenmez."""
-    from packages.scoring import entry_context, entry_quality
-
-    if entry_quality.mode() == "off":
-        return {}
     from packages.data.providers import ohlcv as _ohlcv
+    from packages.scoring import entry_context
 
     out: dict[str, dict[str, dict]] = {}
     for s in symbols:

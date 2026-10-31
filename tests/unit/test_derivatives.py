@@ -313,7 +313,7 @@ def _force_bullish(snap, symbol: str = "BTCUSD") -> None:
     snap.technicals[symbol] = snap.technicals_by_tf[symbol]["1d"]
 
 
-@pytest.mark.usefixtures("neutral_context")
+@pytest.mark.usefixtures("supportive_context")
 def test_matrix_high_squeeze_blocks_open_cell(paper_env) -> None:
     from packages.data.ingestion.pipeline import build_snapshot
     from packages.decision.engine import decide_matrix, matrix_view
@@ -337,7 +337,7 @@ def test_matrix_high_squeeze_blocks_open_cell(paper_env) -> None:
     )
 
 
-@pytest.mark.usefixtures("neutral_context")
+@pytest.mark.usefixtures("supportive_context")
 def test_matrix_caution_reduces_size_but_keeps_open(paper_env) -> None:
     # ELEVATED squeeze (CAUTION ×0.5) → açılış kalır ama size küçülür (asla artmaz).
     from packages.data.ingestion.pipeline import build_snapshot
@@ -359,7 +359,7 @@ def test_matrix_caution_reduces_size_but_keeps_open(paper_env) -> None:
     assert dec[0].size_multiplier < base[0].size_multiplier  # küçüldü, artmadı
 
 
-@pytest.mark.usefixtures("neutral_context")
+@pytest.mark.usefixtures("supportive_context")
 def test_matrix_unverified_derivatives_does_not_block_open(paper_env) -> None:
     # Fixture/test verisi (verified=False) açılışı bloklayamaz; yalnızca bağlam.
     from packages.data.ingestion.pipeline import build_snapshot

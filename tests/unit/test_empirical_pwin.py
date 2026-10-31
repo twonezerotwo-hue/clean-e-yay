@@ -199,23 +199,17 @@ def test_engine_falls_back_without_evidence(ep_env, monkeypatch) -> None:
     assert d.expected_value_empirical is None
 
 
-# --------------------- F5-3: ödül-ağırlıklı EV kapısı ------------------------
-# NOT: conftest autouse fixture'ı `_ev_gate_cfg`'yi {"enabled": False}'a sabitler
-# (F5 canlı ama çoğu test pre-F5 davranışını varsayar). Bu yüzden EV kapısını
-# doğrulayan testler mevcut F5 deseni gibi `_ev_gate_cfg`'yi DOĞRUDAN monkeypatch
-# eder (threshold_override EV config'ini bu pin yüzünden göremez).
+# --------------------------- ödül-ağırlıklı EV kapısı --------------------------
 
 _EMP_CELL = dict(p_win=0.58, wins=29, losses=21, n=50, source="tf_regime",
                  avg_win_r=0.6, avg_loss_r=1.2, win_r_n=29, loss_r_n=21)
 
 
-def _ev_on(monkeypatch, *, payoff_weighted: bool, cell: dict | None = _EMP_CELL,
-           min_r_samples: int = 8) -> None:
+def _ev_on(monkeypatch, *, cell: dict | None = _EMP_CELL, min_r_samples: int = 8) -> None:
     from packages.decision import engine as dec
     monkeypatch.setattr(
         dec, "_ev_gate_cfg",
-        lambda: {"enabled": True, "min_ev": 0.0, "cost_r": 0.1,
-                 "payoff_weighted": payoff_weighted, "min_r_samples": min_r_samples},
+        lambda: {"min_ev": 0.0, "cost_r": 0.1, "min_r_samples": min_r_samples},
     )
     monkeypatch.setattr(
         dec.empirical_pwin, "lookup",
@@ -226,27 +220,18 @@ def _ev_on(monkeypatch, *, payoff_weighted: bool, cell: dict | None = _EMP_CELL,
 def test_payoff_weighted_blocks_when_realized_payoff_negative(ep_env, monkeypatch) -> None:
     # p=0.58 ama gerçekleşen kazanç küçük (+0.6R), kayıp büyük (−1.2R):
     # EV = 0.58×0.6 − 0.42×1.2 − 0.1 = 0.348 − 0.504 − 0.1 = −0.256 < 0 → blok.
-    _ev_on(monkeypatch, payoff_weighted=True)
+    _ev_on(monkeypatch)
     d, _ = _decide(monkeypatch)
     assert d.action == "hold"
     assert "ev_gate" in d.blocked_by
     assert d.expected_value == pytest.approx(0.58 * 0.6 - 0.42 * 1.2 - 0.1, abs=1e-3)
 
 
-def test_fixed_rr_would_have_allowed_same_trade(ep_env, monkeypatch) -> None:
-    # AYNI hücre sabit-RR ile: EV = 0.58×2.0 − 0.42×1 − 0.1 = 0.64 > 0 → açılırdı.
-    # Ödül-ağırlıklının asıl değeri: sabit-RR'nin gizlediği negatif edge'i yakalar.
-    _ev_on(monkeypatch, payoff_weighted=False)
-    d, _ = _decide(monkeypatch)
-    assert d.action == "open_long"  # sabit-RR EV pozitif → geçer (eski davranış)
-
-
 def test_payoff_weighted_falls_back_without_r_data(ep_env, monkeypatch) -> None:
-    # Flag ON ama hücrede R verisi yok → dürüstçe sabit-RR formülüne düşer.
+    # Hücrede R verisi yok → dürüstçe sabit-RR formülüne düşer.
     from packages.decision import engine as dec
 
-    _ev_on(monkeypatch, payoff_weighted=True,
-           cell=dict(p_win=0.65, wins=13, losses=7, n=20, source="tf_regime",
+    _ev_on(monkeypatch, cell=dict(p_win=0.65, wins=13, losses=7, n=20, source="tf_regime",
                      avg_win_r=None, avg_loss_r=None))
     d, _ = _decide(monkeypatch)
     # R yok → sabit-RR formülü, empirical p (0.65) ile — payoff devreye girmez
@@ -259,7 +244,7 @@ def test_payoff_weighted_falls_back_when_r_samples_thin(ep_env, monkeypatch) -> 
     from packages.decision import engine as dec
 
     _ev_on(
-        monkeypatch, payoff_weighted=True, min_r_samples=8,
+        monkeypatch, min_r_samples=8,
         cell=dict(p_win=0.51, wins=18, losses=17, n=35, source="tf_regime",
                   avg_win_r=0.91, avg_loss_r=1.15, win_r_n=6, loss_r_n=4),
     )
@@ -273,7 +258,7 @@ def test_payoff_weighted_engages_when_r_samples_sufficient(ep_env, monkeypatch) 
     # Aynı negatif payoff ama yeterli R örneği (10/10 ≥ 8) → payoff yolu devrede,
     # EV negatif → blok. min_r_samples guard'ının eşiği geçince açıldığını doğrular.
     _ev_on(
-        monkeypatch, payoff_weighted=True, min_r_samples=8,
+        monkeypatch, min_r_samples=8,
         cell=dict(p_win=0.51, wins=18, losses=17, n=35, source="tf_regime",
                   avg_win_r=0.6, avg_loss_r=1.2, win_r_n=10, loss_r_n=10),
     )

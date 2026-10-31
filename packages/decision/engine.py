@@ -61,7 +61,6 @@ from packages.risk import (
 )
 from packages.risk.engine import RiskDecision, RiskInput
 from packages.risk.engine import evaluate as evaluate_risk
-from packages.scoring import entry_quality
 
 Action = Literal["open_long", "open_short", "hold", "blocked"]
 
@@ -103,8 +102,8 @@ class TradeDecision:
     candidate_action: Action = "hold"
     blocked_by: list[str] = field(default_factory=list)
     actionable: bool = False
-    # F5 — beklenen değer (R-katı): p(win)×RR − (1−p)×1 − maliyet. Her zaman hesaplanır
-    # (gözlem); ev_gate.enabled iken < min_ev olan trade bloklanır. None = hesaplanmadı.
+    # Beklenen değer (R-katı): p(win)×RR − (1−p)×1 − maliyet; < min_ev olan trade
+    # bloklanır. None = hesaplanmadı.
     expected_value: float | None = None
     # Ampirik p(win): (tf|rejim → tf) gerçekleşmiş isabet oranı; EV/Kelly bu p
     # ile hesaplanır. None = yeterli ampirik kanıt yok (cal_conf kullanılır).
@@ -123,11 +122,9 @@ class TradeDecision:
     # D — dinamik korelasyon vetosu: aday sinyalin en güçlü akrabası ilişkiyi
     # çürütüyorsa engel (YALNIZ ENGELLER). Boş = güçlü akraba yok.
     correlation_veto_report: dict = field(default_factory=dict)
-    # Giriş kalitesi v2: YÖN ≠ GİRİŞ ZAMANLAMASI. `entry_quality_v2.mode` off iken boş;
-    # shadow'da eski/yeni karar yan yana (karar DEĞİŞMEZ); active'de YENİ motor uygulanır
-    # (YALNIZ kısıtlar: wait → hold, reduce → boyut ≤ 1.0, asla zıt yön) ve LEGACY gölge/
-    # fallback olarak karşılaştırılır. Alanlar: entry_engine.annotate (applied_engine,
-    # fallback_reason, legacy_*/new_* yön-eylem-skor, agreement).
+    # Giriş kalitesi v2: YÖN ≠ GİRİŞ ZAMANLAMASI. YALNIZ kısıtlar (wait → hold, reduce →
+    # boyut ≤ 1.0, asla zıt yön). Alanlar: verdict, skorlar, applied_engine (new /
+    # legacy_fallback), fallback_reason, gate_ms. Boş = kapıya ulaşılmadı.
     entry_quality_report: dict = field(default_factory=dict)
     # P0 trace identity and confidence provenance. Additive telemetry only: these
     # fields never participate in action, size, or RiskGate decisions.
@@ -239,12 +236,12 @@ def _verdict_to_dict(v: MistakeVerdict) -> dict:
 
 
 def _ev_gate_cfg() -> dict:
-    """F5 EV kapısı config (monkeypatch-edilebilir seam — test izolasyonu)."""
+    """EV kapısı config'i (min_ev, cost_r, min_r_samples)."""
     return load_thresholds().get("ev_gate") or {}
 
 
 def _kelly_cfg() -> dict:
-    """F5 Kelly sizing config (monkeypatch-edilebilir seam — test izolasyonu)."""
+    """Kelly boyut tavanı config'i (fraction)."""
     return load_thresholds().get("kelly_sizing") or {}
 
 
@@ -390,12 +387,11 @@ def _decide_core(
     timeframe: str = "1d",
     recent_edge: float | None = None,
     paper_exploration: bool = False,
-    eq_mode: str = "off",
+    entry_gate: bool = True,
 ) -> TradeDecision:
-    """Tek-motor karar zinciri (RiskGate İLK). ``eq_mode`` giriş-kalitesi kapısını seçer:
-    "off" = LEGACY zincir (kapı yok), "shadow" = kapı hesaplanır ama uygulanmaz,
-    "active" = kapı uygulanır. Hangi motorun uygulanacağını ``decide_for_symbol`` seçer;
-    burada RiskGate/data-policy/EV/mistake/korelasyon/boyut kapıları iki motor için AYNIDIR."""
+    """Tek-motor karar zinciri (RiskGate İLK). ``entry_gate=False`` yalnız giriş kapısının
+    teknik hatasında kullanılır (kapısız zincir); RiskGate/data-policy/EV/mistake/
+    korelasyon/boyut kapıları iki yolda AYNIDIR."""
     th = load_thresholds()["consensus"]
     cons = build_consensus(symbol, snap, regime, timeframe)
     pol = _timeframe_policy(timeframe)
@@ -553,8 +549,7 @@ def _decide_core(
     # ----- Giriş kalitesi v2 — YÖN ≠ GİRİŞ ZAMANLAMASI (YALNIZ KISITLAYICI) -----
     # Konsensüs yönü korunur; "şimdi girmek mantıklı mı" ayrıca ölçülür. Kötü giriş →
     # WAIT (hold), ASLA zıt yön; boyut ≤ 1.0; RiskGate'i gevşetmez (bu noktaya yalnız risk
-    # açıkken gelinir). mode=off → hiçbir hesap yok, davranış bayt-aynı.
-    # Yeni motor TEKNİK olarak başarısızsa (fallback_reason dolu) kısıt uygulanmaz → karar
+    # açıkken gelinir). Kapı TEKNİK olarak başarısızsa (fallback_reason dolu) kısıt uygulanmaz → karar
     # legacy zincirden aynen sürer. Geçerli `wait` teknik hata DEĞİLDİR: bilinçli karardır,
     # legacy'nin LONG/SHORT'u ona karşı zorlanmaz.
     # Kapı yalnız pozisyon AÇABİLEN TF'lerde çalışır: paper_execution=false (1w = sadece bias)
@@ -562,9 +557,9 @@ def _decide_core(
     # (<MIN_BARS) kalıcı "missing_context" fallback'i üretip izlemeyi gürültüye boğar.
     eq_size_factor = 1.0
     eq_reduce_tag = False
-    if eq_mode != "off" and pol["paper_execution"]:
-        eq_report.update(entry_engine.gate(snap, symbol, timeframe, action, eq_mode))
-        if eq_mode == "active" and not eq_report.get("fallback_reason"):
+    if entry_gate and pol["paper_execution"]:
+        eq_report.update(entry_engine.gate(snap, symbol, timeframe, action))
+        if not eq_report.get("fallback_reason"):
             if eq_report["verdict"] == "wait":
                 return _hold(
                     reason=(
@@ -592,9 +587,8 @@ def _decide_core(
             )
         paper_soft_reasons.append("confidence_floor")
 
-    # ----- F5: EV (beklenen değer) kapısı — olasılık + ödül/risk BİRLİKTE pozitif
-    #  değilse açma. EV her zaman hesaplanır (gözlem); ev_gate.enabled iken kısıtlar.
-    #  RiskGate'i bypass etmez; yalnızca ek ekonomik filtre. (Owner config'ten.) -----
+    # ----- EV (beklenen değer) kapısı — olasılık + ödül/risk BİRLİKTE pozitif
+    #  değilse açma. RiskGate'i bypass etmez; yalnızca ek ekonomik filtre. -----
     # Ampirik p(win): hücre (tf|rejim) yeterli örnekliyse EV + Kelly bu p ile
     # hesaplanır (skor-türevi güven yerine ölçülmüş isabet); kanıt yoksa
     # cal_conf (sahte p uydurulmaz).
@@ -603,19 +597,17 @@ def _decide_core(
     cost_r = float(ev_cfg.get("cost_r", 0.1))
     emp = empirical_pwin.lookup(timeframe, regime.label)
     p_for_ev = emp.p_win if emp is not None else cal_conf
-    # F5-3 — ödül-ağırlıklı EV. Flag OFF (default) → sabit-RR formülü birebir
-    # (bayt-aynı). ON + yeterli örnekli hücrede GERÇEKLEŞEN kazanç-R/kayıp-R
-    # varsa: EV = p_emp×avg_win_r − (1−p_emp)×avg_loss_r − cost_r (kazanma
+    # Ödül-ağırlıklı EV: yeterli örnekli hücrede GERÇEKLEŞEN kazanç-R/kayıp-R
+    # varsa EV = p_emp×avg_win_r − (1−p_emp)×avg_loss_r − cost_r (kazanma
     # olasılığı DA ampirik — şişik kalibre güven değil). R verisi yoksa dürüstçe
     # sabit-RR'ye düşer (sahte payoff uydurulmaz).
-    # F5-3 guard — payoff yolu için MİN R-örneği: avg_win_r/avg_loss_r'nin
+    # Payoff yolu için MİN R-örneği: avg_win_r/avg_loss_r'nin
     # istatistiksel anlamı olsun (avuç dolusu gerçekleşen R koca bir timeframe'i
     # kapatmasın). Her yönde win_r_n/loss_r_n ≥ min_r_samples değilse dürüstçe
     # sabit-RR'ye düşer. min_r_samples 0 → guard kapalı (yalnız None kontrolü).
     min_r = int(ev_cfg.get("min_r_samples", 8))
     payoff_ready = (
-        bool(ev_cfg.get("payoff_weighted", False))
-        and emp is not None
+        emp is not None
         and emp.avg_win_r is not None
         and emp.avg_loss_r is not None
         and emp.win_r_n >= min_r
@@ -636,7 +628,7 @@ def _decide_core(
     expected_value_empirical = (
         None if emp is None else round(_expected_value(emp.p_win, rr, cost_r), 4)
     )
-    if ev_cfg.get("enabled", False) and expected_value < float(ev_cfg.get("min_ev", 0.0)):
+    if expected_value < float(ev_cfg.get("min_ev", 0.0)):
         if paper_cfg is None or not paper_policy.allows_expected_value(expected_value, paper_cfg):
             return _hold(
                 reason=ev_reason,
@@ -905,15 +897,14 @@ def _decide_core(
         size = paper_policy.cap_size(size, paper_cfg)
         blocked_by.extend(f"paper_exploration:{reason}" for reason in paper_soft_reasons)
 
-    # ----- F5: Kelly sizing — boyutu ölçülen edge'e oransal CAP'le (yalnız küçültür).
+    # ----- Kelly sizing — boyutu ölçülen edge'e oransal CAP'le (yalnız küçültür).
     #  fractional-Kelly $ = fraction × f* × equity; size_mult cap'i = bu / max_pos.
-    #  no-AI-boost: yalnız min() ile kısar, asla büyütmez. (Owner config; default KAPALI) -----
+    #  no-AI-boost: yalnız min() ile kısar, asla büyütmez. -----
     kelly_cfg = _kelly_cfg()
-    if kelly_cfg.get("enabled", False) and equity_usd > 0:
+    if equity_usd > 0:
         max_pos = float((load_thresholds().get("paper_trading") or {}).get("max_position_usd", 0.0))
         if max_pos > 0:
-            # F4-2 — flag açıkken Kelly de ampirik p ile (EV ile aynı kaynak);
-            # kapalıyken p_for_ev == cal_conf (bayt-aynı).
+            # Kelly de EV ile aynı p kaynağını kullanır (ampirik, yoksa cal_conf).
             f_star = _kelly_fraction(p_for_ev, rr)
             fraction = float(kelly_cfg.get("fraction", 0.25))
             kelly_mult_cap = fraction * f_star * equity_usd / max_pos
@@ -1073,85 +1064,32 @@ def decide_for_symbol(
 ) -> TradeDecision:
     """(symbol, timeframe) kararı — YÖN ≠ GİRİŞ ZAMANLAMASI.
 
-    ``entry_quality_v2.mode``:
-      off    → LEGACY zincir, hiçbir ek hesap yok (bayt-aynı; rollback).
-      shadow → LEGACY uygulanır; yeni motor hesaplanıp yan yana yazılır.
-      active → NEW (yön + giriş kalitesi + dönüş riski) uygulanır; LEGACY aynı turda gölge
-               olarak koşar (karşılaştırma + acil durum fallback'i). LONG / SHORT / WAIT üçü de
-               geçerli üretim kararıdır; yeni motorun WAIT'i legacy'nin LONG/SHORT'uyla
-               ezilmez. Yalnız TEKNİK başarısızlıkta (istisna, NaN/inf, bozuk karar/rapor,
-               eksik bağlam, geçersiz eylem, gecikme aşımı) legacy karar uygulanır.
-
-    Her iki motor da aynı çekirdekten geçer: RiskGate İLK sırada, fallback onu atlayamaz;
+    Yön (konsensüs) + giriş kalitesi + dönüş riski kapısı uygulanır; LONG / SHORT / WAIT
+    üçü de geçerli üretim kararıdır. Yalnız TEKNİK başarısızlıkta (istisna, NaN/inf, bozuk
+    karar/rapor, eksik bağlam, geçersiz eylem, gecikme aşımı) kapısız zincir uygulanır.
+    İki yol da aynı çekirdekten geçer: RiskGate İLK sırada, fallback onu atlayamaz;
     sonrasındaki session/conflict kapıları ve ``attempt_open`` (tick worker) değişmez."""
     kw = {
         "mistakes": mistakes, "open_positions": open_positions, "equity_usd": equity_usd,
         "corr_entries": corr_entries, "timeframe": timeframe, "recent_edge": recent_edge,
         "paper_exploration": paper_exploration,
     }
-    mode = entry_quality.mode()
-    if mode == "off":
-        return _decide_core(symbol, snap, regime, risk, eq_mode="off", **kw)
-    if mode == "shadow":
-        d = _decide_core(symbol, snap, regime, risk, eq_mode="shadow", **kw)
-        rep = d.entry_quality_report
-        if rep:  # kapıya ulaşıldı (aday açık, RiskGate/data-policy geçildi)
-            failed = rep.get("fallback_reason")
-            entry_engine.annotate(
-                d, mode="shadow", applied_engine=entry_engine.ENGINE_LEGACY,
-                fallback_reason=failed, legacy=entry_engine.view(d),
-                new=None if failed else entry_engine.view(
-                    d, entry_engine.shadow_new_action(d.action, rep)
-                ),
-            )
-        return d
-    return _decide_active(symbol, snap, regime, risk, kw)
-
-
-def _decide_active(
-    symbol: str, snap: MarketSnapshot, regime: RegimeOutput, risk: RiskDecision, kw: dict,
-) -> TradeDecision:
-    """active mod: NEW uygula, LEGACY'yi gölge/fallback olarak tut (bkz. ``decide_for_symbol``)."""
     problem: str | None = None
-    new: TradeDecision | None = None
+    decision: TradeDecision | None = None
     try:
-        new = _decide_core(symbol, snap, regime, risk, eq_mode="active", **kw)
-        problem = entry_engine.decision_problem(new)
-    except Exception as exc:  # yeni karar nesnesi üretilemedi → legacy
+        decision = _decide_core(symbol, snap, regime, risk, **kw)
+        problem = entry_engine.decision_problem(decision)
+    except Exception as exc:  # karar nesnesi üretilemedi → kapısız zincir
         problem = f"exception:{type(exc).__name__}"
-    if problem is not None or new is None:
-        # TEKNİK HATA → LEGACY karar zinciri. Aynı çekirdek: RiskGate yine İLK sırada.
-        problem = problem or "no_decision"
-        entry_engine.count_fallback(problem, symbol, kw["timeframe"])
-        legacy = _decide_core(symbol, snap, regime, risk, eq_mode="off", **kw)
-        entry_engine.annotate(
-            legacy, mode="active", applied_engine=entry_engine.ENGINE_FALLBACK,
-            fallback_reason=problem, legacy=entry_engine.view(legacy), new=None,
-        )
-        return legacy
-    rep = new.entry_quality_report
-    if not rep:
-        return new  # kapıya ulaşılmadı (RiskGate / eşik / data-policy): iki motor aynı
-    failed = rep.get("fallback_reason")
-    if failed:
-        # Kapı teknik olarak çalışmadı → kısıt uygulanmadı → bu karar zaten legacy kararıdır.
-        entry_engine.annotate(
-            new, mode="active", applied_engine=entry_engine.ENGINE_FALLBACK,
-            fallback_reason=failed, legacy=entry_engine.view(new), new=None,
-        )
-        return new
-    legacy: TradeDecision | None = new   # verdict=ok → iki motor aynı karar
-    if rep.get("verdict") in ("wait", "reduce"):
-        try:
-            legacy = _decide_core(symbol, snap, regime, risk, eq_mode="off", **kw)
-        except Exception:  # gölge karşılaştırma kararı asla düşürmez
-            legacy = None
+    if problem is None and decision is not None:
+        return decision
+    problem = problem or "no_decision"
+    entry_engine.count_fallback(problem, symbol, timeframe)
+    fallback = _decide_core(symbol, snap, regime, risk, entry_gate=False, **kw)
     entry_engine.annotate(
-        new, mode="active", applied_engine=entry_engine.ENGINE_NEW, fallback_reason=None,
-        legacy=entry_engine.view(legacy) if legacy is not None else None,
-        new=entry_engine.view(new),
+        fallback, applied_engine=entry_engine.ENGINE_FALLBACK, fallback_reason=problem,
     )
-    return new
+    return fallback
 
 
 def decide_all(
@@ -1490,8 +1428,7 @@ def matrix_view(
                 "execution_state": execution_state,
                 "status": status,
                 "paper_action": d.action if actionable else "none",
-                # F5 gözlem — beklenen değer (R-katı); ev_gate KAPALI olsa da dolu.
-                # Dashboard/owner pozitif-EV dağılımını görüp ev_gate enable kararını verir.
+                # Beklenen değer (R-katı).
                 "expected_value": d.expected_value,
                 # Ampirik (tf|rejim) p(win) + onunla hesaplanan EV.
                 "p_win_empirical": d.p_win_empirical,
@@ -1505,17 +1442,12 @@ def matrix_view(
                 # LEARNING_ADVISOR_APPLY ile canlıya alır. Boş = aday değil.
                 "learning_advice": dict(d.learning_advice),
                 # Giriş kalitesi v2 (YÖN ≠ GİRİŞ ZAMANLAMASI): eski/yeni karar yan yana.
-                # Yalnız `entry_quality_v2.mode` off DEĞİLKEN doludur → kapalıyken hücre
-                # bayt-aynı (anahtar hiç yazılmaz). Shadow kanıtı snapshot_store'a bu yoldan düşer.
+                # Giriş kapısı raporu (kapıya ulaşılmadıysa anahtar yazılmaz).
                 **({"entry_quality": dict(d.entry_quality_report)} if d.entry_quality_report else {}),
             }
         )
-    # Giriş motoru karşılaştırması (new vs legacy): yalnız mode != off iken eklenir →
-    # kapalıyken matrix BAYT-AYNI. Tek-tur özet + süreç ömrü fallback sayacı.
-    eq_mode = entry_quality.mode()
-    engine_block = (
-        {"engine": entry_engine.summarize(cells, eq_mode)} if eq_mode != "off" else {}
-    )
+    # Giriş kapısı tek-tur özeti + süreç ömrü fallback sayacı.
+    engine_block = {"engine": entry_engine.summarize(cells)}
     return {
         "generated_at": datetime.now(UTC).isoformat(),
         "snapshot_id": getattr(snap, "snapshot_id", None),

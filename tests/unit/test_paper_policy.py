@@ -51,7 +51,7 @@ def test_decision_can_collect_soft_gate_evidence_only_in_paper_mode(monkeypatch)
     )
     monkeypatch.setattr(engine, "build_consensus", lambda *a, **kw: fake)
     monkeypatch.setattr(engine, "predict_calibrated_tf", lambda *a, **kw: (0.35, "test"))
-    monkeypatch.setattr(engine, "_ev_gate_cfg", lambda: {"enabled": True, "min_ev": 0.0, "cost_r": 0.25})
+    monkeypatch.setattr(engine, "_ev_gate_cfg", lambda: {"min_ev": 0.0, "cost_r": 0.25})
     monkeypatch.setattr(
         paper_policy,
         "load_config",

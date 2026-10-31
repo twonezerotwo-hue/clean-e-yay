@@ -55,29 +55,6 @@ def _no_tick_artifact_leak() -> None:
 
 
 @pytest.fixture(autouse=True)
-def _entry_quality_off_by_default(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Giriş kalitesi v2 canlı config'te SHADOW; unit testlerin çoğu bağlam üretimi/ek rapor
-    olmadan baseline'ı varsayar. Default KAPAT (yalnız mode()/zero_two_canonical() okuyucuları);
-    v2 davranışını doğrulayan testler kendi monkeypatch'iyle açar. `config()` ve YAML
-    ayrıştırması etkilenmez (ayrıştırma testi gerçek config'i okur)."""
-    from packages.scoring import entry_quality
-    monkeypatch.setattr(entry_quality, "mode", lambda: "off")
-    monkeypatch.setattr(entry_quality, "zero_two_canonical", lambda: False)
-
-
-@pytest.fixture(autouse=True)
-def _f5_disabled_by_default(monkeypatch: pytest.MonkeyPatch) -> None:
-    """F5 (EV kapısı + Kelly sizing) canlı config'te AÇIK, ama çoğu unit test pre-F5
-    sizing/açılış davranışını varsayar (relatif size karşılaştırmaları, açık sayısı).
-    Testlerde default KAPAT — F5'i doğrulayan testler explicit monkeypatch ile açar.
-    Böylece F5 canlı enable'ı mevcut testleri bozmaz; F5 davranışı ayrı doğrulanır
-    (test_ev_kelly helper'ları + expected_value wiring + enabled-gate testi)."""
-    from packages.decision import engine
-    monkeypatch.setattr(engine, "_ev_gate_cfg", lambda: {"enabled": False})
-    monkeypatch.setattr(engine, "_kelly_cfg", lambda: {"enabled": False})
-
-
-@pytest.fixture(autouse=True)
 def _package1_flags_off_by_default(monkeypatch: pytest.MonkeyPatch) -> None:
     """Paket-1 aktivasyonu (2026-07-02, owner kararı) canlı config'te 5 girdi-düzeltme
     flag'ini AÇTI; unit testlerin çoğu v1 baseline davranışını varsayar (matrix
@@ -146,6 +123,18 @@ def _package1_flags_off_by_default(monkeypatch: pytest.MonkeyPatch) -> None:
     # D6 (2026-07-06) — tf_scoring_v2 gölge worker-adımı testlerde default OFF
     # (learning koşusu bayt-eşdeğer); flag'i test eden testler kendisi açar.
     monkeypatch.delenv("TF_SCORING_V2_SHADOW", raising=False)
+
+
+@pytest.fixture(autouse=True)
+def _fresh_learned_decision_inputs() -> None:
+    """Karara giren öğrenilmiş girdiler (ampirik p(win), Platt fit'i, rejim freni) her
+    testte boş başlar. Oturum boyu paylaşılan izole klasörde bir öğrenme testinin yazdığı
+    tablo sonraki karar testlerine sızıyordu (örn. ampirik p=0 → canlı EV kapısı açılışı
+    tutar). Testler kendi verisini kendisi yazar."""
+    for env in ("EMPIRICAL_PWIN_PATH", "CALIBRATION_STORE_PATH", "REGIME_RISK_BRAKE_PATH"):
+        path = os.environ.get(env)
+        if path:
+            Path(path).unlink(missing_ok=True)
 
 
 @pytest.fixture(autouse=True, scope="session")
@@ -271,20 +260,22 @@ def _isolate_runtime_stores(tmp_path_factory: pytest.TempPathFactory) -> None:
 
 
 @pytest.fixture
-def neutral_context(monkeypatch) -> None:
-    """Konsensüs dışındaki kapıları (oynaklık, opsiyon, türev, katalizör...) test eden
-    matris testleri için tam kapsamlı NÖTR bağlam: temel = sentinel = quantum = 50.
+def supportive_context(monkeypatch) -> None:
+    """Konsensüs dışındaki kapıları (oynaklık, opsiyon, türev, katalizör, TF) test eden
+    matris testleri için açılabilir hücre: tam kapsamlı, destekleyici bağlam
+    (temel = sentinel = quantum = 80).
 
     Test anlık görüntüsünde risk iştahı katmanı yok → canlı yapılandırmada sentinel
-    eksik sayılır ve kapsama kapısı yönü nötre çeker (canlıda doğru davranış). Bu
-    fixture yalnız bağlam katmanını sabitler; yön teknik + haber oylarından gelir,
-    canlı eşikler ve kapılar aynen çalışır.
-    Dosya bazında `pytestmark = pytest.mark.usefixtures("neutral_context")` açar.
+    eksik sayılır ve kapsama kapısı yönü nötre çeker; nötr bağlamda da konsensüs
+    eşiğe yakın kalır ve canlı EV kapısı (kalibrasyonsuz p) hücreyi tutar. Bu
+    fixture yalnız bağlam katmanını sabitler; canlı eşikler ve kapılar aynen çalışır.
+    Test başına `@pytest.mark.usefixtures("supportive_context")` ile açılır.
     """
     from packages.consensus import engine as consensus_engine
 
-    ctx = {"fundamental": 50.0, "sentinel": 50.0, "quantum": 50.0}
+    ctx = {"fundamental": 80.0, "sentinel": 80.0, "quantum": 80.0}
     monkeypatch.setattr(consensus_engine, "_context_layer", lambda *_a, **_k: (dict(ctx), dict(ctx)))
+
 
 @pytest.fixture
 def seed_ohlcv_reference() -> None:

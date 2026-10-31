@@ -1,20 +1,15 @@
-"""Giriş motoru terfisi — NEW (entry_quality_v2) = PRIMARY, LEGACY = SHADOW + TEKNİK FALLBACK.
+"""Giriş motoru — entry_quality_v2 kapısı + TEKNİK FALLBACK.
 
 Kararın yönünü (konsensüs) ve girişin zamanlamasını (giriş kalitesi + dönüş riski) ayrı
-eksenler olarak tutar; bu modül ikinci eksenin karar akışındaki KAPISINI ve karşılaştırma
-telemetrisini sağlar. ``packages/decision/engine.py`` orkestrasyonu yapar; burası saf
-yardımcıdır (``TradeDecision`` tipini import etmez → döngüsel bağımlılık yok).
+eksenler olarak tutar; bu modül ikinci eksenin karar akışındaki KAPISINI ve telemetrisini
+sağlar. ``packages/decision/engine.py`` orkestrasyonu yapar; burası saf yardımcıdır
+(``TradeDecision`` tipini import etmez → döngüsel bağımlılık yok).
 
-    mode = off     → hiçbir şey hesaplanmaz; karar bayt-aynı (rollback: tek satır).
-    mode = shadow  → LEGACY uygulanır; NEW yalnız hesaplanıp yan yana yazılır.
-    mode = active  → NEW uygulanır (LONG / SHORT / WAIT üçü de GEÇERLİ karardır);
-                     LEGACY aynı turda gölge olarak karşılaştırılır.
-
-TEKNİK HATA ≠ WAIT. Yeni motor sağlıklı biçimde WAIT derse bu bilinçli karardır; legacy'nin
-LONG/SHORT'u ASLA zorla uygulanmaz. Legacy'ye yalnız şunlarda düşülür: istisna, NaN/inf,
-bozuk karar/rapor, zorunlu bağlamın eksikliği, geçersiz eylem, gecikme bütçesi aşımı, yeni
-karar nesnesinin üretilememesi. Düşüş RiskGate'i atlamaz: legacy zincir de aynı çekirdektir
-(RiskGate İLK sırada), sonra aynı session/conflict kapıları ve ``attempt_open`` çalışır.
+LONG / SHORT / WAIT üçü de geçerli karardır. TEKNİK HATA ≠ WAIT: kapı sağlıklı biçimde WAIT
+derse bu bilinçli karardır. Kapısız karar zincirine yalnız şunlarda düşülür: istisna, NaN/inf,
+bozuk karar/rapor, zorunlu bağlamın eksikliği, geçersiz eylem, gecikme bütçesi aşımı, karar
+nesnesinin üretilememesi. Düşüş RiskGate'i atlamaz: aynı çekirdek zincir (RiskGate İLK
+sırada), sonra aynı session/conflict kapıları ve ``attempt_open`` çalışır.
 """
 from __future__ import annotations
 
@@ -29,9 +24,8 @@ log = logging.getLogger(__name__)
 OPEN_ACTIONS = ("open_long", "open_short")
 VALID_ACTIONS = (*OPEN_ACTIONS, "hold", "blocked")
 
-ENGINE_NEW = "new"                    # active, teknik sorun yok → yeni motor uygulandı
-ENGINE_FALLBACK = "legacy_fallback"   # active, yeni motor teknik olarak başarısız → legacy
-ENGINE_LEGACY = "legacy"              # shadow → legacy uygulanır, yeni yalnız gözlenir
+ENGINE_NEW = "new"                    # kapı uygulandı (teknik sorun yok)
+ENGINE_FALLBACK = "legacy_fallback"   # kapı teknik olarak başarısız → kapısız zincir
 
 VETO_TAGS = {
     "entry_quality": "entry_quality_v2:entry_quality",
@@ -64,7 +58,7 @@ def reason_class(reason: str | None) -> str:
 
 
 def count_fallback(reason: str, symbol: str, timeframe: str) -> None:
-    """Gerçek (active) fallback'i say ve log'a seyrek yaz — fallback sistemik olsa bile
+    """Teknik fallback'i say ve log'a seyrek yaz — fallback sistemik olsa bile
     tick başına 50 satır spam yok: sebep sınıfı başına en çok 10 dakikada bir WARNING."""
     cls = reason_class(reason)
     _STATS["fallback_total"] += 1
@@ -92,11 +86,11 @@ def bucket(action: str | None) -> str | None:
 
 # --- kapı ----------------------------------------------------------------------------------
 
-def gate(snap: object, symbol: str, timeframe: str, action: str, mode: str) -> dict:
+def gate(snap: object, symbol: str, timeframe: str, action: str) -> dict:
     """Açık adayın giriş kalitesi + dönüş riski raporu. ASLA raise etmez.
 
     Başarı → ``assess`` raporu (+ ``applied_engine``). Teknik başarısızlık → kısıt YOK,
-    ``fallback_reason`` dolu; çağıran karar zincirini legacy olarak sürdürür."""
+    ``fallback_reason`` dolu; çağıran karar zincirini kapısız sürdürür."""
     side = "long" if action == "open_long" else "short"
     cfg = None
     rep: dict = {}
@@ -116,18 +110,15 @@ def gate(snap: object, symbol: str, timeframe: str, action: str, mode: str) -> d
     gate_ms = round((perf_counter() - t0) * 1000.0, 3)
 
     if problem is not None:
-        if mode == "active":
-            count_fallback(problem, symbol, timeframe)
+        count_fallback(problem, symbol, timeframe)
         return {
-            "mode": mode, "side": side, "verdict": None, "entry_quality": None,
+            "side": side, "verdict": None, "entry_quality": None,
             "reversal_risk": None, "size_factor": None, "reasons": [], "events": [],
-            "applied": False,
-            "applied_engine": ENGINE_FALLBACK if mode == "active" else ENGINE_LEGACY,
+            "applied": False, "applied_engine": ENGINE_FALLBACK,
             "fallback_reason": problem, "gate_ms": gate_ms,
         }
-    rep["mode"] = mode
-    rep["applied"] = mode == "active"
-    rep["applied_engine"] = ENGINE_NEW if mode == "active" else ENGINE_LEGACY
+    rep["applied"] = True
+    rep["applied_engine"] = ENGINE_NEW
     rep["fallback_reason"] = None
     rep["gate_ms"] = gate_ms
     return rep
@@ -150,10 +141,10 @@ def _finite(x: object) -> bool:
 
 
 def decision_problem(d: object) -> str | None:
-    """Yeni motorun ürettiği karar nesnesi teknik olarak geçersizse sebep (aksi None).
+    """Kapılı zincirin ürettiği karar nesnesi teknik olarak geçersizse sebep (aksi None).
 
-    Geçerli LONG / SHORT / WAIT için None döner — WAIT hata değildir. Ayrıca yeni motorun
-    değişmezi kontrol edilir: eylem ya aday yön ya da hold/blocked'tır (ZIT YÖN yok)."""
+    Geçerli LONG / SHORT / WAIT için None döner — WAIT hata değildir. Ayrıca değişmez
+    kontrol edilir: eylem ya aday yön ya da hold/blocked'tır (ZIT YÖN yok)."""
     action = getattr(d, "action", None)
     if action not in VALID_ACTIONS:
         return "invalid_action"
@@ -174,91 +165,33 @@ def decision_problem(d: object) -> str | None:
 
 # --- telemetri -----------------------------------------------------------------------------
 
-_EMPTY_VIEW = {"direction": None, "action": None, "score": None}
-
-
-def view(d: object, action: str | None = None) -> dict:
-    """Bir motorun kararının özeti (yön / eylem / skor). ``action`` verilirse eylemi ezer
-    (shadow'daki hipotetik yeni eylem için)."""
-    cons = getattr(d, "consensus", None)
-    return {
-        "direction": getattr(cons, "direction", None),
-        "action": action if action is not None else getattr(d, "action", None),
-        "score": getattr(cons, "score", None),
-    }
-
-
-def annotate(
-    decision: object,
-    *,
-    mode: str,
-    applied_engine: str,
-    legacy: dict | None,
-    new: dict | None,
-    fallback_reason: str | None = None,
-) -> dict:
-    """Karar raporuna eski/yeni yan yana alanları yazar (yerinde) ve raporu döndürür.
-
-    ``legacy`` / ``new``: ``view()`` çıktısı (motor karar üretmediyse None → alanlar None).
-    Yön ve skor iki motorda AYNIDIR (yön katmanı değişmez; yeni motor zamanlama ekseni
-    ekler); ``agreement`` eylemlerin eşitliğidir."""
+def annotate(decision: object, *, applied_engine: str, fallback_reason: str | None = None) -> dict:
+    """Karar raporuna hangi yolun uygulandığını yazar (yerinde) ve raporu döndürür."""
     rep = decision.entry_quality_report
     if not isinstance(rep, dict):
         rep = {}
-    rep.setdefault("mode", mode)
     rep["applied_engine"] = applied_engine
     rep["applied"] = applied_engine == ENGINE_NEW
     rep["fallback_reason"] = fallback_reason
-    lv = legacy or _EMPTY_VIEW
-    nv = new or _EMPTY_VIEW
-    for key in ("direction", "action", "score"):
-        rep[f"legacy_{key}"] = lv[key]
-        rep[f"new_{key}"] = nv[key]
-    rep["agreement"] = (
-        None if lv["action"] is None or nv["action"] is None else lv["action"] == nv["action"]
-    )
     decision.entry_quality_report = rep
     return rep
 
 
-def shadow_new_action(applied_action: str, rep: dict) -> str:
-    """Shadow'da yeni motorun HİPOTETİK eylemi: giriş adayına ``wait`` derse hold."""
-    if applied_action in OPEN_ACTIONS and rep.get("verdict") == "wait":
-        return "hold"
-    return applied_action
-
-
-def summarize(cells: list[dict], mode: str) -> dict:
-    """Matrix hücrelerinden tek-tur motor karşılaştırma özeti (izleme için).
-
-    ``applied_*`` üretimde uygulanan eylemler; ``legacy`` gölge motorun eylemleri; ``new``
-    yeni motorun kendi eylemleri (fallback hücrelerinde yeni motor karar üretmedi →
-    ``new_unavailable``)."""
-    new = {"long": 0, "short": 0, "wait": 0}
-    leg = {"long": 0, "short": 0, "wait": 0}
-    evaluated = disagree = eq_veto = rr_veto = reduced = fb = new_unavailable = 0
+def summarize(cells: list[dict]) -> dict:
+    """Matrix hücrelerinden tek-tur giriş kapısı özeti (izleme için)."""
+    actions = {"long": 0, "short": 0, "wait": 0}
+    eq_veto = rr_veto = reduced = fb = 0
     reasons: dict[str, int] = {}
     ms: list[float] = []
     for c in cells:
+        actions[bucket(c.get("action")) or "wait"] += 1
         rep = c.get("entry_quality") or {}
-        action = c.get("action")
-        failed = bool(rep.get("fallback_reason"))
-        l_act = rep.get("legacy_action") or action
-        n_act = None if failed else (rep.get("new_action") or action)
-        leg[bucket(l_act) or "wait"] += 1
-        if n_act is None:
-            new_unavailable += 1
-        else:
-            new[bucket(n_act) or "wait"] += 1
         if not rep:
             continue
-        if failed:
+        if rep.get("fallback_reason"):
             fb += 1
             cls = reason_class(rep.get("fallback_reason"))
             reasons[cls] = reasons.get(cls, 0) + 1
-        elif rep.get("agreement") is not None:
-            evaluated += 1
-            disagree += 0 if rep["agreement"] else 1
         blocked = c.get("blocked_by") or []
         eq_veto += VETO_TAGS["entry_quality"] in blocked
         rr_veto += VETO_TAGS["reversal_risk"] in blocked
@@ -266,16 +199,8 @@ def summarize(cells: list[dict], mode: str) -> dict:
         if isinstance(rep.get("gate_ms"), (int, float)):
             ms.append(float(rep["gate_ms"]))
     return {
-        "mode": mode,
-        "primary": "new" if mode == "active" else "legacy",
-        "shadow": "legacy" if mode == "active" else "new",
         "cells": len(cells),
-        "evaluated": evaluated,
-        "new": new,
-        "legacy": leg,
-        "new_unavailable": new_unavailable,
-        "disagreements": disagree,
-        "disagreement_pct": round(100.0 * disagree / evaluated, 2) if evaluated else 0.0,
+        "actions": actions,
         "entry_quality_veto": int(eq_veto),
         "reversal_risk_veto": int(rr_veto),
         "reduced": int(reduced),
@@ -289,7 +214,6 @@ def summarize(cells: list[dict], mode: str) -> dict:
 
 __all__ = [
     "ENGINE_FALLBACK",
-    "ENGINE_LEGACY",
     "ENGINE_NEW",
     "OPEN_ACTIONS",
     "VALID_ACTIONS",
@@ -300,9 +224,7 @@ __all__ = [
     "gate",
     "reason_class",
     "reset_stats",
-    "shadow_new_action",
     "stats",
     "summarize",
-    "view",
     "wait_tags",
 ]

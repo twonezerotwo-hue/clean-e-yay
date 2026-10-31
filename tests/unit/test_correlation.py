@@ -350,7 +350,7 @@ def test_ev_gate_blocks_negative_ev(fresh_env, monkeypatch) -> None:
     )
     monkeypatch.setattr(dec, "build_consensus", lambda *a, **kw: fake)
     # autouse fixture ev_gate'i kapatmıştı — bu testte AÇ (1d → RR 2.5).
-    monkeypatch.setattr(dec, "_ev_gate_cfg", lambda: {"enabled": True, "min_ev": 0.0, "cost_r": 0.5})
+    monkeypatch.setattr(dec, "_ev_gate_cfg", lambda: {"min_ev": 0.0, "cost_r": 0.5})
     hold_risk = RiskDecision(action="HOLD", reason="ok", evidence=[])
     d = dec.decide_for_symbol(
         "BTCUSD", snap, regime, hold_risk, open_positions=[], equity_usd=100_000, timeframe="1d"

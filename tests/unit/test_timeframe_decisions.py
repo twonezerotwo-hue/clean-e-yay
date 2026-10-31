@@ -123,7 +123,7 @@ def _force_bullish(snap, symbol: str = "BTCUSD") -> None:
     snap.technicals[symbol] = snap.technicals_by_tf[symbol]["1d"]
 
 
-@pytest.mark.usefixtures("neutral_context")
+@pytest.mark.usefixtures("supportive_context")
 def test_matrix_produces_all_timeframes_and_1w_never_opens(paper_env, monkeypatch) -> None:
     # Konsantrasyon-dışı (1w/TF enum) test → intra_batch guard'ı kapat (ayrı testlerde).
     from packages.decision import engine as de
@@ -140,7 +140,7 @@ def test_matrix_produces_all_timeframes_and_1w_never_opens(paper_env, monkeypatc
     assert w.actionable is False
 
 
-@pytest.mark.usefixtures("neutral_context")
+@pytest.mark.usefixtures("supportive_context")
 def test_matrix_timeframe_risk_multiplier_only_reduces(paper_env, monkeypatch) -> None:
     # TF risk çarpanı testi → intra_batch guard kapalı (konsantrasyon ayrı testlerde).
     from packages.decision import engine as de
@@ -152,16 +152,12 @@ def test_matrix_timeframe_risk_multiplier_only_reduces(paper_env, monkeypatch) -
     d1d, d15, d1h = by_tf["1d"], by_tf["15m"], by_tf["1h"]
     assert d1d.action == "open_long"
     assert d15.action == "open_long"
-    # 15m ×0.25, 1h ×0.5 — hiçbir TF 1d'den büyük olamaz. Boyutlandırma katmanları
-    # (inanç, oynaklık paritesi, fren) TF başına ayrıca yalnız küçültür; TF çarpanı
-    # katman faktörü ayrılarak doğrulanır. Boyut 3 ondalığa yuvarlanır.
-    def _layers(d):
-        return d.sizing_layers_report["applied_factor"]
-
-    base_1d = d1d.size_multiplier / _layers(d1d)
-    assert d15.size_multiplier == pytest.approx(base_1d * 0.25 * _layers(d15), abs=1e-3)
-    assert d1h.size_multiplier == pytest.approx(base_1d * 0.5 * _layers(d1h), abs=1e-3)
+    # 15m ×0.25, 1h ×0.5 — TF çarpanı yalnız küçültür, gerekçede görünür; hiçbir TF
+    # 1d'den büyük olamaz. Diğer canlı katmanlar (giriş kalitesi, boyut katmanları,
+    # Kelly tavanı) TF başına ayrıca yalnız küçültür.
+    assert "tf:15m×0.25" in d15.reason and "tf:1h×0.5" in d1h.reason
     assert d15.size_multiplier <= d1d.size_multiplier
+    assert d1h.size_multiplier <= d1d.size_multiplier
 
 
 def test_matrix_1w_bearish_bias_scales_down_lower_tf_long(
@@ -474,7 +470,7 @@ def test_decide_matrix_guard_off_is_old_blind_behavior(monkeypatch) -> None:
     assert _fake_open.seen == [0, 0, 0]  # körlük: kimse kardeşini görmez
 
 
-@pytest.mark.usefixtures("neutral_context")
+@pytest.mark.usefixtures("supportive_context")
 def test_open_decisions_carry_expected_value(paper_env, monkeypatch) -> None:
     # F5 — açık kararlar expected_value (gözlem) taşımalı (ev_gate KAPALI olsa da).
     from packages.decision import engine as de

@@ -34,13 +34,11 @@ from dataclasses import dataclass, field
 from packages.data.registry.loader import load_thresholds
 from packages.scoring import reversal_events
 
-MODES = ("off", "shadow", "active")
 VERDICTS = ("ok", "reduce", "wait")
 
 
 @dataclass(frozen=True)
 class EntryQualityConfig:
-    mode: str = "off"
     zero_two_canonical: bool = False
     # --- konum
     range_extreme: float = 0.20
@@ -116,14 +114,7 @@ def config() -> EntryQualityConfig:
                 kwargs[name] = str(v)
         except (TypeError, ValueError):
             continue
-    cfg = EntryQualityConfig(**kwargs)
-    if cfg.mode not in MODES:
-        return EntryQualityConfig()
-    return cfg
-
-
-def mode() -> str:
-    return config().mode
+    return EntryQualityConfig(**kwargs)
 
 
 def zero_two_canonical() -> bool:
@@ -284,13 +275,11 @@ def assess(side: str, ctx: dict | None, cfg: EntryQualityConfig | None = None) -
 
 
 __all__ = [
-    "MODES",
     "VERDICTS",
     "EntryQualityConfig",
     "assess",
     "config",
     "context_problem",
-    "mode",
     "report_problem",
     "zero_two_canonical",
 ]

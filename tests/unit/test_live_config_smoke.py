@@ -13,7 +13,6 @@ import importlib
 
 from packages.data.ingestion.pipeline import build_snapshot
 from packages.data.registry.loader import load_thresholds
-from packages.decision import engine
 from packages.decision.engine import decide_matrix, matrix_view
 from packages.risk.engine import RiskInput
 
@@ -29,24 +28,18 @@ def test_live_config_decision_pipeline_smoke(tmp_path, monkeypatch) -> None:
     monkeypatch.setenv("PAPER_STATE_PATH", str(tmp_path / "paper.json"))
     from packages.paper import state as ps
     importlib.reload(ps)
-    # conftest F5'i kapatmıştı — GERÇEK config'i geri aç (canlı davranışı doğrula).
-    monkeypatch.setattr(engine, "_ev_gate_cfg", lambda: load_thresholds().get("ev_gate") or {})
-    monkeypatch.setattr(engine, "_kelly_cfg", lambda: load_thresholds().get("kelly_sizing") or {})
-
     snap = build_snapshot(["BTCUSD"])
     regime, risk, decisions = decide_matrix(["BTCUSD"], snap, _risk_in())
     vm = matrix_view(regime, risk, decisions, snap, ["BTCUSD"])
 
     assert len(vm["cells"]) == 5  # 5 TF — pipeline crash etmedi
     ev_cfg = load_thresholds().get("ev_gate") or {}
-    ev_on = bool(ev_cfg.get("enabled"))
     min_ev = float(ev_cfg.get("min_ev", 0.0))
     for d in decisions:
         assert 0.0 <= d.size_multiplier <= 1.5  # boyut sınırları (cap'ler asla taşmaz)
         if d.action in ("open_long", "open_short"):
             assert d.expected_value is not None  # açık karar EV taşır
-            if ev_on:
-                # ev_gate açıkken negatif-EV açılış OLAMAZ (olsaydı bloklanırdı)
-                assert d.expected_value >= min_ev
+            # negatif-EV açılış OLAMAZ (olsaydı bloklanırdı)
+            assert d.expected_value >= min_ev
     for c in vm["cells"]:
         assert "expected_value" in c  # dashboard gözlem alanı
