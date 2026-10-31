@@ -11,10 +11,9 @@ from fastapi import APIRouter
 from packages.agent import canonical_context as llm_context
 from packages.agent.llm import report as llm_report
 from packages.agent.narrative import build_narrative
-from packages.consensus.engine import build as build_consensus
-from packages.data.ingestion.pipeline import DEFAULT_SYMBOLS, get_cached_snapshot
+from packages.data.ingestion.pipeline import DEFAULT_SYMBOLS
 from packages.data.provenance import data_provenance, decision_disclaimer
-from packages.regime.classifier import classify
+from packages.decision import read_model
 
 router = APIRouter(tags=["ai"])
 
@@ -39,9 +38,9 @@ def _timeframe_summary(ctx: dict) -> dict:
 
 @router.get("/ai-report/current")
 def get_ai_report_current() -> dict:
-    snap = get_cached_snapshot()
-    regime = classify(snap)
-    cons_list = [build_consensus(s, snap, regime) for s in DEFAULT_SYMBOLS[:6]]
+    dv = read_model.current()
+    snap, regime = dv.snap, dv.regime
+    cons_list = [dv.consensus(s) for s in DEFAULT_SYMBOLS[:6]]
     verdict, narrative, key_signals = build_narrative(cons_list, regime)
     prov = data_provenance(snap)
     disclaimer = decision_disclaimer(snap)

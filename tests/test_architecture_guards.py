@@ -114,6 +114,28 @@ def test_risk_input_built_only_by_factory() -> None:
     assert not offenders, "RiskInput(...) yerine risk_input_from_state kullan: " + ", ".join(offenders)
 
 
+# ── Tek karar kaynağı: okuma yüzeyleri kararı / konsensüsü / rejimi hesaplamaz ──
+
+_DECISION_RECOMPUTE = re.compile(
+    r"from packages\.regime\.classifier import classify"
+    r"|from packages\.consensus\.engine import build\b"
+    r"|from packages\.decision\.engine import [^\n]*\bdecide_(?:matrix|all|for_symbol)\b"
+    r"|from packages\.decision\.tick_artifact import [^\n]*\bdecide_matrix_for\b"
+)
+
+
+def test_read_surfaces_use_single_decision_source() -> None:
+    # Ekran (API), brifing ve YZ bağlamı tick'in yayımladığı kararı
+    # packages.decision.read_model üzerinden okur; kendi kopyasını hesaplamaz.
+    offenders: list[str] = []
+    for root in (API_DIR, REPO / "packages" / "agent"):
+        for path in _py_files(root):
+            for i, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+                if _DECISION_RECOMPUTE.search(line):
+                    offenders.append(f"{path.relative_to(REPO).as_posix()}:{i}")
+    assert not offenders, "read_model.current() kullan: " + ", ".join(offenders)
+
+
 # ── Rule 6: contract-first — generated TS in sync, no friendly type drift ─────
 
 

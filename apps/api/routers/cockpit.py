@@ -22,28 +22,21 @@ from packages.agent.llm.premium_brief import build_premium_brief
 from packages.agent.llm.world_report import build_world_brief
 from packages.agent.localization import localize_headline
 from packages.causal.engine import build_shadow
-from packages.data.ingestion.pipeline import get_cached_snapshot
 from packages.data.provenance import data_provenance
 from packages.data.providers.news import classify as news_classify
 from packages.data.providers.news import get_provider_status
 from packages.data.providers.news import rss as news_rss
 from packages.data.providers.news.provenance import build_consensus
-from packages.data.registry import assets as asset_registry
-from packages.decision import agent_pipeline, paper_policy
+from packages.decision import agent_pipeline, read_model
 from packages.decision.cockpit import (
     agent_brief_view,
     decision_trace_view,
-    finalize_matrix_view,
 )
-from packages.decision.engine import matrix_view
-from packages.decision.tick_artifact import decide_matrix_for
 from packages.learning import tf_weight_trainer
 from packages.paper import news_setup
-from packages.paper import state as paper_state
 from packages.paper import ticket as paper_ticket
 from packages.portfolio import build_portfolio_risk
 from packages.risk import halt as halt_store
-from packages.risk.engine import risk_input_from_state
 from packages.world_state.engine import build as build_world_state
 
 router = APIRouter(tags=["cockpit"])
@@ -56,19 +49,10 @@ _BRIEF_REFRESHING = False
 
 
 def _build_cockpit_brief() -> dict:
-    snap = get_cached_snapshot()
-    ps = paper_state.load()
-    matrix_symbols = asset_registry.trade_symbols()
-    risk_in = risk_input_from_state(ps, snap.quality.score)
-    regime, risk, decisions = decide_matrix_for(
-        matrix_symbols,
-        snap,
-        risk_in,
-        open_positions=ps.open_positions,
-        paper_exploration=paper_policy.enabled(),
-    )
-    view = matrix_view(regime, risk, decisions, snap, matrix_symbols)
-    view = finalize_matrix_view(view, snap, ps)
+    dv = read_model.current()
+    snap, ps = dv.snap, dv.ps
+    matrix_symbols, regime, risk, decisions = dv.symbols, dv.regime, dv.risk, dv.decisions
+    view = dv.matrix()
     # The embedded matrix carries the same provenance as its parent envelope;
     # clients can reject a stale standalone response instead of merging it.
     view["snapshot_id"] = getattr(snap, "id", None) or getattr(snap, "snapshot_id", None)

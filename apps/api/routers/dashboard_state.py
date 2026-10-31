@@ -8,16 +8,13 @@ from fastapi import APIRouter
 from packages.agent.llm.world_report import build_world_brief
 from packages.agent.personas import build_votes
 from packages.causal.engine import build_shadow
-from packages.consensus.engine import build as build_consensus
-from packages.data.ingestion.pipeline import DEFAULT_SYMBOLS, get_cached_snapshot
+from packages.data.ingestion.pipeline import DEFAULT_SYMBOLS
 from packages.data.provenance import data_provenance
 from packages.data.registry import assets as asset_registry
 from packages.data.types import TIMEFRAMES
-from packages.paper import state as paper_state
+from packages.decision import read_model
 from packages.paper.lifecycle import max_drawdown_pct
 from packages.portfolio import build_portfolio_risk
-from packages.regime.classifier import classify
-from packages.risk.engine import evaluate, risk_input_from_state
 from packages.world_state.engine import build as build_world_state
 
 router = APIRouter(tags=["dashboard"])
@@ -71,23 +68,18 @@ def _news_module_health(provider_status: dict, prov: dict, now_iso: str) -> dict
 
 @router.get("/dashboard/state")
 def get_dashboard_state() -> dict:
-    snap = get_cached_snapshot()
-    regime = classify(snap)
-    ps = paper_state.load()
-    risk = evaluate(
-        risk_input_from_state(ps, snap.quality.score)
-    )
-    top_cons = build_consensus(DEFAULT_SYMBOLS[0], snap, regime)
+    dv = read_model.current()
+    snap, ps, regime, risk = dv.snap, dv.ps, dv.regime, dv.risk
+    top_cons = dv.consensus(DEFAULT_SYMBOLS[0])
     votes, quorum = build_votes(top_cons, regime, risk)
     now_iso = datetime.now(UTC).isoformat()
     prov = data_provenance(snap)
     world_state = build_world_state(snap)
     legacy_scores: dict[str, dict[str, object]] = {}
     for symbol in asset_registry.trade_symbols():
-        # Reuse canonical consensus for every trade asset/timeframe. This is
-        # additive shadow comparison; the live decision engine is untouched.
+        # Tick'in karar verdiği konsensüs (her işlem varlığı × TF).
         for timeframe in TIMEFRAMES:
-            cons = build_consensus(symbol, snap, regime, timeframe)
+            cons = dv.consensus(symbol, timeframe)
             legacy_scores[f"{symbol}|{timeframe}"] = {"score": cons.score, "direction": cons.direction, "timeframe": timeframe}
         legacy_scores[symbol] = legacy_scores[f"{symbol}|1d"]
     causal_shadow = build_shadow(
@@ -165,15 +157,11 @@ def get_agent_quorum_matrix() -> dict:
     `/dashboard/state.agent_votes` (`DEFAULT_SYMBOLS[0]` = BTCUSD sabit) bilinçli
     olarak değiştirilmedi — AgentVotesPanel gibi mevcut tüketicileri bozmamak için
     additive bir endpoint olarak eklendi (Çalışan sistemi bozma kuralı)."""
-    snap = get_cached_snapshot()
-    regime = classify(snap)
-    ps = paper_state.load()
-    risk = evaluate(
-        risk_input_from_state(ps, snap.quality.score)
-    )
+    dv = read_model.current()
+    regime, risk = dv.regime, dv.risk
     rows = []
     for symbol in asset_registry.trade_symbols():
-        cons = build_consensus(symbol, snap, regime)
+        cons = dv.consensus(symbol)
         votes, quorum = build_votes(cons, regime, risk)
         tally: dict[str, int] = {}
         for v in votes:

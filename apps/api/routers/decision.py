@@ -9,34 +9,17 @@ from __future__ import annotations
 
 from fastapi import APIRouter
 
-from packages.data.ingestion.pipeline import get_cached_snapshot
 from packages.data.provenance import data_provenance
-from packages.data.registry import assets as asset_registry
-from packages.decision import paper_policy, shadow
-from packages.decision.cockpit import finalize_matrix_view
-from packages.decision.engine import matrix_view
-from packages.decision.tick_artifact import decide_matrix_for
-from packages.paper import state as paper_state
-from packages.risk.engine import risk_input_from_state
+from packages.decision import read_model, shadow
 
 router = APIRouter(tags=["decision"])
 
 
 @router.get("/decision/matrix")
 def get_decision_matrix() -> dict:
-    snap = get_cached_snapshot()
-    ps = paper_state.load()
-    matrix_symbols = asset_registry.trade_symbols()
-    risk_in = risk_input_from_state(ps, snap.quality.score)
-    regime, risk, decisions = decide_matrix_for(
-        matrix_symbols,
-        snap,
-        risk_in,
-        open_positions=ps.open_positions,
-        paper_exploration=paper_policy.enabled(),
-    )
-    view = matrix_view(regime, risk, decisions, snap, matrix_symbols)
-    view = finalize_matrix_view(view, snap, ps)
+    dv = read_model.current()
+    snap, ps = dv.snap, dv.ps
+    view = dv.matrix()
     view["mode"] = data_provenance(snap)
     # Version envelope: consumers can reject a matrix that belongs to a
     # different market snapshot or paper-state revision instead of mixing it

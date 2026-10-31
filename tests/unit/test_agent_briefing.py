@@ -78,13 +78,10 @@ def test_signal_briefing_distinguishes_paper_from_live_execution(monkeypatch):
         provider_status={},
     )
     monkeypatch.setattr(briefing, "get_cached_snapshot", lambda: snap)
-    monkeypatch.setattr(briefing, "classify", lambda _snap: SimpleNamespace(label="NEUTRAL"))
-    monkeypatch.setattr(briefing, "_safe_cells", lambda _snap, paper_state_obj=None: [{
-        "symbol": "BTCUSDT",
-        "timeframe": "1h",
-        "direction": "LONG",
-        "score": 60.0,
-    }])
+    monkeypatch.setattr(briefing, "_decision_read", lambda _snap, paper_state_obj=None: (
+        SimpleNamespace(label="NEUTRAL"),
+        [{"symbol": "BTCUSDT", "timeframe": "1h", "direction": "LONG", "score": 60.0}],
+    ))
     monkeypatch.setattr(
         briefing,
         "_engine_health",
@@ -139,8 +136,8 @@ def test_blocked_score_is_not_reported_as_trade_signal(monkeypatch):
         "reason": "aynı sembolde açık pozisyon var",
     }]
     monkeypatch.setattr(briefing, "get_cached_snapshot", lambda: snap)
-    monkeypatch.setattr(briefing, "classify", lambda _snap: SimpleNamespace(label="DEFENSIVE"))
-    monkeypatch.setattr(briefing, "_safe_cells", lambda _snap, paper_state_obj=None: cells)
+    monkeypatch.setattr(briefing, "_decision_read",
+                        lambda _snap, paper_state_obj=None: (SimpleNamespace(label="DEFENSIVE"), cells))
     monkeypatch.setattr(briefing, "_safe_world_state", lambda _snap: None)
     monkeypatch.setattr(
         briefing,

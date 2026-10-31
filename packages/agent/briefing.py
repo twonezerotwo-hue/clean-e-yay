@@ -14,18 +14,12 @@ from typing import Any, Literal
 
 from packages.agent.localization import localize_headline, localize_text
 from packages.data.ingestion.pipeline import get_cached_snapshot
-from packages.data.registry import assets as asset_registry
-from packages.decision import paper_policy
-from packages.decision.cockpit import finalize_matrix_view
-from packages.decision.engine import matrix_view
-from packages.decision.tick_artifact import decide_matrix_for
+from packages.decision import read_model
 from packages.learning import event_outcomes
 from packages.notifications import list_recent as list_notifications
 from packages.ops import heartbeat
 from packages.paper import state as paper_state
-from packages.regime.classifier import classify
 from packages.risk import halt as halt_store
-from packages.risk.engine import risk_input_from_state
 
 Tone = Literal["ok", "info", "warn", "alert"]
 
@@ -107,24 +101,13 @@ def _engine_health() -> dict[str, Any]:
     }
 
 
-def _safe_cells(snap, paper_state_obj=None):
-    """matrix_view cells — direction/score/timeframe/final_action içerir."""
+def _decision_read(snap, paper_state_obj=None):
+    """Tick'in kararı: (rejim, matris hücreleri). Okunamazsa (None, [])."""
     try:
-        ps = paper_state_obj if paper_state_obj is not None else paper_state.load()
-        risk_in = risk_input_from_state(ps, snap.quality.score)
-        symbols = asset_registry.trade_symbols()
-        regime, risk, decisions = decide_matrix_for(
-            symbols,
-            snap,
-            risk_in,
-            open_positions=ps.open_positions,
-            paper_exploration=paper_policy.enabled(),
-        )
-        view = matrix_view(regime, risk, decisions, snap, symbols)
-        view = finalize_matrix_view(view, snap, ps)
-        return view.get("cells") or []
+        dv = read_model.current(snap, paper_state_obj)
+        return dv.regime, dv.matrix().get("cells") or []
     except Exception:
-        return []
+        return None, []
 
 
 def _market_headlines(snap, cells) -> list[Headline]:
@@ -1114,8 +1097,7 @@ def build() -> dict[str, Any]:
         # Briefing gözlem katmanıdır; state okunamadığında eski güvenli
         # fallback'ler çalışmaya devam eder, yeni karar/emir üretilmez.
         ps = None
-    regime = classify(snap)
-    cells = _safe_cells(snap, paper_state_obj=ps)
+    regime, cells = _decision_read(snap, paper_state_obj=ps)
     engine = _engine_health()
     world_state = _safe_world_state(snap)
 

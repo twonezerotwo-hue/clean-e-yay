@@ -3,14 +3,13 @@ from __future__ import annotations
 
 from fastapi import APIRouter
 
-from packages.consensus.engine import build as build_consensus
 from packages.data.ingestion.pipeline import get_cached_snapshot
 from packages.data.provenance import data_provenance
 from packages.data.providers.news import classify as news_classify
 from packages.data.providers.news import rss
 from packages.data.registry import assets as asset_registry
+from packages.decision import read_model
 from packages.learning import event_outcomes
-from packages.regime.classifier import classify
 from packages.risk import event_risk
 
 router = APIRouter(tags=["regime"])
@@ -38,15 +37,15 @@ def _headline_view(headline) -> dict:
 
 @router.get("/regime-report/current")
 def get_regime_report_current() -> dict:
-    snap = get_cached_snapshot()
-    regime = classify(snap)
+    dv = read_model.current()
+    snap, regime = dv.snap, dv.regime
     # Tüm snapshot evreni (trade + macro) — daha önce DEFAULT_SYMBOLS[:6] ile
     # sınırlıydı (Senaryo paneli BRENT/custom asset'leri hiç göremiyordu).
     # asset_registry her çağrıda taze okunur, sonradan eklenen custom asset
     # otomatik dahil olur.
     universe = asset_registry.snapshot_symbols()
     kind_by_symbol = {a.symbol: a.kind for a in asset_registry.all_assets()}
-    cons_list = [build_consensus(s, snap, regime) for s in universe]
+    cons_list = [dv.consensus(s) for s in universe]
 
     # P0 — olay riski (yalnızca kısıtlayıcı). Hangi catalyst yeni pozisyonu
     # kısıyor, dashboard'da görünür olsun.
