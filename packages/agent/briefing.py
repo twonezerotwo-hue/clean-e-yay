@@ -806,9 +806,9 @@ def _headline_world_context(snap, world_state: Any | None, idea_context: Any | N
 def _safe_world_state(snap):
     """Dünya-state hesaplaması hata verse bile eski briefing akışı çalışır."""
     try:
-        from packages.world_state.engine import build as build_world_state
+        from packages.decision.tick_artifact import world_for
 
-        return build_world_state(snap)
+        return world_for(snap)
     except Exception:
         return None
 

@@ -15,7 +15,6 @@ from packages.data.types import TIMEFRAMES
 from packages.decision import read_model
 from packages.paper.lifecycle import max_drawdown_pct
 from packages.portfolio import build_portfolio_risk
-from packages.world_state.engine import build as build_world_state
 
 router = APIRouter(tags=["dashboard"])
 
@@ -74,7 +73,7 @@ def get_dashboard_state() -> dict:
     votes, quorum = build_votes(top_cons, regime, risk)
     now_iso = datetime.now(UTC).isoformat()
     prov = data_provenance(snap)
-    world_state = build_world_state(snap)
+    world_state = dv.world_state()
     legacy_scores: dict[str, dict[str, object]] = {}
     for symbol in asset_registry.trade_symbols():
         # Tick'in karar verdiği konsensüs (her işlem varlığı × TF).

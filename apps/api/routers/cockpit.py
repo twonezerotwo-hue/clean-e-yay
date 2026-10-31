@@ -37,7 +37,6 @@ from packages.paper import news_setup
 from packages.paper import ticket as paper_ticket
 from packages.portfolio import build_portfolio_risk
 from packages.risk import halt as halt_store
-from packages.world_state.engine import build as build_world_state
 
 router = APIRouter(tags=["cockpit"])
 
@@ -60,7 +59,7 @@ def _build_cockpit_brief() -> dict:
     view["paper_state_revision"] = getattr(ps, "revision", None)
     provenance = data_provenance(snap)
     halt_active = bool(halt_store.active_halts())
-    world_state = build_world_state(snap)
+    world_state = dv.world_state()
     try:
         from packages.discovery import ideas as idea_board
 

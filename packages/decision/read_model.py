@@ -38,6 +38,14 @@ class DecisionView:
             self._off_universe[key] = build_consensus(symbol, self.snap, self.regime, timeframe)
         return self._off_universe[key]
 
+    def world_state(self) -> Any:
+        """Tick'in bu görüntü için kurduğu dünya durumu (yoksa aynı fonksiyonla)."""
+        if "_world" not in self._off_universe:
+            from packages.decision.tick_artifact import world_for
+
+            self._off_universe["_world"] = world_for(self.snap)
+        return self._off_universe["_world"]
+
     def matrix(self) -> dict:
         """Karar matrisi görünümü (hücre rozetleri + son kapı durumu)."""
         from packages.decision.cockpit import finalize_matrix_view

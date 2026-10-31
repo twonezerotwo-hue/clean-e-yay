@@ -57,3 +57,14 @@ def test_off_universe_consensus_uses_tick_regime_once(tick_view, monkeypatch):
     assert dv.consensus("DXY") == "built:DXY"
     assert dv.consensus("DXY") == "built:DXY"
     assert calls == [("DXY", "1d")]
+
+
+def test_world_state_reads_tick_publication(monkeypatch):
+    snap = SimpleNamespace(snapshot_id="tick-world")
+    world = object()
+    tick_artifact.publish_world(snap, world)
+    monkeypatch.setattr("packages.world_state.engine.build", lambda *a, **k: pytest.fail("yeniden kuruldu"))
+    try:
+        assert tick_artifact.world_for(snap) is world
+    finally:
+        tick_artifact.reset()

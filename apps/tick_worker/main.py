@@ -357,6 +357,7 @@ async def run_once() -> None:
         # This removes the old one-tick lag without creating a second snapshot
         # or a second decision engine.
         news_world = build_world_state(snap)
+        tick_artifact.publish_world(snap, news_world)  # ekran aynı dünya durumunu okur
         # T3 — defter mutasyon bölümü (oku→kapat/aç→yaz) süreçler-arası kilit
         # altında: API'nin owner mutasyonlarıyla yarışta kayıt kaybolmaz.
         # Snapshot (ağ) kilitten ÖNCE alınır; commit ilk save noktasında.
