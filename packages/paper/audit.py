@@ -87,16 +87,43 @@ def summary(limit: int = DEFAULT_MAX_READ) -> dict:
     }
 
 
-def closed_trade_ids(limit: int = DEFAULT_MAX_READ) -> set[str]:
-    """Trade ids with an immutable paper close event."""
+_CLOSE_ACTIONS = ("CLOSED", "KILL_SWITCH_EXIT", "RISK_REDUCE_EXIT", "TIME_STOP_EXPIRED")
+_CLOSED_CACHE: dict = {"key": None, "ids": frozenset()}
+
+
+def closed_trade_ids() -> set[str]:
+    """Değişmez kapanış olayı olan işlem kimlikleri — günlüğün tamamı (döndürülmüş
+    `.1` arşivi dahil) taranır; kimlik `trade_id`, eski kayıtlarda `position_id`
+    (tam kapanışta işlem kimliğiyle aynı). Dosya boyutu/zamanına göre önbellekli;
+    yalnız kapanış satırları ayrıştırılır."""
+    import json
+
+    path = _path()
+    files = [f for f in (path.with_name(path.name + ".1"), path) if f.exists()]
+    try:
+        key = tuple((str(f), f.stat().st_size, f.stat().st_mtime_ns) for f in files)
+    except OSError:
+        return set()
+    if _CLOSED_CACHE["key"] == key:
+        return set(_CLOSED_CACHE["ids"])
     ids: set[str] = set()
-    for event in read_recent(limit):
-        if str(event.get("action", "")) in {
-            "CLOSED", "KILL_SWITCH_EXIT", "RISK_REDUCE_EXIT", "TIME_STOP_EXPIRED"
-        }:
-            trade_id = event.get("trade_id")
-            if trade_id:
-                ids.add(str(trade_id))
+    for f in files:
+        try:
+            with f.open("r", encoding="utf-8") as fh:
+                for line in fh:
+                    if not any(f'"{a}"' in line for a in _CLOSE_ACTIONS):
+                        continue
+                    try:
+                        event = json.loads(line)
+                    except ValueError:
+                        continue
+                    if event.get("action") in _CLOSE_ACTIONS:
+                        trade_id = event.get("trade_id") or event.get("position_id")
+                        if trade_id:
+                            ids.add(str(trade_id))
+        except OSError:
+            continue
+    _CLOSED_CACHE["key"], _CLOSED_CACHE["ids"] = key, frozenset(ids)
     return ids
 
 
