@@ -1507,6 +1507,16 @@ export type StressReport = {
   note?: string;
 };
 
+export type SystemMetrics = {
+  worker: string;
+  status?: string | null;
+  cycle_count?: number | null;
+  last_completed_at?: string | null;
+  decisions_last?: number | null;
+  samples: number;
+  stages_sec: Record<string, Record<string, number>>;
+};
+
 export type SystemRegistry = {
   code: string | null;
   config: Record<string, string | null>;

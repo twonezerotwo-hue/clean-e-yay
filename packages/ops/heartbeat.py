@@ -31,6 +31,8 @@ _TERMINAL = {"OK", "DEGRADED", "FAILED", "NO_DATA"}  # cycle_count artar
 _LOCK = threading.Lock()
 
 
+_STAGE_HISTORY = 60
+
 def _path() -> Path:
     p = Path(os.environ.get("WORKER_HEARTBEAT_PATH", DEFAULT_PATH))
     return p if p.is_absolute() else REPO_ROOT / p
@@ -81,6 +83,7 @@ def record(
     unrealized_pnl_usd: float | None = None,
     mtm_equity_usd: float | None = None,
     degraded_reasons: list[str] | None = None,
+    stages: dict[str, float] | None = None,
 ) -> dict:
     """Heartbeat yaz (atomik); yazılan dict'i döner (best-effort).
 
@@ -124,6 +127,13 @@ def record(
             # bozuk? Boş liste = sebep yok (status zaten OK) veya eski kayıt.
             "degraded_reasons": list(degraded_reasons or []),
         }
+        # Aşama süreleri (sn): son tur + son 60 turun geçmişi (gözlemlenebilirlik).
+        history = list(prior.get("stage_history") or [])
+        if stages:
+            hb["stages"] = {k: round(float(v), 3) for k, v in stages.items()}
+            history = [*history, hb["stages"]][-_STAGE_HISTORY:]
+        if history:
+            hb["stage_history"] = history
         all_hb[worker_name] = hb
         _save(all_hb)
         return hb

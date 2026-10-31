@@ -33,6 +33,18 @@ paths:
               schema:
                 $ref: "#/components/schemas/SystemHealth"
 
+  /api/v1/system/metrics:
+    get:
+      operationId: getSystemMetrics
+      summary: Tick aşama süreleri (son 60 tur — son, p50, p95, en yüksek)
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SystemMetrics"
+
   /api/v1/system/registry:
     get:
       operationId: getSystemRegistry
@@ -3020,6 +3032,23 @@ components:
               worst_day_pct: { type: number }
         exceeds_daily_limit: { type: boolean }
         note: { type: string }
+
+    SystemMetrics:
+      type: object
+      description: Gözlemlenebilirlik — tick aşama süreleri heartbeat kaydından.
+      required: [worker, samples, stages_sec]
+      properties:
+        worker: { type: string }
+        status: { type: string, nullable: true }
+        cycle_count: { type: integer, nullable: true }
+        last_completed_at: { type: string, nullable: true }
+        decisions_last: { type: integer, nullable: true }
+        samples: { type: integer }
+        stages_sec:
+          type: object
+          additionalProperties:
+            type: object
+            additionalProperties: { type: number }
 
     SystemRegistry:
       type: object

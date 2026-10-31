@@ -58,3 +58,15 @@ def test_registry_lists_versions():
     assert {"code", "config", "weights", "models", "prompts", "learning_engines"} <= set(snap)
     assert snap["prompts"]["chat"] and snap["models"]["ollama"]
     assert snap["learning_engines"]["subsignal_scorecard"].startswith("subsignal_scorecard")
+
+
+def test_tick_stage_metrics_from_heartbeat(tmp_path, monkeypatch):
+    from packages.ops import heartbeat, metrics
+    monkeypatch.setenv("WORKER_HEARTBEAT_PATH", str(tmp_path / "hb.json"))
+    for total in (10.0, 20.0, 30.0):
+        heartbeat.record("tick_worker", status="OK", run_id="r", started_at="s", completed_at="c",
+                         stages={"snapshot": total - 2, "decide": 1.0, "total": total})
+    out = metrics.tick_metrics()
+    assert out["samples"] == 3 and out["status"] == "OK"
+    assert out["stages_sec"]["total"] == {"last": 30.0, "p50": 20.0, "p95": 30.0, "max": 30.0}
+    assert out["stages_sec"]["decide"]["p50"] == 1.0

@@ -38,6 +38,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/system/metrics": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Tick aşama süreleri (son 60 tur — son, p50, p95, en yüksek) */
+        get: operations["getSystemMetrics"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/system/registry": {
         parameters: {
             query?: never;
@@ -2775,6 +2792,20 @@ export interface components {
             exceeds_daily_limit?: boolean;
             note?: string;
         };
+        /** @description Gözlemlenebilirlik — tick aşama süreleri heartbeat kaydından. */
+        SystemMetrics: {
+            worker: string;
+            status?: string | null;
+            cycle_count?: number | null;
+            last_completed_at?: string | null;
+            decisions_last?: number | null;
+            samples: number;
+            stages_sec: {
+                [key: string]: {
+                    [key: string]: number;
+                };
+            };
+        };
         /** @description Kararı ve anlatımı üreten bileşenlerin sürümleri (tek yerden). */
         SystemRegistry: {
             code: string | null;
@@ -5023,6 +5054,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SystemHealth"];
+                };
+            };
+        };
+    };
+    getSystemMetrics: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SystemMetrics"];
                 };
             };
         };

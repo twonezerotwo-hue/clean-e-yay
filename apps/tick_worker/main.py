@@ -824,7 +824,8 @@ async def run_once() -> None:
             or bool(crit_providers)
             or observer_failed
         )
-        _log_stage_timings(t0, t_snap, t_decide, t_commit, time.monotonic())
+        t_end = time.monotonic()
+        _log_stage_timings(t0, t_snap, t_decide, t_commit, t_end)
         heartbeat.record(
             WORKER_NAME,
             status="DEGRADED" if degraded else "OK",
@@ -839,6 +840,8 @@ async def run_once() -> None:
             unrealized_pnl_usd=round(ps.unrealized_pnl_usd, 2),
             mtm_equity_usd=round(ps.mtm_equity_usd, 2),
             degraded_reasons=reasons,
+            stages={"snapshot": t_snap - t0, "decide": t_decide - t_snap,
+                    "paper": t_commit - t_decide, "observe": t_end - t_commit, "total": t_end - t0},
         )
         # SSE: cockpit'in canlı nabzı — UI bu event'i alınca brief/decision/
         # paper cache'lerini invalidate eder.
