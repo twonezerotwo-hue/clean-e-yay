@@ -5,6 +5,8 @@ Fiyatlar yalnız diskten okunur (bar arşivi + OHLCV önbelleği); ağ çağrıs
 """
 from __future__ import annotations
 
+import math
+from collections import defaultdict
 from datetime import datetime
 from typing import Any
 
@@ -85,4 +87,32 @@ def buy_and_hold(outcomes: list, initial_equity: float) -> dict[str, Any] | None
     }
 
 
-__all__ = ["buy_and_hold", "cost_r", "max_drawdown_r"]
+def significance(outcomes: list) -> dict[str, Any] | None:
+    """Ortalama R sıfırdan büyük mü: t istatistiği ve tek yönlü p (normal yaklaşım)."""
+    r = [float(o.r_multiple) for o in outcomes if o.r_multiple is not None]
+    n = len(r)
+    if n < 2:
+        return None
+    mean = sum(r) / n
+    sd = math.sqrt(sum((x - mean) ** 2 for x in r) / (n - 1))
+    t = mean / (sd / math.sqrt(n)) if sd > 0 else 0.0
+    p = 0.5 * math.erfc(t / math.sqrt(2.0))
+    return {"n": n, "mean_r": round(mean, 4), "t_stat": round(t, 3), "p_value": round(p, 4)}
+
+
+def regime_calibration(outcomes: list) -> dict[str, dict[str, Any]]:
+    """Rejim başına söylenen güven (predicted_confidence ort.) vs gerçekleşen isabet."""
+    rows: dict[str, list] = defaultdict(list)
+    for o in outcomes:
+        if o.predicted_confidence is not None and o.pnl != 0:
+            rows[str(o.regime or "UNKNOWN")].append(o)
+    out = {}
+    for regime, items in sorted(rows.items()):
+        predicted = sum(float(o.predicted_confidence) for o in items) / len(items)
+        actual = sum(1 for o in items if o.pnl > 0) / len(items)
+        out[regime] = {"n": len(items), "predicted": round(predicted, 3), "actual": round(actual, 3),
+                       "gap": round(actual - predicted, 3)}
+    return out
+
+
+__all__ = ["buy_and_hold", "cost_r", "max_drawdown_r", "regime_calibration", "significance"]

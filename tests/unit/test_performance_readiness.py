@@ -14,6 +14,7 @@ def _summary(**overrides):
         "net_expectancy_r": 0.02,
         "max_drawdown_r": -6.0,
         "benchmark": {"system_net_return_pct": 4.0, "benchmark_return_pct": 1.5},
+        "significance": {"n": 100, "mean_r": 0.12, "t_stat": 2.4, "p_value": 0.008},
     }
     summary = {
         "verified_outcomes": 100,
@@ -45,6 +46,7 @@ def test_readiness_surfaces_negative_edge_without_changing_it() -> None:
             "net_expectancy_r": -0.14,
             "max_drawdown_r": -22.0,
             "benchmark": {"system_net_return_pct": -3.0, "benchmark_return_pct": 2.0},
+            "significance": {"n": 100, "mean_r": -0.04, "t_stat": -0.6, "p_value": 0.73},
         },
         walk_forward={"test_window": 40, "test_win_rate": 0.33, "test_sharpe": -1.2},
         by_close_reason={"SL_HIT": {"trades": 40, "avg_r": -1.45}},
@@ -57,6 +59,7 @@ def test_readiness_surfaces_negative_edge_without_changing_it() -> None:
         "net_of_costs",
         "drawdown",
         "beats_buy_and_hold",
+        "significant_edge",
         "positive_sharpe",
         "walk_forward",
         "timeframe_stability",

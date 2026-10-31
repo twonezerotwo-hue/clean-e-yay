@@ -34,3 +34,13 @@ def test_buy_and_hold_uses_disk_prices_and_costs(monkeypatch):
     assert out["system_net_return_pct"] == 0.45                # (500 − 50) / 100k
     monkeypatch.setattr(cache, "load", lambda s, tf: None)
     assert benchmark.buy_and_hold(rows, 100_000.0) is None     # fiyat yok → uydurma yok
+
+
+def test_significance_and_regime_calibration():
+    rows = [SimpleNamespace(r_multiple=r, pnl=r, regime="NEUTRAL", predicted_confidence=0.6)
+            for r in (1.0, 0.5, -0.5, 1.5, 0.8, -0.2, 1.1, 0.9)]
+    sig = benchmark.significance(rows)
+    assert sig["n"] == 8 and sig["mean_r"] == 0.6375 and sig["t_stat"] > 2 and sig["p_value"] < 0.05
+    assert benchmark.significance(rows[:1]) is None
+    cal = benchmark.regime_calibration(rows)
+    assert cal["NEUTRAL"] == {"n": 8, "predicted": 0.6, "actual": 0.75, "gap": 0.15}

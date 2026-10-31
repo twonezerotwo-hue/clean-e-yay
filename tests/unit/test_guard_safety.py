@@ -4,9 +4,9 @@ Kapsam:
   * guard_overrides: default passthrough, set/clear, mtime-cache yazımda geçersiz.
   * engine/timeframe seam'leri: override YALNIZ canlı guard'ı OFF'a zorlar (bayt-aynı).
   * sync: ilk-görüş arm ETMEZ; OFF→ON izlemeye alır; ON→OFF DISARM eder.
-  * check: yetersiz örnek → monitoring; post<baseline → ROLLED_BACK (override yazılır);
-    post≥baseline → CONFIRMED; süre+kanıtsız → INCONCLUSIVE (guard canlı kalır);
-    GUARD_AUTO_DISABLE=0 → ROLLBACK_RECOMMENDED (override YAZILMAZ).
+  * check: yetersiz örnek → monitoring; post<baseline → ROLLBACK_RECOMMENDED (override
+    YAZILMAZ — kapıyı gevşetmek owner kararı); post≥baseline → CONFIRMED; süre+kanıtsız →
+    INCONCLUSIVE (guard canlı kalır).
 """
 from __future__ import annotations
 
@@ -27,7 +27,6 @@ def _isolate(tmp_path, monkeypatch):
     monkeypatch.setenv("GUARD_OVERRIDES_PATH", str(tmp_path / "guard_overrides.json"))
     monkeypatch.setenv("GUARD_MONITOR_STORE_PATH", str(tmp_path / "guard_monitor.json"))
     # Oto-kapat varsayılan AÇIK olsun (env miras kalmasın).
-    monkeypatch.delenv("GUARD_AUTO_DISABLE", raising=False)
     monkeypatch.delenv("GUARD_ROLLBACK_MIN_OUTCOMES", raising=False)
     monkeypatch.delenv("GUARD_MONITOR_MAX_AGE_HOURS", raising=False)
     # mtime-cache'i sıfırla (önceki testten taşmasın).
@@ -153,13 +152,13 @@ def test_check_monitoring_when_insufficient(monkeypatch):
     assert store.get_active("chop") is not None  # izleme sürüyor
 
 
-def test_check_rolled_back_writes_override(monkeypatch):
+def test_check_degraded_only_recommends_rollback(monkeypatch):
+    """Kısıtlayıcı kapı owner onayı olmadan gevşemez: override YAZILMAZ."""
     _arm(baseline=0.5)
     monkeypatch.setattr(weight_rollback, "post_open_expectancy", lambda since: (20, 0.1))
     res = guard_safety.check_guards()
-    assert res[0]["status"] == "ROLLED_BACK"
-    assert res[0]["auto_disabled"] is True
-    assert guard_overrides.is_disabled("chop") is True
+    assert res[0]["status"] == "ROLLBACK_RECOMMENDED"
+    assert guard_overrides.is_disabled("chop") is False
     assert store.get_active("chop") is None
 
 
@@ -179,17 +178,6 @@ def test_check_expired_no_evidence_is_inconclusive(monkeypatch):
     res = guard_safety.check_guards()
     assert res[0]["status"] == "INCONCLUSIVE"
     assert guard_overrides.is_disabled("chop") is False  # owner niyeti korunur
-    assert store.get_active("chop") is None
-
-
-def test_recommend_only_when_auto_disable_off(monkeypatch):
-    monkeypatch.setenv("GUARD_AUTO_DISABLE", "0")
-    _arm(baseline=0.5)
-    monkeypatch.setattr(weight_rollback, "post_open_expectancy", lambda since: (20, 0.1))
-    res = guard_safety.check_guards()
-    assert res[0]["status"] == "ROLLBACK_RECOMMENDED"
-    assert res[0]["auto_disabled"] is False
-    assert guard_overrides.is_disabled("chop") is False  # override YAZILMADI
     assert store.get_active("chop") is None
 
 
@@ -218,14 +206,13 @@ def test_adopt_skips_already_monitored_and_killed(monkeypatch):
 
 
 def test_adopted_guard_never_auto_disables(monkeypatch):
-    # Oto-kapat AÇIK olsa bile adopted guard sadece ÖNERİ verir (override yazılmaz).
+    # Adopted guard da sadece ÖNERİ verir (override yazılmaz).
     enabled_at = (datetime.now(UTC) - timedelta(hours=1)).isoformat()
     store.record_enable("chop", enabled_at=enabled_at, baseline_expectancy=0.5,
                         baseline_n=15, mode="adopted")
     monkeypatch.setattr(weight_rollback, "post_open_expectancy", lambda since: (20, 0.1))
     res = guard_safety.check_guards()
     assert res[0]["status"] == "ROLLBACK_RECOMMENDED"
-    assert res[0]["auto_disabled"] is False
     assert guard_overrides.is_disabled("chop") is False  # sessizce KAPATMADI
 
 

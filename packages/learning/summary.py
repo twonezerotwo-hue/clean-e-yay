@@ -71,6 +71,8 @@ def _performance_snapshot(outcomes: list) -> dict:
     except (OSError, KeyError, ValueError, TypeError):
         equity0 = 0.0
     result["benchmark"] = benchmark.buy_and_hold(outcomes, equity0)
+    result["significance"] = benchmark.significance(outcomes)
+    result["regime_calibration"] = benchmark.regime_calibration(outcomes)
     return result
 
 

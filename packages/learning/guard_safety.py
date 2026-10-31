@@ -3,8 +3,9 @@
 `weight_rollback` desenini **herhangi bir flag'li yön guard'ına** genelleştirir:
 bir owner bir yön guard'ını canlıya aldığında (config flag OFF→ON) kasa onu izlemeye
 alır (enable anındaki eşleştirilmiş baseline expectancy), yeterli yeni outcome
-birikince post-enable expectancy'i baseline ile kıyaslar ve **düşerse guard'ı oto-kapatır**
-(guard_overrides kill-switch'i; owner config'ine dokunmaz, engine seam'leri OFF okur).
+birikince post-enable expectancy'i baseline ile kıyaslar ve **düşerse geri alma ÖNERİR**
+(ROLLBACK_RECOMMENDED). Kısıtlayıcı bir kapıyı kapatmak = gevşetmek; bu yalnız owner
+kararıdır (guard_overrides kill-switch'i owner eliyle yazılır — Iron Law 2).
 
 Bağlı guard'lar (hepsi shadow-first; gözlem değeri zaten direction_score'da hesaplanır):
   * chop          — technical.trend_quality.enabled
@@ -49,7 +50,6 @@ _GUARDS: dict[str, dict] = {
 
 _MIN_OUTCOMES_DEFAULT = 15
 _MONITOR_MAX_AGE_HOURS_DEFAULT = 336.0  # 14 gün; 0 → süre koruması kapalı
-_AUTO_DISABLE_OFF = {"0", "false", "no", "off", ""}
 
 
 def guard_keys() -> list[str]:
@@ -68,13 +68,6 @@ def _monitor_max_age_hours() -> float:
         return max(0.0, float(os.environ.get("GUARD_MONITOR_MAX_AGE_HOURS", _MONITOR_MAX_AGE_HOURS_DEFAULT)))
     except (TypeError, ValueError):
         return _MONITOR_MAX_AGE_HOURS_DEFAULT
-
-
-def _auto_disable_enabled() -> bool:
-    """Oto-kapat ana anahtarı (default AÇIK; `GUARD_AUTO_DISABLE=0` ile recommend-only).
-    Kapalıyken rollback kararı ROLLBACK_RECOMMENDED olarak kaydedilir ama override
-    YAZILMAZ — owner tek-flag ile uygular (law 4: 'veya tek-flag ile geri alınır')."""
-    return os.environ.get("GUARD_AUTO_DISABLE", "1").strip().lower() not in _AUTO_DISABLE_OFF
 
 
 def _raw_enabled(guard_key: str, thresholds: dict) -> bool:
@@ -176,26 +169,14 @@ def adopt(keys: list[str] | None = None) -> dict:
 
 
 # --------------------------------------------------------------------------
-# check — aktif izlemeleri değerlendir (CONFIRMED / ROLLED_BACK / monitoring)
+# check — aktif izlemeleri değerlendir (CONFIRMED / ROLLBACK_RECOMMENDED / monitoring)
 # --------------------------------------------------------------------------
 
 def _apply_rollback(guard_key: str, *, post_exp: float, post_n: int, baseline: float,
                     reason: str | None, adopted: bool = False) -> dict:
-    """post < baseline → guard'ı geri al. Oto-kapat açıksa override yazılır
-    (ROLLED_BACK); kapalıysa yalnız öneri kaydedilir (ROLLBACK_RECOMMENDED).
-
-    `adopted` (zaten-açık guard, eşzamanlı baseline): oto-kapat ANAHTARI ne olursa
-    olsun YALNIZ-ÖNERİ — sürüklenme korumadan değil piyasadan olabilir, sessizce
-    kapatmak güvenli değil (bkz. modül docstring)."""
-    auto = _auto_disable_enabled() and not adopted
-    if auto:
-        guard_overrides.set_disabled(
-            guard_key,
-            reason=f"expectancy {post_exp} < baseline {baseline} (n={post_n})",
-        )
-        status = "ROLLED_BACK"
-    else:
-        status = "ROLLBACK_RECOMMENDED"
+    """post < baseline → geri alma ÖNERİSİ kaydedilir (ROLLBACK_RECOMMENDED); override
+    YAZILMAZ — kısıtlayıcı kapıyı kapatmak owner kararıdır."""
+    status = "ROLLBACK_RECOMMENDED"
     store.resolve(
         guard_key, outcome=status, post_expectancy=post_exp, post_n=post_n, reason=reason,
     )
@@ -205,7 +186,6 @@ def _apply_rollback(guard_key: str, *, post_exp: float, post_n: int, baseline: f
         "post_expectancy": post_exp,
         "baseline_expectancy": baseline,
         "post_n": post_n,
-        "auto_disabled": auto,
     }
     if reason:
         out["reason"] = reason
@@ -277,7 +257,7 @@ def _check_one(guard_key: str, active: dict) -> dict:
 
 def check_guards() -> list[dict]:
     """Tüm aktif izlemeleri değerlendir. Her biri için durum:
-    monitoring | CONFIRMED | ROLLED_BACK | ROLLBACK_RECOMMENDED | INCONCLUSIVE."""
+    monitoring | CONFIRMED | ROLLBACK_RECOMMENDED | INCONCLUSIVE."""
     results: list[dict] = []
     for key, active in store.all_active().items():
         if not isinstance(active, dict):
@@ -291,7 +271,7 @@ def run() -> dict:
     değerlendir (check). Defensive değil — worker zaten try/except sarar."""
     transitions = sync()
     checks = check_guards()
-    rolled = [c["guard_key"] for c in checks if c["status"] in ("ROLLED_BACK", "ROLLBACK_RECOMMENDED")]
+    rolled = [c["guard_key"] for c in checks if c["status"] == "ROLLBACK_RECOMMENDED"]
     monitoring = [c["guard_key"] for c in checks if c["status"] == "monitoring"]
     return {
         "armed": transitions["armed"],
@@ -343,7 +323,8 @@ def report() -> dict:
         })
     return {
         "available": True,
-        "auto_disable_enabled": _auto_disable_enabled(),
+        # Oto-kapatma yok: kısıtlayıcı kapıyı gevşetmek owner kararı (panel rozeti okur).
+        "auto_disable_enabled": False,
         "min_outcomes": need,
         "monitor_max_age_hours": _monitor_max_age_hours(),
         "guards": guards,

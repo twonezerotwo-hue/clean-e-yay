@@ -28,7 +28,6 @@ REGISTRY: dict[str, str] = {
     "EXIT_FORENSICS_NUDGE": "behavior",
     "E_YAY_CANONICAL_RUNTIME": "behavior",
     "EXPECTANCY_R_MODE": "behavior",
-    "GUARD_AUTO_DISABLE": "behavior",
     "GUARD_MONITOR_MAX_AGE_HOURS": "behavior",
     "GUARD_ROLLBACK_MIN_OUTCOMES": "behavior",
     "LEARNING_ADVISOR_APPLY": "behavior",

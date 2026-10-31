@@ -17,6 +17,8 @@ MIN_TIMEFRAME_TRADES = 20
 # Performans kanıtı eşikleri (hedef 7. aşama; owner ayarlayabilir): kapanış sırasına
 # göre birikimli R eğrisinin en derin düşüşü bu sınırın altına inmemeli.
 MAX_DRAWDOWN_R = 15.0
+# Kenarın şans olmadığı: ortalama R > 0 için tek yönlü p bu değerin altında olmalı.
+MAX_P_VALUE = 0.05
 TARGET_SCORE = 90
 
 
@@ -105,6 +107,10 @@ def evaluate(performance: Mapping[str, Any], raw_summary: Mapping[str, Any] | No
     sys_ret = _number(bench.get("system_net_return_pct"))
     bh_ret = _number(bench.get("benchmark_return_pct"))
     bench_ok = sys_ret is not None and bh_ret is not None and sys_ret > bh_ret
+    sig = performance.get("significance") or {}
+    p_val = _number(sig.get("p_value"))
+    sig_n = int(_number(sig.get("n")) or 0)
+    sig_ok = p_val is not None and p_val < MAX_P_VALUE and sig_n >= MIN_WALK_FORWARD_TRADES
 
     excluded = int(_number(performance.get("excluded_from_learning")) or 0)
     excluded_rate = excluded / max(1, int(_number(raw_summary.get("outcomes_total")) or total))
@@ -145,6 +151,13 @@ def evaluate(performance: Mapping[str, Any], raw_summary: Mapping[str, Any] | No
             {"system_net_return_pct": sys_ret, "benchmark_return_pct": bh_ret},
             "Maliyet sonrası net getiri > aynı dönem eşit ağırlıklı al-tut",
             "Al-tut kıyası geçilmedi veya fiyat yok." if not bench_ok else "Al-tut kıyası geçildi.",
+        ),
+        _criterion(
+            "significant_edge",
+            sig_ok,
+            {"p_value": p_val, "n": sig_n, "t_stat": _number(sig.get("t_stat"))},
+            f"ortalama R > 0 için p < {MAX_P_VALUE:g} (n >= {MIN_WALK_FORWARD_TRADES})",
+            "Kenar istatistiksel olarak şanstan ayrılmıyor." if not sig_ok else "Kenar istatistiksel olarak anlamlı.",
         ),
         _criterion(
             "positive_sharpe",
