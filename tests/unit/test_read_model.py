@@ -40,6 +40,7 @@ def test_current_reads_tick_publication_without_recompute(tick_view, monkeypatch
     dv = read_model.current(snap, ps)
     assert dv.regime is regime and dv.risk is risk and len(dv.decisions) == 4
     assert dv.consensus("ETHUSD", "4h") == "cons:ETHUSD:4h"
+    assert dv.source == "tick" and dv.published_age_sec is not None
 
 
 def test_off_universe_consensus_uses_tick_regime_once(tick_view, monkeypatch):

@@ -3062,6 +3062,12 @@ components:
         models: { type: object, additionalProperties: { type: string } }
         prompts: { type: object, additionalProperties: { type: string } }
         learning_engines: { type: object, additionalProperties: { type: string, nullable: true } }
+        history:
+          type: object
+          description: Terfi ve geri alma geçmişi (en yeni önce) — weights, tf_targets, guards, flags.
+          additionalProperties:
+            type: array
+            items: { type: object }
 
     PortfolioRiskReport:
       type: object
@@ -3280,6 +3286,12 @@ components:
       required: [generated_at, symbols, timeframes, cells]
       properties:
         generated_at: { type: string, format: date-time }
+        decision_source:
+          type: object
+          description: Kararın kaynağı — tick (yayın) ya da recomputed (bayat/ilk açılış) — ve yayının yaşı (sn).
+          properties:
+            source: { type: string, enum: [tick, recomputed] }
+            published_age_sec: { type: number, nullable: true }
         snapshot_id: { type: string, nullable: true }
         snapshot_generated_at: { type: string, format: date-time, nullable: true }
         paper_state_revision: { type: integer, nullable: true }

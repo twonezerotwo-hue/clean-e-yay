@@ -1525,6 +1525,7 @@ export type SystemRegistry = {
   models: Record<string, string>;
   prompts: Record<string, string>;
   learning_engines: Record<string, string | null>;
+  history?: Record<string, Record<string, unknown>[]>;
 };
 
 export type CorrelationState = {
@@ -1686,6 +1687,7 @@ export type TimeframeDecision = {
 };
 
 export type DecisionMatrix = {
+  decision_source?: { source?: "tick" | "recomputed"; published_age_sec?: number | null };
   generated_at: string;
   /** Snapshot provenance for cross-panel consistency checks. */
   snapshot_id?: string | null;

@@ -24,6 +24,10 @@ class DecisionView:
     regime: Any
     risk: Any
     decisions: list[Any]
+    # Kararın kaynağı: "tick" (tick'in yayını) ya da "recomputed" (yayın bu görüntüye
+    # ait değil — ilk açılış, ayrı süreç, bayat tick); ekran ikincisini "bayat" gösterir.
+    source: str = "tick"
+    published_age_sec: float | None = None
     _off_universe: dict = field(default_factory=dict, repr=False)
 
     def consensus(self, symbol: str, timeframe: str = "1d") -> Any:
@@ -63,29 +67,33 @@ class DecisionView:
         from packages.decision.engine import matrix_view
 
         view = matrix_view(self.regime, self.risk, self.decisions, self.snap, self.symbols)
-        return finalize_matrix_view(view, self.snap, self.ps)
+        view = finalize_matrix_view(view, self.snap, self.ps)
+        view["decision_source"] = {"source": self.source, "published_age_sec": self.published_age_sec}
+        return view
 
 
 def current(snap: Any = None, ps: Any = None) -> DecisionView:
     """Şu anki karar: tick'in yayını (aynı görüntü), yoksa aynı girdilerle hesap."""
     from packages.data.ingestion.pipeline import get_cached_snapshot
     from packages.data.registry import assets as asset_registry
-    from packages.decision import paper_policy
-    from packages.decision.tick_artifact import decide_matrix_for
+    from packages.decision import paper_policy, tick_artifact
     from packages.paper import state as paper_state
     from packages.risk.engine import risk_input_from_state
 
     snap = snap if snap is not None else get_cached_snapshot()
     ps = ps if ps is not None else paper_state.load()
     symbols = asset_registry.trade_symbols()
-    regime, risk, decisions = decide_matrix_for(
+    exploration = paper_policy.enabled()
+    source = "tick" if tick_artifact.matches(snap, symbols, exploration) else "recomputed"
+    regime, risk, decisions = tick_artifact.decide_matrix_for(
         symbols,
         snap,
         risk_input_from_state(ps, snap.quality.score),
         open_positions=ps.open_positions,
-        paper_exploration=paper_policy.enabled(),
+        paper_exploration=exploration,
     )
-    return DecisionView(snap, ps, symbols, regime, risk, list(decisions))
+    return DecisionView(snap, ps, symbols, regime, risk, list(decisions),
+                        source=source, published_age_sec=tick_artifact.publication_age_sec())
 
 
 __all__ = ["DecisionView", "current"]

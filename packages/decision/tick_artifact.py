@@ -11,7 +11,8 @@ Salt okuma yüzeyi: karar yetkisi eklemez, RiskGate'i atlamaz, kararı değişti
 from __future__ import annotations
 
 import threading
-from dataclasses import dataclass
+import time
+from dataclasses import dataclass, field
 from typing import Any
 
 
@@ -23,6 +24,7 @@ class TickMatrix:
     regime: Any
     risk: Any
     decisions: tuple[Any, ...]
+    published_at: float = field(default_factory=time.monotonic)
 
 
 _LOCK = threading.Lock()
@@ -111,6 +113,22 @@ def reset() -> None:
         _WORLD = None
 
 
+def matches(snap: Any, symbols: list[str], paper_exploration: bool) -> bool:
+    """Tick bu görüntü / sembol seti / keşif bayrağı için yayımladı mı?"""
+    art = _LATEST
+    snapshot_id = str(getattr(snap, "snapshot_id", "") or "")
+    return bool(
+        art is not None and snapshot_id and art.snapshot_id == snapshot_id
+        and art.symbols == tuple(symbols) and art.paper_exploration == bool(paper_exploration)
+    )
+
+
+def publication_age_sec() -> float | None:
+    """Son tick yayınının yaşı (sn); yayın yoksa None."""
+    art = _LATEST
+    return None if art is None else round(time.monotonic() - art.published_at, 1)
+
+
 def decide_matrix_for(
     symbols: list[str],
     snap: Any,
@@ -121,14 +139,7 @@ def decide_matrix_for(
 ) -> tuple[Any, Any, list[Any]]:
     """Tick aynı snapshot için karar verdiyse onu döner; yoksa yeniden hesaplar."""
     art = _LATEST
-    snapshot_id = str(getattr(snap, "snapshot_id", "") or "")
-    if (
-        art is not None
-        and snapshot_id
-        and art.snapshot_id == snapshot_id
-        and art.symbols == tuple(symbols)
-        and art.paper_exploration == bool(paper_exploration)
-    ):
+    if art is not None and matches(snap, symbols, paper_exploration):
         return art.regime, art.risk, list(art.decisions)
     from packages.decision.engine import decide_matrix
 
@@ -142,6 +153,6 @@ def decide_matrix_for(
 
 
 __all__ = [
-    "TickMatrix", "decide_matrix_for", "final_for", "latest", "publish", "publish_final",
-    "publish_world", "reset", "world_for",
+    "TickMatrix", "decide_matrix_for", "final_for", "latest", "matches", "publication_age_sec",
+    "publish", "publish_final", "publish_world", "reset", "world_for",
 ]

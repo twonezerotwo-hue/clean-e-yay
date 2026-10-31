@@ -2827,6 +2827,10 @@ export interface components {
             learning_engines: {
                 [key: string]: string | null;
             };
+            /** @description Terfi ve geri alma geçmişi (en yeni önce) — weights, tf_targets, guards, flags. */
+            history?: {
+                [key: string]: Record<string, never>[];
+            };
         };
         /** @description Read-only paper-ledger exposure view; no rebalance or execution. */
         PortfolioRiskReport: {
@@ -2988,6 +2992,12 @@ export interface components {
         DecisionMatrix: {
             /** Format: date-time */
             generated_at: string;
+            /** @description Kararın kaynağı — tick (yayın) ya da recomputed (bayat/ilk açılış) — ve yayının yaşı (sn). */
+            decision_source?: {
+                /** @enum {string} */
+                source?: "tick" | "recomputed";
+                published_age_sec?: number | null;
+            };
             snapshot_id?: string | null;
             /** Format: date-time */
             snapshot_generated_at?: string | null;

@@ -58,6 +58,7 @@ def test_registry_lists_versions():
     assert {"code", "config", "weights", "models", "prompts", "learning_engines"} <= set(snap)
     assert snap["prompts"]["chat"] and snap["models"]["ollama"]
     assert snap["learning_engines"]["subsignal_scorecard"].startswith("subsignal_scorecard")
+    assert set(snap["history"]) == {"weights", "tf_targets", "guards", "flags"}
 
 
 def test_tick_stage_metrics_from_heartbeat(tmp_path, monkeypatch):
