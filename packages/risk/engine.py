@@ -48,8 +48,8 @@ class RiskInput:
     open_position_count: int
     # S2-1 (F2-1 gate bağlama) — mark-to-market equity (açık pozisyonlar dahil).
     # None = ölçüm yok (eski çağıranlar, API yolları) → davranış birebir eski.
-    # Yalnız tick_worker doldurur; flag `risk_gates.mtm_equity_enabled` AÇIKKEN
-    # drawdown kontrolü min(realized, mtm) ile SIKILAŞIR (asla gevşemez).
+    # Yalnız tick_worker doldurur; drawdown kontrolü min(realized, mtm) ile
+    # SIKILAŞIR (asla gevşemez).
     mtm_equity_usd: float | None = None
     # Gerçek PaperState yolları UTC gün çapası taşır. Boş bırakılması legacy
     # çağrıların davranışını korur.
@@ -116,16 +116,12 @@ def evaluate(
         )
 
     # 3) Max drawdown
-    # S2-1 — flag açık + MTM ölçümü varsa efektif equity = min(realized, mtm):
+    # MTM ölçümü varsa efektif equity = min(realized, mtm):
     # açık pozisyonlar toplamda eriyorsa fren realized kapanışı BEKLEMEZ.
     # min() garantisi: MTM kârı gate'i asla gevşetemez (yalnız sıkılaştırır).
     dd_equity = inp.equity_usd
     dd_label = "DD"
-    if (
-        bool(th.get("mtm_equity_enabled", False))
-        and inp.mtm_equity_usd is not None
-        and inp.mtm_equity_usd < dd_equity
-    ):
+    if inp.mtm_equity_usd is not None and inp.mtm_equity_usd < dd_equity:
         dd_equity = inp.mtm_equity_usd
         dd_label = "DD(mtm)"
     if inp.peak_equity_usd > 0:

@@ -1,11 +1,10 @@
-"""DQS çok-eksen GATE (M14 observe→eşik, FAZ-2 2026-07-16).
+"""DQS çok-eksen kapısı.
 
 Sözleşme:
-- enabled=false / cfg yok / extended yok → rapor BAYT-AYNI (gölge-önce).
+- cfg yok / extended yok → rapor aynen.
 - İhlal → OK→DEGRADED + not; SKOR asla değişmez (KILL_SWITCH zinciri kazayla
   tetiklenemez); BLOCKED dokunulmaz; DEGRADED yükseltilmez.
 - Eşiği 0 eksen MUAF; değeri None eksen ihlal SAYILMAZ (ölçülemedi ≠ bozuk).
-- Watchdog REGISTRY kaydı var (OFF→ON geçişinde arm, E-6 deseni).
 """
 from __future__ import annotations
 
@@ -14,7 +13,6 @@ import dataclasses
 from packages.data.quality.dqs import QualityReport, apply_extended_gate
 
 _CFG = {
-    "enabled": True,
     "technical_bars_min": 40.0,
     "artifact_freshness_min": 30.0,
     "news_diversity_min": 0.0,
@@ -30,11 +28,10 @@ def _report(status="OK", extended=None) -> QualityReport:
     )
 
 
-def test_disabled_is_byte_identical():
+def test_no_cfg_is_byte_identical():
     ext = {"technical_bars": 5.0, "artifact_freshness": 0.0}
     r = _report(extended=dict(ext))
     before = dataclasses.asdict(r)
-    apply_extended_gate(r, {**_CFG, "enabled": False})
     apply_extended_gate(r, None)
     apply_extended_gate(r, {})
     assert dataclasses.asdict(r) == before
@@ -76,10 +73,3 @@ def test_zero_threshold_axis_exempt():
                           "technical_bars": 60.0, "artifact_freshness": 98.0})
     apply_extended_gate(r, _CFG)
     assert r.status == "OK" and r.notes == []
-
-
-def test_watchdog_registry_has_gate_flag():
-    from packages.learning.activation_watchdog import REGISTRY
-
-    src = REGISTRY["data_policy_dqs_extended_gate"]["source"]
-    assert src == ("thresholds", ("data_policy", "dqs_extended_gate", "enabled"))

@@ -61,11 +61,6 @@ def _max_pos_usd() -> float:
 _TF_SECONDS = {"15m": 900, "1h": 3600, "4h": 14400, "1d": 86400, "1w": 604800}
 
 
-def _close_based_stop_enabled() -> bool:
-    """P2 flag'i (default False → SL tetikleme fitil, bayt-aynı). monkeypatch-seam."""
-    return bool((load_thresholds().get("exit_close_based_stop") or {}).get("enabled", False))
-
-
 def _disaster_stop_mult() -> float:
     """H2 (temizlik, owner kararı 2026-10-02: 2 birim) — kapanış-bazlı stop bar
     kapanışını beklerken fiyatın kaçabileceği tavan, açılış risk mesafesinin katı
@@ -83,8 +78,7 @@ def _disaster_level(pos: Position, mult: float) -> float | None:
 
 
 def _structural_stop_cfg() -> dict:
-    """P2 parça-2 — yapısal stop yerleşimi config (default enabled False → SL yeri
-    mevcut ATR motoruyla, bayt-aynı). monkeypatch-seam."""
+    """Yapısal stop yerleşimi config'i (lookback, buffer_pct)."""
     return load_thresholds().get("exit_structural_stop") or {}
 
 
@@ -120,24 +114,23 @@ def canonical_targets(
     """
     targets = None
     sscfg = _structural_stop_cfg()
-    if sscfg.get("enabled", False):
-        bars = _recent_bars_for_stop(symbol, timeframe)
-        if bars:
-            structural = compute_structural_targets(
-                symbol,
-                side,
-                entry_price,
-                highs=[float(b.high) for b in bars],
-                lows=[float(b.low) for b in bars],
-                timeframe=timeframe,
-                atr=atr,
-                predicted_confidence=predicted_confidence,
-                manual=manual,
-                lookback=int(sscfg.get("lookback", 10)),
-                buffer_pct=float(sscfg.get("buffer_pct", 0.001)),
-            )
-            if structural.sl_basis != "invalid":
-                targets = structural
+    bars = _recent_bars_for_stop(symbol, timeframe)
+    if bars:
+        structural = compute_structural_targets(
+            symbol,
+            side,
+            entry_price,
+            highs=[float(b.high) for b in bars],
+            lows=[float(b.low) for b in bars],
+            timeframe=timeframe,
+            atr=atr,
+            predicted_confidence=predicted_confidence,
+            manual=manual,
+            lookback=int(sscfg.get("lookback", 10)),
+            buffer_pct=float(sscfg.get("buffer_pct", 0.001)),
+        )
+        if structural.sl_basis != "invalid":
+            targets = structural
     if targets is None:
         if tf_targets_enabled():
             targets = compute_tf_targets(
@@ -553,8 +546,7 @@ def attempt_open(
         return None, decision
     # Tekrar-giriş kilidi (2026-07-11) — YALNIZ otomatik sinyal açılışına. Kapanış
     # sonrası (owner MANUAL / kârlı otomatik) aynı yöne bayat-sinyal geri-girişi:
-    # taze bar geçene VE sinyal değişene kadar engellenir. Flag KAPALIYKEN rapor
-    # decision'a taşınır ama AÇILIŞ ENGELLENMEZ (shadow-first). Saf; raise etmez.
+    # taze bar geçene VE sinyal değişene kadar engellenir. Saf; raise etmez.
     if apply_reentry_guard:
         try:
             rg = reentry_guard.assess(
@@ -562,11 +554,11 @@ def attempt_open(
                 fingerprint=fingerprint, now=datetime.now(UTC),
                 cfg=load_thresholds().get("reentry_guard") or {},
             )
-        except Exception:  # gölge/uygulama guard'ı kararı asla düşürmez
+        except Exception:  # guard kararı asla düşürmez
             rg = {}
         if rg:
             decision["reentry_guard"] = rg
-            if rg.get("active") and rg.get("locked"):
+            if rg.get("locked"):
                 audit.record(
                     "OPEN_BLOCKED", symbol=symbol, timeframe=timeframe, side=side,
                     reason=rg.get("reason") or "reentry_locked", snapshot_id=snapshot_id,
@@ -947,29 +939,23 @@ def tick(
             continue
         pos.current_price = price
         _update_excursions(pos, price)
-        # P2 — kapanış-bazlı SL: flag açıkken SL tetiği tick yerine son KAPANMIŞ
-        # bar kapanışı (fitil-avı bağışık). Kapanış yoksa None → fitil davranışı
-        # (güvenli fallback). Flag kapalıyken sl_trig=None → tetikleme bayt-aynı.
-        # TP her zaman tick `price` ile (kâr al fitille; owner kuralı yalnız STOP).
-        close_based = _close_based_stop_enabled()
-        sl_trig = (
-            _last_closed_close(pos.symbol, pos.timeframe, now, pos.opened_at)
-            if close_based else None
-        )
-        # H2 — acil fren: kapanış-bazlı stop bar kapanışını beklerken fiyat (fitil)
-        # açılış riskinin `disaster_mult` katına ulaşırsa beklemeden çık. Kapanış-bazlı
-        # stop kapalıyken SL zaten fitille tetiklenir; bu blok çalışmaz.
-        if close_based:
-            lvl = _disaster_level(pos, _disaster_stop_mult())
-            if lvl is not None and (
-                (pos.side == "long" and price <= lvl) or (pos.side == "short" and price >= lvl)
-            ):
-                audit.record(
-                    "DISASTER_STOP", position_id=pos.id, symbol=pos.symbol,
-                    timeframe=pos.timeframe, reason="disaster_stop", price_used=price,
-                )
-                closed.append(close_position(state, pos, exit_price=price, reason="SL_HIT"))
-                continue
+        # Kapanış-bazlı SL: SL tetiği tick yerine son KAPANMIŞ bar kapanışı
+        # (fitil-avı bağışık). Kapanış yoksa None → fitil davranışı (güvenli
+        # fallback). TP her zaman tick `price` ile (kâr al fitille; owner kuralı
+        # yalnız STOP).
+        sl_trig = _last_closed_close(pos.symbol, pos.timeframe, now, pos.opened_at)
+        # H2 — acil fren: bar kapanışı beklenirken fiyat (fitil) açılış riskinin
+        # `disaster_mult` katına ulaşırsa beklemeden çık.
+        lvl = _disaster_level(pos, _disaster_stop_mult())
+        if lvl is not None and (
+            (pos.side == "long" and price <= lvl) or (pos.side == "short" and price >= lvl)
+        ):
+            audit.record(
+                "DISASTER_STOP", position_id=pos.id, symbol=pos.symbol,
+                timeframe=pos.timeframe, reason="disaster_stop", price_used=price,
+            )
+            closed.append(close_position(state, pos, exit_price=price, reason="SL_HIT"))
+            continue
         # SL/TP kontrol — formalized fill simulation (fill at observed tick price).
         fill = execution_sim.simulate_exit_fill(
             side=pos.side, entry_price=pos.entry_price, sl=pos.sl, tp=pos.tp,

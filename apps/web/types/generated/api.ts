@@ -1491,8 +1491,7 @@ export type CorrelationState = {
   max_cluster_pct: number;
   window_days: number;
   min_overlap_days: number;
-  // F2-2 — fiyat-getirisi korelasyon flag durumu + aktiflik eşiği
-  price_returns_enabled?: boolean;
+  // Fiyat-getirisi korelasyonunun aktiflik eşiği (ortak gün)
   price_min_overlap_days?: number;
   symbols: string[];
   matrix: CorrelationEntry[];

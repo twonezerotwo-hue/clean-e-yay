@@ -245,7 +245,7 @@ def build_consensus(headlines: Iterable[Any], *, now: datetime | None = None) ->
         article_impacts: dict[str, float] = {}
         if classify is not None and article and article.get("excerpt"):
             try:
-                sentiment = classify.classify_sentiment_active(article_text)
+                sentiment = classify.classify_sentiment(article_text)
                 article_impacts = classify.classify_asset_impact(article_text, sentiment)
                 bucket.setdefault("article_evidence", []).append({
                     "status": str(article.get("status") or "OK"),

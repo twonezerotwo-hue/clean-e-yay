@@ -108,7 +108,7 @@ def test_timeframe_canary_keeps_1h_and_4h_shadow_only():
 def test_regime_inverse_evidence_keeps_weights_observe_only():
     report = paper_canary.build_report(
         learning={"performance": {}, "signal_quality": {"overall": {"quantum": {"verdict": "INVERSE"}}}},
-        entry_report={}, exit_report={}, race={}, ideas=[], forecasts={}, regime_report={"enabled": True},
+        entry_report={}, exit_report={}, race={}, ideas=[], forecasts={}, regime_report={},
     )
     regime = report["regime_weight_test"]
     assert regime["status"] == "HOLD"

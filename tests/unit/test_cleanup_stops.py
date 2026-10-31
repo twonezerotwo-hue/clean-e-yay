@@ -91,7 +91,6 @@ def _pos(ps, side="long", entry=100.0, sl=95.0, tp=120.0):
     ],
 )
 def test_h2_disaster_stop(fresh_state, monkeypatch, side, entry, sl, tp, inside, beyond):
-    monkeypatch.setattr(lifecycle, "_close_based_stop_enabled", lambda: True)
     monkeypatch.setattr(lifecycle, "_disaster_stop_mult", lambda: 2.0)
     # Son kapanış stopun lehte tarafında → kapanış-bazlı SL tetiklenmez.
     monkeypatch.setattr(
@@ -104,13 +103,6 @@ def test_h2_disaster_stop(fresh_state, monkeypatch, side, entry, sl, tp, inside,
     closed = lifecycle.tick(st, {"BTCUSD": beyond})
     assert len(closed) == 1 and closed[0].close_reason == "SL_HIT"
     assert closed[0].exit_price == beyond
-
-
-def test_h2_inactive_when_close_based_stop_off(fresh_state, monkeypatch):
-    monkeypatch.setattr(lifecycle, "_close_based_stop_enabled", lambda: False)
-    st, _ = _pos(fresh_state)
-    closed = lifecycle.tick(st, {"BTCUSD": 94.0})  # düz fitil SL (95) — eski davranış
-    assert len(closed) == 1 and closed[0].exit_price == 94.0
 
 
 def test_h2_mult_floor():

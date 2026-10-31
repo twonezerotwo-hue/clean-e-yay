@@ -136,24 +136,10 @@ def predict_calibrated(
     return round(min(max(val, 0.0), 1.0), 4), "fitted"
 
 
-def tf_platt_enabled() -> bool:
-    """F4-1 — `calibration.tf_platt` owner-flag'i (default KAPALI = global fit).
-
-    Aktivasyon ayrı tarihli owner kararı: /learning/calibration'daki
-    `per_timeframe` örnek sayıları + fit ayrışması izlenip açılır."""
-    try:
-        return bool(load_thresholds().get("calibration", {}).get("tf_platt", False))
-    except (OSError, KeyError, ValueError, TypeError):
-        return False
-
-
 def predict_calibrated_tf(raw_p: float, timeframe: str) -> tuple[float, str]:
-    """F4-1 — TF-duyarlı kalibrasyon. Flag KAPALIYKEN global `predict_calibrated`
-    birebir (bayt-aynı). AÇIKKEN: o TF'in fit'i varsa uygulanır (kaynak
-    "fitted_tf"); TF fit'i yoksa/yetersizse global fit'e düşer (dürüst fallback,
-    sahte TF parametresi uydurulmaz). RiskGate'i bypass etmez."""
-    if not tf_platt_enabled():
-        return predict_calibrated(raw_p)
+    """TF-duyarlı kalibrasyon: o TF'in fit'i varsa uygulanır (kaynak "fitted_tf");
+    TF fit'i yoksa/yetersizse global fit'e düşer (dürüst fallback, sahte TF
+    parametresi uydurulmaz). RiskGate'i bypass etmez."""
     tf_params = load_tf(timeframe)
     if tf_params is None or tf_params.status != "fitted":
         return predict_calibrated(raw_p)
@@ -179,9 +165,7 @@ def inflation_delta(raw_p: float, fitted_p: float) -> float:
 def apply_inflation_guardrail(raw_p: float, fitted_p: float, source: str) -> tuple[float, str]:
     """Kalibrasyonun ZAYIF ham sinyali aşırı şişirmesini sınırlar.
 
-    OWNER-FLAG, varsayılan KAPALI. `calibration_guardrail.enabled=false` iken
-    PASSTHROUGH — mevcut karar/sizing davranışı birebir korunur (bozulma yok).
-    Açıkken: `fitted - raw > max_inflation_delta` ise fitted = raw + max_delta'ya
+    `fitted - raw > max_inflation_delta` ise fitted = raw + max_delta'ya
     kıstırılır ve kaynak "fitted_capped" olarak damgalanır (ledger'da görünür).
     Yalnızca KISITLAR — fitted'i asla artırmaz, RiskGate/DQS'i bypass etmez.
     """
@@ -190,8 +174,6 @@ def apply_inflation_guardrail(raw_p: float, fitted_p: float, source: str) -> tup
     if source not in ("fitted", "fitted_tf"):
         return fitted_p, source
     cfg = _guardrail_cfg()
-    if not cfg.get("enabled", False):
-        return fitted_p, source
     try:
         max_delta = float(cfg.get("max_inflation_delta", 0.25))
     except (TypeError, ValueError):

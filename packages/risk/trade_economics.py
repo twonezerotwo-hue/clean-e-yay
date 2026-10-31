@@ -434,25 +434,13 @@ _TRAIL_TF_DEFAULT = {
 }
 
 
-def trailing_tf_aware_enabled() -> bool:
-    """`trailing_tf_aware.enabled` owner-flag (config, default KAPALI = düz trailing
-    birebir). Açıkken trailing mesafesi VE devreye-girme eşiği TF'e göre ayarlanır
-    (2026-07-07 exit_backtest kanıtı: higher-TF trail SIKILIR = giveback ilacı).
-    Geri-alma = flag false."""
-    try:
-        return bool(load_thresholds().get("trailing_tf_aware", {}).get("enabled", False))
-    except (OSError, KeyError, ValueError, TypeError):
-        return False
-
-
 def tf_trailing_mults(timeframe: str) -> tuple[float, float]:
-    """(distance_mult, activate_mult) — TF-farkında trailing çarpanları. Flag OFF →
-    (1.0, 1.0) (bayt-aynı). Config `trailing_tf_aware.tf_profile[tf]` varsa okunur,
+    """(distance_mult, activate_mult) — TF-farkında trailing çarpanları (2026-07-07
+    exit_backtest kanıtı: higher-TF trail SIKILIR = giveback ilacı). Config
+    `trailing_tf_aware.tf_profile[tf]` varsa okunur,
     yoksa `_TRAIL_TF_DEFAULT`. Bilinmeyen TF → (1.0, 1.0). Guardrail [0.4, 4.0]:
     <1.0 SIKAR (giveback ilacı, 2026-07-07 exit_backtest), >1.0 gevşetir; taban 0.4
     trail'in aşırı sıkılıp gürültüde erken çıkmasına karşı (sıfıra inmez)."""
-    if not trailing_tf_aware_enabled():
-        return (1.0, 1.0)
     try:
         prof = (load_thresholds().get("trailing_tf_aware", {}) or {}).get("tf_profile") or {}
         row = prof.get(timeframe)

@@ -3,13 +3,9 @@
 Dört katman (likidite, risk iştahı, kripto momentum, rotasyon) → tek
 RegimeLabel. Katman girdileri gerçek snapshot fiyatlarından okunur.
 
-F2-3 — `regime.drop_unavailable_layers` (owner-flag, default KAPALI):
-KAPALI → eski davranış birebir: eksik makro veri sabit default'la doldurulur
-(US10Y yoksa 4.3 varsayılır — "sessiz sahte skor"). AÇIK → veri olmayan
-katman skor ÜRETMEZ, düşer (`RegimeOutput.dropped`); ortalama kalan
-katmanlardan alınır ve consensus tarafında fundamental/sentinel modülleri
-katmansız kalırsa redistribute edilir (quantum deseni). DATA_POLICY:
-uydurma veri yok.
+Veri olmayan katman skor ÜRETMEZ, düşer (`RegimeOutput.dropped`); ortalama
+kalan katmanlardan alınır ve konsensüste katmansız kalan temel/sentinel
+modülleri düşer. DATA_POLICY: uydurma veri yok (sabit default doldurulmaz).
 """
 from __future__ import annotations
 
@@ -103,18 +99,6 @@ def _stabilize(prev: str | None, raw: str, avg: float, band: float) -> str:
     return raw if avg < _LOWER_BOUND[prev] - band else prev
 
 
-def _drop_unavailable_enabled() -> bool:
-    """`regime.drop_unavailable_layers` owner-flag'i (default KAPALI = eski davranış)."""
-    try:
-        from packages.data.registry.loader import load_thresholds
-
-        return bool(
-            (load_thresholds().get("regime") or {}).get("drop_unavailable_layers", False)
-        )
-    except Exception:
-        return False  # config okunamazsa en güvenli: mevcut davranış
-
-
 def _direction(score: float) -> str:
     if score >= 55:
         return "bullish"
@@ -161,13 +145,13 @@ def _archive_liquidity_momentum() -> float | None:
         return None
 
 
-def _liquidity_layer(snap: MarketSnapshot, drop_missing: bool) -> RegimeLayer | None:
-    dxy_p = _price(snap, "DXY")
-    us10_p = _price(snap, "US10Y")
-    us02_p = _price(snap, "US02Y")
+def _liquidity_layer(snap: MarketSnapshot) -> RegimeLayer | None:
+    dxy = _price(snap, "DXY")
+    us10y = _price(snap, "US10Y")
+    us02y = _price(snap, "US02Y")
     cpi = _price(snap, "CPI") or 0.0
-    if drop_missing and (dxy_p is None or us10_p is None):
-        return None  # F2-3: çekirdek girdi yok — sahte default'la skor üretme
+    if dxy is None or us10y is None:
+        return None  # çekirdek girdi yok — sahte default'la skor üretilmez
     # Momentum-Likidite: Likidite skoru DEĞİŞİM-bazlı gelir (seviye şişmesini
     # kırar → CRISIS görünür). Bar arşivi yoksa seviye formülüne düşer.
     mom = _archive_liquidity_momentum()
@@ -178,13 +162,10 @@ def _liquidity_layer(snap: MarketSnapshot, drop_missing: bool) -> RegimeLayer | 
             direction=_direction(mom),
             evidence=[f"DXY+faiz momentum (v4) {mom:.1f}"],
         )
-    dxy = dxy_p if dxy_p is not None else 104.0
-    us10y = us10_p if us10_p is not None else 4.3
-    us02y = us02_p if us02_p is not None else 4.3
     # Yüksek DXY + yüksek getiri → likidite daralıyor.
     score = 100.0 - (dxy - 100.0) * 2.0 - (us10y - 4.0) * 5.0
     evidence = [f"DXY {dxy:.2f}", f"US10Y {us10y:.2f}%"]
-    if drop_missing and us02_p is None:
+    if us02y is None:
         # Eğri iki GERÇEK getiri ister; yarısı uydurma eğri hesaplanmaz.
         evidence.append("2s10s veri yok — eğri sinyali atlandı")
     else:
@@ -207,11 +188,10 @@ def _liquidity_layer(snap: MarketSnapshot, drop_missing: bool) -> RegimeLayer | 
     )
 
 
-def _appetite_layer(snap: MarketSnapshot, drop_missing: bool) -> RegimeLayer | None:
-    vix_p = _price(snap, "VIX")
-    if drop_missing and vix_p is None:
-        return None  # F2-3: VIX yoksa risk iştahı ölçülemez — katman düşer
-    vix = vix_p if vix_p is not None else 14.0
+def _appetite_layer(snap: MarketSnapshot) -> RegimeLayer | None:
+    vix = _price(snap, "VIX")
+    if vix is None:
+        return None  # VIX yoksa risk iştahı ölçülemez — katman düşer
     # Düşük VIX → risk iştahı yüksek
     score = max(0.0, min(100.0, 100.0 - (vix - 12.0) * 4.0))
     return RegimeLayer(
@@ -222,27 +202,27 @@ def _appetite_layer(snap: MarketSnapshot, drop_missing: bool) -> RegimeLayer | N
     )
 
 
-def _crypto_layer(snap: MarketSnapshot, drop_missing: bool) -> RegimeLayer | None:
+def _crypto_layer(snap: MarketSnapshot) -> RegimeLayer | None:
     btc_tech = snap.technicals.get("BTCUSD")
-    if drop_missing and btc_tech is None:
-        return None  # F2-3: BTC tekniği yoksa nötr 50 uydurulmaz
-    base = btc_tech.score if btc_tech else 50.0
+    if btc_tech is None:
+        return None  # BTC tekniği yoksa nötr 50 uydurulmaz
+    base = btc_tech.score
     return RegimeLayer(
         name="Kripto Momentum",
         score=round(base, 1),
         direction=_direction(base),
         evidence=[
-            f"BTC RSI {btc_tech.rsi:.1f}" if btc_tech and btc_tech.rsi is not None else "—",
-            f"BTC EMA {btc_tech.ema_stack}" if btc_tech else "—",
+            f"BTC RSI {btc_tech.rsi:.1f}" if btc_tech.rsi is not None else "—",
+            f"BTC EMA {btc_tech.ema_stack}",
         ],
     )
 
 
-def _rotation_layer(snap: MarketSnapshot, drop_missing: bool) -> RegimeLayer | None:
+def _rotation_layer(snap: MarketSnapshot) -> RegimeLayer | None:
     r = snap.rotation
-    if drop_missing and r.status == "UNAVAILABLE":
-        # F2-3: rotasyon verisi yetersizken provider nötr-50 placeholder döner;
-        # consensus quantum'u zaten düşürüyordu — rejim katmanı da düşer.
+    if r.status == "UNAVAILABLE":
+        # Rotasyon verisi yetersizken provider nötr-50 placeholder döner;
+        # konsensüs quantum'u da düşürür — rejim katmanı da düşer.
         return None
     return RegimeLayer(
         name="Sermaye Rotasyonu",
@@ -264,13 +244,12 @@ def classify(
     Eskiden her GET (cockpit, matris, rapor) kendi önbellek snapshot'ıyla
     etiketi yazıyordu → canlı rejim etiketi (ve modül ağırlıkları) worker'ın
     kendi sırası yerine dashboard isteklerine göre oynayabiliyordu (H10)."""
-    drop = _drop_unavailable_enabled()
     names = ("Likidite", "Risk İştahı", "Kripto Momentum", "Sermaye Rotasyonu")
     candidates = (
-        _liquidity_layer(snap, drop),
-        _appetite_layer(snap, drop),
-        _crypto_layer(snap, drop),
-        _rotation_layer(snap, drop),
+        _liquidity_layer(snap),
+        _appetite_layer(snap),
+        _crypto_layer(snap),
+        _rotation_layer(snap),
     )
     layers = [layer for layer in candidates if layer is not None]
     dropped = [n for n, layer in zip(names, candidates, strict=True) if layer is None]

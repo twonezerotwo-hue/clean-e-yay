@@ -12,7 +12,6 @@ def test_news_wall_is_read_only_and_preserves_multi_country_context(monkeypatch)
         title="Trump warns Iran after China and Russia statements",
         title_tr=None,
         sentiment="bearish",
-        sentiment_v2="bearish",
         asset_impact={"BRENT": 1.0},
         url="https://example.test/story",
         freshness="FRESH",

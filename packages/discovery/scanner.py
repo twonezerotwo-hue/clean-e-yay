@@ -248,7 +248,7 @@ def _analyze(
     ev_cfg = decision_engine._ev_gate_cfg()
     cost_r = float(ev_cfg.get("cost_r", 0.1))
     emp = empirical_pwin.lookup(entry_tf, regime_label)
-    p_for_ev = emp.p_win if (emp is not None and empirical_pwin.enabled()) else cal
+    p_for_ev = emp.p_win if emp is not None else cal
     ev = decision_engine._expected_value(p_for_ev, rr, cost_r)
     if ev < 0:
         result["reasons"].append(f"negative_ev({ev:.3f}R,p={p_for_ev:.2f})")
@@ -276,7 +276,7 @@ def _analyze(
         "confidence": round(cal, 4),
         "confidence_source": conf_source,
         "expected_value": round(ev, 4),
-        "p_source": "empirical" if (emp is not None and empirical_pwin.enabled()) else "calibrated",
+        "p_source": "empirical" if emp is not None else "calibrated",
         "bullish_tfs": bullish,
     })
     result["market_data"].update({

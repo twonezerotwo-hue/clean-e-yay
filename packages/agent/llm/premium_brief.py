@@ -366,7 +366,7 @@ def _article_effect_sentence(row: Mapping[str, Any]) -> str | None:
         from packages.data.providers.news import classify
 
         text = " ".join(str(row.get(key) or "") for key in ("title", "title_tr", "article_excerpt"))
-        sentiment = classify.classify_sentiment_active(text)
+        sentiment = classify.classify_sentiment(text)
         impacts = classify.classify_asset_impact(text, sentiment)
     except Exception:
         sentiment, impacts = "neutral", {}

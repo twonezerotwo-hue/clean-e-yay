@@ -89,16 +89,16 @@ class _Bar:
         self.high, self.low = hi, lo
 
 
-def _open(monkeypatch, tmp_path, *, enabled):
+def _open(monkeypatch, tmp_path, *, bars=True):
     import importlib
     monkeypatch.setenv("PAPER_STATE_PATH", str(tmp_path / "paper.json"))
     from packages.paper import lifecycle
     from packages.paper import state as ps
     importlib.reload(ps)
     monkeypatch.setattr(lifecycle, "_structural_stop_cfg",
-                        lambda: {"enabled": enabled, "lookback": 10, "buffer_pct": 0.001})
+                        lambda: {"lookback": 10, "buffer_pct": 0.001})
     monkeypatch.setattr(lifecycle, "_recent_bars_for_stop",
-                        lambda s, tf, count=15: [_Bar(102, 93)] * 10)
+                        lambda s, tf, count=15: [_Bar(102, 93)] * 10 if bars else [])
     # yapısal motor sabit sl=93 döndürsün → wire'ın onu kullandığı ölçülür
     monkeypatch.setattr(lifecycle, "compute_structural_targets", lambda *a, **k: te.AdaptiveTargets(
         sl=93.0, tp=114.0, rr=2.0, sl_basis="structural", tp_basis="structural_rr",
@@ -109,13 +109,13 @@ def _open(monkeypatch, tmp_path, *, enabled):
         timeframe="4h", atr=1.0, data_verified=True)
 
 
-def test_open_uses_structural_when_enabled(tmp_path, monkeypatch):
-    """Flag açık → açılış stop'u yapısal motordan (sl=93)."""
-    pos = _open(monkeypatch, tmp_path, enabled=True)
+def test_open_uses_structural_stop(tmp_path, monkeypatch):
+    """Açılış stop'u yapısal motordan (sl=93)."""
+    pos = _open(monkeypatch, tmp_path)
     assert pos.sl == 93.0
 
 
-def test_open_ignores_structural_when_disabled(tmp_path, monkeypatch):
-    """Flag kapalı → yapısal motor devrede DEĞİL; sl ATR motorundan (≠93, bayt-aynı)."""
-    pos = _open(monkeypatch, tmp_path, enabled=False)
+def test_open_without_bars_falls_back_to_atr(tmp_path, monkeypatch):
+    """Bar yok → yapısal motor devrede DEĞİL; sl ATR/TF motorundan (≠93)."""
+    pos = _open(monkeypatch, tmp_path, bars=False)
     assert pos.sl != 93.0 and pos.sl < 100.0   # ATR/TF motoru long stop üretti

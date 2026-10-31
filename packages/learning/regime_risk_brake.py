@@ -17,8 +17,7 @@ Fren kuralı (yanlış-pozitif freni için kanıt ÇİFT kaynaklı olmak ZORUNDA
 Akış: `compute()` learning worker'da OFF-TICK koşar → data/runtime/regime_risk_brake.json.
 Sıcak yol (decision engine) yalnız mtime-cache'li `active_mult()` okur; artifact
 yok/bayat (> max_age_hours) → 1.0 (dürüst düşüş — uydurma fren yok, öğrenme durursa
-canlı tik bağımsız kalır). Flag `regime_risk_brake.enabled` DEFAULT OFF = bayt-aynı;
-engine flag'ten BAĞIMSIZ shadow raporu taşır (aktivasyon kanıtı flag açılmadan birikir).
+canlı tik bağımsız kalır). Frenlenen kararda engine fren kanıtını raporda taşır.
 """
 from __future__ import annotations
 
@@ -36,12 +35,6 @@ def _cfg() -> dict:
         return load_thresholds().get("regime_risk_brake") or {}
     except (OSError, KeyError, ValueError, TypeError):
         return {}
-
-
-def enabled() -> bool:
-    """`regime_risk_brake.enabled` owner-flag (DEFAULT OFF = fren uygulanmaz,
-    yalnız shadow raporu). Geri-alma = false (kod değişikliği gerekmez)."""
-    return bool(_cfg().get("enabled", False))
 
 
 def _path() -> Path:
@@ -121,12 +114,11 @@ def compute(outcomes=None, challenger_records=None, now: datetime | None = None)
     report = {
         "generated_at": now.isoformat(),
         "engine": "regime_risk_brake_v1",
-        "enabled": enabled(),
         "config": {"min_live_n": min_live, "min_backtest_n": min_bt,
                    "brake_mult": brake_mult, "floor": floor},
         "per_regime": per_regime,
         "braked_regimes": sorted(r for r, v in per_regime.items() if v["braked"]),
-        "note": "fren YALNIZ kucultur; iki kaynak da negatif degilse 1.0; flag OFF iken salt-gozlem",
+        "note": "fren YALNIZ kucultur; iki kaynak da negatif degilse 1.0",
     }
     _write(report)
     return report
@@ -185,10 +177,10 @@ def viewmodel() -> dict:
     """GET /learning/regime-risk-brake — artifact'tan türetilir, hesap yapmaz."""
     data = _load_cached()
     if not data:
-        return {"status": "NO_ARTIFACT", "enabled": enabled(), "per_regime": {},
+        return {"status": "NO_ARTIFACT", "per_regime": {},
                 "braked_regimes": [],
                 "note": "learning worker henuz compute() kosmadi"}
-    return {"status": "OK", "enabled": enabled(),
+    return {"status": "OK",
             "generated_at": data.get("generated_at"),
             "per_regime": data.get("per_regime") or {},
             "braked_regimes": data.get("braked_regimes") or [],

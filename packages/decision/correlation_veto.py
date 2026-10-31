@@ -1,4 +1,4 @@
-"""D — dinamik korelasyon vetosu (P1, shadow-first, YALNIZ ENGELLER).
+"""D — dinamik korelasyon vetosu (YALNIZ ENGELLER).
 
 Owner içgörüsü + 5y çok-rejim backtest (2026-07-10): varlıklar tek başına değil,
 akrabalarıyla okunmalı. Ama "aynı yön onayı" (C varyantı) İYİ işlemleri eledi;
@@ -11,8 +11,7 @@ EN GÜÇLÜ akrabayı kendi bulur — owner'ın varsayımları veriyle çürüse
 +0.12 zayıfmış) otomatik düzeltir; kayan korelasyonlara dayanıklı, bakım gerektirmez.
 
 MİMARİ KURALLAR (self_conflict/concentration deseniyle birebir):
-- Config-flag `correlation_veto.enabled` (thresholds YAML, default FALSE → shadow:
-  her kararda correlation_veto_report hesaplanır, davranış değişmez).
+- Her kararda correlation_veto_report hesaplanır; çelişki → işlem açılmaz.
 - Yalnız ENGELLER (veto → size 0); boyut ARTIRMAZ, RiskGate/DQS/halt bypass etmez.
 - Saf/defansif: veri yok / zayıf korelasyon / nötr akraba → veto YOK (uydurma yok).
 - Ağ çağrısı YOK — correlation.price_return_series (1d OHLCV disk cache) + partner
@@ -78,9 +77,7 @@ def assess(candidate_symbol: str, side: str, universe: list[str], cfg: dict) -> 
 
     Boş dict = değerlendirilecek güçlü akraba yok (veto konusu değil). Aksi halde:
     en güçlü akraba bulunur, KENDİ yön okuması ilişkinin beklediğiyle çelişirse
-    `vetoed=True`. `enabled` kapalıyken rapor yine dolu (shadow); yalnız açıkken
-    engel. Saf/defansif — asla raise etmez (engine try/except zaten sarar)."""
-    enabled = bool(cfg.get("enabled", False))
+    `vetoed=True`. Saf/defansif — asla raise etmez (engine try/except zaten sarar)."""
     min_rho = float(cfg.get("min_abs_rho", 0.5))
     window = int(cfg.get("corr_window_days", 90))
     cand_sign = 1.0 if side == "long" else -1.0
@@ -94,7 +91,7 @@ def assess(candidate_symbol: str, side: str, universe: list[str], cfg: dict) -> 
     p_lean = partner_lean(partner)
     if p_lean is None or abs(p_lean) < _DIR_EPS:
         return {  # akraba nötr/okunamıyor → çelişki tespit edilemez, veto yok
-            "active": enabled, "vetoed": False, "partner": partner, "rho": rho,
+            "vetoed": False, "partner": partner, "rho": rho,
             "partner_lean": None if p_lean is None else round(p_lean, 3),
             "reason": "akraba yön nötr/okunamıyor",
         }
@@ -104,7 +101,6 @@ def assess(candidate_symbol: str, side: str, universe: list[str], cfg: dict) -> 
     partner_sign = 1.0 if p_lean > 0 else -1.0
     conflict = partner_sign != expected_sign
     return {
-        "active": enabled,
         "vetoed": bool(conflict),
         "partner": partner,
         "rho": rho,

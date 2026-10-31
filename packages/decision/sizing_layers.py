@@ -1,4 +1,4 @@
-"""Boyut katmanları — inanç-boyu + oynaklık-paritesi (P1, shadow-first, YALNIZ KISAR).
+"""Boyut katmanları — inanç-boyu + oynaklık-paritesi + son-edge freni (YALNIZ KISAR).
 
 5 yıllık backtest bulguları (2026-07-10, çok-rejim, gerçek veri):
 
@@ -8,10 +8,8 @@
 - **Oynaklık paritesi:** boyut ATR/oynaklığa ters orantılandığında (oynak varlığa az
   para) 5y maksimum düşüş −293 → −171 (yarıya yakın), getiri korunuyor.
 
-MİMARİ KURALLAR (self_conflict/concentration/regime_brake deseniyle birebir):
-- Config-flag (`sizing_layers.*.enabled`, thresholds YAML, default FALSE) — env flag
-  YOK. Kapalıyken faktör 1.0 → boyut BAYT-AYNI (shadow-first: rapor her kararda
-  hesaplanır, davranış değişmez; owner kanıtı panelden izler).
+MİMARİ KURALLAR:
+- Üç katman her kararda hesaplanır ve çarpılır; rapor kararla birlikte taşınır.
 - **NO-BOOST:** her faktör [floor, 1.0] arasına clamp'lenir — ASLA boyut artırmaz.
 - Saf fonksiyon, yan etki yok; yetersiz girdi → faktör 1.0 (kısma yok, uydurma yok).
 - RiskGate/DQS/halt'ı bypass ETMEZ — karar zincirinde en son boyut katmanı.
@@ -70,12 +68,8 @@ def evaluate(
 ) -> dict:
     """Katmanları hesapla → rapor (faktörler + uygulanan birleşik çarpan).
 
-    Her katman config-flag'iyle bağımsız; kapalı olan faktör 1.0 (etkisiz). `applied`
-    = hepsi kapalıyken 1.0 (shadow: rapor dolu, boyut değişmez). Saf/defansif — raise etmez."""
+    `applied` = üç faktörün çarpımı, [0, 1] aralığında. Saf/defansif — raise etmez."""
     brake_cfg = brake_cfg or {}
-    conv_on = bool(conviction_cfg.get("enabled", False))
-    vp_on = bool(vol_parity_cfg.get("enabled", False))
-    brake_on = bool(brake_cfg.get("enabled", False))
 
     conv_f = conviction_factor(
         score,
@@ -93,21 +87,12 @@ def evaluate(
         threshold=float(brake_cfg.get("threshold", 0.0)),
         factor=float(brake_cfg.get("factor", 0.5)),
     )
-    applied = 1.0
-    if conv_on:
-        applied *= conv_f
-    if vp_on:
-        applied *= vp_f
-    if brake_on:
-        applied *= brake_f
-    applied = _clamp(applied, 0.0, 1.0)   # no-boost güvencesi
+    applied = _clamp(conv_f * vp_f * brake_f, 0.0, 1.0)   # no-boost güvencesi
     return {
-        "conviction": {"enabled": conv_on, "factor": round(conv_f, 4),
+        "conviction": {"factor": round(conv_f, 4),
                        "strength": round(abs(score - _NEUTRAL_SCORE), 2)},
-        "vol_parity": {"enabled": vp_on, "factor": round(vp_f, 4),
-                       "realized_vol": realized_vol},
-        "brake": {"enabled": brake_on, "factor": round(brake_f, 4),
-                  "recent_edge": recent_edge},
+        "vol_parity": {"factor": round(vp_f, 4), "realized_vol": realized_vol},
+        "brake": {"factor": round(brake_f, 4), "recent_edge": recent_edge},
         "applied_factor": round(applied, 4),
     }
 

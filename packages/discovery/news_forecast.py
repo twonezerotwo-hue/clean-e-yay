@@ -207,7 +207,7 @@ def _ingest_web(store: dict[str, dict], asset: Mapping[str, Any], hits: Iterable
         store[k] = {
             "title": title[:240], "source": source, "origin": "web",
             "ts": _iso(_parse(getattr(hit, "published_date", None)) or now),
-            "sentiment": classify.classify_sentiment_active(f"{title}. {content}"),
+            "sentiment": classify.classify_sentiment(f"{title}. {content}"),
             "impact": {}, "url": url, "asset_hint": asset["symbol"],
             "story_key": story_key(title),
             "source_family": source_family(source, title=title, url=url),

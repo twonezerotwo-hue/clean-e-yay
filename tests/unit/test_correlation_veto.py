@@ -3,9 +3,8 @@
 Kritik güvenceler:
 - Çelişki mantığı: pozitif rho → akraba aynı yön beklenir; negatif rho → ters.
   Beklenenden sapma = veto.
-- Shadow-first: enabled kapalıyken active=False (rapor dolu ama karar değişmez).
 - Saf/defansif: güçlü akraba yok / akraba nötr → veto YOK.
-- YALNIZ ENGELLER: boyut artırmaz; engine'de flag açıkken hold döner.
+- YALNIZ ENGELLER: boyut artırmaz; engine'de çelişkide hold döner.
 """
 from __future__ import annotations
 
@@ -24,49 +23,42 @@ def _patch_neighbors(monkeypatch, *, partner, rho, plean):
 def test_no_strong_relative_returns_empty(monkeypatch):
     """Güçlü akraba yok → boş dict (veto konusu değil, gözlem gürültüsü yok)."""
     monkeypatch.setattr(cv, "nearest_relative", lambda *a, **k: (None, 0.2))
-    assert cv.assess("BTCUSD", "long", ["XAUUSD"], {"enabled": True}) == {}
+    assert cv.assess("BTCUSD", "long", ["XAUUSD"], {}) == {}
 
 
 def test_neutral_partner_no_veto(monkeypatch):
     """Akraba yön nötr → çelişki tespit edilemez → veto yok."""
     _patch_neighbors(monkeypatch, partner="XAGUSD", rho=0.8, plean=0.0)
-    r = cv.assess("XAUUSD", "long", ["XAGUSD"], {"enabled": True})
+    r = cv.assess("XAUUSD", "long", ["XAGUSD"], {})
     assert r["vetoed"] is False and r["partner"] == "XAGUSD"
 
 
 def test_positive_rho_same_direction_aligned(monkeypatch):
     """Pozitif rho + akraba AYNI yön → uyumlu (veto YOK)."""
     _patch_neighbors(monkeypatch, partner="XAGUSD", rho=0.8, plean=0.6)
-    r = cv.assess("XAUUSD", "long", ["XAGUSD"], {"enabled": True})
+    r = cv.assess("XAUUSD", "long", ["XAGUSD"], {})
     assert r["vetoed"] is False
 
 
 def test_positive_rho_opposite_direction_vetoes(monkeypatch):
     """Pozitif rho + akraba TERS yön → çelişki → VETO. (altın long, gümüş short)."""
     _patch_neighbors(monkeypatch, partner="XAGUSD", rho=0.8, plean=-0.6)
-    r = cv.assess("XAUUSD", "long", ["XAGUSD"], {"enabled": True})
+    r = cv.assess("XAUUSD", "long", ["XAGUSD"], {})
     assert r["vetoed"] is True and r["expected_partner_sign"] == 1.0
 
 
 def test_negative_rho_same_direction_vetoes(monkeypatch):
     """Negatif rho + akraba AYNI yön → çelişki (ters bekleniyordu) → VETO."""
     _patch_neighbors(monkeypatch, partner="DXY", rho=-0.7, plean=0.5)
-    r = cv.assess("XAUUSD", "long", ["DXY"], {"enabled": True})
+    r = cv.assess("XAUUSD", "long", ["DXY"], {})
     assert r["vetoed"] is True and r["expected_partner_sign"] == -1.0
 
 
 def test_negative_rho_opposite_direction_aligned(monkeypatch):
     """Negatif rho + akraba TERS yön → uyumlu (dolar düşerken altın long) → veto YOK."""
     _patch_neighbors(monkeypatch, partner="DXY", rho=-0.7, plean=-0.5)
-    r = cv.assess("XAUUSD", "long", ["DXY"], {"enabled": True})
+    r = cv.assess("XAUUSD", "long", ["DXY"], {})
     assert r["vetoed"] is False
-
-
-def test_shadow_disabled_reports_but_inactive(monkeypatch):
-    """enabled kapalı → active=False (rapor dolu, karar katmanı ELE ALMAZ = shadow)."""
-    _patch_neighbors(monkeypatch, partner="XAGUSD", rho=0.8, plean=-0.6)
-    r = cv.assess("XAUUSD", "long", ["XAGUSD"], {"enabled": False})
-    assert r["active"] is False and r["vetoed"] is True   # çelişki görülür ama pasif
 
 
 def test_nearest_relative_picks_strongest(monkeypatch):
@@ -113,26 +105,12 @@ def _force_pass(monkeypatch, *, score=85.0):
     return dec, snap, regime
 
 
-def test_engine_shadow_default_no_veto(fresh_env, monkeypatch):
-    """Default (flag kapalı): korelasyon vetosu KARARI DÜŞÜRMEZ (shadow)."""
-    from packages.risk.engine import RiskDecision
-    dec, snap, regime = _force_pass(monkeypatch)
-    # akraba çelişse bile flag kapalı → active False → geçer
-    monkeypatch.setattr(dec.correlation_veto, "assess",
-                        lambda *a, **k: {"active": False, "vetoed": True, "partner": "SP500"})
-    hold_risk = RiskDecision(action="HOLD", reason="ok", evidence=[])
-    d = dec.decide_for_symbol("BTCUSD", snap, regime, hold_risk, equity_usd=100_000)
-    assert d.action == "open_long"
-    assert "correlation_veto" not in d.blocked_by
-    assert d.correlation_veto_report.get("vetoed") is True  # gözlem taşınır
-
-
-def test_engine_veto_on_blocks(fresh_env, monkeypatch):
-    """Flag açık + akraba çelişkisi → işlem ENGELLENİR (hold)."""
+def test_engine_veto_blocks(fresh_env, monkeypatch):
+    """Akraba çelişkisi → işlem ENGELLENİR (hold)."""
     from packages.risk.engine import RiskDecision
     dec, snap, regime = _force_pass(monkeypatch)
     monkeypatch.setattr(dec.correlation_veto, "assess", lambda *a, **k: {
-        "active": True, "vetoed": True, "partner": "SP500", "rho": 0.62,
+        "vetoed": True, "partner": "SP500", "rho": 0.62,
         "partner_lean": -0.5, "reason": "SP500 (rho=+0.62) ilişkiyle çelişiyor"})
     hold_risk = RiskDecision(action="HOLD", reason="ok", evidence=[])
     d = dec.decide_for_symbol("BTCUSD", snap, regime, hold_risk, equity_usd=100_000)
@@ -141,12 +119,12 @@ def test_engine_veto_on_blocks(fresh_env, monkeypatch):
     assert d.correlation_veto_report["partner"] == "SP500"
 
 
-def test_engine_veto_on_but_aligned_passes(fresh_env, monkeypatch):
-    """Flag açık ama akraba UYUMLU (vetoed False) → işlem geçer."""
+def test_engine_veto_aligned_passes(fresh_env, monkeypatch):
+    """Akraba UYUMLU (vetoed False) → işlem geçer."""
     from packages.risk.engine import RiskDecision
     dec, snap, regime = _force_pass(monkeypatch)
     monkeypatch.setattr(dec.correlation_veto, "assess", lambda *a, **k: {
-        "active": True, "vetoed": False, "partner": "SP500", "rho": 0.62})
+        "vetoed": False, "partner": "SP500", "rho": 0.62})
     hold_risk = RiskDecision(action="HOLD", reason="ok", evidence=[])
     d = dec.decide_for_symbol("BTCUSD", snap, regime, hold_risk, equity_usd=100_000)
     assert d.action == "open_long"

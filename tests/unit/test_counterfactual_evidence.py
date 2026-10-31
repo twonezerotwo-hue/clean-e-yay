@@ -17,7 +17,7 @@ from packages.data.registry.loader import threshold_override
 from packages.learning import empirical_pwin as ep
 from packages.learning import missed_opportunity as mo
 
-_CFG = {"empirical_pwin": {"enabled": False, "min_samples": 5}}
+_CFG = {"empirical_pwin": {"min_samples": 5}}
 
 
 def _o(tf: str, regime: str, pnl: float):

@@ -5,8 +5,7 @@
   guardrail [floor, 1.0].
 - active_mult(): artifact yok/bayat/rejim frenli değil → (1.0, None); kurcalanmış
   mult > 1.0 okurken 1.0'a kırpılır (fren asla büyütmez).
-- Engine kablolama: flag OFF → boyut bayt-aynı + shadow raporu applied=False;
-  flag ON → boyut × mult, blocked_by'da regime_risk_brake.
+- Engine kablolama: boyut × mult, blocked_by'da regime_risk_brake, rapor kanıtı taşır.
 """
 from __future__ import annotations
 
@@ -20,7 +19,7 @@ from packages.data.registry.loader import threshold_override
 from packages.learning import regime_risk_brake as rrb
 
 _CFG = {"regime_risk_brake": {
-    "enabled": False, "min_live_n": 3, "min_backtest_n": 5,
+    "min_live_n": 3, "min_backtest_n": 5,
     "brake_mult": 0.6, "floor": 0.4, "max_age_hours": 48,
 }}
 
@@ -163,27 +162,13 @@ def _write_brake_for(regime_label: str, mult: float = 0.5):
     rrb._cache["mtime"] = None
 
 
-def test_engine_flag_off_byte_same_with_shadow(monkeypatch):
+def test_engine_reduces_size(monkeypatch):
     run, regime = _decide(monkeypatch)
-    with threshold_override(_CFG):
-        base = run()
-        assert base.size_multiplier > 0
-        assert base.regime_brake_report == {}          # kanıt yok → boş
-        _write_brake_for(regime.label, mult=0.5)
-        off = run()
-        assert off.size_multiplier == base.size_multiplier  # bayt-aynı boyut
-        assert off.regime_brake_report.get("applied") is False  # shadow birikir
-        assert "regime_risk_brake" not in off.blocked_by
-
-
-def test_engine_flag_on_reduces_size(monkeypatch):
-    run, regime = _decide(monkeypatch)
-    on_cfg = {"regime_risk_brake": {**_CFG["regime_risk_brake"], "enabled": True}}
     with threshold_override(_CFG):
         base = run()
     _write_brake_for(regime.label, mult=0.5)
-    with threshold_override(on_cfg):
+    with threshold_override(_CFG):
         on = run()
     assert on.size_multiplier == pytest.approx(base.size_multiplier * 0.5, abs=1e-3)
-    assert on.regime_brake_report.get("applied") is True
+    assert on.regime_brake_report
     assert "regime_risk_brake" in on.blocked_by

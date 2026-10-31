@@ -13,16 +13,12 @@ Politika:
   hizalama ≤ -threshold → hedge (ayrı raporlanır, cap'e girmez).
 - Cluster toplamı ≥ `max_cluster_pct` (0.30 equity) → size_factor 0.0;
   yarısını aştıysa → 0.5.
-- rho kaynağı (F2-2, 2026-07-02): flag `risk_gates.correlation_price_returns`
-  AÇIKKEN önce gerçek fiyat getirisinden hesaplanır (computed_price — 1d OHLCV
-  disk cache'i, ağ çağrısı YOK, yalnız verified barlar); yoksa/yetersizse
-  kapalı trade PnL serisi (computed); yetersizse config `correlation_baseline`
+- rho kaynağı: önce gerçek 1d fiyat getirisi (computed_price — OHLCV disk
+  cache'i, ağ çağrısı YOK, yalnız verified barlar); yoksa/yetersizse kapalı
+  trade PnL serisi (computed); yetersizse config `correlation_baseline`
   (baseline); o da yoksa neutral (rho=0, `insufficient_correlation_data`
-  uyarısı, adjustment yok). Flag KAPALIYKEN (default) aktif zincir eski
-  davranışla birebir; fiyat-rho her girdide `rho_price`/`price_samples`
-  SALT-GÖZLEM alanı olarak yine hesaplanır (owner aktivasyon kanıtını
-  /risk/correlation matrisinden izler). DATA_POLICY: yalnızca
-  `data_verified=True` trade'ler ve `verified=True` barlar kullanılır.
+  uyarısı, adjustment yok). DATA_POLICY: yalnızca `data_verified=True`
+  trade'ler ve `verified=True` barlar kullanılır.
 """
 from __future__ import annotations
 
@@ -77,15 +73,6 @@ class ClusterReport:
 
 def _gates() -> dict:
     return load_thresholds()["risk_gates"]
-
-
-def _price_returns_enabled() -> bool:
-    """`risk_gates.correlation_price_returns` owner-flag'i (default KAPALI).
-
-    KAPALI → aktif rho zinciri eski davranışla birebir (computed → baseline →
-    neutral); fiyat-rho yalnız gözlem alanlarında. AÇIK → computed_price
-    zincirin başına geçer. Aktivasyon ayrı tarihli owner kararı."""
-    return bool(_gates().get("correlation_price_returns", False))
 
 
 def _price_min_overlap() -> int:
@@ -220,7 +207,7 @@ def pair_correlation(
     rho_price, price_samples = (
         _pair_price_rho(a, b, price_series) if price_series is not None else (None, 0)
     )
-    if _price_returns_enabled() and rho_price is not None:
+    if rho_price is not None:
         return CorrelationEntry(
             symbol_a=a, symbol_b=b, rho=rho_price,
             source="computed_price", samples=price_samples,

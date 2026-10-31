@@ -4,8 +4,7 @@
   per_timeframe verilmeyen save mevcut TF fit'lerini KORUR.
 - Trainer: TF başına fit (örneği yetersiz TF → insufficient, sahte fit yok);
   global fit davranışı birebir eski.
-- predict_calibrated_tf: flag KAPALI (default) → global predict birebir
-  (bayt-aynı regresyon); AÇIK → TF fit'i varsa "fitted_tf", yoksa global.
+- predict_calibrated_tf: TF fit'i varsa "fitted_tf", yoksa global.
 - Guardrail: fitted_tf de şişme cap'ine tabi ("fitted_tf_capped").
 """
 from __future__ import annotations
@@ -16,8 +15,6 @@ import pytest
 
 from packages.data.registry.loader import threshold_override
 from packages.learning.calibration import apply_platt
-
-_TF_ON = {"calibration": {"tf_platt": True}}
 
 
 @pytest.fixture
@@ -97,24 +94,23 @@ def test_trainer_fits_per_tf_and_marks_insufficient(fresh_env) -> None:
 # ------------------------------ predict + flag -------------------------------
 
 
-def test_predict_tf_flag_on_uses_tf_fit_or_falls_back(fresh_env) -> None:
+def test_predict_tf_uses_tf_fit_or_falls_back(fresh_env) -> None:
     ps, cs = fresh_env
     from packages.learning import calibration_trainer as ct
     _seed(ps, "15m", n_high_win=6, n_low_loss=6)
     _seed(ps, "1d", n_high_win=2, n_low_loss=1)
     ct.train()
     tf_params = cs.load_tf("15m")
-    with threshold_override(_TF_ON):
-        val, source = cs.predict_calibrated_tf(0.8, "15m")
-        assert source == "fitted_tf"
-        assert val == pytest.approx(
-            min(max(apply_platt(0.8, tf_params.a, tf_params.b), 0.0), 1.0), abs=1e-4
-        )
-        # 1d yetersiz → global fit'e düşer (kaynak global damgası)
-        val_1d, source_1d = cs.predict_calibrated_tf(0.8, "1d")
-        assert (val_1d, source_1d) == cs.predict_calibrated(0.8)
-        # hiç görülmemiş TF → global
-        assert cs.predict_calibrated_tf(0.8, "4h") == cs.predict_calibrated(0.8)
+    val, source = cs.predict_calibrated_tf(0.8, "15m")
+    assert source == "fitted_tf"
+    assert val == pytest.approx(
+        min(max(apply_platt(0.8, tf_params.a, tf_params.b), 0.0), 1.0), abs=1e-4
+    )
+    # 1d yetersiz → global fit'e düşer (kaynak global damgası)
+    val_1d, source_1d = cs.predict_calibrated_tf(0.8, "1d")
+    assert (val_1d, source_1d) == cs.predict_calibrated(0.8)
+    # hiç görülmemiş TF → global
+    assert cs.predict_calibrated_tf(0.8, "4h") == cs.predict_calibrated(0.8)
 
 
 def test_guardrail_caps_fitted_tf(fresh_env) -> None:
@@ -124,11 +120,7 @@ def test_guardrail_caps_fitted_tf(fresh_env) -> None:
         cs.CalibrationParams(a=1.0, b=0.0, samples=30, status="fitted"),
         per_timeframe={"15m": cs.CalibrationParams(a=1.0, b=3.0, samples=12, status="fitted")},
     )
-    ov = {
-        "calibration": {"tf_platt": True},
-        "calibration_guardrail": {"enabled": True, "max_inflation_delta": 0.05},
-    }
-    with threshold_override(ov):
+    with threshold_override({"calibration_guardrail": {"max_inflation_delta": 0.05}}):
         fitted, source = cs.predict_calibrated_tf(0.3, "15m")
         assert source == "fitted_tf" and fitted > 0.35
         capped, capped_source = cs.apply_inflation_guardrail(0.3, fitted, source)

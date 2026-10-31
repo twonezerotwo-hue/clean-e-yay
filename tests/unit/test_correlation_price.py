@@ -1,10 +1,7 @@
 """F2-2 — fiyat-getirisi korelasyonu (computed_price) testleri.
 
-- Flag KAPALI (default): aktif rho zinciri eski davranışla birebir (computed →
-  baseline → neutral); fiyat-rho yalnız `rho_price`/`price_samples` gözlem
-  alanlarında.
-- Flag AÇIK: yeterli ortak günü olan çiftte computed_price zincirin başına
-  geçer; yetersizse eski zincir devralır.
+- Yeterli ortak günü olan çiftte computed_price zincirin başındadır;
+  yetersizse trade-PnL → baseline → neutral zinciri devralır.
 - DATA_POLICY: verified=False (fixture) barlar seriye girmez.
 - Pencere deterministik: veri setindeki en son bar gününe göre.
 """
@@ -15,11 +12,8 @@ from datetime import UTC, datetime, timedelta
 import pytest
 
 from packages.data.providers.ohlcv import cache as ohlcv_cache
-from packages.data.registry.loader import threshold_override
 from packages.data.types import OHLCVBar
 from packages.risk import correlation as corr
-
-_FLAG_ON = {"risk_gates": {"correlation_price_returns": True}}
 
 
 def _bars(symbol: str, closes: list[float], *, verified: bool = True) -> list[OHLCVBar]:
@@ -66,24 +60,22 @@ def test_unverified_bars_excluded(cache_dir) -> None:
     assert corr.price_return_series(["AAA"]) == {}
 
 
-def test_flag_on_price_takes_priority(cache_dir) -> None:
+def test_price_takes_priority(cache_dir) -> None:
     ohlcv_cache.save("BTCUSD", "1d", _bars("BTCUSD", _X))
     ohlcv_cache.save("ETHUSD", "1d", _bars("ETHUSD", _Z))  # ters seri → rho=-1
-    with threshold_override(_FLAG_ON):
-        entries = corr.matrix(["BTCUSD", "ETHUSD"], trades=[])
+    entries = corr.matrix(["BTCUSD", "ETHUSD"], trades=[])
     e = entries[0]
     assert e.source == "computed_price"
     assert e.rho == pytest.approx(-1.0, abs=0.01)  # baseline +0.75'i ezdi
     assert e.samples == 24
 
 
-def test_flag_on_insufficient_overlap_falls_back(cache_dir) -> None:
+def test_insufficient_overlap_falls_back(cache_dir) -> None:
     """Ortak gün < correlation_price_min_overlap_days (20) → fiyat-rho aktif
     OLAMAZ; zincir baseline'a düşer, gözlemde price_samples görünür."""
     ohlcv_cache.save("BTCUSD", "1d", _bars("BTCUSD", _X[:10]))
     ohlcv_cache.save("ETHUSD", "1d", _bars("ETHUSD", _Y[:10]))
-    with threshold_override(_FLAG_ON):
-        entries = corr.matrix(["BTCUSD", "ETHUSD"], trades=[])
+    entries = corr.matrix(["BTCUSD", "ETHUSD"], trades=[])
     e = entries[0]
     assert e.source == "baseline"
     assert e.rho == pytest.approx(0.75)
@@ -91,10 +83,9 @@ def test_flag_on_insufficient_overlap_falls_back(cache_dir) -> None:
     assert e.price_samples == 9
 
 
-def test_flag_on_no_cache_neutral_fallback(cache_dir) -> None:
+def test_no_cache_neutral_fallback(cache_dir) -> None:
     """Cache yok + baseline yok → neutral (rho=0) — eski davranış korunur."""
-    with threshold_override(_FLAG_ON):
-        entries = corr.matrix(["AAA", "BBB"], trades=[])
+    entries = corr.matrix(["AAA", "BBB"], trades=[])
     e = entries[0]
     assert e.source == "neutral"
     assert e.rho == 0.0

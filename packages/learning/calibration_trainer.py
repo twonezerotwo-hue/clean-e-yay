@@ -74,8 +74,7 @@ def _fit_per_timeframe(
 
 def train() -> dict:
     """Calibration parametrelerini öğren (global + F4-1 per-TF), store'a yaz,
-    özet döndür. Global fit davranışı birebir eskisi; per-TF fit'ler additive
-    yazılır ve yalnız `calibration.tf_platt` flag'i açıkken karar zincirine girer."""
+    özet döndür. Karar zinciri önce TF fit'ini, yoksa global fit'i kullanır."""
     tf_samples = _samples_from_state()
     samples = [(x, y) for _, x, y in tf_samples]
     n = len(samples)

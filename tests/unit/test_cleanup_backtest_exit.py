@@ -4,8 +4,6 @@ from __future__ import annotations
 from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
 
-import pytest
-
 from packages.data import strategy_backtest
 from packages.paper import execution_sim as ex
 
@@ -74,18 +72,12 @@ def test_strategy_backtest_uses_live_exit_policy(monkeypatch):
     monkeypatch.setattr(strategy_backtest, "build_timeframe_result", fake_tf)
     monkeypatch.setattr(strategy_backtest, "_sl_tp_pct", lambda s: (0.005, 0.01))
 
-    monkeypatch.setattr(strategy_backtest, "_exit_policy", lambda: (True, 2.0))
+    monkeypatch.setattr(strategy_backtest, "_disaster_mult", lambda: 2.0)
     live = strategy_backtest.run_signal_backtest("BTCUSD", "1d")
     assert live["total_trades"] == 0, "kapanış stopu: fitil tek başına stop değil"
 
-    calls["n"] = 0
-    monkeypatch.setattr(strategy_backtest, "_exit_policy", lambda: (False, 2.0))
-    wick = strategy_backtest.run_signal_backtest("BTCUSD", "1d")
-    assert wick["total_trades"] == 1 and wick["trades"][0]["exit_reason"] == ex.SL_HIT
 
-
-@pytest.mark.parametrize("enabled", [True, False])
-def test_exit_policy_reads_config(monkeypatch, enabled):
+def test_disaster_mult_reads_config(monkeypatch):
     monkeypatch.setattr(strategy_backtest, "load_thresholds",
-                        lambda: {"exit_close_based_stop": {"enabled": enabled, "disaster_mult": 3}})
-    assert strategy_backtest._exit_policy() == (enabled, 3.0)
+                        lambda: {"exit_close_based_stop": {"disaster_mult": 3}})
+    assert strategy_backtest._disaster_mult() == 3.0

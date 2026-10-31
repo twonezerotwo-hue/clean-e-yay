@@ -279,7 +279,6 @@ def _regime_weight_test(learning: Mapping[str, Any], regime_report: Mapping[str,
         "inverse_or_insufficient_modules": inverse,
         "per_regime": regimes,
         "risk_brake": {
-            "enabled": regime_report.get("enabled"),
             "braked_regimes": list(regime_report.get("braked_regimes") or []),
         },
         "weight_changes": [],

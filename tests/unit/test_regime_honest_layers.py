@@ -1,8 +1,6 @@
 """F2-3 + M2 — rejim katmanı veri dürüstlüğü testleri.
 
-- Flag KAPALI (default): eksik makro veri eski default'larla doldurulur —
-  davranış bayt-aynı (regresyon), dropped hep boş.
-- Flag AÇIK: veri olmayan katman DÜŞER (sahte skor yok); ortalama kalanlardan.
+- Veri olmayan katman DÜŞER (sahte skor yok); ortalama kalanlardan.
 - Consensus: katmansız kalan fundamental/sentinel modülü düşer, ağırlık
   redistribute edilir (quantum deseni), warning yazılır.
 - M2: rejim-makro fiyatı eksikse snapshot warning listesine girer (flag'siz).
@@ -14,10 +12,7 @@ from types import SimpleNamespace
 import pytest
 
 from packages.data.ingestion.pipeline import _regime_macro_missing
-from packages.data.registry.loader import threshold_override
 from packages.regime.classifier import classify
-
-_FLAG_ON = {"regime": {"drop_unavailable_layers": True}}
 
 
 def _q(symbol: str, price: float | None):
@@ -39,27 +34,10 @@ _FULL_MACRO = (
 )
 
 
-# ------------------------- flag KAPALI (regresyon) ---------------------------
+# ------------------------------ katman düşürme ------------------------------
 
-
-def test_flag_off_real_data_same_as_flag_on() -> None:
-    """Tüm veriler mevcutken flag'in hiçbir etkisi yok (skorlar aynı)."""
-    btc_tech = SimpleNamespace(score=53.6, rsi=53.2, ema_stack="bearish")
-    snap = _snap(prices=_FULL_MACRO, technicals={"BTCUSD": btc_tech})
-    off = classify(snap)
-    with threshold_override(_FLAG_ON):
-        on = classify(snap)
-    assert [(ly.name, ly.score) for ly in off.layers] == [
-        (ly.name, ly.score) for ly in on.layers
-    ]
-    assert on.dropped == []
-
-
-# --------------------------- flag AÇIK (dürüst mod) --------------------------
-
-def test_flag_on_drops_layers_without_data() -> None:
-    with threshold_override(_FLAG_ON):
-        out = classify(_snap(rotation_status="UNAVAILABLE"))
+def test_drops_layers_without_data() -> None:
+    out = classify(_snap(rotation_status="UNAVAILABLE"))
     assert set(out.dropped) == {
         "Likidite", "Risk İştahı", "Kripto Momentum", "Sermaye Rotasyonu"
     }
@@ -67,21 +45,19 @@ def test_flag_on_drops_layers_without_data() -> None:
     assert out.label == "NEUTRAL"  # skor uydurulmaz; etiket tarafsız fallback
 
 
-def test_flag_on_average_over_remaining_layers() -> None:
+def test_average_over_remaining_layers() -> None:
     """Yalnız VIX var → tek katman (Risk İştahı 80) → ortalama 80 → OFFENSIVE."""
-    with threshold_override(_FLAG_ON):
-        out = classify(_snap(prices=[_q("VIX", 17.0)], rotation_status="UNAVAILABLE"))
+    out = classify(_snap(prices=[_q("VIX", 17.0)], rotation_status="UNAVAILABLE"))
     assert [ly.name for ly in out.layers] == ["Risk İştahı"]
     assert out.layers[0].score == 80.0
     assert out.label == "OFFENSIVE"
     assert "Likidite" in out.dropped
 
 
-def test_flag_on_partial_curve_skipped_not_faked() -> None:
+def test_partial_curve_skipped_not_faked() -> None:
     """DXY+US10Y gerçek ama US02Y yok → katman kalır, eğri sinyali atlanır
     (yarısı uydurma 2s10s hesaplanmaz)."""
-    with threshold_override(_FLAG_ON):
-        out = classify(_snap(prices=[_q("DXY", 101.0), _q("US10Y", 4.4)]))
+    out = classify(_snap(prices=[_q("DXY", 101.0), _q("US10Y", 4.4)]))
     liq = next(ly for ly in out.layers if ly.name == "Likidite")
     assert any("2s10s veri yok" in e for e in liq.evidence)
     # score = 100 − 1×2 − 0.4×5 = 96.0 (eğri cezası yok)

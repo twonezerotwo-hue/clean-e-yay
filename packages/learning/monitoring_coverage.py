@@ -14,7 +14,7 @@ BAĞLAR ve `test_monitoring_coverage` bunu guard'lar:
   OWN_ROLLBACK  — auto-apply kendi outcome-rollback'ine bağlı (post<baseline →
                   otomatik revert). `monitor` = "modül:callable" (import edilir).
   INPUT_HYGIENE — girdi/skorlama filtresi; kendi başına aktivasyon değil, ZATEN
-                  izlenen bir mekanizmaya (tf_platt / ağırlık auto-apply) besler.
+                  izlenen bir mekanizmaya (TF kalibrasyonu / ağırlık auto-apply) besler.
   TUNING_PARAM  — bir izleyicinin parametresi (aç/kapa aktivasyonu değil).
   SHADOW_EXEMPT — shadow/observe-only; canlı karar zincirine DOKUNMAZ (izleme
                   gereksiz — kirlenme yok).
@@ -84,8 +84,8 @@ COVERAGE: dict[str, dict] = {
     # --- INPUT_HYGIENE: filtre/mod; zaten-izlenen mekanizmaya besler (3) ---
     "TF_CALIBRATION_AUTO_ONLY": {
         "mechanism": INPUT_HYGIENE, "monitor": None,
-        "reason": "tf_platt kalibrasyonunun girdi filtresi (yalnız auto kohort); "
-                  "tf_platt aktivasyonu zaten watchdog'da — ayrı aktivasyon değil.",
+        "reason": "TF kalibrasyonunun girdi filtresi (yalnız auto kohort); "
+                  "kalibrasyon her zaman açık — ayrı aktivasyon değil.",
     },
     "WEIGHT_LOSS_AWARE": {
         "mechanism": INPUT_HYGIENE, "monitor": None,

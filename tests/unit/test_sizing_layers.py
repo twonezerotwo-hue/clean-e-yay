@@ -2,7 +2,7 @@
 
 Kritik güvenceler:
 - NO-BOOST: hiçbir faktör asla >1.0 (boyut ARTMAZ).
-- Shadow-first: iki flag de kapalıyken applied_factor == 1.0 (boyut bayt-aynı).
+- Güçlü sinyal + sakin varlık + kanıt yok → applied_factor == 1.0 (kısma yok).
 - Saf/defansif: geçersiz/yetersiz girdi → 1.0 (kısma yok, uydurma yok).
 """
 from __future__ import annotations
@@ -114,48 +114,32 @@ def test_brake_no_evidence_full():
     assert sl.brake_factor(None, threshold=0.0, factor=0.5) == 1.0
 
 
-def test_evaluate_shadow_all_off_is_byte_identical():
-    """TÜM flag kapalı → applied_factor 1.0 (rapor dolu ama boyut bayt-aynı)."""
-    r = sl.evaluate(
-        score=80.0, realized_vol=0.10, threshold_dist=15.0,
-        conviction_cfg={"enabled": False}, vol_parity_cfg={"enabled": False},
-        recent_edge=-0.5, brake_cfg={"enabled": False},
-    )
-    assert r["applied_factor"] == 1.0
-    assert r["conviction"]["enabled"] is False and r["vol_parity"]["enabled"] is False
-    assert r["brake"]["enabled"] is False
-    # rapor faktörleri yine de hesaplanmış (shadow gözlem)
-    assert r["conviction"]["factor"] == 1.0          # score 80 zaten tam güç
-    assert r["vol_parity"]["factor"] < 1.0           # 0.10 > ref 0.03 → kısacaktı
-    assert r["brake"]["factor"] == 0.5               # recent_edge −0.5 < 0 → frenlerdi
-
-
 def test_evaluate_brake_only_applies():
-    """Yalnız fren açık + kötü son-edge → yalnız fren çarpanı."""
+    """Tam güç + oynaklık verisi yok + kötü son-edge → yalnız fren çarpanı."""
     r = sl.evaluate(
-        score=80.0, realized_vol=0.10, threshold_dist=15.0,
-        conviction_cfg={"enabled": False}, vol_parity_cfg={"enabled": False},
-        recent_edge=-0.3, brake_cfg={"enabled": True, "threshold": 0.0, "factor": 0.5},
+        score=80.0, realized_vol=None, threshold_dist=15.0,
+        conviction_cfg={}, vol_parity_cfg={},
+        recent_edge=-0.3, brake_cfg={"threshold": 0.0, "factor": 0.5},
     )
     assert r["applied_factor"] == 0.5
 
 
 def test_evaluate_conviction_only_applies():
-    """Yalnız inanç açık → yalnız o faktör uygulanır."""
+    """Oynaklık verisi yok + fren kanıtı yok → yalnız inanç faktörü uygulanır."""
     r = sl.evaluate(
-        score=65.0, realized_vol=0.10, threshold_dist=15.0,
-        conviction_cfg={"enabled": True, "full_strength": 25.0, "min_factor": 0.5},
-        vol_parity_cfg={"enabled": False},
+        score=65.0, realized_vol=None, threshold_dist=15.0,
+        conviction_cfg={"full_strength": 25.0, "min_factor": 0.5},
+        vol_parity_cfg={},
     )
     assert abs(r["applied_factor"] - 0.5) < 1e-9      # sadece conviction (0.5)
 
 
-def test_evaluate_both_on_multiplies_and_clamps():
-    """İkisi de açık → çarpım, ve asla >1.0 (no-boost güvencesi)."""
+def test_evaluate_multiplies_and_clamps():
+    """Faktörler çarpılır ve asla >1.0 (no-boost güvencesi)."""
     r = sl.evaluate(
         score=100.0, realized_vol=0.01, threshold_dist=15.0,   # ikisi de 1.0 verir
-        conviction_cfg={"enabled": True, "full_strength": 25.0, "min_factor": 0.5},
-        vol_parity_cfg={"enabled": True, "ref_vol": 0.03, "floor": 0.3},
+        conviction_cfg={"full_strength": 25.0, "min_factor": 0.5},
+        vol_parity_cfg={"ref_vol": 0.03, "floor": 0.3},
     )
     assert r["applied_factor"] == 1.0                # 1.0 × 1.0, boost yok
 
@@ -166,52 +150,53 @@ def test_evaluate_never_exceeds_one():
         for rv in (0.005, 0.03, 0.2):
             r = sl.evaluate(
                 score=score, realized_vol=rv, threshold_dist=15.0,
-                conviction_cfg={"enabled": True, "full_strength": 25.0, "min_factor": 0.5},
-                vol_parity_cfg={"enabled": True, "ref_vol": 0.03, "floor": 0.3},
+                conviction_cfg={"full_strength": 25.0, "min_factor": 0.5},
+                vol_parity_cfg={"ref_vol": 0.03, "floor": 0.3},
             )
             assert 0.0 <= r["applied_factor"] <= 1.0
 
 
 # ---------------- engine entegrasyonu (end-to-end) ----------------
 
-def test_engine_shadow_default_byte_identical(fresh_env, monkeypatch):
-    """Default (iki flag kapalı): rapor DOLU ama boyut/aksiyon BAYT-AYNI (shadow)."""
+def test_engine_strong_calm_no_evidence_not_reduced(fresh_env, monkeypatch):
+    """Güçlü sinyal + sakin varlık (ref_vol yüksek) + fren kanıtı yok → kısma yok."""
     from packages.risk.engine import RiskDecision
     dec, snap, regime = _force_pass(monkeypatch)
+    monkeypatch.setattr(dec, "_sizing_layers_cfg", lambda: {"vol_parity": {"ref_vol": 100.0}})
     hold_risk = RiskDecision(action="HOLD", reason="ok", evidence=[])
     d = dec.decide_for_symbol("BTCUSD", snap, regime, hold_risk, equity_usd=100_000)
     assert d.action == "open_long"
-    assert d.sizing_layers_report  # rapor her kararda hesaplanır (gölge gözlem)
+    assert d.sizing_layers_report  # rapor her kararda hesaplanır
     assert d.sizing_layers_report["applied_factor"] == 1.0
     assert "sizing_layers" not in d.blocked_by
     assert d.size_multiplier > 0.0
 
 
-def test_engine_conviction_on_reduces_size(fresh_env, monkeypatch):
-    """İnanç açık + zayıf-ish sinyal (full_strength yüksek) → boyut KISILIR, yön korunur."""
+def test_engine_conviction_reduces_size(fresh_env, monkeypatch):
+    """Zayıf-ish sinyal (full_strength yüksek) → boyut KISILIR, yön korunur."""
     from packages.risk.engine import RiskDecision
     dec, snap, regime = _force_pass(monkeypatch, score=85.0)
     # full_strength çok yüksek (100) → güçlü sinyal (strength 35) bile tam-güce
     # ulaşmaz → faktör <1.0 (kontrollü kısma; gerçek config 25 civarı).
     monkeypatch.setattr(dec, "_sizing_layers_cfg", lambda: {
-        "conviction": {"enabled": True, "full_strength": 100.0, "min_factor": 0.5},
-        "vol_parity": {"enabled": False},
+        "conviction": {"full_strength": 100.0, "min_factor": 0.5},
+        "vol_parity": {"ref_vol": 100.0},
     })
     hold_risk = RiskDecision(action="HOLD", reason="ok", evidence=[])
     d = dec.decide_for_symbol("BTCUSD", snap, regime, hold_risk, equity_usd=100_000)
     assert d.action == "open_long"                    # yalnız kısar, yön çevirmez
     assert d.sizing_layers_report["applied_factor"] < 1.0
-    assert d.sizing_layers_report["conviction"]["enabled"] is True
+    assert d.sizing_layers_report["conviction"]["factor"] < 1.0
     assert "sizing_layers" in d.blocked_by
     assert d.size_multiplier > 0.0                    # kısar ama sıfırlamaz
 
 
 def test_engine_brake_reduces_size_in_bad_regime(fresh_env, monkeypatch):
-    """P3 fren: son-edge eksi + fren açık → boyut kısılır (yön korunur)."""
+    """P3 fren: son-edge eksi → boyut kısılır (yön korunur)."""
     from packages.risk.engine import RiskDecision
     dec, snap, regime = _force_pass(monkeypatch, score=85.0)
     monkeypatch.setattr(dec, "_sizing_layers_cfg", lambda: {
-        "brake": {"enabled": True, "threshold": 0.0, "factor": 0.5}})
+        "brake": {"threshold": 0.0, "factor": 0.5}})
     hold_risk = RiskDecision(action="HOLD", reason="ok", evidence=[])
     d = dec.decide_for_symbol("BTCUSD", snap, regime, hold_risk,
                               equity_usd=100_000, recent_edge=-0.4)

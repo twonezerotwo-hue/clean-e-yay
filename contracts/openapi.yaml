@@ -1756,9 +1756,6 @@ components:
         title_tr: { type: string }
         article_summary: { type: string, nullable: true, description: RSS'in yayınladığı sınırlı makale özeti; tam metin kanıtı değil. }
         sentiment: { type: string, enum: [bullish, bearish, neutral] }
-        # M1 — v2 (çekim-eki normalize) sınıflandırıcı okuması; salt-gözlem.
-        # Flag (news.sentiment_v2) kapalıyken karar zinciri `sentiment`(v1) okur.
-        sentiment_v2: { type: string, enum: [bullish, bearish, neutral], nullable: true }
         asset_impact:
           type: object
           additionalProperties: { type: number }
@@ -2690,8 +2687,7 @@ components:
         max_cluster_pct: { type: number }
         window_days: { type: integer }
         min_overlap_days: { type: integer }
-        # F2-2 — fiyat-getirisi korelasyon flag durumu + aktiflik eşiği
-        price_returns_enabled: { type: boolean }
+        # Fiyat-getirisi korelasyonunun aktiflik eşiği (ortak gün)
         price_min_overlap_days: { type: integer }
         symbols:
           type: array
@@ -3769,12 +3765,10 @@ components:
         bins:
           type: array
           items: { $ref: "#/components/schemas/CalibrationBin" }
-        # F4-1 — TF başına Platt fit'i (a/b/samples/status) + flag durumu.
-        # Owner tf_platt aktivasyon kanıtını buradan izler.
+        # TF başına Platt fit'i (a/b/samples/status).
         per_timeframe:
           type: object
           additionalProperties: { $ref: "#/components/schemas/CalibrationParams" }
-        tf_platt_enabled: { type: boolean }
 
     MistakeRecord:
       type: object

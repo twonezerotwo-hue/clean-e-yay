@@ -221,8 +221,8 @@ _GATE_AXES = ("technical_bars", "news_diversity", "rotation_coverage", "artifact
 
 
 def apply_extended_gate(report: QualityReport, cfg: dict | None) -> QualityReport:
-    """M14 observe→eşik (FAZ-2, 2026-07-16): genişletilmiş eksen eşiğin altında
-    ise snapshot status OK→DEGRADED (provenance "karar live sayılmaz" etiketi).
+    """Genişletilmiş eksen eşiğin altındaysa snapshot status OK→DEGRADED
+    (provenance "karar live sayılmaz" etiketi).
 
     Sınırlar (bilinçli):
     - SKORA DOKUNMAZ — skor<55 risk-engine KILL_SWITCH zinciri bu kapıdan
@@ -231,8 +231,8 @@ def apply_extended_gate(report: QualityReport, cfg: dict | None) -> QualityRepor
       DEGRADED'i yükseltmez. Not satırı her ihlalde eklenir (görünürlük).
     - Eşiği 0 olan eksen kapıdan MUAF (yalnız-gözlem sürer); değeri None olan
       eksen o snapshot'ta ölçülemedi demektir, ihlal SAYILMAZ (uydurma yok).
-    - `enabled: false` → rapor bayt-aynı (gölge-önce kuralı)."""
-    if not cfg or not cfg.get("enabled", False) or not report.extended:
+    - cfg yok → kapı yok (rapor aynen)."""
+    if not cfg or not report.extended:
         return report
     breaches: list[str] = []
     for axis in _GATE_AXES:

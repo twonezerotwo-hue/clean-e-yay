@@ -1,11 +1,10 @@
-"""calibration guardrail (flag-gated) + jump ledger (observe-only) testleri."""
+"""calibration guardrail + jump ledger (observe-only) testleri."""
 from __future__ import annotations
 
 import json
 from types import SimpleNamespace
 
 from packages.learning import calibration_audit, calibration_store
-
 
 # inflation_delta + guardrail
 
@@ -14,26 +13,20 @@ def test_inflation_delta_signed():
     assert calibration_store.inflation_delta(0.60, 0.50) == -0.10
 
 
-def test_guardrail_off_is_passthrough(monkeypatch):
-    monkeypatch.setattr(calibration_store, "_guardrail_cfg", lambda: {"enabled": False})
-    val, src = calibration_store.apply_inflation_guardrail(0.114, 0.547, "fitted")
-    assert (val, src) == (0.547, "fitted")
-
-
-def test_guardrail_on_caps_excess_inflation(monkeypatch):
+def test_guardrail_caps_excess_inflation(monkeypatch):
     monkeypatch.setattr(
         calibration_store, "_guardrail_cfg",
-        lambda: {"enabled": True, "max_inflation_delta": 0.25},
+        lambda: {"max_inflation_delta": 0.25},
     )
     val, src = calibration_store.apply_inflation_guardrail(0.114, 0.547, "fitted")
     assert src == "fitted_capped"
     assert val == 0.364  # raw 0.114 + 0.25
 
 
-def test_guardrail_on_within_band_passthrough(monkeypatch):
+def test_guardrail_within_band_passthrough(monkeypatch):
     monkeypatch.setattr(
         calibration_store, "_guardrail_cfg",
-        lambda: {"enabled": True, "max_inflation_delta": 0.25},
+        lambda: {"max_inflation_delta": 0.25},
     )
     val, src = calibration_store.apply_inflation_guardrail(0.40, 0.55, "fitted")
     assert (val, src) == (0.55, "fitted")  # delta 0.15 < 0.25
@@ -42,7 +35,7 @@ def test_guardrail_on_within_band_passthrough(monkeypatch):
 def test_guardrail_skips_non_fitted_source(monkeypatch):
     monkeypatch.setattr(
         calibration_store, "_guardrail_cfg",
-        lambda: {"enabled": True, "max_inflation_delta": 0.05},
+        lambda: {"max_inflation_delta": 0.05},
     )
     val, src = calibration_store.apply_inflation_guardrail(0.114, 0.90, "identity")
     assert (val, src) == (0.90, "identity")

@@ -8,9 +8,9 @@ GERÇEKLEŞMİŞ isabet oranı birikiyor. Bu modül o tabloyu üretir/okur:
   `data/runtime/empirical_pwin.json`'a yazar (`write_table`).
 - Karar motoru `lookup(timeframe, regime)` ile okur (mtime-cache — 30sn
   tick'e dosya IO yükü binmez).
-- Flag `empirical_pwin.enabled` DEFAULT OFF: kapalıyken EV/Kelly eskisi gibi
-  kalibre güvenle hesaplanır (bayt-aynı); ampirik değerler TradeDecision'da
-  SALT-GÖZLEM (`p_win_empirical` / `expected_value_empirical`).
+- Yeterli örnekli hücrede EV/Kelly bu ampirik p ile hesaplanır; hücre yoksa
+  kalibre güvene düşülür. Değerler TradeDecision'da da görünür
+  (`p_win_empirical` / `expected_value_empirical`).
 
 Kurallar (DATA_POLICY/F1-2): yalnız verified outcome; başabaş (pnl==0)
 paydaya girmez; hücre `min_samples` altındaysa lookup DÖNDÜRMEZ (sahte p
@@ -43,26 +43,16 @@ def _path() -> Path:
 
 
 def cfg() -> dict:
-    """`empirical_pwin` config'i (enabled default False, min_samples default 20).
+    """`empirical_pwin` config'i (min_samples default 20).
 
     Counterfactual (missed-opportunity) sayımları tabloda AYRI kanalda (cf_by_tf)
     yalnız gözlem olarak durur; p(win)'e harmanlanmaz (F5-1 harman flag'i hiç
     açılmadı — temizlikte söküldü)."""
     try:
         raw = load_thresholds().get("empirical_pwin") or {}
-        return {
-            "enabled": bool(raw.get("enabled", False)),
-            "min_samples": max(1, int(raw.get("min_samples", DEFAULT_MIN_SAMPLES))),
-        }
+        return {"min_samples": max(1, int(raw.get("min_samples", DEFAULT_MIN_SAMPLES)))}
     except (OSError, KeyError, ValueError, TypeError):
-        return {
-            "enabled": False,
-            "min_samples": DEFAULT_MIN_SAMPLES,
-        }
-
-
-def enabled() -> bool:
-    return cfg()["enabled"]
+        return {"min_samples": DEFAULT_MIN_SAMPLES}
 
 
 @dataclass
@@ -301,6 +291,6 @@ def payoff_readiness() -> dict:
 
 
 __all__ = [
-    "EmpiricalPwin", "build_table", "cfg", "enabled", "lookup",
+    "EmpiricalPwin", "build_table", "cfg", "lookup",
     "payoff_readiness", "write_table",
 ]

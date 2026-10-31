@@ -1,7 +1,6 @@
 """Y-4 — walk-forward doğrulama testleri (threshold_ab.sweep).
 
-- Flag OFF → çıktı birebir eski şekil (walk_forward anahtarı bile yok).
-- Flag ON → aday eğitim penceresinde seçilir; doğrulama penceresinde baseline'ı
+- Aday eğitim penceresinde seçilir; doğrulama penceresinde baseline'ı
   geçmezse öneri YOK (aşırı-uyum kapıda ölür); iki pencerede de geçerse önerilir.
 Motor koşulmaz — run_signal_backtest sahte sonuçla (pencere + entry_ts'li
 trade listesi) monkeypatch'lenir; sahte, override edilen eşiği load_thresholds
@@ -9,12 +8,10 @@ trade listesi) monkeypatch'lenir; sahte, override edilen eşiği load_thresholds
 """
 from __future__ import annotations
 
-from packages.data.registry.loader import load_thresholds, threshold_override
+from packages.data.registry.loader import load_thresholds
 from packages.learning import threshold_ab
 
 _PARAM = "paper_trading.tp_rr_ratio"
-_WF_ON = {"threshold_ab": {"walk_forward": True, "split_ratio": 0.7}}
-
 
 def _fake_result(train_avg: float, val_avg: float) -> dict:
     # 10 günlük pencere; split 0.7 → gün ≤7 eğitim, sonrası doğrulama.
@@ -45,9 +42,8 @@ def _patch_backtest(monkeypatch, table: dict[float, tuple[float, float]]):
 def test_wf_blocks_overfit_candidate(monkeypatch):
     # 2.5 eğitimde parlak (2.0) ama doğrulamada çöküyor (−1.0) → öneri YOK.
     _patch_backtest(monkeypatch, {2.0: (0.5, 0.5), 2.5: (2.0, -1.0)})
-    with threshold_override(_WF_ON):
-        rep = threshold_ab.sweep(_PARAM, [2.5])
-    assert rep["walk_forward"] == {"enabled": True, "split_ratio": 0.7}
+    rep = threshold_ab.sweep(_PARAM, [2.5])
+    assert rep["walk_forward"] == {"split_ratio": 0.7}
     assert rep["best"]["value"] == 2.5          # eğitimde seçildi
     assert rep["best"]["validation"]["avg_return_pct"] == -1.0
     assert rep["recommendation"] is None         # doğrulama teyidi düştü
@@ -56,8 +52,7 @@ def test_wf_blocks_overfit_candidate(monkeypatch):
 def test_wf_confirms_genuine_candidate(monkeypatch):
     # 3.0 iki pencerede de baseline'ı geçiyor → önerilir.
     _patch_backtest(monkeypatch, {2.0: (0.5, 0.5), 3.0: (1.5, 1.2)})
-    with threshold_override(_WF_ON):
-        rep = threshold_ab.sweep(_PARAM, [3.0])
+    rep = threshold_ab.sweep(_PARAM, [3.0])
     assert rep["recommendation"] is not None
     assert rep["recommendation"]["value"] == 3.0
     assert rep["baseline"]["train"]["avg_return_pct"] == 0.5
@@ -68,7 +63,6 @@ def test_wf_selection_is_train_window(monkeypatch):
     # Eğitim kazananı (2.5) doğrulamada düşerse, doğrulamada iyi olan diğer aday
     # (3.0) ARKA KAPIDAN önerilMEZ — walk-forward disiplini seçimi eğitime kilitler.
     _patch_backtest(monkeypatch, {2.0: (0.5, 0.5), 2.5: (2.0, -1.0), 3.0: (1.0, 1.0)})
-    with threshold_override(_WF_ON):
-        rep = threshold_ab.sweep(_PARAM, [2.5, 3.0])
+    rep = threshold_ab.sweep(_PARAM, [2.5, 3.0])
     assert rep["best"]["value"] == 2.5
     assert rep["recommendation"] is None

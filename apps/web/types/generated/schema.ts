@@ -1876,8 +1876,6 @@ export interface components {
             article_summary?: string | null;
             /** @enum {string} */
             sentiment?: "bullish" | "bearish" | "neutral";
-            /** @enum {string|null} */
-            sentiment_v2?: "bullish" | "bearish" | "neutral" | null;
             asset_impact?: {
                 [key: string]: number;
             };
@@ -2511,7 +2509,6 @@ export interface components {
             max_cluster_pct: number;
             window_days?: number;
             min_overlap_days?: number;
-            price_returns_enabled?: boolean;
             price_min_overlap_days?: number;
             symbols: string[];
             matrix: components["schemas"]["CorrelationEntry"][];
@@ -3282,7 +3279,6 @@ export interface components {
             per_timeframe?: {
                 [key: string]: components["schemas"]["CalibrationParams"];
             };
-            tf_platt_enabled?: boolean;
         };
         MistakeRecord: {
             fingerprint: string;

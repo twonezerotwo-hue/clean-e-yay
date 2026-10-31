@@ -48,26 +48,9 @@ _BEARISH_PHRASES: Final[tuple[str, ...]] = (
 )
 
 
-def classify_sentiment(text: str) -> Sentiment:
-    lower = text.lower()
-    words = set(lower.split())
-    bullish = len(words & _BULLISH_WORDS)
-    bearish = len(words & _BEARISH_WORDS)
-    bullish += sum(1 for p in _BULLISH_PHRASES if p in lower)
-    bearish += sum(1 for p in _BEARISH_PHRASES if p in lower)
-    if bearish > bullish:
-        return "bearish"
-    if bullish > bearish:
-        return "bullish"
-    return "neutral"
-
-
 # ---------------------------------------------------------------------------
-# M1 — sentiment v2: çekim-eki normalizasyonu (owner-flag `news.sentiment_v2`,
-# default KAPALI = v1 birebir). v1'in tam-kelime eşleşmesi İngilizce başlıkların
-# 3. tekil çekimini ("Bitcoin rebounds…") sistematik kaçırıyordu; sözlükteki
-# "escalat"/"retaliat" kök girdileri ise tam-kelime modunda HİÇ eşleşemiyordu.
-# v2 aynı sözlük + aynı oylamayı kullanır; yalnız eşleşme kuralı değişir.
+# Eşleşme kuralı: çekim ekleri indirgenir ("rebounds" → rebound) ve ≥6 harfli
+# sözlük kökleri prefix olarak eşleşir ("escalat" → escalates/escalation).
 # ---------------------------------------------------------------------------
 
 _PUNCT_STRIP = ".,;:!?()[]{}\"'’‘“”…"
@@ -109,7 +92,7 @@ def _token_variants(token: str) -> set[str]:
     return out
 
 
-def _match_count_v2(lower: str, words: frozenset[str], phrases: tuple[str, ...]) -> int:
+def _match_count(lower: str, words: frozenset[str], phrases: tuple[str, ...]) -> int:
     count = 0
     for tok in set(lower.split()):
         if _token_variants(tok) & words:
@@ -122,36 +105,16 @@ def _match_count_v2(lower: str, words: frozenset[str], phrases: tuple[str, ...])
     return count
 
 
-def classify_sentiment_v2(text: str) -> Sentiment:
-    """v1 ile aynı sözlük + aynı oylama; fark yalnız eşleşme kuralı:
-    çekim ekleri indirgenir (rebounds→rebound) ve ≥6 harfli sözlük kökleri
-    prefix olarak eşleşir (escalat→escalates)."""
+def classify_sentiment(text: str) -> Sentiment:
+    """Başlık/metin duygu oylaması: sözlük eşleşme sayısı, eşitlik → neutral."""
     lower = text.lower()
-    bullish = _match_count_v2(lower, _BULLISH_WORDS, _BULLISH_PHRASES)
-    bearish = _match_count_v2(lower, _BEARISH_WORDS, _BEARISH_PHRASES)
+    bullish = _match_count(lower, _BULLISH_WORDS, _BULLISH_PHRASES)
+    bearish = _match_count(lower, _BEARISH_WORDS, _BEARISH_PHRASES)
     if bearish > bullish:
         return "bearish"
     if bullish > bearish:
         return "bullish"
     return "neutral"
-
-
-def sentiment_v2_enabled() -> bool:
-    """`news.sentiment_v2` owner-flag'i (default KAPALI = v1 birebir).
-
-    Açılış ayrı tarihli owner kararıdır (config yorumuna yazılır); açılana
-    kadar karar zinciri v1 okur, v2 yalnız `sentiment_v2` gözlem alanına yazılır."""
-    try:
-        from packages.data.registry.loader import load_thresholds
-
-        return bool((load_thresholds().get("news") or {}).get("sentiment_v2", False))
-    except Exception:
-        return False  # config okunamazsa en güvenli: mevcut davranış (v1)
-
-
-def classify_sentiment_active(text: str) -> Sentiment:
-    """Karar zincirine giren sentiment: flag açıkken v2, kapalıyken v1 (bayt-aynı)."""
-    return classify_sentiment_v2(text) if sentiment_v2_enabled() else classify_sentiment(text)
 
 
 # ---------------------------------------------------------------------------

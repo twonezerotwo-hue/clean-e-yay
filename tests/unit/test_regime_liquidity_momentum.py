@@ -12,7 +12,6 @@ from types import SimpleNamespace
 
 import pytest
 
-from packages.data.registry.loader import threshold_override
 from packages.regime import classifier as rc
 
 
@@ -53,7 +52,7 @@ def _snap(dxy=104.0, us10=4.3):
 
 
 def _liq(snap):
-    return rc._liquidity_layer(snap, drop_missing=True)
+    return rc._liquidity_layer(snap)
 
 
 def test_no_archive_is_level_formula(monkeypatch, tmp_path):
@@ -102,10 +101,9 @@ def test_crisis_visible_with_momentum(macro_archive, monkeypatch):
         technicals={"BTCUSD": SimpleNamespace(score=10.0, rsi=20.0, ema_stack="bearish")},
         rotation=SimpleNamespace(score=15.0, direction="risk_off", evidence=[], status="OK"),
     )
-    with threshold_override({"regime": {"drop_unavailable_layers": True}}):
-        out_mom = rc.classify(snap, stateful=False)
-        monkeypatch.setattr(rc, "_archive_liquidity_momentum", lambda: None)  # seviye formülü
-        out_lvl = rc.classify(snap, stateful=False)
+    out_mom = rc.classify(snap, stateful=False)
+    monkeypatch.setattr(rc, "_archive_liquidity_momentum", lambda: None)  # seviye formülü
+    out_lvl = rc.classify(snap, stateful=False)
     order = ["CRISIS", "DEFENSIVE", "NEUTRAL", "OFFENSIVE"]
     # Momentum varyantı en az seviye kadar (veya daha) karamsar rejim üretir.
     assert order.index(out_mom.label) <= order.index(out_lvl.label)

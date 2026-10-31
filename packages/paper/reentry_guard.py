@@ -130,7 +130,6 @@ def assess(
         reason = "reentry_locked:" + "+".join(parts)
 
     return {
-        "active": bool(cfg.get("enabled", False)),
         "locked": locked,
         "symbol": symbol,
         "side": side,

@@ -155,7 +155,7 @@ _HTF_NEUTRAL_BAND = 5.0  # üst TF |lean| < 5 → nötr sayılır, sönümleme y
 
 
 def _htf_alignment_cfg() -> dict:
-    """`technical.htf_alignment` bloğu (enabled default False = bayt-aynı)."""
+    """`technical.htf_alignment` bloğu (min_mult)."""
     try:
         return (load_thresholds().get("technical") or {}).get("htf_alignment") or {}
     except (OSError, KeyError, ValueError, TypeError):
@@ -168,8 +168,8 @@ def _htf_dampen(
     """T-1 — alt TF skoru üst basamağın yönüne TERSse 50'ye doğru kıs.
 
     YALNIZ KÜÇÜLTÜR: aynı yön → dokunmaz (boost yok); üst TF nötr/verisiz →
-    dokunmaz; yön ASLA çevrilmez (çarpan [min_mult..1.0]). Çarpan her karşıtlıkta
-    hesaplanıp warning satırına yazılır (shadow); yalnız flag açıkken uygulanır."""
+    dokunmaz; yön ASLA çevrilmez (çarpan [min_mult..1.0]). Çarpan ve sonuç
+    warning satırına yazılır."""
     htf = _HTF_LADDER.get(timeframe)
     if htf is None:
         return score, None
@@ -191,13 +191,11 @@ def _htf_dampen(
     strength = min(1.0, abs(htf_lean) / 50.0)  # üst TF ne kadar kararlı
     mult = 1.0 - (1.0 - min_mult) * strength
     adjusted = 50.0 + ltf_lean * mult
-    enabled = bool(cfg.get("enabled", False))
-    tag = "htf_alignment" if enabled else "htf_alignment_shadow"
     warning = (
-        f"{tag}:{symbol}:{timeframe}vs{htf}:htf_score={float(ds):.1f}:"
-        f"mult={mult:.3f}:raw={score:.2f}:used={adjusted if enabled else score:.2f}"
+        f"htf_alignment:{symbol}:{timeframe}vs{htf}:htf_score={float(ds):.1f}:"
+        f"mult={mult:.3f}:raw={score:.2f}:used={adjusted:.2f}"
     )
-    return (adjusted if enabled else score), warning
+    return adjusted, warning
 
 
 def _touche(
@@ -207,8 +205,8 @@ def _touche(
 ) -> tuple[float, list[str]]:
     """Technical module score for one (symbol, timeframe).
 
-    T-1: taban skor `_touche_base`'ten gelir; üst-TF karşıtlığında flag'li
-    sönümleme (`_htf_dampen`) uygulanır — shadow satırı her karşıtlıkta yazılır."""
+    Taban skor `_touche_base`'ten gelir; üst-TF karşıtlığında sönümleme
+    (`_htf_dampen`) uygulanır."""
     score, warnings = _touche_base(symbol, snap, timeframe)
     adjusted, htf_warning = _htf_dampen(symbol, snap, timeframe, score)
     if htf_warning is not None:

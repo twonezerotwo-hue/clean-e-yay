@@ -53,14 +53,13 @@ def _sl_tp_pct(symbol: str) -> tuple[float, float]:
     return sl_pct, tp_pct
 
 
-def _exit_policy() -> tuple[bool, float]:
-    """Canlı lifecycle ile aynı çıkış ayarı: (kapanış-bazlı stop açık mı, acil fren katı)."""
+def _disaster_mult() -> float:
+    """Canlı lifecycle ile aynı çıkış ayarı: kapanış-bazlı stopun acil fren katı."""
     cfg = load_thresholds().get("exit_close_based_stop") or {}
     try:
-        mult = max(1.0, float(cfg.get("disaster_mult", 2.0)))
+        return max(1.0, float(cfg.get("disaster_mult", 2.0)))
     except (TypeError, ValueError):
-        mult = 2.0
-    return bool(cfg.get("enabled", False)), mult
+        return 2.0
 
 
 def run_signal_backtest(symbol: str = "BTCUSD", timeframe: str = "1d") -> dict:
@@ -78,7 +77,7 @@ def run_signal_backtest(symbol: str = "BTCUSD", timeframe: str = "1d") -> dict:
         }
 
     sl_pct, tp_pct = _sl_tp_pct(symbol)
-    close_based, disaster_mult = _exit_policy()
+    disaster_mult = _disaster_mult()
     trades: list[SimTrade] = []
     open_side: str | None = None
     entry_price = 0.0
@@ -94,7 +93,7 @@ def run_signal_backtest(symbol: str = "BTCUSD", timeframe: str = "1d") -> dict:
             hit = execution_sim.bar_exit(
                 side=open_side, entry_price=entry_price, sl=sl, tp=tp,
                 high=bar.high, low=bar.low, close=bar.close,
-                close_based=close_based, disaster_mult=disaster_mult,
+                close_based=True, disaster_mult=disaster_mult,
             )
             if hit is not None:
                 reason, fill_price = hit

@@ -138,7 +138,7 @@ def _regime_brake_records() -> list[EvidenceRecord]:
             regime=reg, n_samples=live_n,
             statistic=(ev.get("live") or {}).get("pnl_usd"),
             verdict="BRAKED" if row.get("braked") else "NO_BRAKE",
-            detail={"mult": row.get("mult"), "enabled": vm.get("enabled"),
+            detail={"mult": row.get("mult"),
                     "backtest": ev.get("backtest"), "live": ev.get("live")},
         ))
     return out

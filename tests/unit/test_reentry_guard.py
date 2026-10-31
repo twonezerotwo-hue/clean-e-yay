@@ -1,8 +1,7 @@
 """Tekrar-giriş kilidi (reentry_guard) — kapanış sonrası bayat-sinyal geri-girişi.
 
 Owner kararı (2026-07-11): kilit KURAN = MANUAL veya kârlı-otomatik; AÇILIR ancak
-İKİSİ birden (taze bar + sinyal değişti). Ters yön hiç kilitlenmez. Flag default
-KAPALI (shadow: locked hesaplanır, active=False).
+İKİSİ birden (taze bar + sinyal değişti). Ters yön hiç kilitlenmez.
 """
 from __future__ import annotations
 
@@ -39,10 +38,10 @@ def _now(closed_at: str, *, plus_sec: float) -> datetime:
     return datetime.fromisoformat(closed_at) + timedelta(seconds=plus_sec)
 
 
-def _assess(state, *, fingerprint=_FP_A, now, enabled=False):
+def _assess(state, *, fingerprint=_FP_A, now):
     return reentry_guard.assess(
         state, symbol="BTCUSD", side="long", timeframe="4h",
-        fingerprint=fingerprint, now=now, cfg={"enabled": enabled},
+        fingerprint=fingerprint, now=now, cfg={},
     )
 
 
@@ -106,7 +105,7 @@ def test_opposite_side_not_locked():
     t = _trade(side="long")
     r = reentry_guard.assess(
         _state([t]), symbol="BTCUSD", side="short", timeframe="4h",
-        fingerprint=_FP_A, now=_now(t.closed_at, plus_sec=60), cfg={"enabled": True},
+        fingerprint=_FP_A, now=_now(t.closed_at, plus_sec=60), cfg={},
     )
     assert r == {}
 
@@ -135,15 +134,6 @@ def test_missing_fingerprint_falls_back_to_fresh_bar_only():
     assert r2["locked"] is False
 
 
-# ── shadow: flag KAPALIYKEN active False ─────────────────────────────────────
-
-def test_active_reflects_flag():
-    t = _trade()
-    now = _now(t.closed_at, plus_sec=600)
-    assert _assess(_state([t]), now=now, enabled=False)["active"] is False
-    assert _assess(_state([t]), now=now, enabled=True)["active"] is True
-
-
 # ── attempt_open kablolaması (uçtan uca) ─────────────────────────────────────
 
 def _recent_win() -> Trade:
@@ -153,19 +143,8 @@ def _recent_win() -> Trade:
                   closed_at=closed, fingerprint=_FP_A)
 
 
-def _lc_with_flag(monkeypatch, *, enabled: bool):
+def test_attempt_open_blocks_when_locked():
     import packages.paper.lifecycle as lc
-    real = lc.load_thresholds
-    def patched():
-        d = dict(real())
-        d["reentry_guard"] = {"enabled": enabled}
-        return d
-    monkeypatch.setattr(lc, "load_thresholds", patched)
-    return lc
-
-
-def test_attempt_open_blocks_when_enabled_and_locked(monkeypatch):
-    lc = _lc_with_flag(monkeypatch, enabled=True)
     ps = _state([_recent_win()])
     pos, decision = lc.attempt_open(
         ps, symbol="BTCUSD", side="long", entry_price=60000.0, size_multiplier=1.0,
@@ -176,22 +155,9 @@ def test_attempt_open_blocks_when_enabled_and_locked(monkeypatch):
     assert ps.open_positions == []
 
 
-def test_attempt_open_opens_when_flag_disabled_shadow(monkeypatch):
-    lc = _lc_with_flag(monkeypatch, enabled=False)
-    ps = _state([_recent_win()])
-    pos, decision = lc.attempt_open(
-        ps, symbol="BTCUSD", side="long", entry_price=60000.0, size_multiplier=1.0,
-        timeframe="4h", fingerprint=_FP_A, apply_reentry_guard=True,
-    )
-    # shadow: rapor decision'a taşınır ama açılış engellenmez
-    assert pos is not None and decision["allowed"] is True
-    assert decision["reentry_guard"]["locked"] is True
-    assert decision["reentry_guard"]["active"] is False
-
-
-def test_attempt_open_owner_path_not_guarded(monkeypatch):
-    # apply_reentry_guard default False (owner manuel/manual_ready) → flag açık olsa da açar
-    lc = _lc_with_flag(monkeypatch, enabled=True)
+def test_attempt_open_owner_path_not_guarded():
+    # apply_reentry_guard default False (owner manuel/manual_ready) → kilit uygulanmaz
+    import packages.paper.lifecycle as lc
     ps = _state([_recent_win()])
     pos, decision = lc.attempt_open(
         ps, symbol="BTCUSD", side="long", entry_price=60000.0, size_multiplier=1.0,

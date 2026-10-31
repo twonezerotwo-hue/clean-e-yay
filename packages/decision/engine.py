@@ -106,26 +106,22 @@ class TradeDecision:
     # F5 — beklenen değer (R-katı): p(win)×RR − (1−p)×1 − maliyet. Her zaman hesaplanır
     # (gözlem); ev_gate.enabled iken < min_ev olan trade bloklanır. None = hesaplanmadı.
     expected_value: float | None = None
-    # F4-2 — ampirik p(win) gözlemi: (tf|rejim → tf) gerçekleşmiş isabet oranı.
-    # `empirical_pwin.enabled` KAPALIYKEN yalnız gözlem (EV/Kelly cal_conf ile);
-    # açıkken EV/Kelly bu p ile hesaplanır. None = yeterli ampirik kanıt yok.
+    # Ampirik p(win): (tf|rejim → tf) gerçekleşmiş isabet oranı; EV/Kelly bu p
+    # ile hesaplanır. None = yeterli ampirik kanıt yok (cal_conf kullanılır).
     p_win_empirical: float | None = None
     expected_value_empirical: float | None = None
-    # Y-1 — rejim risk freni (shadow-first). Rejim kanıtı çift-negatifse fren
-    # bilgisi burada taşınır; `regime_risk_brake.enabled` iken boyut kısılır,
-    # kapalıyken yalnız gözlem (applied=False). Boş = frenlenecek kanıt yok.
+    # Rejim risk freni: rejim kanıtı çift-negatifse boyut kısılır ve kanıt
+    # burada taşınır. Boş = frenlenecek kanıt yok.
     regime_brake_report: dict = field(default_factory=dict)
     # Karar-kanıt tüketicisi (2026-07-09): tüm learning'lerin TEK birleşik fikri
     # (CONFIRM/CAUTION/AVOID + gerekçe). VARSAYILAN GÖLGE — boyutu değiştirmez;
     # canlı etki yalnız LEARNING_ADVISOR_APPLY=1 (owner). Boş = aday değil/hata.
     learning_advice: dict = field(default_factory=dict)
-    # Boyut katmanları (P1, 2026-07-10): inanç-boyu + oynaklık-paritesi. VARSAYILAN
-    # GÖLGE (her katman config-flag default false → applied_factor 1.0, boyut bayt-
-    # aynı); açık katman YALNIZ KISAR (no-boost). Boş = aday değil/hesaplanamadı.
+    # Boyut katmanları: inanç-boyu + oynaklık-paritesi + son-edge freni; YALNIZ
+    # KISAR (no-boost). Boş = aday değil/hesaplanamadı.
     sizing_layers_report: dict = field(default_factory=dict)
-    # D — dinamik korelasyon vetosu (P1, 2026-07-10): aday sinyalin en güçlü akrabası
-    # ilişkiyi çürütüyorsa engel. VARSAYILAN GÖLGE (correlation_veto.enabled=false →
-    # rapor dolu, karar değişmez); açıkken YALNIZ ENGELLER. Boş = güçlü akraba yok.
+    # D — dinamik korelasyon vetosu: aday sinyalin en güçlü akrabası ilişkiyi
+    # çürütüyorsa engel (YALNIZ ENGELLER). Boş = güçlü akraba yok.
     correlation_veto_report: dict = field(default_factory=dict)
     # Giriş kalitesi v2: YÖN ≠ GİRİŞ ZAMANLAMASI. `entry_quality_v2.mode` off iken boş;
     # shadow'da eski/yeni karar yan yana (karar DEĞİŞMEZ); active'de YENİ motor uygulanır
@@ -282,15 +278,12 @@ def _concentration_cfg() -> dict:
 
 
 def _sizing_layers_cfg() -> dict:
-    """Boyut katmanları (inanç-boyu + oynaklık-paritesi) config (monkeypatch-seam).
-    İki alt-katman ayrı `enabled` (default False → shadow, boyut bayt-aynı). Yalnız
-    KISAR (no-boost). Yoksa boş dict → evaluate güvenli 1.0 döner."""
+    """Boyut katmanları config'i (conviction, vol_parity, brake). Yalnız KISAR."""
     return load_thresholds().get("sizing_layers") or {}
 
 
 def _correlation_veto_cfg() -> dict:
-    """D — dinamik korelasyon vetosu config (monkeypatch-seam). enabled default False
-    (shadow-first: rapor her kararda hesaplanır, davranış değişmez). Yalnız ENGELLER."""
+    """D — dinamik korelasyon vetosu config (min_abs_rho, corr_window_days)."""
     return load_thresholds().get("correlation_veto") or {}
 
 
@@ -408,11 +401,9 @@ def _decide_core(
     pol = _timeframe_policy(timeframe)
 
     raw_conf = raw_confidence_from_score(cons.score)
-    # F4-1 — TF-duyarlı Platt: flag (calibration.tf_platt) KAPALIYKEN global
-    # fit birebir; açıkken o TF'in fit'i (yoksa global fallback, "fitted_tf").
+    # TF-duyarlı Platt (TF fit'i yoksa global fallback) → zayıf ham sinyalin
+    # aşırı kalibrasyon şişmesi kısılır.
     cal_conf, conf_source = predict_calibrated_tf(raw_conf, timeframe)
-    # Owner-flag (default KAPALI): zayıf ham sinyalin aşırı kalibrasyon şişmesini
-    # kıs. Kapalıyken passthrough — mevcut davranış birebir korunur.
     cal_conf, conf_source = apply_inflation_guardrail(raw_conf, cal_conf, conf_source)
 
     # Candidate = consensus'un ham niyeti (gate'lerden önce) — dashboard
@@ -604,15 +595,14 @@ def _decide_core(
     # ----- F5: EV (beklenen değer) kapısı — olasılık + ödül/risk BİRLİKTE pozitif
     #  değilse açma. EV her zaman hesaplanır (gözlem); ev_gate.enabled iken kısıtlar.
     #  RiskGate'i bypass etmez; yalnızca ek ekonomik filtre. (Owner config'ten.) -----
-    # F4-2 — ampirik p(win): (tf|rejim) gerçekleşmiş isabet oranı her zaman
-    # GÖZLENİR; `empirical_pwin.enabled` açık VE hücre yeterli örnekliyse EV +
-    # Kelly bu p ile hesaplanır (skor-türevi güven yerine ölçülmüş isabet).
-    # Kapalıyken / kanıt yokken cal_conf (bayt-aynı — sahte p uydurulmaz).
+    # Ampirik p(win): hücre (tf|rejim) yeterli örnekliyse EV + Kelly bu p ile
+    # hesaplanır (skor-türevi güven yerine ölçülmüş isabet); kanıt yoksa
+    # cal_conf (sahte p uydurulmaz).
     rr = _tf_rr(timeframe)
     ev_cfg = _ev_gate_cfg()
     cost_r = float(ev_cfg.get("cost_r", 0.1))
     emp = empirical_pwin.lookup(timeframe, regime.label)
-    p_for_ev = emp.p_win if (emp is not None and empirical_pwin.enabled()) else cal_conf
+    p_for_ev = emp.p_win if emp is not None else cal_conf
     # F5-3 — ödül-ağırlıklı EV. Flag OFF (default) → sabit-RR formülü birebir
     # (bayt-aynı). ON + yeterli örnekli hücrede GERÇEKLEŞEN kazanç-R/kayıp-R
     # varsa: EV = p_emp×avg_win_r − (1−p_emp)×avg_loss_r − cost_r (kazanma
@@ -931,19 +921,19 @@ def _decide_core(
                 size = max(0.0, kelly_mult_cap)
                 blocked_by.append("kelly_cap")
 
-    # ----- D: dinamik korelasyon vetosu (shadow-first, YALNIZ ENGELLER) — aday
+    # ----- D: dinamik korelasyon vetosu (YALNIZ ENGELLER) — aday
     # sinyalin EN GÜÇLÜ akrabası (o anki |rho| en yüksek) KENDİ sinyaliyle ilişkiyi
     # çürütüyorsa işlem AÇILMAZ. 5y backtest: elenen işlemler −0.511 (çöp), 5/5 yıl.
-    # Akraba otomatik (owner kararı); ağ yok (1d cache). enabled default false →
-    # rapor gözlem, karar değişmez. Boyuttan ÖNCE ("girer miyim" → "ne kadar"). -----
+    # Akraba otomatik (owner kararı); ağ yok (1d cache). Boyuttan ÖNCE
+    # ("girer miyim" → "ne kadar"). -----
     correlation_veto_report: dict = {}
     try:
         correlation_veto_report = correlation_veto.assess(
             symbol, cand_side, _veto_universe(), _correlation_veto_cfg(),
         )
-    except Exception:  # gölge/veto fikri kararı asla düşürmez
+    except Exception:  # veto hesabı kararı asla düşürmez
         correlation_veto_report = {}
-    if correlation_veto_report.get("active") and correlation_veto_report.get("vetoed"):
+    if correlation_veto_report.get("vetoed"):
         return _hold(
             reason=f"correlation_veto: {correlation_veto_report.get('reason', '')}",
             mistake_verdict=_verdict_to_dict(verdict),
@@ -958,11 +948,9 @@ def _decide_core(
             correlation_veto_report=correlation_veto_report,
         )
 
-    # ----- P1: boyut katmanları — inanç-boyu + oynaklık-paritesi (shadow-first,
-    # YALNIZ KISAR). Sinyal gücüne oransal + oynaklığa ters orantılı boyut; her
-    # katman config-flag default false → applied_factor 1.0 (boyut bayt-aynı,
-    # rapor her kararda hesaplanır). 5y çok-rejim backtest: inanç edge ~2 kat,
-    # vol-parite maxDD yarıya. RiskGate'i bypass etmez (zincirin en sonunda). -----
+    # ----- Boyut katmanları — inanç-boyu + oynaklık-paritesi + son-edge freni
+    # (YALNIZ KISAR). 5y çok-rejim backtest: inanç edge ~2 kat, vol-parite maxDD
+    # yarıya. RiskGate'i bypass etmez (zincirin en sonunda). -----
     sl_cfg = _sizing_layers_cfg()
     threshold_dist = (
         float(th["bullish_min"]) - 50.0 if action == "open_long"
@@ -980,16 +968,13 @@ def _decide_core(
         size = max(0.0, round(size * sl_factor, 3))
         blocked_by.append("sizing_layers")
 
-    # ----- Y-1: rejim risk freni — kanıtı çift-negatif (canlı AUTO kohort +
-    # backtest challenger) rejimde boyut kıs (YALNIZ küçültür). SHADOW her
-    # kararda: rapor flag'ten bağımsız taşınır (aktivasyon kanıtı flag'siz
-    # birikir); uygulama yalnız `regime_risk_brake.enabled` açıkken. -----
+    # ----- Rejim risk freni — kanıtı çift-negatif (canlı AUTO kohort +
+    # backtest challenger) rejimde boyut kıs (YALNIZ küçültür). -----
     brake_mult, brake_evidence = regime_risk_brake.active_mult(regime.label)
     regime_brake_report: dict = {}
     if brake_evidence is not None:
-        brake_applied = regime_risk_brake.enabled()
-        regime_brake_report = {**brake_evidence, "applied": brake_applied}
-        if brake_applied and brake_mult < 1.0:
+        regime_brake_report = dict(brake_evidence)
+        if brake_mult < 1.0:
             size = max(0.0, round(size * brake_mult, 3))
             blocked_by.append("regime_risk_brake")
 
@@ -1508,9 +1493,7 @@ def matrix_view(
                 # F5 gözlem — beklenen değer (R-katı); ev_gate KAPALI olsa da dolu.
                 # Dashboard/owner pozitif-EV dağılımını görüp ev_gate enable kararını verir.
                 "expected_value": d.expected_value,
-                # F4-2 gözlem — ampirik (tf|rejim) p(win) + onunla hesaplanan EV.
-                # Owner cal_conf-EV ile ampirik-EV ayrışmasını izleyip
-                # empirical_pwin.enabled aktivasyon kararını verir.
+                # Ampirik (tf|rejim) p(win) + onunla hesaplanan EV.
                 "p_win_empirical": d.p_win_empirical,
                 "expected_value_empirical": d.expected_value_empirical,
                 # Y-1 gözlem — rejim risk freni (shadow-first): kanıt çift-negatifse

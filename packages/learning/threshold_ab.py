@@ -48,17 +48,9 @@ def _metrics(result: dict) -> dict:
     }
 
 
-def _agg_metrics(symbols: list[str], timeframe: str) -> dict:
-    """Aktif override altında sembol-seti üstünde backtest'i TRADE-AĞIRLIKLI birleştir.
-    Global eşikler (bias_cuts/adx) tek sembolde değil, sepet üstünde doğrulanmalı."""
-    results = [(sym, strategy_backtest.run_signal_backtest(sym, timeframe))
-               for sym in symbols]
-    return _agg_from_results(results)
-
-
 def _agg_from_results(results: list[tuple[str, dict]]) -> dict:
-    """Ham (sembol, sonuç) çiftlerinden trade-ağırlıklı birleşim (Y-4: walk-forward
-    modu backtest'i yeniden KOŞMADAN aynı birleşimi kullanır — çıktı birebir)."""
+    """Ham (sembol, sonuç) çiftlerinden TRADE-AĞIRLIKLI birleşim. Global eşikler
+    (bias_cuts/adx) tek sembolde değil, sepet üstünde doğrulanmalı."""
     total_trades = 0
     total_wins = 0.0
     weighted_ret = 0.0
@@ -84,12 +76,11 @@ def _agg_from_results(results: list[tuple[str, dict]]) -> dict:
     }
 
 
-# ── Y-4: walk-forward doğrulama (freqtrade deseni) ──────────────────────────────
+# ── Walk-forward doğrulama (freqtrade deseni) ───────────────────────────────────
 # Aday eşik EĞİTİM penceresinde (ilk split_ratio) seçilir, DOĞRULAMA penceresinde
 # (kalan) baseline'ı geçmeden öneri OLMAZ — tek pencerede parlayan aşırı-uyum
-# adayı kapıda ölür. Flag `threshold_ab.walk_forward` DEFAULT OFF = mevcut çıktı
-# birebir (yeni anahtar bile eklenmez). Motora dokunulmaz: bölme, backtest'in
-# ZATEN döndürdüğü trade listesinin entry_ts'i üzerinden yapılır.
+# adayı kapıda ölür. Motora dokunulmaz: bölme, backtest'in ZATEN döndürdüğü
+# trade listesinin entry_ts'i üzerinden yapılır.
 
 _SPLIT_RATIO_DEFAULT = 0.7
 
@@ -99,11 +90,6 @@ def _wf_cfg() -> dict:
         return load_thresholds().get("threshold_ab") or {}
     except (OSError, KeyError, ValueError, TypeError):
         return {}
-
-
-def walk_forward_enabled() -> bool:
-    """`threshold_ab.walk_forward` owner-flag (DEFAULT OFF = tek-pencere davranışı)."""
-    return bool(_wf_cfg().get("walk_forward", False))
 
 
 def _trade_seg_metrics(trades: list[dict]) -> dict:
@@ -161,36 +147,23 @@ def sweep(
 ) -> dict:
     """`param_path` eşiğini `values` üzerinde tara; her değer için backtest metriği.
 
-    En iyi = en yüksek avg_return_pct (yeterli trade'i olan; trade yoksa elenir).
-    Baseline = aktif config değeri (override'sız koşu).
-
-    Y-4 walk-forward (flag `threshold_ab.walk_forward`, DEFAULT OFF = bu çıktı
-    birebir): AÇIKKEN aday EĞİTİM penceresinde seçilir ve DOĞRULAMA penceresinde
-    baseline'ı geçmeden `recommendation` üretilmez (aşırı-uyum kapıda ölür).
-    Tüketici (threshold_trainer) yalnız `recommendation` okuduğundan flag
-    yalnızca SIKILAŞTIRIR."""
+    Aday EĞİTİM penceresinde seçilir (en yüksek eğitim avg_return_pct; trade'siz
+    aday elenir) ve DOĞRULAMA penceresinde baseline'ı (aktif config, override'sız
+    koşu) geçmeden `recommendation` üretilmez (aşırı-uyum kapıda ölür)."""
     baseline_value = _current_value(param_path)
     syms = symbols or [symbol]
     multi = len(syms) > 1
-    wf = walk_forward_enabled()
     try:
         split_ratio = float(_wf_cfg().get("split_ratio", _SPLIT_RATIO_DEFAULT))
     except (ValueError, TypeError):
         split_ratio = _SPLIT_RATIO_DEFAULT
     split_ratio = max(0.5, min(0.9, split_ratio))  # dejenere bölme yok
 
-    def _measure() -> dict:
-        if multi:
-            return _agg_metrics(syms, timeframe)
-        return _metrics(strategy_backtest.run_signal_backtest(syms[0], timeframe))
-
-    def _measure_wf() -> dict:
+    def measure() -> dict:
         raws = [(s, strategy_backtest.run_signal_backtest(s, timeframe)) for s in syms]
         full = _agg_from_results(raws) if multi else _metrics(raws[0][1])
         tr, va = _wf_split([r for _, r in raws], split_ratio)
         return {**full, "train": tr, "validation": va}
-
-    measure = _measure_wf if wf else _measure
 
     runs: list[dict] = []
     for v in values:
@@ -201,59 +174,40 @@ def sweep(
     # Baseline (override yok) — referans.
     base_result = measure()
 
-    if wf:
-        # Seçim eğitim penceresinde; trade'siz/verisiz aday elenir.
-        ranked = [
-            r for r in runs
-            if (r.get("train") or {}).get("avg_return_pct") is not None
-        ]
-        best = (
-            max(ranked, key=lambda r: r["train"]["avg_return_pct"]) if ranked else None
-        )
-        base_tr = (base_result.get("train") or {}).get("avg_return_pct")
-        base_va = (base_result.get("validation") or {}).get("avg_return_pct")
-        best_va = ((best or {}).get("validation") or {}).get("avg_return_pct")
-        recommendation = (
-            best
-            if best is not None
-            and base_tr is not None and base_va is not None and best_va is not None
-            and best["train"]["avg_return_pct"] > base_tr
-            and best_va > base_va          # doğrulama penceresi TEYİDİ şart
-            else None
-        )
-    else:
-        ranked = [
-            r for r in runs
-            if r.get("avg_return_pct") is not None and (r.get("total_trades") or 0) > 0
-        ]
-        best = max(ranked, key=lambda r: r["avg_return_pct"]) if ranked else None
-        recommendation = (
-            best
-            if best
-            and base_result.get("avg_return_pct") is not None
-            and best["avg_return_pct"] > base_result["avg_return_pct"]
-            else None
-        )
+    # Seçim eğitim penceresinde; trade'siz/verisiz aday elenir.
+    ranked = [
+        r for r in runs
+        if (r.get("train") or {}).get("avg_return_pct") is not None
+    ]
+    best = (
+        max(ranked, key=lambda r: r["train"]["avg_return_pct"]) if ranked else None
+    )
+    base_tr = (base_result.get("train") or {}).get("avg_return_pct")
+    base_va = (base_result.get("validation") or {}).get("avg_return_pct")
+    best_va = ((best or {}).get("validation") or {}).get("avg_return_pct")
+    recommendation = (
+        best
+        if best is not None
+        and base_tr is not None and base_va is not None and best_va is not None
+        and best["train"]["avg_return_pct"] > base_tr
+        and best_va > base_va          # doğrulama penceresi TEYİDİ şart
+        else None
+    )
 
-    out = {
+    return {
         "param_path": param_path,
         "symbol": symbol if not multi else None,
         "symbols": syms,
         "timeframe": timeframe,
         "baseline_value": baseline_value,
-        "baseline": (
-            {**_metrics(base_result), "train": base_result.get("train"),
-             "validation": base_result.get("validation")}
-            if wf else _metrics(base_result)
-        ),
+        "baseline": {**_metrics(base_result), "train": base_result.get("train"),
+                     "validation": base_result.get("validation")},
         "runs": runs,
         "best": best,
-        # Öneri yalnızca açıkça daha iyiyse (wf modunda: iki pencerede de).
+        # Öneri yalnızca iki pencerede de açıkça daha iyiyse.
         "recommendation": recommendation,
+        "walk_forward": {"split_ratio": split_ratio},
     }
-    if wf:
-        out["walk_forward"] = {"enabled": True, "split_ratio": split_ratio}
-    return out
 
 
 __all__ = ["sweep"]

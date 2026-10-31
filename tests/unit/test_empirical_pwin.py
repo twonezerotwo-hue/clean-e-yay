@@ -3,8 +3,7 @@
 - build_table: yalnız verified; başabaş paydaya girmez (F1-2); tf|rejim + tf.
 - lookup: min_samples altı hücre DÖNMEZ (sahte p yok); hiyerarşi tf|rejim → tf;
   artifact yok/bozuk → None.
-- Karar motoru: flag KAPALI (default) → EV/Kelly cal_conf ile (bayt-aynı),
-  ampirik değerler SALT-GÖZLEM alanlarında; AÇIK → EV ampirik p ile.
+- Karar motoru: yeterli örnekli hücrede EV ampirik p ile; kanıt yoksa cal_conf.
 """
 from __future__ import annotations
 
@@ -16,8 +15,7 @@ import pytest
 from packages.data.registry.loader import threshold_override
 from packages.learning import empirical_pwin as ep
 
-_ON = {"empirical_pwin": {"enabled": True, "min_samples": 5}}
-_OFF_MIN5 = {"empirical_pwin": {"enabled": False, "min_samples": 5}}
+_MIN5 = {"empirical_pwin": {"min_samples": 5}}
 
 
 def _o(tf: str, regime: str, pnl: float, verified: bool = True, r_multiple=None):
@@ -85,7 +83,7 @@ def test_lookup_carries_r_stats(ep_env) -> None:
         }),
         encoding="utf-8",
     )
-    with threshold_override(_OFF_MIN5):
+    with threshold_override(_MIN5):
         hit = ep.lookup("4h", "NEUTRAL")
     assert hit is not None
     assert hit.avg_win_r == pytest.approx(0.8) and hit.avg_loss_r == pytest.approx(1.1)
@@ -98,7 +96,7 @@ def test_lookup_r_stats_none_for_legacy_cell(ep_env) -> None:
         cells={"4h|NEUTRAL": {"p_win": 0.55, "wins": 11, "losses": 9, "n": 20}},
         by_tf={},
     )
-    with threshold_override(_OFF_MIN5):
+    with threshold_override(_MIN5):
         hit = ep.lookup("4h", "NEUTRAL")
     assert hit is not None and hit.avg_win_r is None and hit.avg_loss_r is None
 
@@ -119,7 +117,7 @@ def test_lookup_hierarchy_and_min_samples(ep_env) -> None:
         by_tf={"4h": {"p_win": 0.55, "wins": 11, "losses": 9, "n": 20},
                "1h": {"p_win": 0.58, "wins": 7, "losses": 5, "n": 12}},
     )
-    with threshold_override(_OFF_MIN5):
+    with threshold_override(_MIN5):
         hit = ep.lookup("4h", "NEUTRAL")
         assert hit is not None and hit.source == "tf_regime" and hit.p_win == 0.60
         # rejim hücresi 2 örnek < 5 → TF geneline düşer
@@ -142,7 +140,7 @@ def test_write_table_roundtrip_and_cache_refresh(ep_env, monkeypatch) -> None:
         lambda state=None: [_o("4h", "NEUTRAL", +1) for _ in range(6)]
         + [_o("4h", "NEUTRAL", -1) for _ in range(4)],
     )
-    with threshold_override(_OFF_MIN5):
+    with threshold_override(_MIN5):
         t = ep.write_table()
         assert t["sufficient_count"] == 1
         hit = ep.lookup("4h", "NEUTRAL")
@@ -177,23 +175,23 @@ def _decide(monkeypatch):
     return dec.decide_for_symbol("BTCUSD", snap, regime, hold, timeframe="4h"), regime
 
 
-def test_engine_flag_on_uses_empirical_p(ep_env, monkeypatch) -> None:
+def test_engine_uses_empirical_p(ep_env, monkeypatch) -> None:
     from packages.decision import engine as dec
 
     monkeypatch.setattr(
         dec.empirical_pwin, "lookup",
         lambda tf, rg: ep.EmpiricalPwin(p_win=0.65, wins=13, losses=7, n=20, source="tf_regime"),
     )
-    with threshold_override(_ON):
+    with threshold_override(_MIN5):
         d, _ = _decide(monkeypatch)
     assert d.expected_value == pytest.approx(dec._expected_value(0.65, 2.0, 0.1), abs=1e-3)
 
 
-def test_engine_flag_on_falls_back_without_evidence(ep_env, monkeypatch) -> None:
+def test_engine_falls_back_without_evidence(ep_env, monkeypatch) -> None:
     from packages.decision import engine as dec
 
     monkeypatch.setattr(dec.empirical_pwin, "lookup", lambda tf, rg: None)
-    with threshold_override(_ON):
+    with threshold_override(_MIN5):
         d, _ = _decide(monkeypatch)
     # kanıt yok → cal_conf tabanlı EV (sahte p uydurulmaz), gözlem alanları None
     assert d.expected_value == pytest.approx(dec._expected_value(0.30, 2.0, 0.1), abs=1e-3)
@@ -219,7 +217,6 @@ def _ev_on(monkeypatch, *, payoff_weighted: bool, cell: dict | None = _EMP_CELL,
         lambda: {"enabled": True, "min_ev": 0.0, "cost_r": 0.1,
                  "payoff_weighted": payoff_weighted, "min_r_samples": min_r_samples},
     )
-    monkeypatch.setattr(dec.empirical_pwin, "enabled", lambda: True)  # p kaynağı = empirical
     monkeypatch.setattr(
         dec.empirical_pwin, "lookup",
         lambda tf, rg: ep.EmpiricalPwin(**cell) if cell else None,

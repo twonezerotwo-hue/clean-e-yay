@@ -732,8 +732,7 @@ def run_once() -> dict:
         challenger_promotion_status = f"ERROR:{type(exc).__name__}"
         errors.append(f"challenger_promotion:{type(exc).__name__}")
 
-    # Y-1 — rejim risk freni tablosu (SALT-GÖZLEM üretim; uygulama engine'de
-    # `regime_risk_brake.enabled` flag'iyle, DEFAULT OFF). Kanıt çift kaynak:
+    # Rejim risk freni tablosu (uygulama engine'de). Kanıt çift kaynak:
     # canlı AUTO kohort + backtest challenger (İKİSİ de negatif + min örnek →
     # fren). Ucuz (state + jsonl okur). Artifact bayatlarsa (max_age_hours)
     # fren sıcak yolda kendiliğinden düşer — öğrenme durursa tik bağımsız kalır.
@@ -743,10 +742,7 @@ def run_once() -> dict:
         rb = _rrb.compute()
         regime_brake_status = "OK"
         if rb.get("braked_regimes"):
-            log.info(
-                "regime_risk_brake: braked=%s enabled=%s",
-                rb.get("braked_regimes"), rb.get("enabled"),
-            )
+            log.info("regime_risk_brake: braked=%s", rb.get("braked_regimes"))
     except Exception as exc:  # defensive — worker patlamamalı
         regime_brake_status = f"ERROR:{type(exc).__name__}"
         errors.append(f"regime_risk_brake:{type(exc).__name__}")

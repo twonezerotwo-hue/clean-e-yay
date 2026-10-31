@@ -61,25 +61,6 @@ consensus:
   # işlem AÇMAZ (skor raporda aynen; yalnız yön nötre zorlanır).
   min_module_coverage: 0.60
 
-# M1 — haber sentiment sınıflandırıcı sürümü. false (DEFAULT) → v1 birebir
-# (tam-kelime eşleşme; "Bitcoin rebounds…" gibi çekimli başlıklar neutral kalır).
-# true → v2: çekim-eki normalizasyonu ("rebounds"/"surges"/"plunges" eşleşir)
-# + ≥6 harfli kök-prefix ("escalat" → escalates/escalation). Her başlıkta v2
-# okuması `sentiment_v2` alanına HER ZAMAN yazılır (salt-gözlem); owner
-# regime-report'taki v1/v2 ayrışmasını izleyip bu flag'i tarihli kararla açar.
-# Etki alanı: news modül skoru + asset_impact yönü + catalyst/surprise motoru.
-news:
-  # AKTİF (2026-07-02, owner kararı — Paket 1; canlı kanıt: 67 başlığın 17'si
-  # v2'de yön kazandı. v1 kodu paraşüt olarak yerinde).
-  sentiment_v2: true
-
-# F2-3 — rejim katmanı veri dürüstlüğü. false (DEFAULT) → eski davranış birebir:
-# eksik makro veri sabit default'la doldurulur (US10Y yoksa 4.3 varsayılır —
-# 2026-07-02 denetiminde bu "sessiz sahte skor" Likidite katmanını 96.2'ye şişirip
-# konsensüsü ~4 puan oynatıyordu). true → veri olmayan katman skor üretmez, DÜŞER
-# (regime-report `dropped_layers`); fundamental/sentinel katmansız kalırsa consensus
-# modülü de düşer ve ağırlığı redistribute edilir (quantum deseni; DATA_POLICY).
-# Snapshot warnings'e `macro_data_missing` her durumda yazılır (M2, flag'siz gözlem).
 # T5 (2026-07-19, dış denetim P0-3) — FIRTINA KURALI: DEFENSIVE/CRISIS rejimde
 # otomatik açılış owner onayına (manual_ready) düşer. Eski kural yalnız API kopya
 # motorunda yaşıyordu ve bozuk karşılaştırma yüzünden HİÇ çalışmamıştı (T1'de o
@@ -91,13 +72,6 @@ gates:
     enabled: false
 
 regime:
-  # AKTİF (2026-07-02, owner kararı — Paket 1; canlı kanıt: FRED'siz ortamda
-  # sahte Likidite 96.6 → konsensüs ~4.2p şişme. v1 davranışı flag'le geri gelir).
-  drop_unavailable_layers: true
-  # NOT: momentum-Likidite artık AYRI flag DEĞİL (M21 birleştirme) — TEK anahtar
-  # `consensus.fundamental_v4` hem fundamental modülünü hem rejim Likidite
-  # katmanını kontrol eder. Eski ölü `regime.liquidity_momentum` anahtarı
-  # 2026-07-15'te SÖKÜLDÜ (okuyucu consensus.fundamental_v4'e taşınmıştı).
   # Rejim hysteresis (2026-07-13, gölge-önce kuruldu). Dış denetim P1 bulgusu:
   # sınıflandırıcı stateless — skor 64.9→65.1→64.8 salınımı NEUTRAL↔OFFENSIVE
   # flip'i üretir; rejim etiketi modül ağırlıklarını seçtiği için her flip karar
@@ -111,42 +85,13 @@ regime:
   # yönde: gereksiz ağırlık-oynamasını azaltır, yeni risk eklemez). Ani çöküşte
   # çok-basamak sıçrama geciktirilmez. activation_watchdog izliyor.
   hysteresis_band: 3.0
-  # NOT: momentum-Likidite (M18) artık ayrı flag DEĞİL — consensus.fundamental_v4
-  # TEK anahtarı kontrol eder (owner "tek-flag birleştirme"). Eski
-  # `regime.liquidity_momentum` kaldırıldı.
 
-# F4-1 — TF-bazlı Platt kalibrasyonu. false (DEFAULT) → global tek fit birebir
-# (bayt-aynı). true → karar anında o TF'in KENDİ fit'i kullanılır (kaynak
-# "fitted_tf"); TF'in örneği MIN_SAMPLES(10) altındaysa global fit'e düşer
-# (sahte TF parametresi uydurulmaz). Şişme guardrail'i fitted_tf'e de uygulanır.
-# Gözlem: GET /learning/calibration `per_timeframe` (TF başına a/b/samples/
-# status) + learning worker log `tf_fitted=[..]`; owner TF örnek sayıları
-# yeterince ayrışınca bu flag'i tarihli kararla açar.
-calibration:
-  # AKTİF (2026-07-02, owner kararı — Paket 2 / (1); v1 global fit paraşüt olarak
-  # yerinde). Kanıt: 130 verified outcome, 4 TF'in 4'ü de fit (15m=55, 1h=31,
-  # 4h=31, 1d=13 örnek, hepsi MIN_SAMPLES≥10). Fit'ler global'den anlamlı ayrıştı
-  # (a: 15m=0.44, 1h=0.33, 4h=0.26, 1d=0.11 vs global 0.32) → global fit TF'lere
-  # göre yanlış kalibre. Örneği yetersiz TF global'e düşer, şişme guardrail'i
-  # fitted_tf'e de uygulanır. Tek-flag revert (false → global birebir).
-  tf_platt: true
-
-# F4-2 — EV/Kelly p(win) kaynağı. enabled=false (DEFAULT) → EV kapısı ve Kelly
-# sizing skor-türevi kalibre güveni kullanır (bayt-aynı); ampirik (tf|rejim)
-# hit-rate her kararda SALT-GÖZLEM olarak damgalanır (cell.p_win_empirical /
-# expected_value_empirical). true → yeterli örnekli hücrelerde EV+Kelly
-# GERÇEKLEŞMİŞ isabet oranıyla hesaplanır (hücre yoksa kalibre güvene düşer —
-# sahte p uydurulmaz). Hiyerarşi: tf|rejim → tf. Tabloyu learning worker yazar
-# (data/runtime/empirical_pwin.json). min_samples: hücrenin sayılması için
-# gereken kazanç+kayıp adedi (başabaş paydaya girmez, F1-2).
-# Counterfactual'lar tabloda AYRI kanalda (cf_by_tf) yalnız gözlem olarak durur.
+# EV/Kelly p(win) kaynağı: yeterli örnekli (tf|rejim → tf) hücrede GERÇEKLEŞMİŞ
+# isabet oranı; hücre yoksa kalibre güven (sahte p uydurulmaz). Tabloyu learning
+# worker yazar (data/runtime/empirical_pwin.json). min_samples: hücrenin sayılması
+# için kazanç+kayıp adedi (başabaş paydaya girmez). Counterfactual'lar tabloda
+# AYRI kanalda (cf_by_tf) yalnız gözlem olarak durur.
 empirical_pwin:
-  # AKTİF (2026-07-04, owner kararı — Paket 2/(2), S3-1). Kanıt: 15m|NEUTRAL
-  # gerçekleşen isabet p=0.449 (n=49) iken kalibre güven ~0.58 tabanla EV hep
-  # pozitif çıkıyordu; ampirik p ile EV/Kelly gerçek isabete oturur, zayıf TF
-  # otomatik küçülür (15m Kelly f*≈0.08). Yeterli örneği olmayan hücre kalibre
-  # güvene düşer (sahte p uydurulmaz). Tek-flag revert. Watchdog izliyor.
-  enabled: true
   min_samples: 20
 
 # F4-3 partial_tp KALDIRILDI (2026-07-12, owner kararı): exit_backtest (4302
@@ -233,18 +178,13 @@ data_policy:
   # AKTİF (2026-07-13, owner "aktivasyona devam"): bayat karar-TF'i yeni
   # pozisyonu DOĞRUDAN engeller (dış denetim P1; eskiden yalnız yumuşatılıyordu).
   block_stale_ohlcv_for_trade: true
-  # FAZ-2 (2026-07-16) — DQS çok-eksen GATE (M14 observe→eşik). Genişletilmiş
-  # eksen eşiğin altındaysa snapshot status OK→DEGRADED (provenance "karar live
-  # sayılmaz"); SKORA DOKUNMAZ (skor<55 KILL_SWITCH zinciri kazayla tetiklenmez).
-  # Eşikler 500-snapshot canlı gözlem dağılımından (2026-07-16): technical_bars
-  # yapısal 58-76 bandında → eşik 40 yalnız GERÇEK çöküşte tetikler;
-  # artifact_freshness normal 97+ (bir kez 0 = ölü learning worker görüldü) →
-  # eşik 30; news_diversity/rotation_coverage hep 100 → 0 (o eksenler kapıdan
-  # MUAF, yalnız-gözlem sürer). Geri-alma: enabled: false (tek satır).
-  # AKTİF (2026-07-16 FAZ-2; kayıt-deploy'u M26'da AYRI gitti — E-6 deseni,
-  # watchdog OFF→ON geçişini gördü). Geri-alma: enabled: false.
+  # DQS çok-eksen kapısı: genişletilmiş eksen eşiğin altındaysa snapshot status
+  # OK→DEGRADED (provenance "karar live sayılmaz"); SKORA DOKUNMAZ (skor<55
+  # KILL_SWITCH zinciri kazayla tetiklenmez). Eşikler 500-snapshot canlı gözlem
+  # dağılımından (2026-07-16): technical_bars yapısal 58-76 bandında → eşik 40
+  # yalnız GERÇEK çöküşte tetikler; artifact_freshness normal 97+ → eşik 30;
+  # news_diversity/rotation_coverage → 0 (kapıdan MUAF, yalnız-gözlem).
   dqs_extended_gate:
-    enabled: true
     technical_bars_min: 40.0
     artifact_freshness_min: 30.0
     news_diversity_min: 0.0
@@ -258,28 +198,21 @@ data_policy:
 # Yalnızca KISITLAR — fitted'i asla artırmaz. Her açılışta calibration_audit
 # ledger'ı sıçramayı + faktörleri (score/dominant/regime/tier/size) kaydeder.
 calibration_guardrail:
-  # 2026-06-29: AÇILDI. Zayıf ham sinyalin (örn. raw 0.13) Platt ile STRONG
+  # Zayıf ham sinyalin (örn. raw 0.13) Platt ile STRONG
   # kademe eşiğine (0.45) şişip büyük pozisyon açmasını engeller; fitted - raw
   # bu deltayı aşarsa fitted = raw + max_inflation_delta'ya kıstırılır.
   # 2026-07-04 (owner, ACİL): 0.25 → 0.10. Canlı kanıt: 0.25 deltayla raw 0.14
   # → fitted 0.39 (MODERATE), raw 0.23 → 0.48 (neredeyse STRONG) — kalibrasyon
   # kademe sistemini anlamsızlaştırıyordu; açık kitabın 6/6'sı "fitted_tf_capped"
   # kaynaklı tavana dayanmıştı. 0.10 ile STRONG kademe raw ≥ 0.35 ister.
-  enabled: true
   max_inflation_delta: 0.10
 
 risk_gates:
   max_daily_loss_pct: 0.02      # equity'nin %2'si
   max_drawdown_pct: 0.08        # peak'ten %8
-  # S2-1 (F2-1 gate bağlama, 2026-07-04) — false → drawdown yalnız realized
-  # equity ile (bayt-aynı). true → drawdown kontrolü min(realized, mtm) ile:
-  # açık pozisyonlar toplamda eriyorsa RISK_REDUCE freni kapanış BEKLEMEDEN
-  # çeker. YALNIZ SIKILAŞTIRIR (MTM kârı gate'i gevşetemez — engine min() alır).
-  # AKTİF (2026-07-04, owner kararı — S3-3). Kayıt fazı (S2-1) commit 7ead845a'da
-  # deploy edildi; watchdog `mtm_equity_gate` baseline'ını OFF damgaladı (yerel +
-  # AWS learning cycle'ları arasında ≥1 tur OFF görüldü — E-6 sıralaması). Bu
-  # flip OFF→ON geçişi olduğu için watchdog monitörü ARM eder. Tek-flag revert.
-  mtm_equity_enabled: true
+  # Drawdown kontrolü min(realized, mtm) equity ile: açık pozisyonlar toplamda
+  # eriyorsa fren kapanışı BEKLEMEDEN çeker. YALNIZ SIKILAŞTIRIR (MTM kârı
+  # gate'i gevşetemez).
   # 2026-07-04: eskiden risk/engine.py'de hardcoded 6 idi — config'e taşındı
   # (davranış aynı). Bu sayı ve üstünde açık pozisyon varken yeni açılış
   # NO_POSITION_INCREASE ile bloklanır. Zayıf-sinyal düzeltmeleriyle (yukarıda)
@@ -288,19 +221,8 @@ risk_gates:
   correlation_threshold: 0.7
   correlation_window_days: 30
   correlation_min_overlap_days: 5    # bunun altında computed (PnL) rho kullanılmaz
-  # F2-2 (2026-07-02) — fiyat-getirisi korelasyonu. false (DEFAULT) → aktif rho
-  # zinciri eski davranışla birebir (trade-PnL computed → baseline → neutral);
-  # fiyat-rho her girdide `rho_price`/`price_samples` SALT-GÖZLEM alanı olarak
-  # yine hesaplanır (/risk/correlation matrisinde). true → gerçek 1d fiyat
-  # getirisinden hesaplanan rho zincirin BAŞINA geçer (computed_price). Kaynak:
-  # OHLCV disk cache (ağ çağrısı yok, yalnız verified barlar — DATA_POLICY).
-  # Gerekçe: trade-PnL rho'su seyrek/gürültülü (iki sembolde aynı gün kapanmış
-  # trade ister), baseline elle yazılmış sabit — fiyat serisi tek dürüst kaynak.
-  # Owner gözlem sonrası tarihli kararla açar.
-  # AKTİF (2026-07-02, owner kararı — Paket 1; canlı kanıt: 45 çiftin 43'ü
-  # neutral'dı, fiyat-rho 38'ini dolduruyor; BTC|ETH 0.75→0.882, XAG|XAU
-  # 0.80→0.868 — küme riski olduğundan az görünüyordu).
-  correlation_price_returns: true
+  # rho kaynağı: önce gerçek 1d fiyat getirisi (OHLCV disk cache, yalnız verified
+  # bar); yetersizse trade-PnL → baseline → neutral.
   correlation_price_min_overlap_days: 20   # bunun altında ortak günle fiyat-rho AKTİF olamaz (gözlemde görünür)
   max_cluster_pct: 0.30              # aynı risk cluster'ın toplam %equity tavanı
   vol_regime_zscore: 2.0
@@ -581,15 +503,10 @@ news_event_study:
   timeframe: "1d"      # ileri-getiri ölçüm zaman dilimi
   min_bucket_n: 8      # kova bundan azsa hüküm INSUFFICIENT (kanıtsız)
 
-# Y-4 — Walk-forward doğrulama (freqtrade deseni): threshold_ab.sweep adayı
-# EĞİTİM penceresinde (ilk split_ratio) seçer, DOĞRULAMA penceresinde (kalan)
-# baseline'ı geçmeden öneri ÜRETMEZ — tek pencerede parlayan aşırı-uyum adayı
-# kapıda ölür. false = tek-pencere (eski davranış, çıktı birebir). Tüketici
-# (threshold_trainer) yalnız `recommendation` okur → flag yalnızca SIKILAŞTIRIR.
+# Walk-forward doğrulama (freqtrade deseni): threshold_ab.sweep adayı EĞİTİM
+# penceresinde (ilk split_ratio) seçer, DOĞRULAMA penceresinde (kalan) baseline'ı
+# geçmeden öneri ÜRETMEZ — tek pencerede parlayan aşırı-uyum adayı kapıda ölür.
 threshold_ab:
-  walk_forward: true   # 2026-07-07 Y-4 aktivasyonu: yalnız SIKILAŞTIRIR (öneri kapısı);
-                       # THRESHOLD_AUTOTUNE kapalıyken canlı etkisi sıfır, açıldığında
-                       # otonom eşik önerileri doğrulama-pencere teyidi olmadan geçemez
   split_ratio: 0.7     # eğitim payı; [0.5, 0.9] klamplanır
 
 # Y-3 — Backtest-challenger geçmiş penceresi (İZOLE kanal ayar parametresi; canlı
@@ -601,18 +518,12 @@ threshold_ab:
 backtest_challenger:
   lookback_days: 730
 
-# Y-1 — Rejim risk freni (2026-07-07 modül karnesi: OFFENSIVE'da yön kararı her iki
-# sürümde de negatif; backtest −%75 + canlı kohort negatif). Kanıtı ÇİFT kaynaklı
-# (canlı AUTO kohort + backtest challenger, İKİSİ de negatif + min örnek) rejimde
-# açılış boyutu brake_mult ile kısılır. YALNIZ küçültür (no-boost; guardrail
-# [floor, 1.0]). enabled:false → fren uygulanmaz, her kararda SHADOW raporu yine
-# taşınır (aktivasyon kanıtı flag'siz birikir). Geri-alma = false.
-# 2026-07-12 owner onayı + konsey kanıtı (203 canlı işlem: OFFENSIVE topR -8.7,
-# kaybın ~%75'i) ile AÇILDI. Çift-kanıt kuralı korunur: şu an backtest bacağı
-# OFFENSIVE'i pozitif gördüğü için fren PUSUDA (mult=1.0, bayt-etkisiz); iki
-# kanıt da negatife dönerse otomatik kısar. Geri-alma = false.
+# Rejim risk freni (2026-07-07 modül karnesi: OFFENSIVE'da yön kararı her iki
+# sürümde de negatif). Kanıtı ÇİFT kaynaklı (canlı AUTO kohort + backtest
+# challenger, İKİSİ de negatif + min örnek) rejimde açılış boyutu brake_mult ile
+# kısılır. YALNIZ küçültür (no-boost; guardrail [floor, 1.0]); tek kaynak negatifse
+# fren pusuda (mult=1.0).
 regime_risk_brake:
-  enabled: true
   min_live_n: 10       # canlı AUTO kohort rejim başına en az işlem
   min_backtest_n: 30   # backtest challenger rejim başına en az yönlü karar
   brake_mult: 0.6      # frenlenen rejimde boyut çarpanı
@@ -621,18 +532,15 @@ regime_risk_brake:
 
 # TF-farkında trailing (çıkış otopsisi 2026-07-06: düz trailing higher-TF'de çok sıkı —
 # kârın %66-84'ü geri veriliyor, hareketin yalnız %16-34'ü yakalanıyor; en kötüsü 4h).
-# Açıkken trailing MESAFESİ (distance_mult) ve DEVREYE-GİRME eşiği (activate_mult)
-# TF'e göre gevşetilir: higher TF → salınımı bin, erken kilitlenme. Eski (düz) değerler
-# OPENED audit'inde shadow olarak yan yana yazılır (paraşüt + kıyas). Guardrail
-# [1.0, 4.0]: yalnız gevşetir, trailing'i asla düz halden sıkılaştırmaz. Bilinmeyen
-# TF → nötr (1.0). Geri-alma = enabled: false (kod değişikliği gerekmez).
+# Trailing MESAFESİ (distance_mult) ve DEVREYE-GİRME eşiği (activate_mult) TF'e göre
+# ayarlanır. Düz (çarpansız) değerler OPENED audit'inde yan yana yazılır (kıyas).
+# Bilinmeyen TF → nötr (1.0).
 trailing_tf_aware:
-  enabled: true
   # REVİZE (2026-07-07, exit_backtest kanıtı): eski profil trail'i GEVŞETİYORDU
   # (4h 2.0/2.5) → giveback'i ARTIRIYORDU. Backtest (4302 entry, 4 TF, iki
   # bağımsız örneklem) trail mesafesini SIKMAK gerektiğini gösterdi (dar ~0.5R tek
-  # pozitif marjinal). Artık profil <1.0 = trail'i SIKAR + erken devreye (kârı
-  # geri vermeden kilitler). Guardrail [0.4, 4.0]. Geri-alma = flag false (düz).
+  # pozitif marjinal). Profil <1.0 = trail'i SIKAR + erken devreye (kârı
+  # geri vermeden kilitler). Guardrail [0.4, 4.0].
   tf_profile:
     #      mesafe        devreye-girme
     15m: { distance_mult: 1.0, activate_mult: 1.0 }   # kısa TF: düz trailing zaten iyi (backtest)
@@ -688,29 +596,20 @@ sizing_layers:
   # gücü dilimleri ileri-getiride kusursuz merdiven (zayıf −0.210 → güçlü +0.266);
   # eşit-boya karşı edge ~2 kat. Eşiğe yakın sinyal min_factor, tam güçte 1.0.
   conviction:
-    enabled: true         # 2026-07-10 CANLI (owner kararı): sinyal gücüne oransal boyut (yalnız kısar)
     min_factor: 0.5       # eşiğe yakın (zayıf) sinyal için taban boyut çarpanı
     full_strength: 25.0   # |score−50| bu değere ulaşınca tam boy (strong eşiği ~bu uzaklıkta)
   # Oynaklık paritesi: boyut varlık oynaklığına ters orantılı (oynak varlığa az para).
   # Backtest: 5y maksimum düşüş −293 → −171. ref_vol referans; üstü kısılır, altı 1.0
-  # (büyütme yok). realized_vol birimi snapshot'a bağlı → owner shadow raporundan
-  # dağılımı görüp ref_vol'ü kalibre eder, sonra açar (shadow-first'ün amacı).
+  # (büyütme yok).
   # P3 'bugün oynama' freni: sistemin son `lookback` işlemindeki gerçekleşen edge
   # (ort R) eşiğin altındaysa boyut × factor (yarı boy). Backtest: kötü dönemde
   # (2023 gibi her varyantın eksi olduğu) maksimum düşüşü küçültür (−293→−213),
   # getiriden az çalar. <10 örnek → fren yok (yetersiz kanıt). YALNIZ KISAR.
-  # enabled default FALSE (shadow-önce). Owner kanıt birikince açar.
   brake:
-    # AKTİF (2026-07-15, owner "başla" — DALGA-1): son 30 işlemin gerçekleşen
-    # edge'i (ort R) < 0 ise boyut ×0.5 (kötü dönemde yarı-boy). Backtest: maks
-    # düşüş −293→−213, getiriden az çalar. <10 örnek → fren YOK (kendini-korur;
-    # sahte kanıtla frenlemez). YALNIZ KISAR. Geri-alma = false.
-    enabled: true
     threshold: 0.0        # son-edge (ort R) bu değerin altındaysa fren devreye girer
     factor: 0.5           # fren çarpanı (yarı boy)
     lookback: 30          # son kaç kapanan işlemin edge'i ölçülür
   vol_parity:
-    enabled: true         # 2026-07-10 CANLI (owner kararı) — KALİBRE EDİLDİ
     # ref_vol = YILLIK realized_vol referansı (engine annualize eder, ondalık).
     # Canlı dağılım (9 sembol × 4 TF): medyan 0.16, aralık 0.04–0.65. medyan varlık
     # x1.0 referans; üstü kısılır (BTC/gümüş/brent ~x0.3–0.5), sakinler (tahvil/DXY/
@@ -725,10 +624,7 @@ sizing_layers:
 # −0.511 (çöp eliyor), 5/5 yıl. Akraba OTOMATİK seçilir (owner kararı): o anki en
 # güçlü korelasyonlu sembol (bakım yok, kayan korelasyona dayanıklı). YALNIZ ENGELLER
 # (veto → size 0), boyut artırmaz, RiskGate bypass etmez. Ağ yok (1d disk cache).
-# enabled default FALSE (shadow-first: her kararda correlation_veto_report gözlemlenir,
-# davranış değişmez; owner kanıt birikince açar). Yanlışsa false ile geri alınır.
 correlation_veto:
-  enabled: true           # 2026-07-10 CANLI (owner kararı): akraba çelişkisinde işlem açma (yalnız engeller)
   min_abs_rho: 0.5        # akraba yalnız |korelasyon| bu eşiği aşarsa dikkate alınır
   corr_window_days: 90    # korelasyon penceresi (o anki ilişki; kayan korelasyon)
 
@@ -737,10 +633,8 @@ correlation_veto:
 # −$4525; 63 stoplanan işlemin %45'i stop sonrası lehe döndü). 5y Binance 4h backtest:
 # stop'u FİTİL yerine son KAPANMIŞ bar KAPANIŞI tetiklerse toplam R +93→+596 (6 kat),
 # max düşüş −100→−62. TP fitil kalır (kâr al; owner kuralı yalnız STOP için kapanış).
-# enabled default FALSE (gölge-önce: kapalıyken SL tetikleme BAYT-AYNI fitil). Owner
-# backtest kanıtıyla açar; yanlışsa false ile anında geri (tick_worker restart).
+# Kapanmış bar yoksa stop fitille tetiklenir (güvenli fallback).
 exit_close_based_stop:
-  enabled: true           # 2026-07-11 CANLI (owner kararı): stop fitille değil bar KAPANIŞIYLA tetiklenir (stop-avı bağışık)
   # H2 acil fren (2026-10-02 owner kararı: 2 birim): bar kapanışı beklenirken fiyat (fitil)
   # açılış riskinin bu katına ulaşırsa beklemeden çıkılır. Canlıda -8R / -4.3R kayıplar oldu.
   disaster_mult: 2.0
@@ -749,11 +643,9 @@ exit_close_based_stop:
 # barın dip/tepesi (owner "0 noktası/son dip altı"), `buffer_pct` kadar ötede (owner
 # "%0.1 altına"); hedef mevcut TF rr çerçevesinde yapısal R'ye göre. ATR-gürültü stop
 # yerine YAPI. 5y backtest: kapanış-bazlı + yapısal birlikte en iyi (R/DD 30.75, maxDD
-# −25 = diğerlerinin çeyreği). floor/cap güvenlik bandı korunur. enabled default FALSE
-# (gölge-önce: kapalıyken SL yeri ATR motoruyla bayt-aynı). Bar yok/yapı geçersiz →
-# ATR motoruna düşer. Owner backtest kanıtıyla açar; yanlışsa false ile geri.
+# −25 = diğerlerinin çeyreği). floor/cap güvenlik bandı korunur. Bar yok/yapı
+# geçersiz → ATR motoruna düşer.
 exit_structural_stop:
-  enabled: true         # 2026-07-11 CANLI (owner kararı): açılışta stop = son dip/tepe (yapısal)
   lookback: 10          # stop için son kaç barın dip/tepesine bakılır
   buffer_pct: 0.001     # yapısal seviyenin bu oran kadar ötesine stop (owner %0.1)
 
@@ -766,16 +658,8 @@ exit_structural_stop:
 # (b) sinyal değişti (aday fingerprint ≠ kilidi kuran işlemin fingerprint'i). Ters yön
 # hiç kilitlenmez (doğal flip serbest). YALNIZ otomatik sinyal açılışına; owner manuel
 # açılış + manual_ready onayı muaf. YALNIZ ENGELLER (no-boost). state.recent_trades'ten
-# türetilir (yeni dosya yok). enabled default FALSE (shadow-first: kapalıyken decision'a
-# reentry_guard raporu taşınır, açılış BAYT-AYNI). Owner kanıtı görüp açar; yanlışsa
-# false ile geri (tick_worker restart).
+# türetilir (yeni dosya yok).
 reentry_guard:
-  # AKTİF (2026-07-15, owner "başla" — DALGA-1): owner'ın 1 numaralı problemi
-  # (kârda kapat→30sn'de aynı bayat sinyalle geri-gir). 4 gündür shadow kanıt
-  # topladı. YALNIZ tick-worker otomatik açılışını, YALNIZ kilitliyken (taze bar
-  # YOK VEYA sinyal AYNI) bloklar; owner manuel açılış / manual_ready onayı MUAF.
-  # Yalnız-BLOKLAR (işlem açtırmaz). Geri-alma = false (tick_worker restart).
-  enabled: true
   # cross_tf (2026-07-21, owner problemi #6) — DEFAULT FALSE = BAYT-AYNI.
   # false: kilit (sembol, yön, TF) anahtarında → "BTC 1h kârda kapandı" 4h'yi
   #        engellemez; aynı tez TF kopyalarıyla çoğalır (defter 4 pozisyon
@@ -1012,21 +896,11 @@ technical:
     exh_rev_high: 80.0
     rev_magnitude: 25.0
 
-  # T-1 — Üst-TF hiza filtresi (owner onayı 2026-07-02, kodlama; aktivasyon ayrı).
-  # Alt TF sinyali, bir üst basamağın (15m→1h→4h→1d) yön skoruyla TERS düşüyorsa
-  # touche skoru 50'ye doğru kısılır (×[min_mult..1.0], karşıtlık gücüyle orantılı).
-  # YALNIZ KÜÇÜLTÜR: aynı yönse dokunmaz (boost yok), üst TF nötrse (|lean|<5)
-  # dokunmaz, üst TF verisi yoksa dokunmaz. Kanıt: 15m ampirik EV negatif +
-  # bloklanan 15m fırsatlarının %87'si kayıptan kaçınma (missed-opp) — alt dilim
-  # muhtemelen üst-dilim trende karşı işlem üretiyor. enabled=false → bayt-aynı;
-  # çarpan her hücrede htf_alignment warning satırına (shadow) yazılır.
+  # Üst-TF hiza filtresi: alt TF sinyali bir üst basamağın (15m→1h→4h→1d) yön
+  # skoruyla TERS düşüyorsa touche skoru 50'ye doğru kısılır (×[min_mult..1.0],
+  # karşıtlık gücüyle orantılı). YALNIZ KÜÇÜLTÜR: aynı yönde, üst TF nötrken
+  # (|lean|<5) veya verisizken dokunmaz; yön çevrilmez.
   htf_alignment:
-    # AKTİF (2026-07-04, owner kararı — S3-2). Kanıt: bloklanan 15m
-    # fırsatlarının %87'si avoided_loss (missed-opp) + 15m ampirik EV negatif
-    # — alt dilim üst-dilim trende KARŞI işlem üretiyordu. Filtre YALNIZ kısar
-    # (aynı yönde boost yok, üst TF nötr/verisiz → dokunmaz, yön çevrilmez).
-    # Tek-flag revert. Watchdog izliyor.
-    enabled: true
     min_mult: 0.6       # tam karşıtlıkta (üst TF |lean|=50) mesafe ×0.6
 
   # T-2 — Elliott × Fib confluence (owner onayı 2026-07-02, kodlama; aktivasyon ayrı).

@@ -281,9 +281,8 @@ def build_snapshot(symbols: list[str] | None = None) -> MarketSnapshot:
         technicals_by_tf=technicals_by_tf, headlines=headlines,
         rotation=rotation, now=now,
     )
-    # FAZ-2 (2026-07-16) — M14 observe→eşik: flag açıksa eksen çöküşü status'u
-    # OK→DEGRADED indirir (skora dokunmaz). Kapalıyken bayt-aynı. Not satırı
-    # quality.notes'a düşer → aşağıdaki warnings kopyasıyla snapshot'a taşınır.
+    # Genişletilmiş eksen çöküşü status'u OK→DEGRADED indirir (skora dokunmaz).
+    # Not satırı quality.notes'a düşer → aşağıdaki warnings kopyasıyla snapshot'a taşınır.
     try:
         from packages.data.registry.loader import load_thresholds as _load_thr
 

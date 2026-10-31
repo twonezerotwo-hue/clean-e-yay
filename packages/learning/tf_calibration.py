@@ -169,7 +169,7 @@ def fit_confidence_report(
     return {
         "status": "OK" if rows else "NO_DATA",
         "min_trades_per_tf": min_trades,
-        "tf_platt_enabled": calibration_store.tf_platt_enabled(),
+        "tf_platt_enabled": True,  # TF fit her zaman açık (panel rozeti okur)
         "per_timeframe_fit": rows,
         "fitted_timeframes": fitted,
         "any_fitted": bool(fitted),

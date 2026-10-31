@@ -114,13 +114,12 @@ def test_degraded_providers_optional_vs_critical():
 
 # ── S2-1: RiskEngine MTM drawdown ────────────────────────────────────────────
 
-def _mtm_thresholds(enabled):
+def _mtm_thresholds():
     return {
         "risk_gates": {
             "max_daily_loss_pct": 0.02,
             "max_drawdown_pct": 0.08,
             "max_open_positions": 6,
-            "mtm_equity_enabled": enabled,
         }
     }
 
@@ -137,20 +136,10 @@ def _inp(**kw):
     return RiskInput(**base)
 
 
-def test_mtm_flag_off_ignores_mtm(monkeypatch):
+def test_mtm_tightens_drawdown(monkeypatch):
     import packages.risk.engine as eng
 
-    monkeypatch.setattr(eng, "load_thresholds", lambda: _mtm_thresholds(False))
-    monkeypatch.setattr(eng.halt_store, "active_halts", list)
-    # MTM %10 ekside ama flag kapalı → drawdown realized'a göre (0) → HOLD.
-    d = evaluate(_inp(mtm_equity_usd=90_000.0))
-    assert d.action == "HOLD"
-
-
-def test_mtm_flag_on_tightens_drawdown(monkeypatch):
-    import packages.risk.engine as eng
-
-    monkeypatch.setattr(eng, "load_thresholds", lambda: _mtm_thresholds(True))
+    monkeypatch.setattr(eng, "load_thresholds", lambda: _mtm_thresholds())
     monkeypatch.setattr(eng.halt_store, "active_halts", list)
     d = evaluate(_inp(mtm_equity_usd=90_000.0))
     assert d.action == "KILL_SWITCH"  # H11: max DD = KILL_SWITCH
@@ -160,7 +149,7 @@ def test_mtm_flag_on_tightens_drawdown(monkeypatch):
 def test_mtm_profit_never_relaxes_gate(monkeypatch):
     import packages.risk.engine as eng
 
-    monkeypatch.setattr(eng, "load_thresholds", lambda: _mtm_thresholds(True))
+    monkeypatch.setattr(eng, "load_thresholds", lambda: _mtm_thresholds())
     monkeypatch.setattr(eng.halt_store, "active_halts", list)
     # Realized %9 dd (fren çeker); MTM karda olsa bile gate GEVŞEMEZ (min()).
     d = evaluate(_inp(equity_usd=91_000.0, mtm_equity_usd=99_000.0))
@@ -170,8 +159,8 @@ def test_mtm_profit_never_relaxes_gate(monkeypatch):
 def test_mtm_none_is_byte_same(monkeypatch):
     import packages.risk.engine as eng
 
-    monkeypatch.setattr(eng, "load_thresholds", lambda: _mtm_thresholds(True))
+    monkeypatch.setattr(eng, "load_thresholds", lambda: _mtm_thresholds())
     monkeypatch.setattr(eng.halt_store, "active_halts", list)
-    # Ölçüm yoksa (None — eski çağıranlar) flag açık bile olsa davranış eski.
+    # Ölçüm yoksa (None) drawdown realized equity ile.
     d = evaluate(_inp())
     assert d.action == "HOLD"

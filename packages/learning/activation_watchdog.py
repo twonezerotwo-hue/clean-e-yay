@@ -48,34 +48,6 @@ _ENV_TRUE = {"1", "true", "yes", "on"}
 # NOT: guard_safety'nin 5 yön guard'ı BURADA YOK (çifte izleme olmasın; onların
 # oto-kapatlı kasası var). Yeni owner-flag eklendiğinde buraya satır eklenir.
 REGISTRY: dict[str, dict] = {
-    "news_sentiment_v2": {
-        "label": "News sentiment v2 (M1)",
-        "source": ("thresholds", ("news", "sentiment_v2")),
-    },
-    "regime_drop_unavailable_layers": {
-        "label": "Rejim dürüst katman modu (F2-3)",
-        "source": ("thresholds", ("regime", "drop_unavailable_layers")),
-    },
-    "correlation_price_returns": {
-        "label": "Fiyat-getirisi korelasyonu (F2-2)",
-        "source": ("thresholds", ("risk_gates", "correlation_price_returns")),
-    },
-    "mtm_equity_gate": {
-        "label": "MTM drawdown gate girdisi (S2-1/F2-1)",
-        "source": ("thresholds", ("risk_gates", "mtm_equity_enabled")),
-    },
-    "tf_platt": {
-        "label": "TF-bazlı Platt kalibrasyonu (F4-1)",
-        "source": ("thresholds", ("calibration", "tf_platt")),
-    },
-    "empirical_pwin": {
-        "label": "Ampirik EV/Kelly p(win) (F4-2)",
-        "source": ("thresholds", ("empirical_pwin", "enabled")),
-    },
-    "regime_risk_brake": {
-        "label": "Rejim risk freni — çift-negatif kanıtta boyut kıs (Y-1)",
-        "source": ("thresholds", ("regime_risk_brake", "enabled")),
-    },
     "weight_regime_filter": {
         "label": "Rejim-filtreli ağırlık eğitimi (F3-2)",
         "source": ("env", "WEIGHT_REGIME_FILTER"),
@@ -88,12 +60,7 @@ REGISTRY: dict[str, dict] = {
         "label": "R-bazlı expectancy (F1-1)",
         "source": ("env", "EXPECTANCY_R_MODE"),
     },
-    # T serisi — teknik analiz genişletmesi (owner onayı 2026-07-02, kodlama;
-    # aktivasyonlar ayrı tarihli kararlarla).
-    "htf_alignment": {
-        "label": "Üst-TF hiza filtresi (T-1)",
-        "source": ("thresholds", ("technical", "htf_alignment", "enabled")),
-    },
+    # T serisi — teknik analiz genişletmesi.
     "elliott_confluence": {
         "label": "Elliott × Fib confluence (T-2)",
         "source": ("thresholds", ("technical", "elliott_confluence", "enabled")),
@@ -138,14 +105,6 @@ REGISTRY: dict[str, dict] = {
     "consensus_min_module_coverage": {
         "label": "Modül kapsama tabanı — az veride NO_TRADE (M10)",
         "source": ("thresholds", ("consensus", "min_module_coverage")),
-    },
-    # NOT: consensus_fundamental_v3 kaydı 2026-07-15'te SÖKÜLDÜ (v3 canlı yoldan
-    # kaldırıldı — 5y tezgâh çürüttü; flag artık yok).
-    # FAZ-2 (2026-07-16) — kayıt flag OFF'ken gider (E-6 deseni: OFF→ON
-    # geçişinde arm; kayıt + aktivasyon AYRI deploy olmalı).
-    "data_policy_dqs_extended_gate": {
-        "label": "DQS çok-eksen kapısı — genişletilmiş eksen çöküşünde DEGRADED (M14→eşik)",
-        "source": ("thresholds", ("data_policy", "dqs_extended_gate", "enabled")),
     },
 }
 
