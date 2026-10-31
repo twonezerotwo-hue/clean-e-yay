@@ -139,7 +139,23 @@ sentinel_v2:
 # Ayrı ekonomik filtre — RiskGate'i bypass etmez. DEFAULT KAPALI (önce shadow izle).
 ev_gate:
   min_ev: 0.0       # R-katı; <bu beklenen değerli trade açılmaz
-  cost_r: 0.1       # round-trip maliyet (spread/fee) R cinsinden
+  cost_r: 0.1       # stop mesafesi bilinemezse kullanılan işlem başı maliyet (R)
+  # Gidiş-dönüş maliyet (komisyon + spread, % fiyat). Owner onayı 2026-10-31; oranlar
+  # tahmindir, gerçek aracı kurum verisiyle güncellenmeli. EV'deki maliyet (R) =
+  # oran / açılışta kullanılacak stop mesafesi — dar stoplu kısa TF'de maliyet büyür.
+  round_trip_cost_pct:
+    default: 0.08
+    BTCUSD: 0.22
+    ETHUSD: 0.22
+    XAUUSD: 0.06
+    XAGUSD: 0.10
+    BRENT: 0.08
+    WTI: 0.08
+    COPPER: 0.10
+    XLE: 0.04
+    XLK: 0.04
+    XLV: 0.04
+    XLP: 0.04
   # Ödül-ağırlıklı EV (owner kararı 2026-07-04): yeterli örnekli (tf|rejim→tf) hücrede GERÇEKLEŞEN ortalama kazanç-R/kayıp-R + ampirik p(win)
   # kullanılır: trailing/time-stop kazancı hedeften erken kesince (avg_win_r <
   # RR) sabit-RR EV'sinin gizlediği negatif edge açığa çıkar → zayıf trade'ler

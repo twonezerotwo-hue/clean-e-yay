@@ -240,6 +240,34 @@ def _ev_gate_cfg() -> dict:
     return load_thresholds().get("ev_gate") or {}
 
 
+def _cost_pct(symbol: str, ev_cfg: dict) -> float | None:
+    """Varlığın gidiş-dönüş maliyeti (oran); tablo yoksa None."""
+    table = ev_cfg.get("round_trip_cost_pct") or {}
+    if not table:
+        return None
+    return float(table.get(symbol, table.get("default", 0.0))) / 100.0
+
+
+def _cost_r(symbol: str, side: str, snap: MarketSnapshot, timeframe: str, ev_cfg: dict) -> float:
+    """İşlem başı maliyet (R) = varlığın gidiş-dönüş maliyeti / açılışta kullanılacak
+    stop mesafesi (bilet ve paper açılışla aynı canonical_targets). Fiyat, maliyet
+    tablosu ya da stop bilinemezse config `cost_r`."""
+    fallback = float(ev_cfg.get("cost_r", 0.1))
+    pct = _cost_pct(symbol, ev_cfg)
+    price = next((q.price for q in snap.prices if q.symbol == symbol and q.price), None)
+    if not pct or not price:
+        return fallback
+    tech = (snap.technicals_by_tf or {}).get(symbol, {}).get(timeframe)
+    try:
+        from packages.paper.lifecycle import canonical_targets
+
+        targets = canonical_targets(symbol, side, float(price), timeframe, getattr(tech, "atr", None))
+        risk = abs(float(price) - float(targets.sl)) / float(price)
+    except Exception:
+        return fallback
+    return round(pct / risk, 4) if risk > 0 else fallback
+
+
 def _kelly_cfg() -> dict:
     """Kelly boyut tavanı config'i (fraction)."""
     return load_thresholds().get("kelly_sizing") or {}
@@ -594,7 +622,7 @@ def _decide_core(
     # cal_conf (sahte p uydurulmaz).
     rr = _tf_rr(timeframe)
     ev_cfg = _ev_gate_cfg()
-    cost_r = float(ev_cfg.get("cost_r", 0.1))
+    cost_r = _cost_r(symbol, "long" if action == "open_long" else "short", snap, timeframe, ev_cfg)
     emp = empirical_pwin.lookup(timeframe, regime.label)
     p_for_ev = emp.p_win if emp is not None else cal_conf
     # Ödül-ağırlıklı EV: yeterli örnekli hücrede GERÇEKLEŞEN kazanç-R/kayıp-R

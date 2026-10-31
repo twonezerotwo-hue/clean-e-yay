@@ -13,12 +13,26 @@ from typing import Any
 from packages.data.registry.loader import load_thresholds
 
 
-def cost_r() -> float:
-    """İşlem başı varsayılan gidiş-dönüş maliyeti (R) — EV kapısıyla aynı varsayım."""
+def _ev_cfg() -> dict:
     try:
-        return float((load_thresholds().get("ev_gate") or {}).get("cost_r", 0.1))
+        return load_thresholds().get("ev_gate") or {}
     except (OSError, KeyError, ValueError, TypeError):
-        return 0.1
+        return {}
+
+
+def cost_r() -> float:
+    """Stop mesafesi bilinemeyen işlem için varsayılan maliyet (R) — EV kapısıyla aynı."""
+    return float(_ev_cfg().get("cost_r", 0.1))
+
+
+def trade_cost_r(o: Any) -> float:
+    """İşlemin maliyeti (R): varlığın gidiş-dönüş maliyeti / açılış stop mesafesi (EV
+    kapısıyla aynı tablo); stop ya da tablo yoksa varsayılan cost_r."""
+    table = _ev_cfg().get("round_trip_cost_pct") or {}
+    risk = getattr(o, "risk_pct", None)
+    if not table or not risk:
+        return cost_r()
+    return float(table.get(o.symbol, table.get("default", 0.0))) / 100.0 / float(risk)
 
 
 def _ts(value: Any) -> datetime | None:
@@ -73,10 +87,9 @@ def buy_and_hold(outcomes: list, initial_equity: float) -> dict[str, Any] | None
             rets.append(p1 / p0 - 1.0)
     if not rets:
         return None
-    c = cost_r()
     gross = sum(float(o.pnl) for o in outcomes)
     cost_usd = sum(
-        c * abs(float(o.pnl) / float(o.r_multiple))
+        trade_cost_r(o) * abs(float(o.pnl) / float(o.r_multiple))
         for o in outcomes if o.r_multiple not in (None, 0)
     )
     return {
@@ -115,4 +128,4 @@ def regime_calibration(outcomes: list) -> dict[str, dict[str, Any]]:
     return out
 
 
-__all__ = ["buy_and_hold", "cost_r", "max_drawdown_r", "regime_calibration", "significance"]
+__all__ = ["buy_and_hold", "cost_r", "max_drawdown_r", "regime_calibration", "significance", "trade_cost_r"]

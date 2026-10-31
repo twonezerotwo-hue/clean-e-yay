@@ -60,10 +60,12 @@ def _performance_snapshot(outcomes: list) -> dict:
         "by_timeframe": outcomes_mod.bucketize(outcomes, lambda o: o.timeframe),
     }
     # Performans kanıtı (hedef 7. aşama): maliyet sonrası, düşüş ve al-tut kıyası.
-    c = benchmark.cost_r()
-    result["cost_r"] = c
+    r_rows = [o for o in outcomes if o.r_multiple is not None]
+    costs = [benchmark.trade_cost_r(o) for o in r_rows]
+    result["cost_r"] = round(sum(costs) / len(costs), 4) if costs else benchmark.cost_r()
     result["net_expectancy_r"] = (
-        round(result["expectancy_r"] - c, 4) if result["expectancy_r"] is not None else None
+        round(sum(float(o.r_multiple) - c for o, c in zip(r_rows, costs, strict=True)) / len(r_rows), 4)
+        if r_rows else None
     )
     result["max_drawdown_r"] = benchmark.max_drawdown_r(outcomes)
     try:

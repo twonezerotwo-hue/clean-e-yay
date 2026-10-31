@@ -171,6 +171,7 @@ def _decide(monkeypatch):
         modules=[ModuleScore(name="touche", score=65.0, weight=1.0, contribution=65.0)],
     )
     monkeypatch.setattr(dec, "build_consensus", lambda *a, **kw: fake)
+    monkeypatch.setattr(dec, "_cost_r", lambda *a, **kw: 0.1)  # p kaynağı testi; maliyet ayrı test
     hold = RiskDecision(action="HOLD", reason="ok", evidence=[])
     return dec.decide_for_symbol("BTCUSD", snap, regime, hold, timeframe="4h"), regime
 
