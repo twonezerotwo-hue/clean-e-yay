@@ -11,7 +11,6 @@ import json
 import math
 import os
 import re
-import socket
 import unicodedata
 from urllib.parse import urlsplit
 
@@ -117,7 +116,7 @@ class VoiceStudioTTSProvider:
                     detail=f"VoiceStudio local TTS returned HTTP {response.status}.",
                 )
             audio = response.read(MAX_WAV_BYTES + 1)
-        except (TimeoutError, socket.timeout) as exc:
+        except TimeoutError as exc:
             raise HTTPException(status_code=504, detail="VoiceStudio TTS timed out.") from exc
         except (OSError, http.client.HTTPException) as exc:
             raise HTTPException(status_code=503, detail="VoiceStudio local TTS is unavailable.") from exc
