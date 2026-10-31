@@ -10,6 +10,10 @@ def _summary(**overrides):
         "sharpe": 0.8,
         "excluded_from_learning": 0,
         "by_timeframe": {"1h": {"trades": 50, "avg_r": 0.08}},
+        "cost_r": 0.1,
+        "net_expectancy_r": 0.02,
+        "max_drawdown_r": -6.0,
+        "benchmark": {"system_net_return_pct": 4.0, "benchmark_return_pct": 1.5},
     }
     summary = {
         "verified_outcomes": 100,
@@ -38,6 +42,9 @@ def test_readiness_surfaces_negative_edge_without_changing_it() -> None:
             "sharpe": -0.8,
             "excluded_from_learning": 50,
             "by_timeframe": {"1h": {"trades": 50, "avg_r": -0.08}},
+            "net_expectancy_r": -0.14,
+            "max_drawdown_r": -22.0,
+            "benchmark": {"system_net_return_pct": -3.0, "benchmark_return_pct": 2.0},
         },
         walk_forward={"test_window": 40, "test_win_rate": 0.33, "test_sharpe": -1.2},
         by_close_reason={"SL_HIT": {"trades": 40, "avg_r": -1.45}},
@@ -47,6 +54,9 @@ def test_readiness_surfaces_negative_edge_without_changing_it() -> None:
     assert report["score"] < 90
     assert {
         "positive_expectancy",
+        "net_of_costs",
+        "drawdown",
+        "beats_buy_and_hold",
         "positive_sharpe",
         "walk_forward",
         "timeframe_stability",

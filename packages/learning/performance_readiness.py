@@ -14,6 +14,9 @@ from typing import Any
 MIN_CLEAN_TRADES = 100
 MIN_WALK_FORWARD_TRADES = 30
 MIN_TIMEFRAME_TRADES = 20
+# Performans kanıtı eşikleri (hedef 7. aşama; owner ayarlayabilir): kapanış sırasına
+# göre birikimli R eğrisinin en derin düşüşü bu sınırın altına inmemeli.
+MAX_DRAWDOWN_R = 15.0
 TARGET_SCORE = 90
 
 
@@ -94,6 +97,15 @@ def evaluate(performance: Mapping[str, Any], raw_summary: Mapping[str, Any] | No
     sl_avg_r = _number(sl.get("avg_r"))
     exit_ok = sl_rate <= 0.25 and (sl_avg_r is None or sl_avg_r > -1.0)
 
+    net_r = _number(performance.get("net_expectancy_r"))
+    net_ok = net_r is not None and net_r > 0
+    max_dd = _number(performance.get("max_drawdown_r"))
+    dd_ok = max_dd is not None and max_dd >= -MAX_DRAWDOWN_R
+    bench = performance.get("benchmark") or {}
+    sys_ret = _number(bench.get("system_net_return_pct"))
+    bh_ret = _number(bench.get("benchmark_return_pct"))
+    bench_ok = sys_ret is not None and bh_ret is not None and sys_ret > bh_ret
+
     excluded = int(_number(performance.get("excluded_from_learning")) or 0)
     excluded_rate = excluded / max(1, int(_number(raw_summary.get("outcomes_total")) or total))
     provenance_ok = excluded_rate <= 0.10
@@ -112,6 +124,27 @@ def evaluate(performance: Mapping[str, Any], raw_summary: Mapping[str, Any] | No
             expectancy,
             ">0 R",
             "Beklenen değer negatif veya hesaplanamıyor." if not expectancy_ok else "Beklenen değer pozitif.",
+        ),
+        _criterion(
+            "net_of_costs",
+            net_ok,
+            {"net_expectancy_r": net_r, "cost_r": _number(performance.get("cost_r"))},
+            ">0 R (işlem başı maliyet düşüldükten sonra)",
+            "Maliyet sonrası beklenen değer pozitif değil." if not net_ok else "Maliyet sonrası beklenen değer pozitif.",
+        ),
+        _criterion(
+            "drawdown",
+            dd_ok,
+            max_dd,
+            f">= -{MAX_DRAWDOWN_R:g} R en büyük düşüş",
+            "En büyük düşüş sınırı aşıldı veya hesaplanamıyor." if not dd_ok else "Düşüş sınırın içinde.",
+        ),
+        _criterion(
+            "beats_buy_and_hold",
+            bench_ok,
+            {"system_net_return_pct": sys_ret, "benchmark_return_pct": bh_ret},
+            "Maliyet sonrası net getiri > aynı dönem eşit ağırlıklı al-tut",
+            "Al-tut kıyası geçilmedi veya fiyat yok." if not bench_ok else "Al-tut kıyası geçildi.",
         ),
         _criterion(
             "positive_sharpe",

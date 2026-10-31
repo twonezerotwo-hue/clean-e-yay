@@ -3,16 +3,17 @@ from __future__ import annotations
 
 from dataclasses import asdict
 
-from packages.data.registry.loader import active_weights_version
-from packages.learning import cohorts as cohorts_mod
-from packages.learning import outcomes as outcomes_mod
+from packages.data.registry.loader import active_weights_version, load_thresholds
 from packages.learning import (
+    benchmark,
     performance_readiness,
     rebalance_store,
     run_store,
     shadow_routing,
     signal_quality,
 )
+from packages.learning import cohorts as cohorts_mod
+from packages.learning import outcomes as outcomes_mod
 from packages.learning.calibration import reliability_bins
 from packages.learning.walkforward import summarize as wf_summarize
 from packages.paper import state as paper_state
@@ -58,6 +59,18 @@ def _performance_snapshot(outcomes: list) -> dict:
         "sample_sufficient": total >= MIN_RELIABLE_TRADES,
         "by_timeframe": outcomes_mod.bucketize(outcomes, lambda o: o.timeframe),
     }
+    # Performans kanıtı (hedef 7. aşama): maliyet sonrası, düşüş ve al-tut kıyası.
+    c = benchmark.cost_r()
+    result["cost_r"] = c
+    result["net_expectancy_r"] = (
+        round(result["expectancy_r"] - c, 4) if result["expectancy_r"] is not None else None
+    )
+    result["max_drawdown_r"] = benchmark.max_drawdown_r(outcomes)
+    try:
+        equity0 = float(load_thresholds()["paper_trading"]["initial_equity_usd"])
+    except (OSError, KeyError, ValueError, TypeError):
+        equity0 = 0.0
+    result["benchmark"] = benchmark.buy_and_hold(outcomes, equity0)
     return result
 
 
