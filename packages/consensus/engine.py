@@ -39,6 +39,11 @@ class ModuleScore:
     score: float
     weight: float
     contribution: float
+    # Katman: "context" (temel, sentinel, quantum — varlığa yön verilen bağlam) ya da
+    # "vote" (teknik, haber — hücreye doğrudan yön). raw: bağlam modülünün varlıktan
+    # bağımsız ham skoru (score bunun varlığa ve zaman dilimine çevrilmiş halidir).
+    layer: str = "vote"
+    raw: float | None = None
 
 
 @dataclass
@@ -553,51 +558,84 @@ def _strict_missing_modules_active(generated_at: object | None) -> bool:
         return False
 
 
-def build(
-    symbol: str,
-    snap: MarketSnapshot,
-    regime: RegimeOutput,
-    timeframe: str = "1d",
-) -> ConsensusResult:
-    # Teknik modül yalnız (symbol, timeframe) ile değişir; makro, haber ve
-    # rotasyon katmanları varlık düzeyindedir. Her modülde tek canlı yol vardır.
-    touche_score, tf_warnings = _touche(symbol, snap, timeframe)
-    raw = {"touche": touche_score}
-    # Politika gereği oy dışı kalan modüller (haber çekimserliği, rejim kapısı,
-    # TF düşürme). "Eksik veri" sayılmaz: ağırlıkları kalanlara dağılır.
-    policy_dropped: set[str] = set()
-    news_score = _news(snap, symbol)
-    if news_score is not None:
-        raw["news"] = news_score
-    else:
-        policy_dropped.add("news")
-        tf_warnings.append(f"news_abstain:reason={_news_evidence_gap(snap, symbol)}")
+# Konsensüs katmanları (hedef mimari: bağlam → oy → birleştirme).
+CONTEXT_MODULES = ("fundamental", "sentinel", "quantum")
+VOTE_MODULES = ("touche", "news")
+
+
+def _context_layer(
+    symbol: str, snap: MarketSnapshot, regime: RegimeOutput, timeframe: str,
+    warnings: list[str], policy_dropped: set[str],
+) -> tuple[dict[str, float], dict[str, float]]:
+    """1 · Bağlam: varlıktan bağımsız makro, risk iştahı ve rotasyon okuması.
+
+    Döner: (varlığa ve zaman dilimine çevrilmiş skorlar, ham skorlar)."""
+    oriented: dict[str, float] = {}
+    raw: dict[str, float] = {}
     # Temel: v4 (DXY + 10y faiz momentumu); bar arşivi yoksa v2 (likidite + rotasyon).
     fund_v4 = _fundamental_v4()
     fundamental = fund_v4 if fund_v4 is not None else _fundamental_v2(regime)
     if fund_v4 is None and fundamental is not None:
-        tf_warnings.append(f"fundamental_fallback:v2:{symbol}:{timeframe}")
+        warnings.append(f"fundamental_fallback:v2:{symbol}:{timeframe}")
     if fundamental is not None:
-        raw["fundamental"] = _oriented("fundamental", fundamental, symbol, timeframe)
+        raw["fundamental"] = fundamental
+        oriented["fundamental"] = _oriented("fundamental", fundamental, symbol, timeframe)
     else:
-        tf_warnings.append(f"fundamental_dropped:no_macro_layers:{symbol}:{timeframe}")
+        warnings.append(f"fundamental_dropped:no_macro_layers:{symbol}:{timeframe}")
     # Sentinel: çok girdili stres kompoziti (VIX + oynaklık + türev + opsiyon).
     sentinel = _sentinel_v2(regime, snap, symbol, timeframe)
     if sentinel is not None:
-        raw["sentinel"] = _oriented("sentinel", sentinel, symbol, timeframe)
+        raw["sentinel"] = sentinel
+        oriented["sentinel"] = _oriented("sentinel", sentinel, symbol, timeframe)
     else:
-        tf_warnings.append(f"sentinel_dropped:no_risk_appetite_layer:{symbol}:{timeframe}")
+        warnings.append(f"sentinel_dropped:no_risk_appetite_layer:{symbol}:{timeframe}")
     # Quantum: sembol-başı göreceli güç (veri yoksa makro eğim); yalnız izinli
     # rejimlerde oy kullanır, aksi halde düşer (nötr-50 uydurulmaz).
     if snap.rotation.status != "UNAVAILABLE":
         q2 = _quantum_v2(snap, symbol)
         q_score = q2 if q2 is not None else _quantum(snap)
         if regime.label in _quantum_gate_allowed_regimes():
-            raw["quantum"] = q_score
+            raw["quantum"] = oriented["quantum"] = q_score
         else:
-            tf_warnings.append(f"quantum_dropped:regime_gate:{regime.label}:{symbol}")
+            warnings.append(f"quantum_dropped:regime_gate:{regime.label}:{symbol}")
             policy_dropped.add("quantum")
+    return oriented, raw
 
+
+def _vote_layer(
+    symbol: str, snap: MarketSnapshot, timeframe: str,
+    warnings: list[str], policy_dropped: set[str],
+) -> dict[str, float]:
+    """2 · Oylar: hücreye doğrudan yön veren teknik ve haber modülleri."""
+    touche_score, touche_warnings = _touche(symbol, snap, timeframe)
+    warnings.extend(touche_warnings)
+    votes = {"touche": touche_score}
+    news_score = _news(snap, symbol)
+    if news_score is not None:
+        votes["news"] = news_score
+    else:
+        policy_dropped.add("news")
+        warnings.append(f"news_abstain:reason={_news_evidence_gap(snap, symbol)}")
+    return votes
+
+
+def build(
+    symbol: str,
+    snap: MarketSnapshot,
+    regime: RegimeOutput,
+    timeframe: str = "1d",
+) -> ConsensusResult:
+    """Konsensüs sıralı üç katmanda: 1 bağlam → 2 oylar → 3 birleştirme.
+
+    Politika gereği oy dışı kalan modüller (haber çekimserliği, rejim kapısı,
+    TF düşürme) "eksik veri" sayılmaz: ağırlıkları kalanlara dağılır."""
+    tf_warnings: list[str] = []
+    policy_dropped: set[str] = set()
+    votes = _vote_layer(symbol, snap, timeframe, tf_warnings, policy_dropped)
+    context, context_raw = _context_layer(symbol, snap, regime, timeframe, tf_warnings, policy_dropped)
+    raw = {**votes, **context}
+
+    # 3 · Birleştirme: TF düşürme → ağırlık ve kapsama → yön, uyum, baskın modül.
     # Timeframe calibration gate: the current clean cohort marks selected
     # modules inverse on 4h. Keep their scores in the shadow trace, but remove
     # them from that timeframe's live vote until a new canary proves otherwise.
@@ -656,7 +694,12 @@ def build(
         wt = w.get(name, 0.0)
         c = s * wt
         weighted += c
-        modules.append(ModuleScore(name=name, score=round(s, 2), weight=round(wt, 4), contribution=round(c, 3)))
+        layer = "context" if name in CONTEXT_MODULES else "vote"
+        raw_value = context_raw.get(name)
+        modules.append(ModuleScore(
+            name=name, score=round(s, 2), weight=round(wt, 4), contribution=round(c, 3),
+            layer=layer, raw=round(raw_value, 2) if raw_value is not None else None,
+        ))
     # Baskın modül: nötr-50 merkezli yön katkısı |skor−50|×ağırlık (ayı modül de baskın olabilir).
     dominant = max(modules, key=lambda m: abs((m.score - 50.0) * m.weight)).name if modules else ""
     final = max(0.0, min(100.0, weighted))

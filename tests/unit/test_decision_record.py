@@ -22,8 +22,11 @@ def _iso(tmp_path, monkeypatch):
 
 
 def _d(symbol, tf="1h", action="hold", candidate="open_long", blocked=("ev_gate",), score=55.0):
+    modules = [SimpleNamespace(name="fundamental", layer="context", raw=10.0, score=40.0, weight=0.2),
+               SimpleNamespace(name="touche", layer="vote", raw=None, score=62.0, weight=0.4)]
     return SimpleNamespace(symbol=symbol, timeframe=tf, action=action, candidate_action=candidate,
-                           consensus=SimpleNamespace(direction="bullish"), consensus_score=score,
+                           consensus=SimpleNamespace(direction="bullish", modules=modules, dominant_module="touche"),
+                           consensus_score=score,
                            confidence=0.4, expected_value=-0.2, blocked_by=list(blocked), decision_id=f"dec_{symbol}")
 
 
@@ -46,6 +49,10 @@ def test_first_tick_is_checkpoint_with_versions_then_only_changes():
     assert rows[0]["versions"]["thresholds"] and rows[0]["risk_action"] == "ALLOW"
     assert rows[1]["cells"][0]["symbol"] == "BTCUSD" and rows[1]["cells"][0]["route"] == "open"
     assert rows[0]["cells"][0]["gate_blocker"] == "technical_confirmation" and rows[0]["cells"][0]["ev"] == -0.2
+    path = rows[0]["cells"][0]
+    assert [m["layer"] for m in path["modules"]] == ["context", "vote"]
+    assert path["modules"][0] == {"name": "fundamental", "layer": "context", "raw": 10.0, "score": 40.0, "weight": 0.2}
+    assert path["dominant"] == "touche"
 
 
 def test_counters_inside_blocker_codes_do_not_create_rows():

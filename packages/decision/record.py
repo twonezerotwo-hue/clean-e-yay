@@ -81,9 +81,17 @@ def versions() -> dict[str, Any]:
 def _cell(decision: Any, gate: Any) -> dict[str, Any]:
     consensus = getattr(decision, "consensus", None)
     ev = getattr(decision, "expected_value", None)
+    # Karar yolu sırayla: modüller (bağlam → oy) → skor ve yön → engeller → son kapı rotası.
+    modules = [
+        {"name": m.name, "layer": getattr(m, "layer", None), "raw": getattr(m, "raw", None),
+         "score": m.score, "weight": m.weight}
+        for m in (getattr(consensus, "modules", None) or ())
+    ]
     return {
         "symbol": decision.symbol,
         "timeframe": decision.timeframe,
+        "modules": modules,
+        "dominant": getattr(consensus, "dominant_module", None),
         "action": decision.action,
         "candidate": getattr(decision, "candidate_action", None),
         "direction": getattr(consensus, "direction", None),

@@ -30,3 +30,17 @@ def test_build_applies_orientation_per_asset(monkeypatch):
     dxy = ce.build("DXY", snap, regime, "1d")
     assert next(m for m in btc.modules if m.name == "fundamental").score == pytest.approx(40.0)
     assert next(m for m in dxy.modules if m.name == "fundamental").score == pytest.approx(90.0)
+
+
+def test_modules_carry_layer_and_raw(monkeypatch):
+    """Karar yolu: bağlam modülü ham ve yönlü skoru, oy modülü yalnız skoru taşır."""
+    from types import SimpleNamespace
+
+    monkeypatch.setattr(ce, "_fundamental_v4", lambda: 10.0)
+    snap = SimpleNamespace(rotation=SimpleNamespace(status="UNAVAILABLE", score=50.0),
+                           technicals_by_tf={}, technicals={}, headlines=[], volatility={}, derivatives={}, options={})
+    res = ce.build("BTCUSD", snap, SimpleNamespace(label="NEUTRAL", layers=[], dropped=[]), "15m")
+    by = {m.name: m for m in res.modules}
+    assert (by["fundamental"].layer, by["fundamental"].raw, by["fundamental"].score) == ("context", 10.0, 40.0)
+    assert (by["touche"].layer, by["touche"].raw) == ("vote", None)
+    assert set(ce.CONTEXT_MODULES) | set(ce.VOTE_MODULES) == {"fundamental", "sentinel", "quantum", "touche", "news"}
