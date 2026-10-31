@@ -239,7 +239,7 @@ def _technical_gate_summary(snap: MarketSnapshot) -> list[dict]:
     return rows[:6]
 
 
-def _matrix_summary(view: dict) -> dict:
+def _matrix_summary(view: dict, why: dict | None = None) -> dict:
     cells = view.get("cells") or []
     top = sorted(cells, key=lambda c: -abs(float(c.get("score", 50)) - 50))[:TOP_CELL_COUNT]
     diffs = [
@@ -279,6 +279,8 @@ def _matrix_summary(view: dict) -> dict:
                 "direction": c["direction"],
                 "status": c["status"],
                 "blocked_by": list(c.get("blocked_by") or []),
+                # Açıklama paketi: yönü iten / karşı duran modüller + ilk engel.
+                "why": (why or {}).get((c["symbol"], c["timeframe"])),
             }
             for c in top
         ],
@@ -331,7 +333,9 @@ def build_compact_context() -> dict:
         },
         "provider_issues": provider_issues,
         "warnings": list(snap.warnings)[:6],
-        "matrix": _matrix_summary(view),
+        "matrix": _matrix_summary(view, why={
+            (d.symbol, d.timeframe): dv.explain(d.symbol, d.timeframe)["why_now"] for d in dv.decisions
+        }),
         "technical_gate": _technical_gate_summary(snap),
         "deep_data": _deep_data_summary(view, snap),
         "halt": {"active": bool(active_halts), "events": active_halts},

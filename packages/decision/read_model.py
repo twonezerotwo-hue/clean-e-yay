@@ -38,6 +38,17 @@ class DecisionView:
             self._off_universe[key] = build_consensus(symbol, self.snap, self.regime, timeframe)
         return self._off_universe[key]
 
+    def explain(self, symbol: str, timeframe: str = "1d") -> dict | None:
+        """Hücrenin açıklama paketi (tick'in son kapı rotasıyla); karar yoksa None."""
+        from packages.decision import explain as explain_mod
+        from packages.decision.tick_artifact import final_for
+
+        gates = final_for(self.snap) or {}
+        for d in self.decisions:
+            if d.symbol == symbol and getattr(d, "timeframe", "1d") == timeframe:
+                return explain_mod.build(d, gates.get((symbol, timeframe)))
+        return None
+
     def world_state(self) -> Any:
         """Tick'in bu görüntü için kurduğu dünya durumu (yoksa aynı fonksiyonla)."""
         if "_world" not in self._off_universe:

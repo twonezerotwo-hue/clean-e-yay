@@ -21,6 +21,8 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
+from packages.decision import explain
+
 _REPO = Path(__file__).resolve().parents[2]
 _CHECKPOINT_EVERY = timedelta(hours=1)
 # Karar yolunu değiştirebilen bayraklar; değerleri kayıtta sürüm bilgisidir.
@@ -103,6 +105,7 @@ def _cell(decision: Any, gate: Any) -> dict[str, Any]:
         "gate_blocker": getattr(gate, "blocker", None),
         "size_multiplier": round(float(getattr(gate, "size_multiplier", 0.0) or 0.0), 3) if gate is not None else None,
         "decision_id": getattr(decision, "decision_id", None),
+        "explain": explain.build(decision, gate),
     }
 
 
