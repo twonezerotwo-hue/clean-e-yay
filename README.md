@@ -142,32 +142,37 @@ pip install certifi
 SSL_CERT_FILE="$(python -m certifi)" PYTHONPATH=. uvicorn apps.api.main:app --port 9000
 ```
 
-### Yerel ücretsiz Türkçe ses (Piper)
+### Yerel Türkçe ses (VoiceStudio / OmniVoice)
 
-Sesli brief, sohbet ve bildirimler API üzerinden aynı yerel Piper motorunu kullanır;
-tarayıcı/uzak TTS yedeği yoktur ve ses verisi karar motoruna yazılmaz. İlk kurulumda PowerShell'i proje kökünde
-çalıştırın:
+Sesli briefing, sohbet ve bildirimler artık tek ses motoru olarak bilgisayarda
+kurulu **VoiceStudio** uygulamasını kullanır. E-YAY'ın mevcut
+`POST /api/voice/speak` endpoint'i değişmemiştir; backend ses üretimini
+`127.0.0.1:3900/v1/audio/speech` adresindeki VoiceStudio API'sine aktarır.
+Piper, bulut ve tarayıcı TTS fallback'i bulunmaz.
 
-```powershell
-.\scripts\setup-piper.ps1
+İlk kullanımda VoiceStudio'da `türkçe voice 1` profilini oluşturup ses
+üretimini uygulama içinde doğrulayın. VoiceStudio'yu açık tutun.
+`.env` ayarları:
+
+```dotenv
+VOICESTUDIO_API_URL=http://127.0.0.1:3900/v1/audio/speech
+VOICESTUDIO_VOICE=türkçe voice 1
+VOICESTUDIO_MODEL=tts-1
+VOICESTUDIO_SPEED=0.85
+VOICESTUDIO_TIMEOUT_SEC=180
 ```
 
-Script güncel `piper-tts==1.8.0` çalıştırıcısını karar/worker ortamından ayrı
-`.voice-venv` içine ve Türkçe modeli `data/models/piper/` altına kurar. RTX
-olan makinelerde CUDA hızlandırmasını ayrıca doğrulayarak kurmak için:
+VoiceStudio API yalnızca loopback adreslerinde kullanılabilir; uzaktaki bir
+sunucuya otomatik ses kaydı aktarımı yoktur. API yanıtı WAV olarak doğrulanır.
+VoiceStudio kapalıysa yalnızca ses üretimi 503 (zaman aşımında 504) döner;
+piyasa analizi, risk değerlendirmesi ve paper-only karar mekanizması çalışmaya
+devam eder. GPU belleği sınırlı RTX 2070 sistemlerinde Ollama Qwen3:8B
+çalışıyorsa önce modeli boşaltmak gerekebilir.
 
-```powershell
-.\scripts\setup-piper.ps1 -Cuda
-```
-
-Model dosyaları büyük olduğu için Git'e eklenmez; yeni bir makinede script
-yeniden çalıştırılabilir. `.env` içinde `PIPER_MODEL` ve `PIPER_BIN` bulunmalıdır.
-Resmî Türkçe Piper kataloğunda şu an tek doğrulanmış model orta kalite
-`tr_TR-dfki-medium` olduğundan, çalıştırıcı yükseltmesi telaffuz modelini
-kendiliğinden değiştirmez; daha kaliteli bir Türkçe model ayrıca doğrulanmadan
-sisteme alınmaz. Piper
-geçici olarak kullanılamazsa yalnızca ses isteği 503 döner;
-işlem/risk/LLM akışı durmaz ve başka bir ses motoruna sessizce geçilmez.
+**Lisans:** VoiceStudio uygulama lisansı ile ses modelinin ağırlık lisansı
+farklıdır. OmniVoice'un ticari olmayan kullanım kısıtlarına uyun. Eski
+`scripts/setup-piper.*` dosyaları yalnızca tarihsel kurulum araçlarıdır,
+normal çalışma sırasında çağrılmazlar.
 
 ### Port seçimi
 
