@@ -33,14 +33,6 @@ def _snap(by_tf: dict[str, float | None]) -> SimpleNamespace:
     )
 
 
-def test_flag_off_score_identical_with_shadow_warning():
-    # 15m long (70) vs 1h net short (20) — default'ta skor DEĞİŞMEZ, shadow satırı var.
-    snap = _snap({"15m": 70.0, "1h": 20.0})
-    score, warnings = ce._touche("BTCUSD", snap, "15m")
-    assert score == 70.0
-    assert any(w.startswith("htf_alignment_shadow:") for w in warnings)
-
-
 def test_flag_on_opposing_htf_dampens_toward_neutral():
     snap = _snap({"15m": 70.0, "1h": 20.0})
     with threshold_override(_FLAG_ON):

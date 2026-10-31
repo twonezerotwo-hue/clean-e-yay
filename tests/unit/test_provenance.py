@@ -43,6 +43,35 @@ def _patch_live_success(monkeypatch, price_mod) -> None:
     monkeypatch.setattr(price_mod.coingecko, "get_quote", _fake)
     monkeypatch.setattr(price_mod.yfinance, "get_quote", _fake)
     monkeypatch.setattr(price_mod.fred, "get_quote", _fake)
+    # "Tüm kaynaklar doğrulanmış" teknik tabanı da kapsar: canlı DQS genişletilmiş
+    # kapısı (technical_bars ≥ 40) tam bar geçmişi olmayan hücreyi DEGRADED sayar.
+    _patch_full_bars(monkeypatch)
+
+
+_TF_STEP = {"15m": 15 * 60, "1h": 3600, "4h": 4 * 3600, "1d": 86400, "1w": 7 * 86400}
+
+
+def _patch_full_bars(monkeypatch) -> None:
+    from datetime import timedelta
+
+    from packages.data.providers import ohlcv
+    from packages.data.types import OHLCVBar, utcnow
+
+    now = utcnow()
+
+    def _bars(symbol: str, timeframe: str = "1d", *_a, **_k):
+        step = timedelta(seconds=_TF_STEP.get(timeframe, 86400))
+        out = []
+        for i in range(250):
+            close = 100.0 + (i % 7) - 3 + i * 0.05
+            out.append(OHLCVBar(
+                symbol=symbol, timeframe=timeframe, ts=now - step * (249 - i),
+                open=close - 0.2, high=close + 0.5, low=close - 0.5, close=close,
+                volume=1000.0, source="test-full", verified=True,
+            ))
+        return out
+
+    monkeypatch.setattr(ohlcv, "get_bars", _bars)
 
 
 def _patch_live_fail(monkeypatch, price_mod) -> None:

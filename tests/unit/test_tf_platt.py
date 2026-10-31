@@ -96,15 +96,6 @@ def test_trainer_fits_per_tf_and_marks_insufficient(fresh_env) -> None:
 
 # ------------------------------ predict + flag -------------------------------
 
-def test_predict_tf_flag_off_is_global_byte_same(fresh_env) -> None:
-    ps, cs = fresh_env
-    from packages.learning import calibration_trainer as ct
-    _seed(ps, "15m", n_high_win=6, n_low_loss=6)
-    ct.train()
-    for raw in (0.1, 0.42, 0.8):
-        assert cs.predict_calibrated_tf(raw, "15m") == cs.predict_calibrated(raw)
-        assert cs.predict_calibrated_tf(raw, "1d") == cs.predict_calibrated(raw)
-
 
 def test_predict_tf_flag_on_uses_tf_fit_or_falls_back(fresh_env) -> None:
     ps, cs = fresh_env

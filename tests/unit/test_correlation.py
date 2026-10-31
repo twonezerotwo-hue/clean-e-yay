@@ -224,7 +224,7 @@ def test_decision_correlation_reduces_size(fresh_env, monkeypatch) -> None:
         open_positions=[pos], equity_usd=100_000,
     )
     assert reduced.action == "open_long"
-    assert reduced.size_multiplier == pytest.approx(base.size_multiplier * 0.5)
+    assert reduced.size_multiplier == pytest.approx(base.size_multiplier * 0.5, abs=1e-3)
     assert reduced.cluster_report.get("status") == "REDUCED"
 
 

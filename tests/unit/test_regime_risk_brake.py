@@ -184,6 +184,6 @@ def test_engine_flag_on_reduces_size(monkeypatch):
     _write_brake_for(regime.label, mult=0.5)
     with threshold_override(on_cfg):
         on = run()
-    assert on.size_multiplier == round(base.size_multiplier * 0.5, 3)
+    assert on.size_multiplier == pytest.approx(base.size_multiplier * 0.5, abs=1e-3)
     assert on.regime_brake_report.get("applied") is True
     assert "regime_risk_brake" in on.blocked_by

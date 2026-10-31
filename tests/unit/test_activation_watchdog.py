@@ -15,11 +15,18 @@ import pytest
 from packages.data.registry.loader import threshold_override
 from packages.learning import activation_watchdog as aw
 
-_FLAG_ON = {"news": {"sentiment_v2": True}}
+# Geçiş testleri canlıda açık/kapalı bayrağa bağlı değil: kayıt başına sentetik
+# bayrak eklenir (base config'de yok → KAPALI; threshold_override ile açılır).
+_PROBE = "probe_flag"
+_FLAG_ON = {"probe": {"enabled": True}}
 
 
 @pytest.fixture
 def wd_env(tmp_path, monkeypatch):
+    monkeypatch.setattr(aw, "REGISTRY", {
+        _PROBE: {"label": "Test bayrağı", "source": ("thresholds", ("probe", "enabled"))},
+        **aw.REGISTRY,
+    })
     monkeypatch.setenv("ACTIVATION_WATCHDOG_PATH", str(tmp_path / "watchdog.json"))
     monkeypatch.setenv("ACTIVATION_MIN_OUTCOMES", "3")
     # ölçüm fonksiyonlarını deterministik sabitle (kaynak: weight_rollback)
@@ -60,14 +67,14 @@ def test_off_to_on_arms_and_on_to_off_disarms(wd_env) -> None:
     aw.sync()  # ilk görüş: hepsi OFF snapshot'landı
     with threshold_override(_FLAG_ON):
         out = aw.sync()
-    assert out["armed"] == ["news_sentiment_v2"]
+    assert out["armed"] == [_PROBE]
     rep = aw.report()
-    flag = next(f for f in rep["flags"] if f["flag_key"] == "news_sentiment_v2")
+    flag = next(f for f in rep["flags"] if f["flag_key"] == _PROBE)
     assert flag["monitoring"] is True
     assert flag["monitor"]["baseline_expectancy"] == 10.0
     # owner kapattı → DISARMED (watchdog kapatmadı)
     out2 = aw.sync()
-    assert out2["disarmed"] == ["news_sentiment_v2"]
+    assert out2["disarmed"] == [_PROBE]
     assert aw.report()["history"][0]["outcome"] == "DISARMED"
 
 
@@ -122,7 +129,7 @@ def test_recommend_only_never_writes_overrides(wd_env, monkeypatch, tmp_path) ->
     assert not ov_path.exists()  # kill-override YOK
     # flag hâlâ owner'ın bıraktığı gibi okunur (watchdog dokunmadı)
     with threshold_override(_FLAG_ON):
-        assert aw._flag_enabled("news_sentiment_v2") is True
+        assert aw._flag_enabled(_PROBE) is True
 
 
 def test_monitoring_until_enough_outcomes(wd_env) -> None:

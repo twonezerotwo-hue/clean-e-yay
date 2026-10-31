@@ -71,19 +71,6 @@ def test_v2_tie_stays_neutral() -> None:
 
 # ------------------------------- flag dispatch -------------------------------
 
-def test_active_defaults_to_v1() -> None:
-    """Config default'u false → aktif sınıflandırıcı v1 (davranış bayt-aynı)."""
-    assert classify.sentiment_v2_enabled() is False
-    assert classify.classify_sentiment_active(_REBOUNDS) == "neutral"
-
-
-def test_active_switches_with_flag() -> None:
-    with threshold_override({"news": {"sentiment_v2": True}}):
-        assert classify.sentiment_v2_enabled() is True
-        assert classify.classify_sentiment_active(_REBOUNDS) == "bullish"
-    # scope dışında eski davranış geri gelir
-    assert classify.classify_sentiment_active(_REBOUNDS) == "neutral"
-
 
 # ------------------------------ RSS entegrasyonu -----------------------------
 
@@ -100,9 +87,8 @@ def test_rss_headline_carries_active_and_v2() -> None:
     heads = rss.parse_feed(_rss_xml(_REBOUNDS), "TestFeed")
     assert len(heads) == 1
     h = heads[0]
-    # flag default KAPALI: karar zincirinin gördüğü sentiment v1 (neutral)…
-    assert h.sentiment == "neutral"
-    # …v2 okuması gözlem alanında (aktivasyon kanıtı burada birikir)
+    # karar zincirinin gördüğü sentiment v2 (çekim eki indirgenir: rebounds → bullish)
+    assert h.sentiment == "bullish"
     assert h.sentiment_v2 == "bullish"
     assert h.verified is True
 

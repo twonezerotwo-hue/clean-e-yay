@@ -53,7 +53,7 @@ def test_article_body_is_added_to_consensus_without_overwriting_headline_evidenc
             url: {
                 "status": "OK",
                 "url": url,
-                "excerpt": "A blockade disrupts crude oil exports while oil prices surge.",
+                "excerpt": "Crude oil prices surge as exports rally sharply higher.",
                 "word_count": 9,
             }
         },
@@ -65,7 +65,7 @@ def test_article_body_is_added_to_consensus_without_overwriting_headline_evidenc
     brent = next(item for item in report["assets"] if item["symbol"] == "BRENT")
     assert report["article_enriched_stories"] == 1
     assert report["article_evidence_words"] == 9
-    assert brent["consensus"] in {"BULLISH", "BEARISH"}
+    assert brent["consensus"] == "BULLISH"
 
 
 def test_rss_article_summary_is_used_before_page_cache(monkeypatch):

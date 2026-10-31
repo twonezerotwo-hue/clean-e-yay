@@ -297,6 +297,7 @@ def _force_bullish(snap, symbol: str = "BTCUSD") -> None:
     snap.technicals[symbol] = snap.technicals_by_tf[symbol]["1d"]
 
 
+@pytest.mark.usefixtures("neutral_context")
 def test_matrix_extreme_vol_blocks_open_cell(paper_env) -> None:
     from packages.data.ingestion.pipeline import build_snapshot
     from packages.decision.engine import decide_matrix, matrix_view
@@ -317,6 +318,7 @@ def test_matrix_extreme_vol_blocks_open_cell(paper_env) -> None:
     )
 
 
+@pytest.mark.usefixtures("neutral_context")
 def test_matrix_elevated_vol_reduces_size_but_keeps_open(paper_env) -> None:
     from packages.data.ingestion.pipeline import build_snapshot
     from packages.decision.engine import decide_matrix
@@ -337,6 +339,7 @@ def test_matrix_elevated_vol_reduces_size_but_keeps_open(paper_env) -> None:
     assert dec[0].size_multiplier < base_dec[0].size_multiplier  # küçüldü, artmadı
 
 
+@pytest.mark.usefixtures("neutral_context")
 def test_matrix_unverified_vol_does_not_block_open(paper_env) -> None:
     from packages.data.ingestion.pipeline import build_snapshot
     from packages.decision.engine import decide_matrix

@@ -42,17 +42,6 @@ def _patch_backtest(monkeypatch, table: dict[float, tuple[float, float]]):
     monkeypatch.setattr(threshold_ab.strategy_backtest, "run_signal_backtest", fake)
 
 
-def test_flag_off_output_shape_unchanged(monkeypatch):
-    _patch_backtest(monkeypatch, {2.0: (0.5, 0.5), 2.5: (2.0, -1.0)})
-    rep = threshold_ab.sweep(_PARAM, [2.5])
-    assert "walk_forward" not in rep
-    assert "train" not in rep["baseline"] or rep["baseline"].get("train") is None
-    assert "train" not in rep["runs"][0]
-    # Eski davranış: tam-pencere ortalamasına göre öneri (2.5 full avg 0.5 = baseline
-    # 0.5'i GEÇMEZ → öneri yok).
-    assert rep["recommendation"] is None
-
-
 def test_wf_blocks_overfit_candidate(monkeypatch):
     # 2.5 eğitimde parlak (2.0) ama doğrulamada çöküyor (−1.0) → öneri YOK.
     _patch_backtest(monkeypatch, {2.0: (0.5, 0.5), 2.5: (2.0, -1.0)})

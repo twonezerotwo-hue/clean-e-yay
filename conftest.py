@@ -90,51 +90,6 @@ def _package1_flags_off_by_default(monkeypatch: pytest.MonkeyPatch) -> None:
 
     from packages.data.registry import loader
     pinned = copy.deepcopy(loader._load_thresholds_base())
-    pinned.setdefault("news", {})["sentiment_v2"] = False
-    pinned.setdefault("regime", {})["drop_unavailable_layers"] = False
-    pinned.setdefault("risk_gates", {})["correlation_price_returns"] = False
-    # Paket 2 / (1) — tf_platt AÇILDI (2026-07-02); testler global-fit baseline'ı
-    # pinler, F4-1 davranış testleri threshold_override ile açar.
-    pinned.setdefault("calibration", {})["tf_platt"] = False
-    # S3-1/S3-2 (2026-07-04) — empirical_pwin + htf_alignment AÇILDI; suite v1
-    # baseline'ı pinler, davranış testleri threshold_override/monkeypatch ile açar.
-    pinned.setdefault("empirical_pwin", {})["enabled"] = False
-    pinned.setdefault("technical", {}).setdefault("htf_alignment", {})["enabled"] = False
-    # S2-1 — MTM gate flag'i kayıt fazında zaten false; ileride aktive edilince
-    # suite baseline'da kalsın diye şimdiden pinlenir (testler explicit açar).
-    pinned.setdefault("risk_gates", {})["mtm_equity_enabled"] = False
-    # E-9 (2026-07-06) — trailing_tf_aware AÇILDI (çıkış otopsisi); suite düz-trailing
-    # baseline'ında kalır, davranış testleri (test_trailing_tf_aware) override ile açar.
-    pinned.setdefault("trailing_tf_aware", {})["enabled"] = False
-    # Y-1 (2026-07-07) — regime_risk_brake kayıt fazında zaten false; ileride aktive
-    # edilince suite baseline'da kalsın diye şimdiden pinlenir (testler explicit açar).
-    pinned.setdefault("regime_risk_brake", {})["enabled"] = False
-    # Y-4 (2026-07-07) — threshold_ab.walk_forward AÇILDI; suite tek-pencere sweep
-    # baseline'ında kalır, wf davranış testleri threshold_override ile açar.
-    pinned.setdefault("threshold_ab", {})["walk_forward"] = False
-    # P1 (2026-07-10) — boyut/veto katmanları CANLI AÇIK (D korelasyon vetosu +
-    # inanç-boyu + vol-parite). Unit testler v1 baseline'ı (boyut/karar bayt-aynı)
-    # varsayar → test-default KAPAT; davranış testleri (test_correlation_veto/
-    # test_sizing_layers) kendi monkeypatch'iyle açar.
-    pinned.setdefault("correlation_veto", {})["enabled"] = False
-    pinned.setdefault("sizing_layers", {}).setdefault("conviction", {})["enabled"] = False
-    pinned.setdefault("sizing_layers", {}).setdefault("vol_parity", {})["enabled"] = False
-    pinned.setdefault("sizing_layers", {}).setdefault("brake", {})["enabled"] = False  # P3 fren
-    # P2 (2026-07-10) — kapanış-bazlı stop + yapısal stop yerleşimi. Unit testler
-    # fitil-tetikli + ATR-yerleşimli SL baseline'ı varsayar → test-default KAPAT;
-    # davranış testleri kendi monkeypatch'iyle açar.
-    pinned.setdefault("exit_close_based_stop", {})["enabled"] = False
-    pinned.setdefault("exit_structural_stop", {})["enabled"] = False
-    # Tekrar-giriş kilidi (2026-07-11) — otomatik sinyal açılışı baseline'ı (guard
-    # KAPALI → açılış bayt-aynı) varsayar → test-default KAPAT; davranış testleri
-    # (test_reentry_guard) kendi monkeypatch'iyle açar.
-    pinned.setdefault("reentry_guard", {})["enabled"] = False
-    # Bölge etkisi (2026-07-12) — SL/TP bayt-aynı baseline varsayılır → test-default
-    # KAPAT; davranış testleri (test_zone_influence) kendi monkeypatch'iyle açar.
-    pinned.setdefault("zone_influence", {})["enabled"] = False
-    # DQS çok-eksen kapısı (FAZ-2, 2026-07-16) — snapshot status bayt-aynı
-    # baseline; davranış testleri (test_dqs_extended_gate) kendi cfg'siyle açar.
-    pinned.setdefault("data_policy", {}).setdefault("dqs_extended_gate", {})["enabled"] = False
     monkeypatch.setattr(loader, "_load_thresholds_base", lambda: pinned)
     # Denetim 2026-07-03 — çıkış-makinesi env flag'leri testlerde default OFF
     # (dev makinesinde .env yüklenmiş olabilir; testler baseline'ı varsayar).
@@ -314,6 +269,22 @@ def _isolate_runtime_stores(tmp_path_factory: pytest.TempPathFactory) -> None:
     os.environ["CALIBRATION_AUDIT_PATH"] = str(runtime / "calibration_jumps.jsonl")
     os.environ["SHADOW_ROUTING_PATH"] = str(runtime / "shadow_routing.json")
 
+
+@pytest.fixture
+def neutral_context(monkeypatch) -> None:
+    """Konsensüs dışındaki kapıları (oynaklık, opsiyon, türev, katalizör...) test eden
+    matris testleri için tam kapsamlı NÖTR bağlam: temel = sentinel = quantum = 50.
+
+    Test anlık görüntüsünde risk iştahı katmanı yok → canlı yapılandırmada sentinel
+    eksik sayılır ve kapsama kapısı yönü nötre çeker (canlıda doğru davranış). Bu
+    fixture yalnız bağlam katmanını sabitler; yön teknik + haber oylarından gelir,
+    canlı eşikler ve kapılar aynen çalışır.
+    Dosya bazında `pytestmark = pytest.mark.usefixtures("neutral_context")` açar.
+    """
+    from packages.consensus import engine as consensus_engine
+
+    ctx = {"fundamental": 50.0, "sentinel": 50.0, "quantum": 50.0}
+    monkeypatch.setattr(consensus_engine, "_context_layer", lambda *_a, **_k: (dict(ctx), dict(ctx)))
 
 @pytest.fixture
 def seed_ohlcv_reference() -> None:

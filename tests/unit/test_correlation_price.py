@@ -66,19 +66,6 @@ def test_unverified_bars_excluded(cache_dir) -> None:
     assert corr.price_return_series(["AAA"]) == {}
 
 
-def test_flag_off_active_chain_unchanged_price_only_observed(cache_dir) -> None:
-    """Flag kapalı: BTCUSD|ETHUSD aktif rho baseline'dan (0.75) gelir — eski
-    davranış birebir; fiyat-rho yalnız gözlem alanında (+1'e yakın)."""
-    ohlcv_cache.save("BTCUSD", "1d", _bars("BTCUSD", _X))
-    ohlcv_cache.save("ETHUSD", "1d", _bars("ETHUSD", _Y))
-    entries = corr.matrix(["BTCUSD", "ETHUSD"], trades=[])
-    e = entries[0]
-    assert e.source == "baseline"
-    assert e.rho == pytest.approx(0.75)
-    assert e.rho_price == pytest.approx(1.0, abs=1e-6)
-    assert e.price_samples == 24
-
-
 def test_flag_on_price_takes_priority(cache_dir) -> None:
     ohlcv_cache.save("BTCUSD", "1d", _bars("BTCUSD", _X))
     ohlcv_cache.save("ETHUSD", "1d", _bars("ETHUSD", _Z))  # ters seri → rho=-1

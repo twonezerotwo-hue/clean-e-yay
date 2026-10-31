@@ -5,7 +5,6 @@ from packages.data import strategy_backtest
 from packages.data.registry import loader
 from packages.learning import threshold_ab
 
-
 # ── seam: load_thresholds + threshold_override ─────────────────────────────────
 
 def test_no_override_is_byte_identical():
@@ -46,12 +45,18 @@ def test_nested_builder():
 def test_sweep_applies_override_during_backtest(monkeypatch):
     # Sentetik skaler path (base'de yok) — fake_bt o an ETKİN değeri metğe yansıtır
     # → sweep'in her değer için override'ı backtest scope'unda enjekte ettiğini kanıtlar.
+    # Walk-forward: pencere + işlem listesi; eğitim ve doğrulama işlemleri aynı değeri taşır.
     def fake_bt(symbol, timeframe):
         eff = loader.load_thresholds().get("ab_probe", {}).get("value", 0.0)
         return {
-            "status": "ok", "total_trades": 10, "win_rate": 0.5,
+            "status": "ok", "total_trades": 2, "win_rate": 0.5,
             "avg_return_pct": eff,  # etkin override değerini geri yansıt
             "profit_factor": 1.2,
+            "window": {"from": "2026-01-01T00:00:00+00:00", "to": "2026-01-11T00:00:00+00:00"},
+            "trades": [
+                {"entry_ts": "2026-01-02T00:00:00+00:00", "pnl_pct": eff},
+                {"entry_ts": "2026-01-10T00:00:00+00:00", "pnl_pct": eff},
+            ],
         }
 
     monkeypatch.setattr(strategy_backtest, "run_signal_backtest", fake_bt)

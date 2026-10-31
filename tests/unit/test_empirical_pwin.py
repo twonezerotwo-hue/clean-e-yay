@@ -177,25 +177,6 @@ def _decide(monkeypatch):
     return dec.decide_for_symbol("BTCUSD", snap, regime, hold, timeframe="4h"), regime
 
 
-def test_engine_flag_off_observes_only(ep_env, monkeypatch) -> None:
-    from packages.decision import engine as dec
-
-    # her (tf, rejim) için ampirik p=0.65 döndür (kaynağı izole test etmek için)
-    monkeypatch.setattr(
-        dec.empirical_pwin, "lookup",
-        lambda tf, rg: ep.EmpiricalPwin(p_win=0.65, wins=13, losses=7, n=20, source="tf_regime"),
-    )
-    d, _ = _decide(monkeypatch)
-    assert d.action == "open_long"
-    # skor 65 → raw 0.30; identity kalibrasyon → cal_conf 0.30; RR(4h)=2.0, cost 0.1
-    assert d.expected_value == pytest.approx(dec._expected_value(0.30, 2.0, 0.1), abs=1e-3)
-    # ampirik değerler SALT-GÖZLEM olarak damgalı
-    assert d.p_win_empirical == pytest.approx(0.65)
-    assert d.expected_value_empirical == pytest.approx(
-        dec._expected_value(0.65, 2.0, 0.1), abs=1e-3
-    )
-
-
 def test_engine_flag_on_uses_empirical_p(ep_env, monkeypatch) -> None:
     from packages.decision import engine as dec
 

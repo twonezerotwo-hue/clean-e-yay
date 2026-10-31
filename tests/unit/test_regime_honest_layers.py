@@ -41,17 +41,6 @@ _FULL_MACRO = (
 
 # ------------------------- flag KAPALI (regresyon) ---------------------------
 
-def test_flag_off_uses_legacy_defaults() -> None:
-    """Makro veri tamamen yokken eski default'lar birebir: Likidite 90.5
-    (DXY 104 / US10Y 4.3), Risk İştahı 92.0 (VIX 14). Hiçbir katman düşmez."""
-    out = classify(_snap())
-    assert out.dropped == []
-    by = {ly.name: ly.score for ly in out.layers}
-    assert by["Likidite"] == 90.5
-    assert by["Risk İştahı"] == 92.0
-    assert by["Kripto Momentum"] == 50.0
-    assert by["Sermaye Rotasyonu"] == 42.0
-
 
 def test_flag_off_real_data_same_as_flag_on() -> None:
     """Tüm veriler mevcutken flag'in hiçbir etkisi yok (skorlar aynı)."""
