@@ -30,6 +30,7 @@ from pathlib import Path
 
 from packages.data.registry.loader import REPO_ROOT
 from packages.learning import tf_target_store, weight_rollback
+from packages.ops import compliance
 from packages.ops.store import write_text_atomic
 
 _LOCK = threading.Lock()
@@ -112,6 +113,7 @@ def record_apply(
     data["active"] = entry
     data["history"] = [{**entry, "event": "AUTO_APPLIED"}, *data.get("history", [])][:_HISTORY_CAP]
     _save(data)
+    compliance.record_event(action="TF_TARGETS_AUTO_APPLIED", detail={"tfs": entry["applied_tfs"]})
     return entry
 
 
@@ -128,6 +130,8 @@ def _resolve(active: dict, *, outcome: str, post_exp: float, post_n: int,
     data["active"] = None
     data["history"] = [{**resolved, "event": outcome}, *data.get("history", [])][:_HISTORY_CAP]
     _save(data)
+    compliance.record_event(action=f"TF_TARGETS_{outcome}", detail={
+        "tfs": resolved.get("applied_tfs"), "reason": reason})
     return resolved
 
 

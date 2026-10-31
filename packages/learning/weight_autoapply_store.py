@@ -21,6 +21,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from packages.data.registry.loader import REPO_ROOT
+from packages.ops import compliance
 from packages.ops.store import write_text_atomic
 
 _LOCK = threading.Lock()
@@ -95,6 +96,8 @@ def record_apply(
     data["active"] = entry
     data["history"] = [{**entry, "event": "AUTO_APPLIED"}, *data.get("history", [])][:_HISTORY_CAP]
     _save(data)
+    compliance.record_event(action="WEIGHTS_AUTO_APPLIED", detail={
+        "version": entry.get("applied_version"), "prev_version": entry.get("prev_version")})
     return entry
 
 
@@ -114,6 +117,9 @@ def resolve_active(*, outcome: str, post_expectancy: float, post_n: int) -> dict
     data["active"] = None
     data["history"] = [{**resolved, "event": outcome}, *data.get("history", [])][:_HISTORY_CAP]
     _save(data)
+    compliance.record_event(action=f"WEIGHTS_{outcome}", detail={
+        "version": resolved.get("applied_version"), "post_expectancy": resolved["post_expectancy"],
+        "post_n": resolved["post_n"]})
     return resolved
 
 

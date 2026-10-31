@@ -1,7 +1,9 @@
 """Denetim ve uyum kaydı (hedef mimari st_audit) — kim, ne zaman, neyi istedi.
 
 Her yazma komutu (aç, kapat, SL/TP düzenle, onayla/reddet, fren sıfırla, sıfırla,
-bakım; yetkisiz denemeler dahil) API ara katmanından tek bir eklemeli kayda düşer.
+bakım; yetkisiz denemeler dahil) API ara katmanından, öğrenmenin owner'sız yaptığı
+otomatik terfi ve geri almalar (aktör "auto") kendi yerlerinden tek bir eklemeli
+kayda düşer. Süreçler arası yazım defterle aynı OS dosya kilidi altında.
 Her satır bir öncekinin özetini taşır (hash zinciri): sonradan değiştirilen ya da
 silinen satır `verify` ile görünür. Kayıt yalnız tutulur; hiçbir kararı etkilemez
 ve yazılamazsa isteği asla bozmaz.
@@ -11,11 +13,11 @@ from __future__ import annotations
 import hashlib
 import json
 import os
-import threading
 from datetime import UTC, datetime
 from pathlib import Path
 
-_LOCK = threading.Lock()
+from packages.paper.state import _flock_acquire, _flock_release
+
 _GENESIS = "0" * 16
 # Komut olmayan yazma uçları: sohbet/ses üretimi ve bildirim okundu işaretleri.
 _EXCLUDED_PREFIXES = ("/api/v1/chat", "/api/v1/voice/", "/api/v1/notifications/")
@@ -48,9 +50,27 @@ def _last_hash(path: Path) -> str:
         return _GENESIS
 
 
+def _append(body: dict) -> None:
+    """Zincire ekler (kilit altında son özet okunur). Hata çağıranı bozmaz."""
+    try:
+        p = _path()
+        p.parent.mkdir(parents=True, exist_ok=True)
+        lock = open(p.with_name(p.name + ".lock"), "a+b")  # _flock_release kapatır
+        _flock_acquire(lock)
+        try:
+            prev = _last_hash(p)
+            line = {**body, "prev": prev, "hash": _digest(prev, body)}
+            with p.open("a", encoding="utf-8") as fh:
+                fh.write(json.dumps(line, ensure_ascii=False) + "\n")
+        finally:
+            _flock_release(lock)
+    except OSError:
+        return
+
+
 def record(*, actor: str, method: str, path: str, query: str, status: int) -> None:
-    """Bir komutu zincire ekler. Hata isteği bozmaz (kayıt yan etkisizdir)."""
-    body = {
+    """Bir API komutunu zincire ekler (kayıt yan etkisizdir)."""
+    _append({
         "at": datetime.now(UTC).isoformat(),
         "actor": actor,
         "method": method,
@@ -58,17 +78,13 @@ def record(*, actor: str, method: str, path: str, query: str, status: int) -> No
         "query": query,
         "status": int(status),
         "outcome": "denied" if status in (401, 403) else ("ok" if status < 400 else "failed"),
-    }
-    try:
-        p = _path()
-        p.parent.mkdir(parents=True, exist_ok=True)
-        with _LOCK:
-            prev = _last_hash(p)
-            line = {**body, "prev": prev, "hash": _digest(prev, body)}
-            with p.open("a", encoding="utf-8") as fh:
-                fh.write(json.dumps(line, ensure_ascii=False) + "\n")
-    except OSError:
-        return
+    })
+
+
+def record_event(*, action: str, detail: dict, actor: str = "auto") -> None:
+    """API dışı değişiklik (otomatik terfi/geri alma) — `detail` küçük ve JSON."""
+    _append({"at": datetime.now(UTC).isoformat(), "actor": actor, "action": action,
+             "detail": detail, "outcome": "ok"})
 
 
 def _read_all() -> list[dict]:
@@ -114,4 +130,4 @@ def report(limit: int = DEFAULT_LIMIT) -> dict:
     }
 
 
-__all__ = ["is_command", "record", "report", "verify"]
+__all__ = ["is_command", "record", "record_event", "report", "verify"]
