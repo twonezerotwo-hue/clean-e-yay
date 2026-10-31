@@ -33,7 +33,8 @@ def test_denied_attempt_is_logged_and_tampering_is_detected(tmp_path, monkeypatc
     assert client.post("/api/v1/risk/halts/reset").status_code == 401
     client.post("/api/v1/risk/halts/reset", headers={"Authorization": "Bearer t0ken"})
     rows = [json.loads(x) for x in log.read_text(encoding="utf-8").splitlines()]
-    assert rows[0]["outcome"] == "denied" and rows[1]["actor"] == "owner"
+    assert rows[0]["outcome"] == "denied" and rows[0]["actor"] == "anonymous"
+    assert rows[1]["actor"] == "owner"
     assert compliance.verify()["chain_ok"] is True
     rows[0]["path"] = "/api/v1/something/else"                       # sonradan değiştirme
     log.write_text("".join(json.dumps(r) + "\n" for r in rows), encoding="utf-8")

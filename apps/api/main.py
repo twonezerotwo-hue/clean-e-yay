@@ -105,9 +105,10 @@ def create_app() -> FastAPI:
     async def _compliance_log(request, call_next):
         response = await call_next(request)
         if compliance.is_command(request.method, request.url.path):
-            authed = bool(os.environ.get("API_AUTH_TOKEN", "").strip()) and response.status_code != 401
+            # token yoksa yerel geliştirme; varsa eşleşen owner, eşleşmeyen anonim
+            guarded = bool(os.environ.get("API_AUTH_TOKEN", "").strip())
             compliance.record(
-                actor="owner" if authed else "local",
+                actor=("anonymous" if response.status_code == 401 else "owner") if guarded else "local",
                 method=request.method,
                 path=request.url.path,
                 query=request.url.query,
