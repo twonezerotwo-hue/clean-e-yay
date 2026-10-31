@@ -1486,6 +1486,37 @@ export type ExposureCluster = {
   status: "OK" | "WARNING" | "BREACH";
 };
 
+export type StressReport = {
+  status: "OK" | "NO_EXPOSURE" | "NO_DATA";
+  positions: number;
+  priced: number;
+  unpriced: string[];
+  equity_usd: number;
+  daily_loss_limit_pct: number;
+  days?: number;
+  window?: Record<string, string>;
+  var_95_pct?: number;
+  cvar_95_pct?: number;
+  var_99_pct?: number;
+  cvar_99_pct?: number;
+  worst_day_pct?: number;
+  worst_day?: string;
+  worst_5d_pct?: number;
+  per_position?: { symbol?: string; exposure_usd?: number; worst_day_pct?: number }[];
+  exceeds_daily_limit?: boolean;
+  note?: string;
+};
+
+export type SystemRegistry = {
+  code: string | null;
+  config: Record<string, string | null>;
+  weights: Record<string, string | null>;
+  decision_flags?: Record<string, string>;
+  models: Record<string, string>;
+  prompts: Record<string, string>;
+  learning_engines: Record<string, string | null>;
+};
+
 export type CorrelationState = {
   threshold: number;
   max_cluster_pct: number;

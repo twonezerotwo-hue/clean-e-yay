@@ -38,6 +38,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/system/registry": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Model, sinyal ve ajan sürümleri (kod, yapılandırma, ağırlık, YZ modelleri, talimatlar) */
+        get: operations["getSystemRegistry"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/regime-report/current": {
         parameters: {
             query?: never;
@@ -458,6 +475,23 @@ export interface paths {
         };
         /** Read-only portfolio concentration and world-thesis alignment */
         get: operations["getRiskPortfolio"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/risk/stress": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Açık kitabın tarihsel stres testi ve kuyruk riski (VaR/CVaR) — salt rapor */
+        get: operations["getRiskStress"];
         put?: never;
         post?: never;
         delete?: never;
@@ -2713,6 +2747,56 @@ export interface components {
             }[];
             warnings?: string[];
         };
+        /** @description Açık paper pozisyonlarına arşivdeki gerçek günlük getiriler uygulanır; limit değiştirmez. */
+        StressReport: {
+            /** @enum {string} */
+            status: "OK" | "NO_EXPOSURE" | "NO_DATA";
+            positions: number;
+            priced: number;
+            unpriced: string[];
+            equity_usd: number;
+            daily_loss_limit_pct: number;
+            days?: number;
+            window?: {
+                [key: string]: string;
+            };
+            var_95_pct?: number;
+            cvar_95_pct?: number;
+            var_99_pct?: number;
+            cvar_99_pct?: number;
+            worst_day_pct?: number;
+            worst_day?: string;
+            worst_5d_pct?: number;
+            per_position?: {
+                symbol?: string;
+                exposure_usd?: number;
+                worst_day_pct?: number;
+            }[];
+            exceeds_daily_limit?: boolean;
+            note?: string;
+        };
+        /** @description Kararı ve anlatımı üreten bileşenlerin sürümleri (tek yerden). */
+        SystemRegistry: {
+            code: string | null;
+            config: {
+                [key: string]: string | null;
+            };
+            weights: {
+                [key: string]: string | null;
+            };
+            decision_flags?: {
+                [key: string]: string;
+            };
+            models: {
+                [key: string]: string;
+            };
+            prompts: {
+                [key: string]: string;
+            };
+            learning_engines: {
+                [key: string]: string | null;
+            };
+        };
         /** @description Read-only paper-ledger exposure view; no rebalance or execution. */
         PortfolioRiskReport: {
             /** Format: date-time */
@@ -4943,6 +5027,26 @@ export interface operations {
             };
         };
     };
+    getSystemRegistry: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SystemRegistry"];
+                };
+            };
+        };
+    };
     getRegimeReportCurrent: {
         parameters: {
             query?: never;
@@ -5530,6 +5634,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PortfolioRiskReport"];
+                };
+            };
+        };
+    };
+    getRiskStress: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StressReport"];
                 };
             };
         };

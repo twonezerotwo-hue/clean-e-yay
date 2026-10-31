@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter
 
+from packages.ops import registry
 from packages.ops.system_health import build_system_health
 
 router = APIRouter(tags=["system"])
@@ -16,3 +17,9 @@ router = APIRouter(tags=["system"])
 @router.get("/system/health")
 def get_system_health() -> dict:
     return build_system_health()
+
+
+@router.get("/system/registry")
+def get_system_registry() -> dict:
+    """Model, sinyal ve ajan sürümleri (salt okuma)."""
+    return registry.snapshot()

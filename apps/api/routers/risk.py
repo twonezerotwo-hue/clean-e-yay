@@ -12,7 +12,7 @@ from packages.data.registry import assets as asset_registry
 from packages.data.registry.loader import load_thresholds
 from packages.paper import state as paper_state
 from packages.portfolio import build_portfolio_risk
-from packages.risk import correlation
+from packages.risk import correlation, stress
 from packages.risk import halt as halt_store
 from packages.risk.engine import RiskInput, risk_input_from_state
 
@@ -78,6 +78,12 @@ def get_correlation() -> dict:
         "equity_usd": round(ps.equity_usd, 2),
         "insufficient_pairs": insufficient,
     }
+
+
+@router.get("/risk/stress")
+def get_risk_stress() -> dict:
+    """Açık kitabın tarihsel stres testi ve kuyruk riski (salt rapor; limit değiştirmez)."""
+    return stress.report(paper_state.load())
 
 
 @router.get("/risk/portfolio")
