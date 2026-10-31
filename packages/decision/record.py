@@ -124,8 +124,13 @@ def _prune(folder: Path, today: datetime) -> None:
 
 
 def append(snap: Any, decisions: list[Any], final_results: dict[tuple[str, str], Any], *,
-           now: datetime | None = None, risk_action: str | None = None) -> dict[str, Any]:
-    """Bu turun kararlarını kayda ekler; ne yazıldığını döner."""
+           now: datetime | None = None, risk_action: str | None = None,
+           opened: set[tuple[str, str]] | frozenset = frozenset()) -> dict[str, Any]:
+    """Bu turun kararlarını kayda ekler; ne yazıldığını döner.
+
+    ``opened``: bu turda pozisyon açılan (sembol, TF) hücreleri — karar değişmemiş
+    olsa da yazılır ve ``opened: true`` damgası alır; pozisyonun decision_id'si
+    böylece her zaman kayıtta bulunur (karar → pozisyon → sonuç zinciri)."""
     now = now or datetime.now(UTC)
     cells = [_cell(d, final_results.get((d.symbol, d.timeframe))) for d in decisions]
     with _LOCK:
@@ -133,7 +138,13 @@ def append(snap: Any, decisions: list[Any], final_results: dict[tuple[str, str],
         checkpoint = (_STATE["checkpoint_at"] is None or now - _STATE["checkpoint_at"] >= _CHECKPOINT_EVERY
                       or current_versions != _STATE["versions"])
         previous = _STATE["cells"]
-        changed = cells if checkpoint else [c for c in cells if previous.get((c["symbol"], c["timeframe"])) != _key(c)]
+        changed = cells if checkpoint else [
+            c for c in cells
+            if previous.get((c["symbol"], c["timeframe"])) != _key(c) or (c["symbol"], c["timeframe"]) in opened
+        ]
+        for c in changed:
+            if (c["symbol"], c["timeframe"]) in opened:
+                c["opened"] = True
         _STATE["cells"] = {(c["symbol"], c["timeframe"]): _key(c) for c in cells}
         if not changed:
             return {"kind": "none", "cells": 0}

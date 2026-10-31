@@ -63,6 +63,19 @@ def test_counters_inside_blocker_codes_do_not_create_rows():
     assert out["kind"] == "delta"
 
 
+def test_opened_cell_is_written_even_without_change():
+    """Pozisyon açılan hücre karar değişmese de yazılır: decision_id kayıtta bulunur."""
+    gates = {("BTCUSD", "1h"): _gate(route="open", blocker=None)}
+    record.append(SNAP, [_d("BTCUSD", action="open_long")], gates, now=T0)
+    later = _d("BTCUSD", action="open_long")
+    later.decision_id = "dec_BTCUSD_later"
+    assert record.append(SNAP, [later], gates, now=T0 + timedelta(seconds=30))["kind"] == "none"
+    out = record.append(SNAP, [later], gates, now=T0 + timedelta(seconds=60), opened={("BTCUSD", "1h")})
+    assert out == {"kind": "delta", "cells": 1}
+    cell = record.load_day("2026-10-30")[-1]["cells"][0]
+    assert cell["decision_id"] == "dec_BTCUSD_later" and cell["opened"] is True
+
+
 def test_hourly_checkpoint_and_flag_change_force_full_copy(monkeypatch):
     decisions = [_d("BTCUSD")]
     record.append(SNAP, decisions, {}, now=T0)

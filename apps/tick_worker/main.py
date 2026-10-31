@@ -497,6 +497,7 @@ async def run_once() -> None:
             for pos in ps.open_positions
             if getattr(pos, "signal_id", None)
         }
+        opened_cells: set[tuple[str, str]] = set()  # bu turda pozisyon açılan hücreler
         # Son kapı tek yerde (packages.decision.final_gate): yürütmeye hazır →
         # teknik veri → teknik teyit → haber etkisi → seans/conflict gate rotası.
         # Sonuçlar yayınlanır; ekran aynı kapı sonucunu gösterir.
@@ -628,13 +629,13 @@ async def run_once() -> None:
                     m.name: m.contribution for m in d.consensus.modules
                 },
                 # Tekrar-giriş kilidi YALNIZ otomatik sinyal açılışına (owner manuel
-                # açılış / manual_ready onayı muaf). Flag KAPALIYKEN gözlem, açılış
-                # bayt-aynı (shadow-first).
+                # açılış / manual_ready onayı muaf).
                 apply_reentry_guard=True,
                 **routed.session_attribution,
             )
             if pos is not None:
                 opened_by_signal[signal_id] = pos.id
+                opened_cells.add((d.symbol, d.timeframe))
                 paper_actions += 1
                 if news_match:
                     news_setup.mark_activated(ps, news_setup_id, now=now)
@@ -648,24 +649,23 @@ async def run_once() -> None:
                 calibration_audit.record_open(
                     d, pos, regime=getattr(_regime, "label", None)
                 )
-            # Tekrar-giriş kilidi kanıtı (shadow VEYA canlı): guard kilit hesapladıysa
-            # logla — owner kapalıyken frekansı görüp açar (shadow-first kanıt yolu).
+            # Tekrar-giriş kilidi bu açılışı engellediyse logla.
             rg = (open_decision or {}).get("reentry_guard")
             if rg and rg.get("locked"):
                 log.info(
-                    "reentry_guard %s: %s %s %s (armed_by=%s, %s) — %s",
-                    "BLOK" if rg.get("active") else "gölge",
-                    d.symbol, d.timeframe, side, rg.get("armed_by"),
-                    rg.get("reason"), "açılış engellendi" if rg.get("active") else "açılışa izin (flag kapalı)",
+                    "reentry_guard BLOK: %s %s %s (armed_by=%s, %s) — açılış engellendi",
+                    d.symbol, d.timeframe, side, rg.get("armed_by"), rg.get("reason"),
                 )
 
         tick_artifact.publish_final(snap, final_results)  # ekran aynı kapı sonucunu okur
-        # Kalıcı karar kaydı (hedef mimari 4. aşama): değişen hücreler + saatlik tam
-        # kopya. Salt kayıt; yazılamazsa tick sürer.
+        # Kalıcı karar kaydı (hedef mimari 4. aşama): değişen hücreler + bu turda
+        # pozisyon açılan hücreler (decision_id zinciri) + saatlik tam kopya. Salt
+        # kayıt; yazılamazsa tick sürer.
         try:
             from packages.decision import record as decision_record
 
-            decision_record.append(snap, decisions, final_results, now=now, risk_action=_risk.action)
+            decision_record.append(snap, decisions, final_results, now=now,
+                                   risk_action=_risk.action, opened=opened_cells)
         except Exception:
             log.exception("karar kaydı yazılamadı (tick devam ediyor)")
         txn.commit()  # T3 — persist the paper mutation before any notification.
