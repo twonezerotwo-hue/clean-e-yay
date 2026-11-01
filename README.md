@@ -233,6 +233,15 @@ tick ve learning thread'de, API donmaz). Web ayrı: `next start` (`.next-prod`).
 | AWS | `main`'e merge → `scripts/deploy-from-github.sh` | `eyay-supervisor.service` + `eyay-web.service` (systemd, restart-always) |
 | Linux/mac elle | `make run` (supervisor) + `make web-dev` | geliştirme/deneme |
 
+İsteğe bağlı Windows CS2 oyun modu: `scripts/install-cs2-game-mode.ps1` kullanıcı
+başlangıcına izleyici kurar. CS2 açılınca lokal keeper durur; EyAy, web/tünel,
+Ollama ve açıksa VoiceStudio'ya güvenli kapanma isteği gider. Oyun kapanınca
+önceki servisler yeniden açılır; kapalı olan VoiceStudio açılmaz. İzleyici
+tarayıcıları veya diğer projeleri kapatmaz. Model dosyaları ve runtime verileri
+silinmez; devam eden isteğin yeniden denenmesi gerekebilir. Durum ve hata kaydı:
+`%LOCALAPPDATA%\ToucheLocalRunner\cs2-game-mode.log`. Uygulamalar standart konsol
+kapanma isteğine yanıt vermiyorsa zorla sonlandırılmaz; hata bu kayda yazılır.
+
 Ortam değişkenleri: `API_HOST` (varsayılan 0.0.0.0; lokal keeper 127.0.0.1),
 `API_PORT` (9000), `TICK_INTERVAL_SEC` (30), `LEARNING_INTERVAL_SEC` (300),
 `RUN_WORKERS=false` → yalnız API.
