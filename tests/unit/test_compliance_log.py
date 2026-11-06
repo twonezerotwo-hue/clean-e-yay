@@ -52,3 +52,9 @@ def test_automatic_promotions_join_the_same_chain(tmp_path, monkeypatch):
     rep = compliance.report()
     assert rep["chain_ok"] and rep["entries"][0]["action"] == "WEIGHTS_AUTO_APPLIED"
     assert rep["entries"][0]["actor"] == "auto" and rep["entries"][0]["detail"]["version"] == "1.0.1"
+
+
+def test_speech_synthesis_is_not_a_command():
+    assert not compliance.is_command("POST", "/api/voice/speak")
+    assert not compliance.is_command("POST", "/api/v1/chat/stream")
+    assert compliance.is_command("POST", "/api/v1/paper-trading/positions/x/close")

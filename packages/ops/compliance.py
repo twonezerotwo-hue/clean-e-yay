@@ -20,7 +20,7 @@ from packages.paper.state import _flock_acquire, _flock_release
 
 _GENESIS = "0" * 16
 # Komut olmayan yazma uçları: sohbet/ses üretimi ve bildirim okundu işaretleri.
-_EXCLUDED_PREFIXES = ("/api/v1/chat", "/api/v1/voice/", "/api/v1/notifications/")
+_EXCLUDED_PREFIXES = ("/api/v1/chat", "/api/v1/voice/", "/api/voice/", "/api/v1/notifications/")
 DEFAULT_LIMIT = 100
 
 
