@@ -99,10 +99,7 @@ function ParticleMesh() {
     <points ref={ref}>
       <bufferGeometry>
         <bufferAttribute
-          attach="attributes-position"
-          count={particles.length / 3}
-          array={particles}
-          itemSize={3}
+          attach="attributes-position" args={[particles, 3]}
         />
       </bufferGeometry>
       <pointsMaterial color="#f8fafc" size={0.012} transparent opacity={0.22} sizeAttenuation />
