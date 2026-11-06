@@ -102,12 +102,12 @@ def test_supervisor_warms_after_server_starts(monkeypatch):
 
     from apps.supervisor import main as sup
 
-    warmed: list[float] = []
-    monkeypatch.setattr(cockpit, "warm", lambda: warmed.append(time.monotonic()))
+    warmed: list[tuple[float, float]] = []
+    monkeypatch.setattr(cockpit, "warm", lambda wait: warmed.append((time.monotonic(), wait)))
     server = SimpleNamespace(started=False)
 
     async def scenario() -> float:
-        task = asyncio.create_task(sup._warm_cockpit(server, timeout=5))
+        task = asyncio.create_task(sup._warm_cockpit(server, wait_tick_sec=120.0, timeout=5))
         await asyncio.sleep(0.2)
         assert warmed == [], "API dinlemeden ısıtma başlamaz"
         server.started = True
@@ -116,4 +116,39 @@ def test_supervisor_warms_after_server_starts(monkeypatch):
         return started_at
 
     started_at = asyncio.run(scenario())
-    assert len(warmed) == 1 and warmed[0] >= started_at
+    assert len(warmed) == 1 and warmed[0][0] >= started_at
+    assert warmed[0][1] == 120.0
+
+
+def test_warm_waits_for_tick_snapshot_and_cold_request_shares_it(empty_cache, monkeypatch):
+    """Açılışta özet tick'in görüntüsünü bekler; arada gelen istek aynı derlemeyi bekler."""
+    from packages.data.ingestion import pipeline
+
+    tick_snap: list[object] = []
+    monkeypatch.setattr(
+        pipeline, "latest_tick_snapshot", lambda: tick_snap[0] if tick_snap else None
+    )
+    seen: list[bool] = []
+
+    def build() -> dict:
+        seen.append(bool(tick_snap))
+        return {"from_tick": bool(tick_snap)}
+
+    monkeypatch.setattr(cockpit, "_build_cockpit_brief", build)
+    cockpit.warm(wait_tick_sec=10)
+    threading.Timer(0.4, lambda: tick_snap.append(object())).start()
+    time.sleep(0.05)
+    assert cockpit.get_cockpit_state() == {"from_tick": True}
+    assert seen == [True], "derleme tick görüntüsünden önce başlamamalı ve tek olmalı"
+
+
+def test_warm_builds_anyway_when_tick_never_publishes(empty_cache, monkeypatch):
+    from packages.data.ingestion import pipeline
+
+    monkeypatch.setattr(pipeline, "latest_tick_snapshot", lambda: None)
+    builds = _counting_builder(monkeypatch, delay=0.0)
+    cockpit.warm(wait_tick_sec=0.6)
+    started = time.monotonic()
+    assert cockpit.get_cockpit_state() == {"n": 1}
+    assert 0.4 < time.monotonic() - started < 5
+    assert len(builds) == 1

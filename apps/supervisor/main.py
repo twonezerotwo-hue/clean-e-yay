@@ -106,11 +106,12 @@ async def _tick_loop(stop: asyncio.Event, interval: int, min_rest: float = 10.0)
     _log.info("tick loop stopped")
 
 
-async def _warm_cockpit(server, timeout: float = 120.0) -> None:
+async def _warm_cockpit(server, wait_tick_sec: float, timeout: float = 120.0) -> None:
     """API dinlemeye başlayınca kokpit özetini bir kez arka planda derletir.
 
-    Yeniden başlatmadan sonra ilk ekran 5+ sn'lik soğuk derlemeyi kendisi
-    başlatmaz; süren derlemeyi bekler. Salt okuma — karar yolu değişmez.
+    Yeniden başlatmadan sonra ilk ekran soğuk derlemeyi kendisi başlatmaz;
+    süren derlemeyi bekler. Tick çalışıyorsa derleme tick'in ilk piyasa
+    görüntüsünü kullanır (aynı veri iki kez çekilmez). Salt okuma.
     """
     deadline = time.monotonic() + timeout
     while not getattr(server, "started", False):
@@ -120,7 +121,7 @@ async def _warm_cockpit(server, timeout: float = 120.0) -> None:
     try:
         from apps.api.routers import cockpit
 
-        cockpit.warm()
+        cockpit.warm(wait_tick_sec)
     except Exception:
         _log.exception("cockpit warm-up skipped")
 
@@ -139,7 +140,8 @@ async def _serve() -> None:
     stop = asyncio.Event()
     tasks: list[asyncio.Task] = []
 
-    if _env_truthy("RUN_WORKERS", "true"):
+    workers_on = _env_truthy("RUN_WORKERS", "true")
+    if workers_on:
         from apps.tick_worker.main import INTERVAL as tick_interval
 
         interval = int(os.environ.get("LEARNING_INTERVAL_SEC", "300"))
@@ -150,7 +152,9 @@ async def _serve() -> None:
         _log.info("agent ON — tick + learning workers running alongside API")
     else:
         _log.info("agent OFF (RUN_WORKERS=false) — API only")
-    tasks.append(asyncio.create_task(_warm_cockpit(server), name="cockpit_warm"))
+    tasks.append(asyncio.create_task(
+        _warm_cockpit(server, wait_tick_sec=120.0 if workers_on else 0.0), name="cockpit_warm"
+    ))
 
     try:
         # uvicorn.Server.serve() SIGINT/SIGTERM'i kendi yakalar; çıkışta

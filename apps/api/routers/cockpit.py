@@ -382,11 +382,26 @@ def _build_and_store() -> dict:
     return result
 
 
-def _refresh_brief_cache() -> None:
+def _wait_for_tick_snapshot(timeout: float) -> None:
+    """Açılışta tick'in ilk piyasa görüntüsünü bekler (süre dolarsa geçer).
+
+    Aynı veri ikinci kez ağdan çekilmez ve ekran tick'in karar verdiği anı
+    görür; tick yoksa ya da gecikirse özet kendi görüntüsüyle derlenir.
+    """
+    from packages.data.ingestion.pipeline import latest_tick_snapshot
+
+    deadline = time.monotonic() + timeout
+    while latest_tick_snapshot() is None and time.monotonic() < deadline:
+        time.sleep(0.5)
+
+
+def _refresh_brief_cache(wait_tick_sec: float = 0.0) -> None:
     """Refresh the read-only cockpit cache without blocking HTTP requests."""
     global _BRIEF_REFRESHING
     try:
         with _BUILD_LOCK:
+            if wait_tick_sec > 0:
+                _wait_for_tick_snapshot(wait_tick_sec)
             _build_and_store()
     except Exception:
         _log.exception("cockpit brief refresh failed; last good snapshot kept")
@@ -395,18 +410,21 @@ def _refresh_brief_cache() -> None:
             _BRIEF_REFRESHING = False
 
 
-def warm() -> None:
+def warm(wait_tick_sec: float = 0.0) -> None:
     """Açılışta özeti arka planda bir kez derler (önbellek boşsa).
 
-    Supervisor API dinlemeye başlayınca çağırır; ilk ekran isteği derlemeyi
-    başlatmak yerine süren derlemeyi bekler. Karar üretmez, yalnız okur.
+    Supervisor API dinlemeye başlayınca çağırır. Derleme kilidi hemen alınır:
+    ilk ekran isteği yeni derleme başlatmak yerine bunu bekler. ``wait_tick_sec``
+    > 0 ise önce tick'in ilk görüntüsü beklenir. Karar üretmez, yalnız okur.
     """
     global _BRIEF_REFRESHING
     with _BRIEF_CACHE_LOCK:
         if _BRIEF_CACHE is not None or _BRIEF_REFRESHING:
             return
         _BRIEF_REFRESHING = True
-    threading.Thread(target=_refresh_brief_cache, name="cockpit-brief-warm", daemon=True).start()
+    threading.Thread(
+        target=_refresh_brief_cache, args=(wait_tick_sec,), name="cockpit-brief-warm", daemon=True
+    ).start()
 
 
 @router.get("/cockpit/brief")
