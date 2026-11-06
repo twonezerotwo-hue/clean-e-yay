@@ -285,9 +285,12 @@ def test_supervisor_restores_before_api_listens(monkeypatch):
         async def serve(self):
             order.append("serve")
 
-    import uvicorn
+    import sys
+    from types import SimpleNamespace
 
-    monkeypatch.setattr(uvicorn, "Server", FakeServer)
+    # CI'da uvicorn kurulu değil; supervisor yalnız Config + Server kullanır.
+    fake_uvicorn = SimpleNamespace(Config=lambda *a, **k: None, Server=FakeServer)
+    monkeypatch.setitem(sys.modules, "uvicorn", fake_uvicorn)
     monkeypatch.setattr(sup, "_warm_cockpit", fake_warm)
     asyncio.run(sup._serve())
     assert order.index("restore") < order.index("serve")
