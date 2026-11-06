@@ -26,6 +26,8 @@ def empty_cache(monkeypatch):
     monkeypatch.setattr(cockpit, "_BRIEF_CACHE", None)
     monkeypatch.setattr(cockpit, "_BRIEF_REFRESHING", False)
     monkeypatch.setattr(cockpit, "_BUILD_LOCK", threading.Lock())
+    monkeypatch.setattr(cockpit, "_RESTORED", False)
+    monkeypatch.setattr(cockpit, "_DISK_LAST_SAVE", 0.0)
     yield
     _join_cockpit_threads()
 
@@ -152,3 +154,140 @@ def test_warm_builds_anyway_when_tick_never_publishes(empty_cache, monkeypatch):
     assert cockpit.get_cockpit_state() == {"n": 1}
     assert 0.4 < time.monotonic() - started < 5
     assert len(builds) == 1
+
+
+# ── Hızlı açılış: son özet diskte, yeniden başlatmada hemen sunulur ──────────────
+
+
+@pytest.fixture
+def disk_copy(empty_cache, monkeypatch, tmp_path):
+    path = tmp_path / "cockpit_brief_last.json"
+    monkeypatch.setenv("COCKPIT_BRIEF_DISK_PATH", str(path))
+    return path
+
+
+def _simulate_restart(monkeypatch) -> None:
+    monkeypatch.setattr(cockpit, "_BRIEF_CACHE", None)
+    monkeypatch.setattr(cockpit, "_BRIEF_REFRESHING", False)
+    monkeypatch.setattr(cockpit, "_RESTORED", False)
+    monkeypatch.setattr(cockpit, "_DISK_LAST_SAVE", 0.0)
+
+
+def test_build_writes_disk_copy_and_restart_serves_it_without_building(disk_copy, monkeypatch):
+    builds = _counting_builder(monkeypatch, delay=0.0)
+    first = cockpit.get_cockpit_state()
+    assert first == {"n": 1}
+    assert disk_copy.exists()
+
+    _simulate_restart(monkeypatch)
+    assert cockpit.restore_from_disk() is True
+    started = time.monotonic()
+    assert cockpit.get_cockpit_state() == {"n": 1}
+    assert time.monotonic() - started < 0.5
+    assert len(builds) == 1, "geri yüklenen kopya istekte yeni derleme başlatmamalı"
+    assert cockpit._BRIEF_REFRESHING is False
+
+
+def test_restored_copy_is_served_while_warm_builds_then_replaced(disk_copy, monkeypatch):
+    import json
+    from datetime import UTC, datetime
+
+    disk_copy.write_text(
+        json.dumps({"saved_at": datetime.now(UTC).isoformat(), "brief": {"old": True}}),
+        encoding="utf-8",
+    )
+    builds = _counting_builder(monkeypatch, delay=0.4)
+    assert cockpit.restore_from_disk() is True
+    cockpit.warm()
+    time.sleep(0.05)
+    started = time.monotonic()
+    assert cockpit.get_cockpit_state() == {"old": True}
+    assert time.monotonic() - started < 0.2, "ilk ekran ısıtma derlemesini beklememeli"
+
+    deadline = time.monotonic() + 5
+    while cockpit._BRIEF_REFRESHING and time.monotonic() < deadline:
+        time.sleep(0.01)
+    assert cockpit.get_cockpit_state() == {"n": 1}
+    assert len(builds) == 1
+    assert cockpit._RESTORED is False
+    saved = json.loads(disk_copy.read_text(encoding="utf-8"))
+    assert saved["brief"] == {"n": 1}
+
+
+@pytest.mark.parametrize(
+    "content",
+    [
+        "{bozuk",
+        '{"saved_at": "2026-01-01T00:00:00+00:00", "brief": {"old": true}}',
+        '{"brief": {"old": true}}',
+        "OLD",
+    ],
+)
+def test_old_or_corrupt_disk_copy_is_ignored(disk_copy, monkeypatch, content):
+    import json
+    from datetime import UTC, datetime, timedelta
+
+    if content == "OLD":
+        saved = datetime.now(UTC) - timedelta(hours=7)
+        content = json.dumps({"saved_at": saved.isoformat(), "brief": {"old": True}})
+    disk_copy.write_text(content, encoding="utf-8")
+    assert cockpit.restore_from_disk() is False
+    assert cockpit._BRIEF_CACHE is None
+    assert cockpit._RESTORED is False
+
+
+def test_missing_disk_copy_keeps_cold_start_behaviour(disk_copy, monkeypatch):
+    builds = _counting_builder(monkeypatch, delay=0.0)
+    assert cockpit.restore_from_disk() is False
+    assert cockpit.get_cockpit_state() == {"n": 1}
+    assert len(builds) == 1
+
+
+def test_restore_never_overwrites_a_built_cache(disk_copy, monkeypatch):
+    import json
+    from datetime import UTC, datetime
+
+    disk_copy.write_text(
+        json.dumps({"saved_at": datetime.now(UTC).isoformat(), "brief": {"old": True}}),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(cockpit, "_BRIEF_CACHE", (time.monotonic(), {"fresh": True}))
+    assert cockpit.restore_from_disk() is False
+    assert cockpit.get_cockpit_state() == {"fresh": True}
+
+
+def test_disk_copy_written_at_most_once_a_minute(disk_copy, monkeypatch):
+    import json
+
+    builds = _counting_builder(monkeypatch, delay=0.0)
+    cockpit._build_and_store()
+    cockpit._build_and_store()
+    assert len(builds) == 2
+    assert json.loads(disk_copy.read_text(encoding="utf-8"))["brief"] == {"n": 1}
+
+
+def test_supervisor_restores_before_api_listens(monkeypatch):
+    import asyncio
+
+    from apps.supervisor import main as sup
+
+    order: list[str] = []
+    monkeypatch.setenv("RUN_WORKERS", "false")
+    monkeypatch.setattr(cockpit, "restore_from_disk", lambda: order.append("restore"))
+
+    async def fake_warm(server, wait_tick_sec, timeout=120.0):
+        order.append("warm")
+
+    class FakeServer:
+        def __init__(self, config):
+            self.started = False
+
+        async def serve(self):
+            order.append("serve")
+
+    import uvicorn
+
+    monkeypatch.setattr(uvicorn, "Server", FakeServer)
+    monkeypatch.setattr(sup, "_warm_cockpit", fake_warm)
+    asyncio.run(sup._serve())
+    assert order.index("restore") < order.index("serve")

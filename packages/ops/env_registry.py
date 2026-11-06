@@ -149,6 +149,7 @@ REGISTRY: dict[str, str] = {
     "CAUSAL_CALIBRATION_PATH": "path",
     "CAUSAL_EVENT_LEDGER_PATH": "path",
     "CAUSAL_EVENT_STUDY_PATH": "path",
+    "COCKPIT_BRIEF_DISK_PATH": "path",
     "COUNCIL_SCORECARD_PATH": "path",
     "CUSTOM_ASSETS_PATH": "path",
     "DECISION_LOG_PATH": "path",
