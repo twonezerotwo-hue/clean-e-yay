@@ -15,6 +15,7 @@ from packages.agent import canonical_context as ctx_mod
 from packages.agent.llm import budget, cache, guard, system_memory, web_search
 from packages.agent.llm import client as llm_client
 from packages.notifications import list_recent as list_notifications
+from packages.ops import compliance
 
 _SYMBOL_ALIASES = {
     "btc": "BTCUSD",
@@ -1306,12 +1307,36 @@ _CHAT_TEMPERATURE = 0.6
 
 # Cache anahtar sürümü — prompt/yönlendirme değişince artır ki file-backed
 # cache'teki (2 saat TTL) eski üsluptaki cevaplar dönmesin.
-_PROMPT_VERSION = "v5-natural-tr-blockers"
+_PROMPT_VERSION = "v6-context-is-data"
 
 # Side-effect'li owner komutları (emir aç/iptal, pozisyon op'u): cevap
 # DETERMİNİSTİK kalır, LLM parafrazına GİRMEZ — sayı/SL-TP bozulmaz, cevap
 # anında döner (owner şikayeti 2026-07-03: chat "1. sınıf his" vermiyor).
 _DETERMINISTIC_EVIDENCE_PREFIXES = ("manual_order:", "pending_order:", "pending:", "pos_op:")
+# Bu etiketler soru/eksik bilgi demektir, kâğıt durumunu değiştirmez; geri kalan
+# her komut etiketi (yeni eklenenler dahil) denetim kaydına düşer.
+_CHAT_NO_EFFECT = frozenset({
+    "manual_order:need_side", "pos_op:need_pct", "pos_op:need_amt", "pos_op:unknown",
+    "pending:cancel_need_id", "pending:none", "pending:list",
+})
+_CHAT_REJECTED = frozenset({"manual_order:rejected", "pos_op:rejected"})
+
+
+def _audit_chat_command(message: str, evidence: list[str]) -> None:
+    """Sohbetten çalışan kâğıt komutlarını denetim kaydına yazar.
+
+    HTTP katmanı /chat'i komut saymaz (sohbetin çoğu soru); emir aç/iptal ve
+    pozisyon işlemleri ise burada, gerçekleştikleri yerde kayda girer.
+    """
+    for tag in evidence:
+        if not tag.startswith(_DETERMINISTIC_EVIDENCE_PREFIXES) or tag in _CHAT_NO_EFFECT:
+            continue
+        compliance.record_event(
+            action="CHAT_COMMAND",
+            detail={"result": tag, "message": message[:200]},
+            actor="chat",
+            outcome="failed" if tag in _CHAT_REJECTED else "ok",
+        )
 
 
 def _screen(message: str) -> dict | None:
@@ -1354,6 +1379,7 @@ def _prepare(message: str, history: list[dict] | None) -> dict:
     """
     ctx = ctx_mod.build_canonical_context()
     grounded, evidence = _grounded_answer(message, ctx)
+    _audit_chat_command(message, evidence)
     live_evidence = any(e.startswith("web:tavily") or e.startswith("web:http") for e in evidence)
     hist_msgs = _history_messages(history)
     mode = llm_client.get_mode()

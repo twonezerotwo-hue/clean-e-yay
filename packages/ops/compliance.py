@@ -81,10 +81,10 @@ def record(*, actor: str, method: str, path: str, query: str, status: int) -> No
     })
 
 
-def record_event(*, action: str, detail: dict, actor: str = "auto") -> None:
-    """API dışı değişiklik (otomatik terfi/geri alma) — `detail` küçük ve JSON."""
+def record_event(*, action: str, detail: dict, actor: str = "auto", outcome: str = "ok") -> None:
+    """API dışı değişiklik (otomatik terfi/geri alma, sohbet komutu) — `detail` küçük ve JSON."""
     _append({"at": datetime.now(UTC).isoformat(), "actor": actor, "action": action,
-             "detail": detail, "outcome": "ok"})
+             "detail": detail, "outcome": outcome})
 
 
 def _read_all() -> list[dict]:
