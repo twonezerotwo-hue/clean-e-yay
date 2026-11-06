@@ -27,6 +27,13 @@ echo "deploy: python deps"
 pip install --upgrade pip
 pip install -e .
 
+# Next 15 en az Node 18.18 ister. Eskiyse paketlere ve derlemeye dokunmadan dur:
+# calisan web eski node_modules ve .next-prod ile hizmete devam eder.
+if ! node -e 'const [a,b]=process.versions.node.split(".").map(Number);process.exit(a>18||(a===18&&b>=18)?0:1)'; then
+  echo "deploy: Node $(node -v) < 18.18 (Next 15) - web atlandi; EC2'de Node'u yukselt" >&2
+  exit 1
+fi
+
 echo "deploy: web deps"
 pnpm install --filter web --frozen-lockfile
 
