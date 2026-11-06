@@ -424,6 +424,27 @@ def evaluate_open(
     }
 
 
+def _reentry_key(symbol: str, side: str, timeframe: str, identity: str | None) -> str:
+    """Kilitli otomatik denemenin kimliği (fiyat anahtarda yok)."""
+    return "|".join((str(symbol), str(side), str(timeframe), str(identity or "legacy")))
+
+
+def _reentry_block_seen(state: PaperState, key: str, reason: str) -> bool:
+    return any(
+        row.get("key") == key and row.get("reason") == reason
+        for row in getattr(state, "reentry_blocked_attempts", None) or []
+    )
+
+
+def _remember_reentry_block(state: PaperState, key: str, reason: str) -> None:
+    """Kilitli sinyal başına tek satır; liste sınırlı (son 128)."""
+    if _reentry_block_seen(state, key, reason):
+        return
+    rows = list(getattr(state, "reentry_blocked_attempts", None) or [])
+    rows.append({"key": key, "reason": reason, "at": utc_iso()})
+    state.reentry_blocked_attempts = rows[-128:]
+
+
 def attempt_open(
     state: PaperState,
     *,
@@ -469,7 +490,29 @@ def attempt_open(
     (bkz. reentry_guard). Owner manuel açılış / manual_ready onayı default False
     (guard uygulanmaz — owner override). Flag KAPALIYKEN rapor gözlem, açılış
     bayt-aynı (shadow-first).
+
+    Aynı kilitli sinyal (sembol, yön, TF, sinyal kimliği) zaten denetim kaydına
+    yazıldıysa tekrar yazılmaz: karar yine "engellendi" döner, yalnız kayıt
+    gürültüsü kesilir. Sinyal değişince ya da kilit açılınca normal yol işler.
     """
+    pre_rg: dict = {}
+    reentry_key = _reentry_key(symbol, side, timeframe, signal_id or fingerprint or decision_id)
+    if apply_reentry_guard:
+        try:
+            pre_rg = reentry_guard.assess(
+                state, symbol=symbol, side=side, timeframe=timeframe,
+                fingerprint=fingerprint, now=datetime.now(UTC),
+                cfg=load_thresholds().get("reentry_guard") or {},
+            )
+        except Exception:  # guard kararı asla düşürmez
+            pre_rg = {}
+        reason = pre_rg.get("reason") or "reentry_locked"
+        if pre_rg.get("locked") and _reentry_block_seen(state, reentry_key, reason):
+            return None, {
+                "allowed": False, "duplicate": True,
+                "reason": "reentry_locked_duplicate_suppressed",
+                "reentry_guard": {**pre_rg, "suppressed": True},
+            }
     audit.record(
         "OPEN_ATTEMPT", symbol=symbol, timeframe=timeframe, side=side,
         price_used=entry_price, reason=open_reason, snapshot_id=snapshot_id,
@@ -548,22 +591,16 @@ def attempt_open(
     # sonrası (owner MANUAL / kârlı otomatik) aynı yöne bayat-sinyal geri-girişi:
     # taze bar geçene VE sinyal değişene kadar engellenir. Saf; raise etmez.
     if apply_reentry_guard:
-        try:
-            rg = reentry_guard.assess(
-                state, symbol=symbol, side=side, timeframe=timeframe,
-                fingerprint=fingerprint, now=datetime.now(UTC),
-                cfg=load_thresholds().get("reentry_guard") or {},
-            )
-        except Exception:  # guard kararı asla düşürmez
-            rg = {}
+        rg = pre_rg
         if rg:
             decision["reentry_guard"] = rg
             if rg.get("locked"):
+                _remember_reentry_block(state, reentry_key, rg.get("reason") or "reentry_locked")
                 audit.record(
                     "OPEN_BLOCKED", symbol=symbol, timeframe=timeframe, side=side,
                     reason=rg.get("reason") or "reentry_locked", snapshot_id=snapshot_id,
                     signal_id=signal_id, decision_id=decision_id, news_setup_id=news_setup_id, news_event_id=news_event_id,
-            news_evidence_id=news_evidence_id,
+                    news_evidence_id=news_evidence_id,
                 )
                 decision["allowed"] = False
                 decision["reason"] = rg.get("reason") or "reentry_locked"

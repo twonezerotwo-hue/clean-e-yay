@@ -710,6 +710,7 @@ def decision_trace_view(view: dict, snap: Any) -> dict:
         {
             "symbol": c.get("symbol"),
             "timeframe": c.get("timeframe"),
+            "decision_id": c.get("decision_id"),
             "action": c.get("action"),
             "actionable": bool(c.get("actionable")),
             "status": c.get("status"),

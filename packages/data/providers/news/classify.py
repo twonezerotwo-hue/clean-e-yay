@@ -296,7 +296,7 @@ def macro_surprise(text: str) -> str | None:
 # silver rise", "stock futures jump") yön oradan alınır — duygudan güçlü kanıt.
 _UP_WORDS: Final[frozenset[str]] = frozenset({
     "rise", "rises", "rose", "rising", "gain", "gains", "gained", "climb", "climbs", "climbed",
-    "jump", "jumps", "jumped", "rally", "rallies", "rallied", "surge", "surges", "surged",
+    "jump", "jumps", "jumped", "rally", "rallies", "rallied", "rallying", "surge", "surges", "surged",
     "soar", "soars", "soared", "advance", "advances", "advanced", "rebound", "rebounds",
     "rebounded", "strengthen", "strengthens", "strengthened", "firms", "firmed", "higher",
     "spike", "spikes", "spiked", "highest", "up",
@@ -317,7 +317,7 @@ _REVERSAL_WORDS: Final[frozenset[str]] = frozenset({
 _MOVE_NOUNS: Final[frozenset[str]] = frozenset({"gains", "gain", "rally", "advance", "losses", "decline", "slide", "drop"})
 _ASSET_TERMS: Final[dict[str, tuple[str, ...]]] = {
     "XAUUSD": ("gold", "xau"),
-    "XAGUSD": ("silver", "xag"),
+    "XAGUSD": ("silver", "xag", "xagusd"),
     "BRENT": ("oil", "brent", "crude"),
     "BTCUSD": ("bitcoin", "btc"),
     "ETHUSD": ("ethereum", "ether", "eth"),
@@ -326,6 +326,65 @@ _ASSET_TERMS: Final[dict[str, tuple[str, ...]]] = {
 }
 _TOKEN_RE = re.compile(r"[\w$&.\-]+")
 _MOVE_WINDOW = 4
+
+# "silver" hem metal hem yaygın bir soyadı/ad (Nate Silver). Her geçişi XAGUSD
+# saymak kişi/ödül haberlerini gümüş sinyaline çeviriyordu: çıplak kelime yetmez,
+# metal/piyasa bağlamı ya da borsa kodu (SI=F, XAG) gerekir.
+_SILVER_PERSON_RE: Final[re.Pattern[str]] = re.compile(
+    r"\b(?:nate|professor|senator|author|writer|analyst|pollster)\s+silver\b|"
+    r"\bsilver\s+(?:award|medal|lake|bullet|lining|screen|surfer|spring|rail)\b",
+    re.IGNORECASE,
+)
+_SILVER_MARKET_TERMS: Final[tuple[str, ...]] = (
+    "silver price", "silver prices", "silver futures", "silver market", "silver metal",
+    "silver demand", "silver supply", "silver etf", "silver ounce", "ounces of silver",
+    "gold and silver", "silver and gold", "precious metal", "precious metals",
+    "si=f", "xag", "xagusd", "gümüş",
+)
+_SILVER_CONTEXT_WORDS: Final[frozenset[str]] = frozenset({
+    "gold", "metal", "metals", "precious", "price", "prices", "futures", "market",
+    "demand", "supply", "mining", "mine", "production", "exports", "ounce", "ounces",
+    "rise", "rises", "rose", "rising", "rally", "rallies", "rallied", "rallying",
+    "surge", "surges", "surged", "jump", "jumps", "gain", "gains", "higher", "up",
+    "fall", "falls", "fell", "falling", "drop", "drops", "dropped", "tumble", "tumbles",
+    "slip", "slips", "slipped", "down",
+})
+_SILVER_TICKER_RE: Final[re.Pattern[str]] = re.compile(
+    r"(?<![a-z0-9])(?:si\s*=\s*f|xagusd|xag)(?![a-z0-9])", re.IGNORECASE,
+)
+
+
+def _silver_commodity_mentioned(text: str) -> bool:
+    """Metin metali mi anlatıyor (kişi/yer adı değil)?
+
+    Borsa kodu (SI=F/XAG) kesin kanıttır. Aksi halde piyasa/metal bağlamı ya da
+    yakınında piyasa/hareket kelimesi gerekir: zayıf bir haberi kaçırmak, uydurma
+    emtia sinyalinden iyidir.
+    """
+    lower = str(text or "").casefold()
+    if _SILVER_PERSON_RE.search(lower):
+        return False
+    if any(_has_term(lower, t) if t.isascii() else t in lower for t in _SILVER_MARKET_TERMS):
+        return True
+    tokens = re.findall(r"[a-z0-9]+", lower)
+    for i, token in enumerate(tokens):
+        if token == "silver" and any(
+            w in _SILVER_CONTEXT_WORDS for w in tokens[max(0, i - 3): i + 5] if w != "silver"
+        ):
+            return True
+    return False
+
+
+def silver_ticker_move(text: str) -> float | None:
+    """Metinde gümüşün borsa kodu (SI=F / XAGUSD / XAG) ve açık hareketi var mı?
+
+    RSS özeti ve makale alıntısı için: başlık "gold and bitcoin" derken özet
+    "SI=F is rallying" diyorsa gümüş etkisi kaybolmasın. Yalnız kod + hareket
+    fiili birlikteyse yön döner (+1/-1); aksi halde None.
+    """
+    if not text or not _SILVER_TICKER_RE.search(text):
+        return None
+    return stated_move(_SILVER_TICKER_RE.sub("silver", text), ("silver",))
 
 
 def _stated_move(tokens: list[str], terms: tuple[str, ...] | list[str]) -> float | None:
@@ -363,6 +422,95 @@ def direction_of(sentiment: Sentiment | None) -> float:
     return _dir(sentiment) if sentiment in ("bullish", "bearish", "neutral") else 0.0
 
 
+# ---------------------------------------------------------------------------
+# Olay profilleri: ABD seçim sonucu, İran savaşı
+# ---------------------------------------------------------------------------
+# Başlık varlık adı taşımasa da olayın piyasa kanalı kaybolmamalı: seçim ve İran
+# haberleri yalnız VIX'e bağlanıyordu; gümüş/altın, dolar ve tahvil tarafı boş
+# kalınca haber modülü yanlış yöndeki emtia adayına karşı oy veremiyordu. Bu
+# eşleme işlem sinyali değildir: aynı ``asset_impact`` alanına yön kanıtı (±1)
+# yazar; haber modülü onu diğer başlıklarla ortalar, tek başına işlem açmaz.
+_ELECTION_CONTEXT: Final[tuple[str, ...]] = (
+    "election", "elections", "midterm", "midterms", "ballot", "presidential race",
+    "both chambers", "control of congress", "control of the house", "control of the senate",
+    "seçim",
+)
+_DEM_TERMS: Final[frozenset[str]] = frozenset({"democrat", "democrats", "democratic", "demokrat", "demokratlar"})
+_REP_TERMS: Final[frozenset[str]] = frozenset({
+    "republican", "republicans", "gop", "trump", "cumhuriyetçi", "cumhuriyetçiler",
+})
+_WIN_WORDS: Final[frozenset[str]] = frozenset({
+    "win", "wins", "won", "sweep", "sweeps", "swept", "retain", "retains", "retained",
+    "flip", "flips", "flipped", "take", "takes", "took", "keep", "keeps", "kept",
+    "landslide", "victory", "kazandı", "kazanıyor", "kazanacak",
+})
+_LOSE_WORDS: Final[frozenset[str]] = frozenset({
+    "lose", "loses", "lost", "concede", "concedes", "conceded", "defeated", "yenildi", "kaybetti",
+})
+_PARTY_WINDOW = 4
+_IRAN_TERMS: Final[tuple[str, ...]] = ("iran", "iranian", "tehran", "hormuz", "i̇ran", "tahran")
+_WAR_TERMS: Final[tuple[str, ...]] = (
+    "war", "strike", "strikes", "attack", "attacks", "airstrike", "airstrikes", "missile",
+    "missiles", "offensive", "bomb", "bombing", "retaliate", "retaliation", "escalate",
+    "escalates", "escalation", "escalating", "savaş", "saldırı", "füze", "tırman",
+)
+# Yalnız aktörün açık tekrar/pişmanlık-yok beyanı. "Seçimde İran savaşı
+# tartışıldı" gibi yorumlar tırmanma değildir (geçmiş ölçümde gümüş short'larını
+# haksız durduruyordu: "Vance says Iran war is the reason we lost midterms").
+_REPEAT_PHRASES: Final[tuple[str, ...]] = (
+    "would do it again", "do it again", "no regret", "not regret", "doesn't regret",
+    "strike iran again", "attack iran again", "pişman değil", "tekrar yapar",
+)
+
+
+def election_outcome_impact(text: str) -> dict[str, float]:
+    """ABD seçiminde Demokrat sonuç → değerli metal yukarı, dolar ve 10y getiri aşağı.
+
+    Kazanan, parti adının hemen ardındaki fiilden okunur ("Democrats win",
+    "Trump loses"); "Democrats lost" Demokrat sonucu sayılmaz. Cumhuriyetçi
+    sonuçta ya da çelişkide yön uydurulmaz ({}). Seçim bağlamı şarttır
+    ("Democrats win vote on bill" eşlenmez). Değerler yön kanıtıdır, olasılık değil.
+    """
+    lower = str(text or "").casefold()
+    if not _hits(lower, _ELECTION_CONTEXT):
+        return {}
+    tokens = re.findall(r"\w+", lower)
+    dem_won = rep_won = False
+    for i, token in enumerate(tokens):
+        party = "dem" if token in _DEM_TERMS else "rep" if token in _REP_TERMS else None
+        if party is None:
+            continue
+        for word in tokens[i + 1: i + 1 + _PARTY_WINDOW]:
+            if word in _DEM_TERMS or word in _REP_TERMS:
+                break
+            if word in _WIN_WORDS or word in _LOSE_WORDS:
+                won = word in _WIN_WORDS
+                if (party == "dem") == won:
+                    dem_won = True
+                else:
+                    rep_won = True
+                break
+    if not dem_won or rep_won:
+        return {}
+    return {"XAGUSD": 1.0, "XAUUSD": 1.0, "DXY": -1.0, "US10Y": -1.0}
+
+
+def iran_escalation_impact(text: str) -> dict[str, float]:
+    """İran savaşında "tekrar yaparım / pişman değilim" beyanı → güvenli liman
+    (gümüş, altın) ve risk primi (VIX, petrol) yukarı.
+
+    Ateşkes/anlaşma dili varsa ya da beyan yoksa yön verilmez.
+    """
+    lower = str(text or "").casefold()
+    if not _hits(lower, _IRAN_TERMS) or not _hits(lower, _WAR_TERMS):
+        return {}
+    if _hits(lower, _DEESCALATION_WORDS):
+        return {}
+    if not any(p in lower for p in _REPEAT_PHRASES):
+        return {}
+    return {"XAGUSD": 1.0, "XAUUSD": 1.0, "VIX": 1.0, "BRENT": 1.0}
+
+
 def _has_term(lower: str, term: str) -> bool:
     """Kayıt defteri terimi kelime olarak geçiyor mu (alt-dize değil: "sys·tem" ≠ TEM,
     "n·eth·ermind" ≠ ETH). Sağda yalnız Türkçe ek harfine izin verilir ("altın·ı")."""
@@ -390,11 +538,16 @@ def classify_asset_impact(title: str, sentiment: Sentiment) -> dict[str, float]:
     setinin Clean sembol evrenine indirgenmiş portu)."""
     lower = title.lower()
     d = _dir(sentiment)
-    impacts: dict[str, float] = {}
+    # Olay profilleri önce yazılır; varlık başlıkta açıkça geçiyorsa aşağıdaki
+    # doğrudan eşleme onu ezer (açık kanıt profilden güçlüdür).
+    impacts: dict[str, float] = dict(election_outcome_impact(lower))
+    for symbol, value in iran_escalation_impact(lower).items():
+        impacts.setdefault(symbol, value)
 
     if _hits(lower, ("gold", "xau", "altın")):
         impacts["XAUUSD"] = d
-    if _hits(lower, ("silver", "xag", "gümüş")):
+    # Kişi adı ("Nate Silver") metal pozisyonuna dönmez; borsa kodu kesin kanıt.
+    if _silver_commodity_mentioned(lower):
         impacts["XAGUSD"] = d
     if _hits(lower, ("oil", "brent", "crude", "opec", "petrol", "petroleum")):
         impacts["BRENT"] = d
@@ -424,7 +577,8 @@ def classify_asset_impact(title: str, sentiment: Sentiment) -> dict[str, float]:
                      "airstrike", "airstrikes", "missile", "missiles",
                      "drone strike", "vix", "fear", "fears", "panic", "volatility",
                      "savaş", "çatışma", "gerilim")):
-        impacts["VIX"] = 1.0 if sentiment == "bearish" else 0.0
+        # Olay profilinin açık risk-yukarı etkisi nötr duyguyla silinmez.
+        impacts.setdefault("VIX", 1.0 if sentiment == "bearish" else 0.0)
 
     # Orta Doğu eskalasyonu → enerji risk primi (sentiment'ten bağımsız)
     if _hits(lower, ("israel", "israeli", "gaza", "hamas", "hezbollah",
@@ -454,7 +608,10 @@ def classify_asset_impact(title: str, sentiment: Sentiment) -> dict[str, float]:
 
         class_terms = {
             "energy": ("oil", "crude", "brent", "petrol", "petroleum", "natural gas", "lng", "doğalgaz"),
-            "precious_metal": ("gold", "silver", "altın", "gümüş", "xau", "xag"),
+            # Değerli metaller ortak sınıf takma adı DEĞİL: "silver rises" altını,
+            # "Nate Silver" ikisini birden etiketliyordu. XAU/XAG yukarıdaki
+            # kurallarla, diğerleri kendi ad/sembolüyle bağlanır.
+            "precious_metal": (),
             "crypto": ("bitcoin", "btc", "ethereum", "eth", "crypto", "kripto"),
             "equity": ("stock", "stocks", "equity", "shares", "hisse", "borsa"),
         }
@@ -479,6 +636,8 @@ def classify_asset_impact(title: str, sentiment: Sentiment) -> dict[str, float]:
     # yeni sembol EKLENMEZ).
     tokens = [t.removesuffix("'s") for t in _TOKEN_RE.findall(lower)]
     for symbol in impacts:
+        if symbol == "XAGUSD" and not _silver_commodity_mentioned(lower):
+            continue
         stated = _stated_move(tokens, (*_ASSET_TERMS.get(symbol, ()), *registry_terms.get(symbol, ())))
         if stated is not None:
             impacts[symbol] = stated
