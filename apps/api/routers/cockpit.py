@@ -45,6 +45,9 @@ _BRIEF_TTL_SEC = max(1.0, float(os.environ.get("COCKPIT_BRIEF_CACHE_SEC", "10"))
 _BRIEF_CACHE: tuple[float, dict] | None = None
 _BRIEF_CACHE_LOCK = threading.Lock()
 _BRIEF_REFRESHING = False
+# Tek uçuş: aynı anda yalnız bir derleme. Soğuk açılışta eşzamanlı istekler
+# (ekranlar + SSR) ayrı ayrı derleme başlatıp birbirini GIL'de yavaşlatıyordu.
+_BUILD_LOCK = threading.Lock()
 
 
 def _build_cockpit_brief() -> dict:
@@ -367,18 +370,43 @@ def _build_cockpit_brief() -> dict:
     }
 
 
+def _build_and_store() -> dict:
+    """Derler ve önbelleğe yazar; çağıran ``_BUILD_LOCK``'u tutar."""
+    global _BRIEF_CACHE
+    started = time.monotonic()
+    result = _build_cockpit_brief()
+    done = time.monotonic()
+    with _BRIEF_CACHE_LOCK:
+        _BRIEF_CACHE = (done, result)
+    _log.info("cockpit brief built in %.1fs", done - started)
+    return result
+
+
 def _refresh_brief_cache() -> None:
     """Refresh the read-only cockpit cache without blocking HTTP requests."""
-    global _BRIEF_CACHE, _BRIEF_REFRESHING
+    global _BRIEF_REFRESHING
     try:
-        result = _build_cockpit_brief()
-        with _BRIEF_CACHE_LOCK:
-            _BRIEF_CACHE = (time.monotonic(), result)
+        with _BUILD_LOCK:
+            _build_and_store()
     except Exception:
         _log.exception("cockpit brief refresh failed; last good snapshot kept")
     finally:
         with _BRIEF_CACHE_LOCK:
             _BRIEF_REFRESHING = False
+
+
+def warm() -> None:
+    """Açılışta özeti arka planda bir kez derler (önbellek boşsa).
+
+    Supervisor API dinlemeye başlayınca çağırır; ilk ekran isteği derlemeyi
+    başlatmak yerine süren derlemeyi bekler. Karar üretmez, yalnız okur.
+    """
+    global _BRIEF_REFRESHING
+    with _BRIEF_CACHE_LOCK:
+        if _BRIEF_CACHE is not None or _BRIEF_REFRESHING:
+            return
+        _BRIEF_REFRESHING = True
+    threading.Thread(target=_refresh_brief_cache, name="cockpit-brief-warm", daemon=True).start()
 
 
 @router.get("/cockpit/brief")
@@ -389,7 +417,7 @@ def get_cockpit_brief() -> dict:
     request still builds the same authoritative view, but subsequent dashboard
     polls never wait behind that work and keep the last known-good snapshot.
     """
-    global _BRIEF_CACHE, _BRIEF_REFRESHING
+    global _BRIEF_REFRESHING
     now = time.monotonic()
     with _BRIEF_CACHE_LOCK:
         cached = _BRIEF_CACHE
@@ -407,11 +435,14 @@ def get_cockpit_brief() -> dict:
             return cached[1]
 
     # Cold start only: preserve the original synchronous behaviour so the
-    # endpoint never returns an empty/partial decision view.
-    result = _build_cockpit_brief()
-    with _BRIEF_CACHE_LOCK:
-        _BRIEF_CACHE = (time.monotonic(), result)
-    return result
+    # endpoint never returns an empty/partial decision view. Single flight:
+    # concurrent cold callers wait for one build and share its result.
+    with _BUILD_LOCK:
+        with _BRIEF_CACHE_LOCK:
+            cached = _BRIEF_CACHE
+        if cached is not None:
+            return cached[1]
+        return _build_and_store()
 
 
 @router.get("/cockpit/state")
