@@ -310,6 +310,9 @@ class PaperState:
     # Boş ise henüz tick atılmamış demektir; legacy kayıtlar default boş yüklenir.
     last_rechecks: list[dict] = field(default_factory=list)
     last_recheck_at: str | None = None
+    # Yeniden giriş kilidi: aynı kilitli otomatik sinyal denetim kaydına bir kez
+    # yazılır (her 30 sn'lik tick yeni OPEN_ATTEMPT/OPEN_BLOCKED çifti üretmesin).
+    reentry_blocked_attempts: list[dict] = field(default_factory=list)
 
     # F2-1 — mark-to-market SALT-GÖZLEM alanları. Persist edilmez (türetilir),
     # RiskGate girdisine BAĞLI DEĞİL: gate hâlâ realized `equity_usd` görür.
@@ -339,6 +342,7 @@ class PaperState:
             "pending_orders": [asdict(o) for o in self.pending_orders],
             "last_rechecks": list(self.last_rechecks),
             "last_recheck_at": self.last_recheck_at,
+            "reentry_blocked_attempts": list(self.reentry_blocked_attempts[-128:]),
         }
 
     @classmethod
@@ -386,6 +390,9 @@ class PaperState:
                 r for r in d.get("last_rechecks", []) if isinstance(r, dict)
             ],
             last_recheck_at=d.get("last_recheck_at") or None,
+            reentry_blocked_attempts=[
+                r for r in d.get("reentry_blocked_attempts", []) if isinstance(r, dict)
+            ][-128:],
         )
 
 

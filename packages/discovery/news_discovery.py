@@ -591,6 +591,47 @@ def parse_extraction(text: str, n_titles: int, *, max_events: int = 4, max_asset
     return out
 
 
+def _augment_explicit_silver(parsed: list[dict], batch: list[dict], *, max_assets: int) -> list[dict]:
+    """Yerel modelin atladığı açık gümüş kodunu (SI=F) öneriye ekler.
+
+    Ara seçim haberlerinde başlık "gold and bitcoin" derken makale "SI=F
+    rallying" diyordu; XAGUSD keşif zincirine hiç girmiyordu. Deterministik ve
+    sınırlı: yalnız metin gümüşün kodunu ya da metal bağlamını VE açık hareketini
+    taşıyorsa eklenir; yön kanonik sınıflandırıcıdan okunur. Kişi adı eklenmez.
+    """
+    from packages.data.providers.news import classify
+
+    out: list[dict] = []
+    for event in parsed:
+        try:
+            head = batch[int(event["h"]) - 1]
+        except (KeyError, IndexError, TypeError, ValueError):
+            out.append(event)
+            continue
+        article = head.get("article") or {}
+        text = " ".join(str(part) for part in (
+            head.get("title"), article.get("excerpt"), head.get("article_summary"),
+        ) if part)
+        direction = classify.silver_ticker_move(text)
+        if direction is None and classify._silver_commodity_mentioned(text):
+            direction = classify.stated_move(text, ("silver", "gümüş"))
+        assets = list(event.get("a") or [])
+        has_silver = any(
+            str(row.get("t") or "").upper().replace(" ", "") in {"SI=F", "XAGUSD", "XAG"}
+            for row in assets if isinstance(row, Mapping)
+        )
+        if not direction or has_silver:
+            out.append(event)
+            continue
+        assets.append({
+            "t": "SI=F", "n": "Silver futures", "d": "up" if direction > 0 else "down",
+            "k": "high" if classify._SILVER_TICKER_RE.search(text) else "med",
+            "m": "Gümüş fiyatı haber metninde doğrudan bağlandı",
+        })
+        out.append({**event, "a": assets[:max_assets]})
+    return out
+
+
 # ---------------------------------------------------------------------------
 # 3) Doğrulama
 # ---------------------------------------------------------------------------
@@ -950,6 +991,8 @@ def run(
             else:
                 parsed = parse_extraction(comp.text, len(batch), max_events=cfg["max_events_per_call"],
                                           max_assets=cfg["max_assets_per_event"])
+            if parsed is not None:
+                parsed = _augment_explicit_silver(parsed, batch, max_assets=cfg["max_assets_per_event"])
             if parsed is None:
                 stats["errors"].append("unparsed")
                 continue

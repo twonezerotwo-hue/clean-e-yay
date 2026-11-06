@@ -293,6 +293,21 @@ def _summary_text(item: ET.Element) -> str | None:
     return None
 
 
+def _asset_impact(title: str, summary: str | None, sentiment) -> dict[str, float]:
+    """Başlıktan varlık etkisi; özet yalnız gümüşün borsa kodu için ek kanıt.
+
+    Akış başlığı çoğu zaman kodu atlar, sınırlı RSS özeti taşır ("SI=F is
+    rallying"). Özetin geri kalanı eşlemeye girmez (geçerken anılan varlık
+    sahte etki üretmesin).
+    """
+    impact = classify.classify_asset_impact(title, sentiment)
+    if summary and "XAGUSD" not in impact and len(impact) < 4:
+        move = classify.silver_ticker_move(summary)
+        if move is not None:
+            impact = {**impact, "XAGUSD": move}
+    return impact
+
+
 def parse_feed(
     xml_text: str,
     source: str,
@@ -372,7 +387,7 @@ def parse_feed(
                     title=title,
                     article_summary=article_summary,
                     sentiment=sentiment,
-                    asset_impact=classify.classify_asset_impact(title, sentiment),
+                    asset_impact=_asset_impact(title, article_summary, sentiment),
                     url=url or None,
                     verified=True,
                     freshness=classify.freshness_of(pub_dt, now_utc),

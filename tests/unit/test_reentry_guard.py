@@ -155,6 +155,32 @@ def test_attempt_open_blocks_when_locked():
     assert ps.open_positions == []
 
 
+def test_same_locked_signal_is_audited_once(monkeypatch):
+    import packages.paper.lifecycle as lc
+    rows: list[str] = []
+    monkeypatch.setattr(lc.audit, "record", lambda action, **kw: rows.append(action))
+    ps = _state([_recent_win()])
+    kw = dict(symbol="BTCUSD", side="long", size_multiplier=1.0, timeframe="4h",
+              fingerprint=_FP_A, signal_id="sig_same", apply_reentry_guard=True)
+    first, d1 = lc.attempt_open(ps, entry_price=60000.0, **kw)
+    second, d2 = lc.attempt_open(ps, entry_price=60001.0, **kw)
+    assert first is None and d1["reason"].startswith("reentry_locked")
+    assert second is None and d2["allowed"] is False
+    assert d2["reason"] == "reentry_locked_duplicate_suppressed"
+    assert rows == ["OPEN_ATTEMPT", "OPEN_BLOCKED"]          # ikinci tick kayda yazmaz
+    assert len(ps.reentry_blocked_attempts) == 1
+    # Sinyal değişince kayıt yine yazılır (yeni kanıt görünür kalır).
+    lc.attempt_open(ps, entry_price=60002.0, **{**kw, "signal_id": "sig_new"})
+    assert rows[-2:] == ["OPEN_ATTEMPT", "OPEN_BLOCKED"] and len(rows) == 4
+
+
+def test_reentry_block_memory_survives_state_round_trip():
+    ps = _state([])
+    ps.reentry_blocked_attempts = [{"key": "k", "reason": "r", "at": "x"}] * 200
+    back = PaperState.from_dict(ps.to_dict())
+    assert len(back.reentry_blocked_attempts) == 128
+
+
 def test_attempt_open_owner_path_not_guarded():
     # apply_reentry_guard default False (owner manuel/manual_ready) → kilit uygulanmaz
     import packages.paper.lifecycle as lc

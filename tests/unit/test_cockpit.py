@@ -408,6 +408,17 @@ def test_decision_trace_shape():
     assert any(r.startswith("snapshot:") for r in trace["evidence_refs"])
 
 
+def test_decision_trace_carries_decision_id():
+    cell = {
+        "symbol": "XAGUSD", "timeframe": "1h", "decision_id": "dec-silver",
+        "candidate_action": "open_short", "action": "hold", "actionable": False,
+        "status": "NOT_ACTIONABLE", "blocked_by": ["entry_quality_v2:entry_quality"],
+    }
+    final = decision_trace_view(_view(suspended=False, risk_action="HOLD", cells=[cell]), _snap())[
+        "final_decisions"][0]
+    assert final["decision_id"] == "dec-silver"
+
+
 # ---------------- time-stop serileştirme (negatif geri sayım YOK) ----------------
 
 def test_time_stop_expired_no_negative():
