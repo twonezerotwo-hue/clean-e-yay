@@ -19,6 +19,7 @@ bütçe doluysa çağrı yapılmaz ve DATA_UNAVAILABLE akışı sürer (sahte fi
 from __future__ import annotations
 
 import json
+import math
 import os
 import threading
 import time
@@ -29,7 +30,7 @@ from pathlib import Path
 
 from packages.data.providers import coingecko_auth, quota
 from packages.data.registry import custom_assets
-from packages.data.types import PriceQuote, utcnow
+from packages.data.types import PriceQuote
 from packages.ops.store import write_text_atomic
 
 API = "https://api.coingecko.com/api/v3/simple/price"
@@ -63,6 +64,8 @@ def _load_disk_cache(symbol: str, ttl: float) -> PriceQuote | None:
     """Processler arasında yalnız TTL içindeki doğrulanmış quote'u paylaş."""
     try:
         raw = json.loads(_disk_cache_path(symbol).read_text(encoding="utf-8"))
+        if not isinstance(raw, dict) or raw.get("provider_ts_authoritative") is not True:
+            return None
         quote = PriceQuote.model_validate(raw["quote"])
         # monotonic zaman süreçler arasında karşılaştırılamaz; quote.ts UTC
         # watermark'ı TTL kontrolünün otoritesidir.
@@ -81,7 +84,7 @@ def _save_disk_cache(quote: PriceQuote, now: float) -> None:
         write_text_atomic(
             path,
             json.dumps(
-                {"fetched_monotonic": now, "quote": quote.model_dump(mode="json")},
+                {"fetched_monotonic": now, "provider_ts_authoritative": True, "quote": quote.model_dump(mode="json")},
                 ensure_ascii=False,
             ),
         )
@@ -107,30 +110,55 @@ def _all_ids() -> dict[str, str]:
 
 
 def _fetch_many(ids: dict[str, str]) -> dict[str, PriceQuote]:
-    """Tek istekte birden çok sembol; kota doluysa ya da hata varsa boş döner."""
+    """CoinGecko source timestamp verified, fail-closed prices."""
     if not ids or not quota.consume("coingecko"):
         return {}
-    url = f"{API}?ids={','.join(sorted(set(ids.values())))}&vs_currencies=usd"
+
+    url = f"{API}?ids={','.join(sorted(set(ids.values())))}&vs_currencies=usd&include_last_updated_at=true"
     data = _request_json(url)
-    if data is None:
+
+    if not isinstance(data, dict):
         return {}
+
     out: dict[str, PriceQuote] = {}
-    ts = utcnow()
+
     for symbol, cg_id in ids.items():
-        px = (data.get(cg_id) or {}).get("usd")
-        if px is None:
+        entry = data.get(cg_id)
+
+        if not isinstance(entry, dict):
             continue
+
+        try:
+            price = float(entry["usd"])
+            raw_ts = entry["last_updated_at"]
+
+            if isinstance(raw_ts, bool):
+                continue
+
+            ts = datetime.fromtimestamp(int(raw_ts), UTC)
+
+        except (KeyError, TypeError, ValueError, OverflowError, OSError):
+            continue
+
+        if not math.isfinite(price) or price <= 0:
+            continue
+
+        age = (datetime.now(UTC) - ts).total_seconds()
+
+        if age < -30 or age > 600:
+            continue
+
         out[symbol] = PriceQuote(
             symbol=symbol,
-            price=float(px),
+            price=price,
             ts=ts,
             source="coingecko",
             verified=True,
             status="OK",
             fallback=False,
         )
-    return out
 
+    return out
 
 def _request_json(url: str, *, retry_keyless: bool = True) -> dict | None:
     req = urllib.request.Request(url, headers=coingecko_auth.headers())
@@ -164,7 +192,8 @@ def get_quote(symbol: str) -> PriceQuote | None:
     with _LOCK:
         cached = _CACHE.get(symbol)
         if cached and (now - cached[0]) < ttl:
-            return cached[1]
+            age = (datetime.now(UTC) - cached[1].ts).total_seconds()
+            return cached[1] if -30 <= age <= 600 else None
         disk = _load_disk_cache(symbol, ttl)
         if disk is not None:
             _CACHE[symbol] = (now, disk)

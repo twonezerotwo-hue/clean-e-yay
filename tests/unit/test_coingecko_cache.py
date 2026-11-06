@@ -93,7 +93,9 @@ def test_monthly_cap_pauses_key_and_retries_keyless(monkeypatch, tmp_path) -> No
         seen.append(keyed)
         if keyed:
             raise urllib.error.HTTPError(req.full_url, 429, "Too Many", {}, io.BytesIO(b'{"status":{"error_code":10006}}'))
-        return _Resp(b'{"bitcoin":{"usd":77000}}')
+        import json
+
+        return _Resp(json.dumps({"bitcoin": {"usd": 77000, "last_updated_at": int(datetime.now(UTC).timestamp())}}).encode())
 
     monkeypatch.setattr(coingecko.urllib.request, "urlopen", fake_urlopen)
     out = coingecko._fetch_many({"BTCUSD": "bitcoin"})
