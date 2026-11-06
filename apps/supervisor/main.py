@@ -152,6 +152,14 @@ async def _serve() -> None:
         _log.info("agent ON — tick + learning workers running alongside API")
     else:
         _log.info("agent OFF (RUN_WORKERS=false) — API only")
+    try:
+        # Hızlı açılış: API dinlemeden önce son özet diskten yüklenir; ilk ekran
+        # ısıtma derlemesini beklemez (salt görüntü önbelleği).
+        from apps.api.routers import cockpit
+
+        cockpit.restore_from_disk()
+    except Exception:
+        _log.exception("cockpit disk restore skipped")
     tasks.append(asyncio.create_task(
         _warm_cockpit(server, wait_tick_sec=120.0 if workers_on else 0.0), name="cockpit_warm"
     ))
