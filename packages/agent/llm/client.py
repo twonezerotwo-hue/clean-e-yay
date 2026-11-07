@@ -393,10 +393,30 @@ class OllamaClient:
         # Modeli RAM'de tut → soğuk yükleme (ilk istekteki ~15s) tekrar etmesin.
         self.keep_alive = os.environ.get("OLLAMA_KEEP_ALIVE", "30m").strip()
 
+        # Input admission control: avoid oversized Ollama prompts.
+        try:
+            self.num_ctx = max(1024, min(
+                4096, int(os.environ.get("OLLAMA_NUM_CTX", "4096"))
+            ))
+        except ValueError:
+            self.num_ctx = 4096
+
+        try:
+            self.max_input_chars = max(1000, min(
+                6000, int(os.environ.get("OLLAMA_MAX_INPUT_CHARS", "6000"))
+            ))
+        except ValueError:
+            self.max_input_chars = 6000
+
+
     def complete(
         self, system: str, user: str, max_tokens: int, temperature: float = 0.2,
         *, json_mode: bool = False,
     ) -> LLMCompletion | None:
+        # Never silently truncate financial context.
+        if len(system) + len(user) > self.max_input_chars:
+            return None
+
         payload: dict = {
             "model": self.model,
             "stream": False,
@@ -411,6 +431,7 @@ class OllamaClient:
             "options": {
                 "temperature": float(temperature),
                 "num_predict": int(max_tokens),
+                "num_ctx": self.num_ctx,
             },
         }
         if json_mode:
@@ -448,6 +469,10 @@ class OllamaClient:
         self, messages: list[ChatMessage], max_tokens: int, temperature: float = 0.2
     ) -> Iterator[StreamEvent]:
         """Ollama NDJSON stream'i — her satır bir JSON; final satır done:true + usage."""
+        # Reject oversized streaming requests as well.
+        if len(json.dumps(messages, ensure_ascii=False)) > self.max_input_chars:
+            return
+
         body = json.dumps(
             {
                 "model": self.model,
@@ -458,6 +483,7 @@ class OllamaClient:
                 "options": {
                     "temperature": float(temperature),
                     "num_predict": int(max_tokens),
+                    "num_ctx": self.num_ctx,
                 },
             }
         ).encode("utf-8")
