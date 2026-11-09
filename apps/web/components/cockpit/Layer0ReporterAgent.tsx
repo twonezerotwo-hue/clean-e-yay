@@ -16,6 +16,7 @@ import { selectDqs, selectSnapshotMeta } from "@/lib/selectors/snapshot";
 import type { AgentBriefing, ChatResponse, ChatTurn, Position, PremiumBrief, WorldBrief } from "@/types/generated/api";
 import { HologramAssetIdeaBanner } from "./HologramAssetIdeaBanner";
 import { normalizeVoiceText } from "@/lib/voiceText";
+import { startLocalVoiceStream, type LocalVoiceStreamHandle } from "@/lib/voiceStream";
 import {
   Layer0HumanComputerModel,
   type Layer0DataQualityPulse,
@@ -889,6 +890,7 @@ export function Layer0ReporterAgent({
   const paper = usePaperTradingState();
   const snapshot = useDataSnapshot();
   const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
+  const voiceStreamRef = useRef<LocalVoiceStreamHandle | null>(null);
   const pttTextRef = useRef("");
   const [messages, setMessages] = useState<ReporterMessage[]>([]);
   const [input, setInput] = useState("");
@@ -947,7 +949,10 @@ export function Layer0ReporterAgent({
   }, [unlockAudio]);
 
   useEffect(() => {
-    setMicReady(Boolean(getSpeechRecognition()));
+    setMicReady(
+      Boolean(getSpeechRecognition()) ||
+        Boolean("mediaDevices" in navigator && typeof WebSocket !== "undefined"),
+    );
     return () => {
       speechRunRef.current += 1;
       audioRef.current?.pause();
@@ -964,6 +969,8 @@ export function Layer0ReporterAgent({
         // yut
       }
       recognitionRef.current = null;
+      voiceStreamRef.current?.stop();
+      voiceStreamRef.current = null;
       streamAbortRef.current?.abort();
     };
   }, []);
@@ -1101,7 +1108,7 @@ export function Layer0ReporterAgent({
       setVoiceLoading(false);
       setSpeaking(false);
       clearAudioPlayback();
-      setVoiceError("Yerel Piper sesi üretilemedi.");
+      setVoiceError("Yerel ses üretilemedi.");
       return false;
     }
   };
@@ -1254,18 +1261,15 @@ export function Layer0ReporterAgent({
   };
 
   // ── Bas-konus (push-to-talk) ───────────────────────────────────────────────
-  // Holograma basili tutuldugu surece dinler; birakildiginda recognition.stop()
-  // -> onend toplanan metni sisteme gonderir. Sessiz modda devre disi.
-  const startPushToTalk = () => {
-    if (silentRef.current) return;
-    if (listeningRef.current || chatPendingRef.current) return;
+  // Önce VoiceStudio'nun yerel PCM akışı denenir. Servis yoksa mevcut tarayıcı
+  // tanıma yolu çalışır; böylece eski kullanım bozulmadan kalır.
+  const startBrowserRecognition = () => {
     const Recognition = getSpeechRecognition();
     if (!Recognition) {
-      setVoiceError("Tarayici sesli girisi desteklemiyor; asagidan yazarak sorabilirsin.");
+      setVoiceError("Yerel ses tanıma kullanılamıyor; aşağıdan yazarak sorabilirsin.");
       return;
     }
     stopAllVoice();
-    setVoiceError(null);
     const recognition = new Recognition();
     recognition.lang = "tr-TR";
     recognition.interimResults = true;
@@ -1302,7 +1306,50 @@ export function Layer0ReporterAgent({
     }
   };
 
+  const startPushToTalk = () => {
+    if (silentRef.current) return;
+    if (listeningRef.current || chatPendingRef.current) return;
+    stopAllVoice();
+    setVoiceError(null);
+    void startLocalVoiceStream({
+      onPartial: (text) => {
+        setListening(true);
+        setLiveTranscript(text);
+      },
+      onFinal: (text) => {
+        voiceStreamRef.current = null;
+        setListening(false);
+        setLiveTranscript("");
+        if (text) send(text);
+      },
+      onStatus: (stage) => {
+        setListening(true);
+        if (stage === "loading" || stage === "downloading") {
+          setVoiceError("Yerel Türkçe ses modeli hazırlanıyor...");
+        } else {
+          setVoiceError(null);
+        }
+      },
+      onError: (message) => {
+        setListening(false);
+        setVoiceError(message);
+      },
+    }).then((handle) => {
+      if (handle) {
+        voiceStreamRef.current = handle;
+        setListening(true);
+        return;
+      }
+      if (!silentRef.current && !chatPendingRef.current) startBrowserRecognition();
+    });
+  };
+
   const stopPushToTalk = () => {
+    if (voiceStreamRef.current) {
+      setListening(false);
+      voiceStreamRef.current.stop();
+      return;
+    }
     const recognition = recognitionRef.current;
     if (!recognition) return;
     try {
@@ -1333,6 +1380,8 @@ export function Layer0ReporterAgent({
       // yut
     }
     recognitionRef.current = null;
+    voiceStreamRef.current?.stop();
+    voiceStreamRef.current = null;
     pttTextRef.current = "";
     setListening(false);
     setLiveTranscript("");
