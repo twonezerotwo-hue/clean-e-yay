@@ -141,6 +141,16 @@ def _regime_macro_missing(prices: list[PriceQuote]) -> list[str]:
     )
 
 
+def _macro_archive_stale_warning() -> str | None:
+    """DXY/US10Y arşivi bayatsa görünür uyarı (fundamental + rejim Likidite düşer)."""
+    from packages.data.providers.rotation import macro_liquidity
+
+    reading = macro_liquidity.read()
+    if reading.status != macro_liquidity.STALE:
+        return None
+    return f"macro_archive_stale: DXY/US10Y son ortak gün {reading.as_of}"
+
+
 def _latest_timestamp(items: list[object], attribute: str = "ts") -> datetime | None:
     values = [getattr(item, attribute, None) for item in items]
     values = [value for value in values if isinstance(value, datetime)]
@@ -331,6 +341,9 @@ def build_snapshot(symbols: list[str] | None = None) -> MarketSnapshot:
     missing_macro = _regime_macro_missing(prices)
     if missing_macro:
         warnings.append("macro_data_missing: " + ", ".join(missing_macro))
+    macro_stale = _macro_archive_stale_warning()
+    if macro_stale:
+        warnings.append(macro_stale)
     degraded_deriv = [s for s, d in derivatives.items() if d.status == "DEGRADED"]
     if degraded_deriv:
         warnings.append("derivatives_degraded: " + ", ".join(sorted(degraded_deriv)))

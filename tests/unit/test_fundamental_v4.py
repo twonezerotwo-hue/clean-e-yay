@@ -17,7 +17,7 @@ from types import SimpleNamespace
 import pytest
 
 from packages.consensus import engine as ce
-from packages.data.providers.rotation import flow
+from packages.data.providers.rotation import flow, macro_liquidity
 from packages.learning import macro_backtest as mb
 from packages.regime.classifier import RegimeLayer, RegimeOutput
 
@@ -100,10 +100,10 @@ def macro_archive(tmp_path, monkeypatch):
     """DXY/US10Y bar arşivi kur; consensus v4 memo'sunu temizle."""
     monkeypatch.setenv("BAR_HISTORY_ENABLED", "1")
     monkeypatch.setenv("BAR_HISTORY_DIR", str(tmp_path))
-    ce._FUND_V4_MEMO["key"] = None
+    macro_liquidity._MEMO["key"] = None
 
     def _write(sym: str, closes: list[float]) -> None:
-        base = datetime(2021, 1, 1, tzinfo=UTC)
+        base = datetime.now(UTC) - timedelta(days=len(closes))
         lines = [
             json.dumps({
                 "symbol": sym, "timeframe": "1d",
@@ -129,7 +129,7 @@ def test_fundamental_v4_reads_archive(macro_archive):
 def test_fundamental_v4_no_archive_is_none(monkeypatch, tmp_path):
     monkeypatch.setenv("BAR_HISTORY_ENABLED", "1")
     monkeypatch.setenv("BAR_HISTORY_DIR", str(tmp_path))
-    ce._FUND_V4_MEMO["key"] = None
+    macro_liquidity._MEMO["key"] = None
     assert ce._fundamental_v4() is None  # dosya yok → None (kademe düşer)
 
 
@@ -139,7 +139,7 @@ def test_fundamental_v4_memo_invalidates_on_change(macro_archive):
     first = ce._fundamental_v4()
     macro_archive("DXY", _easing())   # dosya değişti (boyut/mtime)
     macro_archive("US10Y", _easing(base=6.0, step=0.02))
-    ce._FUND_V4_MEMO["key"] = None      # imza aynı saniyeye düşerse diye zorla
+    macro_liquidity._MEMO["key"] = None  # imza aynı saniyeye düşerse diye zorla
     second = ce._fundamental_v4()
     assert first < 50.0 and second > 50.0  # sıkılaşma → gevşeme
 
@@ -184,7 +184,7 @@ def test_build_uses_v4_when_archive_present(macro_archive):
 def test_build_no_archive_falls_back_to_v2(monkeypatch, tmp_path):
     monkeypatch.setenv("BAR_HISTORY_ENABLED", "1")
     monkeypatch.setenv("BAR_HISTORY_DIR", str(tmp_path))  # boş → v4 None
-    ce._FUND_V4_MEMO["key"] = None
+    macro_liquidity._MEMO["key"] = None
     res = ce.build("BTCUSD", _snap(), _regime(), "1d")
     fund = next(m for m in res.modules if m.name == "fundamental")
     assert fund.score == pytest.approx(67.5)  # v4 üretemedi → v2 (Likidite+Rotasyon)

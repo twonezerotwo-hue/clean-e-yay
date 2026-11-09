@@ -20,7 +20,7 @@ from packages.learning import macro_backtest as mbt
 
 
 def _bars(sym: str, n: int) -> list[OHLCVBar]:
-    base = datetime(2021, 1, 1, tzinfo=UTC)
+    base = datetime.now(UTC).replace(hour=0, minute=0, second=0, microsecond=0) - timedelta(days=n)
     return [
         OHLCVBar(
             symbol=sym, timeframe="1d", ts=base + timedelta(days=i),
