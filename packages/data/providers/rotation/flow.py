@@ -20,6 +20,7 @@ gecirir). PAPER_SAFE / NO_EXECUTION.
 from __future__ import annotations
 
 import statistics as _st
+from datetime import date
 
 HORIZONS = (21, 63, 126)   # ~1a / 3a / 6a
 VOL_WINDOW = 20
@@ -110,13 +111,27 @@ LIQUIDITY_PCT_WINDOW = 252   # ~1 yil islem gunu
 LIQUIDITY_PCT_MIN = 60       # rank icin asgari gecerli eksen degeri
 
 
+def align_closes_by_date(
+    a_bars: list, b_bars: list
+) -> tuple[list[float], list[float], date | None]:
+    """Iki gunluk bar serisini TARIHLE esler (yalniz ortak gunler, eski->yeni).
+
+    Doner: (a kapanislari, b kapanislari, son ortak gun). Ortak gun yok -> bos
+    listeler ve None. Gun-ici saat farki (DXY 05:00Z, US10Y 12:20Z) onemsizdir."""
+    a = {bar.ts.date(): bar.close for bar in a_bars}
+    b = {bar.ts.date(): bar.close for bar in b_bars}
+    days = sorted(a.keys() & b.keys())
+    return [a[d] for d in days], [b[d] for d in days], days[-1] if days else None
+
+
 def liquidity_momentum_pct_series(
     dxy_closes: list[float],
     us10y_closes: list[float],
     window: int = LIQUIDITY_PCT_WINDOW,
     min_n: int = LIQUIDITY_PCT_MIN,
 ) -> list[float | None]:
-    """Gun-hizali v4.1 skor serisi (0-100). Gun i YALNIZ <=i verisi kullanir.
+    """v4.1 skor serisi (0-100). Gun i YALNIZ <=i verisi kullanir. Iki liste
+    AYNI gunleri tasimali (bar arsivinden: `align_closes_by_date`).
 
     Eksen = HAM (kirpilmamis) DXY+10y-faiz vol-norm momentum ortalamasi; skor =
     100 x (1 - eksenin son-1-yil icindeki yuzdelik sirasi). Sikilasma momentumu
@@ -216,6 +231,7 @@ __all__ = [
     "DEFAULT_SCALE",
     "DEFAULT_WEIGHTS",
     "SIGNAL_KEYS",
+    "align_closes_by_date",
     "asset_signal",
     "build_signals",
     "credit_signal",

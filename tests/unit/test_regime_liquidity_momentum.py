@@ -12,6 +12,7 @@ from types import SimpleNamespace
 
 import pytest
 
+from packages.data.providers.rotation import macro_liquidity
 from packages.regime import classifier as rc
 
 
@@ -19,10 +20,10 @@ from packages.regime import classifier as rc
 def macro_archive(tmp_path, monkeypatch):
     monkeypatch.setenv("BAR_HISTORY_ENABLED", "1")
     monkeypatch.setenv("BAR_HISTORY_DIR", str(tmp_path))
-    rc._LIQ_MOM_MEMO["key"] = None
+    macro_liquidity._MEMO["key"] = None
 
     def _write(sym: str, closes: list[float]) -> None:
-        base = datetime(2021, 1, 1, tzinfo=UTC)
+        base = datetime.now(UTC) - timedelta(days=len(closes))
         lines = [
             json.dumps({
                 "symbol": sym, "timeframe": "1d",
@@ -81,7 +82,7 @@ def test_empty_archive_falls_back_to_level(monkeypatch, tmp_path):
     """Arşiv boş → seviye formülüne düşer (dürüst degrade)."""
     monkeypatch.setenv("BAR_HISTORY_ENABLED", "1")
     monkeypatch.setenv("BAR_HISTORY_DIR", str(tmp_path))  # boş
-    rc._LIQ_MOM_MEMO["key"] = None
+    macro_liquidity._MEMO["key"] = None
     layer = _liq(_snap(dxy=104.0, us10=4.3))
     assert layer.score == pytest.approx(90.5)  # seviye formülü (v4 üretemedi)
 

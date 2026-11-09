@@ -279,42 +279,21 @@ def _fundamental_v2(regime: RegimeOutput) -> float | None:
 # Tezgâh kıyas kaydı macro_backtest.fund_v3'te documented reference olarak kalır.
 
 
-# v4 memoize: DXY/US10Y bar arşivi dosya-imzası (boyut+mtime) değişmedikçe tick
-# içi 20+ hücre tek hesabı paylaşır (sıcak yol; zaman-bağımsız → test-flake yok).
-_FUND_V4_MEMO: dict = {"key": None, "val": None}
-
-
 def _fundamental_v4() -> float | None:
-    """Fundamental v4 (GÖLGE) — DEĞİŞİM-bazlı makro likidite (ADAY B, 5y tezgâh).
+    """Fundamental v4 — DEĞİŞİM-bazlı makro likidite (DXY + 10y faiz momentumu).
 
-    2026-07-13 Basamak-4: mevcut Likidite formülü mutlak seviyeye çapalıydı (5y'da
-    1118/1118 gün ≥55 — hiç bearish olamıyor). v4 DXY + 10y faizin çoklu-ufuk
-    vol-norm momentumundan gelir (yükseliyorsa sıkılaşma = risk-off). Üretici
-    `flow.liquidity_momentum_score` (tek kaynak; macro_backtest ADAY B birebir).
-    Seri bar arşivinden (asset-level); arşiv yok/kapalı/yetersiz → None → kademe
-    v3/v2/v1'e düşer (dürüst degrade). Salt-okur; lazy import."""
-    try:
-        from packages.data.providers.ohlcv import history
+    Mutlak seviye formülü 5y'da 1118/1118 gün ≥55 çıkıyordu (hiç bearish olamıyor);
+    v4 yükselen dolar/faizi sıkılaşma sayar. Kaynak `macro_liquidity.read` (rejim
+    Likidite ile aynı okuma); arşiv yok/kısa/bayat → None."""
+    from packages.data.providers.rotation import macro_liquidity
 
-        def _sig(sym: str):
-            try:
-                st = history._path(sym, "1d").stat()
-                return (st.st_size, int(st.st_mtime))
-            except OSError:
-                return None
+    return macro_liquidity.read().score
 
-        key = (history.enabled(), _sig("DXY"), _sig("US10Y"))
-        if _FUND_V4_MEMO["key"] == key:
-            return _FUND_V4_MEMO["val"]
-        from packages.data.providers.rotation import flow
 
-        dxy = [b.close for b in history.load("DXY", "1d")]
-        us10y = [b.close for b in history.load("US10Y", "1d")]
-        val = flow.liquidity_momentum_score(dxy, us10y)
-        _FUND_V4_MEMO["key"], _FUND_V4_MEMO["val"] = key, val
-        return val
-    except (OSError, ValueError, TypeError, AttributeError):
-        return None
+def _macro_archive_stale() -> bool:
+    from packages.data.providers.rotation import macro_liquidity
+
+    return macro_liquidity.read().status == macro_liquidity.STALE
 
 
 def _news_evidence_gap(snap: MarketSnapshot, symbol: str | None) -> str | None:
@@ -571,15 +550,20 @@ def _context_layer(
     oriented: dict[str, float] = {}
     raw: dict[str, float] = {}
     # Temel: v4 (DXY + 10y faiz momentumu); bar arşivi yoksa v2 (likidite + rotasyon).
+    # Arşiv bayatsa v2'ye de düşülmez: modül oy dışı kalır, ağırlığı dağılır.
     fund_v4 = _fundamental_v4()
-    fundamental = fund_v4 if fund_v4 is not None else _fundamental_v2(regime)
-    if fund_v4 is None and fundamental is not None:
-        warnings.append(f"fundamental_fallback:v2:{symbol}:{timeframe}")
-    if fundamental is not None:
-        raw["fundamental"] = fundamental
-        oriented["fundamental"] = _oriented("fundamental", fundamental, symbol, timeframe)
+    if fund_v4 is None and _macro_archive_stale():
+        warnings.append(f"fundamental_dropped:stale_macro_archive:{symbol}:{timeframe}")
+        policy_dropped.add("fundamental")
     else:
-        warnings.append(f"fundamental_dropped:no_macro_layers:{symbol}:{timeframe}")
+        fundamental = fund_v4 if fund_v4 is not None else _fundamental_v2(regime)
+        if fund_v4 is None and fundamental is not None:
+            warnings.append(f"fundamental_fallback:v2:{symbol}:{timeframe}")
+        if fundamental is not None:
+            raw["fundamental"] = fundamental
+            oriented["fundamental"] = _oriented("fundamental", fundamental, symbol, timeframe)
+        else:
+            warnings.append(f"fundamental_dropped:no_macro_layers:{symbol}:{timeframe}")
     # Sentinel: çok girdili stres kompoziti (VIX + oynaklık + türev + opsiyon).
     sentinel = _sentinel_v2(regime, snap, symbol, timeframe)
     if sentinel is not None:

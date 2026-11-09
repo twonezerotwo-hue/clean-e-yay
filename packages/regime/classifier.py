@@ -114,35 +114,18 @@ def _price(snap: MarketSnapshot, symbol: str) -> float | None:
     return None
 
 
-_LIQ_MOM_MEMO: dict = {"key": None, "val": None}
-
-
 def _archive_liquidity_momentum() -> float | None:
-    """Bar arşivinden DXY+US10Y momentum-Likidite skoru (0-100). Üretici tek
-    kaynak `flow.liquidity_momentum_score` (M16 v4 ile birebir). Dosya-imza
-    memoize (sıcak yol; zaman-bağımsız). Arşiv kapalı/yok/yetersiz → None."""
-    try:
-        from packages.data.providers.ohlcv import history
+    """Bar arşivinden DXY+US10Y momentum-Likidite skoru (0-100); kaynak
+    `macro_liquidity.read` (fundamental v4 ile aynı okuma). Yok/kısa/bayat → None."""
+    from packages.data.providers.rotation import macro_liquidity
 
-        def _sig(sym: str):
-            try:
-                st = history._path(sym, "1d").stat()
-                return (st.st_size, int(st.st_mtime))
-            except OSError:
-                return None
+    return macro_liquidity.read().score
 
-        key = (history.enabled(), _sig("DXY"), _sig("US10Y"))
-        if _LIQ_MOM_MEMO["key"] == key:
-            return _LIQ_MOM_MEMO["val"]
-        from packages.data.providers.rotation import flow
 
-        dxy = [b.close for b in history.load("DXY", "1d")]
-        us10y = [b.close for b in history.load("US10Y", "1d")]
-        val = flow.liquidity_momentum_score(dxy, us10y)
-        _LIQ_MOM_MEMO["key"], _LIQ_MOM_MEMO["val"] = key, val
-        return val
-    except (OSError, ValueError, TypeError, AttributeError):
-        return None
+def _macro_archive_stale() -> bool:
+    from packages.data.providers.rotation import macro_liquidity
+
+    return macro_liquidity.read().status == macro_liquidity.STALE
 
 
 def _liquidity_layer(snap: MarketSnapshot) -> RegimeLayer | None:
@@ -153,8 +136,11 @@ def _liquidity_layer(snap: MarketSnapshot) -> RegimeLayer | None:
     if dxy is None or us10y is None:
         return None  # çekirdek girdi yok — sahte default'la skor üretilmez
     # Momentum-Likidite: Likidite skoru DEĞİŞİM-bazlı gelir (seviye şişmesini
-    # kırar → CRISIS görünür). Bar arşivi yoksa seviye formülüne düşer.
+    # kırar → CRISIS görünür). Bar arşivi yoksa seviye formülüne düşer; bayatsa
+    # katman düşer (seviye formülü hep yüksek çıktığı için yedek olamaz).
     mom = _archive_liquidity_momentum()
+    if mom is None and _macro_archive_stale():
+        return None
     if mom is not None:
         return RegimeLayer(
             name="Likidite",
