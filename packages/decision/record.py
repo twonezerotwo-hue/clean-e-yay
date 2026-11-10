@@ -7,8 +7,9 @@ sonra budanır ve açılmayan adayların son kapı sonucu hiçbir yerde kalmıyo
 Boyut küçük tutulur: her turda yalnız önceki tura göre DEĞİŞEN hücreler yazılır
 ("delta"); saatte bir ve süreç başlangıcında tüm hücreler yazılır ("checkpoint").
 Her checkpoint ve sürüm değişikliği sürüm bilgisini (kod commit'i, eşik ve ağırlık
-dosyası özeti, karar bayrakları) taşır. Karar mantığına dokunmaz; yazılamazsa
-tick sürer (çağıran yakalar).
+dosyası özeti, karar bayrakları) taşır. Yazılan aday hücreler açılsaydı alacakları
+stop/hedef planını taşır (kapı karşı-olgu defteri için). Karar mantığına dokunmaz;
+yazılamazsa tick sürer (çağıran yakalar).
 """
 from __future__ import annotations
 
@@ -122,6 +123,32 @@ def _key(cell: dict[str, Any]) -> tuple:
     return (cell["action"], cell["candidate"], cell["direction"], blocked, cell["route"], cell["gate_blocker"])
 
 
+_SIDES = {"open_long": "long", "open_short": "short"}
+
+
+def _plan(snap: Any, d: Any) -> dict[str, Any] | None:
+    """Aday açılsaydı alacağı stop/hedef: açılış yolunun kendi fonksiyonu, karar anı
+    fiyatı ve ATR'si (sonradan hesaplanamaz — yapısal stop o anki barlara bakar).
+    Kapı karşı-olgu defteri (learning.gate_counterfactual) bunu okur."""
+    side = _SIDES.get(getattr(d, "candidate_action", None) or getattr(d, "action", None))
+    if side is None or d.timeframe == "1w":
+        return None
+    price = next((q.price for q in getattr(snap, "prices", None) or () if q.symbol == d.symbol and q.price), None)
+    if not price:
+        return None
+    from packages.paper import conviction, lifecycle
+
+    price = float(price)
+    tech = ((getattr(snap, "technicals_by_tf", None) or {}).get(d.symbol) or {}).get(d.timeframe)
+    atr = float(tech.atr) if tech is not None and (getattr(tech, "atr", None) or 0) > 0 else None
+    confidence = getattr(d, "confidence", None)
+    t = lifecycle.canonical_targets(d.symbol, side, price, timeframe=d.timeframe, atr=atr,
+                                    predicted_confidence=confidence)
+    time_stop_h = lifecycle._timeframe_time_stop_hours(d.timeframe) * conviction.tier_for(confidence).time_mult
+    return {"price": price, "sl_pct": round(abs(price - t.sl) / price, 6), "tp_pct": round(abs(t.tp - price) / price, 6),
+            "time_stop_h": round(time_stop_h, 2), "basis": getattr(t, "sl_basis", None)}
+
+
 def _prune(folder: Path, today: datetime) -> None:
     cutoff = (today - timedelta(days=_retention_days())).date().isoformat()
     for path in folder.glob("????-??-??.jsonl"):
@@ -148,9 +175,17 @@ def append(snap: Any, decisions: list[Any], final_results: dict[tuple[str, str],
             c for c in cells
             if previous.get((c["symbol"], c["timeframe"])) != _key(c) or (c["symbol"], c["timeframe"]) in opened
         ]
+        by_cell = {(d.symbol, d.timeframe): d for d in decisions}
         for c in changed:
             if (c["symbol"], c["timeframe"]) in opened:
                 c["opened"] = True
+            if c["candidate"] in _SIDES:
+                try:
+                    plan = _plan(snap, by_cell[(c["symbol"], c["timeframe"])])
+                except Exception:
+                    plan = None
+                if plan:
+                    c["plan"] = plan
         _STATE["cells"] = {(c["symbol"], c["timeframe"]): _key(c) for c in cells}
         if not changed:
             return {"kind": "none", "cells": 0}

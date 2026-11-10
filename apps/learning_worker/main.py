@@ -861,6 +861,19 @@ def run_once() -> dict:
         reflection_status = f"ERROR:{type(exc).__name__}"
         errors.append(f"reflection:{type(exc).__name__}")
 
+    # Kapı karşı-olgu defteri (salt ölçüm, flag yok): karar kaydındaki her aday
+    # açılsaydı karar anındaki stop/hedef planıyla ne yapardı — kapıların bedeli.
+    gate_counterfactual_status = "ERROR"
+    try:
+        from packages.learning import gate_counterfactual as _gcf
+        gcf = _gcf.run()
+        gate_counterfactual_status = str(gcf.get("status", "UNKNOWN"))
+        log.info("gate_counterfactual: yeni=%s çözülen=%s bekleyen=%s",
+                 gcf.get("new"), gcf.get("resolved"), gcf.get("pending"))
+    except Exception as exc:  # defensive — worker patlamamalı
+        gate_counterfactual_status = f"ERROR:{type(exc).__name__}"
+        errors.append(f"gate_counterfactual:{type(exc).__name__}")
+
     # 0-2 TAM-STRATEJİ karnesi (SALT-ANALİZ, flag YOK). Owner'ın nihai LONG akışı
     # (0.618 giriş + fib hedef + 0-2 trailing + house-money re-giriş) arşiv+canlı
     # barlarda haftalık ölçülür; canlı karara dokunmaz (kanıt biriktirir).
@@ -1105,6 +1118,7 @@ def run_once() -> dict:
         "zone_proposer_status": zone_proposer_status,  # Aday bölge önericisi (makine ADAY önerir, owner süzer; SALT-ANALİZ)
         "council_status": council_status,  # Konsey karnesi (katmanlar-arası kombinasyon; SALT-ANALİZ)
         "reflection_status": reflection_status,  # Yansıma/hafıza döngüsü (kapanan işlem dersleri; SALT-GÖZLEM)
+        "gate_counterfactual_status": gate_counterfactual_status,  # kapı karşı-olgu defteri (salt ölçüm)
         "subsignal_scorecard_status": subsignal_scorecard_status,  # D5 sinyal karnesi (DISABLED=flag OFF)
         "tf_scoring_v2_shadow_status": tf_scoring_v2_shadow_status,  # D6 v2 gölge skoru (DISABLED=flag OFF)
         "tf_scoring_race_status": tf_scoring_race_status,  # R5 yarış defteri (DISABLED=flag OFF)
