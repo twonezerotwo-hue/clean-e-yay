@@ -3772,7 +3772,7 @@
     {
      "action": "hold",
      "blocked_by": [
-      "entry_quality_v2:entry_quality"
+      "timeframe_policy:no_paper_execution"
      ],
      "candidate_action": "open_long",
      "confidence": 0.498,
@@ -3781,7 +3781,7 @@
      "expected_value": null,
      "fingerprint": "XLK|v2|4h|NEUTRAL|bullish|S65|X|touche",
      "raw_confidence": 0.498,
-     "reason": "Giriş kalitesi: XLK 4h open_long yönü korunuyor ama şimdi girilmez (kalite 0.1555, dönüş riski 0.0) — WAIT",
+     "reason": "timeframe 4h (tactical): paper execution kapalı — sadece bias",
      "risk_action": "HOLD",
      "size_multiplier": 0.0,
      "symbol": "XLK",

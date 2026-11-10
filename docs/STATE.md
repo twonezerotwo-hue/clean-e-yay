@@ -131,6 +131,16 @@ geçmiş pozisyonlar `exploration=true` damgalı kalır ve EXPLORATION kohortuna
 düşer: yalnız güven kalibrasyonu (`calibration_trainer`, `tf_calibration`) bunları
 kullanır, diğer öğreniciler dışarıda bırakır. Yeni açılışlar damga almaz.
 
+## 4h yalnız bias (2026-11-10)
+
+`timeframe_risk."4h".paper_execution: false` (owner kararı). Canlı 4h oyunun
+(touche + sentinel + haber) yön bilgisi ölçülemedi: 16 sembol, 7.594 sinyalli
+bar, maliyet sonrası sinyal başına −%0,22. 4h hücresi skor ve adayı üretir,
+`timeframe_policy:no_paper_execution` ile bekler; stop/hedef planı karar kaydında
+kalır ve kapı karşı-olgu defteri sonucunu yazar. Açık 4h pozisyonları normal
+çıkış kurallarıyla kapanır. Geri açma: uzun veride ve ileri sınamada önceden
+yazılı ölçütleri geçen yeni bir 4h yön kaynağıyla, owner onayıyla.
+
 ## Ekran tick'in anını okur (2026-10-30)
 
 Tick snapshot'ı kurunca `pipeline.publish_tick_snapshot` ile, karar matrisini
