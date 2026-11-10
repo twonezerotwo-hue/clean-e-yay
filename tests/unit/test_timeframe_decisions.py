@@ -141,6 +141,34 @@ def test_matrix_produces_all_timeframes_and_1w_never_opens(paper_env, monkeypatc
 
 
 @pytest.mark.usefixtures("supportive_context")
+def test_4h_is_bias_only_but_candidate_and_plan_survive(paper_env, monkeypatch) -> None:
+    """Owner kararı 2026-11-10: 4h açılışı durdu (paper_execution=false). Hücre açmaz ama
+    adayı ve stop/hedef planı karar kaydında kalır; kapı karşı-olgu defteri 'açılsaydı ne
+    olurdu' sonucunu yazmaya devam eder. Diğer TF'ler etkilenmez."""
+    from packages.data.registry.loader import threshold_override
+    from packages.decision import engine as de
+    from packages.decision import record
+    from packages.learning import gate_counterfactual
+    monkeypatch.setattr(de, "_intra_batch_guard_enabled", lambda: False)
+    snap = build_snapshot(["BTCUSD"])
+    _force_bullish(snap)
+    # Fikstür evreninde 4h kapsaması düşük (temel+kuantum 4h oyundan çıktı); kapsama kapısı
+    # önce durdurmasın ki TF politikası gerçekten sınansın.
+    with threshold_override({"consensus": {"min_module_coverage": 0.0}}):
+        _regime, _risk, decisions = decide_matrix(["BTCUSD"], snap, _risk_in())
+    by_tf = {d.timeframe: d for d in decisions}
+    h4 = by_tf["4h"]
+    assert h4.action == "hold" and h4.actionable is False
+    assert h4.candidate_action == "open_long"
+    assert "timeframe_policy:no_paper_execution" in h4.blocked_by
+    plan = record._plan(snap, h4)
+    assert plan and plan["sl_pct"] > 0 and plan["tp_pct"] > 0 and plan["time_stop_h"] > 0
+    cell = {"symbol": "BTCUSD", "timeframe": "4h", "candidate": h4.candidate_action, "plan": plan}
+    assert gate_counterfactual._sample("2026-11-10T12:00:00+00:00", cell)["side"] == "long"
+    assert by_tf["1d"].action == "open_long" and by_tf["15m"].action == "open_long"
+
+
+@pytest.mark.usefixtures("supportive_context")
 def test_matrix_timeframe_risk_multiplier_only_reduces(paper_env, monkeypatch) -> None:
     # TF risk çarpanı testi → intra_batch guard kapalı (konsantrasyon ayrı testlerde).
     from packages.decision import engine as de
