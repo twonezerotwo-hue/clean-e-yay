@@ -182,15 +182,6 @@ export function ExecutionReadinessPanel() {
         )
         .map((cell) => cell.symbol),
     );
-    const explorationSymbols = new Set(
-      matrixCells
-        .filter(
-          (cell) =>
-            cell.execution_state === "EXPLORATION" &&
-            (cell.action === "open_long" || cell.action === "open_short"),
-        )
-        .map((cell) => cell.symbol),
-    );
     const matrixUsable = Boolean(authoritativeMatrix) && authoritativeMatrix?.suspended !== true && authoritativeMatrix?.dqs_status !== "BLOCKED";
     const universeCount = tradeUniverse.length || new Set(matrixCells.map((c) => c.symbol)).size;
 
@@ -328,13 +319,8 @@ export function ExecutionReadinessPanel() {
         detail: !matrixUsable
           ? "Decision matrix suspended veya DQS BLOCKED; hiçbir asset için yeni işlem yok."
           : actionableSymbols.size > 0
-            ? `Hazır: ${Array.from(actionableSymbols).join(", ")}.` +
-              (explorationSymbols.size
-                ? ` Keşif: ${Array.from(explorationSymbols).join(", ")} (negatif EV veya paper gevşetmesi).`
-                : "")
-            : explorationSymbols.size
-              ? `Şu an yalnız keşif sinyali var: ${Array.from(explorationSymbols).join(", ")}; pozitif kanıt bekleniyor.`
-              : "İşlem evrenindeki hiçbir asset'te işlem hazırlığı tamamlanmadı.",
+            ? `Hazır: ${Array.from(actionableSymbols).join(", ")}.`
+            : "İşlem evrenindeki hiçbir asset'te işlem hazırlığı tamamlanmadı.",
       },
       {
         id: "session_status",

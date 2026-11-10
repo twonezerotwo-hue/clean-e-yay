@@ -66,9 +66,9 @@ def test_not_ready_candidate_is_execution_gate_even_with_stale_data(open_route):
     assert fg.route == "block" and fg.blocker == "execution_gate"
 
 
-def test_exploration_cell_is_execution_gate(open_route):
-    fg = _eval(_decision(blocked_by=["paper_exploration:ev_gate"]), _snap())
-    assert fg.blocker == "execution_gate" and fg.detail["execution_state"] == "EXPLORATION"
+def test_negative_ev_cell_is_execution_gate(open_route):
+    fg = _eval(_decision(expected_value=-0.1), _snap())
+    assert fg.blocker == "execution_gate" and fg.detail["execution_state"] == "BLOCKED"
 
 
 def test_stale_data_then_technical_confirmation(open_route):

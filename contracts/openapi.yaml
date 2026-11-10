@@ -2626,8 +2626,9 @@ components:
         excluded: { $ref: "#/components/schemas/CohortStats" }
         exploration:
           description: >
-            K1 (2026-10-02) — paper keşif açılışları (yumuşak güven/EV kapısı esnetildi).
-            AUTO performansına karışmaz; yalnız güven kalibrasyonuna veri olur.
+            K1 (2026-10-02) — paper keşif açılışları (yumuşak güven/EV kapısı esnetildi;
+            yol 2026-11-10'da kaldırıldı, yalnız geçmiş işlemler). AUTO performansına
+            karışmaz; yalnız güven kalibrasyonuna veri olur.
           allOf:
             - $ref: "#/components/schemas/CohortStats"
         execution_anomaly:
@@ -3305,16 +3306,14 @@ components:
         execution_ready:
           type: boolean
           description: >
-            Hard kapıları geçen, negatif EV ve paper keşif gevşetmesi taşımayan
-            hücre. Yalnız görünürlük alanıdır; mevcut paper_action sözleşmesini
-            değiştirmez.
+            Hard kapıları geçen, negatif EV taşımayan hücre. Yalnız görünürlük
+            alanıdır; mevcut paper_action sözleşmesini değiştirmez.
         execution_state:
           type: string
-          enum: [READY, EXPLORATION, BLOCKED, SUSPENDED]
+          enum: [READY, BLOCKED, SUSPENDED]
           description: >
-            READY gerçek paper hazırlığı; EXPLORATION yalnız paper keşif
-            gevşetmesi/negatif EV; BLOCKED kapı veya sinyal yok; SUSPENDED
-            küresel RiskGate/DQS askısı.
+            READY gerçek paper hazırlığı; BLOCKED kapı, sinyal yok veya negatif
+            EV; SUSPENDED küresel RiskGate/DQS askısı.
         status: { type: string, enum: [ACTIONABLE, NOT_ACTIONABLE, SUSPENDED] }
         paper_action: { type: string, enum: [open_long, open_short, none] }
 
@@ -4090,7 +4089,7 @@ components:
         final_action: { type: string }
         actionable: { type: boolean }
         execution_ready: { type: boolean }
-        execution_state: { type: string, enum: [READY, EXPLORATION, BLOCKED, SUSPENDED] }
+        execution_state: { type: string, enum: [READY, BLOCKED, SUSPENDED] }
         status: { type: string, enum: [ACTIONABLE, NOT_ACTIONABLE, SUSPENDED] }
 
     AutoOpenReadiness:

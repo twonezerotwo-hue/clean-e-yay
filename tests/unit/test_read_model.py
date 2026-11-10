@@ -10,7 +10,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from packages.decision import engine, paper_policy, read_model, tick_artifact
+from packages.decision import engine, read_model, tick_artifact
 
 
 @pytest.fixture
@@ -20,15 +20,13 @@ def tick_view(monkeypatch):
                          daily_pnl_usd=0.0, mtm_equity_usd=None)
     symbols = ["BTCUSD", "ETHUSD"]
     monkeypatch.setattr("packages.data.registry.assets.trade_symbols", lambda: symbols)
-    monkeypatch.setattr(paper_policy, "enabled", lambda: False)
     regime = SimpleNamespace(label="NEUTRAL")
     risk = SimpleNamespace(action="HOLD")
     decisions = [
         SimpleNamespace(symbol=s, timeframe=tf, consensus=f"cons:{s}:{tf}")
         for s in symbols for tf in ("1d", "4h")
     ]
-    tick_artifact.publish(snap, symbols, paper_exploration=False, regime=regime, risk=risk,
-                          decisions=decisions)
+    tick_artifact.publish(snap, symbols, regime=regime, risk=risk, decisions=decisions)
     monkeypatch.setattr(engine, "decide_matrix", lambda *a, **k: pytest.fail("karar yeniden hesaplandı"))
     yield snap, ps, regime, risk
     tick_artifact.reset()

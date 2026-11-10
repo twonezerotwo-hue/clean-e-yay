@@ -38,7 +38,6 @@ from packages.decision import (
     correlation_veto,
     entry_engine,
     learning_advisor,
-    paper_policy,
     sizing_layers,
 )
 from packages.decision.trace import stable_decision_id
@@ -414,7 +413,6 @@ def _decide_core(
     corr_entries: list | None = None,
     timeframe: str = "1d",
     recent_edge: float | None = None,
-    paper_exploration: bool = False,
     entry_gate: bool = True,
 ) -> TradeDecision:
     """Tek-motor karar zinciri (RiskGate İLK). ``entry_gate=False`` yalnız giriş kapısının
@@ -605,15 +603,11 @@ def _decide_core(
     # (Nötr/düşük-güvenli sinyallerle pozisyon açılmasını engeller. RiskGate'i
     #  bypass etmez; yalnızca ek kısıt. Owner config'ten ayarlanır.)
     min_open_conf = float(th.get("min_open_confidence", 0.0))
-    paper_cfg = paper_policy.load_config() if paper_exploration else None
-    paper_soft_reasons: list[str] = []
     if cal_conf < min_open_conf:
-        if paper_cfg is None or not paper_policy.allows_confidence(cal_conf, paper_cfg):
-            return _hold(
-                reason=f"Düşük güven: p(win) %{cal_conf * 100:.0f} < taban %{min_open_conf * 100:.0f}",
-                blocked_by=["confidence_floor"],
-            )
-        paper_soft_reasons.append("confidence_floor")
+        return _hold(
+            reason=f"Düşük güven: p(win) %{cal_conf * 100:.0f} < taban %{min_open_conf * 100:.0f}",
+            blocked_by=["confidence_floor"],
+        )
 
     # ----- EV (beklenen değer) kapısı — olasılık + ödül/risk BİRLİKTE pozitif
     #  değilse açma. RiskGate'i bypass etmez; yalnızca ek ekonomik filtre. -----
@@ -657,15 +651,13 @@ def _decide_core(
         None if emp is None else round(_expected_value(emp.p_win, rr, cost_r), 4)
     )
     if expected_value < float(ev_cfg.get("min_ev", 0.0)):
-        if paper_cfg is None or not paper_policy.allows_expected_value(expected_value, paper_cfg):
-            return _hold(
-                reason=ev_reason,
-                blocked_by=["ev_gate"],
-                expected_value=round(expected_value, 4),
-                p_win_empirical=p_win_empirical,
-                expected_value_empirical=expected_value_empirical,
-            )
-        paper_soft_reasons.append("ev_gate")
+        return _hold(
+            reason=ev_reason,
+            blocked_by=["ev_gate"],
+            expected_value=round(expected_value, 4),
+            p_win_empirical=p_win_empirical,
+            expected_value_empirical=expected_value_empirical,
+        )
 
     # Confluence yoksa boyut yarıya iner
     if not cons.confluence_aligned:
@@ -919,12 +911,6 @@ def _decide_core(
     # reason + size_multiplier üzerinden görünür.
     size *= pol["risk_multiplier"]
 
-    # Paper exploration may relax only the two soft gates above.  It always
-    # applies a small size cap and leaves the reason visible to the cockpit.
-    if paper_cfg is not None and paper_soft_reasons:
-        size = paper_policy.cap_size(size, paper_cfg)
-        blocked_by.extend(f"paper_exploration:{reason}" for reason in paper_soft_reasons)
-
     # ----- Kelly sizing — boyutu ölçülen edge'e oransal CAP'le (yalnız küçültür).
     #  fractional-Kelly $ = fraction × f* × equity; size_mult cap'i = bu / max_pos.
     #  no-AI-boost: yalnız min() ile kısar, asla büyütmez. -----
@@ -1088,7 +1074,6 @@ def decide_for_symbol(
     corr_entries: list | None = None,
     timeframe: str = "1d",
     recent_edge: float | None = None,
-    paper_exploration: bool = False,
 ) -> TradeDecision:
     """(symbol, timeframe) kararı — YÖN ≠ GİRİŞ ZAMANLAMASI.
 
@@ -1100,7 +1085,6 @@ def decide_for_symbol(
     kw = {
         "mistakes": mistakes, "open_positions": open_positions, "equity_usd": equity_usd,
         "corr_entries": corr_entries, "timeframe": timeframe, "recent_edge": recent_edge,
-        "paper_exploration": paper_exploration,
     }
     problem: str | None = None
     decision: TradeDecision | None = None
@@ -1191,7 +1175,6 @@ def decide_matrix(
     paper_state_input: RiskInput,
     open_positions: list | None = None,
     timeframes: list[str] | None = None,
-    paper_exploration: bool = False,
     persist_regime: bool = False,
 ) -> tuple[RegimeOutput, RiskDecision, list[TradeDecision]]:
     """T2 — (symbol, timeframe) karar matrisi.
@@ -1225,21 +1208,16 @@ def decide_matrix(
     for s in symbols:
         per_tf: dict[str, TradeDecision] = {}
         for tf in tfs:
-            decision_kwargs = {
-                "mistakes": mems,
-                "open_positions": pass_positions,
-                "equity_usd": paper_state_input.equity_usd,
-                "corr_entries": corr_entries,
-                "timeframe": tf,
-            }
-            if paper_exploration:
-                decision_kwargs["paper_exploration"] = True
             d = decide_for_symbol(
                 s,
                 snap,
                 regime,
                 risk,
-                **decision_kwargs,
+                mistakes=mems,
+                open_positions=pass_positions,
+                equity_usd=paper_state_input.equity_usd,
+                corr_entries=corr_entries,
+                timeframe=tf,
             )
             per_tf[tf] = d
             if (
@@ -1278,23 +1256,17 @@ def decide_matrix(
 def execution_readiness(decision: TradeDecision, *, suspended: bool = False) -> tuple[bool, str]:
     """Matrix'te sinyal niyeti ile işlem hazırlığını birbirinden ayır.
 
-    ``actionable`` geçmiş sözleşmede paper keşfi için pozitif boyut anlamına
-    gelir; bu yüzden negatif EV veya ``paper_exploration:*`` taşıyan hücreler
-    de actionable görünüyordu. Bu yardımcı yalnızca açıklayıcı bir ViewModel
-    alanı üretir. Eski ``actionable``/RiskGate sözleşmesi korunur; otomatik
-    worker rotası yalnız READY hücreleri deftere geçirir.
+    Yalnızca açıklayıcı bir ViewModel alanı üretir; ``actionable``/RiskGate
+    sözleşmesi korunur, otomatik worker rotası yalnız READY hücreleri deftere
+    geçirir. Negatif EV'li açılış hücresi (EV kapısı min_ev < 0 ayarlanırsa)
+    hazır sayılmaz.
     """
     if suspended:
         return False, "SUSPENDED"
     if not decision.actionable or decision.action not in {"open_long", "open_short"}:
         return False, "BLOCKED"
-    exploratory = any(
-        str(reason).startswith("paper_exploration:")
-        for reason in decision.blocked_by
-    )
-    negative_ev = decision.expected_value is not None and decision.expected_value < 0.0
-    if exploratory or negative_ev:
-        return False, "EXPLORATION"
+    if decision.expected_value is not None and decision.expected_value < 0.0:
+        return False, "BLOCKED"
     return True, "READY"
 
 

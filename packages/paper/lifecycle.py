@@ -198,17 +198,9 @@ def _last_closed_close(
     return None
 
 
-EXPLORATION_PREFIX = "paper_exploration:"
-
-
 # H7 — Trade.exit_policy damgası: bu sürümle kapanan işlemler H1–H3 düzeltmeli
 # çıkış mantığından geçti. Öğrenme, eski (0) kapanışlardaki hata kayıplarını ayırır.
 EXIT_POLICY_VERSION = 2
-
-
-def is_exploration(blocked_by: list[str] | None) -> bool:
-    """K1 — karar paper keşif politikasıyla mı açıldı? (`paper_exploration:<kapı>`)."""
-    return any(str(b).startswith(EXPLORATION_PREFIX) for b in (blocked_by or []))
 
 
 def _new_id(symbol: str, opened_at: str) -> str:
@@ -357,7 +349,6 @@ def open_position(
         # F1-3 — consensus modül katkı vektörü (manuel/legacy açılışta None).
         open_module_contributions=module_contributions,
         open_blocked_by=list(open_blocked_by) if open_blocked_by is not None else None,
-        exploration=is_exploration(open_blocked_by),
     )
     state.open_positions.append(pos)
     audit.record(

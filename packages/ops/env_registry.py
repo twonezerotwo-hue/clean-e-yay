@@ -65,8 +65,6 @@ REGISTRY: dict[str, str] = {
     "LEARNING_BUDGET_MS": "runtime",
     "LEARNING_INTERVAL_SEC": "runtime",
     "NEWS_EVENT_STUDY_INTERVAL_SEC": "runtime",
-    "NO_EXECUTION": "runtime",
-    "PAPER_ONLY": "runtime",
     "RUN_WORKERS": "runtime",
     "SHADOW_LOG_MAX_MB": "runtime",
     "SNAPSHOT_STORE_MAX": "runtime",

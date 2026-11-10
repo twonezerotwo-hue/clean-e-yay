@@ -2508,7 +2508,7 @@ export interface components {
             };
             manual: components["schemas"]["CohortStats"];
             excluded: components["schemas"]["CohortStats"];
-            /** @description K1 (2026-10-02) — paper keşif açılışları (yumuşak güven/EV kapısı esnetildi). AUTO performansına karışmaz; yalnız güven kalibrasyonuna veri olur. */
+            /** @description K1 (2026-10-02) — paper keşif açılışları (yumuşak güven/EV kapısı esnetildi; yol 2026-11-10'da kaldırıldı, yalnız geçmiş işlemler). AUTO performansına karışmaz; yalnız güven kalibrasyonuna veri olur. */
             exploration?: components["schemas"]["CohortStats"];
             /** @description H7 (2026-10-02) — temizlik öncesi çıkış hatalarının (bayat bar stopu, acil fren yok, bozuk tick) ürettiği -1.5R'den kötü SL kayıpları. Hiçbir öğreniciye girmez; yalnız şeffaflık için sayılır. */
             execution_anomaly?: components["schemas"]["CohortStats"];
@@ -3013,13 +3013,13 @@ export interface components {
             reason?: string;
             blocked_by?: string[];
             actionable?: boolean;
-            /** @description Hard kapıları geçen, negatif EV ve paper keşif gevşetmesi taşımayan hücre. Yalnız görünürlük alanıdır; mevcut paper_action sözleşmesini değiştirmez. */
+            /** @description Hard kapıları geçen, negatif EV taşımayan hücre. Yalnız görünürlük alanıdır; mevcut paper_action sözleşmesini değiştirmez. */
             execution_ready?: boolean;
             /**
-             * @description READY gerçek paper hazırlığı; EXPLORATION yalnız paper keşif gevşetmesi/negatif EV; BLOCKED kapı veya sinyal yok; SUSPENDED küresel RiskGate/DQS askısı.
+             * @description READY gerçek paper hazırlığı; BLOCKED kapı, sinyal yok veya negatif EV; SUSPENDED küresel RiskGate/DQS askısı.
              * @enum {string}
              */
-            execution_state?: "READY" | "EXPLORATION" | "BLOCKED" | "SUSPENDED";
+            execution_state?: "READY" | "BLOCKED" | "SUSPENDED";
             /** @enum {string} */
             status?: "ACTIONABLE" | "NOT_ACTIONABLE" | "SUSPENDED";
             /** @enum {string} */
@@ -3553,7 +3553,7 @@ export interface components {
             actionable?: boolean;
             execution_ready?: boolean;
             /** @enum {string} */
-            execution_state?: "READY" | "EXPLORATION" | "BLOCKED" | "SUSPENDED";
+            execution_state?: "READY" | "BLOCKED" | "SUSPENDED";
             /** @enum {string} */
             status?: "ACTIONABLE" | "NOT_ACTIONABLE" | "SUSPENDED";
         };
