@@ -125,10 +125,11 @@ geçen isteğe anahtarı kendisi ekler.
 
 ## Paper keşif açılışları
 
-`paper_trading.paper_auto_open` açık (owner kararı K1): güven/EV yumuşak
-kapılarında kalan aday küçük boyutla açılabilir. Bu pozisyonlar
-`exploration=true` damgalanır ve `decision_log`'a kapı listesiyle (`blocked_by`)
-yazılır ve EXPLORATION kohortuna düşer: yalnız güven kalibrasyonu (`calibration_trainer`, `tf_calibration`) bunları kullanır, diğer öğreniciler dışarıda bırakır.
+Keşif yolu 2026-11-10'da koddan çıktı (owner kararı, 8 Kasım). 2–21 Ekim
+arasında güven/EV yumuşak kapılarında kalan adaylar küçük boyutla açılmıştı; bu
+geçmiş pozisyonlar `exploration=true` damgalı kalır ve EXPLORATION kohortuna
+düşer: yalnız güven kalibrasyonu (`calibration_trainer`, `tf_calibration`) bunları
+kullanır, diğer öğreniciler dışarıda bırakır. Yeni açılışlar damga almaz.
 
 ## Ekran tick'in anını okur (2026-10-30)
 

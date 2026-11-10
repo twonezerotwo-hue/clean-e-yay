@@ -438,7 +438,6 @@ Tek `score` ile her şeyi ölçmeye çalışma.
 ```text
 packages/decision/
 ├─ __init__.py
-├─ paper_policy.py
 ├─ models.py
 ├─ policy.py
 ├─ orchestrator.py
@@ -518,11 +517,9 @@ tabanında sadece `apps/tick_worker/main.py::run_once()` içinde bir kez
 conflict_resolver_activation — hepsi bu tek kapıdan önce sıraya girer veya
 `manual_ready`'e yönlendirir; hiçbiri paralel bir ikinci açılış yolu açmaz.
 
-Paper otomatik açılış ile canlı broker yürütmesi ayrı sözleşmelerdir.
-`PAPER_ONLY` ve `NO_EXECUTION` birlikte açıkken
-`paper_trading.paper_auto_open.enabled`, yalnızca güven/EV yumuşak kapılarında
-sınırlı keşif boyutuna izin verir. Risk, bayat veri, seans, fiyat, duplicate ve
-pozisyon limitleri bu profilde de değişmez; gerçek broker yolu yoktur.
+Paper otomatik açılış ile canlı broker yürütmesi ayrı sözleşmelerdir; gerçek
+broker yolu yoktur. Güven tabanı ve EV kapısı her hücrede kesindir: eski paper
+keşif gevşetmesi (`paper_auto_open`) 2026-11-10'da koddan çıktı.
 
 ### Config anahtarları (`config/thresholds_v1.0.yaml`)
 

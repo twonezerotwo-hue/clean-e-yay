@@ -33,16 +33,12 @@ def _open(state: PaperState, blocked_by: list[str] | None):
     return pos
 
 
-def test_is_exploration_detects_policy_tag() -> None:
-    assert lifecycle.is_exploration(["paper_exploration:ev_gate"])
-    assert not lifecycle.is_exploration(["kelly_cap", "sizing_layers"])
-    assert not lifecycle.is_exploration(None)
-
-
 def test_exploration_and_gates_survive_to_decision_log_and_outcome() -> None:
+    # Keşif yolu çıktı (10 Kasım); geçmiş keşif pozisyonunun damgası kapanışa taşınır.
     state = PaperState(equity_usd=100_000.0, peak_equity_usd=100_000.0)
     pos = _open(state, ["kelly_cap", "paper_exploration:confidence_floor"])
-    assert pos.exploration is True
+    assert pos.exploration is False  # yeni açılış keşif damgası almaz
+    pos.exploration = True
     assert pos.open_dqs == 88.0 and pos.open_risk_action == "HOLD"
 
     trade = lifecycle.close_position(state, pos, exit_price=60_500.0, reason="TP_HIT")

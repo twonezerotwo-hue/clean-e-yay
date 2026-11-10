@@ -52,21 +52,18 @@ _FLAG_ENVS_TO_CLEAR = (
     "PRICE_USE_MOCK",
 )
 
-# (ad, RiskInput alanları, açık pozisyon var mı, paper_exploration)
-SCENARIOS: list[tuple[str, dict, bool]] = [
+# (ad, RiskInput alanları)
+SCENARIOS: list[tuple[str, dict]] = [
     ("normal", {"dqs_score": 90.0, "equity_usd": 100_000.0, "peak_equity_usd": 100_000.0,
-                "daily_pnl_usd": 0.0, "open_position_count": 0}, False),
-    ("normal_exploration", {"dqs_score": 90.0, "equity_usd": 100_000.0,
-                            "peak_equity_usd": 100_000.0, "daily_pnl_usd": 0.0,
-                            "open_position_count": 0}, True),
+                "daily_pnl_usd": 0.0, "open_position_count": 0}),
     ("daily_loss_breach", {"dqs_score": 90.0, "equity_usd": 97_500.0,
                            "peak_equity_usd": 100_000.0, "daily_pnl_usd": -2_500.0,
-                           "open_position_count": 0}, False),
+                           "open_position_count": 0}),
     ("max_dd_breach", {"dqs_score": 90.0, "equity_usd": 91_000.0,
                        "peak_equity_usd": 100_000.0, "daily_pnl_usd": 0.0,
-                       "open_position_count": 0}, False),
+                       "open_position_count": 0}),
     ("dqs_low", {"dqs_score": 40.0, "equity_usd": 100_000.0, "peak_equity_usd": 100_000.0,
-                 "daily_pnl_usd": 0.0, "open_position_count": 0}, False),
+                 "daily_pnl_usd": 0.0, "open_position_count": 0}),
 ]
 
 
@@ -200,13 +197,9 @@ def run() -> dict:
                 "dqs": _r(snap.quality.score),
                 "scenarios": {},
             }
-            for name, risk_kwargs, exploration in SCENARIOS:
+            for name, risk_kwargs in SCENARIOS:
                 regime, risk, decisions = decide_matrix(
-                    symbols,
-                    snap,
-                    RiskInput(**risk_kwargs),
-                    open_positions=[],
-                    paper_exploration=exploration,
+                    symbols, snap, RiskInput(**risk_kwargs), open_positions=[],
                 )
                 out["scenarios"][name] = {
                     "regime": regime.label,

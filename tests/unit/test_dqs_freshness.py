@@ -37,12 +37,12 @@ def test_mixed_sources_are_scored_per_quote() -> None:
     assert 40.0 < score < 60.0
 
 
-def test_execution_ready_excludes_exploration_without_changing_action() -> None:
+def test_execution_ready_excludes_negative_ev_without_changing_action() -> None:
     class Decision:
         action = "open_long"
         actionable = True
         expected_value = -0.1
-        blocked_by = ["paper_exploration:ev_gate"]
+        blocked_by = ["sizing_layers"]
 
     assert is_execution_ready(Decision()) is False
 

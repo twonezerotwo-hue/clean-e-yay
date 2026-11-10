@@ -134,7 +134,10 @@ def build_summary() -> dict:
     # outcome'lar (legacy/SL'siz girmez). USD metrikleri olduğu gibi sürer.
     r_vals = [o.r_multiple for o in outcomes if o.r_multiple is not None]
     expectancy_r = round(sum(r_vals) / len(r_vals), 4) if r_vals else None
-    clean_performance = _performance_snapshot(learning_outcomes)
+    # Hazırlık skoru ve "temiz işlem" yalnız gerçek işlemlerden (owner 8 Kasım:
+    # "Ayrı göster"); keşif işlemleri cohorts.exploration'da ayrı görünür ve
+    # yalnız kalibrasyona girer. excluded_from_learning keşfi saymaz (kaynak sorunu değil).
+    clean_performance = _performance_snapshot(outcomes_mod.learning_grade(outcomes))
     provenance_incomplete = sum(
         1 for o in outcomes if not bool(getattr(o, "provenance_complete", True))
     )

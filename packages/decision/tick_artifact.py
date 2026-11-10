@@ -2,8 +2,8 @@
 
 Supervisor'da tick ve API aynı süreçtedir. Tick ``decide_matrix``'i bir kez
 koşar ve sonucunu buraya yayımlar; okuma yüzeyleri aynı snapshot için kararı
-yeniden hesaplamaz, böylece ekran tick'in karar verdiği anı anlatır. Snapshot,
-sembol seti ya da keşif bayrağı uymazsa (ayrı API süreci, test, bayat tick)
+yeniden hesaplamaz, böylece ekran tick'in karar verdiği anı anlatır. Snapshot
+ya da sembol seti uymazsa (ayrı API süreci, test, bayat tick)
 eski yol koşar: ``decide_matrix`` aynı girdilerle yeniden hesaplanır.
 
 Salt okuma yüzeyi: karar yetkisi eklemez, RiskGate'i atlamaz, kararı değiştirmez.
@@ -20,7 +20,6 @@ from typing import Any
 class TickMatrix:
     snapshot_id: str
     symbols: tuple[str, ...]
-    paper_exploration: bool
     regime: Any
     risk: Any
     decisions: tuple[Any, ...]
@@ -39,7 +38,6 @@ def publish(
     snap: Any,
     symbols: list[str],
     *,
-    paper_exploration: bool,
     regime: Any,
     risk: Any,
     decisions: list[Any],
@@ -53,7 +51,6 @@ def publish(
         _LATEST = TickMatrix(
             snapshot_id=snapshot_id,
             symbols=tuple(symbols),
-            paper_exploration=bool(paper_exploration),
             regime=regime,
             risk=risk,
             decisions=tuple(decisions),
@@ -113,13 +110,13 @@ def reset() -> None:
         _WORLD = None
 
 
-def matches(snap: Any, symbols: list[str], paper_exploration: bool) -> bool:
-    """Tick bu görüntü / sembol seti / keşif bayrağı için yayımladı mı?"""
+def matches(snap: Any, symbols: list[str]) -> bool:
+    """Tick bu görüntü / sembol seti için yayımladı mı?"""
     art = _LATEST
     snapshot_id = str(getattr(snap, "snapshot_id", "") or "")
     return bool(
         art is not None and snapshot_id and art.snapshot_id == snapshot_id
-        and art.symbols == tuple(symbols) and art.paper_exploration == bool(paper_exploration)
+        and art.symbols == tuple(symbols)
     )
 
 
@@ -135,21 +132,14 @@ def decide_matrix_for(
     risk_in: Any,
     *,
     open_positions: list | None = None,
-    paper_exploration: bool = False,
 ) -> tuple[Any, Any, list[Any]]:
     """Tick aynı snapshot için karar verdiyse onu döner; yoksa yeniden hesaplar."""
     art = _LATEST
-    if art is not None and matches(snap, symbols, paper_exploration):
+    if art is not None and matches(snap, symbols):
         return art.regime, art.risk, list(art.decisions)
     from packages.decision.engine import decide_matrix
 
-    return decide_matrix(
-        symbols,
-        snap,
-        risk_in,
-        open_positions=open_positions,
-        paper_exploration=paper_exploration,
-    )
+    return decide_matrix(symbols, snap, risk_in, open_positions=open_positions)
 
 
 __all__ = [

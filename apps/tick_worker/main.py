@@ -42,7 +42,6 @@ from packages.decision import (
     agent_pipeline,
     conflict_gate,
     final_gate,
-    paper_policy,
     shadow,
     shadow_activation,
     tick_artifact,
@@ -395,19 +394,11 @@ async def run_once() -> None:
             snap,
             risk_in,
             open_positions=ps.open_positions,
-            paper_exploration=paper_policy.enabled(),
             persist_regime=True,  # H10 — rejim hafızasının tek yazarı tick
         )
         # Okuma yüzeyleri (cockpit, matris, brifing, YZ) aynı snapshot için bu
         # kararı kullanır; kararı yeniden hesaplamazlar.
-        tick_artifact.publish(
-            snap,
-            MATRIX_SYMBOLS,
-            paper_exploration=paper_policy.enabled(),
-            regime=_regime,
-            risk=_risk,
-            decisions=decisions,
-        )
+        tick_artifact.publish(snap, MATRIX_SYMBOLS, regime=_regime, risk=_risk, decisions=decisions)
         decisions_generated = len(decisions)
         t_decide = time.monotonic()  # B5 — aşama süresi görünürlüğü
         now = datetime.now(UTC)
@@ -621,7 +612,7 @@ async def run_once() -> None:
                 # geçirilmiyordu: decision_log'da 247/247 risk_action_missing.
                 open_dqs=snap.quality.score,
                 open_risk_action=_risk.action,
-                # H6 — kapı atfı + keşif damgası (paper_exploration:*).
+                # H6 — kapı atfı.
                 open_blocked_by=list(d.blocked_by),
                 atr=tf_atr,
                 # F1-3 — modül katkı vektörü (score×weight): dominant_module tek-modül

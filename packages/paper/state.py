@@ -121,8 +121,9 @@ class Position:
     # H6 (temizlik) — açılış kararının kapı atfı (TradeDecision.blocked_by): hangi
     # kapı boyutu kıstı / hangi yumuşak kapı keşifle esnetildi. Legacy/manuel → None.
     open_blocked_by: list[str] | None = None
-    # K1 — paper keşif açılışı (paper_policy: yumuşak güven/EV kapısı esnetildi).
-    # Öğrenme kohortları bunu ayırabilsin diye açıkça damgalanır.
+    # K1 — paper keşif açılışı (yumuşak güven/EV kapısı esnetilmişti; 2–21 Ekim 2026).
+    # Keşif yolu 10 Kasım 2026'da koddan çıktı; alan geçmiş kayıtlar için kalır,
+    # öğrenme kohortları onları ayırır. Yeni açılışlar hep False.
     exploration: bool = False
 
     @property

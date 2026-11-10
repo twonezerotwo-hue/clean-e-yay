@@ -473,14 +473,7 @@ def build_ticket(
         now_utc=ts,
         risk_action=decision.risk.action if decision.risk else None,
     )
-    exploration = any(str(b).startswith("paper_exploration:") for b in decision.blocked_by)
-    if exploration:
-        execution_state = "EXPLORATION"
-        execution_reason = (
-            "Paper keşif sinyali: negatif EV veya güven tabanı aşılamadı; "
-            "otomatik açılış bekletildi, gölge sonucu birikiyor."
-        )
-    elif session.route == "open":
+    if session.route == "open":
         execution_state = "READY"
         execution_reason = "Piyasa açık; tüm kapılar geçerse paper açılışı denenir."
     elif session.route == "manual_ready":
@@ -542,7 +535,7 @@ def build_tickets_from_decisions(
 
     Yalnız ortak execution-readiness kapısından geçen open_long/open_short
     kararları ticket kuyruğuna girer. status="insufficient_rr" telemetry için
-    saklı; "invalid" atılır. Keşif/negatif-EV hücreleri matriste kalır ama
+    saklı; "invalid" atılır. Negatif-EV hücreleri matriste kalır ama
     açılabilir ticket veya bildirim üretmez.
     """
     out: list[TradeTicket] = []
@@ -557,10 +550,9 @@ def build_tickets_from_decisions(
     for d in decisions:
         if d.action not in {"open_long", "open_short"}:
             continue
-        # ``actionable`` is a legacy exploration intent.  Only the shared
-        # execution-readiness helper may enter the ticket/notification lane;
-        # exploratory, negative-EV and risk-suspended cells remain visible in
-        # the matrix/candidate surfaces but are not presented as open signals.
+        # Only the shared execution-readiness helper may enter the
+        # ticket/notification lane; negative-EV and risk-suspended cells remain
+        # visible in the matrix/candidate surfaces but are not presented as open signals.
         risk_action = str(getattr(getattr(d, "risk", None), "action", "") or "")
         if risk_action in {"KILL_SWITCH", "RISK_REDUCE", "NO_POSITION_INCREASE"}:
             continue

@@ -1695,7 +1695,7 @@ export type TimeframeDecision = {
   blocked_by?: string[];
   actionable?: boolean;
   execution_ready?: boolean;
-  execution_state?: "READY" | "EXPLORATION" | "BLOCKED" | "SUSPENDED";
+  execution_state?: "READY" | "BLOCKED" | "SUSPENDED";
   status?: MatrixCellStatus;
   paper_action?: "open_long" | "open_short" | "none";
   lifecycle_state?: "OBSERVED" | "TECHNICAL_CONFIRMED" | "NEWS_CONFIRMED" | "CONFLUENCE_READY" | "RISK_CHECKED" | "PAPER_READY" | "OWNER_APPROVAL" | "PAPER_OPEN" | "BLOCKED" | string;
@@ -1880,7 +1880,7 @@ export type AgentBriefCandidate = {
   final_action?: string;
   actionable?: boolean;
   execution_ready?: boolean;
-  execution_state?: "READY" | "EXPLORATION" | "BLOCKED" | "SUSPENDED";
+  execution_state?: "READY" | "BLOCKED" | "SUSPENDED";
   status?: MatrixCellStatus;
 };
 

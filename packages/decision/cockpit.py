@@ -621,7 +621,6 @@ def agent_brief_view(
         if auto_open["enabled"] and auto_open["available"]
         else matrix_actionable_n
     )
-    exploration_n = sum(1 for c in cells if c.get("execution_state") == "EXPLORATION")
     if auto_open["blocked_count"]:
         # The matrix blockers describe the pre-gate decision.  Add the final
         # worker gate so the user sees why a READY-looking signal did not open.
@@ -646,9 +645,7 @@ def agent_brief_view(
             )
         else:
             summary = (
-                f"Agent {status}. Engel yok; {actionable_n} hücre hazır"
-                + (f", {exploration_n} keşif" if exploration_n else "")
-                + ", "
+                f"Agent {status}. Engel yok; {actionable_n} hücre hazır, "
                 f"{len(candidates)} aday izleniyor."
             )
     else:

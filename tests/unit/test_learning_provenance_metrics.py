@@ -49,6 +49,25 @@ def test_clean_performance_uses_r_and_does_not_count_breakeven_as_loss():
     assert result["sample_sufficient"] is False
 
 
+def test_summary_performance_counts_only_real_trades(monkeypatch):
+    # Owner 8 Kasım "Ayrı göster": hazırlık/temiz performans gerçek işlemlerden;
+    # keşif ayrı kohortta, kaynak sorunu olarak dışlanmış sayılmaz.
+    from packages.learning import summary
+
+    real = outcomes.build_outcome_from_log_entry(_entry(diagnostics=[], pnl=10.0))
+    expl_row = _entry(diagnostics=[], pnl=-20.0)
+    expl_row["opening_signal"]["exploration"] = True
+    expl = outcomes.build_outcome_from_log_entry(expl_row)
+    monkeypatch.setattr(summary.outcomes_mod, "outcomes_from_state", lambda *_a, **_k: [real, expl])
+
+    out = summary.build_summary()
+    assert out["performance"]["total_trades"] == 1
+    assert out["performance"]["total_pnl"] == 10.0
+    assert out["performance"]["excluded_from_learning"] == 0
+    assert out["cohorts"]["exploration"]["trades"] == 1
+    assert out["total_trades"] == 2  # ham başlık alanı tüm kapanışları saymaya devam eder
+
+
 def test_current_trade_with_config_stamp_requires_open_attribution():
     from packages.paper.state import Trade
 

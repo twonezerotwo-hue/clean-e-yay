@@ -76,21 +76,19 @@ def current(snap: Any = None, ps: Any = None) -> DecisionView:
     """Şu anki karar: tick'in yayını (aynı görüntü), yoksa aynı girdilerle hesap."""
     from packages.data.ingestion.pipeline import get_cached_snapshot
     from packages.data.registry import assets as asset_registry
-    from packages.decision import paper_policy, tick_artifact
+    from packages.decision import tick_artifact
     from packages.paper import state as paper_state
     from packages.risk.engine import risk_input_from_state
 
     snap = snap if snap is not None else get_cached_snapshot()
     ps = ps if ps is not None else paper_state.load()
     symbols = asset_registry.trade_symbols()
-    exploration = paper_policy.enabled()
-    source = "tick" if tick_artifact.matches(snap, symbols, exploration) else "recomputed"
+    source = "tick" if tick_artifact.matches(snap, symbols) else "recomputed"
     regime, risk, decisions = tick_artifact.decide_matrix_for(
         symbols,
         snap,
         risk_input_from_state(ps, snap.quality.score),
         open_positions=ps.open_positions,
-        paper_exploration=exploration,
     )
     return DecisionView(snap, ps, symbols, regime, risk, list(decisions),
                         source=source, published_age_sec=tick_artifact.publication_age_sec())
