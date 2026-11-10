@@ -25,6 +25,9 @@ from packages.decision import explain
 
 _REPO = Path(__file__).resolve().parents[2]
 _CHECKPOINT_EVERY = timedelta(hours=1)
+# 90 gün: karar değişikliği önerileri en az 90 günlük örneklem dışı sınamadan
+# geçer; kayıt bundan kısa tutulursa sınama verisi silinir (~3 MB/gün).
+_RETENTION_DAYS = 90
 # Karar yolunu değiştirebilen bayraklar; değerleri kayıtta sürüm bilgisidir.
 _DECISION_FLAGS = (
     "E_YAY_CANONICAL_RUNTIME",
@@ -40,9 +43,9 @@ def _dir() -> Path:
 
 def _retention_days() -> int:
     try:
-        return max(1, int(os.environ.get("DECISION_RECORD_RETENTION_DAYS", "30")))
+        return max(1, int(os.environ.get("DECISION_RECORD_RETENTION_DAYS", str(_RETENTION_DAYS))))
     except ValueError:
-        return 30
+        return _RETENTION_DAYS
 
 
 def _digest(path: Path) -> str | None:

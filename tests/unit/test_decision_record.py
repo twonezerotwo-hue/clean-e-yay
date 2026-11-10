@@ -87,14 +87,25 @@ def test_hourly_checkpoint_and_flag_change_force_full_copy(monkeypatch):
 
 
 def test_retention_removes_only_old_day_files(tmp_path):
+    """Varsayılan saklama 90 gün: 90 günlük örneklem dışı sınama verisi silinmez."""
     folder = tmp_path / "decision_record"
     folder.mkdir()
-    (folder / "2026-09-01.jsonl").write_text("{}\n", encoding="utf-8")
-    (folder / "2026-10-29.jsonl").write_text("{}\n", encoding="utf-8")
+    for day in ("2026-07-31", "2026-08-01", "2026-09-01", "2026-10-29"):
+        (folder / f"{day}.jsonl").write_text("{}\n", encoding="utf-8")
     (folder / "notlar.txt").write_text("x", encoding="utf-8")
     record.append(SNAP, [_d("BTCUSD")], {}, now=T0)
-    assert not (folder / "2026-09-01.jsonl").exists()
-    assert (folder / "2026-10-29.jsonl").exists() and (folder / "notlar.txt").exists()
+    assert not (folder / "2026-07-31.jsonl").exists()  # 91 gün önce
+    assert all((folder / f"{day}.jsonl").exists() for day in ("2026-08-01", "2026-09-01", "2026-10-29"))
+    assert (folder / "notlar.txt").exists()
+
+
+def test_retention_env_override(tmp_path, monkeypatch):
+    folder = tmp_path / "decision_record"
+    folder.mkdir()
+    (folder / "2026-10-20.jsonl").write_text("{}\n", encoding="utf-8")
+    monkeypatch.setenv("DECISION_RECORD_RETENTION_DAYS", "5")
+    record.append(SNAP, [_d("BTCUSD")], {}, now=T0)
+    assert not (folder / "2026-10-20.jsonl").exists()
 
 
 def test_backup_includes_latest_record_days(tmp_path, monkeypatch):
