@@ -156,6 +156,11 @@ def test_write_table_roundtrip_and_cache_refresh(ep_env, monkeypatch) -> None:
 
 # ----------------------------- karar motoru ----------------------------------
 
+# EV matematiği TF'den bağımsız; 4h 2026-11-10'dan beri yalnız bias olduğundan pozisyon
+# açabilen bir TF (1d) üzerinde sınanır, RR o TF'nin kendi ayarından okunur.
+_TF = "1d"
+
+
 def _decide(monkeypatch):
     from packages.consensus.engine import ConsensusResult, ModuleScore
     from packages.data.ingestion.pipeline import build_snapshot
@@ -173,7 +178,7 @@ def _decide(monkeypatch):
     monkeypatch.setattr(dec, "build_consensus", lambda *a, **kw: fake)
     monkeypatch.setattr(dec, "_cost_r", lambda *a, **kw: 0.1)  # p kaynağı testi; maliyet ayrı test
     hold = RiskDecision(action="HOLD", reason="ok", evidence=[])
-    return dec.decide_for_symbol("BTCUSD", snap, regime, hold, timeframe="4h"), regime
+    return dec.decide_for_symbol("BTCUSD", snap, regime, hold, timeframe=_TF), regime
 
 
 def test_engine_uses_empirical_p(ep_env, monkeypatch) -> None:
@@ -185,7 +190,7 @@ def test_engine_uses_empirical_p(ep_env, monkeypatch) -> None:
     )
     with threshold_override(_MIN5):
         d, _ = _decide(monkeypatch)
-    assert d.expected_value == pytest.approx(dec._expected_value(0.65, 2.0, 0.1), abs=1e-3)
+    assert d.expected_value == pytest.approx(dec._expected_value(0.65, dec._tf_rr(_TF), 0.1), abs=1e-3)
 
 
 def test_engine_falls_back_without_evidence(ep_env, monkeypatch) -> None:
@@ -195,7 +200,7 @@ def test_engine_falls_back_without_evidence(ep_env, monkeypatch) -> None:
     with threshold_override(_MIN5):
         d, _ = _decide(monkeypatch)
     # kanıt yok → cal_conf tabanlı EV (sahte p uydurulmaz), gözlem alanları None
-    assert d.expected_value == pytest.approx(dec._expected_value(0.30, 2.0, 0.1), abs=1e-3)
+    assert d.expected_value == pytest.approx(dec._expected_value(0.30, dec._tf_rr(_TF), 0.1), abs=1e-3)
     assert d.p_win_empirical is None
     assert d.expected_value_empirical is None
 
@@ -236,7 +241,7 @@ def test_payoff_weighted_falls_back_without_r_data(ep_env, monkeypatch) -> None:
                      avg_win_r=None, avg_loss_r=None))
     d, _ = _decide(monkeypatch)
     # R yok → sabit-RR formülü, empirical p (0.65) ile — payoff devreye girmez
-    assert d.expected_value == pytest.approx(dec._expected_value(0.65, 2.0, 0.1), abs=1e-3)
+    assert d.expected_value == pytest.approx(dec._expected_value(0.65, dec._tf_rr(_TF), 0.1), abs=1e-3)
 
 
 def test_payoff_weighted_falls_back_when_r_samples_thin(ep_env, monkeypatch) -> None:
@@ -252,7 +257,7 @@ def test_payoff_weighted_falls_back_when_r_samples_thin(ep_env, monkeypatch) -> 
     d, _ = _decide(monkeypatch)
     # payoff yolu atlandı → sabit-RR, empirical p (0.51) — negatif payoff EV'sine
     # DÜŞMEDİ (ince kanıt); açılır (eski davranış korunur).
-    assert d.expected_value == pytest.approx(dec._expected_value(0.51, 2.0, 0.1), abs=1e-3)
+    assert d.expected_value == pytest.approx(dec._expected_value(0.51, dec._tf_rr(_TF), 0.1), abs=1e-3)
 
 
 def test_payoff_weighted_engages_when_r_samples_sufficient(ep_env, monkeypatch) -> None:
