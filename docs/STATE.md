@@ -141,6 +141,19 @@ kalır ve kapı karşı-olgu defteri sonucunu yazar. Açık 4h pozisyonları nor
 çıkış kurallarıyla kapanır. Geri açma: uzun veride ve ileri sınamada önceden
 yazılı ölçütleri geçen yeni bir 4h yön kaynağıyla, owner onayıyla.
 
+## Kesinti telafisi (2026-11-11)
+
+Bilgisayar uyurken pozisyonu kimse izlemiyordu; uyanıştaki ilk tick o anki
+fiyatla karar veriyordu (17 Ağu BTC: 56 sa kesinti → −8,04R). Artık her pozisyon
+`marked_at` (son fiyatla yönetildiği an) taşır. Tick, bu andan sonra tamamen
+kapanmış 15m/1h önbellek barlarını canlı sırayla oynatır (`lifecycle._replay_gap`):
+acil fren → stop (TF kapanışı; yoksa fitil) → hedef → trailing, süre stopu bar
+sınırında. Çıkış bar zamanı ve fiyatıyla yazılır, denetimde `GAP_REPLAY` satırı
+kalır. Normal 30 sn tick'te arada tamamen kapanmış bar olmaz → davranış aynı.
+Ölçüm (owner onaylı): sadakat sınırda (%80, ölçüm düzeltmesinden sonra), telafi
+gerçeğe göre işlem başına ~+0,14R iyimser; tick fiyatı ile bar serisi bazı
+sembollerde farklı (BRENT). Kök çözüm uykuyu önlemektir (kapak ayarı, owner).
+
 ## Ekran tick'in anını okur (2026-10-30)
 
 Tick snapshot'ı kurunca `pipeline.publish_tick_snapshot` ile, karar matrisini

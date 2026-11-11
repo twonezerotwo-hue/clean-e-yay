@@ -107,6 +107,10 @@ class Position:
     trail_activate_pct: float | None = None  # trailing'in devreye girdiği lehte hareket
     trail_peak: float | None = None          # lehteki en uç fiyat (highwater)
     trail_active: bool = False               # trailing devreye girdi mi
+    # Uyku/kesinti telafisi: pozisyonun fiyatla en son yönetildiği an (UTC ISO). Tick
+    # bu andan sonra TAMAMEN kapanmış barları canlı çıkış kurallarıyla oynatır
+    # (`lifecycle._replay_gap`). Legacy kayıtlar None → ilk tick'e kadar telafi yok.
+    marked_at: str | None = None
     # MAE/MFE (TF-target trainer'ın yakıtı). Her tick `current_price` güncellenirken
     # _update_excursions tarafından monoton ilerletilir; kapanışta Trade'e taşınır.
     # mae_pct: entry'ye göre ters yönde gördüğü en uç hareket (pozitif %).

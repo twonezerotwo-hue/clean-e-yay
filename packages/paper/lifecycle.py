@@ -346,6 +346,7 @@ def open_position(
         trail_activate_pct=_trail_act_flat * _trail_act_mult,
         trail_peak=entry_price,
         trail_active=False,
+        marked_at=opened_at,
         # F1-3 — consensus modül katkı vektörü (manuel/legacy açılışta None).
         open_module_contributions=module_contributions,
         open_blocked_by=list(open_blocked_by) if open_blocked_by is not None else None,
@@ -625,12 +626,14 @@ def close_position(
     exit_price: float,
     reason: str,
     close_size: float | None = None,
+    closed_at: str | None = None,
 ) -> Trade:
     # close_size verilmişse ve pozisyon boyutundan küçükse KISMİ kapatma: o kadar
     # realize edilir, pozisyon kalan boyutla AÇIK kalır. Aksi halde tam kapatma.
+    # closed_at: yalnız kesinti telafisi verir (çıkışın gerçekleştiği bar zamanı).
     full = close_size is None or close_size >= pos.size_usd - 1e-6
     realized_size = pos.size_usd if full else float(close_size)
-    closed_at = utc_iso()
+    closed_at = closed_at or utc_iso()
     # F1-5 — kısmi kapanışta trade id benzersiz olmalı: aynı pos.id ile birden çok
     # Trade üretmek decision_log kurtarma dedupe'unda (outcomes_from_state,
     # trade_id bazlı) kısmi leg'lerden birini düşürüyordu. Tam kapanış pos.id'yi
@@ -890,6 +893,169 @@ def trigger_pending_orders(
     return opened
 
 
+# Uyku/kesinti telafisi (owner kararı 2026-11-11). Tick 30 sn'de bir fiyat görür;
+# bilgisayar uyurken pozisyonu kimse izlemez ve uyanıştaki ilk tick o anki fiyatla
+# karar verirdi (17 Ağu BTC: 56 sa kesinti → −8,2R). Telafi, `marked_at` ile şimdi
+# arasında TAMAMEN kapanmış barları canlı tick sırasıyla oynatır. Normal çalışmada
+# iki tick arasında tamamen kapanmış bar olmaz → hiçbir şey değişmez.
+_GAP_PATH_TFS = ("15m", "1h")
+
+
+def _bar_ts(b) -> float:
+    return (b.ts if b.ts.tzinfo else b.ts.replace(tzinfo=UTC)).timestamp()
+
+
+def _bar_ok(b) -> bool:
+    try:
+        return 0 < b.low <= min(b.open, b.close) and b.high >= max(b.open, b.close)
+    except TypeError:
+        return False
+
+
+def _cached_bars(symbol: str, timeframe: str) -> list:
+    """OHLCV disk önbelleği (ağ yok); geçersiz bar atlanır, yoksa boş liste."""
+    try:
+        from packages.data.providers.ohlcv import cache as ohlcv_cache
+        cached = ohlcv_cache.load(symbol, timeframe)  # type: ignore[arg-type]
+    except Exception:
+        return []
+    return [b for b in cached.bars if _bar_ok(b)] if cached and cached.bars else []
+
+
+def _gap_path(symbol: str, timeframe: str, since_ts: float, now_ts: float) -> tuple[list, int]:
+    """Kaçan aralığın yol barları: `since`ten sonra AÇILIP `now`dan önce KAPANMIŞ barlar.
+    Pozisyon TF'inden ince/eşit önbelleklerden aralığın başını kapsayan, sonra en geç
+    biten, sonra en ince olan seçilir. Yok → ([], 0)."""
+    tf_sn = _TF_SECONDS.get(timeframe)
+    best: tuple[tuple, list, int] | None = None
+    for ptf in _GAP_PATH_TFS:
+        p_sn = _TF_SECONDS[ptf]
+        if tf_sn is None or p_sn > tf_sn:
+            break
+        bars = _cached_bars(symbol, ptf)
+        win = [b for b in bars if _bar_ts(b) >= since_ts and _bar_ts(b) + p_sn <= now_ts]
+        if not win:
+            continue
+        key = (_bar_ts(bars[0]) <= since_ts, _bar_ts(win[-1]) + p_sn, -p_sn)
+        if best is None or key > best[0]:
+            best = (key, win, p_sn)
+    return (best[1], best[2]) if best else ([], 0)
+
+
+def replay_gap_bars(
+    pos: Position, path: list, path_sec: int, tf_bars: list, *, since_ts: float,
+    disaster_mult: float,
+) -> tuple[str, float, float, bool] | None:
+    """Kaçan yol barlarını canlı tick sırasıyla oynat → (neden, dolum, zaman_ts, acil_fren)
+    veya None. Bar içi yol: yükselen bar O→L→H→C, düşen O→H→L→C (4h tezgâhında
+    gerçek çıkışlarla sınandı). Her noktada canlı sıra: acil fren → SL → TP → trailing;
+    SL kapanış-bazlıdır (TF barı kapanınca, dolum kapanışta), TF barı yoksa canlıdaki
+    gibi fitil. Süre stopu bar sınırında. Dolum seviyede; bar seviyenin ötesinde
+    açıldıysa açılışta. Ağ/disk yok; pozisyonun trailing, MAE/MFE, current_price ve
+    marked_at alanlarını canlı tick'in yapacağı gibi ilerletir."""
+    long = pos.side == "long"
+    tf_sn = _TF_SECONDS.get(pos.timeframe, 0)
+
+    def _iso(s: str | None) -> float | None:
+        try:
+            d = datetime.fromisoformat(str(s))
+        except (TypeError, ValueError):
+            return None
+        return (d if d.tzinfo else d.replace(tzinfo=UTC)).timestamp()
+
+    opened_ts = _iso(pos.opened_at) or since_ts
+    due_ts = _iso(pos.valid_until) if pos.valid_until else None
+    # Canlı `_last_closed_close` kuralı: açılıştan sonra kapanmış, en çok 2 TF eski
+    # son TF kapanışı varsa SL ona bakar; yoksa fitil stopu.
+    closes = sorted(
+        (_bar_ts(b) + tf_sn, float(b.close)) for b in tf_bars
+        if tf_sn and _bar_ok(b) and _bar_ts(b) + tf_sn > opened_ts
+    )
+    lvl = _disaster_level(pos, disaster_mult)
+
+    def beyond(p: float, level: float | None, adverse: bool) -> bool:
+        if level is None:
+            return False
+        return (p <= level if long else p >= level) if adverse else (p >= level if long else p <= level)
+
+    last = pos.current_price
+    ci = 0
+    latest: tuple[float, float] | None = None
+    for b in path:
+        t0 = _bar_ts(b)
+        while ci < len(closes) and closes[ci][0] <= t0:  # TF kapanışları bar sınırında görülür
+            latest = closes[ci]
+            ci += 1
+        sl_trig = latest[1] if latest is not None and t0 - latest[0] <= 2 * tf_sn else None
+        pts = (b.open, b.low, b.high, b.close) if b.close >= b.open else (b.open, b.high, b.low, b.close)
+        for n, p in enumerate(pts):
+            p = float(p)
+            if not price_sanity.tick_price_usable(pos.symbol, p, last):
+                continue
+            last = p
+            opening = n == 0
+            at = t0 if opening else t0 + path_sec
+            _update_excursions(pos, p)
+            if beyond(p, lvl, True):
+                return "SL_HIT", p if opening else float(lvl), at, True
+            if sl_trig is not None:
+                if beyond(sl_trig, pos.sl, True):
+                    return "SL_HIT", sl_trig, at, False
+            elif beyond(p, pos.sl, True):
+                return "SL_HIT", p if opening else float(pos.sl), at, False
+            if beyond(p, pos.tp, False):
+                return "TP_HIT", p if opening else float(pos.tp), at, False
+            if _trailing_breached(pos, p):
+                d = float(pos.trail_distance_pct or 0.0)
+                level = pos.trail_peak * (1 - d) if long else pos.trail_peak * (1 + d)
+                return "TRAILING_STOP_EXIT", p if opening else level, at, False
+            if opening and due_ts is not None and t0 >= due_ts:
+                return "TIME_STOP_EXIT", p, t0, False
+        pos.current_price = last
+        pos.marked_at = datetime.fromtimestamp(t0 + path_sec, UTC).isoformat()
+    return None
+
+
+def _replay_gap(state: PaperState, pos: Position, now: datetime) -> Trade | None:
+    """Kesinti sonrası ilk tick: kaçan barları oynat; çıkış olduysa o bar zamanıyla kapat."""
+    if not pos.marked_at:
+        return None
+    try:
+        _m = datetime.fromisoformat(pos.marked_at)
+        since_ts = (_m if _m.tzinfo else _m.replace(tzinfo=UTC)).timestamp()
+    except ValueError:
+        return None
+    now_ts = (now if now.tzinfo else now.replace(tzinfo=UTC)).timestamp()
+    if now_ts - since_ts < _TF_SECONDS[_GAP_PATH_TFS[0]]:
+        return None  # en ince bar bile sığmaz → önbellek okunmaz (normal 30 sn tick)
+    path, path_sec = _gap_path(pos.symbol, pos.timeframe, since_ts, now_ts)
+    if not path:
+        return None
+    since_iso = pos.marked_at
+    hit = replay_gap_bars(
+        pos, path, path_sec, _cached_bars(pos.symbol, pos.timeframe),
+        since_ts=since_ts, disaster_mult=_disaster_stop_mult(),
+    )
+    audit.record(
+        "GAP_REPLAY", position_id=pos.id, symbol=pos.symbol, timeframe=pos.timeframe,
+        side=pos.side, reason=f"exit:{hit[0]}" if hit else "no_exit", since=since_iso,
+        bars=len(path), path_seconds=path_sec,
+        until=datetime.fromtimestamp(_bar_ts(path[-1]) + path_sec, UTC).isoformat(),
+    )
+    if hit is None:
+        return None
+    reason, fill, at_ts, disaster = hit
+    if disaster:
+        audit.record(
+            "DISASTER_STOP", position_id=pos.id, symbol=pos.symbol,
+            timeframe=pos.timeframe, reason="disaster_stop", price_used=fill,
+        )
+    return close_position(
+        state, pos, exit_price=fill, reason=reason,
+        closed_at=datetime.fromtimestamp(at_ts, UTC).isoformat(),
+    )
+
+
 def tick(
     state: PaperState,
     prices: dict[str, float],
@@ -941,6 +1107,11 @@ def tick(
                     timeframe=pos.timeframe, reason="invalid_position_fields",
                 )
             continue
+        # Kesinti telafisi: son yönetimden bu yana tamamen kapanmış bar varsa önce onlar.
+        replayed = _replay_gap(state, pos, now)
+        if replayed is not None:
+            closed.append(replayed)
+            continue
         due = _time_stop_due(pos, now)
         pos.time_stop_expired = due
         price = prices.get(pos.symbol)
@@ -966,6 +1137,7 @@ def tick(
                 )
             continue
         pos.current_price = price
+        pos.marked_at = now.isoformat()
         _update_excursions(pos, price)
         # Kapanış-bazlı SL: SL tetiği tick yerine son KAPANMIŞ bar kapanışı
         # (fitil-avı bağışık). Kapanış yoksa None → fitil davranışı (güvenli
