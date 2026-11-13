@@ -54,7 +54,7 @@ _BLOCKER_TR = {
     "coverage_gate": "kanıt kapsamı", "correlation_veto": "korelasyon", "session_gate": "seans",
 }
 _RISK_TR = {
-    "ALLOW_NORMAL": "normal", "WATCH": "izleme", "NO_POSITION_INCREASE": "yeni giriş durdu",
+    "ALLOW_NORMAL": "normal", "WATCH": "izleme", "HOLD": "normal (kapı açık)", "NO_POSITION_INCREASE": "yeni giriş durdu",
     "RISK_REDUCE": "boyut azaltma", "KILL_SWITCH": "tüm girişler durdu",
 }
 
@@ -230,17 +230,26 @@ def _tail_jsonl(path: Path, max_lines: int) -> list[dict[str, Any]]:
     return out
 
 
-def _latest_record() -> dict[str, Any]:
+def _system_view() -> tuple[list[dict[str, Any]], str | None]:
+    """Karar kaydının güncel hali: satırların çoğu yalnız değişen hücreleri taşıyan "delta"dır;
+    en yeniden geriye, son "checkpoint"e kadar her (sembol, TF) için en yeni hücre alınır."""
     root = Path(os.environ.get("DECISION_RECORD_DIR", "data/runtime/decision_record"))
     try:
-        files = sorted(root.glob("*.jsonl"))
+        files = sorted(root.glob("*.jsonl"))[-2:]
     except OSError:
-        return {}
-    for f in reversed(files[-2:]):
-        rows = _tail_jsonl(f, 5)
-        if rows:
-            return rows[-1]
-    return {}
+        return [], None
+    cells: dict[tuple[Any, Any], dict[str, Any]] = {}
+    risk: str | None = None
+    for f in reversed(files):
+        for row in reversed(_tail_jsonl(f, 2000)):
+            if risk is None and row.get("risk_action"):
+                risk = str(row["risk_action"])
+            for c in row.get("cells") or []:
+                if isinstance(c, dict):
+                    cells.setdefault((c.get("symbol"), c.get("timeframe")), c)
+            if row.get("kind") == "checkpoint":
+                return list(cells.values()), risk
+    return list(cells.values()), risk
 
 
 def _positions() -> list[dict[str, Any]]:
@@ -279,12 +288,12 @@ def check(now: datetime | None = None) -> list[Notification]:
     fired = scan(moves, state["last_alert"])
     if not fired:
         return []
-    record = _latest_record()
+    cells, risk_action = _system_view()
     headlines = _tail_jsonl(Path(os.environ.get("NEWS_EVENT_LEDGER_PATH", "data/runtime/news_event_ledger.jsonl")), 400)
     out = []
     for kind, chosen in fired:
         out.append(build(kind, chosen, now, headlines=headlines, positions=_positions(),
-                         cells=record.get("cells") or [], risk_action=record.get("risk_action")))
+                         cells=cells, risk_action=risk_action))
         for m in chosen:
             state["last_alert"][m.symbol] = m.bar_ts
     write_text_atomic(_state_path(), json.dumps(state))

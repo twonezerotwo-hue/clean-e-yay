@@ -131,12 +131,25 @@ def test_check_reads_completed_bars_notifies_once_and_skips_stale_symbols(tmp_pa
     eth["bars"].append({**eth["bars"][-1], "ts": (LAST_BAR + timedelta(hours=1)).isoformat(), "close": 50.0})
     (cache_dir / "ETHUSD_1h.json").write_text(json.dumps(eth), encoding="utf-8")
     _write_cache(cache_dir, "NVDA", _series(last_jump=-0.05), LAST_BAR - timedelta(hours=10))
+    # Karar kaydı: tam liste checkpoint'te, sonraki delta satırlarında ETH yok → görüş checkpoint'ten gelmeli.
+    rec = tmp_path / "rec"
+    rec.mkdir()
+    eth_cell = {"symbol": "ETHUSD", "timeframe": "1h", "candidate": "open_short", "action": "hold", "blocked_by": ["ev_gate"]}
+    old_btc = {"symbol": "BTCUSD", "timeframe": "1h", "candidate": "open_long", "action": "hold", "blocked_by": ["confidence_floor"]}
+    new_btc = {"symbol": "BTCUSD", "timeframe": "1h", "candidate": "hold", "action": "hold", "blocked_by": []}
+    lines = [{"kind": "checkpoint", "risk_action": "WATCH", "cells": [eth_cell, old_btc]},
+             {"kind": "delta", "risk_action": "WATCH", "cells": [new_btc]},
+             {"kind": "delta", "risk_action": "HOLD", "cells": []}]
+    (rec / "2026-11-13.jsonl").write_text("\n".join(json.dumps(x) for x in lines) + "\n", encoding="utf-8")
 
     first = ms.check(NOW)
     assert len(first) == 1
     n = first[0]
     assert "Sert hareket" in n.title and "NVDA" not in n.body_long
     assert "ETHUSD −%1,2 (1 sa" in n.body_long  # kapanmamış 03:00 barı (−%50) sayılmadı
+    assert "ETHUSD 1h: short adayı, engel: beklenen değer kapısı" in n.body_long
+    assert "BTCUSD 1h: aday yok" in n.body_long  # en yeni delta checkpoint'teki eski hücreyi ezer
+    assert "Risk seviyesi: normal (kapı açık)" in n.body_long  # HOLD = risk motorunda en serbest seviye
     assert "birden çok varlık" in n.body_long and "yön karışık" in n.body_long
     assert ms.check(NOW) == []  # aynı bar, soğuma dosyada
     assert ms.check(NOW + timedelta(minutes=5)) == []
