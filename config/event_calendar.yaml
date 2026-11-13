@@ -1,12 +1,15 @@
 # ---------------------------------------------------------------------------
 # Clean E-yAy — Olay Takvimi (Catalyst Calendar)
-# Eski Codex'ten port (P0 legacy parity). Son senkron: 2026-06-12.
+# Eski Codex'ten port (P0 legacy parity). Son senkron: 2026-11-13.
 # market_impact metinleri faiz kanalı varsayımıyla (owner kararı E3, 2026-10-03):
 # zayıf veri / düşük enflasyon / güvercin Fed → dolar ve faiz ↓, altın-kripto-hisse ↑.
 # Tarihler resmi takvimlerden HARDCODED:
-#   BLS (NFP/CPI/PPI): bls.gov/schedule/2026/
-#   FOMC: federalreserve.gov/monetarypolicy/fomccalendars.htm
-# Güncelleme şimdilik manuel — otomatik updater OPS/v2.7 adayı.
+#   BLS (NFP/CPI/PPI): bls.gov/schedule/news_release/{empsit,cpi,ppi}.htm
+#   FOMC: federalreserve.gov/monetarypolicy/fomccalendars.htm (2027 tarihleri geçici)
+#   FOMC tutanakları: karardan üç hafta sonra (Fed kuralı); 2027 tutanakları eklenmedi.
+# Güncelleme elle — her senkronda BÜTÜN tarihleri resmi sayfayla karşılaştır.
+# (2026-11-13: Eylül/Ekim CPI ve Eylül PPI günleri yanlıştı; Ekim ve Aralık FOMC,
+# Aralık CPI/PPI ve 2027 eksikti. Yanlış gün = olay riski kapısı yanlış günde kapanır.)
 # Geçmiş tarihli event'ler provider tarafından filtrelenir.
 # ---------------------------------------------------------------------------
 
@@ -176,14 +179,6 @@ events:
     expectation: "08:30 ET — BLS resmi takvim"
     market_impact: "Güçlü → Fed şahin: DXY↑ faiz↑, altın/kripto/hisse↓ | Zayıf → Fed güvercin: DXY↓ faiz↓, altın/kripto/hisse↑"
 
-  - id: "cpi_2026_10"
-    date: "2026-10-07"
-    name: "ABD CPI (Eylül 2026)"
-    category: "MACRO"
-    importance: "CRITICAL"
-    expectation: "08:30 ET — BLS resmi takvim"
-    market_impact: "Yüksek → DXY↑ BTC↓ Altın↓ | Düşük → BTC↑ Altın↑ hisse↑"
-
   - id: "fomc_minutes_2026_09"
     date: "2026-10-07"
     time: "14:00 ET"  # tutanaklar 14:00 ET yayımlanır (olay-sonrası takip saati)
@@ -193,13 +188,29 @@ events:
     expectation: "2026-09-16 kararı detayları (karar+21g)"
     market_impact: "Şahin ton → DXY↑ | Güvercin ipuçları → risk iştahı açılır"
 
+  - id: "cpi_2026_10"
+    date: "2026-10-14"
+    name: "ABD CPI (Eylül 2026)"
+    category: "MACRO"
+    importance: "CRITICAL"
+    expectation: "08:30 ET — BLS resmi takvim"
+    market_impact: "Yüksek → DXY↑ BTC↓ Altın↓ | Düşük → BTC↑ Altın↑ hisse↑"
+
   - id: "ppi_2026_10"
-    date: "2026-10-08"
+    date: "2026-10-15"
     name: "ABD PPI (Eylül 2026)"
     category: "MACRO"
     importance: "MEDIUM"
     expectation: "08:30 ET — BLS resmi takvim"
     market_impact: "Yüksek → enflasyon beklentisi↑: DXY↑ faiz↑, altın/kripto↓ | Düşük → DXY↓ faiz↓, altın/kripto↑"
+
+  - id: "fomc_2026_10"
+    date: "2026-10-28"
+    name: "FOMC Faiz Kararı (Ekim 2026)"
+    category: "FED"
+    importance: "CRITICAL"
+    expectation: "14:00 ET — basın toplantısı 14:30 ET"
+    market_impact: "Hawkish sürpriz → DXY↑ BTC↓ | Dovish pivot → BTC↑ Altın↑"
 
   # ─── 2026-11 ──────────────────────────────────────────────────
 
@@ -212,7 +223,7 @@ events:
     market_impact: "Güçlü → Fed şahin: DXY↑ faiz↑, altın/kripto/hisse↓ | Zayıf → Fed güvercin: DXY↓ faiz↓, altın/kripto/hisse↑"
 
   - id: "cpi_2026_11"
-    date: "2026-11-12"
+    date: "2026-11-10"
     name: "ABD CPI (Ekim 2026)"
     category: "MACRO"
     importance: "CRITICAL"
@@ -227,6 +238,15 @@ events:
     expectation: "08:30 ET — BLS resmi takvim"
     market_impact: "Yüksek → enflasyon beklentisi↑: DXY↑ faiz↑, altın/kripto↓ | Düşük → DXY↓ faiz↓, altın/kripto↑"
 
+  - id: "fomc_minutes_2026_10"
+    date: "2026-11-18"
+    time: "14:00 ET"  # tutanaklar 14:00 ET yayımlanır (olay-sonrası takip saati)
+    name: "FOMC Tutanakları (Ekim 2026 kararı)"
+    category: "FED"
+    importance: "MEDIUM"
+    expectation: "2026-10-28 kararı detayları (karar+21g)"
+    market_impact: "Şahin ton → DXY↑ | Güvercin ipuçları → risk iştahı açılır"
+
   # ─── 2026-12 ──────────────────────────────────────────────────
 
   - id: "nfp_2026_12"
@@ -237,7 +257,286 @@ events:
     expectation: "08:30 ET — BLS resmi takvim"
     market_impact: "Güçlü → Fed şahin: DXY↑ faiz↑, altın/kripto/hisse↓ | Zayıf → Fed güvercin: DXY↓ faiz↓, altın/kripto/hisse↑"
 
+  - id: "fomc_2026_12"
+    date: "2026-12-09"
+    name: "FOMC Faiz Kararı (Aralık 2026)"
+    category: "FED"
+    importance: "CRITICAL"
+    expectation: "14:00 ET — basın toplantısı 14:30 ET"
+    market_impact: "Hawkish sürpriz → DXY↑ BTC↓ | Dovish pivot → BTC↑ Altın↑"
+
+  - id: "cpi_2026_12"
+    date: "2026-12-10"
+    name: "ABD CPI (Kasım 2026)"
+    category: "MACRO"
+    importance: "CRITICAL"
+    expectation: "08:30 ET — BLS resmi takvim"
+    market_impact: "Yüksek → DXY↑ BTC↓ Altın↓ | Düşük → BTC↑ Altın↑ hisse↑"
+
+  - id: "ppi_2026_12"
+    date: "2026-12-15"
+    name: "ABD PPI (Kasım 2026)"
+    category: "MACRO"
+    importance: "MEDIUM"
+    expectation: "08:30 ET — BLS resmi takvim"
+    market_impact: "Yüksek → enflasyon beklentisi↑: DXY↑ faiz↑, altın/kripto↓ | Düşük → DXY↓ faiz↓, altın/kripto↑"
+
+  - id: "fomc_minutes_2026_12"
+    date: "2026-12-30"
+    time: "14:00 ET"  # tutanaklar 14:00 ET yayımlanır (olay-sonrası takip saati)
+    name: "FOMC Tutanakları (Aralık 2026 kararı)"
+    category: "FED"
+    importance: "MEDIUM"
+    expectation: "2026-12-09 kararı detayları (karar+21g)"
+    market_impact: "Şahin ton → DXY↑ | Güvercin ipuçları → risk iştahı açılır"
+
+  # ─── 2027-01 ──────────────────────────────────────────────────
+
+  - id: "nfp_2027_01"
+    date: "2027-01-08"
+    name: "ABD İstihdam / NFP (Aralık 2026)"
+    category: "MACRO"
+    importance: "HIGH"
+    expectation: "08:30 ET — BLS resmi takvim"
+    market_impact: "Güçlü → Fed şahin: DXY↑ faiz↑, altın/kripto/hisse↓ | Zayıf → Fed güvercin: DXY↓ faiz↓, altın/kripto/hisse↑"
+
+  - id: "cpi_2027_01"
+    date: "2027-01-13"
+    name: "ABD CPI (Aralık 2026)"
+    category: "MACRO"
+    importance: "CRITICAL"
+    expectation: "08:30 ET — BLS resmi takvim"
+    market_impact: "Yüksek → DXY↑ BTC↓ Altın↓ | Düşük → BTC↑ Altın↑ hisse↑"
+
+  - id: "ppi_2027_01"
+    date: "2027-01-14"
+    name: "ABD PPI (Aralık 2026)"
+    category: "MACRO"
+    importance: "MEDIUM"
+    expectation: "08:30 ET — BLS resmi takvim"
+    market_impact: "Yüksek → enflasyon beklentisi↑: DXY↑ faiz↑, altın/kripto↓ | Düşük → DXY↓ faiz↓, altın/kripto↑"
+
+  - id: "fomc_2027_01"
+    date: "2027-01-27"  # geçici: Fed bir önceki toplantıda kesinleştirir
+    name: "FOMC Faiz Kararı (Ocak 2027)"
+    category: "FED"
+    importance: "CRITICAL"
+    expectation: "14:00 ET — basın toplantısı 14:30 ET"
+    market_impact: "Hawkish sürpriz → DXY↑ BTC↓ | Dovish pivot → BTC↑ Altın↑"
+
+  # ─── 2027-02 ──────────────────────────────────────────────────
+
+  - id: "nfp_2027_02"
+    date: "2027-02-05"
+    name: "ABD İstihdam / NFP (Ocak 2027)"
+    category: "MACRO"
+    importance: "HIGH"
+    expectation: "08:30 ET — BLS resmi takvim"
+    market_impact: "Güçlü → Fed şahin: DXY↑ faiz↑, altın/kripto/hisse↓ | Zayıf → Fed güvercin: DXY↓ faiz↓, altın/kripto/hisse↑"
+
+  - id: "cpi_2027_02"
+    date: "2027-02-11"
+    name: "ABD CPI (Ocak 2027)"
+    category: "MACRO"
+    importance: "CRITICAL"
+    expectation: "08:30 ET — BLS resmi takvim"
+    market_impact: "Yüksek → DXY↑ BTC↓ Altın↓ | Düşük → BTC↑ Altın↑ hisse↑"
+
+  - id: "ppi_2027_02"
+    date: "2027-02-12"
+    name: "ABD PPI (Ocak 2027)"
+    category: "MACRO"
+    importance: "MEDIUM"
+    expectation: "08:30 ET — BLS resmi takvim"
+    market_impact: "Yüksek → enflasyon beklentisi↑: DXY↑ faiz↑, altın/kripto↓ | Düşük → DXY↓ faiz↓, altın/kripto↑"
+
+  # ─── 2027-03 ──────────────────────────────────────────────────
+
+  - id: "nfp_2027_03"
+    date: "2027-03-05"
+    name: "ABD İstihdam / NFP (Şubat 2027)"
+    category: "MACRO"
+    importance: "HIGH"
+    expectation: "08:30 ET — BLS resmi takvim"
+    market_impact: "Güçlü → Fed şahin: DXY↑ faiz↑, altın/kripto/hisse↓ | Zayıf → Fed güvercin: DXY↓ faiz↓, altın/kripto/hisse↑"
+
+  - id: "cpi_2027_03"
+    date: "2027-03-10"
+    name: "ABD CPI (Şubat 2027)"
+    category: "MACRO"
+    importance: "CRITICAL"
+    expectation: "08:30 ET — BLS resmi takvim"
+    market_impact: "Yüksek → DXY↑ BTC↓ Altın↓ | Düşük → BTC↑ Altın↑ hisse↑"
+
+  - id: "ppi_2027_03"
+    date: "2027-03-12"
+    name: "ABD PPI (Şubat 2027)"
+    category: "MACRO"
+    importance: "MEDIUM"
+    expectation: "08:30 ET — BLS resmi takvim"
+    market_impact: "Yüksek → enflasyon beklentisi↑: DXY↑ faiz↑, altın/kripto↓ | Düşük → DXY↓ faiz↓, altın/kripto↑"
+
+  - id: "fomc_2027_03"
+    date: "2027-03-17"  # geçici: Fed bir önceki toplantıda kesinleştirir
+    name: "FOMC Faiz Kararı (Mart 2027)"
+    category: "FED"
+    importance: "CRITICAL"
+    expectation: "14:00 ET — basın toplantısı 14:30 ET"
+    market_impact: "Hawkish sürpriz → DXY↑ BTC↓ | Dovish pivot → BTC↑ Altın↑"
+
+  # ─── 2027-04 ──────────────────────────────────────────────────
+
+  - id: "nfp_2027_04"
+    date: "2027-04-02"
+    name: "ABD İstihdam / NFP (Mart 2027)"
+    category: "MACRO"
+    importance: "HIGH"
+    expectation: "08:30 ET — BLS resmi takvim"
+    market_impact: "Güçlü → Fed şahin: DXY↑ faiz↑, altın/kripto/hisse↓ | Zayıf → Fed güvercin: DXY↓ faiz↓, altın/kripto/hisse↑"
+
+  - id: "cpi_2027_04"
+    date: "2027-04-13"
+    name: "ABD CPI (Mart 2027)"
+    category: "MACRO"
+    importance: "CRITICAL"
+    expectation: "08:30 ET — BLS resmi takvim"
+    market_impact: "Yüksek → DXY↑ BTC↓ Altın↓ | Düşük → BTC↑ Altın↑ hisse↑"
+
+  - id: "ppi_2027_04"
+    date: "2027-04-14"
+    name: "ABD PPI (Mart 2027)"
+    category: "MACRO"
+    importance: "MEDIUM"
+    expectation: "08:30 ET — BLS resmi takvim"
+    market_impact: "Yüksek → enflasyon beklentisi↑: DXY↑ faiz↑, altın/kripto↓ | Düşük → DXY↓ faiz↓, altın/kripto↑"
+
+  - id: "fomc_2027_04"
+    date: "2027-04-28"  # geçici: Fed bir önceki toplantıda kesinleştirir
+    name: "FOMC Faiz Kararı (Nisan 2027)"
+    category: "FED"
+    importance: "CRITICAL"
+    expectation: "14:00 ET — basın toplantısı 14:30 ET"
+    market_impact: "Hawkish sürpriz → DXY↑ BTC↓ | Dovish pivot → BTC↑ Altın↑"
+
+  # ─── 2027-05 ──────────────────────────────────────────────────
+
+  - id: "nfp_2027_05"
+    date: "2027-05-07"
+    name: "ABD İstihdam / NFP (Nisan 2027)"
+    category: "MACRO"
+    importance: "HIGH"
+    expectation: "08:30 ET — BLS resmi takvim"
+    market_impact: "Güçlü → Fed şahin: DXY↑ faiz↑, altın/kripto/hisse↓ | Zayıf → Fed güvercin: DXY↓ faiz↓, altın/kripto/hisse↑"
+
+  - id: "cpi_2027_05"
+    date: "2027-05-12"
+    name: "ABD CPI (Nisan 2027)"
+    category: "MACRO"
+    importance: "CRITICAL"
+    expectation: "08:30 ET — BLS resmi takvim"
+    market_impact: "Yüksek → DXY↑ BTC↓ Altın↓ | Düşük → BTC↑ Altın↑ hisse↑"
+
+  - id: "ppi_2027_05"
+    date: "2027-05-13"
+    name: "ABD PPI (Nisan 2027)"
+    category: "MACRO"
+    importance: "MEDIUM"
+    expectation: "08:30 ET — BLS resmi takvim"
+    market_impact: "Yüksek → enflasyon beklentisi↑: DXY↑ faiz↑, altın/kripto↓ | Düşük → DXY↓ faiz↓, altın/kripto↑"
+
+  # ─── 2027-06 ──────────────────────────────────────────────────
+
+  - id: "nfp_2027_06"
+    date: "2027-06-04"
+    name: "ABD İstihdam / NFP (Mayıs 2027)"
+    category: "MACRO"
+    importance: "HIGH"
+    expectation: "08:30 ET — BLS resmi takvim"
+    market_impact: "Güçlü → Fed şahin: DXY↑ faiz↑, altın/kripto/hisse↓ | Zayıf → Fed güvercin: DXY↓ faiz↓, altın/kripto/hisse↑"
+
+  - id: "fomc_2027_06"
+    date: "2027-06-09"  # geçici: Fed bir önceki toplantıda kesinleştirir
+    name: "FOMC Faiz Kararı (Haziran 2027)"
+    category: "FED"
+    importance: "CRITICAL"
+    expectation: "14:00 ET — basın toplantısı 14:30 ET"
+    market_impact: "Hawkish sürpriz → DXY↑ BTC↓ | Dovish pivot → BTC↑ Altın↑"
+
+  - id: "cpi_2027_06"
+    date: "2027-06-10"
+    name: "ABD CPI (Mayıs 2027)"
+    category: "MACRO"
+    importance: "CRITICAL"
+    expectation: "08:30 ET — BLS resmi takvim"
+    market_impact: "Yüksek → DXY↑ BTC↓ Altın↓ | Düşük → BTC↑ Altın↑ hisse↑"
+
+  - id: "ppi_2027_06"
+    date: "2027-06-11"
+    name: "ABD PPI (Mayıs 2027)"
+    category: "MACRO"
+    importance: "MEDIUM"
+    expectation: "08:30 ET — BLS resmi takvim"
+    market_impact: "Yüksek → enflasyon beklentisi↑: DXY↑ faiz↑, altın/kripto↓ | Düşük → DXY↓ faiz↓, altın/kripto↑"
+
+  # ─── 2027-07 ──────────────────────────────────────────────────
+
+  - id: "nfp_2027_07"
+    date: "2027-07-02"
+    name: "ABD İstihdam / NFP (Haziran 2027)"
+    category: "MACRO"
+    importance: "HIGH"
+    expectation: "08:30 ET — BLS resmi takvim"
+    market_impact: "Güçlü → Fed şahin: DXY↑ faiz↑, altın/kripto/hisse↓ | Zayıf → Fed güvercin: DXY↓ faiz↓, altın/kripto/hisse↑"
+
+  - id: "cpi_2027_07"
+    date: "2027-07-14"
+    name: "ABD CPI (Haziran 2027)"
+    category: "MACRO"
+    importance: "CRITICAL"
+    expectation: "08:30 ET — BLS resmi takvim"
+    market_impact: "Yüksek → DXY↑ BTC↓ Altın↓ | Düşük → BTC↑ Altın↑ hisse↑"
+
+  - id: "ppi_2027_07"
+    date: "2027-07-15"
+    name: "ABD PPI (Haziran 2027)"
+    category: "MACRO"
+    importance: "MEDIUM"
+    expectation: "08:30 ET — BLS resmi takvim"
+    market_impact: "Yüksek → enflasyon beklentisi↑: DXY↑ faiz↑, altın/kripto↓ | Düşük → DXY↓ faiz↓, altın/kripto↑"
+
+  - id: "fomc_2027_07"
+    date: "2027-07-28"  # geçici: Fed bir önceki toplantıda kesinleştirir
+    name: "FOMC Faiz Kararı (Temmuz 2027)"
+    category: "FED"
+    importance: "CRITICAL"
+    expectation: "14:00 ET — basın toplantısı 14:30 ET"
+    market_impact: "Hawkish sürpriz → DXY↑ BTC↓ | Dovish pivot → BTC↑ Altın↑"
+
   # ─── 2027-08 ──────────────────────────────────────────────────
+
+  - id: "nfp_2027_08"
+    date: "2027-08-06"
+    name: "ABD İstihdam / NFP (Temmuz 2027)"
+    category: "MACRO"
+    importance: "HIGH"
+    expectation: "08:30 ET — BLS resmi takvim"
+    market_impact: "Güçlü → Fed şahin: DXY↑ faiz↑, altın/kripto/hisse↓ | Zayıf → Fed güvercin: DXY↓ faiz↓, altın/kripto/hisse↑"
+
+  - id: "ppi_2027_08"
+    date: "2027-08-10"
+    name: "ABD PPI (Temmuz 2027)"
+    category: "MACRO"
+    importance: "MEDIUM"
+    expectation: "08:30 ET — BLS resmi takvim"
+    market_impact: "Yüksek → enflasyon beklentisi↑: DXY↑ faiz↑, altın/kripto↓ | Düşük → DXY↓ faiz↓, altın/kripto↑"
+
+  - id: "cpi_2027_08"
+    date: "2027-08-11"
+    name: "ABD CPI (Temmuz 2027)"
+    category: "MACRO"
+    importance: "CRITICAL"
+    expectation: "08:30 ET — BLS resmi takvim"
+    market_impact: "Yüksek → DXY↑ BTC↓ Altın↓ | Düşük → BTC↑ Altın↑ hisse↑"
 
   - id: "jackson_hole_2027"
     date: "2027-08-20"
@@ -246,3 +545,131 @@ events:
     importance: "CRITICAL"
     expectation: "~10:00 ET Cuma — Powell yıllık politika konuşması (sempozyum 3 gün)"
     market_impact: "Pivot ipucu → tüm riskli varlıklar↑ | Şahin ton → geneli↓ DXY↑"
+
+  # ─── 2027-09 ──────────────────────────────────────────────────
+
+  - id: "nfp_2027_09"
+    date: "2027-09-03"
+    name: "ABD İstihdam / NFP (Ağustos 2027)"
+    category: "MACRO"
+    importance: "HIGH"
+    expectation: "08:30 ET — BLS resmi takvim"
+    market_impact: "Güçlü → Fed şahin: DXY↑ faiz↑, altın/kripto/hisse↓ | Zayıf → Fed güvercin: DXY↓ faiz↓, altın/kripto/hisse↑"
+
+  - id: "ppi_2027_09"
+    date: "2027-09-10"
+    name: "ABD PPI (Ağustos 2027)"
+    category: "MACRO"
+    importance: "MEDIUM"
+    expectation: "08:30 ET — BLS resmi takvim"
+    market_impact: "Yüksek → enflasyon beklentisi↑: DXY↑ faiz↑, altın/kripto↓ | Düşük → DXY↓ faiz↓, altın/kripto↑"
+
+  - id: "cpi_2027_09"
+    date: "2027-09-14"
+    name: "ABD CPI (Ağustos 2027)"
+    category: "MACRO"
+    importance: "CRITICAL"
+    expectation: "08:30 ET — BLS resmi takvim"
+    market_impact: "Yüksek → DXY↑ BTC↓ Altın↓ | Düşük → BTC↑ Altın↑ hisse↑"
+
+  - id: "fomc_2027_09"
+    date: "2027-09-15"  # geçici: Fed bir önceki toplantıda kesinleştirir
+    name: "FOMC Faiz Kararı (Eylül 2027)"
+    category: "FED"
+    importance: "CRITICAL"
+    expectation: "14:00 ET — basın toplantısı 14:30 ET"
+    market_impact: "Hawkish sürpriz → DXY↑ BTC↓ | Dovish pivot → BTC↑ Altın↑"
+
+  # ─── 2027-10 ──────────────────────────────────────────────────
+
+  - id: "nfp_2027_10"
+    date: "2027-10-08"
+    name: "ABD İstihdam / NFP (Eylül 2027)"
+    category: "MACRO"
+    importance: "HIGH"
+    expectation: "08:30 ET — BLS resmi takvim"
+    market_impact: "Güçlü → Fed şahin: DXY↑ faiz↑, altın/kripto/hisse↓ | Zayıf → Fed güvercin: DXY↓ faiz↓, altın/kripto/hisse↑"
+
+  - id: "cpi_2027_10"
+    date: "2027-10-14"
+    name: "ABD CPI (Eylül 2027)"
+    category: "MACRO"
+    importance: "CRITICAL"
+    expectation: "08:30 ET — BLS resmi takvim"
+    market_impact: "Yüksek → DXY↑ BTC↓ Altın↓ | Düşük → BTC↑ Altın↑ hisse↑"
+
+  - id: "ppi_2027_10"
+    date: "2027-10-15"
+    name: "ABD PPI (Eylül 2027)"
+    category: "MACRO"
+    importance: "MEDIUM"
+    expectation: "08:30 ET — BLS resmi takvim"
+    market_impact: "Yüksek → enflasyon beklentisi↑: DXY↑ faiz↑, altın/kripto↓ | Düşük → DXY↓ faiz↓, altın/kripto↑"
+
+  - id: "fomc_2027_10"
+    date: "2027-10-27"  # geçici: Fed bir önceki toplantıda kesinleştirir (Fed takviminde 'Monetary Policy Strategy Meeting' notu)
+    name: "FOMC Faiz Kararı (Ekim 2027)"
+    category: "FED"
+    importance: "CRITICAL"
+    expectation: "14:00 ET — basın toplantısı 14:30 ET"
+    market_impact: "Hawkish sürpriz → DXY↑ BTC↓ | Dovish pivot → BTC↑ Altın↑"
+
+  # ─── 2027-11 ──────────────────────────────────────────────────
+
+  - id: "nfp_2027_11"
+    date: "2027-11-05"
+    name: "ABD İstihdam / NFP (Ekim 2027)"
+    category: "MACRO"
+    importance: "HIGH"
+    expectation: "08:30 ET — BLS resmi takvim"
+    market_impact: "Güçlü → Fed şahin: DXY↑ faiz↑, altın/kripto/hisse↓ | Zayıf → Fed güvercin: DXY↓ faiz↓, altın/kripto/hisse↑"
+
+  - id: "cpi_2027_11"
+    date: "2027-11-10"
+    name: "ABD CPI (Ekim 2027)"
+    category: "MACRO"
+    importance: "CRITICAL"
+    expectation: "08:30 ET — BLS resmi takvim"
+    market_impact: "Yüksek → DXY↑ BTC↓ Altın↓ | Düşük → BTC↑ Altın↑ hisse↑"
+
+  - id: "ppi_2027_11"
+    date: "2027-11-12"
+    name: "ABD PPI (Ekim 2027)"
+    category: "MACRO"
+    importance: "MEDIUM"
+    expectation: "08:30 ET — BLS resmi takvim"
+    market_impact: "Yüksek → enflasyon beklentisi↑: DXY↑ faiz↑, altın/kripto↓ | Düşük → DXY↓ faiz↓, altın/kripto↑"
+
+  - id: "fomc_2027_11"
+    date: "2027-11-17"  # geçici: Fed bir önceki toplantıda kesinleştirir
+    name: "FOMC Faiz Kararı (Kasım 2027)"
+    category: "FED"
+    importance: "CRITICAL"
+    expectation: "14:00 ET — basın toplantısı 14:30 ET"
+    market_impact: "Hawkish sürpriz → DXY↑ BTC↓ | Dovish pivot → BTC↑ Altın↑"
+
+  # ─── 2027-12 ──────────────────────────────────────────────────
+
+  - id: "nfp_2027_12"
+    date: "2027-12-03"
+    name: "ABD İstihdam / NFP (Kasım 2027)"
+    category: "MACRO"
+    importance: "HIGH"
+    expectation: "08:30 ET — BLS resmi takvim"
+    market_impact: "Güçlü → Fed şahin: DXY↑ faiz↑, altın/kripto/hisse↓ | Zayıf → Fed güvercin: DXY↓ faiz↓, altın/kripto/hisse↑"
+
+  - id: "cpi_2027_12"
+    date: "2027-12-10"
+    name: "ABD CPI (Kasım 2027)"
+    category: "MACRO"
+    importance: "CRITICAL"
+    expectation: "08:30 ET — BLS resmi takvim"
+    market_impact: "Yüksek → DXY↑ BTC↓ Altın↓ | Düşük → BTC↑ Altın↑ hisse↑"
+
+  - id: "ppi_2027_12"
+    date: "2027-12-15"
+    name: "ABD PPI (Kasım 2027)"
+    category: "MACRO"
+    importance: "MEDIUM"
+    expectation: "08:30 ET — BLS resmi takvim"
+    market_impact: "Yüksek → enflasyon beklentisi↑: DXY↑ faiz↑, altın/kripto↓ | Düşük → DXY↓ faiz↓, altın/kripto↑"
