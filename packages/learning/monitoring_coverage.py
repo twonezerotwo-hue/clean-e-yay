@@ -175,6 +175,12 @@ COVERAGE: dict[str, dict] = {
                   "secret'ta). Karar/öğrenme zincirine DOKUNMAZ — yalnız yetkisiz "
                   "isteği 401 ile çevirir; kirlenme yok, izleme gereksiz.",
     },
+    "BENZINGA_API_KEY": {
+        "mechanism": SHADOW_EXEMPT, "monitor": None,
+        "reason": "Benzinga haber API anahtarı (sır; değer GitHub secret'ta). Davranış "
+                  "bayrağı değil: yalnız ek haber kaynağını açar; yokken sağlayıcı "
+                  "kapalı, hata akışı düşürmez. İzleme ilk görülme kaydında.",
+    },
 }
 
 
