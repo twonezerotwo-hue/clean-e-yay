@@ -285,6 +285,14 @@ sources:
     decision_usage: analytics_only
     feed_registry: packages/data/providers/news/rss.py:GEO_FEEDS
 
+  # Benzinga haber API'si (owner anahtarı, 2026-11-13). Anahtar yoksa kapalı.
+  - id: news_benzinga
+    kind: news
+    fetcher: benzinga
+    cadence_sec: 60
+    decision_usage: analytics_only
+    fallback_to_mock: false
+
   # Public HTML calendar observer.  Rows are unverified consensus evidence;
   # the existing YAML/official calendar remains the only verified event source.
   - id: economic_calendar_investing_web
