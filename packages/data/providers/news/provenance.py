@@ -74,6 +74,7 @@ _PUBLISHER_ALIASES = {
     "bloomberg politics": "direct:bloomberg.com",
     "ft world": "direct:ft.com",
     "nyt world": "direct:nytimes.com",
+    "benzinga": "direct:benzinga.com",
 }
 
 _HOST_ALIASES = {

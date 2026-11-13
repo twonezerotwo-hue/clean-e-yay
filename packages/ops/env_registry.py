@@ -117,6 +117,7 @@ REGISTRY: dict[str, str] = {
     "API_AUTH_TOKEN": "secret",
     "COINGECKO_API_KEY": "secret",
     "FINNHUB_API_KEY": "secret",
+    "BENZINGA_API_KEY": "secret",
     "FRED_API_KEY": "secret",
     "BLS_API_KEY": "secret",
     "EIA_API_KEY": "secret",

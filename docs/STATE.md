@@ -154,6 +154,16 @@ kalır. Normal 30 sn tick'te arada tamamen kapanmış bar olmaz → davranış a
 gerçeğe göre işlem başına ~+0,14R iyimser; tick fiyatı ile bar serisi bazı
 sembollerde farklı (BRENT). Kök çözüm uykuyu önlemektir (kapak ayarı, owner).
 
+## Benzinga haber API'si (2026-11-13)
+
+`packages/data/providers/news/benzinga.py`: owner'ın anahtarı (`BENZINGA_API_KEY`, yalnız yerel
+.env; yoksa sağlayıcı kapalı) ile genel uç dakikada bir okunur, başlıklar piyasa grubuna
+katılır ve ilk görülme kaydına `Benzinga` olarak yazılır. 13 Kasım denemesi: REST çalışıyor ve
+taze, ama anahtarın kapsamı dar — en fazla 25 başlık, sembol/kanal süzgeçleri boş, WebSocket
+3 dakikada mesaj göndermedi, başlıkların çoğu izlenmeyen şirketler. Sembol etiketi yalnız ≤2
+sembollü (şirkete özgü) haberde ve sınıflandırıcının genel eşleşmelerinden ÖNCE; yön başlığın
+açık hareketinden, yoksa duygudan. Değeri ~27 Kasım ölçümünde ilk görülme kaydıyla görülecek.
+
 ## Doğrudan haber akışları + ilk görülme kaydı (2026-11-13)
 
 Ölçüm: Google News sorguları ortanca 81 dk, doğrudan yayıncı akışları 5 dk gecikiyordu

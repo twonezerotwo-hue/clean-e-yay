@@ -18,7 +18,7 @@ import threading
 import time
 from datetime import UTC, datetime
 
-from packages.data.providers.news import fixtures, rss
+from packages.data.providers.news import benzinga, fixtures, rss
 from packages.data.types import NewsHeadline
 
 _PROVIDER_NAMES = ("news", "geo_news")
@@ -83,6 +83,7 @@ def reset_provider_status() -> None:
             )
     _CACHE = None
     rss.reset_cache()  # B4 — paylaşılan ham-feed önbelleği de temizlenir
+    benzinga.reset_cache()
 
 
 def _dedup(headlines: list[NewsHeadline]) -> list[NewsHeadline]:
@@ -127,10 +128,13 @@ def list_headlines(limit: int = 14, fetch_fn: rss.FetchFn | None = None) -> list
 
     market, market_ok, market_err = rss.fetch_feed_group(rss.MARKET_FEEDS, fetch_fn=fetch_fn)
     geo, geo_ok, geo_err = rss.fetch_feed_group(rss.GEO_FEEDS, geo=True, fetch_fn=fetch_fn)
+    # Benzinga (owner anahtarı, 2026-11-13): anahtar yoksa boş; enjekte edilen test
+    # getirmesinde hiç çağrılmaz. Piyasa grubuna katılır, aynı tekilleştirmeden geçer.
+    bz = [] if fetch_fn is not None else benzinga.fetch_headlines()
     _mark(
         "news",
-        ok=market_ok > 0,
-        error=market_err or ("no fresh headlines" if not market else None),
+        ok=market_ok > 0 or bool(bz),
+        error=market_err or ("no fresh headlines" if not (market or bz) else None),
     )
     _mark(
         "geo_news",
@@ -138,7 +142,7 @@ def list_headlines(limit: int = 14, fetch_fn: rss.FetchFn | None = None) -> list
         error=geo_err or ("no fresh geo headlines" if not geo else None),
     )
 
-    merged = _dedup(market + geo)
+    merged = _dedup(market + bz + geo)
     merged.sort(key=_sort_key)
 
     if fetch_fn is None:
