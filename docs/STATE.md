@@ -165,7 +165,13 @@ kaldırıldı (aynı haber iki "bağımsız" aile sayılmasın; aynı yayıncın
 `data/runtime/news_first_seen.jsonl`'a bir kez yazar (akışın süreçteki ilk ayrıştırması
 `boot`, ölçüme girmez). Karara dokunan kısım yalnız başlık setinin değişmesi.
 
-ÖNCEDEN YAZILAN ÖLÇÜT (2026-11-27 civarı, canlıya alınıştan 14 gün sonra; boot=false satırlar):
+İlk sürümde açılış işareti yalnız akış başınaydı; haber keşfi (15 derinlik, süzgeçsiz) ilk turunda
+7–15. sıradaki eski başlıkları "yeni" yazdı (canlıda ilk 7 dk'da doğrudan ortanca 345 dk göründü).
+Düzeltme: anahtar akış + derinlik + süzgeç, grup akışın listesinden, satırda `v: 2`. Ölçüm YALNIZ
+`v == 2` satırlarla yapılır.
+
+ÖNCEDEN YAZILAN ÖLÇÜT (2026-11-27 civarı, düzeltmenin canlıya alınışından 14 gün sonra;
+`v == 2` ve boot=false satırlar):
 1. Jeopolitik grubunda doğrudan akış satırlarının ortanca gecikmesi (first_seen − ts) ≤ 15 dk ve
    GN satırlarının ortancasının ≤ 1/3'ü (her biri n ≥ 100).
 2. Jeopolitik grubu satırlarının ≥ %40'ı doğrudan akışlardan.

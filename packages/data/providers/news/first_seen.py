@@ -2,8 +2,10 @@
 
 Salt gözlem: karara, oya, kapıya dokunmaz. RSS akışı her ayrıştırıldığında yeni başlık kimlikleri
 `data/runtime/news_first_seen.jsonl`'a bir kez yazılır (yeniden başlatmada dosyadaki kimlikler
-okunur, kopya yazılmaz). Bir akışın bu süreçteki İLK ayrıştırmasında görülen başlıklar ``boot``
-işaretlidir: ne zaman geldikleri bilinmez, ölçümde sayılmaz.
+okunur, kopya yazılmaz). Bir akış anahtarının (akış + derinlik + süzgeç) bu süreçteki İLK
+ayrıştırmasında görülen başlıklar ``boot`` işaretlidir: ne zaman geldikleri bilinmez, ölçümde
+sayılmaz. ``v`` = 2: 13 Kasım ilk sürümünde anahtar yalnız akıştı; haber keşfinin 15'lik ilk turu
+eski başlıkları "yeni" yazdı (v'siz satırlar ölçüme girmez).
 
 Neden: 13 Kasım 2026 ölçümünde gecikme yalnız 15 dakikalık toplu kayıttan (news_event_ledger) okunabildi;
 gerçek ilk görülme anı hiçbir yerde yoktu.
@@ -20,6 +22,7 @@ from typing import Any
 
 from packages.ops.store import write_text_atomic
 
+SCHEMA_VERSION = 2
 MAX_BYTES = 30 * 1024 * 1024
 KEEP_DAYS = 30
 
@@ -60,8 +63,10 @@ def _compact(path: Path, now: datetime) -> None:
     write_text_atomic(path, "\n".join(kept) + ("\n" if kept else ""))
 
 
-def record(feed_url: str, headlines: Iterable[Any], *, group: str, now: datetime | None = None) -> int:
-    """Akıştan ayrıştırılan başlıkların yenilerini yazar; yazılan satır sayısını döner. Asla hata fırlatmaz."""
+def record(feed_key: str, headlines: Iterable[Any], *, group: str, now: datetime | None = None) -> int:
+    """Akıştan ayrıştırılan başlıkların yenilerini yazar; yazılan satır sayısını döner. Asla hata fırlatmaz.
+
+    feed_key: akışın okunma biçimini ayırır (url|derinlik|süzgeç) — açılış işareti bu anahtar başına."""
     try:
         from packages.data.providers.news.provenance import (
             is_proxy_source,
@@ -75,8 +80,8 @@ def record(feed_url: str, headlines: Iterable[Any], *, group: str, now: datetime
             global _KNOWN
             if _KNOWN is None:
                 _KNOWN = _load_known(path)
-            boot = feed_url not in _PARSED_FEEDS
-            _PARSED_FEEDS.add(feed_url)
+            boot = feed_key not in _PARSED_FEEDS
+            _PARSED_FEEDS.add(feed_key)
             rows = []
             for h in headlines:
                 hid = str(getattr(h, "id", "") or "")
@@ -98,6 +103,7 @@ def record(feed_url: str, headlines: Iterable[Any], *, group: str, now: datetime
                     "ts": ts.isoformat() if hasattr(ts, "isoformat") else None,
                     "first_seen": now.isoformat(),
                     "boot": boot,
+                    "v": SCHEMA_VERSION,
                 }, ensure_ascii=False))
             if not rows:
                 return 0
