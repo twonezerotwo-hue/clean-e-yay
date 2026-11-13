@@ -34,6 +34,7 @@ NotificationType = str
 #   risk_gate_changed · risk_kill_switch
 #   catalyst_imminent · dqs_dropped
 #   position_near_sl · position_near_tp
+#   event_outcome (açıklanan olayın sonucu/tepkisi ve planlanmamış piyasa şoku — market_shock.py)
 
 
 @dataclass

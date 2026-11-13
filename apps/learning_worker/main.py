@@ -194,6 +194,19 @@ def run_once() -> dict:
     except Exception as exc:  # defensive
         errors.append(f"macro_backfill:{type(exc).__name__}")
 
+    # Piyasa şoku bildirimi (salt gözlem, 13 Kasım 2026 owner onayı): son tamamlanmış
+    # 1h barlarda oynaklığa göre sert hareket varsa owner'a "ne oluyor, kimi etkiler,
+    # sistem ne görüyor" özeti. Karara, kapılara ve pozisyonlara dokunmaz.
+    try:
+        from packages.notifications import append_many as _notify_many
+        from packages.notifications import market_shock as _market_shock
+        _shock_notifs = _market_shock.check()
+        if _shock_notifs:
+            _notify_many(_shock_notifs)
+            log.info("market_shock: %d bildirim", len(_shock_notifs))
+    except Exception as exc:  # defensive — worker patlamamalı
+        errors.append(f"market_shock:{type(exc).__name__}")
+
     # Özet (boş state'te de güvenli — total=0).
     try:
         summary = build_summary()

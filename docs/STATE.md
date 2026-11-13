@@ -154,6 +154,18 @@ kalır. Normal 30 sn tick'te arada tamamen kapanmış bar olmaz → davranış a
 gerçeğe göre işlem başına ~+0,14R iyimser; tick fiyatı ile bar serisi bazı
 sembollerde farklı (BRENT). Kök çözüm uykuyu önlemektir (kapak ayarı, owner).
 
+## Piyasa şoku bildirimi + şirket adı etiketi (2026-11-13)
+
+`packages/notifications/market_shock.py` öğrenme döngüsünde (5 dk) son tamamlanmış 1h
+barları tarar: sembolün kendi oynaklığına göre 1/3/6/24 saatlik hareket; ≥4 sembol
+≥2,5σ ve ≥2 sınıf ya da tek sembol ≥5σ → owner'a "ne oldu, ilgili başlıklar, açık
+pozisyon lehte/aleyhte, sistemin görüşü (aday + engel), risk seviyesi" bildirimi
+(tip `event_outcome`; sözleşmede ayrı tip yok). 6 saat sembol soğuması
+`data/runtime/market_shock_state.json`'da. Karara dokunmaz. Eşikler son 60 günde yalnız
+sıklıkla seçildi (0,89/gün). Haber sınıflandırıcı kayıtlı sembollere şirket adı takma
+adı uygular (`_COMPANY_ALIASES`: Nvidia/Jensen Huang → NVDA) ve adıyla anılan sembolü
+4-etki sınırında genel sınıf eşleşmelerinin önüne koyar.
+
 ## Olay takvimi elle tutulur (son senkron 2026-11-13)
 
 `config/event_calendar.yaml` olay riski kapısının tek doğrulanmış kaynağıdır:

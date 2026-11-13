@@ -495,6 +495,14 @@ def election_outcome_impact(text: str) -> dict[str, float]:
     return {"XAGUSD": 1.0, "XAUUSD": 1.0, "DXY": -1.0, "US10Y": -1.0}
 
 
+# Şirket adları: kayıt defterindeki etiket çoğu zaman borsa kodudur ("nvda"), başlık ise
+# şirketi adıyla anar ("Nvidia CEO resigns"). Yalnız kayıtlı sembollere uygulanır; yeni
+# sembol uydurmaz. 13 Kasım 2026 ölçümü: 31 Nvidia/Huang başlığının 1'i NVDA'ya bağlıydı.
+_COMPANY_ALIASES: Final[dict[str, tuple[str, ...]]] = {
+    "NVDA": ("nvidia", "jensen huang"),
+}
+
+
 def iran_escalation_impact(text: str) -> dict[str, float]:
     """İran savaşında "tekrar yaparım / pişman değilim" beyanı → güvenli liman
     (gümüş, altın) ve risk primi (VIX, petrol) yukarı.
@@ -603,6 +611,8 @@ def classify_asset_impact(title: str, sentiment: Sentiment) -> dict[str, float]:
     # bounded set of explicit label/symbol/class terms and never invent a
     # ticker from arbitrary text.  Provider identity and RiskGate checks still
     # decide whether the symbol can be traded later in the pipeline.
+    named_hits: dict[str, list[str]] = {}
+    class_hits: dict[str, list[str]] = {}
     try:
         from packages.data.registry import assets as asset_registry
 
@@ -621,16 +631,25 @@ def classify_asset_impact(title: str, sentiment: Sentiment) -> dict[str, float]:
                 continue
             label = str(getattr(asset, "label", "") or "").casefold()
             asset_class = str(getattr(asset, "asset_class", "") or "").casefold()
-            terms = {symbol.casefold(), label}
-            terms.update(class_terms.get(asset_class, ()))
-            hits = sorted(term for term in terms if term and len(term) >= 3 and _has_term(lower, term))
-            if hits:
-                impacts[symbol] = d
-                registry_terms[symbol] = hits
+            names = {symbol.casefold(), label, *_COMPANY_ALIASES.get(symbol, ())}
+            by_name = sorted(t for t in names if t and len(t) >= 3 and _has_term(lower, t))
+            by_class = sorted(
+                t for t in class_terms.get(asset_class, ()) if t and len(t) >= 3 and _has_term(lower, t)
+            )
+            if by_name:
+                named_hits[symbol] = sorted({*by_name, *by_class})
+            elif by_class:
+                class_hits[symbol] = by_class
     except Exception:
         # A registry/configuration failure must not take down RSS ingestion;
         # the built-in deterministic mappings above remain available.
         pass
+    # Adıyla anılan sembol, yalnız sınıf kelimesiyle ("stocks", "equity") yakalananlardan
+    # önce gelir: aşağıdaki 4-etki sınırı açık şirket adını genel eşleşmeler yüzünden
+    # atmamalı ("US equity indexes mixed after Nvidia CEO resigns" → NVDA kalır).
+    for symbol, hits in (*named_hits.items(), *class_hits.items()):
+        impacts[symbol] = d
+        registry_terms[symbol] = hits
 
     # E2 — başlık hareketi açıkça söylüyorsa yön oradan (yalnız mevcut eşlemeler;
     # yeni sembol EKLENMEZ).
