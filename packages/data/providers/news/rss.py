@@ -167,6 +167,9 @@ GEO_FEEDS: Final[tuple[dict[str, str], ...]] = (
     },
 )
 
+_MARKET_URLS: Final[frozenset[str]] = frozenset(f["url"] for f in MARKET_FEEDS)
+_GEO_URLS: Final[frozenset[str]] = frozenset(f["url"] for f in GEO_FEEDS)
+
 FOREIGN_AFFAIRS_FEED_SOURCES: Final[frozenset[str]] = frozenset({
     "US Foreign Affairs",
     "Iran Foreign Affairs",
@@ -430,9 +433,14 @@ def fetch_feed_group(
             return [], f"{feed['source']}: {str(exc)[:120]}"
         if fetch_fn is None:
             # Gecikme ölçümü: başlığın sistemce ilk görüldüğü an (salt gözlem, karara girmez).
+            # Açılış anahtarı akış + derinlik + süzgeç: tick en yeni 6'yı, haber keşfi 15'i
+            # süzgeçsiz okur; keşfin ilk turu 7–15. sıradaki ESKİ başlıkları "yeni" sanmasın.
+            # Grup, çağıran yoldan değil akışın listesinden gelir.
             from packages.data.providers.news import first_seen
 
-            first_seen.record(feed["url"], parsed, group="geo" if geo else "market")
+            url = feed["url"]
+            group = "geo" if url in _GEO_URLS else "market" if url in _MARKET_URLS else "topic"
+            first_seen.record(f"{url}|{max_items}|{int(geo)}", parsed, group=group)
         return parsed, None
 
     # 2026-07-04: 6 → 10 worker. Market grubu 19 feed'e çıktı; 6 worker'la
