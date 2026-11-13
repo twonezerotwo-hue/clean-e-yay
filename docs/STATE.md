@@ -154,6 +154,18 @@ kalır. Normal 30 sn tick'te arada tamamen kapanmış bar olmaz → davranış a
 gerçeğe göre işlem başına ~+0,14R iyimser; tick fiyatı ile bar serisi bazı
 sembollerde farklı (BRENT). Kök çözüm uykuyu önlemektir (kapak ayarı, owner).
 
+## Günlük "neden kaçırdım" incelemesi (2026-11-13)
+
+`packages/learning/daily_review.py` öğrenme döngüsünde günde bir kez (00:15 UTC sonrası
+ilk koşu; yalnız dün, geriye dolum yok) dünün büyük hareketlerini (kendi 1h oynaklığına
+göre |z| ≥ 1,5, en fazla 5) inceler: paper pozisyon yakalandı mı (kapanan işlemler
+defteri + açık pozisyonlar; denetim kaydı değil — orada kapanışsız binlerce eski açılış
+var), kaçırıldıysa o yönde aday kaç saat vardı ve hangi kapı durdurdu (karar kaydı
+checkpoint + delta ile yeniden kurulur, ilk saat önceki günden tohumlanır), sembolün
+başlık sayısı ve ortanca gecikmesi, sistemin kapalı kaldığı süre (karar kaydında 45 dk+
+boşluk). Çıktı `data/runtime/daily_review/YYYY-MM-DD.json` + `review_recommendation`
+bildirimi. Karara dokunmaz.
+
 ## Piyasa şoku bildirimi + şirket adı etiketi (2026-11-13)
 
 `packages/notifications/market_shock.py` öğrenme döngüsünde (5 dk) son tamamlanmış 1h
