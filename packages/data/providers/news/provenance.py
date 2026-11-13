@@ -69,6 +69,11 @@ _PUBLISHER_ALIASES = {
     "finance.yahoo.com": "direct:finance.yahoo.com",
     "al jazeera": "direct:aljazeera.com",
     "aljazeera.com": "direct:aljazeera.com",
+    "cnbc world": "direct:cnbc.com",
+    "bloomberg markets": "direct:bloomberg.com",
+    "bloomberg politics": "direct:bloomberg.com",
+    "ft world": "direct:ft.com",
+    "nyt world": "direct:nytimes.com",
 }
 
 _HOST_ALIASES = {

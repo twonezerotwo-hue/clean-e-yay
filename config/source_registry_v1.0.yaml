@@ -350,7 +350,7 @@ runtime_inventory:
       count: 23
       registry: packages/data/providers/news/rss.py:MARKET_FEEDS
     geo_rss:
-      count: 12
+      count: 16
       registry: packages/data/providers/news/rss.py:GEO_FEEDS
     discovery_topic_feeds:
       count: 8

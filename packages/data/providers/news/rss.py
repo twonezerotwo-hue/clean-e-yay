@@ -48,13 +48,12 @@ MARKET_FEEDS: Final[tuple[dict[str, str], ...]] = (
         ),
         "source": "Reuters",
     },
-    {
-        "url": (
-            "https://news.google.com/rss/search?q=when:1d+(Bloomberg+OR+"
-            "%22Financial+Times%22)+(markets+OR+fed+OR+oil)&hl=en-US&gl=US&ceid=US:en"
-        ),
-        "source": "Bloomberg/FT",
-    },
+    # 2026-11-13 (owner "Evet, ekle ve ölç"): Bloomberg/FT artık Google News
+    # sorgusundan değil yayıncının kendi akışından. Ölçüm: GN sorguları ortanca
+    # 81 dk, doğrudan akışlar 5 dk gecikiyordu. GN kopyası kaldırıldı ki aynı
+    # haber saatler arayla iki "bağımsız" aile gibi sayılmasın. FT World ve
+    # Bloomberg Politics jeopolitik grubunda (GEO_FEEDS).
+    {"url": "https://feeds.bloomberg.com/markets/news.rss", "source": "Bloomberg Markets"},
     # 2026-07-04 RSS genişletme (owner kararı — N1/kat 4): GDELT hem lokalden
     # hem AWS'ten fiilen erişilemez (429); kaybı ek doğrulanmış RSS kanalları
     # kapatır. Aşağıdakilerin HEPSİ ekleme günü canlı test edildi (repo'nun
@@ -112,6 +111,15 @@ GEO_FEEDS: Final[tuple[dict[str, str], ...]] = (
     # 2026-07-04 RSS genişletme (owner kararı — N1/kat 4, üstteki not).
     {"url": "https://www.theguardian.com/world/rss", "source": "Guardian World"},
     {"url": "https://www.france24.com/en/rss", "source": "France24"},
+    # 2026-11-13 doğrudan yayıncı akışları (owner "Evet, ekle ve ölç"): jeopolitik
+    # haber neredeyse yalnız Google News sorgularından geliyordu (ortanca 81 dk).
+    # Hepsi ekleme günü repo'nun kendi fetch+parse'ıyla canlı test edildi; 403
+    # dönen Times of Israel, Mining.com, War.gov ve tarihsiz başlık veren Sky
+    # News, Middle East Eye eklenmedi.
+    {"url": "https://feeds.bloomberg.com/politics/news.rss", "source": "Bloomberg Politics"},
+    {"url": "https://www.ft.com/world?format=rss", "source": "FT World"},
+    {"url": "https://www.cnbc.com/id/100727362/device/rss/rss.html", "source": "CNBC World"},
+    {"url": "https://rss.nytimes.com/services/xml/rss/nyt/World.xml", "source": "NYT World"},
     # Foreign-affairs coverage: broad world feeds can miss a same-day official
     # statement when it is syndicated under a market headline.  These are
     # Google News transport buckets, not independent publishers; provenance
@@ -417,9 +425,15 @@ def fetch_feed_group(
     def _one(feed: dict[str, str]) -> tuple[list[NewsHeadline], str | None]:
         try:
             xml_text = fetch(feed["url"])
-            return parse_feed(xml_text, feed["source"], geo=geo, max_items=max_items), None
+            parsed = parse_feed(xml_text, feed["source"], geo=geo, max_items=max_items)
         except Exception as exc:
             return [], f"{feed['source']}: {str(exc)[:120]}"
+        if fetch_fn is None:
+            # Gecikme ölçümü: başlığın sistemce ilk görüldüğü an (salt gözlem, karara girmez).
+            from packages.data.providers.news import first_seen
+
+            first_seen.record(feed["url"], parsed, group="geo" if geo else "market")
+        return parsed, None
 
     # 2026-07-04: 6 → 10 worker. Market grubu 19 feed'e çıktı; 6 worker'la
     # soğuk yenileme 4 tur sürer (yavaş feed başına 8s'e kadar) — 10 worker

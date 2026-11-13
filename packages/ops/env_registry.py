@@ -176,6 +176,7 @@ REGISTRY: dict[str, str] = {
     "NEWS_FORECAST_LEDGER_PATH": "path",
     "NEWS_FORECAST_PATH": "path",
     "NEWS_EVENT_LEDGER_PATH": "path",
+    "NEWS_FIRST_SEEN_PATH": "path",
     "NEWS_EVENT_STUDY_PATH": "path",
     "NOTIFICATIONS_PATH": "path",
     "OHLCV_CACHE_DIR": "path",

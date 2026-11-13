@@ -154,6 +154,25 @@ kalır. Normal 30 sn tick'te arada tamamen kapanmış bar olmaz → davranış a
 gerçeğe göre işlem başına ~+0,14R iyimser; tick fiyatı ile bar serisi bazı
 sembollerde farklı (BRENT). Kök çözüm uykuyu önlemektir (kapak ayarı, owner).
 
+## Doğrudan haber akışları + ilk görülme kaydı (2026-11-13)
+
+Ölçüm: Google News sorguları ortanca 81 dk, doğrudan yayıncı akışları 5 dk gecikiyordu
+(sistemin kendi akış listesi 25 dk yoklandı); jeopolitik haberlerin çoğu GN'den geliyordu.
+Bloomberg/FT GN sorgusu yerine Bloomberg Markets (piyasa) ve Bloomberg Politics, FT World,
+CNBC World, NYT World (jeopolitik, bölge süzgeciyle) doğrudan akışları eklendi; GN kopyası
+kaldırıldı (aynı haber iki "bağımsız" aile sayılmasın; aynı yayıncının akışları tek aile).
+`packages/data/providers/news/first_seen.py` her başlığın sistemce ilk görüldüğü anı
+`data/runtime/news_first_seen.jsonl`'a bir kez yazar (akışın süreçteki ilk ayrıştırması
+`boot`, ölçüme girmez). Karara dokunan kısım yalnız başlık setinin değişmesi.
+
+ÖNCEDEN YAZILAN ÖLÇÜT (2026-11-27 civarı, canlıya alınıştan 14 gün sonra; boot=false satırlar):
+1. Jeopolitik grubunda doğrudan akış satırlarının ortanca gecikmesi (first_seen − ts) ≤ 15 dk ve
+   GN satırlarının ortancasının ≤ 1/3'ü (her biri n ≥ 100).
+2. Jeopolitik grubu satırlarının ≥ %40'ı doğrudan akışlardan.
+3. Her yeni akış ortalama ≥ 1 başlık/gün getiriyor; getirmeyen listeden çıkarılır.
+4. (Açıklayıcı) aynı hikâye (hikâye anahtarı kelime Jaccard ≥ 0,5, 12 saat içinde) hem doğrudan
+   hem GN'de görüldüyse doğrudan önce gelme oranı ve ortanca fark.
+
 ## Günlük "neden kaçırdım" incelemesi (2026-11-13)
 
 `packages/learning/daily_review.py` öğrenme döngüsünde günde bir kez (00:15 UTC sonrası
