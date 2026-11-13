@@ -207,6 +207,17 @@ def run_once() -> dict:
     except Exception as exc:  # defensive — worker patlamamalı
         errors.append(f"market_shock:{type(exc).__name__}")
 
+    # Günlük "neden kaçırdım" incelemesi (salt gözlem, 13 Kasım 2026 owner onayı): dünün
+    # büyük hareketleri, sistemin onlara karşı ne yaptığı ve hangi kapının durdurduğu.
+    # Günde bir kez (00:15 UTC sonrası ilk koşu); karara dokunmaz.
+    try:
+        from packages.learning import daily_review as _daily_review
+        _review = _daily_review.run_if_due()
+        if _review is not None:
+            log.info("daily_review: %s, %d büyük hareket", _review["day"], len(_review["movers"]))
+    except Exception as exc:  # defensive — worker patlamamalı
+        errors.append(f"daily_review:{type(exc).__name__}")
+
     # Özet (boş state'te de güvenli — total=0).
     try:
         summary = build_summary()
