@@ -129,6 +129,13 @@ set_env GROQ_MODEL openai/gpt-oss-120b
 if [ -n "${API_AUTH_TOKEN:-}" ]; then
   set_env API_AUTH_TOKEN "$API_AUTH_TOKEN"
 fi
+# Benzinga haber API anahtari (owner karari 2026-11-13) — SIR: GitHub Actions
+# secret'inda yasar, deploy-ec2.yml env ile gecirir. Secret yoksa dokunulmaz ->
+# saglayici kapali kalir. Deger log'a yazilmaz.
+if [ -n "${BENZINGA_API_KEY:-}" ]; then
+  set_env BENZINGA_API_KEY "$BENZINGA_API_KEY"
+  echo "deploy: BENZINGA_API_KEY .env'e yazildi (deger gosterilmez)"
+fi
 
 echo "deploy: restart services"
 sudo systemctl restart eyay-supervisor.service
