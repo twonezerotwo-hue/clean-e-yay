@@ -154,6 +154,19 @@ kalır. Normal 30 sn tick'te arada tamamen kapanmış bar olmaz → davranış a
 gerçeğe göre işlem başına ~+0,14R iyimser; tick fiyatı ile bar serisi bazı
 sembollerde farklı (BRENT). Kök çözüm uykuyu önlemektir (kapak ayarı, owner).
 
+## Olay takvimi elle tutulur (son senkron 2026-11-13)
+
+`config/event_calendar.yaml` olay riski kapısının tek doğrulanmış kaynağıdır:
+kritik/yüksek etkili olaydan 24 saat önce ve 30 dakika sonra yeni pozisyon
+açılmaz. Dosya Haziran'dan beri güncellenmemişti: Ekim CPI 12 Kasım yazıyordu
+(gerçek 10 Kasım) → gerçek veri günü korumasız geçti, ertesi 24 saat boşuna
+kapalı kaldı; Eylül CPI/PPI günleri de yanlıştı, Ekim ve Aralık FOMC ile Aralık
+CPI/PPI hiç yoktu. 13 Kasım'da bütün günler bls.gov ve federalreserve.gov ile
+karşılaştırıldı, 2027 sonuna kadar eklendi (2027 FOMC günleri Fed'de "geçici").
+Koruma: `tests/unit/test_event_calendar.py` (aylık kapsama + düzeltilen günler +
+kapının gerçek CPI gününde kapanması). Her senkronda bütün günler yeniden
+karşılaştırılır; otomatik güncelleme yok.
+
 ## Ekran tick'in anını okur (2026-10-30)
 
 Tick snapshot'ı kurunca `pipeline.publish_tick_snapshot` ile, karar matrisini
