@@ -14,6 +14,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Literal
 
+from packages.data.numeric import is_finite
 from packages.data.registry.loader import load_thresholds
 from packages.risk import halt as halt_store
 
@@ -94,6 +95,22 @@ def evaluate(
     """
     th = load_thresholds()["risk_gates"]
     candidates: list[tuple[RiskAction, str, list[str]]] = []
+
+    # 0) Girdi sayı değilse kapı kapanır. NaN ile her karşılaştırma yanlıştır:
+    #    aşağıdaki "DQS < 55", "zarar ≤ limit", "DD ≥ sınır" denetimlerinin hepsi
+    #    sessizce geçilirdi (bozuk veriyle kapı açık kalırdı).
+    broken = [
+        name for name, value in (
+            ("dqs_score", inp.dqs_score), ("equity_usd", inp.equity_usd),
+            ("peak_equity_usd", inp.peak_equity_usd), ("daily_pnl_usd", inp.daily_pnl_usd),
+        ) if not is_finite(value)
+    ] + (["mtm_equity_usd"] if inp.mtm_equity_usd is not None and not is_finite(inp.mtm_equity_usd) else [])
+    if broken:
+        return RiskDecision(
+            action="KILL_SWITCH",
+            reason="Risk girdisi sayı değil — karar yok",
+            evidence=[f"{name} sayı değil" for name in broken],
+        )
 
     # 1) DQS — düşükse karar yok
     if inp.dqs_score < 55:

@@ -14,6 +14,7 @@ Rules (non-negotiable):
 """
 from __future__ import annotations
 
+from packages.data.numeric import bounded, is_finite
 from packages.data.registry.loader import load_thresholds
 
 # Deterministic conviction ceiling for the consensus base multiplier. Nothing —
@@ -25,11 +26,12 @@ def clamp_ai_multiplier(multiplier: float | None) -> float:
     """AI/opinion/persona/conviction multipliers may only reduce → clamp to [0.0, 1.0].
 
     `None` (no opinion) is neutral (1.0). A value > 1.0 (an attempted boost) becomes
-    exactly 1.0 — AI can never increase size.
+    exactly 1.0 — AI can never increase size. A non-finite opinion (NaN/inf) is a
+    broken input, not an opinion: it reduces to 0.0 (no position).
     """
     if multiplier is None:
         return 1.0
-    return min(1.0, max(0.0, float(multiplier)))
+    return bounded(multiplier, 0.0, 1.0, default=0.0)
 
 
 def apply_ai_opinion(base_multiplier: float, ai_multiplier: float | None) -> float:
@@ -38,7 +40,8 @@ def apply_ai_opinion(base_multiplier: float, ai_multiplier: float | None) -> flo
     Returns `base × clamp_ai_multiplier(ai)`. With ai > 1.0 the result equals the base
     (no boost); with ai < 1.0 the base is reduced.
     """
-    return max(0.0, float(base_multiplier)) * clamp_ai_multiplier(ai_multiplier)
+    base = float(base_multiplier) if is_finite(base_multiplier) else 0.0
+    return max(0.0, base) * clamp_ai_multiplier(ai_multiplier)
 
 
 def _max_position_usd() -> float:
@@ -54,7 +57,13 @@ def compute_size_usd(
 
     The multiplier is floored at 0 and capped at MAX_SIZE_MULTIPLIER, then scaled by
     the configured max position notional. Never negative, never above the cap.
+
+    A non-finite multiplier or cap (NaN/inf) yields 0.0: a broken sizing input must
+    never open a position. (`max(0, min(1.5, NaN))` used to return 1.5 — the largest
+    position — because every comparison with NaN is false.)
     """
     cap = max_position_usd if max_position_usd is not None else _max_position_usd()
-    m = max(0.0, min(MAX_SIZE_MULTIPLIER, float(size_multiplier)))
-    return round(cap * m, 2)
+    if not is_finite(cap) or not is_finite(size_multiplier):
+        return 0.0
+    m = bounded(size_multiplier, 0.0, MAX_SIZE_MULTIPLIER, default=0.0)
+    return round(max(0.0, float(cap)) * m, 2)

@@ -16,6 +16,7 @@ from pathlib import Path
 
 from packages.data.registry.loader import REPO_ROOT, load_thresholds
 from packages.learning.calibration import apply_platt
+from packages.ops.store import write_text_atomic
 
 MIN_SAMPLES = 10
 _LOCK = threading.Lock()
@@ -104,8 +105,8 @@ def save(
             payload["per_timeframe"] = {
                 tf: asdict(p) for tf, p in per_timeframe.items()
             }
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+        # Atomik: yarım yazılmış dosya okunamaz ve güven sessizce ham değere düşerdi.
+        write_text_atomic(path, json.dumps(payload, indent=2))
     return params
 
 
@@ -130,6 +131,10 @@ def predict_calibrated(
     raw = min(max(raw_p, 0.0), 1.0)
     if params.status != "fitted":
         return round(raw, 4), params.status
+    if not params.a > 0.0:
+        # Eğimi pozitif olmayan fit (eski dosya) kullanılmaz: güçlenen sinyale
+        # daha düşük olasılık yazardı. Eğitici bunu artık kaydetmez.
+        return round(raw, 4), "insufficient"
     val = apply_platt(raw, params.a, params.b)
     if math.isnan(val) or math.isinf(val):
         return round(raw, 4), "insufficient"
@@ -141,7 +146,7 @@ def predict_calibrated_tf(raw_p: float, timeframe: str) -> tuple[float, str]:
     TF fit'i yoksa/yetersizse global fit'e düşer (dürüst fallback, sahte TF
     parametresi uydurulmaz). RiskGate'i bypass etmez."""
     tf_params = load_tf(timeframe)
-    if tf_params is None or tf_params.status != "fitted":
+    if tf_params is None or tf_params.status != "fitted" or not tf_params.a > 0.0:
         return predict_calibrated(raw_p)
     raw = min(max(raw_p, 0.0), 1.0)
     val = apply_platt(raw, tf_params.a, tf_params.b)

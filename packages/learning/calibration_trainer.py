@@ -10,11 +10,16 @@ Politika:
   daralma, uydurma fallback yok.)
 - En az `MIN_SAMPLES` örnek olmadan fit yapılmaz; insufficient durumunda
   identity (a=1, b=0) saklanır.
+- Eğimi sıfır ya da negatif çıkan fit KULLANILMAZ (insufficient + identity):
+  böyle bir eğri "sinyal güçlendikçe kazanma olasılığı düşer" der; küçük
+  örneklemde bu gürültüdür ve güven tabanını, EV'yi ve boyut kademesini ters
+  yönde besler. Reddedilen fit özetin `rejected_fits` alanında görünür.
 - Owner approval gerekmez; calibration parametreleri audit'lenir (status
   + samples + fitted_at + reliability bins).
 """
 from __future__ import annotations
 
+import math
 from dataclasses import asdict
 from datetime import UTC, datetime
 
@@ -44,8 +49,14 @@ def _samples_from_state() -> list[tuple[str, float, bool]]:
     return out
 
 
+def _usable_fit(a: float, b: float) -> bool:
+    """Fit karar zincirine girebilir mi? Sayı olmalı ve eğim pozitif olmalı."""
+    return math.isfinite(a) and math.isfinite(b) and a > 0.0
+
+
 def _fit_per_timeframe(
-    samples: list[tuple[str, float, bool]], fitted_at: str
+    samples: list[tuple[str, float, bool]], fitted_at: str,
+    rejected: dict[str, dict] | None = None,
 ) -> dict[str, calibration_store.CalibrationParams]:
     """F4-1 — TF başına Platt fit'i. TF'in örneği MIN_SAMPLES altındaysa
     "insufficient" (identity parametreli) kaydedilir — örnek sayısı owner'ın
@@ -62,6 +73,13 @@ def _fit_per_timeframe(
             )
             continue
         a, b = fit_platt(tf_samples)
+        if not _usable_fit(a, b):
+            if rejected is not None:
+                rejected[tf] = {"reason": "non_positive_slope", "a": float(a), "b": float(b), "samples": n}
+            per[tf] = calibration_store.CalibrationParams(
+                a=1.0, b=0.0, samples=n, fitted_at=fitted_at, status="insufficient"
+            )
+            continue
         per[tf] = calibration_store.CalibrationParams(
             a=round(float(a), 6),
             b=round(float(b), 6),
@@ -79,7 +97,8 @@ def train() -> dict:
     samples = [(x, y) for _, x, y in tf_samples]
     n = len(samples)
     fitted_at = datetime.now(UTC).isoformat()
-    per_tf = _fit_per_timeframe(tf_samples, fitted_at)
+    rejected: dict[str, dict] = {}
+    per_tf = _fit_per_timeframe(tf_samples, fitted_at, rejected)
     per_tf_summary = {tf: asdict(p) for tf, p in per_tf.items()}
     tf_fitted = sorted(tf for tf, p in per_tf.items() if p.status == "fitted")
     if n < calibration_store.MIN_SAMPLES:
@@ -99,9 +118,26 @@ def train() -> dict:
             "bins": [],
             "per_timeframe": per_tf_summary,
             "tf_fitted": tf_fitted,
+            "rejected_fits": rejected,
         }
 
     a, b = fit_platt(samples)
+    if not _usable_fit(a, b):
+        rejected["global"] = {"reason": "non_positive_slope", "a": float(a), "b": float(b), "samples": n}
+        params = calibration_store.CalibrationParams(
+            a=1.0, b=0.0, samples=n, fitted_at=fitted_at, status="insufficient",
+        )
+        calibration_store.save(params, per_timeframe=per_tf)
+        return {
+            "status": "INSUFFICIENT",
+            "samples": n,
+            "min_required": calibration_store.MIN_SAMPLES,
+            "params": asdict(params),
+            "bins": [],
+            "per_timeframe": per_tf_summary,
+            "tf_fitted": tf_fitted,
+            "rejected_fits": rejected,
+        }
     params = calibration_store.CalibrationParams(
         a=round(float(a), 6),
         b=round(float(b), 6),
@@ -118,4 +154,5 @@ def train() -> dict:
         "bins": bins,
         "per_timeframe": per_tf_summary,
         "tf_fitted": tf_fitted,
+        "rejected_fits": rejected,
     }

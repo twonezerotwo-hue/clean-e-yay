@@ -154,6 +154,41 @@ kalır. Normal 30 sn tick'te arada tamamen kapanmış bar olmaz → davranış a
 gerçeğe göre işlem başına ~+0,14R iyimser; tick fiyatı ile bar serisi bazı
 sembollerde farklı (BRENT). Kök çözüm uykuyu önlemektir (kapak ayarı, owner).
 
+## Karar zinciri sağlamlığı (2026-11-14)
+
+Bozuk ya da eksik girdi artık "en güçlü sinyal / en büyük boyut / kapı açık" sonucuna dönüşmez
+(`tests/unit/test_trigger_chain_hardening.py`). Ortak araç `packages/data/numeric.py`.
+
+- **Boyut:** `max(0, min(1.5, NaN))` 1,5 (en büyük pozisyon, 37.500 $) veriyordu. `sizing.compute_size_usd`
+  sayı olmayan çarpanda 0 döner; karar motoru boyut zincirindeki her kısıtlayıcı çarpanı toplar,
+  biri sayı değilse karar `sizing_fault:non_finite` ile bekler. Güven ve EV sayı değilse kapı kapanır.
+- **Konsensüs:** sayı olmayan modül skoru 0–100 sıkıştırmasında 100'e dönüşüyordu; artık o modül
+  "verisi gelmedi" sayılır (`module_non_finite:` uyarısı, eksik modül politikası işler).
+- **RiskGate:** DQS/equity/zirve/günlük kâr-zarar/MTM sayı değilse `KILL_SWITCH` (önceden bütün
+  denetimler sessizce geçiliyordu).
+- **Fren dosyası** (`risk_halts.json`): atomik yazılır. Dosya var ama okunamıyorsa "fren yok" sayılmaz;
+  `STORE_UNREADABLE` geçici kaydı yeni pozisyonu durdurur (RISK_REDUCE), sonraki tick bozuk dosyayı
+  `.corrupt-<zaman>` adıyla kenara alır ve hâlâ geçerli frenleri güncel durumdan yeniden kurar.
+- **Son-edge freni** (`sizing_layers.brake`, son 30 işlem ortalaması < 0 → yarım boy) yalnız
+  `decide_all`'da hesaplanıyordu; canlı yol `decide_matrix` onu hiç görmüyordu. Artık canlıda da
+  çalışır (14 Kasım'da son 30 işlem +0,13R → fren kapalı; geçmiş kapanışların %39'unda açık olurdu).
+- **Hayalet yığın:** pas içi yığın koruması, son kapıda düşecek (teknik veri/teyit yok, yürütmeye hazır
+  değil) bir adayı "açılacak pozisyon" sayıyor, aynı sembolün diğer zaman dilimlerini
+  `concentration_guard` ile bekletiyordu (6–13 Kasım kaydında gerçek pozisyon yokken 1d 374, 1h 71,
+  4h 45 hücre×tick). Artık yalnız son kapının snapshot adımlarını geçen aday yer tutar.
+- **Kalibrasyon:** eğimi sıfır/negatif çıkan Platt fit'i ("sinyal güçlendikçe kazanma olasılığı düşer";
+  13 Kasım'da 1d, 14 işlem) karar zincirine girmez; eğitici `insufficient` yazar, özet
+  `rejected_fits` taşır, okuma tarafı eski dosyadaki ters fit'i de yok sayar (küresel fit'e düşer).
+  Kalibrasyon dosyası ve rejim hafızası (`regime_state.json`) artık atomik yazılır.
+
+Öngörü sınaması (karara GİRMEDİ): "hedef yolunda 1R'den yakın swing engeli varsa girme" kuralı
+2 yıllık 1d/4h verisinde, önceden yazılmış ölçütlerle sınandı (betik ve ölçütler oturum
+scratchpad'inde `audit/room_ahead.py`). 1d: engelli işlemler daha zayıf (+0,10R'e karşı +0,16R; fark
+%90 alt sınırı +0,013, iki dönemde de aynı yönde, rastgele elemeden iyi), ama işlemlerin %65'ini
+eliyor ve elenenler hâlâ kârlı → toplam kâr düşüyor; ölçüt 1 ve 5 geçmedi. Eşik sonradan
+ayarlanmadı. Engel mesafesi bilgi taşıyor; sert kapı olarak değil, olası bir boyut/öncelik
+girdisi olarak ileri veride ayrıca sınanmalı (owner kararı).
+
 ## Benzinga haber API'si (2026-11-13)
 
 `packages/data/providers/news/benzinga.py`: owner'ın anahtarı (`BENZINGA_API_KEY`, yalnız yerel

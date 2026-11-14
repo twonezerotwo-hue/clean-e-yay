@@ -11,12 +11,16 @@ Politika:
   RiskGate'in mevcut hard gate'lerini **bypass etmez**, gevşetmez.
 - Breach tespiti tick yollarında `sync(risk_input)` ile yapılır ve diske
   yazılır; `active_halts()` salt okur (önceki günün DAILY_LOSS'unu saymaz).
+- Dosya atomik yazılır. Dosya var ama okunamıyorsa "fren yok" sayılmaz:
+  `active_halts()` yeni pozisyonu durduran geçici bir kayıt döner; bir sonraki
+  `sync` bozuk dosyayı kenara alır ve hâlâ geçerli frenleri yeniden kurar.
 - PAPER_SAFE / NO_EXECUTION: broker yok; halt yalnızca paper karar
   akışını kısıtlar.
 """
 from __future__ import annotations
 
 import json
+import logging
 import os
 import threading
 from dataclasses import asdict, dataclass, field
@@ -24,8 +28,12 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from packages.data.registry.loader import load_thresholds
+from packages.ops.store import replace_with_retry, write_text_atomic
 
+log = logging.getLogger(__name__)
 _LOCK = threading.Lock()
+# Fren dosyası okunamazken geçerli olan geçici kayıt (diske yazılmaz).
+STORE_UNREADABLE = "STORE_UNREADABLE"
 
 HALT_LEVELS = {
     "DAILY_LOSS": "RISK_REDUCE",
@@ -50,6 +58,8 @@ class HaltEvent:
 @dataclass
 class HaltState:
     events: list[HaltEvent] = field(default_factory=list)
+    # Dosya vardı ama okunamadı (yarım yazım, bozuk JSON, beklenmeyen biçim).
+    unreadable: bool = False
 
     def to_dict(self) -> dict:
         return {"events": [asdict(e) for e in self.events[-MAX_HISTORY:]]}
@@ -74,21 +84,22 @@ def _utc_iso() -> str:
 
 
 def load() -> HaltState:
+    """Fren durumunu oku. Dosya yoksa boş durum (ilk çalıştırma); dosya var ama
+    okunamıyorsa `unreadable=True` — bozuk dosya "aktif fren yok" demek DEĞİLDİR."""
     with _LOCK:
         p = _path()
         if not p.exists():
             return HaltState()
         try:
             return HaltState.from_dict(json.loads(p.read_text(encoding="utf-8")))
-        except (OSError, json.JSONDecodeError, TypeError):
-            return HaltState()
+        except (OSError, ValueError, TypeError, KeyError, AttributeError):
+            return HaltState(unreadable=True)
 
 
 def save(state: HaltState) -> None:
+    """Atomik yazım: yarım kalmış bir yazma hedef dosyayı bozamaz."""
     with _LOCK:
-        p = _path()
-        p.parent.mkdir(parents=True, exist_ok=True)
-        p.write_text(json.dumps(state.to_dict(), indent=2), encoding="utf-8")
+        write_text_atomic(_path(), json.dumps(state.to_dict(), indent=2))
 
 
 def _today_utc() -> str:
@@ -113,8 +124,22 @@ def _is_stale_daily(e: HaltEvent, today: str) -> bool:
     return e.type == "DAILY_LOSS" and (e.started_at or "")[:10] < today
 
 
+def _unreadable_event() -> HaltEvent:
+    return HaltEvent(
+        id="halt-store-unreadable",
+        type=STORE_UNREADABLE,
+        level="RISK_REDUCE",
+        started_at=_utc_iso(),
+        reason="Fren dosyası okunamıyor — doğrulanana kadar yeni pozisyon yok",
+        evidence=[str(_path())],
+    )
+
+
 def active_halts(state: HaltState | None = None) -> list[HaltEvent]:
     state = state if state is not None else load()
+    if state.unreadable:
+        # Hangi frenin aktif olduğu bilinmiyor: güvenli taraf yeni pozisyon açmamak.
+        return [_unreadable_event()]
     today = _today_utc()
     return [e for e in state.events if e.active and not _is_stale_daily(e, today)]
 
@@ -179,6 +204,19 @@ def sync(inp) -> list[HaltEvent]:
     state = load()
     changed = False
     now = _utc_iso()
+    if state.unreadable:
+        # Bozuk dosya incelenmek üzere kenara alınır; frenler aşağıda güncel
+        # durumdan yeniden kurulur (zarar/düşüş koşulu sürdükçe fren yeniden doğar)
+        # ve temiz dosya yazılır.
+        p = _path()
+        quarantine = p.with_name(f"{p.name}.corrupt-{now[:19].replace(':', '')}")
+        try:
+            replace_with_retry(p, quarantine)
+            log.error("fren dosyası okunamadı; kenara alındı: %s", quarantine)
+        except OSError:
+            log.exception("fren dosyası okunamadı ve kenara alınamadı: %s", p)
+        state = HaltState()
+        changed = True
     # H11 — gün dönümü: önceki günün DAILY_LOSS halt'i kendiliğinden kapanır.
     today = _today_utc()
     for e in state.events:
