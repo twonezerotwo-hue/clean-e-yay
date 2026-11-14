@@ -19,12 +19,14 @@ korunur ve tarih öncesi kararlar byte-stable kalır.
 """
 from __future__ import annotations
 
+import math
 import os
 import sys
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 
 from packages.data.ingestion.pipeline import MarketSnapshot
+from packages.data.numeric import is_finite
 from packages.data.registry import assets as asset_registry
 from packages.data.registry.loader import (
     load_active_weights,
@@ -85,7 +87,10 @@ def _oriented(module: str, score: float, symbol: str, timeframe: str) -> float:
     scale = 1.0
     if module == "fundamental":
         scale = float((cfg.get("context_timeframe_scale") or {}).get(str(timeframe), 1.0))
-    return max(0.0, min(100.0, 50.0 + (float(score) - 50.0) * sign * scale))
+    oriented = 50.0 + (float(score) - 50.0) * sign * scale
+    if not math.isfinite(oriented):
+        return math.nan  # sıkıştırma NaN'ı 100'e çevirirdi; build() modülü oy dışı bırakır
+    return max(0.0, min(100.0, oriented))
 
 
 def _redistribute(weights: dict[str, float], available: set[str]) -> dict[str, float]:
@@ -175,7 +180,7 @@ def _htf_dampen(
         return score, None
     t = (snap.technicals_by_tf or {}).get(symbol, {}).get(htf)
     ds = getattr(t, "direction_score", None) if t is not None else None
-    if ds is None:
+    if not is_finite(ds):
         return score, None
     ltf_lean = score - 50.0
     htf_lean = float(ds) - 50.0
@@ -376,7 +381,7 @@ def _sentinel_v2(
         v is not None
         and getattr(v, "status", None) == "OK"
         and getattr(v, "verified", False)
-        and v.vol_zscore is not None
+        and is_finite(v.vol_zscore)
     ):
         # z=0 → 50 nötr; z=-2 (çok sakin) → 100; z=+2 (extreme) → 0. Shock
         # durumunda tavan 25 (ani hareket sakinlik sayılamaz).
@@ -389,7 +394,7 @@ def _sentinel_v2(
         d is not None
         and getattr(d, "status", None) == "OK"
         and getattr(d, "verified", False)
-        and d.squeeze_proxy is not None
+        and is_finite(d.squeeze_proxy)
     ):
         # squeeze_proxy 0-100 (yüksek = squeeze baskısı) → sakinlik = 100 − proxy.
         parts["derivatives"] = max(0.0, min(100.0, 100.0 - float(d.squeeze_proxy)))
@@ -616,6 +621,13 @@ def build(
     votes = _vote_layer(symbol, snap, timeframe, tf_warnings, policy_dropped)
     context, context_raw = _context_layer(symbol, snap, regime, timeframe, tf_warnings, policy_dropped)
     raw = {**votes, **context}
+    # Skoru sayı olmayan (NaN/inf) modül oy kullanamaz: aşağıdaki 0–100 sıkıştırması
+    # NaN'ı 100'e (en güçlü yükseliş) çeviriyordu. Modül "verisi gelmedi" sayılır;
+    # eksik modül politikası (nötr doldurma + hücre nötr) aynen işler.
+    for name in [k for k, v in raw.items() if not is_finite(v)]:
+        raw.pop(name)
+        context_raw.pop(name, None)
+        tf_warnings.append(f"module_non_finite:{name}:{symbol}:{timeframe}")
 
     # 3 · Birleştirme: TF düşürme → ağırlık ve kapsama → yön, uyum, baskın modül.
     # Timeframe calibration gate: the current clean cohort marks selected
@@ -684,6 +696,10 @@ def build(
         ))
     # Baskın modül: nötr-50 merkezli yön katkısı |skor−50|×ağırlık (ayı modül de baskın olabilir).
     dominant = max(modules, key=lambda m: abs((m.score - 50.0) * m.weight)).name if modules else ""
+    if not math.isfinite(weighted):
+        # Ağırlık dosyasından gelen bozuk sayı: skor uydurulmaz, hücre nötr kalır.
+        tf_warnings.append("consensus_non_finite:forced_neutral")
+        weighted = 50.0
     final = max(0.0, min(100.0, weighted))
     # Yön etiketi trade aksiyon eşikleriyle aynı banttan (tek kaynak) okunur.
     cons_th = load_thresholds().get("consensus", {})

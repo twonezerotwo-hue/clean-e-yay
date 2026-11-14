@@ -79,9 +79,10 @@ def _write_label(label: str) -> None:
     try:
         import json
 
-        p = _state_path()
-        p.parent.mkdir(parents=True, exist_ok=True)
-        p.write_text(json.dumps({"label": label}), encoding="utf-8")
+        from packages.ops.store import write_text_atomic
+
+        # Atomik: yarım dosya rejim hafızasını (hysteresis) sessizce sıfırlardı.
+        write_text_atomic(_state_path(), json.dumps({"label": label}))
     except (OSError, ValueError, TypeError):
         pass  # state yazılamazsa hysteresis bir sonraki tick'te ham etikete düşer
 
