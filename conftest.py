@@ -96,6 +96,8 @@ def _package1_flags_off_by_default(monkeypatch: pytest.MonkeyPatch) -> None:
     # Chat model sırası (2026-07-03) — testler default Groq-önce sırayı varsayar;
     # dev .env'inde lokal-önce açık olabilir, sızdırma.
     monkeypatch.delenv("CHAT_LLM_LOCAL_FIRST", raising=False)
+    monkeypatch.delenv("OLLAMA_NUM_CTX", raising=False)
+    monkeypatch.delenv("OLLAMA_MAX_INPUT_CHARS", raising=False)
     # B-1 (2026-07-04) — geçmiş yeniden-kurma fidelity flag'i testlerde OFF.
     monkeypatch.delenv("BACKTEST_RECON_ENABLED", raising=False)
     # B-2 (2026-07-05) — challenger üretim flag'i testlerde default OFF (üretim

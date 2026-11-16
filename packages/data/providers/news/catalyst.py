@@ -172,7 +172,10 @@ _RULES: Final[dict[CatalystEventType, dict]] = {
     "inflation_data": {
         "half_life_min": 90,
         "timeframes": ["15m", "1h", "4h"],
-        "default_assets": ["DXY", "XAUUSD", "BTCUSD", "US10Y"],
+        # Inflation/rates shocks reprice both precious metals.  Silver was
+        # missing here, so the headline could be captured while XAGUSD never
+        # reached the risk/technical confirmation path.
+        "default_assets": ["DXY", "XAUUSD", "XAGUSD", "BTCUSD", "US10Y"],
         "base_action": "CAUTION",
         "bias_kind": "sentiment",
     },
@@ -180,7 +183,7 @@ _RULES: Final[dict[CatalystEventType, dict]] = {
     "jobs_data": {
         "half_life_min": 90,
         "timeframes": ["15m", "1h", "4h"],
-        "default_assets": ["DXY", "XAUUSD", "BTCUSD", "US10Y"],
+        "default_assets": ["DXY", "XAUUSD", "XAGUSD", "BTCUSD", "US10Y"],
         "base_action": "CAUTION",
         "bias_kind": "sentiment",
     },
@@ -188,7 +191,7 @@ _RULES: Final[dict[CatalystEventType, dict]] = {
     "central_bank": {
         "half_life_min": 240,
         "timeframes": ["15m", "1h", "4h", "1d"],
-        "default_assets": ["DXY", "XAUUSD", "BTCUSD", "US10Y", "VIX"],
+        "default_assets": ["DXY", "XAUUSD", "XAGUSD", "BTCUSD", "US10Y", "VIX"],
         "base_action": "CAUTION",
         "bias_kind": "sentiment",
     },
@@ -401,6 +404,10 @@ def build_impact(
         headline_id=headline.id,
         event_type=event_type,
         surprise_level=surprise,
+        # This is a headline/body heuristic, not an official release
+        # surprise.  Keeping the provenance explicit prevents the macro
+        # engine from treating article language as actual-vs-consensus data.
+        surprise_kind="news_heuristic" if surprise else "unavailable",
         affected_assets=assets,
         expected_half_life_minutes=half_life,
         affected_timeframes=timeframes,

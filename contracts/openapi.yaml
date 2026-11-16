@@ -3216,6 +3216,11 @@ components:
         NO_POSITION_INCREASE yeni pozisyon açılışını durdurur.
       enum: [CONTEXT_ONLY, WATCH, CAUTION, NO_POSITION_INCREASE]
 
+    CatalystSurpriseKind:
+      type: string
+      description: Headline heuristic versus official actual-vs-consensus surprise.
+      enum: [news_heuristic, official_numeric, unavailable]
+
     CatalystImpact:
       type: object
       description: >
@@ -3230,6 +3235,7 @@ components:
         headline_id: { type: string }
         event_type: { $ref: "#/components/schemas/CatalystEventType" }
         surprise_level: { type: number, minimum: -1, maximum: 1 }
+        surprise_kind: { $ref: "#/components/schemas/CatalystSurpriseKind" }
         affected_assets:
           type: array
           items: { type: string }
@@ -3314,6 +3320,10 @@ components:
           description: >
             READY gerçek paper hazırlığı; BLOCKED kapı, sinyal yok veya negatif
             EV; SUSPENDED küresel RiskGate/DQS askısı.
+        macro_evidence:
+          type: array
+          description: Canonical macro evidence used by the final paper gate.
+          items: { type: object, additionalProperties: true }
         status: { type: string, enum: [ACTIONABLE, NOT_ACTIONABLE, SUSPENDED] }
         paper_action: { type: string, enum: [open_long, open_short, none] }
 

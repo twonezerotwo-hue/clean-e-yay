@@ -151,7 +151,8 @@ kurulu **VoiceStudio** uygulamasını kullanır. E-YAY'ın mevcut
 Piper, bulut ve tarayıcı TTS fallback'i bulunmaz.
 
 İlk kullanımda VoiceStudio'da `türkçe voice 1` profilini oluşturup ses
-üretimini uygulama içinde doğrulayın. VoiceStudio'yu açık tutun.
+üretimini uygulama içinde doğrulayın. Windows lokal keeper daha sonra yalnızca
+VoiceStudio arka plan API'sini açar; Electron arayüzünü açık tutmak gerekmez.
 `.env` ayarları:
 
 ```dotenv
@@ -164,7 +165,7 @@ VOICESTUDIO_TIMEOUT_SEC=180
 
 VoiceStudio API yalnızca loopback adreslerinde kullanılabilir; uzaktaki bir
 sunucuya otomatik ses kaydı aktarımı yoktur. API yanıtı WAV olarak doğrulanır.
-VoiceStudio kapalıysa yalnızca ses üretimi 503 (zaman aşımında 504) döner;
+VoiceStudio arka plan API'si kapalıysa yalnızca ses üretimi 503 (zaman aşımında 504) döner;
 piyasa analizi, risk değerlendirmesi ve paper-only karar mekanizması çalışmaya
 devam eder. GPU belleği sınırlı RTX 2070 sistemlerinde Ollama Qwen3:8B
 çalışıyorsa önce modeli boşaltmak gerekebilir.
@@ -231,6 +232,15 @@ tick ve learning thread'de, API donmaz). Web ayrı: `next start` (`.next-prod`).
 | Windows (lokal) | `scripts/local-autostart.ps1` (kurulum: `scripts/install-local-autostart.ps1`) | 20 sn'de bir sağlık; düşeni kaldırır; Ollama + ngrok |
 | AWS | `main`'e merge → `scripts/deploy-from-github.sh` | `eyay-supervisor.service` + `eyay-web.service` (systemd, restart-always) |
 | Linux/mac elle | `make run` (supervisor) + `make web-dev` | geliştirme/deneme |
+
+İsteğe bağlı Windows CS2 oyun modu: `scripts/install-cs2-game-mode.ps1` kullanıcı
+başlangıcına izleyici kurar. CS2 açılınca lokal keeper durur; EyAy, web/tünel,
+Ollama ve açıksa VoiceStudio'ya güvenli kapanma isteği gider. Oyun kapanınca
+önceki servisler yeniden açılır; kapalı olan VoiceStudio açılmaz. İzleyici
+tarayıcıları veya diğer projeleri kapatmaz. Model dosyaları ve runtime verileri
+silinmez; devam eden isteğin yeniden denenmesi gerekebilir. Durum ve hata kaydı:
+`%LOCALAPPDATA%\ToucheLocalRunner\cs2-game-mode.log`. Uygulamalar standart konsol
+kapanma isteğine yanıt vermiyorsa zorla sonlandırılmaz; hata bu kayda yazılır.
 
 Ortam değişkenleri: `API_HOST` (varsayılan 0.0.0.0; lokal keeper 127.0.0.1),
 `API_PORT` (9000), `TICK_INTERVAL_SEC` (30), `LEARNING_INTERVAL_SEC` (300),

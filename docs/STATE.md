@@ -48,9 +48,13 @@ geri alma: [ENTRY_QUALITY_V2](ENTRY_QUALITY_V2.md); kanıt: `docs/evidence/entry
 
 ## Süreçler (gerçek topoloji)
 
+İsteğe bağlı lokal CS2 izleyicisinin kurulumu ve duraklatma/geri dönüş davranışı
+README'nin "Çalıştırma (7/24)" bölümünde; giriş noktası
+`scripts/cs2-game-mode.ps1`. AWS servislerini etkilemez.
+
 | Ortam | Nasıl kalkar | Süreçler |
 | --- | --- | --- |
-| Lokal (Windows) | `scripts/local-autostart.ps1` keeper (20 sn'de bir sağlık) | `apps.supervisor` (127.0.0.1:9000), web (`next start` :4000), Ollama; ngrok tüneli varsa |
+| Lokal (Windows) | `scripts/local-autostart.ps1` keeper (20 sn'de bir sağlık) | `apps.supervisor` (127.0.0.1:9000), VoiceStudio arka plan API'si (:3900), web (`next start` :4000), Ollama; ngrok tüneli varsa |
 | AWS (EC2) | `main`'e merge → GitHub Actions → `scripts/deploy-from-github.sh` | `eyay-supervisor.service` (`apps.supervisor`), `eyay-web.service` |
 
 İki ortam aynı şekilde çalışır (owner kararı): API, tick ve learning tek

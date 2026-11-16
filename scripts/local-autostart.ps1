@@ -26,6 +26,8 @@
 # would break the parser and silently kill this keeper. Keep this file ASCII.
 #
 # Logs: logs\*.log under repo root (keeper's own log: logs\keeper.log).
+param([switch]$SkipVoiceStudio)
+
 $ErrorActionPreference = "SilentlyContinue"
 
 # ---- single-instance guard (named mutex) -----------------------------------
@@ -40,6 +42,8 @@ $root = Split-Path -Parent $PSScriptRoot
 $py   = Join-Path $root ".venv\Scripts\python.exe"
 $node = "C:\Program Files\nodejs\node.exe"
 $web  = Join-Path $root "apps\web"
+$voiceStudioRoot = Join-Path $env:LOCALAPPDATA "VoiceStudioWorkspace\VoiceStudio\project"
+$voiceStudioPy = Join-Path $voiceStudioRoot ".venv\Scripts\python.exe"
 $logs = Join-Path $root "logs"
 New-Item -ItemType Directory -Force -Path $logs | Out-Null
 
@@ -206,6 +210,7 @@ if ($migrated) {
 
 # ---- keeper loop -----------------------------------------------------------
 $apiDown = $null
+$voiceStudioDown = $null
 $webDown = $null
 
 # ngrok tunnel (dashboard from phone). Binary is gitignored, so a fresh clone
@@ -217,10 +222,32 @@ $ngrokUrl = "https://mobster-ipad-transform.ngrok-free.dev"
 $script:ngrokWarned = $false
 
 while ($true) {
+    # A game-mode pause must also block scheduled/self-healing restarts.
+    if (Test-Path (Join-Path $env:LOCALAPPDATA "ToucheLocalRunner\cs2-game-state.json")) {
+        try {
+            $gameState = Get-Content (Join-Path $env:LOCALAPPDATA "ToucheLocalRunner\cs2-game-state.json") -Raw | ConvertFrom-Json
+            $SkipVoiceStudio = -not $gameState.Voice
+        } catch { Klog "WARN: game-mode state could not be read; services remain paused" }
+        Start-Sleep -Seconds 3
+        continue
+    }
     # supervisor - API + tick + learning in one process (health = API answers)
     Ensure-HttpSvc "supervisor" "http://127.0.0.1:9000/api/v1/health" 9000 $py "apps.supervisor" `
         @("-m","apps.supervisor") `
         $root "$logs\supervisor.out.log" "$logs\supervisor.err.log" ([ref]$apiDown)
+
+    # VoiceStudio backend only; the Electron UI is not required for TTS.
+    if ((-not $SkipVoiceStudio) -and (Test-Path $voiceStudioPy)) {
+        $savedPythonPath = $env:PYTHONPATH
+        try {
+            Remove-Item Env:PYTHONPATH -ErrorAction SilentlyContinue
+            Ensure-HttpSvc "voicestudio" "http://127.0.0.1:3900/health" 3900 $voiceStudioPy "uvicorn main:app" `
+                @("-m","uvicorn","main:app","--app-dir","backend","--host","127.0.0.1","--port","3900") `
+                $voiceStudioRoot "$logs\voicestudio.out.log" "$logs\voicestudio.err.log" ([ref]$voiceStudioDown)
+        } finally {
+            $env:PYTHONPATH = $savedPythonPath
+        }
+    }
 
     # Ollama - local LLM for chat/persona narration (dead process => robotic chat)
     $ollama = "$env:LOCALAPPDATA\Programs\Ollama\ollama.exe"

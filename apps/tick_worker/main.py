@@ -528,6 +528,12 @@ async def run_once() -> None:
                     d.symbol, d.timeframe, d.action, fg.reason,
                 )
                 continue
+            if fg.blocker == "macro_confluence":
+                log.info(
+                    "macro confluence hold: %s %s %s — %s",
+                    d.symbol, d.timeframe, d.action, fg.reason,
+                )
+                continue
             # Haber/dünya kurulumunun rolü (owner kararı 2026-10-30: conflict_reduce —
             # haber yoksa nötr, TERS yönlü kurulum boyutu küçültür, aynı yönlü eşleşme
             # yalnız kanıt kimliği). Yalnız kısıtlar; büyütmez.

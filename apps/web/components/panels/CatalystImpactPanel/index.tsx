@@ -12,6 +12,7 @@ import type {
   CatalystActionability,
   CatalystEventType,
   CatalystImpact,
+  CatalystSurpriseKind,
 } from "@/types/generated/api";
 
 // v2.7 D5 — Catalyst Impact paneli. Haber → kural tabanlı (deterministik, LLM
@@ -49,6 +50,12 @@ const ACTION_TONE: Record<CatalystActionability, { label: string; tone: string }
     label: "açılış durur (NO_POS_INC)",
     tone: "text-signal-down border-signal-down/40 bg-signal-down/10",
   },
+};
+
+const SURPRISE_LABEL: Record<CatalystSurpriseKind, string> = {
+  news_heuristic: "haber sezgisi",
+  official_numeric: "resmî sürpriz",
+  unavailable: "sürpriz yok",
 };
 
 function fmtCountdown(min: number | null): string {
@@ -114,6 +121,11 @@ function CatalystRow({ c }: { c: CatalystImpact }) {
           <span className={c.surprise_level > 0 ? "text-signal-up/70" : "text-signal-down/70"}>
             surprise {c.surprise_level > 0 ? "+" : ""}
             {c.surprise_level.toFixed(2)}
+          </span>
+        ) : null}
+        {c.surprise_kind ? (
+          <span className="rounded border border-white/10 px-1 py-px text-white/45">
+            {SURPRISE_LABEL[c.surprise_kind]}
           </span>
         ) : null}
         {!c.verified ? (

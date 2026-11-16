@@ -353,6 +353,7 @@ _FINAL_BLOCKER_REASONS = {
     "news_conflict": "Ters yönlü canlı haber kurulumu otomatik açılışı engelledi.",
     "technical_data": "Teknik veri taze ve doğrulanmış değil; otomatik açılış bekletildi.",
     "technical_confirmation": "Teknik göstergeler aynı yönde yeterli teyit vermedi; otomatik açılış bekletildi.",
+    "macro_confluence": "Doğrulanmış makro sürpriz aday yönüyle çelişti; fiyat ve teknik teyit bekleniyor.",
     "session_gate": "Seans ya da conflict gate otomatik açılışı engelledi.",
 }
 
@@ -437,6 +438,10 @@ def finalize_matrix_view(
 
         cell["final_execution_ready"] = result.route != "block"
         cell["final_actionable"] = result.route == "open"
+        # Same canonical macro evidence used by the final gate; this keeps the
+        # dashboard explanation aligned with the paper decision without making
+        # the frontend recompute or reinterpret a surprise.
+        cell["macro_evidence"] = list(result.macro_evidence)
         cell["paper_action"] = intent if result.route == "open" else "none"
         if result.route == "manual_ready":
             cell["reason"] = "Tüm kapılar geçti; seans/conflict gate açılışı owner onayına yönlendirdi" + (
