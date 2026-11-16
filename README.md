@@ -151,7 +151,8 @@ kurulu **VoiceStudio** uygulamasını kullanır. E-YAY'ın mevcut
 Piper, bulut ve tarayıcı TTS fallback'i bulunmaz.
 
 İlk kullanımda VoiceStudio'da `türkçe voice 1` profilini oluşturup ses
-üretimini uygulama içinde doğrulayın. VoiceStudio'yu açık tutun.
+üretimini uygulama içinde doğrulayın. Windows lokal keeper daha sonra yalnızca
+VoiceStudio arka plan API'sini açar; Electron arayüzünü açık tutmak gerekmez.
 `.env` ayarları:
 
 ```dotenv
@@ -164,7 +165,7 @@ VOICESTUDIO_TIMEOUT_SEC=180
 
 VoiceStudio API yalnızca loopback adreslerinde kullanılabilir; uzaktaki bir
 sunucuya otomatik ses kaydı aktarımı yoktur. API yanıtı WAV olarak doğrulanır.
-VoiceStudio kapalıysa yalnızca ses üretimi 503 (zaman aşımında 504) döner;
+VoiceStudio arka plan API'si kapalıysa yalnızca ses üretimi 503 (zaman aşımında 504) döner;
 piyasa analizi, risk değerlendirmesi ve paper-only karar mekanizması çalışmaya
 devam eder. GPU belleği sınırlı RTX 2070 sistemlerinde Ollama Qwen3:8B
 çalışıyorsa önce modeli boşaltmak gerekebilir.
