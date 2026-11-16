@@ -11,24 +11,100 @@ shift). A different timeframe or direction is a NEW candidate (recurring signal)
 Owner actions:
   - approve → open via the guarded `attempt_open` (price sanity / state anomaly /
     duplicate still apply); clears the queued + rejected records for that key.
-  - reject  → remove from queue AND record a RejectedSignal so it stops re-appearing.
+    Yalnız güncel fiyatla; fiyat kuyruk fiyatından 0,5 ATR'den fazla kaçtıysa açmaz.
+  - reject  → remove from queue AND record a RejectedSignal so it stops re-appearing
+    while the same signal keeps arriving; one bar of absence ends the rejection.
   - dismiss → remove from queue only (may re-queue next tick).
+
+Ömür (2026-11-16): aday kendi zaman diliminin bir barı yaşar; eskimiş aday okuma
+yüzeylerinde görünmez, onaylanamaz, anahtarı engellemez ve sonraki kuyruklamada silinir.
 
 PAPER_SAFE / NO_EXECUTION: no real orders; approval opens a paper position only.
 """
 from __future__ import annotations
 
 import hashlib
+import math
+from datetime import UTC, datetime, timedelta
 
 from packages.paper import audit
-from packages.paper.lifecycle import attempt_open
-from packages.paper.state import ManualReady, PaperState, RejectedSignal, utc_iso
+from packages.paper.lifecycle import _TF_SECONDS, attempt_open
+from packages.paper.state import ManualReady, PaperState, RejectedSignal
 from packages.risk.engine import RiskInput
 from packages.risk.engine import evaluate as evaluate_risk
 
 # Canonical RiskGate actions that forbid opening a NEW position (mirror of the
 # decision engine: KILL_SWITCH→blocked, RISK_REDUCE/NO_POSITION_INCREASE→hold).
 _RISK_BLOCKS_NEW_OPEN = {"KILL_SWITCH", "RISK_REDUCE", "NO_POSITION_INCREASE"}
+
+# Kuyruk ömrü (karar-destek adım 1, 2026-11-16): aday kendi zaman diliminin BİR barı
+# kadar geçerlidir. Sonra fiyat ve kurulum değişmiştir; onay eski plana dayanır. Sinyal
+# sürüyorsa sonraki tick taze fiyatla yeniden kuyruğa koyar. Eskiden ömür yoktu: canlı
+# kuyrukta 6 haftalık adaylar aynı anahtarları sessizce engelliyordu.
+_DEFAULT_TTL_SEC = 3600
+# Geç onay: fiyat kuyruğa giriş fiyatından bu kadar ATR (aynı TF) uzaklaştıysa onay
+# açmaz — giriş/stop planı artık geçerli değil.
+LATE_PRICE_ATR = 0.5
+
+
+def _parse_ts(ts: str | None) -> datetime | None:
+    if not ts:
+        return None
+    try:
+        dt = datetime.fromisoformat(str(ts).replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    return dt if dt.tzinfo else dt.replace(tzinfo=UTC)
+
+
+def ttl_seconds(timeframe: str) -> int:
+    """Bir bar (saniye); bilinmeyen TF → 1 saat."""
+    return int(_TF_SECONDS.get(timeframe, _DEFAULT_TTL_SEC))
+
+
+def expires_at(entry: ManualReady) -> datetime | None:
+    start = _parse_ts(entry.requested_at)
+    return None if start is None else start + timedelta(seconds=ttl_seconds(entry.timeframe))
+
+
+def is_expired(entry: ManualReady, now: datetime | None = None) -> bool:
+    """Okunamayan zaman damgası da eskimiş sayılır: yaşı bilinmeyen aday onaylanmaz."""
+    end = expires_at(entry)
+    return end is None or (now or datetime.now(UTC)) >= end
+
+
+def active(state: PaperState, now: datetime | None = None) -> list[ManualReady]:
+    """Onaylanabilir (eskimemiş) adaylar — okuma yüzeyleri yalnız bunları gösterir."""
+    now = now or datetime.now(UTC)
+    return [m for m in state.manual_ready if not is_expired(m, now)]
+
+
+def purge_expired(state: PaperState, now: datetime | None = None) -> int:
+    """Eskimiş adayları kuyruktan çıkarır (her biri denetim kaydına); çıkan sayıyı döner."""
+    now = now or datetime.now(UTC)
+    gone = [m for m in state.manual_ready if is_expired(m, now)]
+    if gone:
+        state.manual_ready = [m for m in state.manual_ready if not is_expired(m, now)]
+        for m in gone:
+            audit.record(
+                "MANUAL_READY_EXPIRED", position_id=m.id, symbol=m.symbol, timeframe=m.timeframe,
+                side=m.side, reason=m.reason,
+            )
+    return len(gone)
+
+
+def rejection_active(rej: RejectedSignal, now: datetime | None = None) -> bool:
+    """Ret, aynı sinyal gelmeye devam ettikçe geçerlidir. Sinyal en az bir bar görünmeyip
+    geri gelirse yeni aday sayılır (eskiden ret kalıcıydı; temizleyici hiç çağrılmıyordu)."""
+    last = _parse_ts(rej.last_seen_at) or _parse_ts(rej.rejected_at)
+    if last is None:
+        return False
+    return ((now or datetime.now(UTC)) - last).total_seconds() < ttl_seconds(rej.timeframe)
+
+
+def active_rejection_count(state: PaperState, now: datetime | None = None) -> int:
+    now = now or datetime.now(UTC)
+    return sum(1 for r in state.rejected_signals if rejection_active(r, now))
 
 
 def _make_id(symbol: str, timeframe: str, side: str, requested_at: str) -> str:
@@ -56,15 +132,20 @@ def _find_rejection(state: PaperState, symbol: str, side: str, timeframe: str) -
     return None
 
 
-def should_silent_block(state: PaperState, symbol: str, side: str, timeframe: str) -> bool:
-    """True if this exact (symbol, side, timeframe) is already queued or rejected.
+def should_silent_block(
+    state: PaperState, symbol: str, side: str, timeframe: str, now: datetime | None = None,
+) -> bool:
+    """True if this exact (symbol, side, timeframe) is queued (not expired) or its
+    rejection is still active.
 
     Fingerprint-independent: a re-scored variant of the same signal must not spam.
     """
-    return (
-        _find_rejection(state, symbol, side, timeframe) is not None
-        or _find_ready(state, symbol, side, timeframe) is not None
-    )
+    now = now or datetime.now(UTC)
+    rej = _find_rejection(state, symbol, side, timeframe)
+    if rej is not None and rejection_active(rej, now):
+        return True
+    ready = _find_ready(state, symbol, side, timeframe)
+    return ready is not None and not is_expired(ready, now)
 
 
 def is_recurring_signal(state: PaperState, symbol: str, side: str, timeframe: str) -> bool:
@@ -91,12 +172,28 @@ def route_to_manual_ready(
     news_setup_id: str | None = None,
     news_event_id: str | None = None,
     news_evidence_id: str | None = None,
+    now: datetime | None = None,
 ) -> ManualReady | None:
     """Queue a candidate for owner approval. Returns the entry, or None if silently
-    blocked (already queued/rejected — no spam)."""
-    if should_silent_block(state, symbol, side, timeframe):
+    blocked (already queued/rejected — no spam).
+
+    Önce eskimiş adaylar çıkar. Aktif ret varsa sinyalin hâlâ geldiği yazılır
+    (``last_seen_at``) ve aday sessizce düşer; ret süresi dolmuşsa silinir, aday yeni sayılır."""
+    now = now or datetime.now(UTC)
+    purge_expired(state, now)
+    rej = _find_rejection(state, symbol, side, timeframe)
+    if rej is not None:
+        if rejection_active(rej, now):
+            rej.last_seen_at = now.isoformat()
+            return None
+        state.rejected_signals = [r for r in state.rejected_signals if r is not rej]
+        audit.record(
+            "MANUAL_READY_REJECTION_LAPSED", symbol=symbol, timeframe=timeframe, side=side,
+            reason=f"rejected_at:{rej.rejected_at}",
+        )
+    if _find_ready(state, symbol, side, timeframe) is not None:
         return None
-    requested_at = utc_iso()
+    requested_at = now.isoformat()
     entry = ManualReady(
         id=_make_id(symbol, timeframe, side, requested_at),
         symbol=symbol,
@@ -144,13 +241,18 @@ def reject(state: PaperState, manual_id: str) -> bool:
     if entry is None:
         return False
     state.manual_ready = [m for m in state.manual_ready if m.id != manual_id]
-    if _find_rejection(state, entry.symbol, entry.side, entry.timeframe) is None:
+    now_iso = datetime.now(UTC).isoformat()
+    existing = _find_rejection(state, entry.symbol, entry.side, entry.timeframe)
+    if existing is None:
         state.rejected_signals.append(
             RejectedSignal(
                 symbol=entry.symbol, timeframe=entry.timeframe, side=entry.side,
-                rejected_at=utc_iso(), fingerprint=entry.fingerprint,
+                rejected_at=now_iso, fingerprint=entry.fingerprint, last_seen_at=now_iso,
             )
         )
+    else:
+        existing.rejected_at = now_iso
+        existing.last_seen_at = now_iso
     audit.record(
         "MANUAL_READY_REJECTED", position_id=manual_id, symbol=entry.symbol,
         timeframe=entry.timeframe, side=entry.side,
@@ -175,19 +277,31 @@ def approve(
     *,
     current_price: float | None,
     risk_input: RiskInput | None = None,
+    atr: float | None = None,
+    now: datetime | None = None,
 ) -> dict:
     """Owner approves: open the position — but queue membership does NOT pre-authorize.
 
-    When `risk_input` is supplied (the API always supplies it), the canonical RiskGate
-    is re-evaluated at approval time: DQS, daily-loss, drawdown and any active
-    KILL_SWITCH halt can still block the open. The open then goes through the guarded
-    `attempt_open` (price sanity / state anomaly / duplicate). On success, clears the
-    queued + rejected records for that key.
+    Eskimiş aday açılmaz (``blocked``/``expired``, kuyruktan çıkar). When `risk_input` is
+    supplied (the API always supplies it), the canonical RiskGate is re-evaluated at
+    approval time: DQS, daily-loss, drawdown and any active KILL_SWITCH halt can still
+    block the open. Açılış yalnız GÜNCEL fiyatla yapılır (kuyruk fiyatına düşülmez); fiyat
+    kuyruk fiyatından ``LATE_PRICE_ATR`` ATR'den fazla kaçtıysa ``price_moved``. The open
+    then goes through the guarded `attempt_open` (price sanity / state anomaly /
+    duplicate). On success, clears the queued + rejected records for that key.
 
     Returns {"status": opened|not_found|no_price|blocked, ...}."""
+    now = now or datetime.now(UTC)
     entry = _find_ready_by_id(state, manual_id)
     if entry is None:
         return {"status": "not_found"}
+    if is_expired(entry, now):
+        state.manual_ready = [m for m in state.manual_ready if m.id != manual_id]
+        audit.record(
+            "MANUAL_READY_EXPIRED", position_id=manual_id, symbol=entry.symbol,
+            timeframe=entry.timeframe, side=entry.side, reason="approve_after_expiry",
+        )
+        return {"status": "blocked", "reason": "expired"}
     # Rule: re-run the canonical RiskGate/DQS/KillSwitch before opening.
     open_risk_action: str | None = None
     open_dqs = risk_input.dqs_score if risk_input is not None else None
@@ -200,9 +314,19 @@ def approve(
                 timeframe=entry.timeframe, side=entry.side, reason=f"risk_gate:{rg.action}",
             )
             return {"status": "blocked", "reason": f"risk_gate:{rg.action}"}
-    price = current_price if current_price is not None else entry.requested_price
-    if price is None or price <= 0:
+    price = current_price
+    if price is None or not math.isfinite(price) or price <= 0:
         return {"status": "no_price"}
+    ref = entry.requested_price
+    if atr is not None and math.isfinite(atr) and atr > 0 and ref is not None and math.isfinite(ref) and ref > 0:
+        drift = abs(price - ref) / atr
+        if drift > LATE_PRICE_ATR:
+            reason = f"price_moved:{drift:.2f}atr"
+            audit.record(
+                "MANUAL_READY_BLOCKED", position_id=manual_id, symbol=entry.symbol,
+                timeframe=entry.timeframe, side=entry.side, reason=reason,
+            )
+            return {"status": "blocked", "reason": reason}
     pos, decision = attempt_open(
         state,
         symbol=entry.symbol,

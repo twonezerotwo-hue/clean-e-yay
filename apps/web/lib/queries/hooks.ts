@@ -103,6 +103,31 @@ export const useClosePaperPosition = () => {
   });
 };
 
+// Onay kuyruğu — tick adayı kuyruğa koyar; owner onaylar/reddeder/geçer. Aday bir bar yaşar.
+export const useManualReady = () => {
+  const policy = usePanelQueryPolicy(30_000);
+  return useQuery({
+    queryKey: qk.manualReady,
+    queryFn: api.manualReady,
+    staleTime: 15_000,
+    ...policy,
+  });
+};
+
+export const useManualReadyAction = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ manualId, action }: { manualId: string; action: "approve" | "reject" | "dismiss" }) =>
+      api.manualReadyAction(manualId, action),
+    onSettled: () => {
+      void queryClient.invalidateQueries({ queryKey: qk.manualReady });
+      void queryClient.invalidateQueries({ queryKey: qk.paperTradingState });
+      void queryClient.invalidateQueries({ queryKey: qk.cockpitBrief });
+      void queryClient.invalidateQueries({ queryKey: qk.decisionMatrix });
+    },
+  });
+};
+
 export const useUpdatePaperPositionRiskPlan = () => {
   const queryClient = useQueryClient();
   return useMutation({

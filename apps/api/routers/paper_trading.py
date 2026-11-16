@@ -108,7 +108,7 @@ def _serialize_state(ps: paper_state.PaperState) -> dict:
         "audit_summary": paper_audit.summary(),
         "recent_audit_events": paper_audit.read_recent(20),
         "identity_reconciliation": identity_reconciliation,
-        "manual_ready_count": len(ps.manual_ready),
+        "manual_ready_count": len(manual_queue.active(ps, now)),
         "news_prepared_setups_count": len(
             [s for s in ps.news_prepared_setups if news_setup.is_live(s, now)]
         ),
@@ -378,12 +378,20 @@ def cancel_all_pending_orders() -> dict:
 
 @router.get("/paper-trading/manual-ready")
 def get_manual_ready() -> dict:
-    """P2 — owner-approval kuyruğu (read-only; frontend hesap yapmaz)."""
+    """P2 — owner-approval kuyruğu (read-only; frontend hesap yapmaz). Yalnız eskimemiş
+    adaylar ve hâlâ etkin retler sayılır (kuyruk ömrü bir bar)."""
     ps = paper_state.load()
+    now = datetime.now(UTC)
     return {
-        "manual_ready": [asdict(m) for m in ps.manual_ready],
-        "rejected_count": len(ps.rejected_signals),
+        "manual_ready": [asdict(m) for m in manual_queue.active(ps, now)],
+        "rejected_count": manual_queue.active_rejection_count(ps, now),
     }
+
+
+def _tf_atr(snap, symbol: str, timeframe: str) -> float | None:
+    tech = ((snap.technicals_by_tf or {}).get(symbol) or {}).get(timeframe)
+    atr = getattr(tech, "atr", None) if tech is not None else None
+    return float(atr) if atr is not None and math.isfinite(atr) and atr > 0 else None
 
 
 @router.post("/paper-trading/manual-ready/{manual_id}/approve")
@@ -400,6 +408,7 @@ def approve_manual_ready(manual_id: str) -> dict:
             ps, manual_id,
             current_price=prices.get(entry.symbol) if entry else None,
             risk_input=risk_in,
+            atr=_tf_atr(snap, entry.symbol, entry.timeframe) if entry else None,
         )
         if result["status"] == "not_found":
             raise HTTPException(status_code=404, detail="not_found")

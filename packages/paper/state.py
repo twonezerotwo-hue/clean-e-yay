@@ -258,12 +258,14 @@ class NewsPreparedSetup:
 
 @dataclass
 class RejectedSignal:
-    """Owner-rejected signal — silent-blocks the same symbol+side+timeframe."""
+    """Owner-rejected signal — silent-blocks the same symbol+side+timeframe while that
+    signal keeps arriving (``last_seen_at``); a gap of one bar ends the rejection."""
     symbol: str
     timeframe: str
     side: str
     rejected_at: str
     fingerprint: str | None = None
+    last_seen_at: str | None = None
 
 
 @dataclass

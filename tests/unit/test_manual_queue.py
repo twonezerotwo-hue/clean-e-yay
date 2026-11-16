@@ -9,6 +9,8 @@ Acceptance:
 """
 from __future__ import annotations
 
+from datetime import UTC, datetime, timedelta
+
 import pytest
 
 from packages.paper import manual_queue
@@ -162,6 +164,100 @@ def test_purge_preserves_while_queued(st) -> None:
     assert st.rejected_signals == []      # no queue → purge
 
 
+# ---------- kuyruk ömrü, ret süresi, geç onay (karar-destek adım 1) ----------
+
+_T0 = datetime(2026, 11, 16, 12, 0, tzinfo=UTC)
+
+
+def _queue_at(st, when, *, tf="1h", price=60_000.0, side="long"):
+    return manual_queue.route_to_manual_ready(
+        st, symbol="BTCUSD", timeframe=tf, side=side, size_multiplier=1.0,
+        requested_price=price, reason="defensive", now=when,
+    )
+
+
+@pytest.mark.parametrize(("tf", "bar"), [("15m", 15), ("1h", 60), ("4h", 240), ("1d", 1440)])
+def test_entry_lives_exactly_one_bar(st, tf, bar) -> None:
+    entry = _queue_at(st, _T0, tf=tf)
+    assert manual_queue.active(st, _T0 + timedelta(minutes=bar - 1)) == [entry]
+    assert manual_queue.active(st, _T0 + timedelta(minutes=bar)) == []
+    assert manual_queue.is_expired(entry, _T0 + timedelta(minutes=bar)) is True
+
+
+def test_unreadable_timestamp_counts_as_expired(st) -> None:
+    st.manual_ready.append(
+        ManualReady(id="x", symbol="BTCUSD", timeframe="1h", side="long", requested_at="t", size_multiplier=1.0)
+    )
+    assert manual_queue.active(st, _T0) == []
+
+
+def test_expired_entry_no_longer_blocks_and_is_replaced(st) -> None:
+    """Eskiden: 6 haftalık aday aynı anahtarı kalıcı engelliyordu."""
+    old = _queue_at(st, _T0, price=60_000.0)
+    later = _T0 + timedelta(hours=1, minutes=5)
+    assert manual_queue.should_silent_block(st, "BTCUSD", "long", "1h", later) is False
+    fresh = _queue_at(st, later, price=61_000.0)
+    assert fresh is not None and fresh.id != old.id
+    assert [m.id for m in st.manual_ready] == [fresh.id]  # eskisi çıktı
+    assert fresh.requested_price == 61_000.0
+
+
+def test_purge_expired_keeps_live_entries(st) -> None:
+    _queue_at(st, _T0, tf="1h")
+    live = _queue_at(st, _T0, tf="1d")
+    assert manual_queue.purge_expired(st, _T0 + timedelta(hours=2)) == 1
+    assert st.manual_ready == [live]
+
+
+def test_rejection_holds_while_signal_keeps_coming(st) -> None:
+    entry = _queue_at(st, _T0)
+    assert manual_queue.reject(st, entry.id) is True
+    rej = st.rejected_signals[0]
+    rej.rejected_at = rej.last_seen_at = _T0.isoformat()
+    # Sinyal her 30 dakikada geliyor → ret sürer, 3 saat sonra bile.
+    for minutes in range(30, 181, 30):
+        assert _queue_at(st, _T0 + timedelta(minutes=minutes)) is None
+    assert st.manual_ready == [] and len(st.rejected_signals) == 1
+
+
+def test_rejection_lapses_after_one_bar_gap(st) -> None:
+    entry = _queue_at(st, _T0)
+    manual_queue.reject(st, entry.id)
+    rej = st.rejected_signals[0]
+    rej.rejected_at = rej.last_seen_at = _T0.isoformat()
+    back = _queue_at(st, _T0 + timedelta(hours=1, minutes=1))  # bir bar görünmedi → yeni aday
+    assert back is not None
+    assert st.rejected_signals == []
+
+
+def test_approve_after_expiry_is_blocked_and_removed(st) -> None:
+    entry = _queue_at(st, _T0)
+    res = manual_queue.approve(st, entry.id, current_price=60_000.0, now=_T0 + timedelta(hours=1))
+    assert res == {"status": "blocked", "reason": "expired"}
+    assert st.manual_ready == [] and st.open_positions == []
+
+
+def test_approve_never_falls_back_to_queued_price(st) -> None:
+    entry = _queue_at(st, datetime.now(UTC), price=60_000.0)
+    assert manual_queue.approve(st, entry.id, current_price=None)["status"] == "no_price"
+    assert manual_queue.approve(st, entry.id, current_price=float("nan"))["status"] == "no_price"
+    assert st.open_positions == []
+
+
+def test_approve_blocks_when_price_ran_away(st) -> None:
+    entry = _queue_at(st, datetime.now(UTC), price=60_000.0)
+    res = manual_queue.approve(st, entry.id, current_price=60_600.0, atr=1_000.0)  # 0,6 ATR
+    assert res["status"] == "blocked" and res["reason"] == "price_moved:0.60atr"
+    assert st.open_positions == [] and len(st.manual_ready) == 1
+
+
+def test_approve_opens_within_late_price_limit(st) -> None:
+    entry = _queue_at(st, datetime.now(UTC), price=60_000.0)
+    res = manual_queue.approve(st, entry.id, current_price=60_400.0, atr=1_000.0)  # 0,4 ATR
+    assert res["status"] == "opened"
+    assert len(st.open_positions) == 1
+
+
 def test_state_roundtrip_preserves_queue(st) -> None:
     _queue(st)
     st.rejected_signals.append(
@@ -171,6 +267,18 @@ def test_state_roundtrip_preserves_queue(st) -> None:
     assert len(restored.manual_ready) == 1
     assert len(restored.rejected_signals) == 1
     assert restored.manual_ready[0].symbol == "BTCUSD"
+
+
+def test_state_roundtrip_keeps_rejection_last_seen(st) -> None:
+    st.rejected_signals.append(
+        RejectedSignal(symbol="ETHUSD", timeframe="4h", side="short", rejected_at="t", last_seen_at="s")
+    )
+    restored = paper_state.PaperState.from_dict(st.to_dict())
+    assert restored.rejected_signals[0].last_seen_at == "s"
+    # Eski kayıt (alan yok) okunur, None gelir.
+    legacy = st.to_dict()
+    legacy["rejected_signals"] = [{"symbol": "X", "timeframe": "1h", "side": "long", "rejected_at": "t"}]
+    assert paper_state.PaperState.from_dict(legacy).rejected_signals[0].last_seen_at is None
 
 
 # ---------- HTTP endpoints (thin router; logic lives in manual_queue) ----------
@@ -205,6 +313,23 @@ def test_get_manual_ready_endpoint(api) -> None:
     assert len(body["manual_ready"]) == 1
     assert body["manual_ready"][0]["id"] == mid
     assert body["rejected_count"] == 0
+
+
+def test_get_endpoint_hides_expired_and_counts_live_only(api) -> None:
+    s = paper_state.load()
+    s.manual_ready.append(
+        ManualReady(id="old", symbol="ETHUSD", timeframe="1h", side="short",
+                    requested_at="2026-10-01T07:21:13+00:00", size_multiplier=1.0)
+    )
+    s.rejected_signals.append(
+        RejectedSignal(symbol="NVDA", timeframe="1h", side="long", rejected_at="2026-09-30T23:01:32+00:00")
+    )
+    paper_state.save(s)
+    mid = _seed_queue()
+    body = api.get("/api/v1/paper-trading/manual-ready").json()
+    assert [m["id"] for m in body["manual_ready"]] == [mid]
+    assert body["rejected_count"] == 0
+    assert api.get("/api/v1/paper-trading/state").json()["manual_ready_count"] == 1
 
 
 def test_dismiss_endpoint(api) -> None:
