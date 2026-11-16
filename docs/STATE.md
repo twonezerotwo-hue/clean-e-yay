@@ -154,6 +154,24 @@ kalır. Normal 30 sn tick'te arada tamamen kapanmış bar olmaz → davranış a
 gerçeğe göre işlem başına ~+0,14R iyimser; tick fiyatı ile bar serisi bazı
 sembollerde farklı (BRENT). Kök çözüm uykuyu önlemektir (kapak ayarı, owner).
 
+## Onay kuyruğu (karar-destek adım 1, 2026-11-16)
+
+Owner kararı: sistem karar-destek konumuna geçecek (adım 1–5, plan sohbette). Adım 1
+karar değiştirmez; kuyruğu kullanılabilir yapar (`packages/paper/manual_queue.py`,
+`tests/unit/test_manual_queue.py`):
+- Aday kendi zaman diliminin **bir barı** yaşar (15m 15 dk … 1d 1 gün). Eskimiş aday
+  okuma yüzeylerinde görünmez, onaylanamaz (`blocked`/`expired`), anahtarı engellemez,
+  sonraki kuyruklamada silinir (`MANUAL_READY_EXPIRED`). Öncesi: canlı kuyrukta 1 Ekim'den
+  kalma 80 aday aynı anahtarları 6 hafta sessizce engelliyordu.
+- Ret, aynı sinyal gelmeye devam ettikçe geçerli (`RejectedSignal.last_seen_at`); sinyal
+  bir bar görünmezse ret düşer (`MANUAL_READY_REJECTION_LAPSED`). Öncesi: ret kalıcıydı
+  (`purge_stale_rejection` hiç çağrılmıyordu).
+- Onay yalnız güncel fiyatla (kuyruk fiyatına düşülmez); fiyat kuyruk fiyatından
+  0,5 ATR'den (aynı TF) fazla kaçtıysa `price_moved:<x>atr` ile açmaz.
+- Ekran: kokpit açık pozisyon sütununun üstünde "Onay Bekleyen" listesi
+  (`apps/web/components/cockpit/Layer0ApprovalQueue.tsx`; Onayla / Reddet / Geç). Kuyruk
+  boşken çizilmez → mevcut görünüm aynı. Sözleşme değişmedi (uçlar zaten vardı).
+
 ## Karar zinciri sağlamlığı (2026-11-14)
 
 Bozuk ya da eksik girdi artık "en güçlü sinyal / en büyük boyut / kapı açık" sonucuna dönüşmez

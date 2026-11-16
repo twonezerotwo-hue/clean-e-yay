@@ -15,6 +15,7 @@ import { streamChat, type ChatStreamStatus } from "@/lib/api/chatStream";
 import { selectDqs, selectSnapshotMeta } from "@/lib/selectors/snapshot";
 import type { AgentBriefing, ChatResponse, ChatTurn, Position, PremiumBrief, WorldBrief } from "@/types/generated/api";
 import { HologramAssetIdeaBanner } from "./HologramAssetIdeaBanner";
+import { Layer0ApprovalQueue } from "./Layer0ApprovalQueue";
 import { normalizeVoiceText } from "@/lib/voiceText";
 import {
   Layer0HumanComputerModel,
@@ -1359,6 +1360,8 @@ export function Layer0ReporterAgent({
     <section className="layer0-mobile-flow grid h-full min-h-0 gap-4 overflow-y-auto pb-2 pr-1 xl:grid-cols-[minmax(360px,1fr)_minmax(380px,1fr)_minmax(360px,1fr)] xl:overflow-hidden xl:pb-0 xl:pr-0">
       {/* ── Sutun 1: Acik pozisyon yonetim merkezi ───────────────── */}
       <div className="order-3 flex h-[calc(100dvh-8rem)] min-h-0 snap-start flex-col xl:order-1 xl:h-full xl:min-h-0">
+        {/* Onay kuyruğu: yalnız bekleyen aday varken görünür (boşken sütun aynen eskisi gibi). */}
+        <Layer0ApprovalQueue />
         <Layer0PositionManager
           positions={positions}
           totalPnl={totalPnl}

@@ -89,4 +89,5 @@ export const qk = {
   agentBriefing: ["agent", "briefing"] as const,
   liquidityRotation: ["liquidity", "rotation"] as const,
   pendingOrders: ["paper-trading", "orders"] as const,
+  manualReady: ["paper-trading", "manual-ready"] as const,
 };
