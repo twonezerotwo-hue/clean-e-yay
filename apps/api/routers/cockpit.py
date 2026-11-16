@@ -7,12 +7,16 @@ diğer endpoint'lerle aynıdır; bu router sadece özet üretir. PAPER_SAFE.
 """
 from __future__ import annotations
 
+import json
 import logging
 import os
 import threading
 import time
+from datetime import UTC, datetime
+from pathlib import Path
 
 from fastapi import APIRouter
+from fastapi.encoders import jsonable_encoder
 
 from apps.api.routers.paper_trading import _serialize_state as serialize_paper_state
 from packages.agent.brief_id import build_brief_id
@@ -33,6 +37,7 @@ from packages.decision.cockpit import (
     decision_trace_view,
 )
 from packages.learning import tf_weight_trainer
+from packages.ops.store import write_json_atomic
 from packages.paper import news_setup
 from packages.paper import ticket as paper_ticket
 from packages.portfolio import build_portfolio_risk
@@ -45,6 +50,64 @@ _BRIEF_TTL_SEC = max(1.0, float(os.environ.get("COCKPIT_BRIEF_CACHE_SEC", "10"))
 _BRIEF_CACHE: tuple[float, dict] | None = None
 _BRIEF_CACHE_LOCK = threading.Lock()
 _BRIEF_REFRESHING = False
+# Tek uçuş: aynı anda yalnız bir derleme. Soğuk açılışta eşzamanlı istekler
+# (ekranlar + SSR) ayrı ayrı derleme başlatıp birbirini GIL'de yavaşlatıyordu.
+_BUILD_LOCK = threading.Lock()
+# Hızlı açılış: son derlenen özet diske yazılır (en çok dakikada bir). Yeniden
+# başlatmada ilk taze derleme (tick görüntüsü + derleme ~80 sn) bitene kadar bu
+# kopya kendi zaman damgasıyla sunulur. Yalnız ekran önbelleği; karar yolu okumaz.
+_DISK_SAVE_EVERY_SEC = 60.0
+_DISK_MAX_AGE_SEC = 6 * 3600.0
+# Geri yüklenen kopya bu süre taze sayılır: ısıtma derlemesi tick'i beklerken
+# gelen istekler ikinci (tick'siz) bir derleme başlatmaz. Isıtma hiç gelmezse
+# süre dolunca olağan bayat-yenile yolu devreye girer (takılı kalmaz).
+_RESTORED_HOLD_SEC = 150.0
+_DISK_LAST_SAVE = 0.0
+_RESTORED = False
+
+
+def _disk_path() -> Path:
+    return Path(os.environ.get("COCKPIT_BRIEF_DISK_PATH", "data/runtime/cockpit_brief_last.json"))
+
+
+def _save_to_disk(result: dict) -> None:
+    """Derlenen özeti diske yazar (kısıtlı sıklık); hata ekranı etkilemez."""
+    global _DISK_LAST_SAVE
+    now = time.monotonic()
+    if _DISK_LAST_SAVE and now - _DISK_LAST_SAVE < _DISK_SAVE_EVERY_SEC:
+        return
+    _DISK_LAST_SAVE = now
+    try:
+        payload = {"saved_at": datetime.now(UTC).isoformat(), "brief": jsonable_encoder(result)}
+        write_json_atomic(_disk_path(), payload, ensure_ascii=False, separators=(",", ":"))
+    except Exception:
+        _log.warning("cockpit brief disk copy not written", exc_info=True)
+
+
+def restore_from_disk() -> bool:
+    """Açılışta son özeti diskten önbelleğe alır (önbellek boşsa, en çok 6 saatlik).
+
+    Supervisor API dinlemeden önce çağırır; ilk ekran beklemeden açılır. Kopya
+    kendi ``generated_at``'ini taşır (ekran yaşını gösterir); taze derleme
+    ``warm()`` ile arkada sürer ve bitince yerine geçer. Karar üretmez.
+    """
+    global _BRIEF_CACHE, _RESTORED
+    try:
+        payload = json.loads(_disk_path().read_text(encoding="utf-8"))
+        saved_at = datetime.fromisoformat(payload["saved_at"])
+        brief = payload["brief"]
+        age = (datetime.now(UTC) - saved_at).total_seconds()
+    except (OSError, ValueError, KeyError, TypeError):
+        return False
+    if not isinstance(brief, dict) or not brief or not 0 <= age <= _DISK_MAX_AGE_SEC:
+        return False
+    with _BRIEF_CACHE_LOCK:
+        if _BRIEF_CACHE is not None:
+            return False
+        _BRIEF_CACHE = (time.monotonic() + _RESTORED_HOLD_SEC, brief)
+        _RESTORED = True
+    _log.info("cockpit brief restored from disk (%.0fs old)", age)
+    return True
 
 
 def _build_cockpit_brief() -> dict:
@@ -367,18 +430,64 @@ def _build_cockpit_brief() -> dict:
     }
 
 
-def _refresh_brief_cache() -> None:
+def _build_and_store() -> dict:
+    """Derler ve önbelleğe yazar; çağıran ``_BUILD_LOCK``'u tutar."""
+    global _BRIEF_CACHE, _RESTORED
+    started = time.monotonic()
+    result = _build_cockpit_brief()
+    done = time.monotonic()
+    with _BRIEF_CACHE_LOCK:
+        _BRIEF_CACHE = (done, result)
+        _RESTORED = False
+    _log.info("cockpit brief built in %.1fs", done - started)
+    _save_to_disk(result)
+    return result
+
+
+def _wait_for_tick_snapshot(timeout: float) -> None:
+    """Açılışta tick'in ilk piyasa görüntüsünü bekler (süre dolarsa geçer).
+
+    Aynı veri ikinci kez ağdan çekilmez ve ekran tick'in karar verdiği anı
+    görür; tick yoksa ya da gecikirse özet kendi görüntüsüyle derlenir.
+    """
+    from packages.data.ingestion.pipeline import latest_tick_snapshot
+
+    deadline = time.monotonic() + timeout
+    while latest_tick_snapshot() is None and time.monotonic() < deadline:
+        time.sleep(0.5)
+
+
+def _refresh_brief_cache(wait_tick_sec: float = 0.0) -> None:
     """Refresh the read-only cockpit cache without blocking HTTP requests."""
-    global _BRIEF_CACHE, _BRIEF_REFRESHING
+    global _BRIEF_REFRESHING
     try:
-        result = _build_cockpit_brief()
-        with _BRIEF_CACHE_LOCK:
-            _BRIEF_CACHE = (time.monotonic(), result)
+        with _BUILD_LOCK:
+            if wait_tick_sec > 0:
+                _wait_for_tick_snapshot(wait_tick_sec)
+            _build_and_store()
     except Exception:
         _log.exception("cockpit brief refresh failed; last good snapshot kept")
     finally:
         with _BRIEF_CACHE_LOCK:
             _BRIEF_REFRESHING = False
+
+
+def warm(wait_tick_sec: float = 0.0) -> None:
+    """Açılışta özeti arka planda bir kez derler (önbellek boş ya da diskten gelmişse).
+
+    Supervisor API dinlemeye başlayınca çağırır. Derleme kilidi hemen alınır:
+    ilk ekran isteği yeni derleme başlatmak yerine bunu (ya da diskteki son
+    özeti) bekler. ``wait_tick_sec`` > 0 ise önce tick'in ilk görüntüsü
+    beklenir. Karar üretmez, yalnız okur.
+    """
+    global _BRIEF_REFRESHING
+    with _BRIEF_CACHE_LOCK:
+        if _BRIEF_REFRESHING or (_BRIEF_CACHE is not None and not _RESTORED):
+            return
+        _BRIEF_REFRESHING = True
+    threading.Thread(
+        target=_refresh_brief_cache, args=(wait_tick_sec,), name="cockpit-brief-warm", daemon=True
+    ).start()
 
 
 @router.get("/cockpit/brief")
@@ -389,7 +498,7 @@ def get_cockpit_brief() -> dict:
     request still builds the same authoritative view, but subsequent dashboard
     polls never wait behind that work and keep the last known-good snapshot.
     """
-    global _BRIEF_CACHE, _BRIEF_REFRESHING
+    global _BRIEF_REFRESHING
     now = time.monotonic()
     with _BRIEF_CACHE_LOCK:
         cached = _BRIEF_CACHE
@@ -407,11 +516,14 @@ def get_cockpit_brief() -> dict:
             return cached[1]
 
     # Cold start only: preserve the original synchronous behaviour so the
-    # endpoint never returns an empty/partial decision view.
-    result = _build_cockpit_brief()
-    with _BRIEF_CACHE_LOCK:
-        _BRIEF_CACHE = (time.monotonic(), result)
-    return result
+    # endpoint never returns an empty/partial decision view. Single flight:
+    # concurrent cold callers wait for one build and share its result.
+    with _BUILD_LOCK:
+        with _BRIEF_CACHE_LOCK:
+            cached = _BRIEF_CACHE
+        if cached is not None:
+            return cached[1]
+        return _build_and_store()
 
 
 @router.get("/cockpit/state")

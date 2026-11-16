@@ -31,16 +31,16 @@ topics:
     symbols: {XAUUSD: -1, XAGUSD: -0.5, BRENT: 0, WTI: 0, COPPER: 0, SP500: -0.5, XLK: -1, NVDA: -1, XLV: 0, DXY: 1, US10Y: 1, VIX: 0.5}
     classes: {crypto: -1, equity: -0.5}
   jobs:
-    symbols: {XAUUSD: -1, XAGUSD: 0, BRENT: 0.5, WTI: 0.5, SP500: 0, XLK: 0, NVDA: 0, XLV: 0, DXY: 1, US10Y: 1}
+    symbols: {XAUUSD: -1, XAGUSD: -0.25, BRENT: 0.5, WTI: 0.5, SP500: 0, XLK: 0, NVDA: 0, XLV: 0, DXY: 1, US10Y: 1}
     classes: {crypto: 0, energy: 0.5}
   unemployment:
-    symbols: {XAUUSD: -0.5, XAGUSD: 0, BRENT: 1, WTI: 1, DXY: 0.5, US10Y: 0.5}
+    symbols: {XAUUSD: -0.5, XAGUSD: 0.25, BRENT: 1, WTI: 1, DXY: 0.5, US10Y: 0.5}
     classes: {crypto: 0, energy: 1}
   jolts:
-    symbols: {XAUUSD: -0.5, BRENT: 0.5, WTI: 0.5, DXY: 0.5, US10Y: 0.5}
+    symbols: {XAUUSD: -0.5, XAGUSD: -0.25, BRENT: 0.5, WTI: 0.5, DXY: 0.5, US10Y: 0.5}
     classes: {energy: 0.5}
   eci:
-    symbols: {XAUUSD: -0.5, XLK: -0.5, NVDA: -0.5, DXY: 0.5, US10Y: 0.5}
+    symbols: {XAUUSD: -0.5, XAGUSD: -0.25, XLK: -0.5, NVDA: -0.5, DXY: 0.5, US10Y: 0.5}
     classes: {crypto: -0.5, equity: -0.5}
   gdp:
     symbols: {XAUUSD: 0, XAGUSD: 0.5, BRENT: 1, WTI: 1, COPPER: 1, SP500: 1, XLK: 1, NVDA: 1, XLV: 0.5, DXY: 0.5, US10Y: 0.5}

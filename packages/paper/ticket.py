@@ -25,7 +25,7 @@ from typing import Any
 from packages.data.ingestion.pipeline import MarketSnapshot
 from packages.decision.engine import TradeDecision, is_execution_ready
 from packages.ops.store import write_text_atomic
-from packages.paper import news_setup, session_gate
+from packages.paper import decision_card, news_setup, session_gate
 from packages.paper.guards import price_sanity
 from packages.paper.lifecycle import canonical_targets
 from packages.paper.signal_identity import build_signal_id
@@ -464,6 +464,11 @@ def build_ticket(
         news_event_id=news_event_id,
         news_evidence_id=news_evidence_id,
     )
+    # Karar kartı (karar-destek adım 2): owner'ın kendi araçları — gözlemci, karar değişmez.
+    technical_detail["owner_card"] = decision_card.build_owner_card(
+        decision.symbol, decision.timeframe, side, entry, atr,
+        catalysts=getattr(snap, "catalysts", None) or (), now=ts,
+    )
     why = _why_bullets(decision)
     safety = _safety_lines(decision, snap.quality.score if snap.quality else None)
     session = session_gate.evaluate_open(
@@ -473,14 +478,7 @@ def build_ticket(
         now_utc=ts,
         risk_action=decision.risk.action if decision.risk else None,
     )
-    exploration = any(str(b).startswith("paper_exploration:") for b in decision.blocked_by)
-    if exploration:
-        execution_state = "EXPLORATION"
-        execution_reason = (
-            "Paper keşif sinyali: negatif EV veya güven tabanı aşılamadı; "
-            "otomatik açılış bekletildi, gölge sonucu birikiyor."
-        )
-    elif session.route == "open":
+    if session.route == "open":
         execution_state = "READY"
         execution_reason = "Piyasa açık; tüm kapılar geçerse paper açılışı denenir."
     elif session.route == "manual_ready":
@@ -542,7 +540,7 @@ def build_tickets_from_decisions(
 
     Yalnız ortak execution-readiness kapısından geçen open_long/open_short
     kararları ticket kuyruğuna girer. status="insufficient_rr" telemetry için
-    saklı; "invalid" atılır. Keşif/negatif-EV hücreleri matriste kalır ama
+    saklı; "invalid" atılır. Negatif-EV hücreleri matriste kalır ama
     açılabilir ticket veya bildirim üretmez.
     """
     out: list[TradeTicket] = []
@@ -557,10 +555,9 @@ def build_tickets_from_decisions(
     for d in decisions:
         if d.action not in {"open_long", "open_short"}:
             continue
-        # ``actionable`` is a legacy exploration intent.  Only the shared
-        # execution-readiness helper may enter the ticket/notification lane;
-        # exploratory, negative-EV and risk-suspended cells remain visible in
-        # the matrix/candidate surfaces but are not presented as open signals.
+        # Only the shared execution-readiness helper may enter the
+        # ticket/notification lane; negative-EV and risk-suspended cells remain
+        # visible in the matrix/candidate surfaces but are not presented as open signals.
         risk_action = str(getattr(getattr(d, "risk", None), "action", "") or "")
         if risk_action in {"KILL_SWITCH", "RISK_REDUCE", "NO_POSITION_INCREASE"}:
             continue

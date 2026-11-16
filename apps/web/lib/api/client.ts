@@ -64,6 +64,8 @@ import type {
   AgentQuorumMatrixResponse,
   MarketSessionsTradeUniverseResponse,
   NewsWall,
+  ManualReadyQueue,
+  ManualReadyActionResult,
 } from "@/types/generated/api";
 // Sözleşmesiz (observe-only) öğrenme görünümleri — codegen'e girmedi (I serisi).
 import type {
@@ -565,6 +567,14 @@ export const api = {
   triggerAnalysis: (symbol: string, timeframe = "1d") =>
     fetchJSON<TriggerAnalysis>(
       `/api/v1/technical/trigger/${encodeURIComponent(symbol)}?timeframe=${encodeURIComponent(timeframe)}`,
+    ),
+  // Onay kuyruğu (owner kararı): sunucu yalnız eskimemiş adayları döndürür; onay/ret/geç
+  // sonucu HTTP 200 + status/reason (engel de alan sonucudur, hata değil).
+  manualReady: () => fetchJSON<ManualReadyQueue>("/api/v1/paper-trading/manual-ready"),
+  manualReadyAction: (manualId: string, action: "approve" | "reject" | "dismiss") =>
+    fetchJSON<ManualReadyActionResult>(
+      `/api/v1/paper-trading/manual-ready/${encodeURIComponent(manualId)}/${action}`,
+      { method: "POST" },
     ),
   closePaperPosition: (positionId: string) =>
     fetchJSON<ClosePositionResult>(

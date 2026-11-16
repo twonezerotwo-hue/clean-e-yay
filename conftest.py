@@ -190,6 +190,7 @@ def _isolate_runtime_stores(tmp_path_factory: pytest.TempPathFactory) -> None:
         ("OPS_ALERTS_STATE_PATH", "ops_alerts_state.json"),
         ("DECISION_RECORD_DIR", "decision_record"),
         ("COMPLIANCE_LOG_PATH", "compliance_log.jsonl"),
+        ("COCKPIT_BRIEF_DISK_PATH", "cockpit_brief_last.json"),
     ):
         os.environ.setdefault(_env, str(runtime / _name))
     # K5 — git'teki config/weights_active.json suite'e sızmasın: testler baseline
@@ -251,6 +252,11 @@ def _isolate_runtime_stores(tmp_path_factory: pytest.TempPathFactory) -> None:
     os.environ["WORKER_HEARTBEAT_PATH"] = str(runtime / "worker_heartbeats.json")
     os.environ["SNAPSHOT_STORE_PATH"] = str(runtime / "snapshots")
     os.environ["TICKETS_PATH"] = str(runtime / "tickets.json")
+    # Haber ilk-görülme kaydı (2026-11-13): varsayılan yoldan akış çeken RSS testleri
+    # gerçek data/runtime/news_first_seen.jsonl'a sahte başlık yazmasın.
+    os.environ["NEWS_FIRST_SEEN_PATH"] = str(runtime / "news_first_seen.jsonl")
+    # Benzinga (2026-11-13): test takımı gerçek API'yi çağırmasın (anahtar varsa bile).
+    os.environ.pop("BENZINGA_API_KEY", None)
     # T1 — decide/attempt_open yolunu süren HER test (eskiden API tick testleri,
     # şimdi run_once testleri) bu gözlem defterlerine yazar; suite gerçek
     # data/runtime kanıtını kirletmesin (dev makinesinde test artefaktı canlı

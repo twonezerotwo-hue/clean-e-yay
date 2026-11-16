@@ -107,6 +107,10 @@ class Position:
     trail_activate_pct: float | None = None  # trailing'in devreye girdiği lehte hareket
     trail_peak: float | None = None          # lehteki en uç fiyat (highwater)
     trail_active: bool = False               # trailing devreye girdi mi
+    # Uyku/kesinti telafisi: pozisyonun fiyatla en son yönetildiği an (UTC ISO). Tick
+    # bu andan sonra TAMAMEN kapanmış barları canlı çıkış kurallarıyla oynatır
+    # (`lifecycle._replay_gap`). Legacy kayıtlar None → ilk tick'e kadar telafi yok.
+    marked_at: str | None = None
     # MAE/MFE (TF-target trainer'ın yakıtı). Her tick `current_price` güncellenirken
     # _update_excursions tarafından monoton ilerletilir; kapanışta Trade'e taşınır.
     # mae_pct: entry'ye göre ters yönde gördüğü en uç hareket (pozitif %).
@@ -121,8 +125,9 @@ class Position:
     # H6 (temizlik) — açılış kararının kapı atfı (TradeDecision.blocked_by): hangi
     # kapı boyutu kıstı / hangi yumuşak kapı keşifle esnetildi. Legacy/manuel → None.
     open_blocked_by: list[str] | None = None
-    # K1 — paper keşif açılışı (paper_policy: yumuşak güven/EV kapısı esnetildi).
-    # Öğrenme kohortları bunu ayırabilsin diye açıkça damgalanır.
+    # K1 — paper keşif açılışı (yumuşak güven/EV kapısı esnetilmişti; 2–21 Ekim 2026).
+    # Keşif yolu 10 Kasım 2026'da koddan çıktı; alan geçmiş kayıtlar için kalır,
+    # öğrenme kohortları onları ayırır. Yeni açılışlar hep False.
     exploration: bool = False
 
     @property
@@ -253,12 +258,14 @@ class NewsPreparedSetup:
 
 @dataclass
 class RejectedSignal:
-    """Owner-rejected signal — silent-blocks the same symbol+side+timeframe."""
+    """Owner-rejected signal — silent-blocks the same symbol+side+timeframe while that
+    signal keeps arriving (``last_seen_at``); a gap of one bar ends the rejection."""
     symbol: str
     timeframe: str
     side: str
     rejected_at: str
     fingerprint: str | None = None
+    last_seen_at: str | None = None
 
 
 @dataclass
@@ -310,6 +317,9 @@ class PaperState:
     # Boş ise henüz tick atılmamış demektir; legacy kayıtlar default boş yüklenir.
     last_rechecks: list[dict] = field(default_factory=list)
     last_recheck_at: str | None = None
+    # Yeniden giriş kilidi: aynı kilitli otomatik sinyal denetim kaydına bir kez
+    # yazılır (her 30 sn'lik tick yeni OPEN_ATTEMPT/OPEN_BLOCKED çifti üretmesin).
+    reentry_blocked_attempts: list[dict] = field(default_factory=list)
 
     # F2-1 — mark-to-market SALT-GÖZLEM alanları. Persist edilmez (türetilir),
     # RiskGate girdisine BAĞLI DEĞİL: gate hâlâ realized `equity_usd` görür.
@@ -339,6 +349,7 @@ class PaperState:
             "pending_orders": [asdict(o) for o in self.pending_orders],
             "last_rechecks": list(self.last_rechecks),
             "last_recheck_at": self.last_recheck_at,
+            "reentry_blocked_attempts": list(self.reentry_blocked_attempts[-128:]),
         }
 
     @classmethod
@@ -386,6 +397,9 @@ class PaperState:
                 r for r in d.get("last_rechecks", []) if isinstance(r, dict)
             ],
             last_recheck_at=d.get("last_recheck_at") or None,
+            reentry_blocked_attempts=[
+                r for r in d.get("reentry_blocked_attempts", []) if isinstance(r, dict)
+            ][-128:],
         )
 
 

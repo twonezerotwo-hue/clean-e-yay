@@ -141,6 +141,34 @@ def test_matrix_produces_all_timeframes_and_1w_never_opens(paper_env, monkeypatc
 
 
 @pytest.mark.usefixtures("supportive_context")
+def test_4h_is_bias_only_but_candidate_and_plan_survive(paper_env, monkeypatch) -> None:
+    """Owner kararı 2026-11-10: 4h açılışı durdu (paper_execution=false). Hücre açmaz ama
+    adayı ve stop/hedef planı karar kaydında kalır; kapı karşı-olgu defteri 'açılsaydı ne
+    olurdu' sonucunu yazmaya devam eder. Diğer TF'ler etkilenmez."""
+    from packages.data.registry.loader import threshold_override
+    from packages.decision import engine as de
+    from packages.decision import record
+    from packages.learning import gate_counterfactual
+    monkeypatch.setattr(de, "_intra_batch_guard_enabled", lambda: False)
+    snap = build_snapshot(["BTCUSD"])
+    _force_bullish(snap)
+    # Fikstür evreninde 4h kapsaması düşük (temel+kuantum 4h oyundan çıktı); kapsama kapısı
+    # önce durdurmasın ki TF politikası gerçekten sınansın.
+    with threshold_override({"consensus": {"min_module_coverage": 0.0}}):
+        _regime, _risk, decisions = decide_matrix(["BTCUSD"], snap, _risk_in())
+    by_tf = {d.timeframe: d for d in decisions}
+    h4 = by_tf["4h"]
+    assert h4.action == "hold" and h4.actionable is False
+    assert h4.candidate_action == "open_long"
+    assert "timeframe_policy:no_paper_execution" in h4.blocked_by
+    plan = record._plan(snap, h4)
+    assert plan and plan["sl_pct"] > 0 and plan["tp_pct"] > 0 and plan["time_stop_h"] > 0
+    cell = {"symbol": "BTCUSD", "timeframe": "4h", "candidate": h4.candidate_action, "plan": plan}
+    assert gate_counterfactual._sample("2026-11-10T12:00:00+00:00", cell)["side"] == "long"
+    assert by_tf["1d"].action == "open_long" and by_tf["15m"].action == "open_long"
+
+
+@pytest.mark.usefixtures("supportive_context")
 def test_matrix_timeframe_risk_multiplier_only_reduces(paper_env, monkeypatch) -> None:
     # TF risk çarpanı testi → intra_batch guard kapalı (konsantrasyon ayrı testlerde).
     from packages.decision import engine as de
@@ -431,7 +459,7 @@ def test_paper_tick_worker_timeframe_positions(paper_env) -> None:
 # ---------------- intra-batch yığılma koruması ----------------
 
 def _fake_open(symbol, snap, regime, risk, *, mistakes=None, open_positions=None,
-               equity_usd=0.0, corr_entries=None, timeframe="1d"):
+               equity_usd=0.0, corr_entries=None, timeframe="1d", recent_edge=None):
     """Her hücreyi open_short olarak döndürür; gördüğü open_positions uzunluğunu
     çağıran teste kaydetmek için _fake_open.seen listesine ekler."""
     from packages.consensus.engine import ConsensusResult
@@ -443,7 +471,7 @@ def _fake_open(symbol, snap, regime, risk, *, mistakes=None, open_positions=None
     )
     return TradeDecision(
         symbol=symbol, action="open_short", confidence=0.5, size_multiplier=0.5,
-        consensus=cons, risk=risk, reason="t", timeframe=timeframe,
+        consensus=cons, risk=risk, reason="t", timeframe=timeframe, actionable=True,
     )
 
 
@@ -452,11 +480,25 @@ def test_decide_matrix_feeds_pass_siblings_when_guard_on(monkeypatch) -> None:
     # sonraki hücre daha uzun liste görür (correlation cap onları görebilir).
     from packages.decision import engine
     monkeypatch.setattr(engine, "_intra_batch_guard_enabled", lambda: True)
+    monkeypatch.setattr(engine, "_reaches_paper_route", lambda d, snap: True)
     _fake_open.seen = []
     monkeypatch.setattr(engine, "decide_for_symbol", _fake_open)
     snap = build_snapshot(["BTCUSD"])
     engine.decide_matrix(["BTCUSD"], snap, _risk_in(), timeframes=["15m", "1h", "4h"])
     assert _fake_open.seen == [0, 1, 2]  # her açılış sonrakine birikiyor
+
+
+def test_decide_matrix_ignores_siblings_that_cannot_open(monkeypatch) -> None:
+    # Son kapıda düşecek aday (teknik teyit yok) gerçek pozisyon olmayacak; kardeş
+    # hücreler onu açık pozisyon gibi görüp beklememeli.
+    from packages.decision import engine
+    monkeypatch.setattr(engine, "_intra_batch_guard_enabled", lambda: True)
+    monkeypatch.setattr(engine, "_reaches_paper_route", lambda d, snap: False)
+    _fake_open.seen = []
+    monkeypatch.setattr(engine, "decide_for_symbol", _fake_open)
+    snap = build_snapshot(["BTCUSD"])
+    engine.decide_matrix(["BTCUSD"], snap, _risk_in(), timeframes=["15m", "1h", "4h"])
+    assert _fake_open.seen == [0, 0, 0]
 
 
 def test_decide_matrix_guard_off_is_old_blind_behavior(monkeypatch) -> None:

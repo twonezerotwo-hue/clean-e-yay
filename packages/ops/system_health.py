@@ -196,6 +196,8 @@ def _registry_runtime_summary(provider_status: dict | None) -> dict:
         "bls_public_api": {"bls_public_api", "macro_bls"},
         "eia_api": {"eia_api", "macro_eia"},
         "rss": {"rss", "news", "geo_news"},
+        # Benzinga başlıkları "news" sağlayıcı durumuna katılır (2026-11-13).
+        "benzinga": {"benzinga", "news"},
         "investing_web_calendar": {"investing_web_calendar", "calendar", "calendar_web"},
         "investing_web_calendar_plus_news": {
             "investing_web_calendar_plus_news", "calendar", "calendar_web", "news", "geo_news",

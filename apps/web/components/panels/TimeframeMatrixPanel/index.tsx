@@ -39,8 +39,6 @@ function cellTone(c: TimeframeDecision): string {
     return c.action === "open_long"
       ? "border-signal-up/50 text-signal-up bg-signal-up/10"
       : "border-accent-magenta/50 text-accent-magenta bg-accent-magenta/10";
-  if (c.execution_state === "EXPLORATION")
-    return "border-amber-300/40 text-amber-200 bg-amber-300/5";
   return "border-white/10 text-white/45";
 }
 
@@ -104,11 +102,7 @@ function MatrixCell({
         {globalSuspended ? null : (
           <>
             <div className="text-[8px] uppercase tracking-wider opacity-70">
-              {c.execution_state === "EXPLORATION"
-                ? "KEŞİF"
-                : (c.execution_ready ?? c.actionable)
-                  ? "HAZIR"
-                  : "NOT ACT."}
+              {(c.execution_ready ?? c.actionable) ? "HAZIR" : "NOT ACT."}
             </div>
             {/* P0/T2 — bir hücreyi hangi kapı kıstı (event riski, risk gate,
                 mistake, korelasyon, 1w bias) kısa rozette görünür. */}

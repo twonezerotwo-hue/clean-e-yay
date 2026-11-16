@@ -27,6 +27,13 @@ echo "deploy: python deps"
 pip install --upgrade pip
 pip install -e .
 
+# Next 15 en az Node 18.18 ister. Eskiyse paketlere ve derlemeye dokunmadan dur:
+# calisan web eski node_modules ve .next-prod ile hizmete devam eder.
+if ! node -e 'const [a,b]=process.versions.node.split(".").map(Number);process.exit(a>18||(a===18&&b>=18)?0:1)'; then
+  echo "deploy: Node $(node -v) < 18.18 (Next 15) - web atlandi; EC2'de Node'u yukselt" >&2
+  exit 1
+fi
+
 echo "deploy: web deps"
 pnpm install --filter web --frozen-lockfile
 
@@ -121,6 +128,13 @@ set_env GROQ_MODEL openai/gpt-oss-120b
 # set_env: secret rotasyonunda kutudaki degeri de zorla gunceller.
 if [ -n "${API_AUTH_TOKEN:-}" ]; then
   set_env API_AUTH_TOKEN "$API_AUTH_TOKEN"
+fi
+# Benzinga haber API anahtari (owner karari 2026-11-13) — SIR: GitHub Actions
+# secret'inda yasar, deploy-ec2.yml env ile gecirir. Secret yoksa dokunulmaz ->
+# saglayici kapali kalir. Deger log'a yazilmaz.
+if [ -n "${BENZINGA_API_KEY:-}" ]; then
+  set_env BENZINGA_API_KEY "$BENZINGA_API_KEY"
+  echo "deploy: BENZINGA_API_KEY .env'e yazildi (deger gosterilmez)"
 fi
 
 echo "deploy: restart services"

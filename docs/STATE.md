@@ -48,6 +48,10 @@ geri alma: [ENTRY_QUALITY_V2](ENTRY_QUALITY_V2.md); kanıt: `docs/evidence/entry
 
 ## Süreçler (gerçek topoloji)
 
+İsteğe bağlı lokal CS2 izleyicisinin kurulumu ve duraklatma/geri dönüş davranışı
+README'nin "Çalıştırma (7/24)" bölümünde; giriş noktası
+`scripts/cs2-game-mode.ps1`. AWS servislerini etkilemez.
+
 | Ortam | Nasıl kalkar | Süreçler |
 | --- | --- | --- |
 | Lokal (Windows) | `scripts/local-autostart.ps1` keeper (20 sn'de bir sağlık) | `apps.supervisor` (127.0.0.1:9000), VoiceStudio arka plan API'si (:3900), web (`next start` :4000), Ollama; ngrok tüneli varsa |
@@ -125,10 +129,170 @@ geçen isteğe anahtarı kendisi ekler.
 
 ## Paper keşif açılışları
 
-`paper_trading.paper_auto_open` açık (owner kararı K1): güven/EV yumuşak
-kapılarında kalan aday küçük boyutla açılabilir. Bu pozisyonlar
-`exploration=true` damgalanır ve `decision_log`'a kapı listesiyle (`blocked_by`)
-yazılır ve EXPLORATION kohortuna düşer: yalnız güven kalibrasyonu (`calibration_trainer`, `tf_calibration`) bunları kullanır, diğer öğreniciler dışarıda bırakır.
+Keşif yolu 2026-11-10'da koddan çıktı (owner kararı, 8 Kasım). 2–21 Ekim
+arasında güven/EV yumuşak kapılarında kalan adaylar küçük boyutla açılmıştı; bu
+geçmiş pozisyonlar `exploration=true` damgalı kalır ve EXPLORATION kohortuna
+düşer: yalnız güven kalibrasyonu (`calibration_trainer`, `tf_calibration`) bunları
+kullanır, diğer öğreniciler dışarıda bırakır. Yeni açılışlar damga almaz.
+
+## 4h yalnız bias (2026-11-10)
+
+`timeframe_risk."4h".paper_execution: false` (owner kararı). Canlı 4h oyunun
+(touche + sentinel + haber) yön bilgisi ölçülemedi: 16 sembol, 7.594 sinyalli
+bar, maliyet sonrası sinyal başına −%0,22. 4h hücresi skor ve adayı üretir,
+`timeframe_policy:no_paper_execution` ile bekler; stop/hedef planı karar kaydında
+kalır ve kapı karşı-olgu defteri sonucunu yazar. Açık 4h pozisyonları normal
+çıkış kurallarıyla kapanır. Geri açma: uzun veride ve ileri sınamada önceden
+yazılı ölçütleri geçen yeni bir 4h yön kaynağıyla, owner onayıyla.
+
+## Kesinti telafisi (2026-11-11)
+
+Bilgisayar uyurken pozisyonu kimse izlemiyordu; uyanıştaki ilk tick o anki
+fiyatla karar veriyordu (17 Ağu BTC: 56 sa kesinti → −8,04R). Artık her pozisyon
+`marked_at` (son fiyatla yönetildiği an) taşır. Tick, bu andan sonra tamamen
+kapanmış 15m/1h önbellek barlarını canlı sırayla oynatır (`lifecycle._replay_gap`):
+acil fren → stop (TF kapanışı; yoksa fitil) → hedef → trailing, süre stopu bar
+sınırında. Çıkış bar zamanı ve fiyatıyla yazılır, denetimde `GAP_REPLAY` satırı
+kalır. Normal 30 sn tick'te arada tamamen kapanmış bar olmaz → davranış aynı.
+Ölçüm (owner onaylı): sadakat sınırda (%80, ölçüm düzeltmesinden sonra), telafi
+gerçeğe göre işlem başına ~+0,14R iyimser; tick fiyatı ile bar serisi bazı
+sembollerde farklı (BRENT). Kök çözüm uykuyu önlemektir (kapak ayarı, owner).
+
+## Onay kuyruğu (karar-destek adım 1, 2026-11-16)
+
+Owner kararı: sistem karar-destek konumuna geçecek (adım 1–5, plan sohbette). Adım 1
+karar değiştirmez; kuyruğu kullanılabilir yapar (`packages/paper/manual_queue.py`,
+`tests/unit/test_manual_queue.py`):
+- Aday kendi zaman diliminin **bir barı** yaşar (15m 15 dk … 1d 1 gün). Eskimiş aday
+  okuma yüzeylerinde görünmez, onaylanamaz (`blocked`/`expired`), anahtarı engellemez,
+  sonraki kuyruklamada silinir (`MANUAL_READY_EXPIRED`). Öncesi: canlı kuyrukta 1 Ekim'den
+  kalma 80 aday aynı anahtarları 6 hafta sessizce engelliyordu.
+- Ret, aynı sinyal gelmeye devam ettikçe geçerli (`RejectedSignal.last_seen_at`); sinyal
+  bir bar görünmezse ret düşer (`MANUAL_READY_REJECTION_LAPSED`). Öncesi: ret kalıcıydı
+  (`purge_stale_rejection` hiç çağrılmıyordu).
+- Onay yalnız güncel fiyatla (kuyruk fiyatına düşülmez); fiyat kuyruk fiyatından
+  0,5 ATR'den (aynı TF) fazla kaçtıysa `price_moved:<x>atr` ile açmaz.
+- Ekran: kokpit açık pozisyon sütununun üstünde "Onay Bekleyen" listesi
+  (`apps/web/components/cockpit/Layer0ApprovalQueue.tsx`; Onayla / Reddet / Geç). Kuyruk
+  boşken çizilmez → mevcut görünüm aynı. Sözleşme değişmedi (uçlar zaten vardı).
+
+Adım 2 — karar kartı (gözlemci, karar değişmez). Her bilet `technical_detail.owner_card`
+taşır (`packages/paper/decision_card.py`, `tests/unit/test_decision_card.py`): üst TF yapı
+yönü (son iki pivot tepe/dip) ve adayla uyumu; son salınımın Fib geri çekilme oranı
+(0,382–0,618 bayrağı) + 1,272 / 1,618 uzantıları; son teyitli dip/tepe ve girişe ATR
+uzaklığı; en son 0-1-2 kurulumu (owner geçerlilik kuralı, çizginin bugünkü değeri, son
+değme); pozisyonun süre stopu içindeki yüksek/kritik takvim olayları; aynı sembol × TF ×
+yön adaylarının son 60 gün karşı-olgu net R'ı (gün dosyası mtime/boyut önbelleği). Her
+bölüm ayrı korunur (düşerse `status: unavailable` + neden). Onay paneli adayı biletle
+`signal_id` üzerinden eşler; giriş/stop/hedef/R:R + açılır kart; örnek az ise etiketler.
+`technical_detail` sözleşmede serbest alan → openapi ve üretilen tipler değişmedi.
+
+## Karar zinciri sağlamlığı (2026-11-14)
+
+Bozuk ya da eksik girdi artık "en güçlü sinyal / en büyük boyut / kapı açık" sonucuna dönüşmez
+(`tests/unit/test_trigger_chain_hardening.py`). Ortak araç `packages/data/numeric.py`.
+
+- **Boyut:** `max(0, min(1.5, NaN))` 1,5 (en büyük pozisyon, 37.500 $) veriyordu. `sizing.compute_size_usd`
+  sayı olmayan çarpanda 0 döner; karar motoru boyut zincirindeki her kısıtlayıcı çarpanı toplar,
+  biri sayı değilse karar `sizing_fault:non_finite` ile bekler. Güven ve EV sayı değilse kapı kapanır.
+- **Konsensüs:** sayı olmayan modül skoru 0–100 sıkıştırmasında 100'e dönüşüyordu; artık o modül
+  "verisi gelmedi" sayılır (`module_non_finite:` uyarısı, eksik modül politikası işler).
+- **RiskGate:** DQS/equity/zirve/günlük kâr-zarar/MTM sayı değilse `KILL_SWITCH` (önceden bütün
+  denetimler sessizce geçiliyordu).
+- **Fren dosyası** (`risk_halts.json`): atomik yazılır. Dosya var ama okunamıyorsa "fren yok" sayılmaz;
+  `STORE_UNREADABLE` geçici kaydı yeni pozisyonu durdurur (RISK_REDUCE), sonraki tick bozuk dosyayı
+  `.corrupt-<zaman>` adıyla kenara alır ve hâlâ geçerli frenleri güncel durumdan yeniden kurar.
+- **Son-edge freni** (`sizing_layers.brake`, son 30 işlem ortalaması < 0 → yarım boy) yalnız
+  `decide_all`'da hesaplanıyordu; canlı yol `decide_matrix` onu hiç görmüyordu. Artık canlıda da
+  çalışır (14 Kasım'da son 30 işlem +0,13R → fren kapalı; geçmiş kapanışların %39'unda açık olurdu).
+- **Hayalet yığın:** pas içi yığın koruması, son kapıda düşecek (teknik veri/teyit yok, yürütmeye hazır
+  değil) bir adayı "açılacak pozisyon" sayıyor, aynı sembolün diğer zaman dilimlerini
+  `concentration_guard` ile bekletiyordu (6–13 Kasım kaydında gerçek pozisyon yokken 1d 374, 1h 71,
+  4h 45 hücre×tick). Artık yalnız son kapının snapshot adımlarını geçen aday yer tutar.
+- **Kalibrasyon:** eğimi sıfır/negatif çıkan Platt fit'i ("sinyal güçlendikçe kazanma olasılığı düşer";
+  13 Kasım'da 1d, 14 işlem) karar zincirine girmez; eğitici `insufficient` yazar, özet
+  `rejected_fits` taşır, okuma tarafı eski dosyadaki ters fit'i de yok sayar (küresel fit'e düşer).
+  Kalibrasyon dosyası ve rejim hafızası (`regime_state.json`) artık atomik yazılır.
+
+Öngörü sınaması (karara GİRMEDİ): "hedef yolunda 1R'den yakın swing engeli varsa girme" kuralı
+2 yıllık 1d/4h verisinde, önceden yazılmış ölçütlerle sınandı (betik ve ölçütler oturum
+scratchpad'inde `audit/room_ahead.py`). 1d: engelli işlemler daha zayıf (+0,10R'e karşı +0,16R; fark
+%90 alt sınırı +0,013, iki dönemde de aynı yönde, rastgele elemeden iyi), ama işlemlerin %65'ini
+eliyor ve elenenler hâlâ kârlı → toplam kâr düşüyor; ölçüt 1 ve 5 geçmedi. Eşik sonradan
+ayarlanmadı. Engel mesafesi bilgi taşıyor; sert kapı olarak değil, olası bir boyut/öncelik
+girdisi olarak ileri veride ayrıca sınanmalı (owner kararı).
+
+## Benzinga haber API'si (2026-11-13)
+
+`packages/data/providers/news/benzinga.py`: owner'ın anahtarı (`BENZINGA_API_KEY`, yalnız yerel
+.env; yoksa sağlayıcı kapalı) ile genel uç dakikada bir okunur, başlıklar piyasa grubuna
+katılır ve ilk görülme kaydına `Benzinga` olarak yazılır. 13 Kasım denemesi: REST çalışıyor ve
+taze, ama anahtarın kapsamı dar — en fazla 25 başlık, sembol/kanal süzgeçleri boş, WebSocket
+3 dakikada mesaj göndermedi, başlıkların çoğu izlenmeyen şirketler. Sembol etiketi yalnız ≤2
+sembollü (şirkete özgü) haberde ve sınıflandırıcının genel eşleşmelerinden ÖNCE; yön başlığın
+açık hareketinden, yoksa duygudan. Değeri ~27 Kasım ölçümünde ilk görülme kaydıyla görülecek.
+
+## Doğrudan haber akışları + ilk görülme kaydı (2026-11-13)
+
+Ölçüm: Google News sorguları ortanca 81 dk, doğrudan yayıncı akışları 5 dk gecikiyordu
+(sistemin kendi akış listesi 25 dk yoklandı); jeopolitik haberlerin çoğu GN'den geliyordu.
+Bloomberg/FT GN sorgusu yerine Bloomberg Markets (piyasa) ve Bloomberg Politics, FT World,
+CNBC World, NYT World (jeopolitik, bölge süzgeciyle) doğrudan akışları eklendi; GN kopyası
+kaldırıldı (aynı haber iki "bağımsız" aile sayılmasın; aynı yayıncının akışları tek aile).
+`packages/data/providers/news/first_seen.py` her başlığın sistemce ilk görüldüğü anı
+`data/runtime/news_first_seen.jsonl`'a bir kez yazar (akışın süreçteki ilk ayrıştırması
+`boot`, ölçüme girmez). Karara dokunan kısım yalnız başlık setinin değişmesi.
+
+İlk sürümde açılış işareti yalnız akış başınaydı; haber keşfi (15 derinlik, süzgeçsiz) ilk turunda
+7–15. sıradaki eski başlıkları "yeni" yazdı (canlıda ilk 7 dk'da doğrudan ortanca 345 dk göründü).
+Düzeltme: anahtar akış + derinlik + süzgeç, grup akışın listesinden, satırda `v: 2`. Ölçüm YALNIZ
+`v == 2` satırlarla yapılır.
+
+ÖNCEDEN YAZILAN ÖLÇÜT (2026-11-27 civarı, düzeltmenin canlıya alınışından 14 gün sonra;
+`v == 2` ve boot=false satırlar):
+1. Jeopolitik grubunda doğrudan akış satırlarının ortanca gecikmesi (first_seen − ts) ≤ 15 dk ve
+   GN satırlarının ortancasının ≤ 1/3'ü (her biri n ≥ 100).
+2. Jeopolitik grubu satırlarının ≥ %40'ı doğrudan akışlardan.
+3. Her yeni akış ortalama ≥ 1 başlık/gün getiriyor; getirmeyen listeden çıkarılır.
+4. (Açıklayıcı) aynı hikâye (hikâye anahtarı kelime Jaccard ≥ 0,5, 12 saat içinde) hem doğrudan
+   hem GN'de görüldüyse doğrudan önce gelme oranı ve ortanca fark.
+
+## Günlük "neden kaçırdım" incelemesi (2026-11-13)
+
+`packages/learning/daily_review.py` öğrenme döngüsünde günde bir kez (00:15 UTC sonrası
+ilk koşu; yalnız dün, geriye dolum yok) dünün büyük hareketlerini (kendi 1h oynaklığına
+göre |z| ≥ 1,5, en fazla 5) inceler: paper pozisyon yakalandı mı (kapanan işlemler
+defteri + açık pozisyonlar; denetim kaydı değil — orada kapanışsız binlerce eski açılış
+var), kaçırıldıysa o yönde aday kaç saat vardı ve hangi kapı durdurdu (karar kaydı
+checkpoint + delta ile yeniden kurulur, ilk saat önceki günden tohumlanır), sembolün
+başlık sayısı ve ortanca gecikmesi, sistemin kapalı kaldığı süre (karar kaydında 45 dk+
+boşluk). Çıktı `data/runtime/daily_review/YYYY-MM-DD.json` + `review_recommendation`
+bildirimi. Karara dokunmaz.
+
+## Piyasa şoku bildirimi + şirket adı etiketi (2026-11-13)
+
+`packages/notifications/market_shock.py` öğrenme döngüsünde (5 dk) son tamamlanmış 1h
+barları tarar: sembolün kendi oynaklığına göre 1/3/6/24 saatlik hareket; ≥4 sembol
+≥2,5σ ve ≥2 sınıf ya da tek sembol ≥5σ → owner'a "ne oldu, ilgili başlıklar, açık
+pozisyon lehte/aleyhte, sistemin görüşü (aday + engel), risk seviyesi" bildirimi
+(tip `event_outcome`; sözleşmede ayrı tip yok). 6 saat sembol soğuması
+`data/runtime/market_shock_state.json`'da. Karara dokunmaz. Eşikler son 60 günde yalnız
+sıklıkla seçildi (0,89/gün). Haber sınıflandırıcı kayıtlı sembollere şirket adı takma
+adı uygular (`_COMPANY_ALIASES`: Nvidia/Jensen Huang → NVDA) ve adıyla anılan sembolü
+4-etki sınırında genel sınıf eşleşmelerinin önüne koyar.
+
+## Olay takvimi elle tutulur (son senkron 2026-11-13)
+
+`config/event_calendar.yaml` olay riski kapısının tek doğrulanmış kaynağıdır:
+kritik/yüksek etkili olaydan 24 saat önce ve 30 dakika sonra yeni pozisyon
+açılmaz. Dosya Haziran'dan beri güncellenmemişti: Ekim CPI 12 Kasım yazıyordu
+(gerçek 10 Kasım) → gerçek veri günü korumasız geçti, ertesi 24 saat boşuna
+kapalı kaldı; Eylül CPI/PPI günleri de yanlıştı, Ekim ve Aralık FOMC ile Aralık
+CPI/PPI hiç yoktu. 13 Kasım'da bütün günler bls.gov ve federalreserve.gov ile
+karşılaştırıldı, 2027 sonuna kadar eklendi (2027 FOMC günleri Fed'de "geçici").
+Koruma: `tests/unit/test_event_calendar.py` (aylık kapsama + düzeltilen günler +
+kapının gerçek CPI gününde kapanması). Her senkronda bütün günler yeniden
+karşılaştırılır; otomatik güncelleme yok.
 
 ## Ekran tick'in anını okur (2026-10-30)
 

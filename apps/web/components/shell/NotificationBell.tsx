@@ -15,6 +15,7 @@ import {
 } from "@/lib/queries/hooks";
 import type { ChatResponse, Notification, NotificationPriority } from "@/types/generated/api";
 import { normalizeVoiceText } from "@/lib/voiceText";
+import { startLocalVoiceStream, type LocalVoiceStreamHandle } from "@/lib/voiceStream";
 
 type BellMode = "feed" | "ask";
 type AssistantMessage = { role: "user" | "agent"; text: string; meta?: ChatResponse };
@@ -228,6 +229,7 @@ export function NotificationBell() {
   const audioUrlRef = useRef<string | null>(null);
   const speechRunRef = useRef(0);
   const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
+  const voiceStreamRef = useRef<LocalVoiceStreamHandle | null>(null);
 
   const items: Notification[] = data?.notifications ?? [];
   const activeTicketIds = useMemo(
@@ -346,7 +348,7 @@ export function NotificationBell() {
       setVoiceLoading(false);
       setSpeaking(false);
       clearAudioPlayback();
-      setVoiceError("Yerel Piper sesi üretilemedi.");
+      setVoiceError("Yerel ses üretilemedi.");
       return false;
     }
   }, [clearAudioPlayback, voiceEnabled]);
@@ -388,8 +390,7 @@ export function NotificationBell() {
     });
   }, [chat, speak, messages]);
 
-  const startListening = useCallback(() => {
-    if (chat.isPending || listening) return;
+  const startBrowserListening = useCallback(() => {
     const Recognition = getSpeechRecognition();
     if (!Recognition) {
       setVoiceError("Mikrofon bu tarayıcıda hazır değil.");
@@ -414,7 +415,42 @@ export function NotificationBell() {
     recognitionRef.current = recognition;
     setListening(true);
     recognition.start();
-  }, [chat.isPending, listening, send]);
+  }, [send]);
+
+  const startListening = useCallback(() => {
+    if (chat.isPending || listening) return;
+    stopSpeaking();
+    setVoiceError(null);
+    void startLocalVoiceStream({
+      onPartial: (text) => {
+        setListening(true);
+        setInput(text);
+      },
+      onFinal: (text) => {
+        voiceStreamRef.current = null;
+        setListening(false);
+        setInput("");
+        if (text) send(text);
+      },
+      onStatus: (stage) => {
+        setListening(true);
+        if (stage === "loading" || stage === "downloading") {
+          setVoiceError("Yerel Türkçe ses modeli hazırlanıyor...");
+        }
+      },
+      onError: (message) => {
+        setListening(false);
+        setVoiceError(message);
+      },
+    }).then((handle) => {
+      if (handle) {
+        voiceStreamRef.current = handle;
+        setListening(true);
+      } else if (!listening) {
+        startBrowserListening();
+      }
+    });
+  }, [chat.isPending, listening, send, startBrowserListening, stopSpeaking]);
 
   useEffect(() => {
     const log = chatLogRef.current;
@@ -423,10 +459,15 @@ export function NotificationBell() {
   }, [messages, chat.isPending]);
 
   useEffect(() => {
-    setMicReady(Boolean(getSpeechRecognition()));
+    setMicReady(
+      Boolean(getSpeechRecognition()) ||
+        Boolean("mediaDevices" in navigator && typeof WebSocket !== "undefined"),
+    );
     return () => {
       speechRunRef.current += 1;
       recognitionRef.current?.stop();
+      voiceStreamRef.current?.stop();
+      voiceStreamRef.current = null;
       clearAudioPlayback();
     };
   }, [clearAudioPlayback]);

@@ -200,6 +200,7 @@ def get_snapshot() -> dict:
                 "headline_id": c.headline_id,
                 "event_type": c.event_type,
                 "surprise_level": c.surprise_level,
+                "surprise_kind": c.surprise_kind,
                 "affected_assets": list(c.affected_assets),
                 "affected_timeframes": list(c.affected_timeframes),
                 "timeframe_bias": c.timeframe_bias,

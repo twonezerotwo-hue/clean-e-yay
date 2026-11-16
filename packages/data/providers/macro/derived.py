@@ -147,12 +147,17 @@ def _calendar_rows(now: datetime) -> list[Any]:
 def _attach_expectation(row: Catalyst, spec: Spec, calendar_rows: list[Any]) -> Catalyst:
     candidates = [c for c in calendar_rows if _matches(spec, c) and compatible(row, c)]
     if not candidates:
-        return row
+        # A blocked/degraded public calendar is not a zero forecast.  Keep the
+        # official actual for reporting, but make the missing expectation
+        # explicit so no downstream layer can manufacture a surprise.
+        return row.model_copy(update={
+            "evidence": [*row.evidence, "expectation_join=unavailable"],
+        })
     best = min(candidates, key=lambda c: abs((c.ts - row.ts).total_seconds()))
     return row.model_copy(update={
         "expected": best.expected,
         "ts": best.ts,  # sürpriz açıklama anından itibaren azalır; dönem sonu kimlikte
-        "evidence": [*row.evidence, f"expectation_join={best.id}"],
+        "evidence": [*row.evidence, f"expectation_join={best.id}", "expectation_unit=matched"],
     })
 
 

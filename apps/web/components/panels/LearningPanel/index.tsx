@@ -77,7 +77,7 @@ export function LearningPanel() {
           <div className="text-[10px] uppercase tracking-widest text-white/40 mb-1">
             Performans ayrımı — kim kazandı, kim kaybetti?
           </div>
-          <div className="grid grid-cols-3 gap-2">
+          <div className={`grid gap-2 ${data.cohorts.exploration?.trades ? "grid-cols-4" : "grid-cols-3"}`}>
             <CohortCard
               title="OTOMATİK"
               hint="sistemin kendi işlemleri"
@@ -94,6 +94,13 @@ export function LearningPanel() {
               hint="test / kaynağı belirsiz"
               stats={data.cohorts.excluded}
             />
+            {data.cohorts.exploration?.trades ? (
+              <CohortCard
+                title="KEŞİF"
+                hint="2–21 Ekim, yol kapandı"
+                stats={data.cohorts.exploration}
+              />
+            ) : null}
           </div>
           {(data.cohorts.auto.manual_closed ?? 0) > 0 ? (
             <p className="mt-1 text-[10px] text-white/40">

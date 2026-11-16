@@ -24,12 +24,14 @@ yok (calibration BOOST veya mistake BOOST yüksek olsa bile).
 """
 from __future__ import annotations
 
+import math
 from dataclasses import asdict, dataclass, field
 from typing import Literal
 
 from packages.consensus.engine import ConsensusResult, canonical_module_name
 from packages.consensus.engine import build as build_consensus
 from packages.data.ingestion.pipeline import MarketSnapshot
+from packages.data.numeric import is_finite
 from packages.data.providers import technical as tech_provider
 from packages.data.registry import guard_overrides
 from packages.data.registry.loader import load_thresholds
@@ -38,7 +40,6 @@ from packages.decision import (
     correlation_veto,
     entry_engine,
     learning_advisor,
-    paper_policy,
     sizing_layers,
 )
 from packages.decision.trace import stable_decision_id
@@ -218,6 +219,13 @@ def directional_strength_from_score(score: float, direction: str | None = None) 
     if str(direction or "").casefold() in {"bearish", "down"}:
         return 100.0 - value
     return value
+
+
+def _bounded_size(size: float) -> float:
+    """Boyut çarpanını [0, 1.5] aralığına sıkıştırır; sayı değilse NaN olarak
+    bırakır. Eski ``max(0, min(1.5, size))`` NaN'ı 1.5'e (en büyük boyut)
+    çeviriyordu; NaN korunur ve zincirin sonundaki tek kontrol kararı durdurur."""
+    return max(0.0, min(1.5, size)) if math.isfinite(size) else math.nan
 
 
 def _regime_multiplier(label: str) -> float:
@@ -414,7 +422,6 @@ def _decide_core(
     corr_entries: list | None = None,
     timeframe: str = "1d",
     recent_edge: float | None = None,
-    paper_exploration: bool = False,
     entry_gate: bool = True,
 ) -> TradeDecision:
     """Tek-motor karar zinciri (RiskGate İLK). ``entry_gate=False`` yalnız giriş kapısının
@@ -605,15 +612,11 @@ def _decide_core(
     # (Nötr/düşük-güvenli sinyallerle pozisyon açılmasını engeller. RiskGate'i
     #  bypass etmez; yalnızca ek kısıt. Owner config'ten ayarlanır.)
     min_open_conf = float(th.get("min_open_confidence", 0.0))
-    paper_cfg = paper_policy.load_config() if paper_exploration else None
-    paper_soft_reasons: list[str] = []
-    if cal_conf < min_open_conf:
-        if paper_cfg is None or not paper_policy.allows_confidence(cal_conf, paper_cfg):
-            return _hold(
-                reason=f"Düşük güven: p(win) %{cal_conf * 100:.0f} < taban %{min_open_conf * 100:.0f}",
-                blocked_by=["confidence_floor"],
-            )
-        paper_soft_reasons.append("confidence_floor")
+    if not math.isfinite(cal_conf) or cal_conf < min_open_conf:
+        return _hold(
+            reason=f"Düşük güven: p(win) %{cal_conf * 100:.0f} < taban %{min_open_conf * 100:.0f}",
+            blocked_by=["confidence_floor"],
+        )
 
     # ----- EV (beklenen değer) kapısı — olasılık + ödül/risk BİRLİKTE pozitif
     #  değilse açma. RiskGate'i bypass etmez; yalnızca ek ekonomik filtre. -----
@@ -656,16 +659,14 @@ def _decide_core(
     expected_value_empirical = (
         None if emp is None else round(_expected_value(emp.p_win, rr, cost_r), 4)
     )
-    if expected_value < float(ev_cfg.get("min_ev", 0.0)):
-        if paper_cfg is None or not paper_policy.allows_expected_value(expected_value, paper_cfg):
-            return _hold(
-                reason=ev_reason,
-                blocked_by=["ev_gate"],
-                expected_value=round(expected_value, 4),
-                p_win_empirical=p_win_empirical,
-                expected_value_empirical=expected_value_empirical,
-            )
-        paper_soft_reasons.append("ev_gate")
+    if not math.isfinite(expected_value) or expected_value < float(ev_cfg.get("min_ev", 0.0)):
+        return _hold(
+            reason=ev_reason,
+            blocked_by=["ev_gate"],
+            expected_value=round(expected_value, 4),
+            p_win_empirical=p_win_empirical,
+            expected_value_empirical=expected_value_empirical,
+        )
 
     # Confluence yoksa boyut yarıya iner
     if not cons.confluence_aligned:
@@ -684,8 +685,11 @@ def _decide_core(
 
     # No-AI-boost invariant: learning/mistake-memory may only REDUCE size. Clamp the
     # factor to ≤ 1.0 so a BOOST verdict can never increase the deterministic base.
+    # Kısıtlayıcı çarpanlar burada toplanır: biri sayı değilse (NaN/inf) `min` onu
+    # sessizce yok sayardı; zincirin sonundaki kontrol kararı durdurur.
+    restrictors: list[float] = [eq_size_factor, verdict.size_factor]
     size *= min(1.0, verdict.size_factor)
-    size = max(0.0, min(1.5, size))
+    size = _bounded_size(size)
 
     # ----- Açık-kitap self-conflict guard (shadow-first) -----
     # Aday aynı sembolde zaten açık ZIT yöne giriyorsa (BRENT short varken long)
@@ -757,8 +761,9 @@ def _decide_core(
             cluster_report=cluster_dict,
             blocked_by=["correlation_cluster_cap"],
         )
+    restrictors.append(cluster.size_factor)
     size *= min(1.0, cluster.size_factor)
-    size = max(0.0, min(1.5, size))
+    size = _bounded_size(size)
 
     # ----- v2.7 D2: kripto türev riski (RiskGate'ten SONRA; yalnızca kısıtlayıcı) -----
     # Yalnızca crypto sembolleri + verified/OK snapshot karar zincirine girer.
@@ -791,8 +796,9 @@ def _decide_core(
                 derivatives_report=derivatives_dict,
                 blocked_by=[f"derivatives_risk:{dv.level}"],
             )
+        restrictors.append(dv.size_factor)
         size *= dv.size_factor
-        size = max(0.0, min(1.5, size))
+        size = _bounded_size(size)
 
     # ----- v2.7 D4: realized volatility riski (RiskGate'ten SONRA; yalnızca kısıtlayıcı) -----
     # Yalnızca verified/OK (symbol, tf) snapshot karar zincirine girer. 15m/1h'de
@@ -826,8 +832,9 @@ def _decide_core(
                 volatility_report=volatility_dict,
                 blocked_by=[f"volatility_risk:{vv.level}"],
             )
+        restrictors.append(vv.size_factor)
         size *= vv.size_factor
-        size = max(0.0, min(1.5, size))
+        size = _bounded_size(size)
 
     # ----- v2.7 D5: haber catalyst riski (RiskGate'ten SONRA; yalnızca kısıtlayıcı) -----
     # Yalnızca verified + yarı-ömrü dolmamış impact'ler bu (symbol, tf) hücresini
@@ -855,8 +862,9 @@ def _decide_core(
                 catalyst_report=catalyst_dict,
                 blocked_by=[f"catalyst_risk:{cv.level}"],
             )
+        restrictors.append(cv.size_factor)
         size *= cv.size_factor
-        size = max(0.0, min(1.5, size))
+        size = _bounded_size(size)
 
     # ----- v2.7 D3: options IV/skew/term riski (RiskGate'ten SONRA; yalnızca kısıtlayıcı) -----
     # Yalnızca BTC/ETH + verified/OK snapshot karar zincirine girer. Options daha
@@ -895,8 +903,9 @@ def _decide_core(
                     options_report=options_dict,
                     blocked_by=[f"options_risk:{ov.level}"],
                 )
+            restrictors.append(ov.size_factor)
             size *= ov.size_factor
-            size = max(0.0, min(1.5, size))
+            size = _bounded_size(size)
 
     # ----- T2: timeframe politikası EN SON (RiskGate'ten sonra; sadece azaltır) -----
     blocked_by: list[str] = []
@@ -918,12 +927,7 @@ def _decide_core(
     # Çarpan sadece küçültür (≤1.0 clamp'li) — blocked_by'a girmez,
     # reason + size_multiplier üzerinden görünür.
     size *= pol["risk_multiplier"]
-
-    # Paper exploration may relax only the two soft gates above.  It always
-    # applies a small size cap and leaves the reason visible to the cockpit.
-    if paper_cfg is not None and paper_soft_reasons:
-        size = paper_policy.cap_size(size, paper_cfg)
-        blocked_by.extend(f"paper_exploration:{reason}" for reason in paper_soft_reasons)
+    restrictors.append(pol["risk_multiplier"])
 
     # ----- Kelly sizing — boyutu ölçülen edge'e oransal CAP'le (yalnız küçültür).
     #  fractional-Kelly $ = fraction × f* × equity; size_mult cap'i = bu / max_pos.
@@ -936,6 +940,7 @@ def _decide_core(
             f_star = _kelly_fraction(p_for_ev, rr)
             fraction = float(kelly_cfg.get("fraction", 0.25))
             kelly_mult_cap = fraction * f_star * equity_usd / max_pos
+            restrictors.append(kelly_mult_cap)
             if kelly_mult_cap < size:
                 size = max(0.0, kelly_mult_cap)
                 blocked_by.append("kelly_cap")
@@ -983,6 +988,7 @@ def _decide_core(
         recent_edge=recent_edge, brake_cfg=sl_cfg.get("brake") or {},
     )
     sl_factor = float(sizing_layers_report["applied_factor"])
+    restrictors.append(sl_factor)
     if sl_factor < 1.0 and size > 0.0:
         size = max(0.0, round(size * sl_factor, 3))
         blocked_by.append("sizing_layers")
@@ -993,6 +999,7 @@ def _decide_core(
     regime_brake_report: dict = {}
     if brake_evidence is not None:
         regime_brake_report = dict(brake_evidence)
+        restrictors.append(brake_mult)
         if brake_mult < 1.0:
             size = max(0.0, round(size * brake_mult, 3))
             blocked_by.append("regime_risk_brake")
@@ -1009,6 +1016,8 @@ def _decide_core(
                 calibrated_confidence=cal_conf,
                 expected_value=expected_value, min_confidence=min_open_conf,
             )
+            if learning_advisor.apply_enabled():
+                restrictors.append(adv.size_hint)
             if learning_advisor.apply_enabled() and adv.size_hint < 1.0 and size > 0.0:
                 size = max(0.0, round(size * adv.size_hint, 3))
                 adv.applied = True
@@ -1017,6 +1026,25 @@ def _decide_core(
             learning_advice = learning_advisor.to_dict(adv)
         except Exception:  # gölge/uygulama fikri kararı asla düşürmez
             learning_advice = {}
+
+    # ----- Boyut hesabı sayı üretmediyse açılış yok (fail-closed) -----
+    # NaN/inf bir çarpan karşılaştırmalardan sessizce geçer ("kısma yok" gibi
+    # görünür) ve eski sıkıştırma kalıbında en büyük boyuta dönüşürdü. Bozuk
+    # girdiyle pozisyon açılmaz; hangi kapının durdurduğu kayıtta görünür.
+    if not all(is_finite(v) for v in (size, *restrictors)):
+        return _hold(
+            reason="Boyut hesabı sayı üretmedi (bozuk çarpan) — açılış yapılmaz",
+            mistake_verdict=_verdict_to_dict(verdict),
+            cluster_report=cluster_dict,
+            self_conflict_report=self_conflict_report,
+            concentration_report=concentration_report,
+            derivatives_report=derivatives_dict,
+            volatility_report=volatility_dict,
+            catalyst_report=catalyst_dict,
+            options_report=options_dict,
+            blocked_by=[*blocked_by, "sizing_fault:non_finite"],
+            expected_value=round(expected_value, 4),
+        )
 
     return TradeDecision(
         symbol=symbol,
@@ -1088,7 +1116,6 @@ def decide_for_symbol(
     corr_entries: list | None = None,
     timeframe: str = "1d",
     recent_edge: float | None = None,
-    paper_exploration: bool = False,
 ) -> TradeDecision:
     """(symbol, timeframe) kararı — YÖN ≠ GİRİŞ ZAMANLAMASI.
 
@@ -1100,7 +1127,6 @@ def decide_for_symbol(
     kw = {
         "mistakes": mistakes, "open_positions": open_positions, "equity_usd": equity_usd,
         "corr_entries": corr_entries, "timeframe": timeframe, "recent_edge": recent_edge,
-        "paper_exploration": paper_exploration,
     }
     problem: str | None = None
     decision: TradeDecision | None = None
@@ -1185,13 +1211,32 @@ class _PendingPosition:
     size_usd: float
 
 
+def _reaches_paper_route(d: TradeDecision, snap: MarketSnapshot) -> bool:
+    """Aday, son kapının snapshot'tan okunan adımlarını geçiyor mu?
+
+    Intra-batch koruması kardeş hücreyi "açılacak pozisyon" sayar. Son kapıda
+    (teknik veri / teknik teyit / yürütme hazırlığı) düşecek bir aday hiç açılmaz;
+    onu sayınca aynı sembolün diğer zaman dilimleri gerçekte olmayan bir pozisyon
+    yüzünden `concentration_guard` ile bekliyordu (canlı kayıtta 6–13 Kasım: 1d'de
+    374, 1h'te 71 hücre×tick). Seans ve haber kapıları zamana/deftere bağlıdır ve
+    tick'te değerlendirilir; burada yalnız saf, snapshot'a bağlı adımlar sorulur."""
+    # final_gate bu modülü içe aktarır; döngüyü kırmak için geç içe aktarma.
+    from packages.decision import final_gate
+
+    if not is_execution_ready(d):
+        return False
+    if not final_gate.technical_data_ready(snap, d.symbol, d.timeframe):
+        return False
+    side = "long" if d.action == "open_long" else "short"
+    return final_gate.technical_confirmation_ready(snap, d.symbol, d.timeframe, side)[0]
+
+
 def decide_matrix(
     symbols: list[str],
     snap: MarketSnapshot,
     paper_state_input: RiskInput,
     open_positions: list | None = None,
     timeframes: list[str] | None = None,
-    paper_exploration: bool = False,
     persist_regime: bool = False,
 ) -> tuple[RegimeOutput, RiskDecision, list[TradeDecision]]:
     """T2 — (symbol, timeframe) karar matrisi.
@@ -1210,6 +1255,10 @@ def decide_matrix(
         event_candidates=event_risk.risk_candidates(snap.catalysts),
     )
     mems = mistake_memory.summary()
+    # P3 fren — sistemin son işlemlerdeki gerçekleşen edge'i (tek okuma). Canlı yol
+    # budur; önceden yalnız decide_all hesaplıyordu ve fren canlıda hiç çalışmıyordu.
+    _brake_lb = int(((load_thresholds().get("sizing_layers") or {}).get("brake") or {}).get("lookback", 30))
+    recent_edge = _recent_edge(_brake_lb)
     positions = open_positions or []
     corr_entries = correlation.matrix(
         sorted({*symbols, *(p.symbol for p in positions)})
@@ -1225,21 +1274,17 @@ def decide_matrix(
     for s in symbols:
         per_tf: dict[str, TradeDecision] = {}
         for tf in tfs:
-            decision_kwargs = {
-                "mistakes": mems,
-                "open_positions": pass_positions,
-                "equity_usd": paper_state_input.equity_usd,
-                "corr_entries": corr_entries,
-                "timeframe": tf,
-            }
-            if paper_exploration:
-                decision_kwargs["paper_exploration"] = True
             d = decide_for_symbol(
                 s,
                 snap,
                 regime,
                 risk,
-                **decision_kwargs,
+                mistakes=mems,
+                open_positions=pass_positions,
+                equity_usd=paper_state_input.equity_usd,
+                corr_entries=corr_entries,
+                timeframe=tf,
+                recent_edge=recent_edge,
             )
             per_tf[tf] = d
             if (
@@ -1247,6 +1292,7 @@ def decide_matrix(
                 and max_pos > 0
                 and d.action in ("open_long", "open_short")
                 and d.size_multiplier > 0
+                and _reaches_paper_route(d, snap)
             ):
                 pass_positions.append(
                     _PendingPosition(
@@ -1278,23 +1324,17 @@ def decide_matrix(
 def execution_readiness(decision: TradeDecision, *, suspended: bool = False) -> tuple[bool, str]:
     """Matrix'te sinyal niyeti ile işlem hazırlığını birbirinden ayır.
 
-    ``actionable`` geçmiş sözleşmede paper keşfi için pozitif boyut anlamına
-    gelir; bu yüzden negatif EV veya ``paper_exploration:*`` taşıyan hücreler
-    de actionable görünüyordu. Bu yardımcı yalnızca açıklayıcı bir ViewModel
-    alanı üretir. Eski ``actionable``/RiskGate sözleşmesi korunur; otomatik
-    worker rotası yalnız READY hücreleri deftere geçirir.
+    Yalnızca açıklayıcı bir ViewModel alanı üretir; ``actionable``/RiskGate
+    sözleşmesi korunur, otomatik worker rotası yalnız READY hücreleri deftere
+    geçirir. Negatif EV'li açılış hücresi (EV kapısı min_ev < 0 ayarlanırsa)
+    hazır sayılmaz.
     """
     if suspended:
         return False, "SUSPENDED"
     if not decision.actionable or decision.action not in {"open_long", "open_short"}:
         return False, "BLOCKED"
-    exploratory = any(
-        str(reason).startswith("paper_exploration:")
-        for reason in decision.blocked_by
-    )
-    negative_ev = decision.expected_value is not None and decision.expected_value < 0.0
-    if exploratory or negative_ev:
-        return False, "EXPLORATION"
+    if decision.expected_value is not None and decision.expected_value < 0.0:
+        return False, "BLOCKED"
     return True, "READY"
 
 

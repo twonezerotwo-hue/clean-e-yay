@@ -101,12 +101,13 @@ def test_countertrend_unconfirmed_requires_confirmation():
 # ── Guard: upper TF only scales DOWN, never up; size ≤ 1.0 ────────────────────
 
 def test_upper_tf_only_scales_down():
-    # Entry on 4h (base multiplier 1.0) so the cap-at-1.0 is visible.
-    bias = {"d1": "BULLISH", "h4": "BULLISH"}
+    # Entry on 1d (base multiplier 1.0) so the cap-at-1.0 is visible; 1w only biases.
+    # (4h is bias-only since 2026-11-10, so the guard no longer relies on a 4h entry.)
+    bias = {"w1": "BULLISH", "d1": "BULLISH"}
     aligned = ad.decide("BTCUSD", _cs(per_timeframe_bias=bias))
     counter = ad.decide("BTCUSD", _cs(per_timeframe_bias=bias, is_countertrend=True, confirmed_count=1))
 
-    assert aligned.entry_timeframe == "4h" and counter.entry_timeframe == "4h"
+    assert aligned.entry_timeframe == "1d" and counter.entry_timeframe == "1d"
     # Agreeing upper TF does NOT boost the entry above its own base cap.
     assert aligned.size_multiplier == 1.0
     assert aligned.size_multiplier <= 1.0

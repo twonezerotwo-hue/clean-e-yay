@@ -133,6 +133,10 @@ class FinalGate:
     gate: gates.GateDecision | None = None
     technical_confirmed: bool | None = None
     news_matched: bool | None = None
+    # Canonical macro evidence consumed at the same final gate.  It is
+    # diagnostic/attribution data until an owner-supplied paper decision id,
+    # verified actual+expectation and technical confirmation all agree.
+    macro_evidence: tuple[dict, ...] = ()
     detail: dict = field(default_factory=dict)
 
 
@@ -177,6 +181,28 @@ def evaluate(
                          reason="Teknik veri taze ve doğrulanmış değil.", technical_confirmed=False)
     technical_ok, technical_reason = technical_confirmation_ready(snap, symbol, timeframe, side)
 
+    # Join official macro evidence to this exact decision identity.  News
+    # headline heuristics are deliberately excluded by build_macro_evidence;
+    # an official row can become execution-eligible only when actual, same-unit
+    # expectation and this gate's technical confirmation all agree.  The
+    # existing paper route remains unchanged because this is an additive
+    # attribution field, not a RiskGate bypass.
+    try:
+        from packages.macro.evidence import build_macro_evidence
+
+        macro_rows = tuple(
+            row for row in build_macro_evidence(
+                snap,
+                regime=str(getattr(regime, "label", regime) or "UNKNOWN"),
+                decision_id=getattr(d, "decision_id", None),
+            )
+            if row.get("asset") == symbol and row.get("timeframe") == timeframe
+        )
+    except Exception:
+        # Evidence is additive; a provider/model error must not break the
+        # legacy technical/news/risk route.
+        macro_rows = ()
+
     # Haber etkisi saf ve ucuzdur; etiket için teknik teyit düşse de ölçülür.
     news_effect = news_setup.auto_open_news_effect(
         setups,
@@ -189,11 +215,43 @@ def evaluate(
         now=now,
     )
     news_matched = True if news_effect["match"] else (False if news_effect["mode"] == "require" else None)
-    evidence = {"technical_confirmed": technical_ok, "news_matched": news_matched, "news_effect": news_effect}
+    evidence = {
+        "technical_confirmed": technical_ok,
+        "news_matched": news_matched,
+        "news_effect": news_effect,
+        "macro_evidence": macro_rows,
+    }
 
     if not technical_ok:
         return FinalGate(route="block", side=side, blocker="technical_confirmation",
                          reason=technical_reason or "insufficient same-side confirmations", **evidence)
+
+    # A verified numeric macro event is a restrictive confluence gate: if the
+    # whole event points against the candidate, do not let an article-level
+    # heuristic or an old technical vote open the paper position.  Mixed
+    # macro directions stay WATCH/context (no fabricated winner).  This never
+    # increases size and never bypasses RiskGate.
+    numeric_macro = [
+        row for row in macro_rows
+        if row.get("surprise_kind") == "official_numeric"
+        and row.get("direction") in {"bullish", "bearish"}
+    ]
+    expected_side = "bullish" if side == "long" else "bearish"
+    macro_directions = {str(row.get("direction")) for row in numeric_macro}
+    if numeric_macro and len(macro_directions) == 1 and expected_side not in macro_directions:
+        reason = (
+            "Doğrulanmış makro sürpriz aday yönün tersini gösteriyor; "
+            "fiyat/teknik teyit aynı yönde oluşmadan kâğıt işlemi açılmadı."
+        )
+        return FinalGate(
+            route="block",
+            side=side,
+            blocker="macro_confluence",
+            reason=reason,
+            detail={"macro_direction": next(iter(macro_directions)), "candidate_direction": expected_side},
+            **evidence,
+        )
+
     if not news_effect["allow"]:
         blocker = "news_confluence" if news_effect["mode"] == "require" else "news_conflict"
         return FinalGate(route="block", side=side, blocker=blocker, reason=news_effect["reason"], **evidence)

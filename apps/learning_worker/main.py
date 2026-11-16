@@ -194,6 +194,30 @@ def run_once() -> dict:
     except Exception as exc:  # defensive
         errors.append(f"macro_backfill:{type(exc).__name__}")
 
+    # Piyasa şoku bildirimi (salt gözlem, 13 Kasım 2026 owner onayı): son tamamlanmış
+    # 1h barlarda oynaklığa göre sert hareket varsa owner'a "ne oluyor, kimi etkiler,
+    # sistem ne görüyor" özeti. Karara, kapılara ve pozisyonlara dokunmaz.
+    try:
+        from packages.notifications import append_many as _notify_many
+        from packages.notifications import market_shock as _market_shock
+        _shock_notifs = _market_shock.check()
+        if _shock_notifs:
+            _notify_many(_shock_notifs)
+            log.info("market_shock: %d bildirim", len(_shock_notifs))
+    except Exception as exc:  # defensive — worker patlamamalı
+        errors.append(f"market_shock:{type(exc).__name__}")
+
+    # Günlük "neden kaçırdım" incelemesi (salt gözlem, 13 Kasım 2026 owner onayı): dünün
+    # büyük hareketleri, sistemin onlara karşı ne yaptığı ve hangi kapının durdurduğu.
+    # Günde bir kez (00:15 UTC sonrası ilk koşu); karara dokunmaz.
+    try:
+        from packages.learning import daily_review as _daily_review
+        _review = _daily_review.run_if_due()
+        if _review is not None:
+            log.info("daily_review: %s, %d büyük hareket", _review["day"], len(_review["movers"]))
+    except Exception as exc:  # defensive — worker patlamamalı
+        errors.append(f"daily_review:{type(exc).__name__}")
+
     # Özet (boş state'te de güvenli — total=0).
     try:
         summary = build_summary()
@@ -861,6 +885,19 @@ def run_once() -> dict:
         reflection_status = f"ERROR:{type(exc).__name__}"
         errors.append(f"reflection:{type(exc).__name__}")
 
+    # Kapı karşı-olgu defteri (salt ölçüm, flag yok): karar kaydındaki her aday
+    # açılsaydı karar anındaki stop/hedef planıyla ne yapardı — kapıların bedeli.
+    gate_counterfactual_status = "ERROR"
+    try:
+        from packages.learning import gate_counterfactual as _gcf
+        gcf = _gcf.run()
+        gate_counterfactual_status = str(gcf.get("status", "UNKNOWN"))
+        log.info("gate_counterfactual: yeni=%s çözülen=%s bekleyen=%s",
+                 gcf.get("new"), gcf.get("resolved"), gcf.get("pending"))
+    except Exception as exc:  # defensive — worker patlamamalı
+        gate_counterfactual_status = f"ERROR:{type(exc).__name__}"
+        errors.append(f"gate_counterfactual:{type(exc).__name__}")
+
     # 0-2 TAM-STRATEJİ karnesi (SALT-ANALİZ, flag YOK). Owner'ın nihai LONG akışı
     # (0.618 giriş + fib hedef + 0-2 trailing + house-money re-giriş) arşiv+canlı
     # barlarda haftalık ölçülür; canlı karara dokunmaz (kanıt biriktirir).
@@ -1105,6 +1142,7 @@ def run_once() -> dict:
         "zone_proposer_status": zone_proposer_status,  # Aday bölge önericisi (makine ADAY önerir, owner süzer; SALT-ANALİZ)
         "council_status": council_status,  # Konsey karnesi (katmanlar-arası kombinasyon; SALT-ANALİZ)
         "reflection_status": reflection_status,  # Yansıma/hafıza döngüsü (kapanan işlem dersleri; SALT-GÖZLEM)
+        "gate_counterfactual_status": gate_counterfactual_status,  # kapı karşı-olgu defteri (salt ölçüm)
         "subsignal_scorecard_status": subsignal_scorecard_status,  # D5 sinyal karnesi (DISABLED=flag OFF)
         "tf_scoring_v2_shadow_status": tf_scoring_v2_shadow_status,  # D6 v2 gölge skoru (DISABLED=flag OFF)
         "tf_scoring_race_status": tf_scoring_race_status,  # R5 yarış defteri (DISABLED=flag OFF)

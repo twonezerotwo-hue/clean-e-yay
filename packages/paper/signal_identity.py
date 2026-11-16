@@ -55,11 +55,23 @@ def build_audit_id(
 def build_evidence_id(
     *, event_id: str, source_id: str, asset: str, direction: str | None,
     timeframe: str, decision_id: str | None = None,
+    metric: str | None = None,
+    release_period: str | None = None,
 ) -> str:
-    """Stable shared identity for a news/macro/technical evidence row."""
-    raw = "|".join(str(value or "") for value in (
-        event_id, source_id, str(asset or "").upper(), direction, timeframe, decision_id,
-    ))
+    """Stable shared identity for a news/macro/technical evidence row.
+
+    ``metric`` and ``release_period`` are optional so old callers keep their
+    byte-stable identities.  Macro callers must provide them: two CPI rows
+    (for example MoM and YoY) can share a title, source and release day but are
+    different observations and must never overwrite one another.
+    """
+    parts = [event_id, source_id, str(asset or "").upper(), direction, timeframe, decision_id]
+    # Do not change legacy identities when the new disambiguators are absent.
+    # This keeps existing tickets/audit rows joinable while making every new
+    # macro identity metric- and period-specific.
+    if metric is not None or release_period is not None:
+        parts.extend([metric, release_period])
+    raw = "|".join(str(value or "") for value in parts)
     return "ev_" + hashlib.sha256(raw.encode("utf-8")).hexdigest()[:20]
 
 

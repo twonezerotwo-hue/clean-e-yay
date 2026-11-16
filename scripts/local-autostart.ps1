@@ -26,6 +26,8 @@
 # would break the parser and silently kill this keeper. Keep this file ASCII.
 #
 # Logs: logs\*.log under repo root (keeper's own log: logs\keeper.log).
+param([switch]$SkipVoiceStudio)
+
 $ErrorActionPreference = "SilentlyContinue"
 
 # ---- single-instance guard (named mutex) -----------------------------------
@@ -220,13 +222,22 @@ $ngrokUrl = "https://mobster-ipad-transform.ngrok-free.dev"
 $script:ngrokWarned = $false
 
 while ($true) {
+    # A game-mode pause must also block scheduled/self-healing restarts.
+    if (Test-Path (Join-Path $env:LOCALAPPDATA "ToucheLocalRunner\cs2-game-state.json")) {
+        try {
+            $gameState = Get-Content (Join-Path $env:LOCALAPPDATA "ToucheLocalRunner\cs2-game-state.json") -Raw | ConvertFrom-Json
+            $SkipVoiceStudio = -not $gameState.Voice
+        } catch { Klog "WARN: game-mode state could not be read; services remain paused" }
+        Start-Sleep -Seconds 3
+        continue
+    }
     # supervisor - API + tick + learning in one process (health = API answers)
     Ensure-HttpSvc "supervisor" "http://127.0.0.1:9000/api/v1/health" 9000 $py "apps.supervisor" `
         @("-m","apps.supervisor") `
         $root "$logs\supervisor.out.log" "$logs\supervisor.err.log" ([ref]$apiDown)
 
     # VoiceStudio backend only; the Electron UI is not required for TTS.
-    if (Test-Path $voiceStudioPy) {
+    if ((-not $SkipVoiceStudio) -and (Test-Path $voiceStudioPy)) {
         $savedPythonPath = $env:PYTHONPATH
         try {
             Remove-Item Env:PYTHONPATH -ErrorAction SilentlyContinue
