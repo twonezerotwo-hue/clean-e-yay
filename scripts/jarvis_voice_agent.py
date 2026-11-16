@@ -32,7 +32,14 @@ LOG = logging.getLogger("eyay.jarvis_voice")
 SAMPLE_RATE = 16_000
 BLOCKSIZE = 3_200  # 200 ms PCM frames
 DEFAULT_API = "http://127.0.0.1:9000"
-DEFAULT_VOICE_WS = "ws://127.0.0.1:3900/v1/audio/transcriptions/stream?pcm=1&sr=16000"
+# Pin the local dictation model explicitly.  Relying only on VoiceStudio's
+# persisted preference can route a native background client through the legacy
+# ASR path, which then reports a misleading "model not installed" error even
+# when the sherpa Whisper Tiny weights are present.
+DEFAULT_VOICE_WS = (
+    "ws://127.0.0.1:3900/v1/audio/transcriptions/stream"
+    "?pcm=1&sr=16000&model=sherpa-whisper-tiny"
+)
 WAKE_WORDS = ("hey atlas", "atlas")
 STATUS_PATH = Path("data/runtime/jarvis_voice_status.json")
 

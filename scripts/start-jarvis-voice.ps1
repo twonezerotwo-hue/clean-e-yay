@@ -11,9 +11,12 @@ if (-not (Test-Path $Python)) {
     throw "Jarvis kurulmamış. Önce scripts\setup-jarvis-voice.ps1 çalıştırılmalı."
 }
 
-$running = Get-CimInstance Win32_Process -Filter "Name='python.exe'" -ErrorAction SilentlyContinue |
-    Where-Object { $_.CommandLine -like "*$Agent*" }
-if ($running) { Write-Host "Jarvis zaten çalışıyor."; exit 0 }
+# Match the agent filename rather than the full command line.  Windows can
+# expose one launch with quotes and another without them; the old full-path
+# wildcard check could miss a just-started instance and open a second mic.
+$running = @(Get-CimInstance Win32_Process -Filter "Name='python.exe'" -ErrorAction SilentlyContinue |
+    Where-Object { $_.CommandLine -match 'jarvis_voice_agent\.py(?:\s|$)' })
+if ($running.Count -gt 0) { Write-Host "Jarvis zaten çalışıyor."; exit 0 }
 
 $args = @($Agent)
 if ($Once) { $args += "--once" }

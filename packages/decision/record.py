@@ -93,6 +93,11 @@ def _cell(decision: Any, gate: Any) -> dict[str, Any]:
          "score": m.score, "weight": m.weight}
         for m in (getattr(consensus, "modules", None) or ())
     ]
+    macro_evidence = [
+        dict(row)
+        for row in (getattr(gate, "macro_evidence", None) or ())
+        if isinstance(row, dict)
+    ]
     return {
         "symbol": decision.symbol,
         "timeframe": decision.timeframe,
@@ -109,6 +114,7 @@ def _cell(decision: Any, gate: Any) -> dict[str, Any]:
         "gate_blocker": getattr(gate, "blocker", None),
         "size_multiplier": round(float(getattr(gate, "size_multiplier", 0.0) or 0.0), 3) if gate is not None else None,
         "decision_id": getattr(decision, "decision_id", None),
+        "macro_evidence": macro_evidence,
         "explain": explain.build(decision, gate),
     }
 
@@ -120,7 +126,19 @@ def _key(cell: dict[str, Any]) -> tuple:
     # Skorun küçük oynaması satır üretmez; karar, rota ya da engel değişince yazılır.
     # Engel kodlarındaki sayaçlar (ör. "market_closed:15m:4051s") anahtar dışıdır.
     blocked = tuple(_DIGITS.sub("#", str(item)) for item in cell["blocked_by"])
-    return (cell["action"], cell["candidate"], cell["direction"], blocked, cell["route"], cell["gate_blocker"])
+    macro = tuple(
+        sorted(
+            (
+                str(row.get("evidence_id") or ""),
+                str(row.get("direction") or ""),
+                str(row.get("surprise_kind") or ""),
+                bool(row.get("execution_eligible")),
+            )
+            for row in (cell.get("macro_evidence") or ())
+            if isinstance(row, dict)
+        )
+    )
+    return (cell["action"], cell["candidate"], cell["direction"], blocked, cell["route"], cell["gate_blocker"], macro)
 
 
 _SIDES = {"open_long": "long", "open_short": "short"}

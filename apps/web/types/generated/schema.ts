@@ -2947,12 +2947,18 @@ export interface components {
          * @enum {string}
          */
         CatalystActionability: "CONTEXT_ONLY" | "WATCH" | "CAUTION" | "NO_POSITION_INCREASE";
+        /**
+         * @description Headline heuristic versus official actual-vs-consensus surprise.
+         * @enum {string}
+         */
+        CatalystSurpriseKind: "news_heuristic" | "official_numeric" | "unavailable";
         /** @description v2.7 D5 — haber → catalyst half-life etkisi. Başlık kural tabanlı (deterministik, LLM YOK) bir event_type'a sınıflandırılır; event_type'a göre asset × timeframe etki haritası + yarı-ömür + valid_until + actionability üretilir. Karar zincirinde YALNIZCA kısıtlayıcı; rumor (verified=false) ve yarı-ömrü dolmuş catalyst yalnızca bağlamdır. */
         CatalystImpact: {
             catalyst_id: string;
             headline_id?: string;
             event_type: components["schemas"]["CatalystEventType"];
             surprise_level?: number;
+            surprise_kind?: components["schemas"]["CatalystSurpriseKind"];
             affected_assets?: string[];
             expected_half_life_minutes?: number;
             affected_timeframes?: components["schemas"]["Timeframe"][];
@@ -3020,6 +3026,10 @@ export interface components {
              * @enum {string}
              */
             execution_state?: "READY" | "BLOCKED" | "SUSPENDED";
+            /** @description Canonical macro evidence used by the final paper gate. */
+            macro_evidence?: {
+                [key: string]: unknown;
+            }[];
             /** @enum {string} */
             status?: "ACTIONABLE" | "NOT_ACTIONABLE" | "SUSPENDED";
             /** @enum {string} */

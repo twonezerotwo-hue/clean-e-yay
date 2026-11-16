@@ -7,6 +7,7 @@ snapshot, replay and dashboard; raw provider payloads remain in their owners.
 from __future__ import annotations
 
 import hashlib
+import re
 from datetime import UTC, datetime
 from typing import Any
 
@@ -23,6 +24,11 @@ _ASSET_ALIASES: tuple[tuple[tuple[str, ...], tuple[str, ...]], ...] = (
     (("silver", "gümüş", "xag"), ("XAGUSD",)),
     (("dollar", "dxy", "fed", "fomc", "interest rate", "inflation", "cpi", "pce", "jobs", "nfp", "payroll", "adp", "jolts", "job openings", "employment cost", "eci", "wage"), ("DXY",)),
     (("treasury", "yield", "bond", "us10y", "interest rate", "fed", "fomc", "inflation"), ("US10Y",)),
+    # Even when the public calendar is unavailable and no numeric surprise can
+    # be calculated, the affected metals must remain visible as context.  The
+    # direction stays None until actual and same-unit expectation are joined.
+    (("inflation", "cpi", "pce", "ppi"), ("XAUUSD", "XAGUSD")),
+    (("fed", "fomc", "interest rate", "rate decision"), ("XAUUSD", "XAGUSD")),
     (("nasdaq", "s&p", "sp500", "equity", "stocks", "stock market", "ai spending"), ("SP500",)),
     (("ism", "manufacturing pmi", "services pmi", "durable goods", "durable orders"), ("SP500", "COPPER")),
     (("bitcoin", "btc", "crypto", "ethereum", "eth", "digital asset"), ("BTCUSD", "ETHUSD")),
@@ -41,7 +47,12 @@ def _text(item: Any) -> str:
 
 def _assets(text: str, affected: Any) -> tuple[str, ...]:
     explicit = tuple(str(value).upper() for value in (affected or ()) if value)
-    found: list[str] = list(explicit)
+    # Provider-supplied affected assets are already a canonical mapping.  Do
+    # not append title heuristics to them: mixing an explicit DXY-only row with
+    # every metal/crypto keyword would create false cross-asset evidence.
+    if explicit:
+        return tuple(dict.fromkeys(explicit))
+    found: list[str] = []
     for needles, symbols in _ASSET_ALIASES:
         if any(needle in text for needle in needles):
             found.extend(symbols)
@@ -99,6 +110,32 @@ def _ts(value: Any) -> str | None:
     return str(value)
 
 
+def _period_key(item: Any) -> str:
+    """Return the observation period, not merely the release day.
+
+    FRED/BLS rows encode the measurement period in their provider id while a
+    public calendar row normally only has a release timestamp.  Keeping the
+    period in the canonical key prevents CPI MoM/YoY (or two monthly releases)
+    from collapsing into one event.
+    """
+    raw_id = str(getattr(item, "id", "") or "")
+    match = re.search(r"(\d{4}-\d{2}-\d{2})$", raw_id)
+    if match:
+        return match.group(1)
+    value = getattr(item, "ts", None)
+    if isinstance(value, datetime):
+        return value.astimezone(UTC).date().isoformat()
+    return "unknown-period"
+
+
+def _metric_key(item: Any) -> str:
+    title = str(getattr(item, "title", "") or "")
+    topic = _event_topic(title)
+    measure = macro_derived.measure_of(title)
+    unit = str(getattr(item, "unit", None) or "unknown").casefold()
+    return f"{topic}:{measure or unit}"
+
+
 def _canonical_event_id(catalyst: Any, title: str) -> str:
     """Join compatible provider rows without trusting feed-specific IDs."""
     published = getattr(catalyst, "ts", None)
@@ -108,6 +145,9 @@ def _canonical_event_id(catalyst: Any, title: str) -> str:
     # forecast is usually a percentage; joining those would create a fake
     # surprise and contaminate every downstream consumer.
     unit = str(getattr(catalyst, "unit", None) or "unknown").casefold()
+    measure = macro_derived.measure_of(title) or unit
+    region = _region(getattr(catalyst, "region", None)) or "unknown"
+    period = _period_key(catalyst)
     topic = _event_topic(title)
     # A published macro observation is dated to its measurement period while
     # a calendar row is dated to the later release day.  For known macro
@@ -118,7 +158,11 @@ def _canonical_event_id(catalyst: Any, title: str) -> str:
         "core_pce", "pce", "core_cpi", "cpi", "ppi", "nfp",
         "unemployment", "jolts", "eci", "gdp", "adp", "ism_pmi", "durable_goods", "fed_policy", "oil_inventory", "natural_gas_storage",
     }
-    key = f"macro|{topic}|{unit}" if topic in macro_topics else f"{day}|{topic}|{unit}"
+    key = (
+        f"macro|{topic}|{measure}|{unit}|{region}|{period}"
+        if topic in macro_topics
+        else f"{day}|{topic}|{unit}|{region}|{period}|{source_family(getattr(catalyst, 'source', None), title=title)}"
+    )
     return "evt_" + hashlib.sha256(key.encode("utf-8")).hexdigest()[:20]
 
 
@@ -194,6 +238,10 @@ def _compatible_rows(left: Any, right: Any) -> bool:
         return False
     if str(getattr(left, "unit", None) or "").casefold() != str(getattr(right, "unit", None) or "").casefold():
         return False
+    left_measure = macro_derived.measure_of(str(getattr(left, "title", "")))
+    right_measure = macro_derived.measure_of(str(getattr(right, "title", "")))
+    if left_measure and right_measure and left_measure != right_measure:
+        return False
     lreg, rreg = _region(getattr(left, "region", None)), _region(getattr(right, "region", None))
     if lreg and rreg and lreg != rreg:
         return False
@@ -239,8 +287,12 @@ def _observation_groups(observations: list[Any]) -> list[tuple[str, list[Any]]]:
         day = ts.astimezone(UTC).date().isoformat() if isinstance(ts, datetime) else "unknown-day"
         topic = _event_topic(str(getattr(actual, "title", "")))
         unit = str(getattr(actual, "unit", None) or "unknown").casefold()
+        measure = macro_derived.measure_of(str(getattr(actual, "title", ""))) or unit
+        period = _period_key(actual)
         region = _region(getattr(actual, "region", None)) or _region(getattr(pair, "region", None) if pair else None) or "unknown"
-        event_id = "evt_" + hashlib.sha256(f"macro|{topic}|{unit}|{region}|{day}".encode()).hexdigest()[:20]
+        event_id = "evt_" + hashlib.sha256(
+            f"macro|{topic}|{measure}|{unit}|{region}|{period}".encode()
+        ).hexdigest()[:20]
         groups.append((event_id, items))
     for row in rows:
         row_id = str(getattr(row, "id", ""))
@@ -251,7 +303,14 @@ def _observation_groups(observations: list[Any]) -> list[tuple[str, list[Any]]]:
 
 
 def build_macro_evidence(snapshot: Any, *, regime: str = "UNKNOWN", decision_id: str | None = None) -> tuple[dict[str, Any], ...]:
-    """Return canonical, shadow-only evidence rows for one market snapshot."""
+    """Return canonical evidence rows for one market snapshot.
+
+    Article language never becomes a numeric macro surprise.  A row can leave
+    shadow-only status only when it has a verified official actual, a
+    same-unit expectation, a computed surprise, technical confirmation and a
+    caller-supplied decision id.  The last condition keeps the existing paper
+    route safe while making the eligibility rule explicit and auditable.
+    """
     result: list[dict[str, Any]] = []
     observations = [
         *(getattr(snapshot, "catalysts", ()) or ()),
@@ -274,6 +333,12 @@ def build_macro_evidence(snapshot: Any, *, regime: str = "UNKNOWN", decision_id:
         previous = getattr(official or primary, "previous", None)
         revised = getattr(official or primary, "revised", None)
         surprise = _surprise(actual, expected)
+        official_numeric = bool(
+            official is not None
+            and getattr(official, "verified", False)
+            and expected is not None
+            and surprise is not None
+        )
         # Numeric surprise is a signal only when it is explicitly available;
         # it is never converted into a default value. Its asset direction comes
         # from the single owner table (packages/macro/matrix.py).
@@ -295,10 +360,28 @@ def build_macro_evidence(snapshot: Any, *, regime: str = "UNKNOWN", decision_id:
                 direction = _asset_direction(base, asset)
             for timeframe, confirmation, score, current_regime in _technical(snapshot, asset, regime, direction):
                 source_id = "+".join(families)
-                evidence_id = build_evidence_id(event_id=event_id, source_id=source_id, asset=asset, direction=direction, timeframe=timeframe, decision_id=decision_id)
+                metric = _metric_key(official or primary)
+                release_period = _period_key(official or primary)
+                execution_eligible = bool(
+                    decision_id
+                    and official_numeric
+                    and confirmation == "CONFIRMED"
+                )
+                evidence_id = build_evidence_id(
+                    event_id=event_id,
+                    source_id=source_id,
+                    asset=asset,
+                    direction=direction,
+                    timeframe=timeframe,
+                    decision_id=decision_id,
+                    metric=metric,
+                    release_period=release_period,
+                )
                 result.append({
                     "evidence_id": evidence_id,
                     "event_id": event_id,
+                    "metric": metric,
+                    "release_period": release_period,
                     "source_id": source_id,
                     "asset": asset,
                     "direction": direction,
@@ -315,6 +398,8 @@ def build_macro_evidence(snapshot: Any, *, regime: str = "UNKNOWN", decision_id:
                     "correlation_regime": current_regime,
                     "decision_id": decision_id,
                     "verified": bool(getattr(official or primary, "verified", False)),
+                    "surprise_kind": "official_numeric" if official_numeric else "unavailable",
+                    "execution_eligible": execution_eligible,
                     "published_at": _ts(getattr(official or primary, "ts", None)),
                     "ingested_at": _ts(getattr(snapshot, "ingested_at", None)),
                     "provenance": {
@@ -323,7 +408,14 @@ def build_macro_evidence(snapshot: Any, *, regime: str = "UNKNOWN", decision_id:
                         "provider_event_ids": provider_ids,
                         "titles": [str(getattr(item, "title", "")) for item in items],
                         "url": None,
-                        "shadow_only": True,
+                        "shadow_only": not execution_eligible,
+                        "numeric_source": "official_actual+same_unit_expectation" if official_numeric else None,
+                        "technical_gate": confirmation,
+                        "eligibility_reason": (
+                            "verified_actual_expected_and_technical_confirmed"
+                            if execution_eligible
+                            else "paper_decision_context_only"
+                        ),
                     },
                 })
     return tuple(result)

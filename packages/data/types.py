@@ -501,6 +501,10 @@ CatalystActionability = Literal[
     "CONTEXT_ONLY", "WATCH", "CAUTION", "NO_POSITION_INCREASE"
 ]
 
+# Article headlines use a deterministic heuristic for urgency/sentiment.  It
+# must never be confused with an official actual-vs-consensus calculation.
+CatalystSurpriseKind = Literal["news_heuristic", "official_numeric", "unavailable"]
+
 # Kural tabanlı event_type taksonomisi (deterministik; rumor/unknown dâhil).
 CatalystEventType = Literal[
     "geopolitical_deescalation",
@@ -540,6 +544,7 @@ class CatalystImpact(BaseModel):
     headline_id: str = ""
     event_type: CatalystEventType = "unknown"
     surprise_level: float = 0.0     # -1..+1 (piyasa yönü işaretli; |.| = şiddet)
+    surprise_kind: CatalystSurpriseKind = "news_heuristic"
     affected_assets: list[str] = Field(default_factory=list)
     expected_half_life_minutes: int = 60
     affected_timeframes: list[Timeframe] = Field(default_factory=list)

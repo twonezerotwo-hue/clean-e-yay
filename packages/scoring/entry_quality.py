@@ -39,6 +39,10 @@ VERDICTS = ("ok", "reduce", "wait")
 
 @dataclass(frozen=True)
 class EntryQualityConfig:
+    # Kept as an explicit compatibility/provenance field for frozen config
+    # snapshots.  The entry gate itself remains controlled by the surrounding
+    # pipeline; older snapshots may carry values such as ``shadow``.
+    mode: str = "active"
     zero_two_canonical: bool = False
     # --- konum
     range_extreme: float = 0.20
