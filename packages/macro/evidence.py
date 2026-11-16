@@ -282,9 +282,6 @@ def _observation_groups(observations: list[Any]) -> list[tuple[str, list[Any]]]:
         if pair is not None:
             items.append(pair)
             used.add(str(getattr(pair, "id", "")))
-        anchor = pair or actual
-        ts = getattr(anchor, "ts", None)
-        day = ts.astimezone(UTC).date().isoformat() if isinstance(ts, datetime) else "unknown-day"
         topic = _event_topic(str(getattr(actual, "title", "")))
         unit = str(getattr(actual, "unit", None) or "unknown").casefold()
         measure = macro_derived.measure_of(str(getattr(actual, "title", ""))) or unit
