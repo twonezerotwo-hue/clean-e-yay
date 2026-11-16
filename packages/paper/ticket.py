@@ -25,7 +25,7 @@ from typing import Any
 from packages.data.ingestion.pipeline import MarketSnapshot
 from packages.decision.engine import TradeDecision, is_execution_ready
 from packages.ops.store import write_text_atomic
-from packages.paper import news_setup, session_gate
+from packages.paper import decision_card, news_setup, session_gate
 from packages.paper.guards import price_sanity
 from packages.paper.lifecycle import canonical_targets
 from packages.paper.signal_identity import build_signal_id
@@ -463,6 +463,11 @@ def build_ticket(
         news_setup_id=news_setup_id,
         news_event_id=news_event_id,
         news_evidence_id=news_evidence_id,
+    )
+    # Karar kartı (karar-destek adım 2): owner'ın kendi araçları — gözlemci, karar değişmez.
+    technical_detail["owner_card"] = decision_card.build_owner_card(
+        decision.symbol, decision.timeframe, side, entry, atr,
+        catalysts=getattr(snap, "catalysts", None) or (), now=ts,
     )
     why = _why_bullets(decision)
     safety = _safety_lines(decision, snap.quality.score if snap.quality else None)

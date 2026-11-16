@@ -172,6 +172,17 @@ karar değiştirmez; kuyruğu kullanılabilir yapar (`packages/paper/manual_queu
   (`apps/web/components/cockpit/Layer0ApprovalQueue.tsx`; Onayla / Reddet / Geç). Kuyruk
   boşken çizilmez → mevcut görünüm aynı. Sözleşme değişmedi (uçlar zaten vardı).
 
+Adım 2 — karar kartı (gözlemci, karar değişmez). Her bilet `technical_detail.owner_card`
+taşır (`packages/paper/decision_card.py`, `tests/unit/test_decision_card.py`): üst TF yapı
+yönü (son iki pivot tepe/dip) ve adayla uyumu; son salınımın Fib geri çekilme oranı
+(0,382–0,618 bayrağı) + 1,272 / 1,618 uzantıları; son teyitli dip/tepe ve girişe ATR
+uzaklığı; en son 0-1-2 kurulumu (owner geçerlilik kuralı, çizginin bugünkü değeri, son
+değme); pozisyonun süre stopu içindeki yüksek/kritik takvim olayları; aynı sembol × TF ×
+yön adaylarının son 60 gün karşı-olgu net R'ı (gün dosyası mtime/boyut önbelleği). Her
+bölüm ayrı korunur (düşerse `status: unavailable` + neden). Onay paneli adayı biletle
+`signal_id` üzerinden eşler; giriş/stop/hedef/R:R + açılır kart; örnek az ise etiketler.
+`technical_detail` sözleşmede serbest alan → openapi ve üretilen tipler değişmedi.
+
 ## Karar zinciri sağlamlığı (2026-11-14)
 
 Bozuk ya da eksik girdi artık "en güçlü sinyal / en büyük boyut / kapı açık" sonucuna dönüşmez

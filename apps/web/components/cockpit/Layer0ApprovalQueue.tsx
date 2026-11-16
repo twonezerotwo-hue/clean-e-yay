@@ -3,7 +3,8 @@
 import { useEffect, useMemo, useState } from "react";
 
 import { fmtNum } from "@/lib/format";
-import { useManualReady, useManualReadyAction } from "@/lib/queries/hooks";
+import { useManualReady, useManualReadyAction, useTradeTickets } from "@/lib/queries/hooks";
+import { findTicket, selectDecisionCard, type CardTone, type DecisionCardView } from "@/lib/selectors/decisionCard";
 import type { ManualReadyActionResult, ManualReadyTrade } from "@/types/generated/api";
 
 // Onay kuyruğu (karar-destek adım 1, 2026-11-16): tick'in owner onayına bıraktığı adaylar.
@@ -23,6 +24,54 @@ const OUTCOME_TONE: Record<Outcome["tone"], string> = {
   warn: "text-amber-200",
   info: "text-white/65",
 };
+
+const CARD_TONE: Record<CardTone, string> = {
+  good: "text-emerald-200/85",
+  bad: "text-amber-200/90",
+  neutral: "text-white/70",
+  muted: "text-white/40",
+};
+
+// Karar kartı (adım 2): plan satırı her zaman, owner araçları açılır bölümde. Bilet yoksa
+// nedeni söylenir — kart sessizce kaybolmaz.
+function DecisionCard({ view }: { view: DecisionCardView | null }) {
+  if (!view) {
+    return (
+      <p className="mt-1.5 text-[10px] leading-4 text-white/40">
+        Karar kartı yok — bu aday için bilet üretilmedi (risk/ödül tabanı karşılanmadı ya da tick henüz yazmadı).
+      </p>
+    );
+  }
+  const p = view.plan;
+  return (
+    <div className="mt-1.5 space-y-1">
+      {p ? (
+        <div className="grid grid-cols-4 gap-1 rounded-lg border border-white/[0.06] bg-white/[0.02] px-2 py-1 font-mono text-[10px] text-white/80">
+          <span title="Giriş">G {fmtPrice(p.entry)}</span>
+          <span className="text-red-200/85" title="Stop">S {fmtPrice(p.stop)}</span>
+          <span className="text-emerald-200/85" title="Hedef">H {fmtPrice(p.target)}</span>
+          <span title={`Risk özsermayenin %${p.riskPct.toFixed(2)}'i`}>R:R {p.rr.toFixed(1).replace(".", ",")}</span>
+        </div>
+      ) : null}
+      {view.lines.length ? (
+        <details className="group rounded-lg border border-white/[0.06] bg-black/20 px-2 py-1 text-[10px] leading-4">
+          <summary className="flex cursor-pointer list-none items-center gap-1.5 text-white/60 marker:content-none [&::-webkit-details-marker]:hidden">
+            <span className="text-[8px] text-amber-200/80 transition-transform group-open:rotate-90" aria-hidden>▶</span>
+            Karar kartı — yapı, Fib, dip/tepe, 0-2, olaylar, geçmiş
+          </summary>
+          <dl className="mt-1 space-y-0.5 border-t border-white/[0.06] pt-1">
+            {view.lines.map((line) => (
+              <div key={line.label} className="grid grid-cols-[6.5rem_minmax(0,1fr)] gap-1.5">
+                <dt className="text-white/40">{line.label}</dt>
+                <dd className={`min-w-0 ${CARD_TONE[line.tone]}`}>{line.text}</dd>
+              </div>
+            ))}
+          </dl>
+        </details>
+      ) : null}
+    </div>
+  );
+}
 
 function remainingSec(item: ManualReadyTrade, nowMs: number): number {
   const start = Date.parse(item.requested_at);
@@ -91,6 +140,7 @@ function outcomeOf(item: ManualReadyTrade, action: Action, res: ManualReadyActio
 export function Layer0ApprovalQueue() {
   const queue = useManualReady();
   const act = useManualReadyAction();
+  const tickets = useTradeTickets();
   const [nowMs, setNowMs] = useState(() => Date.now());
   const [busyId, setBusyId] = useState<string | null>(null);
   const [outcome, setOutcome] = useState<Outcome | null>(null);
@@ -177,6 +227,7 @@ export function Layer0ApprovalQueue() {
                   {fmtRemaining(remainingSec(item, nowMs))}
                 </span>
               </div>
+              <DecisionCard view={selectDecisionCard(findTicket(item, tickets.data?.tickets))} />
               <div className="mt-1.5 grid grid-cols-3 gap-1.5">
                 <button
                   type="button"
