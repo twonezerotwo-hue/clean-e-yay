@@ -200,8 +200,13 @@ Bozuk ya da eksik girdi artık "en güçlü sinyal / en büyük boyut / kapı a�
 - **RiskGate:** DQS/equity/zirve/günlük kâr-zarar/MTM sayı değilse `KILL_SWITCH` (önceden bütün
   denetimler sessizce geçiliyordu).
 - **Fren dosyası** (`risk_halts.json`): atomik yazılır. Dosya var ama okunamıyorsa "fren yok" sayılmaz;
-  `STORE_UNREADABLE` geçici kaydı yeni pozisyonu durdurur (RISK_REDUCE), sonraki tick bozuk dosyayı
-  `.corrupt-<zaman>` adıyla kenara alır ve hâlâ geçerli frenleri güncel durumdan yeniden kurar.
+  `STORE_UNREADABLE` kaydı yeni pozisyonu durdurur (RISK_REDUCE). 17 Kasım: her yazımda aynı içerikle
+  `risk_halts.json.bak` de yazılır ve ilk tick iki dosyayı (boş da olsa) oluşturur. Asıl dosya silinir ya
+  da bozulursa frenler yedekten okunur — koşulu artık sürmeyen, yalnız owner reset'in kaldırdığı düşüş
+  freni de korunur (önceden kayboluyordu) — ve asıl dosya yeniden yazılır (`HALT_STORE_RECOVERED`
+  denetim kaydı). İkisi de okunamıyorsa bozuklar `.corrupt-<zaman>` adıyla kenara alınır,
+  `STORE_UNREADABLE` kalıcı yazılır (`HALT_STORE_UNREADABLE` denetim kaydı) ve yalnız owner reset
+  kaldırır; owner reset okunamayan depoda temiz durum yazar.
 - **Son-edge freni** (`sizing_layers.brake`, son 30 işlem ortalaması < 0 → yarım boy) yalnız
   `decide_all`'da hesaplanıyordu; canlı yol `decide_matrix` onu hiç görmüyordu. Artık canlıda da
   çalışır (14 Kasım'da son 30 işlem +0,13R → fren kapalı; geçmiş kapanışların %39'unda açık olurdu).

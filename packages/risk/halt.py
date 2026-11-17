@@ -11,9 +11,13 @@ Politika:
   RiskGate'in mevcut hard gate'lerini **bypass etmez**, gevşetmez.
 - Breach tespiti tick yollarında `sync(risk_input)` ile yapılır ve diske
   yazılır; `active_halts()` salt okur (önceki günün DAILY_LOSS'unu saymaz).
-- Dosya atomik yazılır. Dosya var ama okunamıyorsa "fren yok" sayılmaz:
-  `active_halts()` yeni pozisyonu durduran geçici bir kayıt döner; bir sonraki
-  `sync` bozuk dosyayı kenara alır ve hâlâ geçerli frenleri yeniden kurar.
+- Dosya atomik yazılır ve her yazımda `.bak` kopyası da yazılır; ilk tick iki
+  dosyayı (boş da olsa) oluşturur, böylece "dosya yok" ilk çalıştırmayla
+  karışmaz (17 Kasım). Asıl dosya silinir ya da bozulursa frenler yedekten
+  okunur (aktif frenler korunur). İkisi de okunamıyorsa "fren yok" sayılmaz:
+  `active_halts()` yeni pozisyonu durduran kayıt döner; `sync` bozuk dosyaları
+  kenara alır ve bu kaydı KALICI yazar — hangi frenin aktif olduğu bilinmediği
+  için yalnız owner reset kaldırır. Kurtarma ve okunamama denetim kaydına girer.
 - PAPER_SAFE / NO_EXECUTION: broker yok; halt yalnızca paper karar
   akışını kısıtlar.
 """
@@ -32,7 +36,7 @@ from packages.ops.store import replace_with_retry, write_text_atomic
 
 log = logging.getLogger(__name__)
 _LOCK = threading.Lock()
-# Fren dosyası okunamazken geçerli olan geçici kayıt (diske yazılmaz).
+# Fren dosyası ve yedeği okunamazken geçerli kayıt; sync onu kalıcı yazar, owner reset kaldırır.
 STORE_UNREADABLE = "STORE_UNREADABLE"
 
 HALT_LEVELS = {
@@ -58,8 +62,11 @@ class HaltEvent:
 @dataclass
 class HaltState:
     events: list[HaltEvent] = field(default_factory=list)
-    # Dosya vardı ama okunamadı (yarım yazım, bozuk JSON, beklenmeyen biçim).
+    # Dosya vardı ama okunamadı (yarım yazım, bozuk JSON, beklenmeyen biçim) ve
+    # yedekten de kurtarılamadı.
     unreadable: bool = False
+    # Asıl dosya yoktu ya da bozuktu; durum `.bak` kopyasından okundu.
+    recovered: bool = False
 
     def to_dict(self) -> dict:
         return {"events": [asdict(e) for e in self.events[-MAX_HISTORY:]]}
@@ -79,27 +86,76 @@ def _path() -> Path:
     return Path(os.environ.get("RISK_HALT_PATH", "data/runtime/risk_halts.json"))
 
 
+def _bak_path() -> Path:
+    p = _path()
+    return p.with_name(p.name + ".bak")
+
+
+def _read(p: Path) -> HaltState | None:
+    """Okunabilir durum ya da None (yok / bozuk / beklenmeyen biçim)."""
+    try:
+        return HaltState.from_dict(json.loads(p.read_text(encoding="utf-8")))
+    except (OSError, ValueError, TypeError, KeyError, AttributeError):
+        return None
+
+
 def _utc_iso() -> str:
     return datetime.now(UTC).isoformat()
 
 
 def load() -> HaltState:
-    """Fren durumunu oku. Dosya yoksa boş durum (ilk çalıştırma); dosya var ama
-    okunamıyorsa `unreadable=True` — bozuk dosya "aktif fren yok" demek DEĞİLDİR."""
+    """Fren durumunu oku.
+
+    Asıl dosya okunabiliyorsa o. Değilse (silinmiş ya da bozuk) `.bak` kopyası
+    okunur (`recovered=True`). İkisi de yoksa ilk çalıştırma (boş durum). Biri var
+    ama hiçbiri okunamıyorsa `unreadable=True` — "aktif fren yok" demek DEĞİLDİR."""
     with _LOCK:
-        p = _path()
-        if not p.exists():
+        p, bak = _path(), _bak_path()
+        state = _read(p)
+        if state is not None:
+            return state
+        backup = _read(bak)
+        if backup is not None:
+            backup.recovered = True
+            return backup
+        if not p.exists() and not bak.exists():
             return HaltState()
-        try:
-            return HaltState.from_dict(json.loads(p.read_text(encoding="utf-8")))
-        except (OSError, ValueError, TypeError, KeyError, AttributeError):
-            return HaltState(unreadable=True)
+        return HaltState(unreadable=True)
 
 
 def save(state: HaltState) -> None:
-    """Atomik yazım: yarım kalmış bir yazma hedef dosyayı bozamaz."""
+    """Atomik yazım (yarım kalmış yazma hedefi bozamaz) + aynı içerikle `.bak`."""
     with _LOCK:
-        write_text_atomic(_path(), json.dumps(state.to_dict(), indent=2))
+        text = json.dumps(state.to_dict(), indent=2)
+        write_text_atomic(_path(), text)
+        try:
+            write_text_atomic(_bak_path(), text)
+        except OSError:
+            log.exception("fren yedeği yazılamadı (asıl dosya yazıldı): %s", _bak_path())
+
+
+def _audit(action: str, detail: dict) -> None:
+    try:
+        from packages.ops import compliance
+
+        compliance.record_event(action=action, detail=detail, actor="auto")
+    except Exception:  # denetim yazılamazsa fren yine çalışır
+        log.exception("fren denetim kaydı yazılamadı: %s", action)
+
+
+def _quarantine(now: str) -> list[str]:
+    """Okunamayan fren dosyalarını incelenmek üzere kenara al."""
+    moved: list[str] = []
+    for p in (_path(), _bak_path()):
+        if not p.exists():
+            continue
+        target = p.with_name(f"{p.name}.corrupt-{now[:19].replace(':', '')}")
+        try:
+            replace_with_retry(p, target)
+            moved.append(target.name)
+        except OSError:
+            log.exception("fren dosyası okunamadı ve kenara alınamadı: %s", p)
+    return moved
 
 
 def _today_utc() -> str:
@@ -130,7 +186,7 @@ def _unreadable_event() -> HaltEvent:
         type=STORE_UNREADABLE,
         level="RISK_REDUCE",
         started_at=_utc_iso(),
-        reason="Fren dosyası okunamıyor — doğrulanana kadar yeni pozisyon yok",
+        reason="Fren dosyası ve yedeği okunamıyor — owner sıfırlayana kadar yeni pozisyon yok",
         evidence=[str(_path())],
     )
 
@@ -202,20 +258,23 @@ def sync(inp) -> list[HaltEvent]:
     DAILY_LOSS UTC gün dönümünde kapanır; MAX_DRAWDOWN yalnız owner reset ile.
     """
     state = load()
-    changed = False
     now = _utc_iso()
+    # İlk tick iki dosyayı da yazar: "dosya yok" bundan sonra ilk çalıştırma değil,
+    # kayıp demektir (yedekten okunur).
+    changed = not _path().exists() or not _bak_path().exists()
+    if state.recovered:
+        log.error("fren dosyası okunamadı; frenler yedekten okundu ve yeniden yazılıyor")
+        _audit("HALT_STORE_RECOVERED", {"active": [e.type for e in state.events if e.active]})
+        state.recovered = False
+        changed = True
     if state.unreadable:
-        # Bozuk dosya incelenmek üzere kenara alınır; frenler aşağıda güncel
-        # durumdan yeniden kurulur (zarar/düşüş koşulu sürdükçe fren yeniden doğar)
-        # ve temiz dosya yazılır.
-        p = _path()
-        quarantine = p.with_name(f"{p.name}.corrupt-{now[:19].replace(':', '')}")
-        try:
-            replace_with_retry(p, quarantine)
-            log.error("fren dosyası okunamadı; kenara alındı: %s", quarantine)
-        except OSError:
-            log.exception("fren dosyası okunamadı ve kenara alınamadı: %s", p)
-        state = HaltState()
+        # Asıl dosya da yedek de okunamıyor: hangi frenin aktif olduğu bilinmiyor.
+        # Bozuk dosyalar kenara alınır; yeni pozisyonu durduran kayıt KALICI yazılır
+        # (owner reset kaldırır). Güncel ihlaller aşağıda ayrıca kurulur.
+        moved = _quarantine(now)
+        log.error("fren dosyası ve yedeği okunamadı; kenara alındı: %s", moved)
+        _audit("HALT_STORE_UNREADABLE", {"quarantined": moved})
+        state = HaltState(events=[_unreadable_event()])
         changed = True
     # H11 — gün dönümü: önceki günün DAILY_LOSS halt'i kendiliğinden kapanır.
     today = _today_utc()
@@ -247,9 +306,14 @@ def sync(inp) -> list[HaltEvent]:
 
 
 def owner_reset() -> list[HaltEvent]:
-    """Owner reset — tüm aktif halt'leri kapatır; geçmiş korunur."""
+    """Owner reset — tüm aktif halt'leri kapatır; geçmiş korunur. Fren dosyası ve
+    yedeği okunamıyorsa owner'ın sıfırlaması temiz durum yazar (bozuklar kenara)."""
     state = load()
     now = _utc_iso()
+    if state.unreadable:
+        _quarantine(now)
+        state = HaltState()
+        save(state)
     cleared: list[HaltEvent] = []
     for e in state.events:
         if e.active:

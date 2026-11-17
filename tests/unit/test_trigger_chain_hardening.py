@@ -355,24 +355,94 @@ def test_risk_gate_restricts_while_halt_file_unreadable(halt_env) -> None:
     assert res.action == "RISK_REDUCE"
 
 
-def test_sync_quarantines_corrupt_file_and_rebuilds_active_halts(halt_env) -> None:
+def test_sync_quarantines_corrupt_file_and_keeps_store_brake_with_breaches(halt_env) -> None:
     halt, path = halt_env
     path.write_text("{not json", encoding="utf-8")
-    # Düşüş koşulu sürüyor (%10) → fren yeniden kurulur.
+    # Düşüş koşulu sürüyor (%10) → fren yeniden kurulur; bilinmeyen eski frenler
+    # için okunamama kaydı da kalıcı yazılır (17 Kasım).
     active = halt.sync(_risk_input(equity_usd=90_000.0))
-    assert [e.type for e in active] == ["MAX_DRAWDOWN"]
-    assert active[0].level == "KILL_SWITCH"
-    assert json.loads(path.read_text(encoding="utf-8"))["events"][0]["type"] == "MAX_DRAWDOWN"
+    assert [e.type for e in active] == [halt.STORE_UNREADABLE, "MAX_DRAWDOWN"]
+    assert [e.level for e in active] == ["RISK_REDUCE", "KILL_SWITCH"]
+    assert [e["type"] for e in json.loads(path.read_text(encoding="utf-8"))["events"]] == [
+        halt.STORE_UNREADABLE, "MAX_DRAWDOWN"]
     assert halt.load().unreadable is False
     assert list(path.parent.glob("risk_halts.json.corrupt-*")), "bozuk dosya incelenmek üzere saklanmalı"
 
 
-def test_sync_after_corruption_without_breach_writes_clean_file(halt_env) -> None:
+def test_unreadable_store_brake_stays_until_owner_reset(halt_env) -> None:
     halt, path = halt_env
     path.write_text("{not json", encoding="utf-8")
+    assert [e.type for e in halt.sync(_risk_input())] == [halt.STORE_UNREADABLE]
+    # Sonraki tick'lerde ihlal olmasa da kalkmaz: hangi frenin aktif olduğu bilinmiyordu.
+    assert [e.type for e in halt.sync(_risk_input())] == [halt.STORE_UNREADABLE]
+    assert [e.type for e in halt.active_halts()] == [halt.STORE_UNREADABLE]
+    cleared = halt.owner_reset()
+    assert [e.type for e in cleared] == [halt.STORE_UNREADABLE]
+    assert halt.active_halts() == []
+    assert halt.sync(_risk_input()) == []
+
+
+def _dd_halt_then_recovery(halt) -> None:
+    """Düşüş freni kurulur, sonra equity koşulun üstüne çıkar (fren yalnız owner reset ile kalkar)."""
+    assert [e.type for e in halt.sync(_risk_input(equity_usd=90_000.0))] == ["MAX_DRAWDOWN"]
+    assert [e.type for e in halt.sync(_risk_input(equity_usd=97_000.0))] == ["MAX_DRAWDOWN"]
+
+
+def _halt_audit(tmp_path) -> list[str]:
+    log = tmp_path / "compliance.jsonl"
+    if not log.exists():
+        return []
+    return [json.loads(line).get("action") for line in log.read_text(encoding="utf-8").splitlines() if line]
+
+
+@pytest.mark.parametrize("damage", ["delete", "corrupt"])
+def test_lost_main_file_recovers_owner_only_brake_from_backup(halt_env, tmp_path, monkeypatch, damage) -> None:
+    halt, path = halt_env
+    monkeypatch.setenv("COMPLIANCE_LOG_PATH", str(tmp_path / "compliance.jsonl"))
+    _dd_halt_then_recovery(halt)
+    if damage == "delete":
+        path.unlink()
+    else:
+        path.write_text('{"events": [{"id": "x", "ty', encoding="utf-8")
+    # Önceden: dosya yok = fren yok, bozuk dosya = güncel ihlalden yeniden kur (koşul
+    # sürmediği için düşüş freni kayboluyordu).
+    assert [e.type for e in halt.active_halts()] == ["MAX_DRAWDOWN"]
+    from packages.risk.engine import evaluate
+    assert evaluate(_risk_input(equity_usd=97_000.0)).action == "KILL_SWITCH"
+    assert [e.type for e in halt.sync(_risk_input(equity_usd=97_000.0))] == ["MAX_DRAWDOWN"]
+    assert json.loads(path.read_text(encoding="utf-8"))["events"][0]["type"] == "MAX_DRAWDOWN"
+    assert halt.load().recovered is False                # asıl dosya yeniden yazıldı
+    assert "HALT_STORE_RECOVERED" in _halt_audit(tmp_path)
+
+
+def test_both_files_unreadable_blocks_and_is_audited(halt_env, tmp_path, monkeypatch) -> None:
+    halt, path = halt_env
+    monkeypatch.setenv("COMPLIANCE_LOG_PATH", str(tmp_path / "compliance.jsonl"))
+    _dd_halt_then_recovery(halt)
+    path.write_text("{bozuk", encoding="utf-8")
+    path.with_name(path.name + ".bak").write_text("{bozuk", encoding="utf-8")
+    assert [e.type for e in halt.active_halts()] == [halt.STORE_UNREADABLE]
+    assert [e.type for e in halt.sync(_risk_input(equity_usd=97_000.0))] == [halt.STORE_UNREADABLE]
+    assert len(list(path.parent.glob("risk_halts.json*.corrupt-*"))) == 2
+    assert "HALT_STORE_UNREADABLE" in _halt_audit(tmp_path)
+    from packages.risk.engine import evaluate
+    assert evaluate(_risk_input(equity_usd=97_000.0)).action == "RISK_REDUCE"
+
+
+def test_first_tick_creates_both_files(halt_env) -> None:
+    halt, path = halt_env
     assert halt.sync(_risk_input()) == []
     assert json.loads(path.read_text(encoding="utf-8")) == {"events": []}
+    assert json.loads(path.with_name(path.name + ".bak").read_text(encoding="utf-8")) == {"events": []}
+
+
+def test_owner_reset_on_unreadable_store_writes_clean_state(halt_env) -> None:
+    halt, path = halt_env
+    path.write_text("{bozuk", encoding="utf-8")
+    assert halt.owner_reset() == []
+    assert halt.load().unreadable is False
     assert halt.active_halts() == []
+    assert list(path.parent.glob("risk_halts.json.corrupt-*"))
 
 
 def test_halt_save_is_atomic(halt_env, monkeypatch) -> None:
