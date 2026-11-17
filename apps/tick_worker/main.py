@@ -490,6 +490,8 @@ async def run_once() -> None:
             if getattr(pos, "signal_id", None)
         }
         opened_cells: set[tuple[str, str]] = set()  # bu turda pozisyon açılan hücreler
+        # Bu turda açılışı tetikleyen haber eşleşmeleri (sembol, TF, yön) → kart aynı teyitle kurulur.
+        activated_news: dict[tuple[str, str, str], dict] = {}
         # Son kapı tek yerde (packages.decision.final_gate): yürütmeye hazır →
         # teknik veri → teknik teyit → haber etkisi → seans/conflict gate rotası.
         # Sonuçlar yayınlanır; ekran aynı kapı sonucunu gösterir.
@@ -637,6 +639,7 @@ async def run_once() -> None:
                 paper_actions += 1
                 if news_match:
                     news_setup.mark_activated(ps, news_setup_id, now=now)
+                    activated_news[(pos.symbol, pos.timeframe, pos.side)] = dict(news_match)
                 log.info(
                     "open: %s %s %s @ %.4f size=%.0f valid_until=%s",
                     pos.symbol, pos.timeframe, pos.side, pos.entry_price, pos.size_usd,
@@ -687,6 +690,7 @@ async def run_once() -> None:
                 ps,
                 only_signal_ids=set(opened_by_signal),
                 position_ids_by_signal=opened_by_signal,
+                activated_confluence=activated_news,
                 brief_id=build_brief_id(
                     getattr(snap, "snapshot_id", None),
                     getattr(ps, "revision", None),

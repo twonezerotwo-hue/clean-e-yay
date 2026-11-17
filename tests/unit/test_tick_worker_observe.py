@@ -106,6 +106,31 @@ def test_ticket_notifications_share_news_confluence_gate(monkeypatch) -> None:
     assert len(ticket.build_tickets_from_decisions([decision], snapshot, state)) == 1
 
 
+def test_news_confluence_open_still_gets_its_ticket(monkeypatch) -> None:
+    """17 Kasım: açılış kurulumu ACTIVATED olduğu için match_confluence (yalnız ARMED)
+    None dönüyordu; haber teyitli açılışın kartı ve "yeni sinyal" bildirimi düşüyordu."""
+    from packages.paper import ticket
+
+    decision = SimpleNamespace(
+        action="open_short", symbol="ETHUSD", timeframe="1d",
+        candidate_action="open_short", risk=SimpleNamespace(action="ALLOW_NORMAL"),
+    )
+    snapshot = SimpleNamespace(prices=[SimpleNamespace(symbol="ETHUSD", price=1817.66, verified=True)])
+    state = SimpleNamespace(news_prepared_setups=[])
+    seen = []
+    monkeypatch.setattr(ticket, "is_execution_ready", lambda *_args, **_kwargs: True)
+    monkeypatch.setattr(ticket.news_setup, "require_confluence_for_auto_open", lambda: True)
+    monkeypatch.setattr(ticket.news_setup, "match_confluence", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(ticket, "build_ticket", lambda *_a, **k: seen.append(k) or SimpleNamespace(status="active"))
+    activated = {("ETHUSD", "1d", "short"): {"setup_id": "s1", "event_id": "e1", "evidence_id": "v1"}}
+    out = ticket.build_tickets_from_decisions([decision], snapshot, state, activated_confluence=activated)
+    assert len(out) == 1
+    assert (seen[0]["news_setup_id"], seen[0]["news_event_id"], seen[0]["news_evidence_id"]) == ("s1", "e1", "v1")
+    # Başka sembol/yön için açılış kurulumu kullanılmaz.
+    other = {("ETHUSD", "1d", "long"): {"setup_id": "s1"}}
+    assert ticket.build_tickets_from_decisions([decision], snapshot, state, activated_confluence=other) == []
+
+
 def test_ticket_technical_detail_keeps_signal_audit_ids() -> None:
     """A successful ticket must retain the identity used by the opener."""
     from packages.paper import ticket

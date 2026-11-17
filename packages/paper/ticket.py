@@ -535,6 +535,7 @@ def build_tickets_from_decisions(
     only_signal_ids: set[str] | None = None,
     position_ids_by_signal: dict[str, str] | None = None,
     brief_id: str | None = None,
+    activated_confluence: dict[tuple[str, str, str], dict] | None = None,
 ) -> list[TradeTicket]:
     """Bir tick'in tüm karar matrisinden ticket listesi üret.
 
@@ -581,6 +582,11 @@ def build_tickets_from_decisions(
                 data_verified=verified.get(d.symbol, False),
                 decision_id=getattr(d, "decision_id", None),
             )
+            if confluence is None and activated_confluence:
+                # Bu tick'te açılışı tetikleyen haber kurulumu açılırken ACTIVATED
+                # işaretlenir ve match_confluence yalnız ARMED arar; kart aynı
+                # teyitle kurulur (yoksa haber teyitli açılış bildirimsiz kalıyordu).
+                confluence = activated_confluence.get((d.symbol, d.timeframe, side))
             if confluence is None:
                 continue
         side = "long" if d.action == "open_long" else "short"

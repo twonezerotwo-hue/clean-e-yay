@@ -266,6 +266,13 @@ Artık aktif kartı olmayan açık pozisyon, sinyal ve karar kimliğini taşıyo
 dosyası yoksa (saklama süresi doldu) `decision_record_unavailable` uyarısı. Kartlar defterden
 yeniden üretilmez (owner kararı). 9 Kasım+ kapanan 55 işlemde: yeni denetim 55/55 bağlı, eski 55 FAIL.
 
+Haber teyitli otomatik açılışın kartı ve "yeni sinyal" bildirimi düşüyordu: açılışı tetikleyen haber
+kurulumu açılırken `ACTIVATED` işaretleniyor, aynı tick'te kart kurulurken `match_confluence` yalnız
+`ARMED` kurulum aradığı için teyit bulunamıyordu (10–17 Kasım: haber teyitsiz 42 açılışın 42'si
+bildirildi, haber teyitli tek açılış — ETHUSD 1d short, 16 Kasım 18:47 — bildirilmedi). Tick artık o
+turda açılışı tetikleyen eşleşmeyi `build_tickets_from_decisions(activated_confluence=…)`'a verir;
+kart aynı haber kimlikleriyle kurulur.
+
 ## Benzinga haber API'si (2026-11-13)
 
 `packages/data/providers/news/benzinga.py`: owner'ın anahtarı (`BENZINGA_API_KEY`, yalnız yerel
