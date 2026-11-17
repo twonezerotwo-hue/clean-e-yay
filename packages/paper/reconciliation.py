@@ -5,11 +5,47 @@ The worker is the only writer, but the UI consumes several persisted surfaces
 mutates those files; it reports whether the same signal still points to the
 same decision and position.  Missing legacy attribution is reported as
 ``incomplete`` rather than fabricated.
+
+Tickets are per-tick "new signal" cards: once a position is open and the
+decision changes, its card leaves the list.  An open position without an
+active ticket is therefore checked against the persistent chain instead (17
+November): it is linked when it carries its signal and decision ids and the
+decision is in the decision record.
 """
 from __future__ import annotations
 
-from collections.abc import Iterable, Mapping
+from collections.abc import Callable, Iterable, Mapping
+from datetime import UTC, datetime, timedelta
 from typing import Any
+
+_RECORDED: set[str] = set()
+
+
+def decision_recorded(decision_id: str, opened_at: str | None) -> bool | None:
+    """Is the decision in the decision record (day file of the opening ±1 day)?
+
+    True: found · False: those day files exist but the decision is not in them ·
+    None: no day file (retention expired or no record) — cannot be verified."""
+    if decision_id in _RECORDED:
+        return True
+    try:
+        day = datetime.fromisoformat(str(opened_at).replace("Z", "+00:00")).astimezone(UTC).date()
+    except (TypeError, ValueError):
+        return None
+    from packages.decision.record import _dir as record_dir
+
+    needle = f'"{decision_id}"'
+    seen = False
+    for d in (day, day - timedelta(days=1), day + timedelta(days=1)):
+        try:
+            text = (record_dir() / f"{d.isoformat()}.jsonl").read_text(encoding="utf-8")
+        except OSError:
+            continue
+        seen = True
+        if needle in text:
+            _RECORDED.add(decision_id)
+            return True
+    return False if seen else None
 
 
 def _rows(value: Any) -> list[Mapping[str, Any]]:
@@ -33,6 +69,7 @@ def reconcile(
     tickets: Any = None,
     positions: Any = None,
     notifications: Any = None,
+    decision_lookup: Callable[[str, str | None], bool | None] | None = None,
 ) -> dict[str, Any]:
     """Return deterministic identity-chain health for current paper state.
 
@@ -86,8 +123,20 @@ def reconcile(
         for row in ticket_rows
         if row.get("position_id") not in (None, "")
     }
+    recorded_positions = 0
     for row in position_rows:
         if not row.get("id") or str(row.get("id")) in active_position_ids:
+            continue
+        if decision_lookup is not None and row.get("signal_id") and row.get("decision_id"):
+            found = decision_lookup(str(row["decision_id"]), row.get("opened_at"))
+            if found:
+                recorded_positions += 1
+                continue
+            item = {"position_id": row.get("id"), "decision_id": row.get("decision_id")}
+            if found is None:
+                incomplete.append({**item, "type": "decision_record_unavailable"})
+            else:
+                mismatches.append({**item, "type": "position_decision_not_recorded"})
             continue
         # Positions created before the canonical ticket lane have no identity
         # to reconcile.  Keep them visible as legacy/incomplete, but do not
@@ -110,6 +159,7 @@ def reconcile(
         "score": score,
         "active_tickets": len(ticket_rows),
         "open_positions": len(position_rows),
+        "recorded_positions": recorded_positions,
         "ticket_created_notifications": len(notif_rows),
         "historical_ticket_notifications": historical_notifications,
         "mismatches": mismatches,

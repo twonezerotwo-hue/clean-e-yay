@@ -255,6 +255,17 @@ Pozisyon işlemleri (`packages/paper/position_ops.py`):
 
 Testler: `tests/unit/test_chat_position_safety.py`.
 
+## Kimlik mutabakatı karar kaydıyla (2026-11-17)
+
+Sağlıktaki `identity_reconciliation` açık pozisyonları o tick'in "yeni sinyal" kartlarıyla
+karşılaştırıyordu; kartlar her tick yalnız açılmaya hazır adaylardan kurulduğu için pozisyon açılıp
+karar değişince kart düşüyor ve sağlık `open_position_without_ticket` FAIL diyordu (yanlış alarm).
+Artık aktif kartı olmayan açık pozisyon, sinyal ve karar kimliğini taşıyor ve kararı karar kaydında
+(açılış günü ±1 gün dosyası; `reconciliation.decision_recorded`) bulunuyorsa bağlı sayılır
+(`recorded_positions`). Karar o günlerin kaydında yoksa `position_decision_not_recorded` FAIL, kayıt
+dosyası yoksa (saklama süresi doldu) `decision_record_unavailable` uyarısı. Kartlar defterden
+yeniden üretilmez (owner kararı). 9 Kasım+ kapanan 55 işlemde: yeni denetim 55/55 bağlı, eski 55 FAIL.
+
 ## Benzinga haber API'si (2026-11-13)
 
 `packages/data/providers/news/benzinga.py`: owner'ın anahtarı (`BENZINGA_API_KEY`, yalnız yerel

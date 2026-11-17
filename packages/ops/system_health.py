@@ -331,6 +331,7 @@ def build_system_health() -> dict:
             tickets=ticket.load_last(),
             positions=[p.__dict__ for p in paper_state_view.open_positions],
             notifications=[n.to_dict() for n in list_recent(limit=200)],
+            decision_lookup=reconciliation.decision_recorded,
         )
     except Exception:
         identity_reconciliation = {"status": "UNAVAILABLE", "score": None, "paper_safe": True, "no_execution": True}
