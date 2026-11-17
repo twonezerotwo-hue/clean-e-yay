@@ -38,7 +38,16 @@ def llm_env(tmp_path, monkeypatch):
     monkeypatch.setenv("LLM_MODE", "mock")
     monkeypatch.setenv("COMPLIANCE_LOG_PATH", str(tmp_path / "compliance_log.jsonl"))
     monkeypatch.setattr(llm_chat, "_PENDING_ORDER", None)
+    monkeypatch.setattr(llm_chat, "_PROPOSALS", {})
     return tmp_path
+
+
+def _confirmed(command: str) -> dict:
+    """Sohbet komutu önce öneri olur; işlem aynı sohbette 'onayla <kod>' ile yapılır."""
+    proposal = llm_chat.answer(command)
+    code = proposal["answer"].split()[2].rstrip(".")
+    history = [{"role": "user", "text": command}, {"role": "agent", "text": proposal["answer"][:500]}]
+    return llm_chat.answer(f"onayla {code}", history=history)
 
 
 @pytest.fixture
@@ -168,12 +177,13 @@ def test_chat_order_is_recorded_in_compliance_chain(llm_env, monkeypatch):
         "kind": "market", "side": "long", "symbol": "BTCUSD", "size_usd": 10000.0,
         "entry_price": 100.0, "sl": 95.0, "tp": 110.0, "position_id": "pos-test",
     })
-    result = llm_chat.answer("btc'ye 10 bin al")
+    result = _confirmed("btc'ye 10 bin al")
     assert "manual_order:pos-test" in result["evidence_used"]
     rows = _chat_rows()
     assert len(rows) == 1
     assert rows[0]["actor"] == "chat" and rows[0]["outcome"] == "ok"
-    assert rows[0]["detail"] == {"result": "manual_order:pos-test", "message": "btc'ye 10 bin al"}
+    assert rows[0]["detail"]["result"] == "manual_order:pos-test"
+    assert rows[0]["detail"]["message"].startswith("btc'ye 10 bin al (onayla ")
     assert compliance.verify()["chain_ok"] is True
 
 
@@ -182,7 +192,7 @@ def test_rejected_chat_order_is_recorded_as_failed(llm_env, monkeypatch):
         raise manual_order.ManualOrderError("test reddi")
 
     monkeypatch.setattr(manual_order, "place", _reject)
-    llm_chat.answer("btc'ye 10 bin al")
+    _confirmed("btc'ye 10 bin al")
     rows = _chat_rows()
     assert [r["outcome"] for r in rows] == ["failed"]
 

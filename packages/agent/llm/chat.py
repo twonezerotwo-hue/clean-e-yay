@@ -9,6 +9,7 @@ from __future__ import annotations
 import copy
 import hashlib
 import re
+import secrets
 import time
 
 from packages.agent import canonical_context as ctx_mod
@@ -911,6 +912,66 @@ def _notifications_answer() -> tuple[str, list[str]]:
 _PENDING_ORDER: dict | None = None
 _PENDING_TTL_SEC = 180
 
+# Sohbetten kâğıt işlemi onay koduyla (owner kararı 17 Kasım 2026). Komut önce
+# öneriye döner; işlem yalnız "onayla <kod>" ile yapılır. Kod tek kullanımlık,
+# 2 dk geçerli ve yalnız önerinin göründüğü sohbetten kabul edilir: istemcinin
+# gönderdiği geçmişin son ajan cevabı "Onay kodu <kod>" ile başlamalı. Kod metnin
+# başında durur; istemci her turun ilk 500 karakterini gönderir.
+_PROPOSALS: dict[str, dict] = {}
+_PROPOSAL_TTL_SEC = 120
+_CONFIRM_RE = re.compile(r"^\s*onayla\s+(\d{4})\s*[.!]*\s*$")
+
+# Soru, danışma ve dilek cümleleri hiçbir zaman işlem değildir ("ETH'yi yarıya
+# kadar satmalı mıyım?", "BTC ters çevirir mi sence?", "gümüşte %50 kapatsam mı?").
+_QUESTION_RE = re.compile(
+    r"\?|\b(?:m[ıiuü](?:yım|yim|yum|yüm|sın|sin|sun|sün|yız|yiz|yuz|yüz|dır|dir|dur|dür)?"
+    r"|sence|acaba|neden|niye|nasıl|olur|olsa|olabilir|gerekir"
+    r"|alsam|satsam|açsam|acsam|kapatsam|eklesem|artırsam|arttırsam|büyütsem|çevirsem"
+    r"|alsak|satsak|açsak|kapatsak|açalım mı|acalim mi"
+    r"|\w*(?:malı|meli)(?:yım|yim|yız|yiz)?)\b"
+)
+
+
+def _is_question(folded: str) -> bool:
+    return _QUESTION_RE.search(folded) is not None
+
+
+def _propose(kind: str, payload: dict, summary: str, tag: str, message: str) -> tuple[str, list[str]]:
+    now = time.time()
+    for code in [c for c, p in _PROPOSALS.items() if now - p["ts"] >= _PROPOSAL_TTL_SEC]:
+        del _PROPOSALS[code]
+    code = f"{secrets.randbelow(10_000):04d}"
+    while code in _PROPOSALS:
+        code = f"{secrets.randbelow(10_000):04d}"
+    _PROPOSALS[code] = {"kind": kind, "payload": payload, "ts": now, "message": message[:120]}
+    return (
+        f"Onay kodu {code}. {summary} Yapmamı istiyorsan 2 dakika içinde 'onayla {code}' yaz; "
+        "başka bir şey yazarsan hiçbir işlem yapılmaz.",
+        [tag],
+    )
+
+
+def _confirm(code: str, history: list[dict] | None) -> tuple[str, list[str]]:
+    prop = _PROPOSALS.get(code)
+    if prop is None or time.time() - prop["ts"] >= _PROPOSAL_TTL_SEC:
+        _PROPOSALS.pop(code, None)
+        return ("Bu onay kodu geçersiz ya da süresi dolmuş; hiçbir işlem yapılmadı. Komutu yeniden yaz.",
+                ["confirm:invalid"])
+    last_agent = next(
+        (str((t or {}).get("text") or "") for t in reversed(history or []) if (t or {}).get("role") == "agent"),
+        "",
+    )
+    if not last_agent.lstrip().startswith(f"Onay kodu {code}"):
+        return ("Bu kod bu sohbette verilmedi; hiçbir işlem yapılmadı.", ["confirm:foreign"])
+    del _PROPOSALS[code]  # tek kullanımlık: yürütmeden ÖNCE düşer, ikinci onay işlem açmaz
+    if prop["kind"] == "order":
+        text, evidence = _manual_order_answer(prop["payload"])
+    elif prop["kind"] == "pos_op":
+        text, evidence = _position_op_answer(prop["payload"])
+    else:
+        text, evidence = _cancel_answer(prop["payload"])
+    return text, [*evidence, f"confirmed:{prop['message']}"]
+
 
 def _bare_side(folded: str) -> str | None:
     f = folded.strip().rstrip(".!? ").strip()
@@ -959,13 +1020,7 @@ def _parse_manual_order(folded: str) -> dict | None:
     # paper pozisyonuna dönüşmemelidir. Emir yalnız açık ve doğrudan bir komut
     # olarak yazıldığında ayrıştırılır; yönün sonradan sorulması (_PENDING_ORDER)
     # mevcut kontrollü akışta devam eder.
-    if re.search(
-        r"\b(?:alsam|satsam|açsam|acsam|alsak|satsak|açalım mı|acalim mi|"
-        r"almalı(?:yım|yim|mıyım|miyim)?|satmalı(?:yım|yim|mıyım|miyim)?|"
-        r"açmalı(?:yım|yim|mıyım|miyim)?|acmalı(?:yım|yim|mıyım|miyim)?|"
-        r"olur|olsa|olabilir|gerekir|mı|mi|mu|mü)\b",
-        folded,
-    ) or "?" in folded:
+    if _is_question(folded):
         return None
     if not re.search(r"\b(al|sat|aç|ac|emir|pozisyon|işlem aç|islem ac|long|short|buy|sell)\b", folded):
         return None
@@ -1021,6 +1076,17 @@ def _manual_order_answer(parsed: dict) -> tuple[str, list[str]]:
     )
 
 
+def _order_proposal(parsed: dict, message: str) -> tuple[str, list[str]]:
+    """Manuel emir komutu → öneri (yön belirsizse önce yön sorulur)."""
+    if parsed.get("side") is None:
+        return _manual_order_answer(parsed)
+    yon = "alış" if parsed["side"] == "long" else "satış"
+    price = parsed.get("entry_price")
+    nasil = f"tetik fiyatı {price:.2f} olan bekleyen emir" if price else "piyasa fiyatından"
+    summary = f"{parsed['symbol']} {yon}, {parsed['size_usd']:.0f} dolar, {nasil} açacağım."
+    return _propose("order", parsed, summary, "manual_order:proposed", message)
+
+
 def _parse_pct(folded: str) -> float | None:
     """'%2' / 'yüzde 2' / '2%' / '1.5' → yüzde değeri (2 = %2)."""
     m = re.search(r"%\s*(\d+(?:[.,]\d+)?)|yüzde\s*(\d+(?:[.,]\d+)?)|(\d+(?:[.,]\d+)?)\s*%", folded)
@@ -1031,7 +1097,10 @@ def _parse_pct(folded: str) -> float | None:
 
 
 def _parse_position_op(folded: str) -> dict | None:
-    """Pozisyon yönetimi komutu (sembol şart). op: flip|trailing|partial|scale|sltp."""
+    """Pozisyon yönetimi komutu (sembol şart). op: flip|trailing|partial|scale|sltp.
+    Soru cümlesi komut değildir (None)."""
+    if _is_question(folded):
+        return None
     sym = _detect_analyze_symbol(folded)
     if sym is None:
         return None
@@ -1113,18 +1182,56 @@ def _position_op_answer(p: dict) -> tuple[str, list[str]]:
     return ("Komutu anlayamadım.", ["pos_op:unknown"])
 
 
-def _pending_orders_answer(folded: str) -> tuple[str, list[str]]:
+def _position_op_proposal(p: dict, message: str) -> tuple[str, list[str]]:
+    """Pozisyon komutu → öneri. Eksik bilgi varsa önce o sorulur (öneri açılmaz)."""
+    ref, op = p["ref"], p["op"]
+    if op == "trailing" and not p.get("pct"):
+        return ("Trailing mesafesini yüzde olarak yaz (ör. '%2').", ["pos_op:need_pct"])
+    if op in ("scale", "partial") and not (p.get("size_usd") or p.get("fraction")):
+        return ("Tutarı ya da oranı yaz (ör. '2 bin' ya da '%50').", ["pos_op:need_amt"])
+    if op == "sltp" and p.get("sl") is None and p.get("tp") is None:
+        return ("Fiyatı yaz (ör. 'BTC stop 95000').", ["pos_op:need_amt"])
+    if op == "flip":
+        summary = f"{ref} pozisyonunu kapatıp aynı boyutla ters yönde açacağım (RiskGate'ten geçerse)."
+    elif op == "trailing":
+        summary = f"{ref} pozisyonuna %{p['pct']:.1f} takip eden stop koyacağım."
+    elif op == "scale":
+        summary = f"{ref} pozisyonuna {p['size_usd']:.0f} dolar ekleyeceğim (RiskGate'ten geçerse)."
+    elif op == "partial" and p.get("fraction"):
+        summary = f"{ref} pozisyonunun %{p['fraction'] * 100:.0f}'ini kapatacağım."
+    elif op == "partial":
+        summary = f"{ref} pozisyonundan {p['size_usd']:.0f} dolar kapatacağım."
+    else:
+        parts = [f"zarar-kes {p['sl']}" if p.get("sl") is not None else "",
+                 f"kâr-al {p['tp']}" if p.get("tp") is not None else ""]
+        summary = f"{ref} pozisyonunda {' ve '.join(x for x in parts if x)} yapacağım."
+    return _propose("pos_op", p, summary, "pos_op:proposed", message)
+
+
+def _cancel_answer(payload: dict) -> tuple[str, list[str]]:
     from packages.paper import manual_order
 
-    # İptal mi?
-    if re.search(r"\bipt[ae]l\b|\bvazgeç\b|\bsil\b|\bkaldır\b", folded):
+    if payload.get("all"):
+        n = manual_order.cancel_all()
+        return (f"{n} bekleyen emrin tümünü iptal ettim.", ["pending:cancel_all"])
+    if manual_order.cancel(payload["id"]):
+        return (f"{payload['id']} numaralı bekleyen emri iptal ettim.", ["pending:cancel"])
+    return (f"{payload['id']} numaralı bekleyen emir artık yok.", ["pending:cancel_gone"])
+
+
+def _pending_orders_answer(folded: str, message: str = "") -> tuple[str, list[str]]:
+    from packages.paper import manual_order
+
+    # İptal mi? (soru cümlesi iptal etmez; iptal de onay kodu ister)
+    if re.search(r"\bipt[ae]l\b|\bvazgeç\b|\bsil\b|\bkaldır\b", folded) and not _is_question(folded):
         if re.search(r"\b(hep|tüm|tum|hepsi)\w*\b", folded):
-            n = manual_order.cancel_all()
-            return (f"{n} bekleyen emrin tümünü iptal ettim.", ["pending:cancel_all"])
+            return _propose("cancel", {"all": True}, "Bekleyen emirlerin tümünü iptal edeceğim.",
+                            "pending:proposed", message)
         # tek id
         m = re.search(r"\b([0-9a-f]{6,10})\b", folded)
-        if m and manual_order.cancel(m.group(1)):
-            return (f"{m.group(1)} numaralı bekleyen emri iptal ettim.", ["pending:cancel"])
+        if m and any(o["id"] == m.group(1) for o in manual_order.list_pending()):
+            return _propose("cancel", {"id": m.group(1)},
+                            f"{m.group(1)} numaralı bekleyen emri iptal edeceğim.", "pending:proposed", message)
         return (
             "Hangi emri iptal edeyim? 'tümünü iptal' ya da emir numarasını yaz "
             "('emirleri listele' ile görebilirsin).",
@@ -1144,8 +1251,11 @@ def _pending_orders_answer(folded: str) -> tuple[str, list[str]]:
     return ("Bekleyen emirler: " + " | ".join(lines), ["pending:list"])
 
 
-def _grounded_answer(message: str, ctx: dict) -> tuple[str, list[str]]:
+def _grounded_answer(message: str, ctx: dict, history: list[dict] | None = None) -> tuple[str, list[str]]:
     folded = message.casefold()
+    confirm = _CONFIRM_RE.match(folded)
+    if confirm is not None:
+        return _confirm(confirm.group(1), history)
     symbol = _detect_symbol(folded)
     timeframe = _detect_timeframe(folded)
     # Bekleyen emir + sadece yön ("al"/"sat") → önceki emri tamamla (chat hafızası).
@@ -1160,22 +1270,23 @@ def _grounded_answer(message: str, ctx: dict) -> tuple[str, list[str]]:
                 "entry_price": _PENDING_ORDER.get("price"),
             }
             _PENDING_ORDER = None
-            return _manual_order_answer(order)
+            return _order_proposal(order, message)
         if time.time() - _PENDING_ORDER["ts"] >= _PENDING_TTL_SEC:
             _PENDING_ORDER = None
     # Owner manuel emir — "BTC'ye 10 bin al" gibi komut. EN ÖNCE (action niyeti).
+    # Kâğıt durumunu değiştiren her komut önce öneridir; "onayla <kod>" ile yapılır.
     manual = _parse_manual_order(folded)
     if manual is not None:
-        return _manual_order_answer(manual)
+        return _order_proposal(manual, message)
     # Bekleyen emirleri listele / iptal.
     if re.search(r"bekleyen emir|emirleri|emir listele|açık emir|acik emir", folded) or (
         re.search(r"\bipt[ae]l\b", folded) and "emir" in folded
     ):
-        return _pending_orders_answer(folded)
+        return _pending_orders_answer(folded, message)
     # Pozisyon yönetimi — SL/TP, trailing, kısmi kapat, scale-in, flip.
     pos_op = _parse_position_op(folded)
     if pos_op is not None:
-        return _position_op_answer(pos_op)
+        return _position_op_proposal(pos_op, message)
     if any(k in folded for k in ("ticket", "tiket", "sinyal listesi", "aktif sinyal")):
         return _tickets_answer(ctx)
     if any(k in folded for k in ("bildirim", "notification", "uyarı", "uyari", "alarm")):
@@ -1312,14 +1423,17 @@ _PROMPT_VERSION = "v6-context-is-data"
 # Side-effect'li owner komutları (emir aç/iptal, pozisyon op'u): cevap
 # DETERMİNİSTİK kalır, LLM parafrazına GİRMEZ — sayı/SL-TP bozulmaz, cevap
 # anında döner (owner şikayeti 2026-07-03: chat "1. sınıf his" vermiyor).
-_DETERMINISTIC_EVIDENCE_PREFIXES = ("manual_order:", "pending_order:", "pending:", "pos_op:")
+_DETERMINISTIC_EVIDENCE_PREFIXES = ("manual_order:", "pending_order:", "pending:", "pos_op:", "confirm:")
 # Bu etiketler soru/eksik bilgi demektir, kâğıt durumunu değiştirmez; geri kalan
 # her komut etiketi (yeni eklenenler dahil) denetim kaydına düşer.
 _CHAT_NO_EFFECT = frozenset({
     "manual_order:need_side", "pos_op:need_pct", "pos_op:need_amt", "pos_op:unknown",
     "pending:cancel_need_id", "pending:none", "pending:list",
+    # Öneri henüz işlem değildir; işlem "onayla <kod>" ile yapılınca kayda girer.
+    "manual_order:proposed", "pos_op:proposed", "pending:proposed",
 })
-_CHAT_REJECTED = frozenset({"manual_order:rejected", "pos_op:rejected"})
+# Geçersiz/başka sohbetten onay denemesi de kayda "failed" olarak girer.
+_CHAT_REJECTED = frozenset({"manual_order:rejected", "pos_op:rejected", "confirm:invalid", "confirm:foreign"})
 
 
 def _audit_chat_command(message: str, evidence: list[str]) -> None:
@@ -1328,12 +1442,15 @@ def _audit_chat_command(message: str, evidence: list[str]) -> None:
     HTTP katmanı /chat'i komut saymaz (sohbetin çoğu soru); emir aç/iptal ve
     pozisyon işlemleri ise burada, gerçekleştikleri yerde kayda girer.
     """
+    # Onaylanan işlemde kayıt, onaylanan komutun kendisini de taşır.
+    origin = next((e[len("confirmed:"):] for e in evidence if e.startswith("confirmed:")), None)
+    text = f"{origin} ({message.strip()})" if origin else message
     for tag in evidence:
         if not tag.startswith(_DETERMINISTIC_EVIDENCE_PREFIXES) or tag in _CHAT_NO_EFFECT:
             continue
         compliance.record_event(
             action="CHAT_COMMAND",
-            detail={"result": tag, "message": message[:200]},
+            detail={"result": tag, "message": text[:200]},
             actor="chat",
             outcome="failed" if tag in _CHAT_REJECTED else "ok",
         )
@@ -1378,7 +1495,7 @@ def _prepare(message: str, history: list[dict] | None) -> dict:
     buradaki grounded kullanılır, ikinci çağrı YAPILMAZ (manuel emir çifte açılmasın).
     """
     ctx = ctx_mod.build_canonical_context()
-    grounded, evidence = _grounded_answer(message, ctx)
+    grounded, evidence = _grounded_answer(message, ctx, history)
     _audit_chat_command(message, evidence)
     live_evidence = any(e.startswith("web:tavily") or e.startswith("web:http") for e in evidence)
     hist_msgs = _history_messages(history)

@@ -2,20 +2,36 @@
 
 Pozisyon ID veya SEMBOL ile referanslanır (sembol → o sembolün son açık pozisyonu).
 PAPER_SAFE / NO_EXECUTION — gerçek broker emri yok.
+
+Kurallar (17 Kasım P0):
+* Pozisyonu büyüten ya da yeni pozisyon açan işlem (scale-in, flip) manuel emirle
+  aynı RiskGate'ten geçer (``manual_order.risk_block``); fren aktifken yapılamaz.
+* Fiyat ağ çağrısıdır, defter kilidi DIŞINDA çekilir; kilit içinde pozisyonun bu
+  arada kapanmadığı ya da boyutunun değişmediği doğrulanır.
+* Sayı olmayan ya da sıfır/negatif tutar, oran, fiyat reddedilir; sıfır boyutlu
+  kısmi kapama işlem kaydı üretmez.
 """
 from __future__ import annotations
 
 from packages.data.ingestion.pipeline import build_snapshot
+from packages.data.numeric import is_finite
 from packages.paper import audit as paper_audit
 from packages.paper import state as paper_state
 from packages.paper.guards import price_sanity
 from packages.paper.lifecycle import close_position, open_position
+from packages.paper.manual_order import risk_block
 
 
 class PositionOpError(Exception):
     def __init__(self, message: str, code: int = 409) -> None:
         super().__init__(message)
         self.code = code
+
+
+def _positive(value, message: str) -> float:
+    if not is_finite(value) or float(value) <= 0:
+        raise PositionOpError(message, 400)
+    return float(value)
 
 
 def _market_price(symbol: str):
@@ -46,34 +62,63 @@ def _require(state, ref):
     return pos
 
 
+def _locate(ref: str) -> tuple[str, str, float]:
+    """Kilit dışı ön okuma (fiyatı kilit dışında çekebilmek için): id, sembol, boyut."""
+    pos = _require(paper_state.load(), ref)
+    return pos.id, pos.symbol, float(pos.size_usd)
+
+
+def _unchanged(state, pos_id: str, size_usd: float):
+    """Kilit içinde: fiyat çekilirken pozisyon kapanmadıysa ve boyutu değişmediyse onu döndür."""
+    for p in state.open_positions:
+        if p.id == pos_id:
+            if abs(float(p.size_usd) - size_usd) > 1e-6:
+                raise PositionOpError("pozisyon bu sırada değişti — tekrar dene")
+            return p
+    raise PositionOpError("pozisyon bu sırada kapandı")
+
+
+def _price_or_error(symbol: str, action: str):
+    price, snap = _market_price(symbol)
+    if price is None or price <= 0:
+        raise PositionOpError(f"{symbol} için fiyat yok — {action}")
+    return price, snap
+
+
 def modify_sltp(ref: str, sl: float | None = None, tp: float | None = None) -> dict:
+    if sl is None and tp is None:
+        raise PositionOpError("sl ya da tp belirt", 400)
+    sl = None if sl is None else _positive(sl, "zarar-kes sıfırdan büyük bir fiyat olmalı")
+    tp = None if tp is None else _positive(tp, "kâr-al sıfırdan büyük bir fiyat olmalı")
     # T3 — oku→değiştir→yaz tek kilit altında; hata (raise) → yazmadan bırakır.
     with paper_state.transaction("position_ops:modify_sltp") as ps:
         pos = _require(ps, ref)
-        if sl is None and tp is None:
-            raise PositionOpError("sl ya da tp belirt", 400)
         if sl is not None:
-            pos.sl = round(float(sl), 4)
+            pos.sl = round(sl, 4)
         if tp is not None:
-            pos.tp = round(float(tp), 4)
+            pos.tp = round(tp, 4)
         paper_audit.record("MODIFY_SLTP", position_id=pos.id, symbol=pos.symbol, reason=f"sl={pos.sl} tp={pos.tp}")
         return {"position_id": pos.id, "symbol": pos.symbol, "sl": pos.sl, "tp": pos.tp}
 
 
 def set_trailing(ref: str, distance_pct: float, activate_pct: float | None = None) -> dict:
+    distance = _positive(distance_pct, "trailing mesafesi sıfırdan büyük olmalı")
+    if distance >= 1:
+        raise PositionOpError("trailing mesafesi %100'den küçük olmalı", 400)
+    if activate_pct is not None and (not is_finite(activate_pct) or activate_pct < 0):
+        raise PositionOpError("trailing başlama eşiği sıfır ya da pozitif bir sayı olmalı", 400)
+    pos_id, symbol, size = _locate(ref)
+    price, _ = _market_price(symbol)
     with paper_state.transaction("position_ops:set_trailing") as ps:
-        pos = _require(ps, ref)
-        if not distance_pct or distance_pct <= 0:
-            raise PositionOpError("trailing mesafesi sıfırdan büyük olmalı", 400)
-        price, _ = _market_price(pos.symbol)
-        pos.trail_distance_pct = float(distance_pct)
+        pos = _unchanged(ps, pos_id, size)
+        pos.trail_distance_pct = distance
         if activate_pct is not None:
             pos.trail_activate_pct = float(activate_pct)
         elif pos.trail_activate_pct is None:
             pos.trail_activate_pct = 0.01
         pos.trail_peak = price if price else (pos.current_price or pos.entry_price)
         pos.trail_active = False
-        paper_audit.record("SET_TRAILING", position_id=pos.id, symbol=pos.symbol, reason=f"dist={distance_pct}")
+        paper_audit.record("SET_TRAILING", position_id=pos.id, symbol=pos.symbol, reason=f"dist={distance}")
         return {
             "position_id": pos.id, "symbol": pos.symbol,
             "trail_distance_pct": pos.trail_distance_pct, "trail_peak": pos.trail_peak,
@@ -81,18 +126,21 @@ def set_trailing(ref: str, distance_pct: float, activate_pct: float | None = Non
 
 
 def partial_close(ref: str, fraction: float | None = None, size_usd: float | None = None) -> dict:
+    if size_usd is not None:
+        _positive(size_usd, "kapatılacak tutar sıfırdan büyük olmalı")
+    elif fraction is not None:
+        if not is_finite(fraction) or not 0 < float(fraction) <= 1:
+            raise PositionOpError("kapatma oranı 0 ile 1 arasında olmalı (ör. 0.5)", 400)
+    else:
+        raise PositionOpError("oran (ör. 0.5) ya da tutar belirt", 400)
+    pos_id, symbol, size = _locate(ref)
+    price, _ = _price_or_error(symbol, "kapatılamaz")
     with paper_state.transaction("position_ops:partial_close") as ps:
-        pos = _require(ps, ref)
-        price, _ = _market_price(pos.symbol)
-        if price is None or price <= 0:
-            raise PositionOpError(f"{pos.symbol} için fiyat yok — kapatılamaz")
-        if size_usd is not None:
-            csize = float(size_usd)
-        elif fraction is not None:
-            csize = pos.size_usd * float(fraction)
-        else:
-            raise PositionOpError("oran (ör. 0.5) ya da tutar belirt", 400)
-        csize = max(0.0, min(csize, pos.size_usd))
+        pos = _unchanged(ps, pos_id, size)
+        csize = float(size_usd) if size_usd is not None else pos.size_usd * float(fraction)
+        csize = min(csize, pos.size_usd)
+        if round(csize, 2) <= 0:
+            raise PositionOpError("kapatılacak tutar sıfıra yuvarlanıyor — işlem kaydı açılmadı", 400)
         trade = close_position(ps, pos, exit_price=price, reason="MANUAL", close_size=csize)
         remaining = next((p.size_usd for p in ps.open_positions if p.id == pos.id), 0.0)
         return {
@@ -103,30 +151,37 @@ def partial_close(ref: str, fraction: float | None = None, size_usd: float | Non
 
 
 def scale_in(ref: str, add_size_usd: float) -> dict:
+    add = _positive(add_size_usd, "eklenecek tutar sıfırdan büyük olmalı")
+    pos_id, symbol, size = _locate(ref)
+    price, snap = _price_or_error(symbol, "eklenemez")
     with paper_state.transaction("position_ops:scale_in") as ps:
-        pos = _require(ps, ref)
-        if not add_size_usd or add_size_usd <= 0:
-            raise PositionOpError("eklenecek tutar sıfırdan büyük olmalı", 400)
-        if add_size_usd > ps.equity_usd:
+        pos = _unchanged(ps, pos_id, size)
+        blocked = risk_block(ps, snap.quality.score)
+        if blocked is not None:
+            raise PositionOpError(blocked)
+        if add > ps.equity_usd:
             raise PositionOpError("yetersiz bakiye")
-        price, _ = _market_price(pos.symbol)
-        if price is None or price <= 0:
-            raise PositionOpError(f"{pos.symbol} için fiyat yok")
-        old = pos.size_usd
-        new = old + float(add_size_usd)
-        pos.entry_price = round((old * pos.entry_price + float(add_size_usd) * price) / new, 4)
+        old = float(pos.size_usd)
+        new = old + add
+        # Ortalama giriş = toplam dolar / toplam miktar (miktar = dolar / fiyat). Dolar
+        # ağırlıklı aritmetik ortalama kâr-zararı yanlış gösterir.
+        pos.entry_price = round(new / (old / pos.entry_price + add / price), 4)
         pos.size_usd = round(new, 2)
-        paper_audit.record("SCALE_IN", position_id=pos.id, symbol=pos.symbol, size=add_size_usd, price_used=price)
+        paper_audit.record("SCALE_IN", position_id=pos.id, symbol=pos.symbol, size=add, price_used=price)
         return {"position_id": pos.id, "symbol": pos.symbol, "size_usd": pos.size_usd, "avg_entry": pos.entry_price}
 
 
 def flip(ref: str) -> dict:
+    pos_id, symbol, size = _locate(ref)
+    price, snap = _price_or_error(symbol, "ters çevrilemez")
     with paper_state.transaction("position_ops:flip") as ps:
-        pos = _require(ps, ref)
-        price, snap = _market_price(pos.symbol)
-        if price is None or price <= 0:
-            raise PositionOpError(f"{pos.symbol} için fiyat yok")
-        sym, size = pos.symbol, pos.size_usd
+        pos = _unchanged(ps, pos_id, size)
+        # Ters çevirme yeni pozisyon açar: kapatmadan ÖNCE RiskGate'e sorulur, engel
+        # varsa hiçbir şey yapılmaz (yarım kalmış flip yok). Yalnız kapatmak serbesttir.
+        blocked = risk_block(ps, snap.quality.score)
+        if blocked is not None:
+            raise PositionOpError(f"{blocked}. Yalnız kapatmak istersen 'kapat' yaz")
+        sym = pos.symbol
         new_side = "short" if pos.side == "long" else "long"
         trade = close_position(ps, pos, exit_price=price, reason="MANUAL")
         newpos = open_position(

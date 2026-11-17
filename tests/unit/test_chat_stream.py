@@ -128,9 +128,9 @@ def test_stream_manual_order_bypasses_llm_and_runs_grounded_once(
     calls = {"n": 0}
     original = llm_chat._grounded_answer
 
-    def _counting(message, ctx):
+    def _counting(message, ctx, history=None):
         calls["n"] += 1
-        return original(message, ctx)
+        return original(message, ctx, history)
 
     monkeypatch.setattr(llm_chat, "_grounded_answer", _counting)
     events = _post_stream("btc'ye 10 bin al")

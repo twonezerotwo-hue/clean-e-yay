@@ -222,6 +222,34 @@ eliyor ve elenenler hâlâ kârlı → toplam kâr düşüyor; ölçüt 1 ve 5 g
 ayarlanmadı. Engel mesafesi bilgi taşıyor; sert kapı olarak değil, olası bir boyut/öncelik
 girdisi olarak ileri veride ayrıca sınanmalı (owner kararı).
 
+## Sohbetten kâğıt işlemi onay koduyla (2026-11-17)
+
+Sohbet (`packages/agent/llm/chat.py`) soru cümlelerini emir gibi uyguluyordu: "ETH pozisyonunu
+yarıya kadar satmalı mıyım?" yarısını kapatıyor, "BTC ters çevirir mi sence?" pozisyonu ters
+çeviriyordu. Owner kararı (17 Kasım): kâğıt durumunu değiştiren her sohbet komutu (manuel emir,
+emir iptali, ters çevir, ekle, kısmi kapat, trailing, SL/TP) önce **öneri** olur; cevap
+"Onay kodu NNNN." ile başlar ve işlem yalnız `onayla NNNN` ile yapılır. Kod tek kullanımlık
+(yürütmeden önce silinir), 2 dk geçerli ve yalnız önerinin göründüğü sohbetten kabul edilir:
+istemcinin gönderdiği geçmişin son ajan turu bu metinle başlamalı (istemci her turun ilk 500
+karakterini gönderir; sözleşme ve ön yüz değişmedi). Soru/danışma/dilek cümleleri (`?`, mı/mi,
+sence, -meli/-malı, kapatsam…) hiçbir zaman öneri ya da işlem üretmez. Onaylanan işlem denetim
+kaydına `CHAT_COMMAND` olarak komutun kendisiyle girer; geçersiz ya da başka sohbetten onay
+denemesi `failed` kaydı bırakır.
+
+Pozisyon işlemleri (`packages/paper/position_ops.py`):
+- **Ekle ve ters çevir** artık manuel emirle aynı RiskGate'ten geçer (`manual_order.risk_block`):
+  KILL_SWITCH / RISK_REDUCE / NO_POSITION_INCREASE varken yapılmaz; ters çevirmede denetim
+  kapatmadan ÖNCE yapılır (yarım kalmış çevirme yok). Önceden ikisi de RiskGate'e sormuyordu.
+- **Ortalama giriş** = toplam dolar / toplam miktar (önceden dolar ağırlıklı aritmetik ortalama:
+  1000 $ @100 + 1000 $ @50 → 75; doğrusu 66,67).
+- Sayı olmayan, sıfır ya da negatif tutar/oran/fiyat reddedilir; sıfıra yuvarlanan kısmi kapama
+  işlem kaydı üretmez (önceden sıfır boyutlu "işlem" öğrenme verisine giriyordu). Manuel emir de
+  sayı olmayan tutarı ve fiyatı reddeder.
+- Fiyat ağ çağrısıdır, defter kilidi dışında çekilir; kilit içinde pozisyonun bu arada kapanmadığı
+  ya da boyutunun değişmediği doğrulanır.
+
+Testler: `tests/unit/test_chat_position_safety.py`.
+
 ## Benzinga haber API'si (2026-11-13)
 
 `packages/data/providers/news/benzinga.py`: owner'ın anahtarı (`BENZINGA_API_KEY`, yalnız yerel

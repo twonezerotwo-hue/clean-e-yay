@@ -13,6 +13,7 @@ from collections.abc import Callable
 from datetime import UTC, datetime
 
 from packages.data.ingestion.pipeline import build_snapshot
+from packages.data.numeric import is_finite
 from packages.paper import audit as paper_audit
 from packages.paper import state as paper_state
 from packages.paper.guards import price_sanity
@@ -39,6 +40,18 @@ class ManualOrderError(Exception):
 
 
 RISK_BLOCKS_NEW_OPEN = {"KILL_SWITCH", "RISK_REDUCE", "NO_POSITION_INCREASE"}
+
+
+def risk_block(ps: PaperState, dqs: float) -> str | None:
+    """Pozisyon açan ya da büyüten her owner işlemi için son ve tek RiskGate.
+
+    Defter kilidi içinde çağrılır; engel varsa okunur sebebi, yoksa None döner.
+    Manuel emir, pozisyona ekleme ve ters çevirme aynı denetimi kullanır."""
+    _ensure_daily_anchor(ps)
+    risk = evaluate_risk(risk_input_from_state(ps, dqs))
+    if risk.action in RISK_BLOCKS_NEW_OPEN:
+        return f"RiskGate engelledi: {risk.action} — {risk.reason}"
+    return None
 
 
 def normalize_side(side: str | None) -> str | None:
@@ -88,8 +101,12 @@ def place(
     s = normalize_side(side)
     if s is None:
         raise ManualOrderError("yön long/short (al/sat) olmalı", 400)
-    if not size_usd or size_usd <= 0:
-        raise ManualOrderError("tutar sıfırdan büyük olmalı", 400)
+    # Sayı olmayan tutar `<= 0` denetiminden geçer (NaN ile her karşılaştırma yanlış).
+    if not is_finite(size_usd) or size_usd <= 0:
+        raise ManualOrderError("tutar sıfırdan büyük bir sayı olmalı", 400)
+    for value in (entry_price, limit_price):
+        if value is not None and not is_finite(value):
+            raise ManualOrderError("fiyat bir sayı olmalı", 400)
     sym = (symbol or "").strip().upper()
     # T3 — ağ çağrısı (snapshot) kilit DIŞINDA; defter mutasyonu tek kilit altında.
     snap = build_snapshot()
@@ -113,13 +130,9 @@ def place(
         _ensure_daily_anchor(ps)
         if guard is not None:
             guard(ps, float(size_usd))
-        risk = evaluate_risk(
-            risk_input_from_state(ps, snap.quality.score)
-        )
-        if risk.action in RISK_BLOCKS_NEW_OPEN:
-            raise ManualOrderError(
-                f"RiskGate engelledi: {risk.action} — {risk.reason}", 409, reason="risk_gate"
-            )
+        blocked = risk_block(ps, snap.quality.score)
+        if blocked is not None:
+            raise ManualOrderError(blocked, 409, reason="risk_gate")
         if size_usd > ps.equity_usd:
             raise ManualOrderError(
                 f"yetersiz bakiye: {size_usd:.0f} dolar > {ps.equity_usd:.0f} dolar",
