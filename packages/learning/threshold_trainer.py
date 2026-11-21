@@ -1,18 +1,18 @@
-"""CP4 (final) — otonom eşik trainer: propose → backtest-doğrula → dar-bant oto-uygula
-→ outcome-rollback. CP4'ün tüm parçalarını birleştirir.
+"""Eşik önericisi: allowlist eşiklerini backtest'le dener, en iyi adayı ÖNERİ olarak
+kaydeder. Canlı eşiği DEĞİŞTİRMEZ.
 
-Akış (train, off-tick, `THRESHOLD_AUTOTUNE` açıkken):
+21 Kasım 2026 owner kararı: otomatik eşik uygulaması (eski `THRESHOLD_AUTOTUNE`,
+dosya tabanlı runtime override + outcome-rollback) kaldırıldı. 10–17 Kasım arasında
+canlı eşikleri onaysız 5 kez değiştirmişti (bias_cuts.bull 60→66, tp_rr_ratio
+2,0→2,2); dayanağı 4 sembol × 1d küçük bir backtest farkıydı, rollback ölçümü de
+bozuktu. Karar/eşik değişikliği ölçüm + plasebo + owner onayı ister: canlı eşik
+yalnız owner'ın config dosyasından (thresholds_v1.0.yaml) gelir.
+
+Akış (train, off-tick, günde en çok bir kez):
   1. Her tunable eşik için mevcut değerin ±NUDGE_STEP adayını üret (guardrail clamp'li).
   2. `threshold_ab.sweep` ile MEVCUT backtest motorunda dener (config-injection seam).
   3. En iyi aday baseline'ı MIN_IMPROVEMENT'tan fazla geçiyorsa VE `edge_report.
-     safe_to_autotune` STABLE ise → `threshold_overrides` ile CANLIYA uygula.
-  4. Uygulamayı izlemeye al (baseline expectancy); yeterli post-apply outcome sonra
-     expectancy düşerse `threshold_overrides.revert` ile geri al (rollback net).
-
-Güvenlik: allowlist (yalnız backtest-ÖLÇÜLEBİLİR eşikler; ilk sürüm
-`paper_trading.tp_rr_ratio`), guardrail clamp, dar-bant nudge, edge-gate, outcome-
-rollback, tek-değişiklik-tek-doğrulama. Flag OFF → hiçbir şey yapmaz (train DISABLED,
-override okunmaz → bayt-aynı). weight_rollback expectancy pencereleri REUSE.
+     safe_to_autotune` STABLE ise → geçmişe PROPOSED olarak yazılır (owner inceler).
 
 PAPER_SAFE / NO_EXECUTION.
 """
@@ -24,15 +24,13 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 
-from packages.data.registry import threshold_overrides
 from packages.data.registry.loader import REPO_ROOT, load_thresholds
-from packages.learning import edge_report, threshold_ab, weight_rollback
+from packages.learning import edge_report, threshold_ab
 from packages.ops.store import write_text_atomic
 
 NUDGE_STEP = 0.10           # ±%10 aday
 MIN_IMPROVEMENT = 0.0005    # avg_return_pct bu kadar iyileşmeli (gürültü değil)
-_MIN_OUTCOMES_DEFAULT = 15
-_MONITOR_MAX_AGE_HOURS = 336.0
+PROPOSE_INTERVAL_HOURS = 24.0
 
 # Backtest-doğrulama: global eşikler tek sembolde değil, işlem evreni SEPETİNDE
 # doğrulanır (CP4-fix #5) — trade-ağırlıklı ortalama. tp_rr_ratio gibi geometri de
@@ -88,13 +86,6 @@ def _save_state(data: dict) -> None:
     write_text_atomic(path, json.dumps(data, indent=2, default=str))
 
 
-def _min_outcomes() -> int:
-    try:
-        return max(1, int(os.environ.get("THRESHOLD_ROLLBACK_MIN_OUTCOMES", _MIN_OUTCOMES_DEFAULT)))
-    except (TypeError, ValueError):
-        return _MIN_OUTCOMES_DEFAULT
-
-
 def _current(path: str):
     node = load_thresholds()
     for k in path.split("."):
@@ -113,18 +104,41 @@ def _candidates(cur: float, p: ThresholdParam) -> list[float]:
     return out
 
 
+def _hours_since(ts: str | None) -> float | None:
+    try:
+        dt = datetime.fromisoformat(str(ts))
+    except (TypeError, ValueError):
+        return None
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=UTC)
+    return (datetime.now(UTC) - dt).total_seconds() / 3600.0
+
+
+def _retire_auto_apply(st: dict) -> dict:
+    """Eski otomatik uygulamadan kalan izleme kaydını geçmişe kapatır (bir kez)."""
+    active = st.get("active")
+    if active:
+        closed = {**active, "status": "REMOVED", "event": "AUTO_APPLY_REMOVED",
+                  "resolved_at": datetime.now(UTC).isoformat()}
+        st["history"] = [closed, *st.get("history", [])][:100]
+        st["active"] = None
+    return st
+
+
 def train() -> dict:
-    """Otonom eşik-ayar döngüsü (off-tick). Flag OFF → DISABLED (no-op, bayt-aynı)."""
-    if not threshold_overrides.autotune_enabled():
-        return {"status": "DISABLED"}
-    # Tek-değişiklik-tek-doğrulama: aktif izleme varken yeni apply yok.
-    if _load_state().get("active") is not None:
-        return {"status": "MONITORING"}
-    # Edge-gate: kanıt stabil değilse oto-uygulama YOK (kırmızı çizgi).
+    """Eşik öneri döngüsü (off-tick). Canlı eşiği değiştirmez; yalnız öneri yazar."""
+    st = _load_state()
+    if st.get("active"):
+        _save_state(_retire_auto_apply(st))
+    age = _hours_since(st.get("last_run_at"))
+    if age is not None and age < PROPOSE_INTERVAL_HOURS:
+        return {"status": "RECENT"}
+    # Edge-gate: kanıt stabil değilse öneri de yok.
     if not edge_report.report().get("safe_to_autotune"):
         return {"status": "EDGE_UNSTABLE"}
 
     evaluated: list[dict] = []
+    proposals: list[dict] = []
     for p in TUNABLE:
         cur = _current(p.path)
         if not isinstance(cur, (int, float)):
@@ -144,77 +158,39 @@ def train() -> dict:
             and base_ret is not None
             and rec.get("avg_return_pct", -1e9) - base_ret >= MIN_IMPROVEMENT
         ):
-            # Uygula + izlemeye al (tek değişiklik → ilk uygun aday).
-            base_n, base_exp = weight_rollback.pre_apply_expectancy()
-            threshold_overrides.set_override(p.path, rec["value"], prev=float(cur))
             entry = {
                 "path": p.path, "from": float(cur), "to": rec["value"],
                 "backtest_gain": round(rec["avg_return_pct"] - base_ret, 6),
-                "baseline_expectancy": round(base_exp, 4), "baseline_n": base_n,
-                "applied_at": datetime.now(UTC).isoformat(), "status": "MONITORING",
+                "proposed_at": datetime.now(UTC).isoformat(),
+                "status": "PROPOSED", "event": "PROPOSED",
             }
-            st = _load_state()
-            st["active"] = entry
-            st["history"] = [{**entry, "event": "AUTO_APPLIED"}, *st.get("history", [])][:100]
-            _save_state(st)
-            evaluated.append({"path": p.path, "decision": "auto_applied", **entry})
-            return {"status": "APPLIED", "evaluated": evaluated}
+            proposals.append(entry)
+            evaluated.append({**entry, "decision": "proposed"})
+            continue
         evaluated.append({
             "path": p.path, "decision": "no_improvement",
             "baseline_avg_return": base_ret,
             "best": rec,
         })
-    return {"status": "NO_CHANGE", "evaluated": evaluated}
-
-
-def _resolve(active: dict, *, outcome: str, post_exp: float, post_n: int,
-             reason: str | None = None) -> dict:
-    resolved = {**active, "status": outcome, "post_expectancy": round(post_exp, 4),
-                "post_n": post_n, "resolved_at": datetime.now(UTC).isoformat()}
-    if reason:
-        resolved["reason"] = reason
     st = _load_state()
-    st["active"] = None
-    st["history"] = [{**resolved, "event": outcome}, *st.get("history", [])][:100]
+    st["last_run_at"] = datetime.now(UTC).isoformat()
+    st["history"] = [*proposals, *st.get("history", [])][:100]
     _save_state(st)
-    return resolved
-
-
-def check_rollback() -> dict:
-    """İzlenen eşik apply'ı değerlendir: no_active | monitoring | CONFIRMED |
-    ROLLED_BACK. post < baseline → threshold_overrides.revert (geri al)."""
-    active = _load_state().get("active")
-    if not active:
-        return {"status": "no_active"}
-    need = _min_outcomes()
-    applied_at = str(active.get("applied_at") or "")
-    post_n, post_exp = weight_rollback.post_open_expectancy(applied_at)
-    baseline = float(active.get("baseline_expectancy", 0.0))
-    if post_n < need:
-        dt = weight_rollback._parse_dt(applied_at)
-        age_h = (datetime.now(UTC) - dt).total_seconds() / 3600.0 if dt else None
-        if age_h is not None and age_h >= _MONITOR_MAX_AGE_HOURS:
-            threshold_overrides.revert(active["path"])
-            return _resolve(active, outcome="ROLLED_BACK", post_exp=post_exp,
-                            post_n=post_n, reason="monitor_expired")
-        return {"status": "monitoring", "post_n": post_n, "need": need}
-    if post_exp < baseline:
-        threshold_overrides.revert(active["path"])
-        return _resolve(active, outcome="ROLLED_BACK", post_exp=post_exp, post_n=post_n)
-    return _resolve(active, outcome="CONFIRMED", post_exp=post_exp, post_n=post_n)
+    return {"status": "PROPOSED" if proposals else "NO_CHANGE", "evaluated": evaluated}
 
 
 def status_viewmodel() -> dict:
-    """Panel/endpoint için özet."""
+    """Panel/endpoint için özet. Otomatik uygulama yok: `enabled` daima False,
+    aktif override ve izlenen uygulama yok; geçmişte öneriler ve eski kayıtlar."""
     st = _load_state()
     return {
-        "enabled": threshold_overrides.autotune_enabled(),
+        "enabled": False,
         "safe_to_autotune": bool(edge_report.report().get("safe_to_autotune")),
         "tunable": [p.path for p in TUNABLE],
-        "active_overrides": threshold_overrides.active(),
-        "monitor": st.get("active"),
+        "active_overrides": {},
+        "monitor": None,
         "history": st.get("history", [])[:8],
     }
 
 
-__all__ = ["TUNABLE", "check_rollback", "status_viewmodel", "train"]
+__all__ = ["TUNABLE", "status_viewmodel", "train"]

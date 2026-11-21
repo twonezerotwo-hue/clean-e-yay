@@ -60,9 +60,9 @@ set_env() {  # set_env KEY VALUE — replace-or-add (değeri ZORLA ayarla; diğe
 }
 ensure_env WEIGHT_LOSS_AWARE 1
 ensure_env REBALANCE_ROLLBACK_MIN_OUTCOMES 8
-# Grup C — tam otonom öz-ayar (CP5'e kadar). Trailing/threshold autotune AÇIK.
+# Grup C — tam otonom öz-ayar (CP5'e kadar). Trailing autotune AÇIK. Eşik otomatik
+# ayarı (THRESHOLD_AUTOTUNE) 21 Kasım 2026 owner kararıyla kodla birlikte kaldırıldı.
 ensure_env TF_TARGET_TRAIL_AUTOTUNE 1
-ensure_env THRESHOLD_AUTOTUNE 1
 # Kalite tuning'i AKTİF: edge-gate KAPALI (0) → geometri/trailing stop/exit'i ŞİMDİ
 # düzeltsin (±%15 bant + outcome-rollback net). Owner kararı — bekletme, aktif çalışsın.
 # set_env: AWS .env'de =1 kalmışsa ZORLA 0'a çevirir (ensure_env yetmez).

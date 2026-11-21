@@ -1,84 +1,71 @@
-"""CP4 (final) — otonom eşik trainer + runtime override + rollback testleri."""
+"""Eşik önericisi testleri: canlı eşik yalnız config dosyasından gelir, öneri uygulanmaz.
+
+21 Kasım 2026 owner kararı: otomatik eşik uygulaması (THRESHOLD_AUTOTUNE + dosya
+tabanlı runtime override) kaldırıldı. Eski kod bu testlerin ilk ikisinde düşer.
+"""
 from __future__ import annotations
+
+import json
 
 import pytest
 
-from packages.data.registry import loader, threshold_overrides
-from packages.learning import edge_report, threshold_ab, threshold_trainer, weight_rollback
+from packages.data.registry import loader
+from packages.learning import edge_report, threshold_ab, threshold_trainer
 
 
 @pytest.fixture
 def fresh(tmp_path, monkeypatch):
-    monkeypatch.setenv("THRESHOLD_OVERRIDES_PATH", str(tmp_path / "thr_ov.json"))
     monkeypatch.setenv("THRESHOLD_AUTOAPPLY_PATH", str(tmp_path / "thr_aa.json"))
-    monkeypatch.delenv("THRESHOLD_AUTOTUNE", raising=False)
-    # cache temizle (önceki testten sızmasın)
-    threshold_overrides._CACHE["key"] = None
     return tmp_path
 
 
-# ── seam: flag OFF → load_thresholds bayt-aynı ─────────────────────────────────
-
-def test_flag_off_byte_identical_even_with_override_file(fresh, monkeypatch):
-    # Override dosyası VAR ama flag kapalı → load_thresholds base'i BİREBİR döner.
-    threshold_overrides.set_override("paper_trading.tp_rr_ratio", 9.9, prev=2.0)
-    monkeypatch.delenv("THRESHOLD_AUTOTUNE", raising=False)
-    assert loader.load_thresholds() is loader._load_thresholds_base()
-    assert threshold_overrides.active_tree() == {}
-
-
-def test_flag_on_merges_override(fresh, monkeypatch):
-    threshold_overrides.set_override("paper_trading.tp_rr_ratio", 3.5, prev=2.0)
-    monkeypatch.setenv("THRESHOLD_AUTOTUNE", "1")
-    eff = loader.load_thresholds()
-    assert eff["paper_trading"]["tp_rr_ratio"] == 3.5
-    # deep-merge: paper_trading'in diğer alanları korunur
-    assert "sl_pct" in eff["paper_trading"]
-
-
-def test_revert_removes_override(fresh, monkeypatch):
-    monkeypatch.setenv("THRESHOLD_AUTOTUNE", "1")
-    threshold_overrides.set_override("paper_trading.tp_rr_ratio", 3.5, prev=2.0)
-    assert loader.load_thresholds()["paper_trading"]["tp_rr_ratio"] == 3.5
-    threshold_overrides.revert("paper_trading.tp_rr_ratio")
-    assert loader.load_thresholds() is loader._load_thresholds_base()
-
-
-# ── trainer.train gate'leri ────────────────────────────────────────────────────
-
-def test_train_disabled_when_flag_off(fresh):
-    assert threshold_trainer.train()["status"] == "DISABLED"
-
-
-def test_train_edge_unstable_blocks(fresh, monkeypatch):
-    monkeypatch.setenv("THRESHOLD_AUTOTUNE", "1")
-    monkeypatch.setattr(edge_report, "report", lambda: {"safe_to_autotune": False})
-    assert threshold_trainer.train()["status"] == "EDGE_UNSTABLE"
-
-
-def test_train_applies_when_better_and_stable(fresh, monkeypatch):
-    monkeypatch.setenv("THRESHOLD_AUTOTUNE", "1")
+def _stable_and_better(monkeypatch):
     monkeypatch.setattr(edge_report, "report", lambda: {"safe_to_autotune": True})
-    monkeypatch.setattr(weight_rollback, "pre_apply_expectancy", lambda: (15, -10.0))
-    # A/B: baseline avg_return 0.01, öneri 0.02 (belirgin iyileşme)
     monkeypatch.setattr(threshold_ab, "sweep", lambda path, cands, **kw: {
         "baseline": {"avg_return_pct": 0.01},
         "recommendation": {"value": cands[-1], "avg_return_pct": 0.02},
     })
-    out = threshold_trainer.train()
-    assert out["status"] == "APPLIED"
-    # override canlıya yazıldı (base 2.0 → +%10 aday 2.2, guardrail [1.5,4.0] içinde)
-    assert threshold_overrides.get("paper_trading.tp_rr_ratio")["value"] == 2.2
 
 
-def test_train_monitoring_blocks_second_apply(fresh, monkeypatch):
+def test_old_override_file_and_flag_do_not_change_live_thresholds(fresh, monkeypatch):
+    # Eski kurulumun kalıntısı: override dosyası VAR ve bayrak AÇIK → yine config.
+    ov = fresh / "thr_ov.json"
+    ov.write_text(json.dumps({"overrides": {"paper_trading.tp_rr_ratio": {
+        "value": 9.9, "prev": 2.0}}}), encoding="utf-8")
+    monkeypatch.setenv("THRESHOLD_OVERRIDES_PATH", str(ov))
     monkeypatch.setenv("THRESHOLD_AUTOTUNE", "1")
-    threshold_trainer._save_state({"active": {"path": "x"}, "history": []})
-    assert threshold_trainer.train()["status"] == "MONITORING"
+    base = loader._load_thresholds_base()
+    assert loader.load_thresholds() is base
+    assert loader.load_thresholds()["paper_trading"]["tp_rr_ratio"] == base[
+        "paper_trading"]["tp_rr_ratio"]
+
+
+def test_train_proposes_but_never_changes_live_threshold(fresh, monkeypatch):
+    _stable_and_better(monkeypatch)
+    before = loader.load_thresholds()["paper_trading"]["tp_rr_ratio"]
+    out = threshold_trainer.train()
+    assert out["status"] == "PROPOSED"
+    assert loader.load_thresholds()["paper_trading"]["tp_rr_ratio"] == before
+    hist = threshold_trainer._load_state()["history"]
+    tp = [h for h in hist if h["path"] == "paper_trading.tp_rr_ratio"]
+    assert tp and tp[0]["event"] == "PROPOSED" and tp[0]["from"] == before
+    view = threshold_trainer.status_viewmodel()
+    assert view["enabled"] is False
+    assert view["active_overrides"] == {} and view["monitor"] is None
+
+
+def test_train_runs_at_most_once_a_day(fresh, monkeypatch):
+    _stable_and_better(monkeypatch)
+    assert threshold_trainer.train()["status"] == "PROPOSED"
+    assert threshold_trainer.train()["status"] == "RECENT"
+
+
+def test_train_edge_unstable_blocks(fresh, monkeypatch):
+    monkeypatch.setattr(edge_report, "report", lambda: {"safe_to_autotune": False})
+    assert threshold_trainer.train()["status"] == "EDGE_UNSTABLE"
 
 
 def test_train_no_change_when_not_better(fresh, monkeypatch):
-    monkeypatch.setenv("THRESHOLD_AUTOTUNE", "1")
     monkeypatch.setattr(edge_report, "report", lambda: {"safe_to_autotune": True})
     monkeypatch.setattr(threshold_ab, "sweep", lambda path, cands, **kw: {
         "baseline": {"avg_return_pct": 0.02},
@@ -87,29 +74,13 @@ def test_train_no_change_when_not_better(fresh, monkeypatch):
     assert threshold_trainer.train()["status"] == "NO_CHANGE"
 
 
-# ── rollback ───────────────────────────────────────────────────────────────────
-
-def test_rollback_reverts_on_worse_expectancy(fresh, monkeypatch):
-    monkeypatch.setenv("THRESHOLD_AUTOTUNE", "1")
-    threshold_overrides.set_override("paper_trading.tp_rr_ratio", 2.2, prev=2.0)
+def test_old_monitoring_entry_is_closed_into_history(fresh, monkeypatch):
+    monkeypatch.setattr(edge_report, "report", lambda: {"safe_to_autotune": False})
     threshold_trainer._save_state({"active": {
-        "path": "paper_trading.tp_rr_ratio", "baseline_expectancy": -10.0,
-        "applied_at": "2026-06-30T00:00:00+00:00",
-    }, "history": []})
-    monkeypatch.setattr(weight_rollback, "post_open_expectancy", lambda since: (15, -50.0))
-    out = threshold_trainer.check_rollback()
-    assert out["status"] == "ROLLED_BACK"
-    assert threshold_overrides.get("paper_trading.tp_rr_ratio") is None  # geri alındı
-
-
-def test_rollback_confirmed_when_holds(fresh, monkeypatch):
-    monkeypatch.setenv("THRESHOLD_AUTOTUNE", "1")
-    threshold_overrides.set_override("paper_trading.tp_rr_ratio", 2.2, prev=2.0)
-    threshold_trainer._save_state({"active": {
-        "path": "paper_trading.tp_rr_ratio", "baseline_expectancy": -10.0,
-        "applied_at": "2026-06-30T00:00:00+00:00",
-    }, "history": []})
-    monkeypatch.setattr(weight_rollback, "post_open_expectancy", lambda since: (15, 5.0))
-    out = threshold_trainer.check_rollback()
-    assert out["status"] == "CONFIRMED"
-    assert threshold_overrides.get("paper_trading.tp_rr_ratio")["value"] == 2.2  # kaldı
+        "path": "paper_trading.tp_rr_ratio", "from": 2.0, "to": 2.2,
+        "status": "MONITORING"}, "history": []})
+    threshold_trainer.train()
+    st = threshold_trainer._load_state()
+    assert st["active"] is None
+    assert st["history"][0]["event"] == "AUTO_APPLY_REMOVED"
+    assert st["history"][0]["to"] == 2.2

@@ -446,19 +446,12 @@ def run_once() -> dict:
     except Exception as exc:  # defensive — worker patlamamalı
         errors.append(f"tf_target_rollback:{type(exc).__name__}")
 
-    # CP4 (final): otonom eşik trainer. THRESHOLD_AUTOTUNE açıkken allowlist eşikleri
-    # backtest-doğrulamayla dar-bant oto-uygular (edge STABLE + iyileşme şartı);
-    # rollback ayrı denetlenir. Flag OFF → DISABLED (no-op). Rollback her koşuda.
+    # Eşik önericisi: allowlist eşiklerini backtest'le dener, öneriyi geçmişe yazar.
+    # Canlı eşiği DEĞİŞTİRMEZ (otomatik uygulama 21 Kasım 2026 owner kararıyla kalktı).
     try:
         tt = threshold_trainer.train()
-        if tt.get("status") == "APPLIED":
-            log.info("threshold AUTO-APPLIED: %s", tt.get("evaluated"))
-        tr = threshold_trainer.check_rollback()
-        if tr.get("status") == "ROLLED_BACK":
-            log.info("threshold ROLLBACK: %s (post_exp=%s < baseline=%s)",
-                     tr.get("path"), tr.get("post_expectancy"), tr.get("baseline_expectancy"))
-        elif tr.get("status") == "CONFIRMED":
-            log.info("threshold auto-apply CONFIRMED: %s", tr.get("path"))
+        if tt.get("status") == "PROPOSED":
+            log.info("threshold PROPOSED (owner inceler): %s", tt.get("evaluated"))
     except Exception as exc:  # defensive — worker patlamamalı
         errors.append(f"threshold_trainer:{type(exc).__name__}")
 

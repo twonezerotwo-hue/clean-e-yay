@@ -37,7 +37,6 @@ FROZEN_NOW = datetime(2026, 9, 15, 13, 7, 0, tzinfo=UTC)  # Salı, ABD seansı a
 # Runtime yolu taşıyan env'ler + davranışı makineye göre değiştiren flag'ler.
 _PATH_SUFFIXES = ("_PATH", "_DIR")
 _FLAG_ENVS_TO_CLEAR = (
-    "THRESHOLD_AUTOTUNE",
     "REBALANCE_AUTO_APPLY",
     "TF_CALIBRATION_AUTO_ONLY",
     "TF_TARGET_AUTO_ONLY",

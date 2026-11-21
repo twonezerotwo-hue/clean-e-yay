@@ -289,10 +289,9 @@ def get_threshold_ab(
 
 @router.get("/learning/threshold-autotune")
 def get_threshold_autotune() -> dict:
-    """CP4 (final) — otonom eşik trainer durumu (observe). Allowlist eşikleri,
-    aktif runtime override'lar, izlenen apply (rollback), geçmiş + edge/flag durumu.
-    Flag `THRESHOLD_AUTOTUNE` OFF iken hiçbir eşik oto-uygulanmaz (bayt-aynı); AÇIK
-    iken trainer backtest-doğrulamalı + edge STABLE + rollback'li dar-bant oto uygular."""
+    """Eşik önericisi durumu (observe). Allowlist eşikleri ve öneri geçmişi.
+    Otomatik uygulama yok (21 Kasım 2026 owner kararı): `enabled` daima false,
+    aktif override yok; canlı eşik yalnız owner'ın config dosyasından gelir."""
     return threshold_trainer.status_viewmodel()
 
 

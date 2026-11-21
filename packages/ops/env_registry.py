@@ -47,8 +47,6 @@ REGISTRY: dict[str, str] = {
     "TF_TARGET_ROLLBACK_MIN_OUTCOMES": "behavior",
     "TF_TARGET_TRAIL_AUTOTUNE": "behavior",
     "TF_TRUST_PER_BUCKET": "behavior",
-    "THRESHOLD_AUTOTUNE": "behavior",
-    "THRESHOLD_ROLLBACK_MIN_OUTCOMES": "behavior",
     "WEIGHT_LOSS_AWARE": "behavior",
     "WEIGHT_REGIME_FILTER": "behavior",
     # ── runtime
@@ -221,7 +219,6 @@ REGISTRY: dict[str, str] = {
     "TF_TARGET_TRIGGER_PATH": "path",
     "TF_WEIGHT_PROPOSAL_OUT_PATH": "path",
     "THRESHOLD_AUTOAPPLY_PATH": "path",
-    "THRESHOLD_OVERRIDES_PATH": "path",
     "TICKETS_PATH": "path",
     "TICK_WORKER_LOCK_PATH": "path",
     "WEIGHTS_MANIFEST_PATH": "path",

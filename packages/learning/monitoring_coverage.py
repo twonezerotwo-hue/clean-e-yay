@@ -70,12 +70,7 @@ COVERAGE: dict[str, dict] = {
         "mechanism": WATCHDOG, "monitor": "expectancy_r_mode",
         "reason": "R-bazlı expectancy aktivasyonu; watchdog izler.",
     },
-    # --- OWN_ROLLBACK: auto-apply kendi outcome-rollback'ine bağlı (2) ---
-    "THRESHOLD_AUTOTUNE": {
-        "mechanism": OWN_ROLLBACK,
-        "monitor": "packages.learning.threshold_trainer:check_rollback",
-        "reason": "Eşik auto-apply; post<baseline → threshold_overrides.revert (kendi rollback).",
-    },
+    # --- OWN_ROLLBACK: auto-apply kendi outcome-rollback'ine bağlı (1) ---
     "TF_TARGET_TRAIL_AUTOTUNE": {
         "mechanism": OWN_ROLLBACK,
         "monitor": "packages.learning.tf_target_rollback:check_rollback",
