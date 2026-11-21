@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import contextvars
+import hashlib
 import json
 import os
 from contextlib import contextmanager
@@ -51,11 +52,23 @@ def load_feature_registry() -> dict:
     return yaml.safe_load(path.read_text(encoding="utf-8"))
 
 
+# Süreçte yüklenen eşik dosyasının özeti (diskteki dosya sonradan değişse de).
+_LOADED: dict = {"thresholds_sha": None}
+
+
 @lru_cache(maxsize=1)
 def _load_thresholds_base() -> dict:
-    """Disk'ten okunan ham thresholds config (cache'li, tek kaynak)."""
-    path = CONFIG_DIR / "thresholds_v1.0.yaml"
-    return yaml.safe_load(path.read_text(encoding="utf-8"))
+    """Disk'ten okunan ham thresholds config (cache'li, tek kaynak). Okunan baytların
+    özeti yükleme anında tutulur: karar damgası yüklenen ayarı göstersin."""
+    raw = (CONFIG_DIR / "thresholds_v1.0.yaml").read_bytes()
+    _LOADED["thresholds_sha"] = hashlib.sha256(raw).hexdigest()[:12]
+    return yaml.safe_load(raw.decode("utf-8"))
+
+
+def thresholds_sha() -> str:
+    """Bu süreçte YÜKLENMİŞ eşik dosyasının özeti (12 hex)."""
+    _load_thresholds_base()
+    return _LOADED["thresholds_sha"]
 
 
 # CP4 — config-injection seam. lru_cache'li base'in ÜSTÜNE in-process override
@@ -154,8 +167,6 @@ def active_weights_version() -> str:
 def _file_sha(path: Path) -> str | None:
     """Dosyanın SHA-256'sı (ilk 12 hex — kısa ama çakışmasız yeter). Yok → None."""
     try:
-        import hashlib
-
         return hashlib.sha256(path.read_bytes()).hexdigest()[:12]
     except OSError:
         return None
@@ -170,6 +181,6 @@ def config_provenance() -> dict:
     return {
         "weights_version": active_weights_version(),
         "weights_sha": _file_sha(_active_weights_yaml()),
-        "thresholds_sha": _file_sha(CONFIG_DIR / "thresholds_v1.0.yaml"),
+        "thresholds_sha": thresholds_sha(),
         "manifest_sha": _file_sha(weights_manifest_path()),
     }

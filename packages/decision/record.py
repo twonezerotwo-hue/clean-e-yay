@@ -22,6 +22,7 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
+from packages.data.registry import loader
 from packages.decision import explain
 
 _REPO = Path(__file__).resolve().parents[2]
@@ -75,11 +76,12 @@ def _git_commit() -> str | None:
 
 
 def versions() -> dict[str, Any]:
-    weights = Path(os.environ.get("WEIGHTS_MANIFEST_PATH") or "data/runtime/weights_active.json")
+    """Kod commit'i, YÜKLENMİŞ eşik dosyasının özeti, etkin ağırlık manifestinin özeti
+    (loader ile aynı yol) ve karar bayrakları."""
     return {
         "commit": _git_commit(),
-        "thresholds": _digest(_REPO / "config" / "thresholds_v1.0.yaml"),
-        "weights": _digest(weights),
+        "thresholds": loader.thresholds_sha(),
+        "weights": _digest(loader.weights_manifest_path()),
         "flags": {name: os.environ.get(name) for name in _DECISION_FLAGS if os.environ.get(name) is not None},
     }
 

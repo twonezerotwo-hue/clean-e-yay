@@ -56,3 +56,28 @@ def test_decision_log_legacy_trade_provenance_none():
     )
     entry = decision_log.entry_for(trade)
     assert entry["opening_signal"]["config_provenance"] is None  # legacy geriye-uyumlu
+
+
+def test_stamp_shows_loaded_thresholds_not_disk(tmp_path, monkeypatch):
+    # Damga YÜKLENEN eşik dosyasının özetidir; diskteki dosya sonradan değişse ya da
+    # kaybolsa da süreçte kullanılan ayarı gösterir (eski kod her çağrıda diski okurdu).
+    from packages.decision import record
+
+    loaded = loader.thresholds_sha()
+    assert loaded == loader._file_sha(loader.CONFIG_DIR / "thresholds_v1.0.yaml")
+    w = loader.DEFAULT_WEIGHTS_FILE
+    (tmp_path / w).write_bytes((loader.CONFIG_DIR / w).read_bytes())
+    monkeypatch.setattr(loader, "CONFIG_DIR", tmp_path)  # orada eşik dosyası yok
+    assert loader.config_provenance()["thresholds_sha"] == loaded
+    assert record.versions()["thresholds"] == loaded
+
+
+def test_record_weights_digest_uses_loader_manifest(tmp_path, monkeypatch):
+    from packages.decision import record
+
+    m = tmp_path / "weights_active.json"
+    m.write_text('{"yaml_path": "config/weights_v1.0.yaml"}', encoding="utf-8")
+    monkeypatch.setenv("WEIGHTS_MANIFEST_PATH", str(m))
+    assert record.versions()["weights"] == loader._file_sha(m)
+    monkeypatch.delenv("WEIGHTS_MANIFEST_PATH")
+    assert record.versions()["weights"] == loader._file_sha(loader.weights_manifest_path())
