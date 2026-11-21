@@ -11,6 +11,7 @@ PAPER_SAFE / NO_EXECUTION: gerçek emir yok; RiskGate/halt yalnızca kısıtlay�
 from __future__ import annotations
 
 import hashlib
+from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
 
 from packages.data.registry.loader import config_provenance, load_thresholds
@@ -849,12 +850,18 @@ def _pending_fill_held_reason(state: PaperState, order) -> str | None:
 
 
 def trigger_pending_orders(
-    state: PaperState, prices: dict[str, float], now: datetime | None = None
+    state: PaperState, prices: dict[str, float], now: datetime | None = None,
+    *, open_gate: Callable[[PaperState], str | None] | None = None,
 ) -> list[Position]:
     """Bekleyen limit/stop emirleri güncel fiyatla kontrol et; tetiklenenleri
     pozisyona çevir (tetik fiyatından doldur) ve kuyruktan çıkar. Fiyat yoksa/
     geçersizse atlanır (uydurma fiyat YOK). Tetiklenmiş ama güvensiz koşuldaki
-    emir beklemede tutulur (bkz. `_pending_fill_held_reason`)."""
+    emir beklemede tutulur (bkz. `_pending_fill_held_reason`).
+
+    D3 (22 Kasım 2026): dolum yeni pozisyon açar, bu yüzden açılış kapısından geçer.
+    `open_gate(state)` engel sebebini (ya da None) döner; tick işçisi
+    `manual_order.risk_block` (defter + snapshot DQS + olay riski) verir. Kapı
+    verilmezse emir DOLMAZ, beklemede kalır (RiskGate'siz dolum yok)."""
     opened: list[Position] = []
     for o in list(state.pending_orders):
         price = prices.get(o.symbol)
@@ -865,6 +872,9 @@ def trigger_pending_orders(
         if not _pending_triggered(o, float(price)):
             continue
         held = _pending_fill_held_reason(state, o)
+        if held is None:
+            gate = open_gate(state) if open_gate is not None else "risk_gate_unavailable"
+            held = f"risk_gate:{gate}" if gate is not None else None
         if held is not None:
             # Audit yalnız sebep DEĞİŞİNCE (her 30 sn tick'te spam olmasın).
             if o.last_held_reason != held:
@@ -1076,6 +1086,8 @@ def tick(
     state: PaperState,
     prices: dict[str, float],
     now: datetime | None = None,
+    *,
+    open_gate: Callable[[PaperState], str | None] | None = None,
 ) -> list[Trade]:
     """Pozisyon fiyatlarını günceller; SL/TP'ye değen veya time-stop'u
     dolan pozisyonları kapatır.
@@ -1086,7 +1098,7 @@ def tick(
     """
     now = now or datetime.now(UTC)
     # Önce bekleyen limit/stop emirleri tetikle (yeni pozisyonlar aynı tick'te yönetilir).
-    trigger_pending_orders(state, prices, now)
+    trigger_pending_orders(state, prices, now, open_gate=open_gate)
     closed: list[Trade] = []
     for pos in list(state.open_positions):
         # P1 — bozuk pozisyon → ERROR_STATE; kapatma denenmez (fake fiyat YOK).

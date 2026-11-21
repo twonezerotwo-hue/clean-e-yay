@@ -25,6 +25,9 @@ def env(tmp_path, monkeypatch):
     return ps_mod, tmp_path
 
 
+_OPEN = lambda st: None  # noqa: E731 — açık giriş kapısı (RiskGate HOLD)
+
+
 def _with_pending(ps_mod, *, symbol="BTCUSD", tf="1d", trigger=60_000.0):
     from packages.paper.state import PendingOrder
 
@@ -50,7 +53,7 @@ def test_triggered_limit_fills_normally(env) -> None:
     from packages.paper import lifecycle
 
     st = _with_pending(ps_mod)
-    opened = lifecycle.trigger_pending_orders(st, {"BTCUSD": 59_000.0})
+    opened = lifecycle.trigger_pending_orders(st, {"BTCUSD": 59_000.0}, open_gate=_OPEN)
     assert len(opened) == 1
     assert st.pending_orders == []
     assert "PENDING_FILLED" in _audit_actions(tmp_path)
@@ -69,12 +72,12 @@ def test_active_halt_holds_fill_without_cancel(env) -> None:
     assert halt_store.active_halts(), "test ön koşulu: halt persist edilmeli"
 
     st = _with_pending(ps_mod)
-    opened = lifecycle.trigger_pending_orders(st, {"BTCUSD": 59_000.0})
+    opened = lifecycle.trigger_pending_orders(st, {"BTCUSD": 59_000.0}, open_gate=_OPEN)
     assert opened == []
     assert len(st.pending_orders) == 1  # iptal YOK — beklemede
     assert st.pending_orders[0].last_held_reason == "active_halt"
     # İkinci tick: aynı sebep → yeni audit YOK (spam koruması).
-    lifecycle.trigger_pending_orders(st, {"BTCUSD": 59_000.0})
+    lifecycle.trigger_pending_orders(st, {"BTCUSD": 59_000.0}, open_gate=_OPEN)
     actions = _audit_actions(tmp_path)
     assert actions.count("PENDING_HELD") == 1
     assert "PENDING_FILLED" not in actions
@@ -89,13 +92,13 @@ def test_duplicate_same_tf_holds_then_fills_when_cleared(env) -> None:
         st, symbol="BTCUSD", side="long", entry_price=60_000.0,
         size_multiplier=1.0, timeframe="1d", open_reason="unit-test",
     )
-    opened = lifecycle.trigger_pending_orders(st, {"BTCUSD": 59_000.0})
+    opened = lifecycle.trigger_pending_orders(st, {"BTCUSD": 59_000.0}, open_gate=_OPEN)
     assert opened == []
     assert st.pending_orders[0].last_held_reason == "duplicate_same_tf"
 
     # Pozisyon kapanınca (duplicate kalkınca) aynı emir dolar; bekleme sebebi sıfırlanır.
     st.open_positions.clear()
-    opened = lifecycle.trigger_pending_orders(st, {"BTCUSD": 59_000.0})
+    opened = lifecycle.trigger_pending_orders(st, {"BTCUSD": 59_000.0}, open_gate=_OPEN)
     assert len(opened) == 1
     assert st.pending_orders == []
     actions = _audit_actions(tmp_path)
@@ -109,7 +112,57 @@ def test_state_anomaly_holds_fill(env) -> None:
 
     st = _with_pending(ps_mod)
     st.daily_pnl_usd = st.equity_usd  # base×0.5 eşiğinin çok üstünde → anomali
-    opened = lifecycle.trigger_pending_orders(st, {"BTCUSD": 59_000.0})
+    opened = lifecycle.trigger_pending_orders(st, {"BTCUSD": 59_000.0}, open_gate=_OPEN)
     assert opened == []
     assert len(st.pending_orders) == 1
     assert (st.pending_orders[0].last_held_reason or "").startswith("state_anomaly")
+
+
+# ---------- D3 (22 Kasım 2026): dolumda RiskGate ----------
+
+def _armed_limit(st):
+    from packages.paper.state import PendingOrder
+    st.pending_orders.append(PendingOrder(
+        id="po-d3", symbol="BTCUSD", side="long", size_usd=1000.0, order_type="limit",
+        trigger_price=59_500.0, created_at="2026-11-22T00:00:00+00:00", timeframe="1d",
+    ))
+
+
+def test_fill_is_held_when_open_gate_blocks(env) -> None:
+    st = env[0]._initial_state()
+    from packages.paper import lifecycle
+    _armed_limit(st)
+    opened = lifecycle.trigger_pending_orders(
+        st, {"BTCUSD": 59_000.0}, open_gate=lambda s: "NO_POSITION_INCREASE")
+    assert opened == [] and st.open_positions == []
+    assert [o.id for o in st.pending_orders] == ["po-d3"]  # iptal yok, beklemede
+    assert st.pending_orders[0].last_held_reason == "risk_gate:NO_POSITION_INCREASE"
+
+
+def test_fill_without_open_gate_never_happens(env) -> None:
+    st = env[0]._initial_state()
+    """Eski kod: kapı yoktu, emir RiskGate'siz doluyordu."""
+    from packages.paper import lifecycle
+    _armed_limit(st)
+    assert lifecycle.trigger_pending_orders(st, {"BTCUSD": 59_000.0}) == []
+    assert st.pending_orders[0].last_held_reason == "risk_gate:risk_gate_unavailable"
+
+
+def test_fill_uses_event_window_via_risk_block(env) -> None:
+    st = env[0]._initial_state()
+    from datetime import UTC, datetime, timedelta
+    from types import SimpleNamespace
+
+    from packages.data.types import Catalyst
+    from packages.paper import lifecycle
+    from packages.paper.manual_order import risk_block
+    _armed_limit(st)
+    cpi = Catalyst(id="cpi", ts=datetime.now(UTC) + timedelta(hours=2), title="CPI",
+                   importance="high", verified=True, hours_until=2.0, source="test")
+    snap = SimpleNamespace(quality=SimpleNamespace(score=90.0), catalysts=[cpi])
+    assert lifecycle.trigger_pending_orders(
+        st, {"BTCUSD": 59_000.0}, open_gate=lambda s: risk_block(s, snap)) == []
+    assert "NO_POSITION_INCREASE" in st.pending_orders[0].last_held_reason
+    snap.catalysts = []
+    assert len(lifecycle.trigger_pending_orders(
+        st, {"BTCUSD": 59_000.0}, open_gate=lambda s: risk_block(s, snap))) == 1

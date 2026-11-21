@@ -64,6 +64,7 @@ from packages.paper import manual_queue, news_setup, ticket
 from packages.paper import state as paper_state
 from packages.paper.lifecycle import _ensure_daily_anchor, attempt_open, flatten_all
 from packages.paper.lifecycle import tick as price_tick
+from packages.paper.manual_order import risk_block as manual_risk_block
 from packages.paper.recheck import compute_rechecks
 from packages.paper.signal_identity import build_signal_id
 from packages.risk import halt as halt_store
@@ -368,7 +369,8 @@ async def run_once() -> None:
         _ensure_daily_anchor(ps)
         prices = {q.symbol: q.price for q in snap.prices if q.price is not None}
         verified_flags = {q.symbol: q.verified for q in snap.prices}
-        closed = price_tick(ps, prices)
+        # D3 — bekleyen emir dolumu da açılış kapısından geçer (owner emri gibi).
+        closed = price_tick(ps, prices, open_gate=lambda st: manual_risk_block(st, snap))
         for cls in closed:
             log.info("close: %s %s pnl=%.2f reason=%s", cls.symbol, cls.side, cls.pnl_usd, cls.close_reason)
 
