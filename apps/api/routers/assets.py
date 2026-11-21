@@ -61,16 +61,19 @@ def add_custom_asset(body: CustomAssetRequest) -> dict:
             "ticker'ı kontrol et (mock/varsayım üretilmez)",
         )
 
-    custom_assets.add(
-        custom_assets.CustomAsset(
-            symbol=symbol,
-            label=body.label.strip(),
-            provider=provider,
-            ticker=body.ticker.strip(),
-            kind=body.kind.strip() or "risk",
-            roles=("trade",),
+    try:
+        custom_assets.add(
+            custom_assets.CustomAsset(
+                symbol=symbol,
+                label=body.label.strip(),
+                provider=provider,
+                ticker=body.ticker.strip(),
+                kind=body.kind.strip() or "risk",
+                roles=("trade",),
+            )
         )
-    )
+    except custom_assets.CorruptCustomAssets as exc:
+        raise HTTPException(409, str(exc)) from exc
     return {"ok": True, "symbol": symbol, "bars_probed": len(bars)}
 
 
@@ -83,7 +86,10 @@ def _probe_with_ticker(provider: str, symbol: str, ticker: str) -> list:
 
 @router.delete("/assets/custom/{symbol}")
 def remove_custom_asset(symbol: str) -> dict:
-    ok = custom_assets.remove(symbol.strip().upper())
+    try:
+        ok = custom_assets.remove(symbol.strip().upper())
+    except custom_assets.CorruptCustomAssets as exc:
+        raise HTTPException(409, str(exc)) from exc
     if not ok:
         raise HTTPException(404, f"{symbol} custom listede yok")
     return {"ok": True, "symbol": symbol.strip().upper()}
