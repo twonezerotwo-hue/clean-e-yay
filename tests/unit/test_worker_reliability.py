@@ -144,6 +144,20 @@ def test_system_health_paper_safe_flags(ops_env) -> None:
     assert "snapshot_store_empty" in sh["warnings"]  # izole store boş
 
 
+def test_broken_weights_manifest_is_visible(ops_env) -> None:
+    # Bozuk manifest → temel ağırlıklar (davranış aynı) ama sağlıkta uyarı var.
+    from packages.data.registry import loader
+    from packages.ops import system_health
+
+    sh = system_health.build_system_health()
+    assert "weights_manifest_fallback" not in sh["warnings"]
+    (ops_env / "weights_active.json").write_text("{bozuk", encoding="utf-8")
+    assert loader.load_active_weights() == loader.yaml.safe_load(
+        (loader.CONFIG_DIR / loader.DEFAULT_WEIGHTS_FILE).read_text(encoding="utf-8"))
+    assert loader.weights_fallback() is not None
+    assert "weights_manifest_fallback" in system_health.build_system_health()["warnings"]
+
+
 # ------------------------------ tick worker hb -------------------------------
 
 def test_tick_worker_success_writes_ok_heartbeat(ops_env) -> None:

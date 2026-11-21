@@ -13,7 +13,7 @@ import os
 from datetime import UTC, datetime
 
 from packages.data import snapshot_store
-from packages.data.registry.loader import load_source_registry, load_thresholds
+from packages.data.registry.loader import load_source_registry, load_thresholds, weights_fallback
 from packages.ops import heartbeat
 from packages.paper import audit as paper_audit
 from packages.risk import halt as halt_store
@@ -375,6 +375,8 @@ def build_system_health() -> dict:
         warnings.append("provider_registry_incomplete")
     if not effective_flags["discovery_scan_enabled"]:
         warnings.append("discovery_scan_disabled")
+    if weights_fallback():
+        warnings.append("weights_manifest_fallback")
 
     # Cold-start / kullanıcı-eylemi gerektiren beklenen durumlar overall'u
     # degraded'a düşürmesin (warning yine raporlanır).

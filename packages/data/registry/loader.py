@@ -4,12 +4,15 @@ from __future__ import annotations
 import contextvars
 import hashlib
 import json
+import logging
 import os
 from contextlib import contextmanager
 from functools import lru_cache
 from pathlib import Path
 
 import yaml
+
+log = logging.getLogger(__name__)
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 CONFIG_DIR = REPO_ROOT / "config"
@@ -133,9 +136,21 @@ def _find_weights_by_name(yaml_path: str) -> Path | None:
     return None
 
 
+# Manifest var ama kullanılamıyorsa düşüş nedeni (sağlık uyarısı); yoksa None.
+_WEIGHTS_FALLBACK: dict = {"reason": None}
+
+
+def _note_weights_fallback(reason: str | None) -> None:
+    if reason != _WEIGHTS_FALLBACK["reason"] and reason is not None:
+        log.error("ağırlık manifesti kullanılamıyor (%s); temel ağırlıklara düşüldü", reason)
+    _WEIGHTS_FALLBACK["reason"] = reason
+
+
 def _active_weights_yaml() -> Path:
-    """Aktif weights yaml dosyasının yolu (approve sonrası güncellenir)."""
+    """Aktif weights yaml dosyasının yolu (approve sonrası güncellenir). Manifest
+    var ama kullanılamıyorsa temel dosyaya düşülür ve neden kaydedilir (görünür)."""
     manifest = weights_manifest_path()
+    reason = None
     if manifest.exists():
         try:
             data = json.loads(manifest.read_text(encoding="utf-8"))
@@ -143,13 +158,25 @@ def _active_weights_yaml() -> Path:
             if yaml_path:
                 p = _resolve_path(yaml_path)
                 if p.exists():
+                    _note_weights_fallback(None)
                     return p
                 found = _find_weights_by_name(str(yaml_path))
                 if found is not None:
+                    _note_weights_fallback(None)
                     return found
-        except (OSError, json.JSONDecodeError):
-            pass
+                reason = f"manifestteki ağırlık dosyası yok: {yaml_path}"
+            else:
+                reason = "manifestte yaml_path yok"
+        except (OSError, ValueError, AttributeError) as exc:
+            reason = f"manifest okunamadı: {type(exc).__name__}"
+    _note_weights_fallback(reason)
     return CONFIG_DIR / DEFAULT_WEIGHTS_FILE
+
+
+def weights_fallback() -> str | None:
+    """Manifest var ama kullanılamadıysa düşüş nedeni; normalde None."""
+    _active_weights_yaml()
+    return _WEIGHTS_FALLBACK["reason"]
 
 
 def load_active_weights() -> dict:
