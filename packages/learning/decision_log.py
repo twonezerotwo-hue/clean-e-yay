@@ -131,6 +131,9 @@ def entry_for(trade: Trade) -> dict:
             # Exit-forensics — pozisyon büyüklüğü ($). Kesin $ maliyeti için;
             # legacy kayıtlar None (notional çıkarımına düşülür, uydurma yok).
             "size_usd": getattr(trade, "size_usd", None),
+            # D2 — pnl_usd net; brüt fiyat sonucu ve düşülen maliyet (legacy: None).
+            "gross_pnl_usd": getattr(trade, "gross_pnl_usd", None),
+            "cost_usd": getattr(trade, "cost_usd", None),
         },
         "opened_at": trade.opened_at,
         "closed_at": trade.closed_at,

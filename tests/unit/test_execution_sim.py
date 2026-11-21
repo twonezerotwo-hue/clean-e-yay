@@ -143,9 +143,13 @@ def test_close_position_pnl_uses_realized_pnl(paper_env) -> None:
         ps, symbol="ETHUSD", side="long", entry_price=100.0,
         size_multiplier=1.0, timeframe="1d",
     )
+    size = pos.size_usd
     trade = lifecycle.close_position(ps, pos, exit_price=120.0, reason="TP_HIT")
-    expected = round(execution_sim.realized_pnl("long", 100.0, 120.0, pos.size_usd), 2)
-    assert trade.pnl_usd == expected
+    gross = execution_sim.realized_pnl("long", 100.0, 120.0, size)
+    cost = size * lifecycle.round_trip_cost_frac("ETHUSD")
+    assert trade.gross_pnl_usd == round(gross, 2)
+    assert trade.cost_usd == round(cost, 2)
+    assert trade.pnl_usd == round(gross - cost, 2)  # D2: defter net
 
 
 def test_tick_sl_fill_matches_simulate_exit_fill(paper_env) -> None:
@@ -164,7 +168,9 @@ def test_tick_sl_fill_matches_simulate_exit_fill(paper_env) -> None:
     closed = lifecycle.tick(ps, {"ETHUSD": fill_price})
     assert len(closed) == 1
     assert closed[0].close_reason == "SL_HIT" == expected_fill.reason
-    assert closed[0].pnl_usd == round(expected_fill.pnl_usd, 2)
+    assert closed[0].gross_pnl_usd == round(expected_fill.pnl_usd, 2)
+    cost = pos.size_usd * lifecycle.round_trip_cost_frac("ETHUSD")
+    assert closed[0].pnl_usd == round(expected_fill.pnl_usd - cost, 2)
 
 
 # ---------- purity: no broker/live, cannot open trades ----------
@@ -190,3 +196,22 @@ def test_public_api_is_primitives_only_no_state() -> None:
             continue
         for pname in inspect.signature(obj).parameters:
             assert pname.lower() not in forbidden_params, f"{name} takes {pname!r}"
+
+
+def test_ledger_is_net_of_round_trip_cost_and_learning_reads_gross(paper_env) -> None:
+    """D2 — BTC long +%1, 1.000 $: brüt 10, maliyet %0,22 → 2,2, net 7,8. Sermaye ve günlük
+    kâr/zarar net; öğrenme (CanonicalOutcome) brüt okur."""
+    from packages.learning import outcomes
+    from packages.paper import lifecycle
+
+    ps = paper_env._initial_state()
+    equity0 = ps.equity_usd
+    pos = lifecycle.open_position(
+        ps, symbol="BTCUSD", side="long", entry_price=100.0, size_multiplier=0.0,
+        manual=True, size_usd_override=1000.0, timeframe="1d",
+    )
+    trade = lifecycle.close_position(ps, pos, exit_price=101.0, reason="TP_HIT")
+    assert (trade.gross_pnl_usd, trade.cost_usd, trade.pnl_usd) == (10.0, 2.2, 7.8)
+    assert ps.equity_usd == round(equity0 + 7.8, 2)
+    assert ps.daily_pnl_usd == 7.8
+    assert outcomes.build_outcome(trade).pnl == 10.0

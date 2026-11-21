@@ -159,6 +159,19 @@ def _trade_provenance(t: Trade) -> tuple[bool, list[str]]:
     return not missing, missing
 
 
+def _learning_pnl(gross, pnl) -> float:
+    """Öğrenmenin kâr/zararı: brüt (maliyet öncesi). Defter 22 Kasım 2026'dan beri net
+    tutuyor (D2); R çarpanı fiyattan hesaplandığı ve EV kapısı maliyeti ayrıca düştüğü
+    için öğrenme brütte kalır, yoksa maliyet iki kez sayılır ve kayıp ortalamasına
+    pozitif R girer. Nete geçiş revizyon grubu 7'de ölçülerek yapılır. Legacy
+    kayıtlarda brüt alan yok; pnl_usd zaten brüt."""
+    value = gross if gross is not None else pnl
+    try:
+        return float(value or 0.0)
+    except (TypeError, ValueError):
+        return 0.0
+
+
 def build_outcome(t: Trade) -> CanonicalOutcome:
     """Tek Trade → CanonicalOutcome (legacy default'larla; asla patlamaz)."""
     parsed = fp.parse(getattr(t, "fingerprint", None))
@@ -183,7 +196,7 @@ def build_outcome(t: Trade) -> CanonicalOutcome:
         direction=side,
         open_price=entry,
         close_price=exit_,
-        pnl=float(getattr(t, "pnl_usd", 0.0) or 0.0),
+        pnl=_learning_pnl(getattr(t, "gross_pnl_usd", None), getattr(t, "pnl_usd", None)),
         pnl_pct=pnl_pct,
         open_reason=getattr(t, "open_reason", None),
         close_reason=getattr(t, "close_reason", None),
@@ -264,7 +277,7 @@ def build_outcome_from_log_entry(entry: dict) -> CanonicalOutcome:
         direction=side,
         open_price=entry_price,
         close_price=exit_price,
-        pnl=float(outcome.get("pnl_usd") or 0.0),
+        pnl=_learning_pnl(outcome.get("gross_pnl_usd"), outcome.get("pnl_usd")),
         pnl_pct=pnl_pct,
         open_reason=opening.get("reason"),
         close_reason=exit_.get("reason"),

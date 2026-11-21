@@ -208,6 +208,10 @@ class Trade:
     # Exit-forensics — kapanan dilimin $ büyüklüğü (kısmi kapanışta realized_size).
     # Kötü çıkışın $ maliyetini kesin hesaplamak için; legacy kayıtlar None.
     size_usd: float | None = None
+    # D2 (22 Kasım 2026): pnl_usd NET (maliyet düşülmüş). Brüt fiyat sonucu ve
+    # düşülen gidiş-dönüş maliyet ayrıca; legacy kayıtlarda None (pnl_usd brüt).
+    gross_pnl_usd: float | None = None
+    cost_usd: float | None = None
 
 
 @dataclass

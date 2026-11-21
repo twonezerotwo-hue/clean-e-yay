@@ -203,6 +203,16 @@ def _last_closed_close(
 EXIT_POLICY_VERSION = 2
 
 
+def round_trip_cost_frac(symbol: str) -> float:
+    """Gidiş-dönüş maliyet oranı (komisyon + spread) — EV kapısıyla aynı tablo
+    (`ev_gate.round_trip_cost_pct`, % fiyat; owner onayı 31 Ekim 2026). Tablo yoksa 0."""
+    table = (load_thresholds().get("ev_gate") or {}).get("round_trip_cost_pct") or {}
+    try:
+        return max(0.0, float(table.get(symbol, table.get("default", 0.0)))) / 100.0
+    except (TypeError, ValueError):
+        return 0.0
+
+
 def _new_id(symbol: str, opened_at: str) -> str:
     return hashlib.sha1(f"{symbol}|{opened_at}".encode()).hexdigest()[:10]
 
@@ -651,7 +661,11 @@ def close_position(
         else None
     )
     # Realized fill P&L — formalized in execution_sim (no broker; paper fill math).
-    pnl = execution_sim.realized_pnl(pos.side, pos.entry_price, exit_price, realized_size)
+    # D2 — kâr/zarar NET: fiyat sonucundan gidiş-dönüş maliyet (EV kapısıyla aynı
+    # tablo) düşülür. Sermaye, günlük zarar ve düşüş net görür; brüt ayrıca saklanır.
+    gross = execution_sim.realized_pnl(pos.side, pos.entry_price, exit_price, realized_size)
+    cost = realized_size * round_trip_cost_frac(pos.symbol)
+    pnl = gross - cost
     lifecycle_status = "FORCE_CLOSED" if reason in _FORCE_CLOSE_REASONS else "CLOSED"
     trade = Trade(
         id=trade_id,
@@ -695,6 +709,8 @@ def close_position(
         open_module_contributions=pos.open_module_contributions,
         # Exit-forensics — kapanan dilimin $ büyüklüğü (kısmi legde realized_size).
         size_usd=round(realized_size, 2),
+        gross_pnl_usd=round(gross, 2),
+        cost_usd=round(cost, 2),
     )
     state.recent_trades.append(trade)
     # Signal attribution: kapanan trade'in karar izini kalıcı decision_log'a yaz
