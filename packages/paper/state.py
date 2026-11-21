@@ -133,6 +133,9 @@ class Position:
     # mfe_pct: entry'ye göre lehte gördüğü en uç hareket (pozitif %).
     mae_pct: float = 0.0
     mfe_pct: float = 0.0
+    # D4 (22 Kasım 2026): açılış risk mesafesi |entry−SL|/entry — R paydası. Owner
+    # stopu sonradan değiştirse de R açılıştaki riske göre hesaplanır (legacy: None).
+    open_risk_pct: float | None = None
     # F1-3 — açılış anındaki consensus modül katkı vektörü (modül → score×weight).
     # dominant_module tek-modül attribution'unun yerini alacak ham veri: kapanışta
     # Trade'e, oradan decision_log'a taşınır; learning summary attribution okur.

@@ -165,7 +165,7 @@ def scale_in(ref: str, add_size_usd: float) -> dict:
         new = old + add
         # Ortalama giriş = toplam dolar / toplam miktar (miktar = dolar / fiyat). Dolar
         # ağırlıklı aritmetik ortalama kâr-zararı yanlış gösterir.
-        pos.entry_price = round(new / (old / pos.entry_price + add / price), 4)
+        pos.entry_price = new / (old / pos.entry_price + add / price)
         pos.size_usd = round(new, 2)
         paper_audit.record("SCALE_IN", position_id=pos.id, symbol=pos.symbol, size=add, price_used=price)
         return {"position_id": pos.id, "symbol": pos.symbol, "size_usd": pos.size_usd, "avg_entry": pos.entry_price}

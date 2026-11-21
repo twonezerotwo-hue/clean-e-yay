@@ -357,6 +357,8 @@ def open_position(
         trail_activate_pct=_trail_act_flat * _trail_act_mult,
         trail_peak=entry_price,
         trail_active=False,
+        open_risk_pct=(round(abs(entry_price - sl) / entry_price, 6)
+                       if sl is not None and entry_price > 0 else None),
         marked_at=opened_at,
         # F1-3 — consensus modül katkı vektörü (manuel/legacy açılışta None).
         open_module_contributions=module_contributions,
@@ -656,11 +658,14 @@ def close_position(
     )
     # F1-1 — açılış risk mesafesi (R-multiple paydası): |entry−SL|/entry.
     # SL'siz/legacy pozisyon → None (uydurma yok; R hesaplanamaz, outcome'da None).
-    open_risk_pct = (
-        round(abs(pos.entry_price - pos.sl) / pos.entry_price, 6)
-        if pos.sl is not None and pos.entry_price > 0
-        else None
-    )
+    # D4 — R paydası açılıştaki risk; legacy pozisyonda kapanıştaki stoptan.
+    open_risk_pct = getattr(pos, "open_risk_pct", None)
+    if open_risk_pct is None:
+        open_risk_pct = (
+            round(abs(pos.entry_price - pos.sl) / pos.entry_price, 6)
+            if pos.sl is not None and pos.entry_price > 0
+            else None
+        )
     # Realized fill P&L — formalized in execution_sim (no broker; paper fill math).
     # D2 — kâr/zarar NET: fiyat sonucundan gidiş-dönüş maliyet (EV kapısıyla aynı
     # tablo) düşülür. Sermaye, günlük zarar ve düşüş net görür; brüt ayrıca saklanır.
@@ -673,7 +678,7 @@ def close_position(
         symbol=pos.symbol,
         side=pos.side,
         entry_price=pos.entry_price,
-        exit_price=round(exit_price, 4),
+        exit_price=exit_price,
         pnl_usd=round(pnl, 2),
         opened_at=pos.opened_at,
         closed_at=closed_at,
@@ -736,7 +741,7 @@ def close_position(
         timeframe=pos.timeframe,
         side=pos.side,
         reason=reason,
-        price_used=round(exit_price, 4),
+        price_used=exit_price,
         size=realized_size,
         pnl=trade.pnl_usd,
         lifecycle_status=lifecycle_status,
