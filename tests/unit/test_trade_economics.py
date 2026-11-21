@@ -8,6 +8,8 @@ Maliyet (spec varsayılanı): round_trip = 2×10 + 2 + 3 = 25 bps · min_net_edg
 """
 from __future__ import annotations
 
+import pytest
+
 from packages.risk import trade_economics as te
 
 
@@ -192,3 +194,32 @@ def test_tf_targets_sl_distance_ordering():
         distances[tf] = r.sl_distance
     # 15m'de cap'e takılır (%2), 1d'de ham geçer; her durumda 15m ≤ 1h ≤ 4h ≤ 1d.
     assert distances["15m"] <= distances["1h"] <= distances["4h"] <= distances["1d"]
+
+
+# ── F3 (21 Kasım 2026): fiyat seviyeleri yuvarlanmaz ──────────────────────────
+
+@pytest.mark.parametrize("entry,atr", [(0.04262235, 0.00035), (0.00052, 0.000004), (58_103.0, 400.0)])
+@pytest.mark.parametrize("side", ["long", "short"])
+def test_tf_targets_keep_configured_rr_at_any_price(entry, atr, side):
+    from packages.risk.trade_economics import _tf_params, compute_tf_targets
+
+    t = compute_tf_targets("DODO", side, entry, timeframe="15m", atr=atr)
+    rr = _tf_params("15m")["rr"]
+    sl_d, tp_d = abs(entry - t.sl), abs(t.tp - entry)
+    assert tp_d / sl_d == pytest.approx(rr, rel=1e-9)
+    if side == "long":
+        assert t.tp > entry > t.sl
+    else:
+        assert t.sl > entry > t.tp
+
+
+@pytest.mark.parametrize("side", ["long", "short"])
+def test_structural_targets_keep_configured_rr_on_low_price(side):
+    from packages.risk.trade_economics import _tf_params, compute_structural_targets
+
+    entry = 0.0428
+    highs = [0.0431, 0.0433, 0.0432, 0.0430]
+    lows = [0.0424, 0.0422, 0.0425, 0.0426]
+    t = compute_structural_targets("DODO", side, entry, highs=highs, lows=lows, timeframe="15m")
+    rr = _tf_params("15m")["rr"]
+    assert abs(t.tp - entry) / abs(entry - t.sl) == pytest.approx(rr, rel=1e-9)

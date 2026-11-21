@@ -153,6 +153,9 @@ def evaluate_trade(
 #  - Doğal hedef ATR tabanından KISA ise: rr_floor_met=False (sinyal yetersiz)
 #  - Doğal hedef ATR tavanından UZAK ise: ATR tavanı kullanılır (yapı zorlanmaz)
 #  - Aksi halde: doğal hedef kullanılır
+# Fiyat seviyeleri (sl, tp, sl_distance) YUVARLANMAZ: round(x, 4) DODO (0,04 $) gibi düşük
+# fiyatlı varlıkta hedef/stop oranını bozuyor, 0,001 $ altında long hedefini girişin altına
+# düşürüyordu (21 Kasım 2026, revizyon grubu 2 F3). Yalnız oran (rr) yuvarlanır.
 @dataclass(frozen=True)
 class AdaptiveTargets:
     sl: float
@@ -257,13 +260,13 @@ def compute_adaptive_targets(
 
     rr = abs(tp - entry) / sl_distance
     return AdaptiveTargets(
-        sl=round(sl, 4),
-        tp=round(tp, 4),
+        sl=sl,
+        tp=tp,
         rr=round(rr, 4),
         sl_basis="atr",
         tp_basis=tp_basis,
         rr_floor_met=rr >= min_rr,
-        sl_distance=round(sl_distance, 4),
+        sl_distance=sl_distance,
         notes=notes,
     )
 
@@ -323,13 +326,13 @@ def compute_fixed_targets(
     sl_distance = abs(entry - sl)
     rr = abs(tp - entry) / sl_distance if sl_distance > 0 else 0.0
     return AdaptiveTargets(
-        sl=round(sl, 4),
-        tp=round(tp, 4),
+        sl=sl,
+        tp=tp,
         rr=round(rr, 4),
         sl_basis="fixed_pct",
         tp_basis="fixed_rr",
         rr_floor_met=True,  # tasarımca sabit RR — floor kavramı yok
-        sl_distance=round(sl_distance, 4),
+        sl_distance=sl_distance,
         notes=notes,
     )
 
@@ -530,13 +533,13 @@ def compute_tf_targets(
         rr = abs(tp - entry) / sl_distance if sl_distance > 0 else 0.0
 
     return AdaptiveTargets(
-        sl=round(sl, 4),
-        tp=round(tp, 4),
+        sl=sl,
+        tp=tp,
         rr=round(rr, 4),
         sl_basis=basis,
         tp_basis="tf_rr",
         rr_floor_met=True,  # tasarımca TF rr config'ten geliyor — floor kavramı yok
-        sl_distance=round(sl_distance, 4),
+        sl_distance=sl_distance,
         notes=notes,
     )
 
@@ -601,10 +604,10 @@ def compute_structural_targets(
     elif raw_pct > cap:
         notes.append(f"clamped_to_cap({cap})")
     return AdaptiveTargets(
-        sl=round(sl, 4), tp=round(tp, 4), rr=round(rr, 4),
+        sl=sl, tp=tp, rr=round(rr, 4),
         sl_basis="structural", tp_basis="structural_rr",
         rr_floor_met=rr >= load_economics_config().min_rr,
-        sl_distance=round(sl_distance, 4), notes=notes,
+        sl_distance=sl_distance, notes=notes,
     )
 
 

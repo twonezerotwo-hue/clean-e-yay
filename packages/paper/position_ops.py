@@ -94,9 +94,9 @@ def modify_sltp(ref: str, sl: float | None = None, tp: float | None = None) -> d
     with paper_state.transaction("position_ops:modify_sltp") as ps:
         pos = _require(ps, ref)
         if sl is not None:
-            pos.sl = round(sl, 4)
+            pos.sl = sl
         if tp is not None:
-            pos.tp = round(tp, 4)
+            pos.tp = tp
         paper_audit.record("MODIFY_SLTP", position_id=pos.id, symbol=pos.symbol, reason=f"sl={pos.sl} tp={pos.tp}")
         return {"position_id": pos.id, "symbol": pos.symbol, "sl": pos.sl, "tp": pos.tp}
 
