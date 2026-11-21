@@ -21,6 +21,15 @@ from packages.learning import guard_monitor_store as store
 from packages.learning import guard_safety, weight_rollback
 
 
+def _kill(key: str) -> None:
+    """Eski kasa kalıntısı: dosyada bir kill-override (yazma yolu kodda yok)."""
+    from packages.data.registry import guard_overrides
+
+    data = guard_overrides._read(guard_overrides._path())
+    data["overrides"][key] = {"disabled": True, "reason": "test"}
+    guard_overrides._write(data)
+
+
 @pytest.fixture(autouse=True)
 def _isolate(tmp_path, monkeypatch):
     """Override + monitor store dosyalarını tmp'e yönlendir (gerçek state'e dokunma)."""
@@ -44,7 +53,7 @@ def test_override_default_is_passthrough():
 
 
 def test_override_set_and_clear_with_cache_invalidation():
-    guard_overrides.set_disabled("chop", reason="test")
+    _kill("chop")
     assert guard_overrides.is_disabled("chop") is True
     assert "chop" in guard_overrides.active()
     assert guard_overrides.clear("chop") is True
@@ -65,7 +74,7 @@ def test_technical_seam_override_forces_off_only(monkeypatch):
     # Override yok → config ON birebir yansır.
     assert tf.load_config().chop_guard_enabled is True
     # Override → zorla OFF.
-    guard_overrides.set_disabled("chop", reason="test")
+    _kill("chop")
     assert tf.load_config().chop_guard_enabled is False
     # Config zaten OFF iken override hiçbir şeyi ON yapmaz.
     monkeypatch.setattr(tf, "load_thresholds", lambda: {"technical": {}})
@@ -78,7 +87,7 @@ def test_self_conflict_seam_override_forces_off(monkeypatch):
         lambda: {"book_audit": {"self_conflict_guard": {"enabled": True}}},
     )
     assert engine._self_conflict_cfg().get("enabled") is True
-    guard_overrides.set_disabled("self_conflict", reason="test")
+    _kill("self_conflict")
     assert engine._self_conflict_cfg().get("enabled") is False
 
 
@@ -114,7 +123,7 @@ def test_off_to_on_arms_with_matched_baseline(monkeypatch):
 
 def test_off_to_on_clears_stale_override(monkeypatch):
     # Owner re-promosyonu eski kill'i düşürür (taze deneme).
-    guard_overrides.set_disabled("reversion", reason="old")
+    _kill("reversion")
     store.set_last_seen(_only({"reversion": False}))
     monkeypatch.setattr(guard_safety, "_raw_states", lambda: _only({"reversion": True}))
     monkeypatch.setattr(weight_rollback, "pre_apply_expectancy", lambda window=None: (10, 0.1))
@@ -200,7 +209,7 @@ def test_adopt_skips_already_monitored_and_killed(monkeypatch):
     monkeypatch.setattr(weight_rollback, "pre_apply_expectancy", lambda window=None: (10, 0.3))
     store.record_enable("chop", enabled_at=datetime.now(UTC).isoformat(),
                         baseline_expectancy=0.1, baseline_n=10)  # zaten izleniyor
-    guard_overrides.set_disabled("exhaustion", reason="killed")  # kasa kapatmış
+    _kill("exhaustion")  # kasa kapatmış
     out = guard_safety.adopt()
     assert out["adopted"] == []
 
@@ -222,7 +231,7 @@ def test_adopted_guard_never_auto_disables(monkeypatch):
 
 def test_report_shape_and_effective_state(monkeypatch):
     monkeypatch.setattr(guard_safety, "_raw_states", lambda: _only({"chop": True}))
-    guard_overrides.set_disabled("chop", reason="killed")
+    _kill("chop")
     rep = guard_safety.report()
     assert rep["available"] is True
     by_key = {g["guard_key"]: g for g in rep["guards"]}

@@ -1,7 +1,9 @@
 """CP3 — yön guard'ları için runtime kill-switch (override) deposu.
 
-`guard_safety` kasası bir yön guard'ını canlıda izlerken expectancy baseline'ın
-altına düşerse buraya bir **disable override** yazar. Engine seam'leri
+Eskiden `guard_safety` kasası bir yön guard'ını canlıda izlerken expectancy
+baseline'ın altına düşerse buraya bir **disable override** yazardı; kasa 31 Ekim'den
+beri yalnız öneriyor ve yazma yolu (`set_disabled`) 21 Kasım 2026'da kaldırıldı.
+Okuyucular revizyonun 9. grubunda (karar çekirdeği) kalkacak. Engine seam'leri
 (`engine._self_conflict_cfg`, `timeframe.load_config`) bu override'ı okuyup ilgili
 guard'ı zorla KAPATIR — owner config dosyasına (thresholds_v1.0.yaml) DOKUNMADAN.
 
@@ -21,7 +23,6 @@ from __future__ import annotations
 import json
 import os
 import threading
-from datetime import UTC, datetime
 from pathlib import Path
 
 from packages.data.registry.loader import REPO_ROOT
@@ -86,20 +87,6 @@ def is_disabled(guard_key: str) -> bool:
     return bool(entry) and bool(entry.get("disabled"))
 
 
-def set_disabled(guard_key: str, *, reason: str, by: str = "guard_safety") -> dict:
-    """`guard_key`'i KAPALI'ya zorla (kasa rollback'i). Override kaydını döner."""
-    data = _read(_path())  # tazeden oku (cache değil) — yarış önle
-    entry = {
-        "disabled": True,
-        "reason": reason,
-        "by": by,
-        "at": datetime.now(UTC).isoformat(),
-    }
-    data.setdefault("overrides", {})[guard_key] = entry
-    _write(data)
-    return entry
-
-
 def clear(guard_key: str) -> bool:
     """`guard_key` override'ını kaldır (owner yeniden canlıya almak isterse).
     Kaldırıldıysa True."""
@@ -120,4 +107,4 @@ def active() -> dict[str, dict]:
     }
 
 
-__all__ = ["active", "clear", "is_disabled", "set_disabled"]
+__all__ = ["active", "clear", "is_disabled"]

@@ -17,6 +17,15 @@ import importlib
 import pytest
 
 
+def _kill(key: str) -> None:
+    """Eski kasa kalıntısı: dosyada bir kill-override (yazma yolu kodda yok)."""
+    from packages.data.registry import guard_overrides
+
+    data = guard_overrides._read(guard_overrides._path())
+    data["overrides"][key] = {"disabled": True, "reason": "test"}
+    guard_overrides._write(data)
+
+
 @pytest.fixture
 def fresh_env(tmp_path, monkeypatch):
     monkeypatch.setenv("PAPER_STATE_PATH", str(tmp_path / "paper.json"))
@@ -97,7 +106,7 @@ def test_cfg_forced_off_by_kill_override(fresh_env, monkeypatch) -> None:
     # kasa kill-override yazmadan → enabled True
     assert dec._concentration_cfg().get("enabled") is True
     # kasa concentration'ı kapattı → enabled zorla False (config'e dokunmadan)
-    guard_overrides.set_disabled("concentration", reason="test")
+    _kill("concentration")
     assert dec._concentration_cfg().get("enabled") is False
 
 
