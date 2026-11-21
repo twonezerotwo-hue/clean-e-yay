@@ -27,28 +27,14 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Literal
 
-from packages.data.registry.loader import load_thresholds
 from packages.data.types import DerivativesSnapshot
+from packages.risk import restrictive
 
 DerivativesRiskLevel = Literal["NONE", "WATCH", "CAUTION", "NO_POSITION_INCREASE"]
 
-_LEVEL_RANK: dict[DerivativesRiskLevel, int] = {
-    "NONE": 0,
-    "WATCH": 1,
-    "CAUTION": 2,
-    "NO_POSITION_INCREASE": 3,
-}
+_LEVEL_RANK = restrictive.LEVEL_RANK
+_LEVEL_SIZE_FACTOR = restrictive.LEVEL_SIZE_FACTOR
 
-_LEVEL_SIZE_FACTOR: dict[DerivativesRiskLevel, float] = {
-    "NONE": 1.0,
-    "WATCH": 1.0,
-    "CAUTION": 0.5,
-    "NO_POSITION_INCREASE": 0.0,
-}
-
-# Bu ağırlığın altındaki timeframe'lerde NO_POSITION_INCREASE block'a dönmez,
-# CAUTION'a düşürülür (1d gibi düşük-ağırlık TF'ler hard-block edilmez).
-_BLOCK_WEIGHT_MIN = 0.75
 
 
 @dataclass
@@ -61,11 +47,7 @@ class DerivativesVerdict:
 
 
 def timeframe_weight(timeframe: str) -> float:
-    cfg = (load_thresholds().get("derivatives") or {}).get("timeframe_weight") or {}
-    try:
-        return max(0.0, min(1.0, float(cfg.get(timeframe, 1.0))))
-    except (TypeError, ValueError):
-        return 1.0
+    return restrictive.timeframe_weight("derivatives", timeframe)
 
 
 def _squeeze_level_to_risk(level: str) -> DerivativesRiskLevel:
@@ -144,22 +126,4 @@ def apply_timeframe(verdict: DerivativesVerdict, weight: float) -> DerivativesVe
     Düşük ağırlıkta (örn. 1d) NO_POSITION_INCREASE block'a DÖNMEZ — etki
     yumuşatılır (size_factor 1.0'a doğru çekilir). Asla artırmaz.
     """
-    if verdict.level == "NONE":
-        return verdict
-    w = max(0.0, min(1.0, weight))
-    if w == 0.0:
-        return DerivativesVerdict(reason="Türev etkisi bu timeframe'de devre dışı.")
-    # size_factor'ı ağırlıkla 1.0'a doğru yumuşat (yalnızca küçültür).
-    eff_size = 1.0 - (1.0 - verdict.size_factor) * w
-    eff_size = max(0.0, min(1.0, eff_size))
-    block = verdict.block and w >= _BLOCK_WEIGHT_MIN
-    eff_level = verdict.level
-    if verdict.block and not block:
-        eff_level = "CAUTION"  # block yumuşatıldı → kısıtlayıcı ama bloklamaz
-    return DerivativesVerdict(
-        level=eff_level,
-        size_factor=eff_size,
-        block=block,
-        reason=verdict.reason + (f" (tf×{w:g})" if w < 1.0 else ""),
-        evidence=list(verdict.evidence),
-    )
+    return restrictive.apply_timeframe(verdict, weight, "Türev etkisi bu timeframe'de devre dışı.")

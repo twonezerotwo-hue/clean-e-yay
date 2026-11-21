@@ -29,6 +29,7 @@ from datetime import datetime
 from typing import Literal
 
 from packages.data.types import CatalystActionability, CatalystImpact, utcnow
+from packages.risk import restrictive
 
 CatalystRiskLevel = Literal["NONE", "WATCH", "CAUTION", "NO_POSITION_INCREASE"]
 
@@ -40,19 +41,8 @@ _ACTION_TO_LEVEL: dict[CatalystActionability, CatalystRiskLevel] = {
     "NO_POSITION_INCREASE": "NO_POSITION_INCREASE",
 }
 
-_LEVEL_RANK: dict[CatalystRiskLevel, int] = {
-    "NONE": 0,
-    "WATCH": 1,
-    "CAUTION": 2,
-    "NO_POSITION_INCREASE": 3,
-}
-
-_LEVEL_SIZE_FACTOR: dict[CatalystRiskLevel, float] = {
-    "NONE": 1.0,
-    "WATCH": 1.0,
-    "CAUTION": 0.5,
-    "NO_POSITION_INCREASE": 0.0,
-}
+_LEVEL_RANK = restrictive.LEVEL_RANK
+_LEVEL_SIZE_FACTOR = restrictive.LEVEL_SIZE_FACTOR
 
 
 @dataclass

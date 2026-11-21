@@ -36,28 +36,14 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Literal
 
-from packages.data.registry.loader import load_thresholds
 from packages.data.types import VolatilitySnapshot
+from packages.risk import restrictive
 
 VolatilityRiskLevel = Literal["NONE", "WATCH", "CAUTION", "NO_POSITION_INCREASE"]
 
-_LEVEL_RANK: dict[VolatilityRiskLevel, int] = {
-    "NONE": 0,
-    "WATCH": 1,
-    "CAUTION": 2,
-    "NO_POSITION_INCREASE": 3,
-}
+_LEVEL_RANK = restrictive.LEVEL_RANK
+_LEVEL_SIZE_FACTOR = restrictive.LEVEL_SIZE_FACTOR
 
-_LEVEL_SIZE_FACTOR: dict[VolatilityRiskLevel, float] = {
-    "NONE": 1.0,
-    "WATCH": 1.0,
-    "CAUTION": 0.5,
-    "NO_POSITION_INCREASE": 0.0,
-}
-
-# Bu ağırlığın altındaki timeframe'lerde NO_POSITION_INCREASE block'a dönmez,
-# CAUTION'a düşürülür (1d gibi düşük-ağırlık TF'ler rejim bağlamı verir).
-_BLOCK_WEIGHT_MIN = 0.75
 
 
 @dataclass
@@ -70,11 +56,7 @@ class VolatilityVerdict:
 
 
 def timeframe_weight(timeframe: str) -> float:
-    cfg = (load_thresholds().get("volatility") or {}).get("timeframe_weight") or {}
-    try:
-        return max(0.0, min(1.0, float(cfg.get(timeframe, 1.0))))
-    except (TypeError, ValueError):
-        return 1.0
+    return restrictive.timeframe_weight("volatility", timeframe)
 
 
 def _regime_to_risk(regime: str) -> VolatilityRiskLevel:
@@ -161,21 +143,4 @@ def apply_timeframe(verdict: VolatilityVerdict, weight: float) -> VolatilityVerd
     yumuşatılır (size_factor 1.0'a doğru çekilir, rejim bağlamı kalır).
     Asla artırmaz.
     """
-    if verdict.level == "NONE":
-        return verdict
-    w = max(0.0, min(1.0, weight))
-    if w == 0.0:
-        return VolatilityVerdict(reason="Volatilite etkisi bu timeframe'de devre dışı.")
-    eff_size = 1.0 - (1.0 - verdict.size_factor) * w
-    eff_size = max(0.0, min(1.0, eff_size))
-    block = verdict.block and w >= _BLOCK_WEIGHT_MIN
-    eff_level = verdict.level
-    if verdict.block and not block:
-        eff_level = "CAUTION"  # block yumuşatıldı → kısıtlayıcı ama bloklamaz
-    return VolatilityVerdict(
-        level=eff_level,
-        size_factor=eff_size,
-        block=block,
-        reason=verdict.reason + (f" (tf×{w:g})" if w < 1.0 else ""),
-        evidence=list(verdict.evidence),
-    )
+    return restrictive.apply_timeframe(verdict, weight, "Volatilite etkisi bu timeframe'de devre dışı.")
