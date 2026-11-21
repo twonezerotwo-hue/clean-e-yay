@@ -81,3 +81,40 @@ def test_bad_pending_size_is_held_not_crashing(ps_mod) -> None:
     ))
     assert lifecycle.trigger_pending_orders(st, {"BTCUSD": 99.0}, open_gate=lambda s: None) == []
     assert st.pending_orders[0].last_held_reason == "invalid_size"
+
+
+# ---------- D7: sessiz hata yok, damgada risk kademeleri ----------
+
+def test_audit_write_failure_is_logged(ps_mod, monkeypatch, caplog) -> None:
+    from packages.paper import audit
+
+    def boom(*a, **k):
+        raise OSError("disk dolu")
+
+    monkeypatch.setattr(audit, "append_jsonl_rotating", boom)
+    with caplog.at_level("ERROR"):
+        audit.record("OPENED", symbol="BTCUSD")  # yine raise etmez
+    assert "kâğıt denetim kaydı yazılamadı" in caplog.text
+
+
+def test_compliance_write_failure_is_logged(tmp_path, monkeypatch, caplog) -> None:
+    from packages.ops import compliance
+    monkeypatch.setenv("COMPLIANCE_LOG_PATH", str(tmp_path / "c.jsonl"))
+
+    def boom(_p):
+        raise OSError("kilit")
+
+    monkeypatch.setattr(compliance, "_last_hash", boom)
+    with caplog.at_level("ERROR"):
+        compliance.record_event(action="TEST", detail={})
+    assert "uyum kaydı yazılamadı" in caplog.text
+
+
+def test_open_stamp_carries_loaded_risk_tiers_digest() -> None:
+    import hashlib
+
+    from packages.data.registry.loader import CONFIG_DIR
+    from packages.paper import lifecycle
+    prov = lifecycle._open_config_provenance()
+    expected = hashlib.sha256((CONFIG_DIR / "risk_tiers.yaml").read_bytes()).hexdigest()[:12]
+    assert prov["tiers_sha"] == expected

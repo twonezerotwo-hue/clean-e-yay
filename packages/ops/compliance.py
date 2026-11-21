@@ -12,11 +12,14 @@ from __future__ import annotations
 
 import hashlib
 import json
+import logging
 import os
 from datetime import UTC, datetime
 from pathlib import Path
 
 from packages.paper.state import _flock_acquire, _flock_release
+
+log = logging.getLogger(__name__)
 
 _GENESIS = "0" * 16
 # Komut olmayan yazma uçları: sohbet/ses üretimi ve bildirim okundu işaretleri.
@@ -64,8 +67,8 @@ def _append(body: dict) -> None:
                 fh.write(json.dumps(line, ensure_ascii=False) + "\n")
         finally:
             _flock_release(lock)
-    except OSError:
-        return
+    except OSError:  # istek bozulmaz; ama iz kalır (D7)
+        log.exception("uyum kaydı yazılamadı: %s", body.get("action") or body.get("path"))
 
 
 def record(*, actor: str, method: str, path: str, query: str, status: int) -> None:

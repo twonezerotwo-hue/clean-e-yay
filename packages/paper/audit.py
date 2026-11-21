@@ -14,12 +14,15 @@ yazılır.
 """
 from __future__ import annotations
 
+import logging
 import os
 import uuid
 from datetime import UTC, datetime
 from pathlib import Path
 
 from packages.ops.store import append_jsonl_rotating, read_jsonl_tail
+
+log = logging.getLogger(__name__)
 
 DEFAULT_PATH = "data/runtime/paper_audit.jsonl"
 DEFAULT_MAX_READ = 200
@@ -62,8 +65,8 @@ def record(action: str, **fields: object) -> dict:
     try:
         p = _path()
         append_jsonl_rotating(p, event, max_bytes=DEFAULT_MAX_BYTES)
-    except OSError:
-        pass  # audit ASLA lifecycle'ı kesmez
+    except OSError:  # audit ASLA lifecycle'ı kesmez; ama sessiz de kalmaz (D7)
+        log.exception("kâğıt denetim kaydı yazılamadı: %s", action)
     return event
 
 

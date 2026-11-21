@@ -30,8 +30,7 @@ MİMARİ (pazarlıksız):
   - SAF / yan-etkisiz / asla raise etmez (kararı düşürmez).
   - Yalnız tik-worker OTOMATİK sinyal açılışına uygulanır; owner manuel açılışı
     (open_position doğrudan) ve manual_ready onayı guard'ı BYPASS eder.
-  - Flag default KAPALI (shadow-first): `active=False` iken rapor hesaplanır,
-    açılış BAYT-AYNI. Owner kanıtı panelden görüp açar; yanlışsa flag ile geri.
+  - Bayrak yok: tik-worker otomatik açılışında kilit (`locked`) gerçek engeldir.
 """
 from __future__ import annotations
 
@@ -97,9 +96,8 @@ def assess(
     """Tekrar-giriş kilidi raporu (saf; asla raise etmez).
 
     Döner boş dict = kilit yok (o anahtarda kilit kuran kapanış yok). Aksi halde
-    rapor: ``active`` (flag açık mı → gerçek engel), ``locked`` (kilitli mi),
-    ``fresh_bar`` / ``signal_changed`` (açılma koşulları), gerekçe. Çağıran YALNIZ
-    ``active and locked`` iken engeller (shadow-first: kapalıyken rapor gözlem)."""
+    rapor: ``locked`` (kilitli mi), ``fresh_bar`` / ``signal_changed`` (açılma
+    koşulları), gerekçe. Çağıran ``locked`` iken engeller."""
     cfg = cfg or {}
     trades = getattr(state, "recent_trades", None) or []
     cross_tf = bool(cfg.get("cross_tf", False))

@@ -43,7 +43,8 @@ _FORCE_AUDIT_ACTION = {
 def _open_config_provenance() -> dict | None:
     """Açılış anındaki config köken damgası; hata → None (kararı düşürmez)."""
     try:
-        return config_provenance()
+        # D7 — risk kademeleri (boyut/stop/vade/trailing çarpanları) de damgada.
+        return {**config_provenance(), "tiers_sha": conviction.tiers_sha()}
     except Exception:
         return None
 
@@ -498,8 +499,7 @@ def attempt_open(
     `apply_reentry_guard` (2026-07-11): YALNIZ tik-worker otomatik sinyal açılışı
     True verir → kapanış sonrası aynı yöne bayat-sinyal tekrar-girişi engellenir
     (bkz. reentry_guard). Owner manuel açılış / manual_ready onayı default False
-    (guard uygulanmaz — owner override). Flag KAPALIYKEN rapor gözlem, açılış
-    bayt-aynı (shadow-first).
+    (guard uygulanmaz — owner override).
 
     Aynı kilitli sinyal (sembol, yön, TF, sinyal kimliği) zaten denetim kaydına
     yazıldıysa tekrar yazılmaz: karar yine "engellendi" döner, yalnız kayıt

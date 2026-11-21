@@ -6,6 +6,7 @@ PAPER_SAFE / NO_EXECUTION.
 """
 from __future__ import annotations
 
+import hashlib
 from dataclasses import dataclass
 from functools import lru_cache
 
@@ -28,10 +29,21 @@ class Tier:
 _NEUTRAL = Tier("NEUTRAL", 0.0, 1.0, 1.0, 1.0, 0.02)
 
 
+# Yüklenen risk kademeleri dosyasının özeti (açılış damgası için, D7).
+_LOADED: dict = {"sha": None}
+
+
 @lru_cache(maxsize=1)
 def _config() -> dict:
-    path = CONFIG_DIR / "risk_tiers.yaml"
-    return yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+    raw = (CONFIG_DIR / "risk_tiers.yaml").read_bytes()
+    _LOADED["sha"] = hashlib.sha256(raw).hexdigest()[:12]
+    return yaml.safe_load(raw.decode("utf-8")) or {}
+
+
+def tiers_sha() -> str | None:
+    """Bu süreçte YÜKLENMİŞ risk_tiers.yaml özeti (12 hex)."""
+    _config()
+    return _LOADED["sha"]
 
 
 @lru_cache(maxsize=1)
