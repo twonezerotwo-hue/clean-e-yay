@@ -22,6 +22,34 @@ from packages.paper.lifecycle import close_position, open_position
 from packages.paper.manual_order import risk_block
 
 
+def _reference(pos) -> float:
+    current = getattr(pos, "current_price", None)
+    if is_finite(current) and float(current) > 0:
+        return float(current)
+    return float(pos.entry_price)
+
+
+def plan_side_error(pos, *, sl: float | None, tp: float | None) -> str | None:
+    """Stop ve hedef pozisyonun doğru tarafında mı (güncel ya da giriş fiyatına göre)?
+    Ekran ucu ve sohbet aynı denetimi kullanır (22 Kasım 2026, D5): yanlış taraftaki
+    stop bir sonraki tick'te pozisyonu kapatırdı."""
+    side = str(pos.side or "").lower()
+    ref = _reference(pos)
+    if side == "long":
+        if sl is not None and sl >= ref:
+            return "LONG pozisyonda stop loss current/entry fiyatının altında olmalı."
+        if tp is not None and tp <= ref:
+            return "LONG pozisyonda take profit current/entry fiyatının üstünde olmalı."
+        return None
+    if side == "short":
+        if sl is not None and sl <= ref:
+            return "SHORT pozisyonda stop loss current/entry fiyatının üstünde olmalı."
+        if tp is not None and tp >= ref:
+            return "SHORT pozisyonda take profit current/entry fiyatının altında olmalı."
+        return None
+    return "Pozisyon yönü okunamadığı için risk planı güncellenemez."
+
+
 class PositionOpError(Exception):
     def __init__(self, message: str, code: int = 409) -> None:
         super().__init__(message)
@@ -93,6 +121,9 @@ def modify_sltp(ref: str, sl: float | None = None, tp: float | None = None) -> d
     # T3 — oku→değiştir→yaz tek kilit altında; hata (raise) → yazmadan bırakır.
     with paper_state.transaction("position_ops:modify_sltp") as ps:
         pos = _require(ps, ref)
+        side_error = plan_side_error(pos, sl=sl, tp=tp)
+        if side_error:
+            raise PositionOpError(side_error, 400)
         if sl is not None:
             pos.sl = sl
         if tp is not None:

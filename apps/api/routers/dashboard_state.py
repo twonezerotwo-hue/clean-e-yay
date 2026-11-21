@@ -13,8 +13,9 @@ from packages.data.provenance import data_provenance
 from packages.data.registry import assets as asset_registry
 from packages.data.types import TIMEFRAMES
 from packages.decision import read_model
-from packages.paper.lifecycle import max_drawdown_pct
 from packages.portfolio import build_portfolio_risk
+from packages.risk import halt as halt_store
+from packages.risk.engine import risk_input_from_state
 
 router = APIRouter(tags=["dashboard"])
 
@@ -134,7 +135,7 @@ def get_dashboard_state() -> dict:
             "paper_trading": {
                 "status": "ok",
                 "last_success_at": now_iso,
-                "notes": f"equity {ps.equity_usd:.0f}, DD {max_drawdown_pct(ps):.1%}",
+                "notes": f"equity {ps.equity_usd:.0f}, DD {max(0.0, halt_store.drawdown(risk_input_from_state(ps, 100.0))[0]):.1%}",
             },
             "news": news_health,
         },

@@ -1245,12 +1245,3 @@ def flatten_all(
         _update_excursions(pos, price)
         closed.append(close_position(state, pos, exit_price=price, reason=reason))
     return closed
-
-
-def max_drawdown_pct(state: PaperState) -> float:
-    if state.peak_equity_usd <= 0:
-        return 0.0
-    return round(
-        max(0.0, (state.peak_equity_usd - state.equity_usd) / state.peak_equity_usd),
-        4,
-    )

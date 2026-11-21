@@ -250,3 +250,55 @@ def test_manual_order_rejects_non_finite_size(monkeypatch):
             manual_order.place(symbol="BTCUSD", side="long", size_usd=bad)
     with pytest.raises(manual_order.ManualOrderError, match="fiyat"):
         manual_order.place(symbol="BTCUSD", side="long", size_usd=100.0, entry_price=math.nan)
+
+
+# ---------- D5 (22 Kasım 2026): tek stop/hedef denetimi, tek sıfırlama yolu, tek düşüş ----------
+
+def test_chat_sltp_on_wrong_side_is_refused(book):
+    """Eski kod: sohbet yolu taraf denetimi yapmıyordu; yanlış taraftaki stop bir sonraki
+    tick'te pozisyonu kapatırdı."""
+    with pytest.raises(position_ops.PositionOpError, match="LONG"):
+        position_ops.modify_sltp("p1", sl=105.0)          # long'da güncel 100'ün üstünde stop
+    with pytest.raises(position_ops.PositionOpError, match="LONG"):
+        position_ops.modify_sltp("p1", tp=95.0)
+    assert _position().sl == 90.0 and _position().tp == 120.0
+    assert position_ops.modify_sltp("p1", sl=95.0)["sl"] == 95.0
+
+
+def test_api_reset_archives_and_clears_halts(tmp_path, monkeypatch):
+    from fastapi.testclient import TestClient
+
+    monkeypatch.setattr(paper_state, "STATE_PATH", tmp_path / "paper.json")
+    monkeypatch.setenv("PAPER_ARCHIVE_DIR", str(tmp_path / "archive"))
+    monkeypatch.setenv("RISK_HALT_PATH", str(tmp_path / "halts.json"))
+    monkeypatch.setenv("PAPER_AUDIT_PATH", str(tmp_path / "audit.jsonl"))
+    from packages.risk import halt
+    from packages.risk.engine import RiskInput
+    st = paper_state.load()
+    st.equity_usd = 90_000.0
+    paper_state.save(st)
+    halt.sync(RiskInput(dqs_score=100, equity_usd=90_000, peak_equity_usd=100_000,
+                        daily_pnl_usd=0, open_position_count=0))
+    assert halt.active_halts()
+    from apps.api.main import app
+    r = TestClient(app).post("/api/v1/paper-trading/reset")
+    assert r.status_code == 200
+    assert list((tmp_path / "archive").glob("paper_state_*.json"))
+    assert halt.active_halts() == []
+    assert paper_state.load().equity_usd == paper_state._initial_state().equity_usd
+
+
+def test_state_summary_drawdown_counts_open_positions(tmp_path, monkeypatch):
+    from fastapi.testclient import TestClient
+
+    monkeypatch.setattr(paper_state, "STATE_PATH", tmp_path / "paper.json")
+    st = paper_state.load()
+    st.equity_usd = st.peak_equity_usd = 100_000.0
+    st.open_positions.append(paper_state.Position(
+        id="p9", symbol="BTCUSD", side="long", entry_price=100.0, current_price=85.0,
+        size_usd=60_000.0, sl=None, tp=None, opened_at="2026-11-17T00:00:00+00:00", timeframe="1d",
+    ))
+    paper_state.save(st)
+    from apps.api.main import app
+    body = TestClient(app).get("/api/v1/paper-trading/state").json()
+    assert body["max_drawdown_pct"] == pytest.approx(0.09)   # eski: 0.0 (yalnız gerçekleşmiş)

@@ -24,12 +24,13 @@ from packages.paper import (
     manual_order,
     manual_queue,
     news_setup,
+    position_ops,
     reconciliation,
     ticket,
 )
 from packages.paper import state as paper_state
 from packages.paper.guards import price_sanity, state_anomaly
-from packages.paper.lifecycle import close_position, max_drawdown_pct
+from packages.paper.lifecycle import close_position
 from packages.risk import halt as halt_store
 from packages.risk.engine import risk_input_from_state
 
@@ -96,7 +97,7 @@ def _serialize_state(ps: paper_state.PaperState) -> dict:
         "equity_usd": round(ps.equity_usd, 2),
         "realized_pnl_usd": round(ps.realized_pnl_usd, 2),
         "unrealized_pnl_usd": round(unreal_total, 2),
-        "max_drawdown_pct": max_drawdown_pct(ps),
+        "max_drawdown_pct": round(max(0.0, halt_store.drawdown(risk_input_from_state(ps, 100.0))[0]), 4),
         "sharpe_30d": 0.0,
         "total_exposure_usd": total_exposure_usd,
         "state_anomaly": {"detected": anomaly.detected, "reasons": anomaly.reasons},
@@ -223,36 +224,6 @@ def _parse_risk_price(value: object | None, field_name: str) -> tuple[float | No
     return price, None
 
 
-def _risk_plan_reference(pos: paper_state.Position) -> float:
-    current = getattr(pos, "current_price", None)
-    if isinstance(current, (int, float)) and math.isfinite(float(current)) and float(current) > 0:
-        return float(current)
-    return float(pos.entry_price)
-
-
-def _risk_plan_side_reason(
-    pos: paper_state.Position,
-    *,
-    sl: float | None,
-    tp: float | None,
-) -> str | None:
-    side = str(pos.side or "").lower()
-    ref = _risk_plan_reference(pos)
-    if side == "long":
-        if sl is not None and sl >= ref:
-            return "LONG pozisyonda stop loss current/entry fiyatının altında olmalı."
-        if tp is not None and tp <= ref:
-            return "LONG pozisyonda take profit current/entry fiyatının üstünde olmalı."
-        return None
-    if side == "short":
-        if sl is not None and sl <= ref:
-            return "SHORT pozisyonda stop loss current/entry fiyatının üstünde olmalı."
-        if tp is not None and tp >= ref:
-            return "SHORT pozisyonda take profit current/entry fiyatının altında olmalı."
-        return None
-    return "Pozisyon yönü okunamadığı için risk planı güncellenemez."
-
-
 @router.patch("/paper-trading/positions/{position_id}/risk-plan")
 def update_position_risk_plan(position_id: str, req: RiskPlanRequest):
     """Owner risk plan update for paper positions only.
@@ -282,7 +253,7 @@ def update_position_risk_plan(position_id: str, req: RiskPlanRequest):
         if tp_error:
             return _risk_plan_error(400, tp_error)
 
-        side_reason = _risk_plan_side_reason(pos, sl=sl, tp=tp)
+        side_reason = position_ops.plan_side_error(pos, sl=sl, tp=tp)
         if side_reason:
             return _risk_plan_error(400, side_reason)
 
@@ -300,7 +271,7 @@ def update_position_risk_plan(position_id: str, req: RiskPlanRequest):
             old_tp=old_tp,
             sl=pos.sl,
             tp=pos.tp,
-            reference_price=_risk_plan_reference(pos),
+            reference_price=position_ops._reference(pos),
             paper_safe=True,
             no_execution=True,
         )
@@ -437,18 +408,13 @@ def dismiss_manual_ready(manual_id: str) -> dict:
 # Test/dev: pozisyonları sıfırla
 @router.post("/paper-trading/reset")
 def reset() -> dict:
-    # T3 — sıfırlama kilit altında (tick worker yazımıyla yarışmaz).
-    txn = paper_state.begin("api:reset")
-    try:
-        ps = paper_state._initial_state()
-        # SL/TP olmadan sadece son trade ve pozisyonları temizle, equity sıfırlama:
-        # gerçek "reset" davranışı için _initial_state yeterli
-        txn.state = ps
-        txn.commit()
-    finally:
-        txn.abort()
+    """Tam kâğıt sıfırlaması — bakım sıfırlamasıyla aynı yol (D5): önce arşiv, sonra
+    başlangıç defteri, aktif frenler kapanır. Eskiden arşiv almıyor, frenleri bırakıyordu."""
+    res = maintenance.reset_state("api_reset")
+    if res.status != "ok":
+        raise HTTPException(status_code=500, detail="; ".join(res.errors) or "reset_failed")
     paper_audit.record("STATE_REPAIRED", reason="manual_reset")
-    return _serialize_state(ps)
+    return _serialize_state(paper_state.load())
 
 
 # ── Phase 2e — owner-admin maintenance (archive / repair / reset) ─────────────
