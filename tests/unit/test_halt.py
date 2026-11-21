@@ -289,3 +289,76 @@ def test_halts_metrics_ratios(fresh_env) -> None:
     assert m["daily_loss_ratio"] == pytest.approx(0.5)
     # DD = 4% / 8% → ratio 0.5
     assert m["drawdown_ratio"] == pytest.approx(0.5)
+
+
+# ---------------- F1/F2 (21 Kasım 2026, revizyon grubu 2) ----------------
+
+def _state_input(ps):
+    from packages.risk.engine import risk_input_from_state
+    return risk_input_from_state(ps.load(), 100.0)
+
+
+def test_owner_reset_rebases_peak_so_dd_halt_stays_cleared(fresh_env, tmp_path, monkeypatch) -> None:
+    """F1 — eski kod: sıfırlama tepe sermayeye dokunmuyordu, sonraki tick fren yeniden kuruluyordu."""
+    monkeypatch.setenv("COMPLIANCE_LOG_PATH", str(tmp_path / "compliance.jsonl"))
+    from packages.risk import engine, halt
+    ps = fresh_env
+    st = ps.load()
+    st.equity_usd, st.peak_equity_usd = 91_000.0, 100_000.0
+    ps.save(st)
+    assert [h.type for h in halt.sync(_state_input(ps))] == ["MAX_DRAWDOWN"]
+    assert [e.type for e in halt.owner_reset()] == ["MAX_DRAWDOWN"]
+    assert ps.load().peak_equity_usd == 91_000.0
+    assert halt.sync(_state_input(ps)) == []
+    assert engine.evaluate(_state_input(ps)).action == "HOLD"
+    assert "HALT_RESET_PEAK_REBASED" in (tmp_path / "compliance.jsonl").read_text(encoding="utf-8")
+    # Sıfırlamadan sonra yeni %8+ düşüş freni yeniden kurar.
+    st = ps.load()
+    st.equity_usd = 83_000.0
+    ps.save(st)
+    assert [h.type for h in halt.sync(_state_input(ps))] == ["MAX_DRAWDOWN"]
+
+
+def test_paper_reset_also_clears_halts(fresh_env, tmp_path, monkeypatch) -> None:
+    """F1 — eski kod: tam kâğıt sıfırlaması fren kaydına dokunmuyordu, fren açık kalıyordu."""
+    monkeypatch.setenv("PAPER_ARCHIVE_DIR", str(tmp_path / "archive"))
+    from packages.paper import maintenance
+    from packages.risk import halt
+    halt.sync(_risk_input(equity=90_000, peak=100_000))
+    assert halt.active_halts()
+    res = maintenance.reset_state("test")
+    assert res.status == "ok" and "risk_halts->cleared" in res.changes
+    assert halt.active_halts() == []
+    assert halt.load().events[0].cleared_by == "paper_reset"
+
+
+def test_open_position_drawdown_persists_halt(fresh_env) -> None:
+    """F2 — eski kod: açık pozisyon düşüşü %9'da RiskGate kapanıyordu ama fren kurulmuyordu."""
+    from packages.risk import engine, halt
+    from packages.risk.engine import RiskInput
+    inp = RiskInput(dqs_score=100, equity_usd=100_000, peak_equity_usd=100_000,
+                    daily_pnl_usd=0, open_position_count=2, mtm_equity_usd=91_000)
+    halts = halt.sync(inp)
+    assert [h.type for h in halts] == ["MAX_DRAWDOWN"]
+    assert halts[0].evidence[0].startswith("DD(mtm) 9.0%")
+    assert halt.metrics(inp)["drawdown_pct"] == pytest.approx(0.09)
+    assert engine.evaluate(inp).action == "KILL_SWITCH"
+    # Açık pozisyon kârı freni gevşetemez: gerçekleşmiş düşüş %9 → yine fren.
+    halt.owner_reset()
+    up = RiskInput(dqs_score=100, equity_usd=91_000, peak_equity_usd=100_000,
+                   daily_pnl_usd=0, open_position_count=2, mtm_equity_usd=120_000)
+    assert halt.drawdown(up) == (pytest.approx(0.09), "DD")
+
+
+def test_open_position_loss_in_ledger_trips_halt(fresh_env) -> None:
+    """F2 — defterdeki açık pozisyon zararı (%9) fren kaydını kurar; tick KILL_SWITCH frenini görünce kapatır."""
+    ps = fresh_env
+    state = ps.load()
+    state.equity_usd = state.peak_equity_usd = 100_000.0
+    pos = _position(ps, symbol="BTCUSD", price=68_000.0, size_usd=60_000)
+    pos.current_price = 68_000.0 * 0.85  # -%15 × 60k = -9k açık zarar
+    state.open_positions.append(pos)
+    ps.save(state)
+    from packages.risk import halt
+    assert halt.drawdown(_state_input(ps))[0] == pytest.approx(0.09)
+    assert [h.type for h in halt.sync(_state_input(ps))] == ["MAX_DRAWDOWN"]

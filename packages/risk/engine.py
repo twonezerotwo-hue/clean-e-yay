@@ -132,26 +132,19 @@ def evaluate(
             )
         )
 
-    # 3) Max drawdown
-    # MTM ölçümü varsa efektif equity = min(realized, mtm):
-    # açık pozisyonlar toplamda eriyorsa fren realized kapanışı BEKLEMEZ.
-    # min() garantisi: MTM kârı gate'i asla gevşetemez (yalnız sıkılaştırır).
-    dd_equity = inp.equity_usd
-    dd_label = "DD"
-    if inp.mtm_equity_usd is not None and inp.mtm_equity_usd < dd_equity:
-        dd_equity = inp.mtm_equity_usd
-        dd_label = "DD(mtm)"
-    if inp.peak_equity_usd > 0:
-        dd = (inp.peak_equity_usd - dd_equity) / inp.peak_equity_usd
-        if dd >= th["max_drawdown_pct"]:
-            # H11 — max DD = KILL_SWITCH: pozisyonlar kapanır, owner reset'e kadar durur.
-            candidates.append(
-                (
-                    "KILL_SWITCH",
-                    "Maksimum drawdown sınırı aşıldı — owner reset gerekli",
-                    [f"{dd_label} {dd:.1%} ≥ {th['max_drawdown_pct']:.0%}"],
-                )
+    # 3) Max drawdown — fren deposuyla TEK ölçü (halt.drawdown): efektif equity =
+    # min(realized, mtm). Açık pozisyonlar eriyorsa fren realized kapanışı
+    # BEKLEMEZ; MTM kârı gate'i asla gevşetemez (yalnız sıkılaştırır).
+    dd, dd_label = halt_store.drawdown(inp)
+    if inp.peak_equity_usd > 0 and dd >= th["max_drawdown_pct"]:
+        # H11 — max DD = KILL_SWITCH: pozisyonlar kapanır, owner reset'e kadar durur.
+        candidates.append(
+            (
+                "KILL_SWITCH",
+                "Maksimum drawdown sınırı aşıldı — owner reset gerekli",
+                [f"{dd_label} {dd:.1%} ≥ {th['max_drawdown_pct']:.0%}"],
             )
+        )
 
     # 4) Çok fazla açık pozisyon — 2026-07-04: hardcoded 6 → owner-tunable
     #    (risk_gates.max_open_positions). Default aynı (6); davranış bayt-aynı.

@@ -18,6 +18,13 @@ Politika:
   `active_halts()` yeni pozisyonu durduran kayıt döner; `sync` bozuk dosyaları
   kenara alır ve bu kaydı KALICI yazar — hangi frenin aktif olduğu bilinmediği
   için yalnız owner reset kaldırır. Kurtarma ve okunamama denetim kaydına girer.
+- Düşüş TEK ölçüyle (`drawdown`) hesaplanır: gerçekleşmiş sermaye ile açık
+  pozisyon değerinin küçüğü. RiskGate, fren deposu ve gösterge aynı sayıyı
+  görür; açık pozisyon düşüşü %8'i geçince fren kalıcı kurulur ve tick bütün
+  pozisyonları kapatır (21 Kasım 2026, revizyon grubu 2 F2).
+- Owner sıfırlaması MAX_DRAWDOWN'u kapatırken tepe sermayeyi o anki sermayeye
+  çeker: düşüş sıfırlama anından yeniden ölçülür (eskiden sonraki tick fren
+  yeniden kuruluyordu). Tam kâğıt sıfırlaması frenleri de kapatır (F1).
 - PAPER_SAFE / NO_EXECUTION: broker yok; halt yalnızca paper karar
   akışını kısıtlar.
 """
@@ -31,6 +38,7 @@ from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
 
+from packages.data.numeric import is_finite
 from packages.data.registry.loader import load_thresholds
 from packages.ops.store import replace_with_retry, write_text_atomic
 
@@ -175,6 +183,21 @@ def effective_daily_pnl(inp) -> float:
     return float(getattr(inp, "daily_pnl_usd", 0.0) or 0.0)
 
 
+def drawdown(inp) -> tuple[float, str]:
+    """(düşüş oranı, etiket) — RiskGate, fren deposu ve gösterge için tek ölçü.
+
+    Etkin sermaye = min(gerçekleşmiş, açık pozisyon değeri): açık pozisyonlar
+    eriyorsa fren kapanışı beklemez; açık pozisyon kârı freni gevşetemez."""
+    equity, label = float(inp.equity_usd), "DD"
+    mtm = getattr(inp, "mtm_equity_usd", None)
+    if mtm is not None and is_finite(mtm) and mtm < equity:
+        equity, label = float(mtm), "DD(mtm)"
+    peak = float(inp.peak_equity_usd)
+    if peak <= 0:
+        return 0.0, label
+    return (peak - equity) / peak, label
+
+
 def _is_stale_daily(e: HaltEvent, today: str) -> bool:
     """H11 — önceki UTC günün DAILY_LOSS halt'i artık geçerli değil."""
     return e.type == "DAILY_LOSS" and (e.started_at or "")[:10] < today
@@ -206,9 +229,7 @@ def metrics(inp) -> dict:
     daily_limit_usd = float(th["max_daily_loss_pct"]) * inp.equity_usd
     daily_pnl_usd = effective_daily_pnl(inp)
     daily_loss_usd = max(0.0, -daily_pnl_usd)
-    dd = 0.0
-    if inp.peak_equity_usd > 0:
-        dd = max(0.0, (inp.peak_equity_usd - inp.equity_usd) / inp.peak_equity_usd)
+    dd = max(0.0, drawdown(inp)[0])
     dd_limit = float(th["max_drawdown_pct"])
     return {
         "equity_usd": round(inp.equity_usd, 2),
@@ -238,16 +259,15 @@ def _breaches(inp) -> list[tuple[str, str, list[str]]]:
                 [f"daily pnl {daily_pnl_usd:.0f} ≤ {daily_limit:.0f}"],
             )
         )
-    if inp.peak_equity_usd > 0:
-        dd = (inp.peak_equity_usd - inp.equity_usd) / inp.peak_equity_usd
-        if dd >= float(th["max_drawdown_pct"]):
-            out.append(
-                (
-                    "MAX_DRAWDOWN",
-                    "Maksimum drawdown sınırı aşıldı — halt",
-                    [f"DD {dd:.1%} ≥ {float(th['max_drawdown_pct']):.0%}"],
-                )
+    dd, label = drawdown(inp)
+    if inp.peak_equity_usd > 0 and dd >= float(th["max_drawdown_pct"]):
+        out.append(
+            (
+                "MAX_DRAWDOWN",
+                "Maksimum drawdown sınırı aşıldı — halt",
+                [f"{label} {dd:.1%} ≥ {float(th['max_drawdown_pct']):.0%}"],
             )
+        )
     return out
 
 
@@ -306,8 +326,29 @@ def sync(inp) -> list[HaltEvent]:
 
 
 def owner_reset() -> list[HaltEvent]:
-    """Owner reset — tüm aktif halt'leri kapatır; geçmiş korunur. Fren dosyası ve
-    yedeği okunamıyorsa owner'ın sıfırlaması temiz durum yazar (bozuklar kenara)."""
+    """Owner reset — tüm aktif halt'leri kapatır; geçmiş korunur. MAX_DRAWDOWN
+    kapanırken tepe sermaye o anki sermayeye çekilir (eski tepe denetim kaydında):
+    düşüş sıfırlama anından ölçülür, sonraki tick freni yeniden kurmaz. Defter
+    kilidi altında çalışır; tick'in fren denetimiyle yarışmaz."""
+    from packages.paper import state as paper_state  # paper → risk yönü; döngü yok
+
+    with paper_state.transaction("risk:owner_reset") as ps:
+        cleared = _clear_active("owner_reset")
+        if any(e.type == "MAX_DRAWDOWN" for e in cleared) and ps.peak_equity_usd > ps.equity_usd:
+            old_peak = ps.peak_equity_usd
+            ps.peak_equity_usd = ps.equity_usd
+            _audit("HALT_RESET_PEAK_REBASED", {"old_peak_usd": old_peak, "new_peak_usd": ps.equity_usd})
+    return cleared
+
+
+def clear_for_paper_reset() -> list[HaltEvent]:
+    """Tam kâğıt sıfırlaması — sermaye başa döndüğü için aktif frenler de kapanır."""
+    return _clear_active("paper_reset")
+
+
+def _clear_active(by: str) -> list[HaltEvent]:
+    """Aktif halt'leri kapat; geçmiş korunur. Fren dosyası ve yedeği okunamıyorsa
+    temiz durum yazılır (bozuklar kenara)."""
     state = load()
     now = _utc_iso()
     if state.unreadable:
@@ -319,7 +360,7 @@ def owner_reset() -> list[HaltEvent]:
         if e.active:
             e.active = False
             e.cleared_at = now
-            e.cleared_by = "owner_reset"
+            e.cleared_by = by
             cleared.append(e)
     if cleared:
         save(state)

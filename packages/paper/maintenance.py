@@ -255,6 +255,10 @@ def reset_state(reason: str, preserve_learning: bool = True) -> MaintenanceResul
         txn.commit()
     finally:
         txn.abort()
+    # Sermaye başa döndü: aktif frenler de kapanır (yoksa düşüş freni açık kalırdı).
+    from packages.risk import halt as halt_store
+
+    halts_cleared = halt_store.clear_for_paper_reset()
 
     if preserve_learning:
         warnings.append("learning_and_decision_logs_preserved")
@@ -265,7 +269,8 @@ def reset_state(reason: str, preserve_learning: bool = True) -> MaintenanceResul
     return MaintenanceResult(
         status="ok", action="reset", dry_run=False, reason=reason,
         created_at=_now(), changed=True, archive_path=arch.archive_path,
-        changes=["paper_state->initial"], warnings=warnings, errors=[],
+        changes=["paper_state->initial", *(["risk_halts->cleared"] if halts_cleared else [])],
+        warnings=warnings, errors=[],
     )
 
 

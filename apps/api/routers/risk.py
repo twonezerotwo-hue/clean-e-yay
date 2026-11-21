@@ -40,7 +40,8 @@ def get_halts() -> dict:
         "metrics": halt_store.metrics(_risk_input(ps)),
         "reset_hint": (
             "DAILY_LOSS UTC gün dönümünde kapanır; MAX_DRAWDOWN için "
-            "POST /api/v1/risk/halts/reset (owner) gerekir"
+            "POST /api/v1/risk/halts/reset (owner) gerekir — sıfırlama düşüşü "
+            "o anki sermayeden yeniden ölçer"
         ),
     }
 
