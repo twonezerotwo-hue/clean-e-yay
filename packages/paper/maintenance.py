@@ -249,7 +249,7 @@ def reset_state(reason: str, preserve_learning: bool = True) -> MaintenanceResul
 
     # T3 — sıfırlama da kilit altında (revision monoton devam eder; eşzamanlı
     # tick yazımıyla yarışıp yarım devir bırakmaz).
-    txn = paper_state.begin("maintenance:reset")
+    txn = paper_state.begin("maintenance:reset", fresh=True)
     try:
         txn.state = paper_state._initial_state()
         txn.commit()

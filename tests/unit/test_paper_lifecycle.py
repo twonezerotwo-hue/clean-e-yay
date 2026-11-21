@@ -8,7 +8,7 @@ Kapsam (hard kurallar):
   scale_in=True explicit'te açılır.
 - audit log: open/close/blocked olayları JSONL'e yazılır.
 - learning handoff: kapanan Trade gerekli alanları taşır.
-- state robustness: corrupt → yedek+default (crash yok); legacy kayıt yüklenir.
+- state robustness: bozuk/kayıp defter yedekten okunur; ikisi de okunamıyorsa hata, başlangıç defteri yazılmaz (D1); legacy kayıt yüklenir.
 - live network bağımlılığı yok (state okuma pipeline çağırmaz).
 """
 from __future__ import annotations
@@ -300,21 +300,6 @@ def test_closed_trade_carries_learning_fields(paper_env) -> None:
 
 # ---------- state robustness ----------
 
-def test_corrupt_state_backup_and_default(paper_env) -> None:
-    paper_state = paper_env["state"]
-    paper_state.STATE_PATH.parent.mkdir(parents=True, exist_ok=True)
-    paper_state.STATE_PATH.write_text("{ not valid json", encoding="utf-8")
-    st = paper_state.load()  # crash YOK
-    assert st.equity_usd > 0  # default state
-    # yedek alındı + temiz dosya yazıldı
-    backups = list(paper_env["tmp"].glob("paper_state.corrupt-*.json"))
-    assert len(backups) == 1
-    reloaded = json.loads(paper_state.STATE_PATH.read_text(encoding="utf-8"))
-    assert reloaded["schema_version"] == paper_state.SCHEMA_VERSION
-    # STATE_REPAIRED audit yazıldı
-    assert any(e["action"] == "STATE_REPAIRED" for e in paper_env["audit"].read_recent())
-
-
 def _seed_one_trade(paper_state, trade_id: str = "t1"):
     st = paper_state._initial_state()
     st.recent_trades.append(paper_state.Trade(
@@ -324,6 +309,67 @@ def _seed_one_trade(paper_state, trade_id: str = "t1"):
     ))
     paper_state.save(st)
     return st
+
+
+def _corrupt(path) -> None:
+    path.write_text("{ not valid json", encoding="utf-8")
+
+
+def test_corrupt_state_recovers_from_backup(paper_env) -> None:
+    """D1 — bozuk defter yedekten okunur; eskiden 100k başlangıç defterine dönüyordu."""
+    paper_state = paper_env["state"]
+    _seed_one_trade(paper_state, "keep")
+    _corrupt(paper_state.STATE_PATH)
+    st = paper_state.load()
+    assert [t.id for t in st.recent_trades] == ["keep"]
+    assert len(list(paper_env["tmp"].glob("paper_state.corrupt-*.json"))) == 1
+    reloaded = json.loads(paper_state.STATE_PATH.read_text(encoding="utf-8"))
+    assert [t["id"] for t in reloaded["recent_trades"]] == ["keep"]
+    assert any(e["action"] == "STATE_REPAIRED" and "recovered_from_backup" in e.get("reason", "")
+               for e in paper_env["audit"].read_recent())
+
+
+def test_missing_state_recovers_from_backup(paper_env) -> None:
+    paper_state = paper_env["state"]
+    _seed_one_trade(paper_state, "keep")
+    paper_state.STATE_PATH.unlink()
+    assert [t.id for t in paper_state.load().recent_trades] == ["keep"]
+    assert paper_state.STATE_PATH.exists()
+
+
+def test_unreadable_state_and_backup_never_writes_initial(paper_env, monkeypatch) -> None:
+    """D1 — ikisi de okunamıyorsa hata; başlangıç defteri YAZILMAZ (sessiz sıfırlama yok)."""
+    paper_state = paper_env["state"]
+    monkeypatch.setattr(paper_state, "_UNREADABLE_REPORTED", False)
+    monkeypatch.setattr(paper_state.time, "sleep", lambda *_: None)
+    _seed_one_trade(paper_state, "keep")
+    _corrupt(paper_state.STATE_PATH)
+    _corrupt(paper_state._bak_path())
+    for _ in range(2):  # ikinci okumada da (asıl kenarda, yedek bozuk) başlangıç defteri yok
+        with pytest.raises(paper_state.PaperStateUnreadable):
+            paper_state.load()
+    assert not paper_state.STATE_PATH.exists()
+    assert paper_state._bak_path().read_text(encoding="utf-8") == "{ not valid json"
+    errors = [e for e in paper_env["audit"].read_recent()
+              if e["action"] == "ERROR" and "paper_state_unreadable" in e.get("reason", "")]
+    assert len(errors) == 1
+    with pytest.raises(paper_state.PaperStateUnreadable):
+        paper_state.begin("tick")
+
+
+def test_owner_reset_recovers_unreadable_ledger(paper_env, monkeypatch) -> None:
+    paper_state = paper_env["state"]
+    monkeypatch.setattr(paper_state, "_UNREADABLE_REPORTED", False)
+    monkeypatch.setattr(paper_state.time, "sleep", lambda *_: None)
+    monkeypatch.setenv("PAPER_ARCHIVE_DIR", str(paper_env["tmp"] / "archive"))
+    _seed_one_trade(paper_state, "keep")
+    _corrupt(paper_state.STATE_PATH)
+    _corrupt(paper_state._bak_path())
+    from packages.paper import maintenance
+    assert maintenance.reset_state("corrupt-ledger").status == "ok"
+    st = paper_state.load()
+    assert st.recent_trades == [] and st.equity_usd == st.peak_equity_usd > 0
+    assert json.loads(paper_state._bak_path().read_text(encoding="utf-8"))["revision"] >= 1
 
 
 def test_transient_read_lock_retries_then_succeeds(paper_env, monkeypatch) -> None:
@@ -387,6 +433,28 @@ def test_persistent_read_lock_does_not_wipe_data(paper_env, monkeypatch) -> None
     audits = paper_env["audit"].read_recent()
     assert not any(e["action"] == "STATE_REPAIRED" for e in audits)
     assert any(e["action"] == "STATE_READ_LOCKED" for e in audits)
+
+
+def test_persistent_lock_at_startup_raises_instead_of_initial(paper_env, monkeypatch) -> None:
+    """D1 — süreç yeni başlamışken (son-iyi yok) kalıcı kilit → hata; eskiden başlangıç
+    defteri dönüyor ve sonraki yazım gerçek defterin üzerine yazabiliyordu."""
+    import pathlib
+    paper_state = paper_env["state"]
+    monkeypatch.setattr(paper_state, "_UNREADABLE_REPORTED", False)
+    _seed_one_trade(paper_state, "keep")
+    monkeypatch.setattr(paper_state, "_LAST_GOOD_RAW", None)
+    real_read = pathlib.Path.read_text
+    state_path = paper_state.STATE_PATH
+
+    def always_locked(self, *a, **k):
+        if self == state_path:
+            raise PermissionError(13, "locked")
+        return real_read(self, *a, **k)
+
+    monkeypatch.setattr(pathlib.Path, "read_text", always_locked)
+    monkeypatch.setattr(paper_state.time, "sleep", lambda *_: None)
+    with pytest.raises(paper_state.PaperStateUnreadable):
+        paper_state.load()
 
 
 def test_legacy_position_without_lifecycle_fields_loads(paper_env) -> None:

@@ -1,12 +1,20 @@
 """Paper trading state — JSON dosyası bazlı kalıcılık.
 
-P1 — robustness: atomik yazım (temp + os.replace), `schema_version`, corrupt
-dosya → yedek + default (crash yok), legacy/forward-uyumlu yükleme (bilinmeyen
-alanlar atlanır, eksik alanlar default'a düşer). PAPER_SAFE / NO_EXECUTION.
+P1 — robustness: atomik yazım (temp + os.replace), `schema_version`, legacy/forward-
+uyumlu yükleme (bilinmeyen alanlar atlanır, eksik alanlar default'a düşer).
+
+Her yazımda aynı içerikle `.bak` kopyası da yazılır (fren deposu deseni, 22 Kasım
+2026, revizyon grubu 3 D1). Asıl dosya silinir ya da bozulursa defter yedekten
+okunur (bozuk dosya kenara alınır). İkisi de okunamıyorsa başlangıç defteri
+YAZILMAZ: `PaperStateUnreadable` yükselir, tick çalışmaz, owner bakım
+sıfırlamasıyla çıkar. Eskiden bozuk ya da kayıp defter sessizce 100.000 dolarlık
+başlangıç defterine dönüyordu (16 Temmuz 2026'da bir kez oldu). İki dosya da
+yoksa ilk çalıştırmadır. PAPER_SAFE / NO_EXECUTION.
 """
 from __future__ import annotations
 
 import json
+import logging
 import os
 import threading
 import time
@@ -19,6 +27,8 @@ from packages.ops.store import write_text_atomic
 from packages.paper import audit, execution_sim
 
 SCHEMA_VERSION = 1
+
+log = logging.getLogger(__name__)
 
 STATE_PATH = Path(
     os.environ.get("PAPER_STATE_PATH", "data/runtime/paper_state.json")
@@ -38,6 +48,12 @@ _RETRY_BASE_SLEEP_S = 0.05
 # gerçek veriyi koruyabilmek için tutulur — boş default'la read-modify-write
 # ezmesini önler.
 _LAST_GOOD_RAW: dict | None = None
+# Okunamama denetim kaydı süreç başına bir kez (her tick yeni satır yazmasın).
+_UNREADABLE_REPORTED = False
+
+
+class PaperStateUnreadable(RuntimeError):
+    """Defter ve yedeği okunamıyor; başlangıç defteri yazılmadı (sessiz sıfırlama yok)."""
 
 
 def _only_known(cls, d: dict) -> dict:
@@ -441,59 +457,92 @@ def _backup_corrupt(path: Path) -> str | None:
         return None
 
 
+def _bak_path() -> Path:
+    return STATE_PATH.with_name(STATE_PATH.name + ".bak")
+
+
+def _write_both(payload: dict) -> None:
+    """Asıl dosya + aynı içerikle `.bak` (yedek yazılamazsa asıl yine yazılmıştır)."""
+    _write_atomic(STATE_PATH, payload)
+    try:
+        _write_atomic(_bak_path(), payload)
+    except OSError:
+        log.exception("defter yedeği yazılamadı (asıl dosya yazıldı): %s", _bak_path())
+
+
+def _unreadable(detail: str, backup: str | None) -> PaperStateUnreadable:
+    global _UNREADABLE_REPORTED
+    log.error("defter ve yedeği okunamıyor (%s); başlangıç defteri YAZILMADI", detail)
+    if not _UNREADABLE_REPORTED:
+        _UNREADABLE_REPORTED = True
+        audit.record("ERROR", reason=f"paper_state_unreadable:{detail}", backup=backup)
+    return PaperStateUnreadable(
+        f"defter ve yedeği okunamıyor ({detail}) — başlangıç defteri yazılmadı; "
+        "owner bakım sıfırlamasıyla çıkar"
+    )
+
+
+def _recover_from_backup(reason: str, corrupt: str | None = None) -> PaperState:
+    """Asıl defter yok ya da bozuk: yedekten oku, asılı yeniden yaz. Yedek de
+    okunamıyorsa PaperStateUnreadable (yedek kenara ALINMAZ: ikisi de yok olursa bir
+    sonraki okuma bunu ilk çalıştırma sanıp başlangıç defteri yazardı)."""
+    global _LAST_GOOD_RAW
+    bak = _bak_path()
+    try:
+        raw = json.loads(_read_text_with_retry(bak))
+        state = PaperState.from_dict(raw)
+    except (OSError, json.JSONDecodeError, ValueError, TypeError, AttributeError) as exc:
+        raise _unreadable(f"{reason};backup:{type(exc).__name__}", corrupt) from exc
+    _write_atomic(STATE_PATH, raw)
+    log.error("defter okunamadı (%s); yedekten okundu ve yeniden yazıldı", reason)
+    audit.record("STATE_REPAIRED", reason=f"recovered_from_backup:{reason}", backup=corrupt)
+    _LAST_GOOD_RAW = raw
+    return state
+
+
 def load() -> PaperState:
     global _LAST_GOOD_RAW
     with _LOCK:
         if not STATE_PATH.exists():
-            state = _initial_state()
-            _write_atomic(STATE_PATH, state.to_dict())
-            _LAST_GOOD_RAW = state.to_dict()
-            return state
+            if not _bak_path().exists():
+                # İlk çalıştırma: iki dosya da yok.
+                state = _initial_state()
+                _write_both(state.to_dict())
+                _LAST_GOOD_RAW = state.to_dict()
+                return state
+            return _recover_from_backup("missing")
 
         # 1) Okuma I/O'su ayrı tutulur: geçici dosya kilidi (PermissionError)
         #    BOZULMA DEĞİLDİR — retry et, asla onarım/sıfırlama tetikleme.
         try:
             raw_text = _read_text_with_retry(STATE_PATH)
         except OSError as exc:
-            # B2 — kalıcı kilit (retry'lar tükendi; pratikte ~hiç olmaz). Disk
-            # dosyasına DOKUNMA: yedekleme/sıfırlama YOK → gerçek veri yerinde
-            # kalır, sıradaki başarılı load onu okur. Süreç-içi son-iyi varsa onu
-            # döndür (read-modify-write'ın boş default'la ezmesini önler).
+            # B2 — kalıcı kilit (retry'lar tükendi). Disk dosyasına DOKUNMA. Süreç-içi
+            # son-iyi varsa onu döndür; yoksa hata (başlangıç defteri dönmek, sonraki
+            # yazımda gerçek defterin üzerine yazardı).
             audit.record(
                 "STATE_READ_LOCKED",
                 reason=f"transient_lock:{type(exc).__name__}",
             )
             if _LAST_GOOD_RAW is not None:
                 return PaperState.from_dict(_LAST_GOOD_RAW)
-            return _initial_state()
+            raise _unreadable(f"locked:{type(exc).__name__}", None) from exc
 
-        # 2) Parse: yalnız GERÇEK bozulma (JSON parse edilemiyor / şema bozuk)
-        #    onarımı tetikler. PermissionError artık buraya DÜŞMEZ.
+        # 2) Parse: yalnız GERÇEK bozulma (JSON parse edilemiyor / şema bozuk) →
+        #    bozuk dosya kenara, yedekten oku.
         try:
             raw = json.loads(raw_text)
             state = PaperState.from_dict(raw)
-            _LAST_GOOD_RAW = raw
-            return state
-        except (json.JSONDecodeError, ValueError, TypeError) as exc:
-            # P1 — corrupt state: yedekle + temiz default yaz (crash YOK).
-            bak = _backup_corrupt(STATE_PATH)
-            state = _initial_state()
-            try:
-                _write_atomic(STATE_PATH, state.to_dict())
-            except OSError:
-                pass
-            audit.record(
-                "STATE_REPAIRED",
-                reason=f"corrupt_paper_state:{type(exc).__name__}",
-                backup=bak,
-            )
-            _LAST_GOOD_RAW = state.to_dict()
-            return state
+        except (json.JSONDecodeError, ValueError, TypeError, AttributeError) as exc:
+            corrupt = _backup_corrupt(STATE_PATH)
+            return _recover_from_backup(f"corrupt:{type(exc).__name__}", corrupt)
+        _LAST_GOOD_RAW = raw
+        return state
 
 
 def save(state: PaperState) -> None:
     with _LOCK:
-        _write_atomic(STATE_PATH, state.to_dict())
+        _write_both(state.to_dict())
 
 
 # ── T3 (2026-07 dış denetim P0-1) — süreçler-arası defter transaction'ı ───────
@@ -561,7 +610,7 @@ class Transaction:
     idempotenttir. Hata yolunda MUTLAKA abort çağrılmalı (try/finally veya
     `transaction()` context manager'ı bunu üstlenir)."""
 
-    def __init__(self, reason: str = "") -> None:
+    def __init__(self, reason: str = "", *, fresh: bool = False) -> None:
         self.reason = reason
         p = _txn_lock_path()
         p.parent.mkdir(parents=True, exist_ok=True)
@@ -572,8 +621,13 @@ class Transaction:
             self._fh.close()
             raise
         self._done = False
-        self.state = load()
-        self._loaded_revision = self.state.revision
+        if fresh:
+            # Bakım sıfırlaması: defter okunamıyor olabilir; yüklemeden başlangıç defteri.
+            self.state = _initial_state()
+            self._loaded_revision = _disk_revision() or 0
+        else:
+            self.state = load()
+            self._loaded_revision = self.state.revision
 
     def commit(self) -> None:
         if self._done:
@@ -603,8 +657,8 @@ class Transaction:
         _flock_release(self._fh)
 
 
-def begin(reason: str = "") -> Transaction:
-    return Transaction(reason)
+def begin(reason: str = "", *, fresh: bool = False) -> Transaction:
+    return Transaction(reason, fresh=fresh)
 
 
 class _TransactionCM:
