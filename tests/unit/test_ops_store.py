@@ -39,6 +39,41 @@ def test_no_tmp_left_and_failure_keeps_target(tmp_path, monkeypatch):
     assert [f.name for f in tmp_path.iterdir()] == ["x.json"]
 
 
+def test_data_is_forced_to_disk_before_replace(tmp_path, monkeypatch):
+    # Güç kesintisi koruması: içerik diske zorlanmadan yer değiştirme yapılmaz.
+    calls: list[str] = []
+    real_fsync, real_replace = store.os.fsync, store.os.replace
+
+    def fsync(fd):
+        calls.append("fsync")
+        real_fsync(fd)
+
+    def replace(src, dst):
+        calls.append("replace")
+        real_replace(src, dst)
+
+    monkeypatch.setattr(store.os, "fsync", fsync)
+    monkeypatch.setattr(store.os, "replace", replace)
+    p = tmp_path / "x.json"
+    store.write_text_atomic(p, "yeni")
+    assert calls == ["fsync", "replace"]
+    assert p.read_text(encoding="utf-8") == "yeni"
+
+
+def test_fsync_failure_keeps_target_and_removes_tmp(tmp_path, monkeypatch):
+    p = tmp_path / "x.json"
+    store.write_text_atomic(p, "eski")
+
+    def boom(fd):
+        raise OSError("disk")
+
+    monkeypatch.setattr(store.os, "fsync", boom)
+    with pytest.raises(OSError):
+        store.write_text_atomic(p, "yeni")
+    assert p.read_text(encoding="utf-8") == "eski"
+    assert [f.name for f in tmp_path.iterdir()] == ["x.json"]
+
+
 def test_replace_retries_transient_lock(tmp_path, monkeypatch):
     real = os.replace
     calls = {"n": 0}
