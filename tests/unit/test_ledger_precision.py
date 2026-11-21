@@ -54,3 +54,30 @@ def test_scale_in_average_entry_is_not_rounded(ps_mod, monkeypatch) -> None:
     expected = 2000.0 / (1000.0 / 0.04262235 + 1000.0 / 0.04301234)
     assert out["avg_entry"] == pytest.approx(expected, rel=1e-12)
     assert round(expected, 4) != pytest.approx(expected, rel=1e-6)  # eski yuvarlama farkı görünür
+
+
+# ---------- D6 (P0 kalan madde): open_position tutar doğrulaması ----------
+
+@pytest.mark.parametrize("bad", [float("nan"), float("inf"), 0.0, -10.0])
+def test_open_position_refuses_bad_override(ps_mod, bad) -> None:
+    """Eski kod: max(0, NaN) = 0 → sıfır boyutlu pozisyon; sonsuz → sonsuz pozisyon."""
+    from packages.paper import lifecycle
+    st = ps_mod._initial_state()
+    with pytest.raises(ValueError):
+        lifecycle.open_position(
+            st, symbol="BTCUSD", side="long", entry_price=100.0, size_multiplier=0.0,
+            manual=True, size_usd_override=bad, timeframe="1d",
+        )
+    assert st.open_positions == []
+
+
+def test_bad_pending_size_is_held_not_crashing(ps_mod) -> None:
+    from packages.paper import lifecycle
+    from packages.paper.state import PendingOrder
+    st = ps_mod._initial_state()
+    st.pending_orders.append(PendingOrder(
+        id="po-bad", symbol="BTCUSD", side="long", size_usd=float("nan"), order_type="limit",
+        trigger_price=100.0, created_at="2026-11-22T00:00:00+00:00", timeframe="1d",
+    ))
+    assert lifecycle.trigger_pending_orders(st, {"BTCUSD": 99.0}, open_gate=lambda s: None) == []
+    assert st.pending_orders[0].last_held_reason == "invalid_size"

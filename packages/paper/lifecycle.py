@@ -14,6 +14,7 @@ import hashlib
 from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
 
+from packages.data.numeric import is_finite
 from packages.data.registry.loader import config_provenance, load_thresholds
 from packages.learning import decision_log
 from packages.paper import audit, conviction, execution_sim, reentry_guard, sizing
@@ -287,8 +288,12 @@ def open_position(
     )
     sl, tp = targets.sl, targets.tp
     if size_usd_override is not None:
-        # Owner manuel emir: tam dolar tutarı (kademe/sizing baypas).
-        size = max(0.0, float(size_usd_override))
+        # Owner manuel emir: tam dolar tutarı (kademe/sizing baypas). Sayı olmayan ya da
+        # sıfır/negatif tutar reddedilir (P0 kalan madde, D6): max(0, NaN) sıfır boyutlu,
+        # sonsuz tutar sonsuz pozisyon açardı.
+        if not is_finite(size_usd_override) or float(size_usd_override) <= 0:
+            raise ValueError(f"geçersiz pozisyon tutarı: {size_usd_override!r}")
+        size = float(size_usd_override)
     else:
         # Canonical sizing: deterministic multiplier → USD (no AI boost; capped).
         # Kademe size_mult tabanı yalnızca KÜÇÜLTÜR (≤1.0 kademelerde).
@@ -841,6 +846,8 @@ def _pending_fill_held_reason(state: PaperState, order) -> str | None:
       * duplicate (aynı symbol+timeframe açık pozisyon) — kazara katlama önlenir
         (owner isterse scale-in'i bilinçli, ayrı aksiyonla yapar).
     Tekrar-giriş kilidi owner-muafiyet kuralı gereği BURADA YOKTUR."""
+    if not is_finite(order.size_usd) or float(order.size_usd) <= 0:
+        return "invalid_size"
     if halt_store.active_halts():
         return "active_halt"
     anomaly = state_anomaly.detect_state(state)
