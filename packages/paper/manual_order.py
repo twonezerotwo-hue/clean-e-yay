@@ -19,8 +19,7 @@ from packages.paper import state as paper_state
 from packages.paper.guards import price_sanity
 from packages.paper.lifecycle import _ensure_daily_anchor, open_position
 from packages.paper.state import PaperState, PendingOrder
-from packages.risk.engine import evaluate as evaluate_risk
-from packages.risk.engine import risk_input_from_state
+from packages.risk.engine import evaluate_for_open, risk_input_from_state
 
 _SIDE = {
     "al": "long", "buy": "long", "long": "long", "uzun": "long",
@@ -42,13 +41,14 @@ class ManualOrderError(Exception):
 RISK_BLOCKS_NEW_OPEN = {"KILL_SWITCH", "RISK_REDUCE", "NO_POSITION_INCREASE"}
 
 
-def risk_block(ps: PaperState, dqs: float) -> str | None:
+def risk_block(ps: PaperState, snap) -> str | None:
     """Pozisyon açan ya da büyüten her owner işlemi için son ve tek RiskGate.
 
     Defter kilidi içinde çağrılır; engel varsa okunur sebebi, yoksa None döner.
-    Manuel emir, pozisyona ekleme ve ters çevirme aynı denetimi kullanır."""
+    Manuel emir, pozisyona ekleme ve ters çevirme aynı denetimi kullanır; olay
+    riski (yüksek etkili veri penceresi) karar motorundakiyle aynıdır (F4)."""
     _ensure_daily_anchor(ps)
-    risk = evaluate_risk(risk_input_from_state(ps, dqs))
+    risk = evaluate_for_open(risk_input_from_state(ps, snap.quality.score), getattr(snap, "catalysts", None))
     if risk.action in RISK_BLOCKS_NEW_OPEN:
         return f"RiskGate engelledi: {risk.action} — {risk.reason}"
     return None
@@ -130,7 +130,7 @@ def place(
         _ensure_daily_anchor(ps)
         if guard is not None:
             guard(ps, float(size_usd))
-        blocked = risk_block(ps, snap.quality.score)
+        blocked = risk_block(ps, snap)
         if blocked is not None:
             raise ManualOrderError(blocked, 409, reason="risk_gate")
         if size_usd > ps.equity_usd:

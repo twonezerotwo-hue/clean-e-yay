@@ -60,8 +60,7 @@ from packages.risk import (
     options_risk,
     volatility_risk,
 )
-from packages.risk.engine import RiskDecision, RiskInput
-from packages.risk.engine import evaluate as evaluate_risk
+from packages.risk.engine import RiskDecision, RiskInput, evaluate_for_open
 
 Action = Literal["open_long", "open_short", "hold", "blocked"]
 
@@ -1154,10 +1153,7 @@ def decide_all(
 ) -> tuple[RegimeOutput, RiskDecision, list[TradeDecision]]:
     regime = classify(snap)
     # P0 — olay riski yalnızca kısıtlayıcı ek candidate; DQS/halt'ı ezemez.
-    risk = evaluate_risk(
-        paper_state_input,
-        event_candidates=event_risk.risk_candidates(snap.catalysts),
-    )
+    risk = evaluate_for_open(paper_state_input, snap.catalysts)
     # Tek pass mistake özeti — tüm semboller için aynı snapshot.
     mems = mistake_memory.summary()
     # P3 fren — sistemin güncel edge'i (tüm kararlar için tek pass; state okuma tekrarı yok).
@@ -1250,10 +1246,7 @@ def decide_matrix(
     """
     regime = classify(snap, persist=persist_regime)
     # P0 — olay riski yalnızca kısıtlayıcı ek candidate; DQS/halt'ı ezemez.
-    risk = evaluate_risk(
-        paper_state_input,
-        event_candidates=event_risk.risk_candidates(snap.catalysts),
-    )
+    risk = evaluate_for_open(paper_state_input, snap.catalysts)
     mems = mistake_memory.summary()
     # P3 fren — sistemin son işlemlerdeki gerçekleşen edge'i (tek okuma). Canlı yol
     # budur; önceden yalnız decide_all hesaplıyordu ve fren canlıda hiç çalışmıyordu.

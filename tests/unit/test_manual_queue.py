@@ -104,7 +104,7 @@ def test_reject_records_rejection_and_blocks(st) -> None:
 
 def test_approve_opens_and_clears(st) -> None:
     entry = _queue(st, price=60_000.0)
-    res = manual_queue.approve(st, entry.id, current_price=60_000.0)
+    res = manual_queue.approve(st, entry.id, risk_input=_risk(), catalysts=[], current_price=60_000.0)
     assert res["status"] == "opened"
     assert len(st.open_positions) == 1
     assert st.open_positions[0].symbol == "BTCUSD"
@@ -114,15 +114,15 @@ def test_approve_opens_and_clears(st) -> None:
 
 
 def test_approve_not_found_and_no_price(st) -> None:
-    assert manual_queue.approve(st, "missing", current_price=60_000.0)["status"] == "not_found"
+    assert manual_queue.approve(st, "missing", risk_input=_risk(), catalysts=[], current_price=60_000.0)["status"] == "not_found"
     entry = _queue(st, price=None)
-    assert manual_queue.approve(st, entry.id, current_price=None)["status"] == "no_price"
+    assert manual_queue.approve(st, entry.id, risk_input=_risk(), catalysts=[], current_price=None)["status"] == "no_price"
 
 
 def test_approve_blocked_by_price_guard(st) -> None:
     """Owner approval still passes through the guards — contaminated price is blocked."""
     entry = _queue(st, price=None)
-    res = manual_queue.approve(st, entry.id, current_price=30.0)  # silver-like contamination
+    res = manual_queue.approve(st, entry.id, risk_input=_risk(), catalysts=[], current_price=30.0)  # silver-like contamination
     assert res["status"] == "blocked"
     assert res["reason"] == "price_insane"
     assert len(st.open_positions) == 0
@@ -132,7 +132,7 @@ def test_approve_blocked_by_price_guard(st) -> None:
 def test_approve_reruns_riskgate_and_blocks(st) -> None:
     """Queue membership is NOT pre-authorization: DQS<55 → RiskGate KILL_SWITCH blocks."""
     entry = _queue(st, price=60_000.0)
-    res = manual_queue.approve(st, entry.id, current_price=60_000.0, risk_input=_risk(dqs=40.0))
+    res = manual_queue.approve(st, entry.id, current_price=60_000.0, catalysts=[], risk_input=_risk(dqs=40.0))
     assert res["status"] == "blocked"
     assert res["reason"].startswith("risk_gate:")
     assert len(st.open_positions) == 0
@@ -141,7 +141,7 @@ def test_approve_reruns_riskgate_and_blocks(st) -> None:
 
 def test_approve_opens_when_riskgate_open(st) -> None:
     entry = _queue(st, price=60_000.0)
-    res = manual_queue.approve(st, entry.id, current_price=60_000.0, risk_input=_risk(dqs=90.0))
+    res = manual_queue.approve(st, entry.id, current_price=60_000.0, catalysts=[], risk_input=_risk(dqs=90.0))
     assert res["status"] == "opened"
     assert len(st.open_positions) == 1
 
@@ -232,28 +232,28 @@ def test_rejection_lapses_after_one_bar_gap(st) -> None:
 
 def test_approve_after_expiry_is_blocked_and_removed(st) -> None:
     entry = _queue_at(st, _T0)
-    res = manual_queue.approve(st, entry.id, current_price=60_000.0, now=_T0 + timedelta(hours=1))
+    res = manual_queue.approve(st, entry.id, risk_input=_risk(), catalysts=[], current_price=60_000.0, now=_T0 + timedelta(hours=1))
     assert res == {"status": "blocked", "reason": "expired"}
     assert st.manual_ready == [] and st.open_positions == []
 
 
 def test_approve_never_falls_back_to_queued_price(st) -> None:
     entry = _queue_at(st, datetime.now(UTC), price=60_000.0)
-    assert manual_queue.approve(st, entry.id, current_price=None)["status"] == "no_price"
-    assert manual_queue.approve(st, entry.id, current_price=float("nan"))["status"] == "no_price"
+    assert manual_queue.approve(st, entry.id, risk_input=_risk(), catalysts=[], current_price=None)["status"] == "no_price"
+    assert manual_queue.approve(st, entry.id, risk_input=_risk(), catalysts=[], current_price=float("nan"))["status"] == "no_price"
     assert st.open_positions == []
 
 
 def test_approve_blocks_when_price_ran_away(st) -> None:
     entry = _queue_at(st, datetime.now(UTC), price=60_000.0)
-    res = manual_queue.approve(st, entry.id, current_price=60_600.0, atr=1_000.0)  # 0,6 ATR
+    res = manual_queue.approve(st, entry.id, risk_input=_risk(), catalysts=[], current_price=60_600.0, atr=1_000.0)  # 0,6 ATR
     assert res["status"] == "blocked" and res["reason"] == "price_moved:0.60atr"
     assert st.open_positions == [] and len(st.manual_ready) == 1
 
 
 def test_approve_opens_within_late_price_limit(st) -> None:
     entry = _queue_at(st, datetime.now(UTC), price=60_000.0)
-    res = manual_queue.approve(st, entry.id, current_price=60_400.0, atr=1_000.0)  # 0,4 ATR
+    res = manual_queue.approve(st, entry.id, risk_input=_risk(), catalysts=[], current_price=60_400.0, atr=1_000.0)  # 0,4 ATR
     assert res["status"] == "opened"
     assert len(st.open_positions) == 1
 
@@ -358,3 +358,45 @@ def test_state_endpoint_surfaces_manual_ready_count(api) -> None:
     r = api.get("/api/v1/paper-trading/state")
     assert r.status_code == 200
     assert r.json()["manual_ready_count"] == 1
+
+
+# ---------- F4 (21 Kasım 2026): olay riski her açılış yolunda ----------
+
+def _cpi_in(hours: float):
+    from packages.data.types import Catalyst
+    ts = datetime.now(UTC) + timedelta(hours=hours)
+    return Catalyst(id="cpi-test", ts=ts, title="CPI", importance="high",
+                    verified=True, hours_until=hours, source="test")
+
+
+def test_approve_is_blocked_inside_event_window(st) -> None:
+    entry = _queue(st, price=60_000.0)
+    res = manual_queue.approve(st, entry.id, risk_input=_risk(), catalysts=[_cpi_in(2)],
+                               current_price=60_000.0)
+    assert res == {"status": "blocked", "reason": "risk_gate:NO_POSITION_INCREASE"}
+    assert st.open_positions == []
+
+
+def test_approve_requires_risk_input_and_catalysts(st) -> None:
+    entry = _queue(st, price=60_000.0)
+    with pytest.raises(TypeError):
+        manual_queue.approve(st, entry.id, current_price=60_000.0)  # eski kod: RiskGate'siz açardı
+
+
+def test_owner_manual_paths_see_event_window(st) -> None:
+    from types import SimpleNamespace
+
+    from packages.paper import idea_order, manual_order
+    from packages.risk import engine
+
+    assert engine.evaluate_for_open(_risk(), [_cpi_in(2)]).action == "NO_POSITION_INCREASE"
+    assert engine.evaluate_for_open(_risk(), []).action == "HOLD"
+    snap = SimpleNamespace(quality=SimpleNamespace(score=90.0), catalysts=[_cpi_in(2)])
+    blocked = manual_order.risk_block(st, snap)
+    assert blocked is not None and "NO_POSITION_INCREASE" in blocked
+    snap_clear = SimpleNamespace(quality=SimpleNamespace(score=90.0), catalysts=[])
+    assert manual_order.risk_block(st, snap_clear) is None
+    # Fikir panosu önizlemesi: tick'in kaydettiği RiskGate kararı (olay riski dahil) kısıtlar.
+    latest = {"dqs": {"score": 90.0},
+              "risk_state": {"action": "NO_POSITION_INCREASE", "reason": "Olay riski", "evidence": []}}
+    assert idea_order._risk_action(st, latest)[0] == "NO_POSITION_INCREASE"

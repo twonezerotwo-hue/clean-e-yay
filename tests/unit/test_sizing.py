@@ -88,7 +88,7 @@ def test_riskgate_block_prevents_open_even_with_valid_size(st) -> None:
         st, symbol="BTCUSD", timeframe="1d", side="long",
         size_multiplier=1.0, requested_price=60_000.0,  # perfectly valid size
     )
-    res = manual_queue.approve(st, entry.id, current_price=60_000.0, risk_input=_risk(dqs=40.0))
+    res = manual_queue.approve(st, entry.id, current_price=60_000.0, catalysts=[], risk_input=_risk(dqs=40.0))
     assert res["status"] == "blocked"
     assert res["reason"].startswith("risk_gate:")
     assert st.open_positions == []
@@ -100,7 +100,7 @@ def test_manual_ready_approved_trade_is_safely_sized(st) -> None:
         st, symbol="BTCUSD", timeframe="1d", side="long",
         size_multiplier=1.0, requested_price=60_000.0,
     )
-    res = manual_queue.approve(st, entry.id, current_price=60_000.0, risk_input=_risk(dqs=90.0))
+    res = manual_queue.approve(st, entry.id, current_price=60_000.0, catalysts=[], risk_input=_risk(dqs=90.0))
     assert res["status"] == "opened"
     pos = st.open_positions[0]
     assert pos.size_usd == sizing.compute_size_usd(1.0)  # sized via canonical sizing

@@ -184,3 +184,14 @@ def evaluate(
     # En yüksek öncelikli olanı seç
     best = max(candidates, key=lambda c: PRIORITY[c[0]])
     return RiskDecision(action=best[0], reason=best[1], evidence=best[2])
+
+
+def evaluate_for_open(inp: RiskInput, catalysts, *, now=None) -> RiskDecision:
+    """Pozisyon açan ya da büyüten HER yolun RiskGate'i: defter girdisi + olay riski.
+
+    Karar motoru, owner'ın elle emri, ekleme ve ters çevirme, onay kuyruğu aynı
+    fonksiyonu çağırır: yüksek etkili veri penceresi (ve açıklama sonrası soğuma)
+    hepsinde yeni pozisyonu durdurur (21 Kasım 2026, revizyon grubu 2 F4)."""
+    from packages.risk import event_risk  # event_risk → engine; döngüyü kırar
+
+    return evaluate(inp, event_candidates=event_risk.risk_candidates(list(catalysts or []), now=now))

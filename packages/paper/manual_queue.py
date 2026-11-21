@@ -30,8 +30,7 @@ from datetime import UTC, datetime, timedelta
 from packages.paper import audit
 from packages.paper.lifecycle import _TF_SECONDS, attempt_open
 from packages.paper.state import ManualReady, PaperState, RejectedSignal
-from packages.risk.engine import RiskInput
-from packages.risk.engine import evaluate as evaluate_risk
+from packages.risk.engine import RiskInput, evaluate_for_open
 
 # Canonical RiskGate actions that forbid opening a NEW position (mirror of the
 # decision engine: KILL_SWITCH→blocked, RISK_REDUCE/NO_POSITION_INCREASE→hold).
@@ -276,16 +275,17 @@ def approve(
     manual_id: str,
     *,
     current_price: float | None,
-    risk_input: RiskInput | None = None,
+    risk_input: RiskInput,
+    catalysts: list,
     atr: float | None = None,
     now: datetime | None = None,
 ) -> dict:
     """Owner approves: open the position — but queue membership does NOT pre-authorize.
 
-    Eskimiş aday açılmaz (``blocked``/``expired``, kuyruktan çıkar). When `risk_input` is
-    supplied (the API always supplies it), the canonical RiskGate is re-evaluated at
-    approval time: DQS, daily-loss, drawdown and any active KILL_SWITCH halt can still
-    block the open. Açılış yalnız GÜNCEL fiyatla yapılır (kuyruk fiyatına düşülmez); fiyat
+    Eskimiş aday açılmaz (``blocked``/``expired``, kuyruktan çıkar). The canonical
+    RiskGate is ALWAYS re-evaluated at approval time (`risk_input` and the snapshot's
+    `catalysts` are required, F4): DQS, daily-loss, drawdown, any active halt and the
+    high-impact event window can still block the open. Açılış yalnız GÜNCEL fiyatla yapılır (kuyruk fiyatına düşülmez); fiyat
     kuyruk fiyatından ``LATE_PRICE_ATR`` ATR'den fazla kaçtıysa ``price_moved``. The open
     then goes through the guarded `attempt_open` (price sanity / state anomaly /
     duplicate). On success, clears the queued + rejected records for that key.
@@ -303,17 +303,15 @@ def approve(
         )
         return {"status": "blocked", "reason": "expired"}
     # Rule: re-run the canonical RiskGate/DQS/KillSwitch before opening.
-    open_risk_action: str | None = None
-    open_dqs = risk_input.dqs_score if risk_input is not None else None
-    if risk_input is not None:
-        rg = evaluate_risk(risk_input)
-        open_risk_action = rg.action
-        if rg.action in _RISK_BLOCKS_NEW_OPEN:
-            audit.record(
-                "MANUAL_READY_BLOCKED", position_id=manual_id, symbol=entry.symbol,
-                timeframe=entry.timeframe, side=entry.side, reason=f"risk_gate:{rg.action}",
-            )
-            return {"status": "blocked", "reason": f"risk_gate:{rg.action}"}
+    open_dqs = risk_input.dqs_score
+    rg = evaluate_for_open(risk_input, catalysts, now=now)
+    open_risk_action: str | None = rg.action
+    if rg.action in _RISK_BLOCKS_NEW_OPEN:
+        audit.record(
+            "MANUAL_READY_BLOCKED", position_id=manual_id, symbol=entry.symbol,
+            timeframe=entry.timeframe, side=entry.side, reason=f"risk_gate:{rg.action}",
+        )
+        return {"status": "blocked", "reason": f"risk_gate:{rg.action}"}
     price = current_price
     if price is None or not math.isfinite(price) or price <= 0:
         return {"status": "no_price"}

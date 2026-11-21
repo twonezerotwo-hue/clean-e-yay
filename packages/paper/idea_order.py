@@ -39,8 +39,8 @@ from packages.paper.lifecycle import _TF_SECONDS, _ensure_daily_anchor
 from packages.paper.session_gate import evaluate_open as evaluate_session
 from packages.paper.sizing import compute_size_usd
 from packages.risk import correlation
+from packages.risk.engine import PRIORITY, risk_input_from_state
 from packages.risk.engine import evaluate as evaluate_risk
-from packages.risk.engine import risk_input_from_state
 
 OPEN_REASON = "owner_idea"
 DEFAULT_SIZE_MULTIPLIER = 0.25  # base boyut çarpanı (max_position_usd'nin payı); yalnız KÜÇÜLTÜLÜR
@@ -195,11 +195,16 @@ def _portfolio_block(ps: paper_state.PaperState, symbol: str, size_usd: float) -
     return None
 
 
-def _risk_action(ps: paper_state.PaperState, dqs: float) -> tuple[str, str]:
+def _risk_action(ps: paper_state.PaperState, latest: dict | None) -> tuple[str, str]:
+    """Önizleme kapısı. Kayıtlı snapshot olay takvimini taşımaz; tick'in kaydettiği
+    RiskGate kararı (olay riski dahil) ek kısıtlayıcı aday olur. Açılışın kendisi
+    `manual_order.place` → `risk_block` ile taze snapshot'ta yeniden denetlenir (F4)."""
     _ensure_daily_anchor(ps)
-    risk = evaluate_risk(
-        risk_input_from_state(ps, dqs)
-    )
+    dqs = float((((latest or {}).get("dqs")) or {}).get("score", 0.0) or 0.0)
+    tick = (latest or {}).get("risk_state") or {}
+    extra = ([(tick["action"], str(tick.get("reason") or ""), list(tick.get("evidence") or []))]
+             if tick.get("action") in PRIORITY else [])
+    risk = evaluate_risk(risk_input_from_state(ps, dqs), event_candidates=extra)
     return risk.action, risk.reason
 
 
@@ -258,8 +263,7 @@ def evaluate(idea: dict, board_at: str | None, ps: paper_state.PaperState,
     data = _data_block(symbol, tf, latest, now)
     if data is not None:
         return _verdict(DATA_UNAVAILABLE, data, **extra)
-    dqs = float((((latest or {}).get("dqs")) or {}).get("score", 0.0) or 0.0)
-    action, why = _risk_action(ps, dqs)
+    action, why = _risk_action(ps, latest)
     if action in manual_order.RISK_BLOCKS_NEW_OPEN:
         return _verdict(RISK_BLOCKED, f"RiskGate engelledi: {action} — {why}", **extra)
     size, size_block = _planned_size(ps, symbol, side, tf, action, now)
@@ -300,7 +304,7 @@ def _plan(symbol: str, now: datetime) -> tuple[Plan | None, dict | None]:
     data = _data_block(symbol, tf, latest, now)
     if data is not None:
         return None, _verdict(DATA_UNAVAILABLE, data)
-    action, _ = _risk_action(ps, float((((latest or {}).get("dqs")) or {}).get("score", 0.0) or 0.0))
+    action, _ = _risk_action(ps, latest)
     size, size_block = _planned_size(ps, symbol, side, tf, action, now)
     if size_block is not None:
         return None, _verdict(RISK_BLOCKED, size_block)

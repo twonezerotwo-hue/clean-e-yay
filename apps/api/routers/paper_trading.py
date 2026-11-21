@@ -408,6 +408,7 @@ def approve_manual_ready(manual_id: str) -> dict:
             ps, manual_id,
             current_price=prices.get(entry.symbol) if entry else None,
             risk_input=risk_in,
+            catalysts=snap.catalysts,
             atr=_tf_atr(snap, entry.symbol, entry.timeframe) if entry else None,
         )
         if result["status"] == "not_found":

@@ -156,7 +156,7 @@ def scale_in(ref: str, add_size_usd: float) -> dict:
     price, snap = _price_or_error(symbol, "eklenemez")
     with paper_state.transaction("position_ops:scale_in") as ps:
         pos = _unchanged(ps, pos_id, size)
-        blocked = risk_block(ps, snap.quality.score)
+        blocked = risk_block(ps, snap)
         if blocked is not None:
             raise PositionOpError(blocked)
         if add > ps.equity_usd:
@@ -178,7 +178,7 @@ def flip(ref: str) -> dict:
         pos = _unchanged(ps, pos_id, size)
         # Ters çevirme yeni pozisyon açar: kapatmadan ÖNCE RiskGate'e sorulur, engel
         # varsa hiçbir şey yapılmaz (yarım kalmış flip yok). Yalnız kapatmak serbesttir.
-        blocked = risk_block(ps, snap.quality.score)
+        blocked = risk_block(ps, snap)
         if blocked is not None:
             raise PositionOpError(f"{blocked}. Yalnız kapatmak istersen 'kapat' yaz")
         sym = pos.symbol
