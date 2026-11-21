@@ -41,8 +41,8 @@ class CorrelationEntry:
     rho: float
     source: str          # computed_price | computed | baseline | neutral
     samples: int         # computed* için ortak gün sayısı, diğerlerinde 0
-    # F2-2 — fiyat-getirisi rho'su HER ZAMAN gözlem olarak taşınır (flag
-    # kapalıyken aktif zincire girmez; owner ayrışmayı buradan izler).
+    # F2-2 — fiyat-getirisi rho'su her girdide ayrıca taşınır (aktif kaynak başka
+    # olsa da owner ayrışmayı buradan izler).
     rho_price: float | None = None
     price_samples: int = 0
 
@@ -200,8 +200,8 @@ def pair_correlation(
 ) -> CorrelationEntry:
     """Tek çift için rho: [computed_price →] computed → baseline → neutral.
 
-    computed_price yalnız flag açıkken AKTİF zincire girer; flag kapalıyken
-    de gözlem alanlarına (`rho_price`/`price_samples`) her zaman yazılır."""
+    Fiyat getirisi yeterli ortak günle varsa aktif kaynaktır; değerleri gözlem
+    alanlarına (`rho_price`/`price_samples`) her durumda yazılır."""
     if a == b:
         return CorrelationEntry(symbol_a=a, symbol_b=b, rho=1.0, source="computed", samples=0)
     rho_price, price_samples = (
