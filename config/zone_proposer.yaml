@@ -1,5 +1,5 @@
 # Aday bölge önericisi — owner'ın kesişim yöntemini mekanik geometriyle serer.
-# SALT-ANALİZ (flag YOK; zone_plan_shadow deseni). Makine bölge SEÇMEZ, ADAY
+# SALT-ANALİZ (flag YOK). Makine bölge SEÇMEZ, ADAY
 # önerir; owner süzer, kabul edileni config/zone_plans.yaml'a taşır (otomatik
 # aktarım YOK — touche dersi: owner'ın gözü formüle sığmıyor). Canlıya dokunmaz.
 version: 1

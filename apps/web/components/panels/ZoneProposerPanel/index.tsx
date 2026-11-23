@@ -14,7 +14,7 @@ import type { ZoneProposerAsset, ZoneProposerZone } from "@/types/uncontracted";
 // Aday bölge önericisi — owner'ın kesişim yöntemi mekanik geometriyle her asset'te:
 // haftalık pivot → LOG trend çizgisi → log-fib kümesi → kesişim → confluence skoru.
 // İşaretli grafik + bölge tablosu. Bölgeler yalnızca owner incelemesi içindir;
-// iptal/onay geçmişi tutulur, canlı SL/TP yerleşimine (zone_influence) girmez.
+// iptal/onay geçmişi tutulur, canlı SL/TP yerleşimine girmez.
 // Makine bölge SEÇMEZ; panel HESAP YAPMAZ. /learning/zone-proposer.
 
 function fmtPrice(v: number): string {
@@ -185,9 +185,8 @@ export function ZoneProposerPanel() {
 
           <div className="mt-2 rounded border border-white/10 bg-white/[0.02] px-2 py-1 text-[10px] leading-4 text-white/45">
             Makine ADAY önerir, bölge SEÇMEZ. Bu paneldeki onay yalnızca owner
-            gözlemidir; bölge otomatik olarak geçerli sayılmaz. Onaylı bölgelerin canlı SL/TP yerleşimine etkisi
-            <span className="font-mono"> zone_influence.enabled</span> flag&apos;ine
-            bağlı — default KAPALI; 5y kanıt + owner onayı olmadan canlıya etki yok.
+            gözlemidir; bölge otomatik olarak geçerli sayılmaz. Onaylı bölgeler canlı SL/TP
+            yerleşimine girmez.
             Eski bölgeler geçerlilik süresi dolduğunda yeniden doğrulanmalıdır.
             Her iptal/onay kalibrasyon verisi olarak birikir.
           </div>

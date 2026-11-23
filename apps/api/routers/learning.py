@@ -177,7 +177,7 @@ class ZoneVerdictRequest(BaseModel):
 @router.post("/learning/zone-proposer/verdict")
 def post_zone_verdict(req: ZoneVerdictRequest) -> dict:
     """Owner bölge kararı (PAPER_SAFE — işlem açmaz/kapamaz). Öneri bölgeleri
-    owner İPTAL EDENE KADAR onaylıdır; iptal edilen bölge zone_influence'a
+    owner İPTAL EDENE KADAR onaylıdır; bölgeler canlı karara
     girmez (flag açık olsa bile). Karar tarihçesi kalibrasyon verisidir."""
     from packages.learning import zone_approval
 

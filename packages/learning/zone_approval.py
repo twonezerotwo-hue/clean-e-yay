@@ -1,7 +1,7 @@
 """Bölge onay defteri — owner'ın kabul/ret hafızası (varsayılan: ONAYLI).
 
 Owner kararı (2026-07-12): önerici bölgeleri owner İPTAL EDENE KADAR onaylı
-sayılır. İptal edilen bölge canlı giriş/çıkış yerleşimine (zone_influence)
+sayılır. Bölgeler canlı giriş/çıkış yerleşimine girmez (karar bağı 22 Kasım 2026'da kalktı)
 GİRMEZ; owner tekrar onaylayabilir. Her karar tarihçeye yazılır — bu tarihçe
 kalibrasyonun ham verisidir (hangi kesişim türlerine güveniyor / güvenmiyor).
 

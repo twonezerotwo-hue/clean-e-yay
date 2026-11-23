@@ -8,8 +8,8 @@ hemfikir" (confluence) skoru → aday bölge listesi.
 ÖNEMLİ SINIR (touche dersi, bkz [[project_touche_structural]]): makine bölge
 SEÇMEZ, ADAY önerir. Owner'ın gözü sabit formüle sığmıyor — bu modül yalnız
 geometriyi serer (pivot/çizgi/fib matematiği; taklit değil ölçüm), süzgeç ve
-karar owner'da kalır. Kabul edilen aday `config/zone_plans.yaml`'a düşer,
-`zone_plan_shadow` onu gölge-işletir. Kalibrasyon owner'ın kabul/ret geri
+karar owner'da kalır. Kabul edilen aday `config/zone_plans.yaml`'a düşer
+(bölge grafiğinde katman olarak görünür). Kalibrasyon owner'ın kabul/ret geri
 bildirimiyle olur; canlı karara bağlanmadan önce 5y çok-rejim testi ŞART.
 
 Evren: rotasyon çekirdeği (BTC/altın/gümüş/S&P/tahvil/petrol/DXY — hepsi derin
@@ -30,10 +30,13 @@ from pathlib import Path
 import yaml
 
 from packages.data.registry.loader import CONFIG_DIR
-from packages.learning.zone_plan_shadow import log_fib
 from packages.ops.store import write_text_atomic
 
 _ENGINE = "zone_proposer_v1"
+# Owner'ın el-çizimi bölge planları (grafikte katman olarak gösterilir).
+_PLANS_ENV = "ZONE_PLANS_PATH"
+_DEFAULT_PLANS = "config/zone_plans.yaml"
+_DEFAULT_TP_LEVELS = (0.236, 0.382, 0.5, 0.618, 0.786, 1.0)
 _INTERVAL_ENV = "ZONE_PROPOSER_INTERVAL_SEC"
 _DEFAULT_INTERVAL_SEC = 24 * 3600
 _WEEK = timedelta(days=7)
@@ -71,6 +74,57 @@ def find_pivots(bars: list, span: int) -> list[Pivot]:
         if lo <= min(b.low for b in window) and lo > 0:
             piv.append(Pivot(i, lo, "L"))
     return piv
+
+
+def log_fib(a: float, b: float, level: float) -> float:
+    """`a` (0) → `b` (1) arasında LOG-ölçekli fib seviyesi.
+
+    Owner fib'leri log çeker: 126.230,09→44.048,58 üstünde 0,236 = 56.472,68
+    (grafikteki basılı değer) — lineer hesap tutmaz, log birebir tutar."""
+    return 10 ** (math.log10(a) + level * (math.log10(b) - math.log10(a)))
+
+
+def _norm_plan(p: dict) -> dict:
+    """Ham YAML kaydını doğrula/normalize et; katman sırası bozuksa ValueError."""
+    core = sorted(float(x) for x in p["core"])
+    plan = {
+        "id": str(p.get("id") or f"{p['symbol']}_{core[0]:.0f}"),
+        "symbol": str(p["symbol"]),
+        "timeframe": str(p.get("timeframe") or "1d"),
+        "top": float(p["top"]),
+        "core_low": core[0],
+        "core_high": core[1],
+        "deep": float(p["deep"]),
+        "entry_parts": max(1, int(p.get("entry_parts", 3))),
+        "deep_add_mult": float(p.get("deep_add_mult", 1.0)),
+        "reclaim_size_mult": float(p.get("reclaim_size_mult", 2.0)),
+        "reclaim_stop_pct": float(p.get("reclaim_stop_pct", 0.03)),
+        "kalici_closes": max(1, int(p.get("kalici_closes", 5))),
+        "tp_levels": tuple(float(x) for x in (p.get("tp_levels") or _DEFAULT_TP_LEVELS)),
+        "valid_from": str(p.get("valid_from") or ""),
+        "note": str(p.get("note") or ""),
+    }
+    if not (0 < plan["deep"] < plan["core_low"] < plan["core_high"] < plan["top"]):
+        raise ValueError("katman sırası bozuk (0 < deep < core < top olmalı)")
+    return plan
+
+
+def load_plans() -> list[dict]:
+    """`config/zone_plans.yaml` → geçerli plan listesi. Asla raise etmez."""
+    try:
+        p = Path(os.environ.get(_PLANS_ENV, _DEFAULT_PLANS))
+        if not p.exists():
+            return []
+        raw = yaml.safe_load(p.read_text(encoding="utf-8")) or {}
+        plans = []
+        for item in raw.get("plans") or []:
+            try:
+                plans.append(_norm_plan(dict(item)))
+            except (KeyError, TypeError, ValueError):
+                continue
+        return plans
+    except (OSError, yaml.YAMLError):
+        return []
 
 
 def fit_log_line(i1: int, p1: float, i2: int, p2: float) -> tuple[float, float]:

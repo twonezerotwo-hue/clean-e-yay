@@ -1,6 +1,6 @@
 # Owner'ın el-çizimi bölge haritaları — SİSTEM BÖLGE ÜRETMEZ, owner çizer
 # (touche dersi: owner'ın gözü formüle sığmıyor; mekanikleşen yalnız uygulama
-# disiplini). zone_plan_shadow bu planları SALT-GÖLGE yürütür; canlı karara,
+# disiplini). planlar bölge grafiğinde katman olarak gösterilir; canlı karara,
 # paper'a, ağırlığa ASLA dokunmaz. Öğretim kaynağı: 2026-07-11 BTCUSD haftalık
 # seansı (Elliott ④/C kesişim kümesi + dallı işlem planı).
 version: 1

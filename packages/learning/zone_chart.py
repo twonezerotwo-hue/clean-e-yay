@@ -216,14 +216,14 @@ def _empty_svg(title: str, reason: str) -> str:
 
 def chart_svg(symbol: str) -> str | None:
     """Sembolün taze analizle işaretli grafiği. Veri yoksa None."""
-    from packages.learning import zone_plan_shadow, zone_proposer
+    from packages.learning import zone_proposer
 
     try:
         bars = zone_proposer._weekly_bars(symbol)
         if not bars:
             return None
         analysis = zone_proposer.analyze_bars(bars, zone_proposer._cfg())
-        plans = [p for p in zone_plan_shadow.load_plans() if p["symbol"] == symbol]
+        plans = [p for p in zone_proposer.load_plans() if p["symbol"] == symbol]
         title = f"{symbol} — haftalık (LOG) · fiyat {_fmt(bars[-1].close)}"
         if analysis.get("status") != "OK":
             return _empty_svg(title, str(analysis.get("status")))
@@ -234,10 +234,8 @@ def chart_svg(symbol: str) -> str | None:
 
 _HONESTY = (
     "Makine ADAY önerir, bölge SEÇMEZ. Owner kararı: bölgeler sen İPTAL EDENE "
-    "KADAR onaylı sayılır. İptal edilen bölge canlı SL/TP yerleşimine girmez; "
-    "onaylılar zone_influence flag'i AÇIKKEN hesaba katılır (default KAPALI — "
-    "5y kanıt + owner onayı olmadan canlıya etki yok). Her karar kalibrasyon "
-    "verisi olarak birikir."
+    "KADAR onaylı sayılır. Bölgeler canlı SL/TP yerleşimine girmez (karar bağı "
+    "22 Kasım 2026'da kaldırıldı). Her karar kalibrasyon verisi olarak birikir."
 )
 
 # Buton JS'i — same-origin POST; başarıda sayfayı tazeler. Saf/inline, bağımlılık yok.

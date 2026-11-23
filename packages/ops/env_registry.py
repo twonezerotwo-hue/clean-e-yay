@@ -70,7 +70,6 @@ REGISTRY: dict[str, str] = {
     "TICK_INTERVAL_SEC": "runtime",
     "WORLD_STATE_ARCHIVE_MAX": "runtime",
     "ZERO_TWO_STRATEGY_INTERVAL_SEC": "runtime",
-    "ZONE_PLAN_SHADOW_INTERVAL_SEC": "runtime",
     "ZONE_PROPOSER_INTERVAL_SEC": "runtime",
     # ── provider
     "ALPHAVANTAGE_TTL_SEC": "provider",
@@ -227,7 +226,6 @@ REGISTRY: dict[str, str] = {
     "WORLD_STATE_ARCHIVE_PATH": "path",
     "ZERO_TWO_STRATEGY_PATH": "path",
     "ZONE_PLANS_PATH": "path",
-    "ZONE_PLAN_SHADOW_PATH": "path",
     "ZONE_PROPOSER_PATH": "path",
     "ZONE_PROPOSER_PATH_CFG": "path",
     "ZONE_VERDICTS_PATH": "path",

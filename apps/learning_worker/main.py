@@ -897,23 +897,6 @@ def run_once() -> dict:
         zero_two_strategy_status = f"ERROR:{type(exc).__name__}"
         errors.append(f"zero_two_strategy:{type(exc).__name__}")
 
-    # Bölge-planı gölge yürütücüsü (SALT-ANALİZ, flag YOK — zero_two_strategy
-    # deseni). Owner'ın el-çizimi kesişim bölgeleri (config/zone_plans.yaml) +
-    # dallı işlem planı (parçalı giriş / BE / derin-ortalama / reclaim + LOG-fib
-    # çıkış merdiveni) günlük barlarda gölge-yürütülür; canlı karara dokunmaz.
-    # Plan dosyası boşsa NO_PLANS (tam no-op).
-    zone_plan_status = "ERROR"
-    try:
-        from packages.learning import zone_plan_shadow as _zps
-        zp = _zps.run_if_due()
-        zone_plan_status = str(zp.get("status", "UNKNOWN"))
-        if zone_plan_status == "OK":
-            log.info("zone_plan_shadow: plans=%s states=%s",
-                     zp.get("plans"), zp.get("states"))
-    except Exception as exc:  # defensive — worker patlamamalı
-        zone_plan_status = f"ERROR:{type(exc).__name__}"
-        errors.append(f"zone_plan_shadow:{type(exc).__name__}")
-
     # Konsey karnesi (SALT-ANALİZ, flag YOK). Katmanlar-arası kombinasyon
     # analizi: modül yayılımları + ikili çiftler + rejim/güven kırılımları +
     # veriden-türetilen sanki-filtreler. Owner 2026-07-12 elle analizinin
@@ -929,7 +912,7 @@ def run_once() -> dict:
         council_status = f"ERROR:{type(exc).__name__}"
         errors.append(f"council_scorecard:{type(exc).__name__}")
 
-    # Aday bölge önericisi (SALT-ANALİZ, flag YOK — zone_plan_shadow deseni).
+    # Aday bölge önericisi (SALT-ANALİZ, flag YOK).
     # Owner'ın kesişim yöntemini makro evrende (rotasyon çekirdeği + ETF + keşif
     # kısa listesi) mekanik geometriyle serer (pivot→log-çizgi→log-fib→kesişim→
     # confluence) → aday bölge listesi. Makine bölge SEÇMEZ, ADAY önerir; owner
@@ -1119,7 +1102,6 @@ def run_once() -> dict:
         "news_study_status": news_study_status,  # Y-6 haber olay-çalışması karnesi (SALT-GÖZLEM)
         "exit_backtest_status": exit_backtest_status,  # Çıkış stop-verim backtest (interval-kapılı; SKIP_FRESH=taze)
         "zero_two_strategy_status": zero_two_strategy_status,  # 0-2 tam-strateji karnesi (0.618+fib+trailing+house-money; SALT-ANALİZ)
-        "zone_plan_status": zone_plan_status,  # Bölge-planı gölge yürütücüsü (owner çizer, makine disiplini uygular; NO_PLANS=dosya boş)
         "zone_proposer_status": zone_proposer_status,  # Aday bölge önericisi (makine ADAY önerir, owner süzer; SALT-ANALİZ)
         "council_status": council_status,  # Konsey karnesi (katmanlar-arası kombinasyon; SALT-ANALİZ)
         "reflection_status": reflection_status,  # Yansıma/hafıza döngüsü (kapanan işlem dersleri; SALT-GÖZLEM)

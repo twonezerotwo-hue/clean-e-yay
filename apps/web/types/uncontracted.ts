@@ -201,7 +201,7 @@ export interface ZoneProposerAsset {
 }
 
 // Aday bölge önericisi görünümü. Makine ADAY önerir, bölge SEÇMEZ; owner iptal
-// edene kadar onaylı. Canlı SL/TP etkisi zone_influence flag'ine bağlı (default OFF).
+// edene kadar onaylı. Canlı SL/TP yerleşimine girmez.
 export interface ZoneProposerView {
   status: string; // OK | NO_DATA
   shadow_only?: boolean;
