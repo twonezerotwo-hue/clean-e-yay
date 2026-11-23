@@ -106,10 +106,6 @@ def _package1_flags_off_by_default(monkeypatch: pytest.MonkeyPatch) -> None:
     # K-0b (2026-07-04) — keşif motoru testlerde default OFF (baseline'da
     # learning koşusu bayt-eşdeğer); flag'i test eden testler kendisi açar.
     monkeypatch.delenv("DISCOVERY_SCAN_ENABLED", raising=False)
-    # Bar arşivi (2026-07-06) — testlerde default OFF (get_bars/karne bayt-aynı
-    # baseline); flag'i test eden testler kendi setenv + BAR_HISTORY_DIR ile açar.
-    monkeypatch.delenv("BAR_HISTORY_ENABLED", raising=False)
-    monkeypatch.delenv("BAR_HISTORY_DIR", raising=False)
     # FAZ-2 (2026-07-16) — FRED backfill bekçisi FRED_API_KEY varlığına bakar;
     # dev .env'inde anahtar dolu → testlerde bırakılırsa macro_backfill FRED
     # sembollerini tarayıp ağa çıkmaya çalışır. Baseline = anahtarsız (FRED
@@ -151,6 +147,8 @@ def _isolate_runtime_stores(tmp_path_factory: pytest.TempPathFactory) -> None:
     runtime = tmp_path_factory.mktemp("runtime")
     os.environ["DECISION_LOG_PATH"] = str(runtime / "decision_log.jsonl")
     os.environ["RISK_HALT_PATH"] = str(runtime / "risk_halts.json")
+    # Bar arşivi her zaman açık (23 Kasım 2026): suite gerçek arşivi okumasın/yazmasın.
+    os.environ["BAR_HISTORY_DIR"] = str(runtime / "bar_history")
     # H17 (temizlik, 2026-10-02) — suite canlı data/runtime'a YAZIYORDU (lokal
     # çalışma dizini = canlı sistem): öğrenme özeti, kalibrasyon, LLM cache, rejim
     # freni vb. Aşağıdakiler de session tmp'ye yönlendirilir; sessionfinish guard'ı

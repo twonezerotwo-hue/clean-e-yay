@@ -21,19 +21,9 @@ def _bar(i: int, tf: str = "1h", close: float = 100.0) -> OHLCVBar:
 
 
 def _on(monkeypatch, tmp_path):
-    monkeypatch.setenv(history.FLAG, "1")
     monkeypatch.setenv("BAR_HISTORY_DIR", str(tmp_path))
     # Süreç içi hızlı-yol önbelleğini sıfırla (testler arası sızıntı olmasın).
     history._LAST_TS.clear()
-
-
-def test_disabled_by_default_noop(tmp_path, monkeypatch):
-    """Flag yok -> append 0, load []; dizine dosya YAZILMAZ (bayt-aynı baseline)."""
-    monkeypatch.setenv("BAR_HISTORY_DIR", str(tmp_path))
-    history._LAST_TS.clear()
-    assert history.append_new("TESTUSD", "1h", [_bar(i) for i in range(5)]) == 0
-    assert history.load("TESTUSD", "1h") == []
-    assert list(tmp_path.iterdir()) == []
 
 
 def test_append_skips_forming_bar_and_dedups(tmp_path, monkeypatch):

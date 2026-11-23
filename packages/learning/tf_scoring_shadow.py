@@ -16,7 +16,7 @@ Sözleşme:
   yeniden adlandırılmaz). OFF → üretim durur; canlı touche artifact bayatlayınca
   (3 saat) zemin motora düşer — sessiz kırılma yok, kademeli düşüş.
 - Import lazy: flag kapalıyken skorlama bağımlılıkları yüklenmez.
-- Bar arşivi (BAR_HISTORY_ENABLED) varsa birleşik pencere kullanılır.
+- Bar arşivi (her zaman açık) ile birleşik pencere kullanılır.
 - ASLA raise etmez; her sembol izole (biri patlarsa diğerleri sürer).
 """
 from __future__ import annotations

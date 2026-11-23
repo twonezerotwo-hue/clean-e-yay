@@ -85,7 +85,6 @@ def test_score_is_last_of_pct_series():
 @pytest.fixture
 def macro_archive(tmp_path, monkeypatch):
     """DXY/US10Y bar arşivi kur; consensus v4 memo'sunu temizle."""
-    monkeypatch.setenv("BAR_HISTORY_ENABLED", "1")
     monkeypatch.setenv("BAR_HISTORY_DIR", str(tmp_path))
     macro_liquidity._MEMO["key"] = None
 
@@ -114,7 +113,6 @@ def test_fundamental_v4_reads_archive(macro_archive):
 
 
 def test_fundamental_v4_no_archive_is_none(monkeypatch, tmp_path):
-    monkeypatch.setenv("BAR_HISTORY_ENABLED", "1")
     monkeypatch.setenv("BAR_HISTORY_DIR", str(tmp_path))
     macro_liquidity._MEMO["key"] = None
     assert ce._fundamental_v4() is None  # dosya yok → None (kademe düşer)
@@ -169,7 +167,6 @@ def test_build_uses_v4_when_archive_present(macro_archive):
 
 
 def test_build_no_archive_falls_back_to_v2(monkeypatch, tmp_path):
-    monkeypatch.setenv("BAR_HISTORY_ENABLED", "1")
     monkeypatch.setenv("BAR_HISTORY_DIR", str(tmp_path))  # boş → v4 None
     macro_liquidity._MEMO["key"] = None
     res = ce.build("BTCUSD", _snap(), _regime(), "1d")

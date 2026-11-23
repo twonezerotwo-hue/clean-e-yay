@@ -8,8 +8,8 @@ arşiv + canlı barları birleştirip her hafta kendiliğinden daha uzun pencere
 ölçer (10/10 kanıt hedefinin veri bacağı).
 
 Sözleşme:
-- Flag `BAR_HISTORY_ENABLED` (env, DEFAULT OFF). OFF → append VE load no-op;
-  sistem bayt-aynı davranır (testler/baseline bozulmaz).
+- Her zaman açık (eski BAR_HISTORY_ENABLED bayrağı 23 Kasım 2026'da kalktı; iki
+  ortamda da açıktı). Testler arşivi oturuma özel geçici klasöre yazar.
 - ASLA raise etmez; arşiv hatası veri akışını/karneyi durduramaz.
 - Yalnız KAPANMIŞ barlar arşivlenir (son bar oluşum hâlinde olabilir → hariç).
 - Fixture barlar arşive GİREMEZ (çağıran `is_fixture_mode` bekçisiyle sarar).
@@ -25,8 +25,6 @@ from pathlib import Path
 
 from packages.data.types import OHLCVBar
 
-FLAG = "BAR_HISTORY_ENABLED"
-_ENV_TRUE = frozenset({"1", "true", "yes", "on"})
 # Test izolasyonu / esneklik: dizin env ile taşınabilir.
 _DIR_ENV = "BAR_HISTORY_DIR"
 _DEFAULT_DIR = "data/runtime/bar_history"
@@ -34,10 +32,6 @@ _DEFAULT_DIR = "data/runtime/bar_history"
 _LOCK = threading.Lock()
 # (symbol, tf) -> arşivdeki en yeni bar ts'i (süreç içi hızlı yol)
 _LAST_TS: dict[tuple[str, str], datetime | None] = {}
-
-
-def enabled() -> bool:
-    return os.environ.get(FLAG, "").strip().lower() in _ENV_TRUE
 
 
 def _dir() -> Path:
@@ -68,8 +62,8 @@ def _tail_ts(path: Path) -> datetime | None:
 
 def append_new(symbol: str, timeframe: str, bars: list[OHLCVBar]) -> int:
     """Arşivden yeni olan KAPANMIŞ barları ekle; eklenen sayısını döndür.
-    Flag OFF veya veri yok → 0 (no-op). Asla raise etmez."""
-    if not enabled() or len(bars) < 2:
+    Veri yok → 0 (no-op). Asla raise etmez."""
+    if len(bars) < 2:
         return 0
     closed = bars[:-1]  # son bar hâlâ oluşuyor olabilir → arşive girmez
     key = (symbol, timeframe)
@@ -94,10 +88,7 @@ def append_new(symbol: str, timeframe: str, bars: list[OHLCVBar]) -> int:
 
 
 def load(symbol: str, timeframe: str) -> list[OHLCVBar]:
-    """Arşivlenmiş barlar (ts-tekil, sıralı). Flag OFF → [] (bayt-aynı baseline).
-    Bozuk satır atlanır; asla raise etmez."""
-    if not enabled():
-        return []
+    """Arşivlenmiş barlar (ts-tekil, sıralı). Bozuk satır atlanır; asla raise etmez."""
     out: dict[datetime, OHLCVBar] = {}
     try:
         path = _path(symbol, timeframe)
@@ -128,4 +119,4 @@ def merged(archive: list[OHLCVBar], live: list[OHLCVBar]) -> list[OHLCVBar]:
     return [by_ts[k] for k in sorted(by_ts)]
 
 
-__all__ = ["FLAG", "append_new", "enabled", "load", "merged"]
+__all__ = ["append_new", "load", "merged"]

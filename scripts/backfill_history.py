@@ -10,7 +10,6 @@ PAPER_SAFE — yalniz veri arsivi yazar; canli karara/paper'a dokunmaz.
 from __future__ import annotations
 
 import argparse
-import os
 import sys
 
 
@@ -20,7 +19,6 @@ def main() -> int:
     ap.add_argument("symbols", nargs="*", help="alt kume (bos=hepsi)")
     args = ap.parse_args()
 
-    os.environ.setdefault("BAR_HISTORY_ENABLED", "1")  # arsiv yazimi icin sart
     from packages.learning.macro_backfill import BACKFILL_TICKERS, backfill_symbol
 
     syms = args.symbols or list(BACKFILL_TICKERS)

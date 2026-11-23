@@ -32,7 +32,6 @@ def _bars(sym: str, n: int) -> list[OHLCVBar]:
 
 @pytest.fixture
 def archive(tmp_path, monkeypatch):
-    monkeypatch.setenv("BAR_HISTORY_ENABLED", "1")
     monkeypatch.setenv("BAR_HISTORY_DIR", str(tmp_path))
     mbf._MEMO["ok"] = set()
     mbf._MEMO["last_attempt"] = 0.0

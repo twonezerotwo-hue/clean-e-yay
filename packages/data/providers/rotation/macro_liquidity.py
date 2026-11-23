@@ -54,7 +54,7 @@ def read(today: date | None = None) -> LiquidityReading:
                 return None
 
         day = today or datetime.now(UTC).date()
-        key = (history.enabled(), _sig("DXY"), _sig("US10Y"), day)
+        key = (_sig("DXY"), _sig("US10Y"), day)
         if _MEMO["key"] == key:
             return _MEMO["val"]
         val = _compute(history.load("DXY", "1d"), history.load("US10Y", "1d"), day)

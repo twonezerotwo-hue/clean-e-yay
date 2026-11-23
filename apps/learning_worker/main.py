@@ -187,7 +187,7 @@ def run_once() -> dict:
     try:
         from packages.learning import macro_backfill
         macro_backfill_status = macro_backfill.ensure_depth()
-        if macro_backfill_status.get("status") not in ("DEEP", "DISABLED"):
+        if macro_backfill_status.get("status") != "DEEP":
             log.info("macro_backfill: %s", macro_backfill_status)
     except Exception as exc:  # defensive
         errors.append(f"macro_backfill:{type(exc).__name__}")

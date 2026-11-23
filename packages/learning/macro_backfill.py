@@ -10,7 +10,7 @@ Canlı bar yolundan geçmeyen seriler için tazeliği de bu bekçi sağlar: son 
 beklenen kapanıştan eskiyse aynı yolla günceller (yalnız kapanmış barlar yazılır).
 
 - Off-tick: yalnız learning worker çağırır (karar yoluna ağ çağrısı GİRMEZ).
-- `BAR_HISTORY_ENABLED` kapalıysa no-op (bayt-aynı).
+- Test/fixture modunda (TEST_USE_MOCK) ağa çıkılmaz: çekim boş döner.
 - Süreç-içi memo: derinlik bir kez TAM görülünce tekrar ölçülmez (tazelik her
   turda bakılır); fetch en erken `RETRY_SEC` sonra yeniden denenir (yfinance'e vurma).
 - PAPER_SAFE — yalnız veri arşivi yazar.
@@ -88,7 +88,10 @@ def _is_stale(symbol: str, today: date) -> bool:
 
 
 def _fetch(ticker: str, symbol: str, rng: str) -> list:
-    from packages.data.providers.ohlcv import yfinance
+    from packages.data.providers.ohlcv import is_fixture_mode, yfinance
+
+    if is_fixture_mode():
+        return []  # test/fixture modunda ağ yok (sağlayıcılarla aynı kural)
 
     chart = yfinance.fetch_chart(ticker, rng)
     return [bar.model_copy(update={"symbol": symbol}) for bar in chart[1]] if chart else []
@@ -123,7 +126,11 @@ def backfill_symbol(symbol: str, ticker: str, rng: str = "5y") -> dict:
 
 
 def _fetch_fred(symbol: str, start: str) -> list:
+    from packages.data.providers.ohlcv import is_fixture_mode
     from packages.data.providers.price import fred
+
+    if is_fixture_mode():
+        return []
 
     return fred.get_history(symbol, start=start) or []
 
@@ -147,8 +154,6 @@ def ensure_depth(min_bars: int = MIN_BARS) -> dict:
     Dönen özet: {status, checked, filled, failed[, unchanged, fred]}."""
     from packages.data.providers.ohlcv import history
 
-    if not history.enabled():
-        return {"status": "DISABLED"}
     fred_key = bool(os.environ.get("FRED_API_KEY"))
     # sembol → (min eşik, kaynak) — tek tarama, kaynak başına doğru eşik.
     targets: dict[str, tuple[int, str]] = {s: (min_bars, "yf") for s in BACKFILL_TICKERS}

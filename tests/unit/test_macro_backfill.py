@@ -29,7 +29,6 @@ def _bars(sym: str, n: int) -> list[OHLCVBar]:
 
 @pytest.fixture
 def archive(tmp_path, monkeypatch):
-    monkeypatch.setenv("BAR_HISTORY_ENABLED", "1")
     monkeypatch.setenv("BAR_HISTORY_DIR", str(tmp_path))
     mbf._MEMO["ok"] = set()
     mbf._MEMO["last_attempt"] = 0.0
@@ -41,9 +40,15 @@ def archive(tmp_path, monkeypatch):
     return _write
 
 
-def test_disabled_is_noop(monkeypatch):
-    monkeypatch.delenv("BAR_HISTORY_ENABLED", raising=False)
-    assert mbf.ensure_depth() == {"status": "DISABLED"}
+def test_fixture_mode_never_touches_network(monkeypatch):
+    """Bayrak kalktı (23 Kasım 2026); test/fixture modunda çekim ağa çıkmaz."""
+    from packages.data.providers.ohlcv import yfinance
+    from packages.data.providers.price import fred
+
+    monkeypatch.setattr(yfinance, "fetch_chart", lambda *a, **k: pytest.fail("ağ"))
+    monkeypatch.setattr(fred, "get_history", lambda *a, **k: pytest.fail("ağ"))
+    assert mbf._fetch("DX-Y.NYB", "DXY", "5y") == []
+    assert mbf._fetch_fred("US02Y", "2021-01-01") == []
 
 
 def test_deep_archive_never_fetches(archive, monkeypatch):

@@ -23,7 +23,6 @@ REGISTRY: dict[str, str] = {
     "ACTIVATION_MONITOR_MAX_AGE_HOURS": "behavior",
     "BACKTEST_CHALLENGER_ENABLED": "behavior",
     "BACKTEST_RECON_ENABLED": "behavior",
-    "BAR_HISTORY_ENABLED": "behavior",
     "DISCOVERY_SCAN_ENABLED": "behavior",
     "EXIT_FORENSICS_NUDGE": "behavior",
     "E_YAY_CANONICAL_RUNTIME": "behavior",

@@ -141,8 +141,8 @@ def analyze(symbols: list[str] | None = None, timeframes=_TIMEFRAMES) -> dict:
         n_points = 0
         used_syms = 0
         for sym in syms:
-            # Arşiv + canlı birleşik pencere (BAR_HISTORY_ENABLED OFF iken arşiv
-            # boş döner → yalnız canlı barlar, v2 ile bayt-aynı). Arşiv büyüdükçe
+            # Arşiv + canlı birleşik pencere (arşiv boşsa yalnız canlı barlar).
+            # Arşiv büyüdükçe
             # ölçüm penceresi _MAX_BARS tavanını aşar — kanıt haftayla büyür.
             bars = history.merged(history.load(sym, tf), get_bars(sym, tf) or [])
             if len(bars) < _MIN_WARMUP + H + 1:

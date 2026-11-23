@@ -131,11 +131,6 @@ COVERAGE: dict[str, dict] = {
         "reason": "İzole backtest challenger kanalı (B serisi); canlı ağırlık/paper/"
                   "karara ASLA yazmaz — ayrı kanal.",
     },
-    "BAR_HISTORY_ENABLED": {
-        "mechanism": SHADOW_EXEMPT, "monitor": None,
-        "reason": "Bar arşivi salt-veri biriktirme (kanıt-büyütme); izole JSONL'e "
-                  "yazar, canlı bar akışını/kararı DEĞİŞTİRMEZ (asla raise etmez).",
-    },
     "SUBSIGNAL_SCORECARD_ENABLED": {
         "mechanism": SHADOW_EXEMPT, "monitor": None,
         "reason": "Sinyal karnesi (D5) salt-gözlem: haftalık sinyal×TF ileri-getiri "

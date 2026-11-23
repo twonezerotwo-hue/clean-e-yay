@@ -84,12 +84,6 @@ ensure_env DISCOVERY_SCAN_ENABLED 1
 # (yalniz backtest_challenger dosyalari); B-2 uretim (gunluk interval) + B-3 karne
 # + B-4 terfi degerlendirmesi. Lokal .env'de de =1 (owner kurali: lokal+AWS senkron).
 set_env BACKTEST_CHALLENGER_ENABLED 0
-# Bar arsivi aktivasyonu (2026-07-06, owner hedefi "kanit 10/10"): kapanmis barlar
-# kalici JSONL arsivine biriksin (data/runtime/bar_history) -> sinyal karnesi
-# penceresi _MAX_BARS tavanini asar, 15m/1h kaniti haftayla buyur. Salt-veri:
-# karar/skor/paper'a SIFIR temas, asla raise etmez; rollback = flag kapat.
-# Lokal .env'de de =1 (owner kurali: lokal+AWS senkron).
-ensure_env BAR_HISTORY_ENABLED 1
 # Public, read-only crypto OHLCV fallback. CoinGecko remains secondary;
 # this prevents a rate-limit from making technical cells use old disk bars.
 ensure_env EYAY_KRAKEN_OHLCV_ENABLED true

@@ -369,7 +369,7 @@ def get_bars(symbol: str, timeframe: str = "1d") -> list[OHLCVBar]:
 
     else:
         bars = _native_bars(symbol, tf)
-    # Bar arşivi (BAR_HISTORY_ENABLED, default OFF → no-op): kapanmış barları
+    # Bar arşivi: kapanmış barları
     # kalıcı biriktirir ki karne pencereleri _MAX_BARS tavanını aşabilsin.
     # Asla raise etmez; fixture yolu yukarıda zaten ayrıldı (arşive giremez).
     history.append_new(symbol, tf, bars)

@@ -43,7 +43,6 @@ def _day(days_ago: int, hour: int = 0) -> datetime:
 
 @pytest.fixture
 def archive(tmp_path, monkeypatch):
-    monkeypatch.setenv("BAR_HISTORY_ENABLED", "1")
     monkeypatch.setenv("BAR_HISTORY_DIR", str(tmp_path))
     macro_liquidity._MEMO["key"] = None
     mbf._MEMO["ok"] = set()
@@ -214,6 +213,7 @@ def test_no_new_bars_is_not_a_failure(archive, monkeypatch):
 
 
 def test_fetch_keeps_internal_symbol_and_plan(monkeypatch):
+    monkeypatch.setenv("TEST_USE_MOCK", "false")  # canlı çekim yolu (fetch_chart sahte)
     plan_before = dict(yfinance._TF_PLAN)
     bar = _bar("^TNX", _day(1), 4.5)
     monkeypatch.setattr(yfinance, "fetch_chart", lambda ticker, rng: ({}, [bar]))
