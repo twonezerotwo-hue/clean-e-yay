@@ -15,42 +15,8 @@ import json
 from datetime import UTC, datetime
 from types import SimpleNamespace
 
-from packages.decision import agent_pipeline, shadow
+from packages.decision import agent_pipeline
 from packages.risk.engine import RiskInput, evaluate
-
-# ── S1-2: shadow tail-read + rotasyon ────────────────────────────────────────
-
-def _write_records(path, start, count):
-    with path.open("a", encoding="utf-8") as f:
-        for i in range(start, start + count):
-            f.write(json.dumps({"i": i}) + "\n")
-
-
-def test_shadow_read_recent_tail(tmp_path, monkeypatch):
-    p = tmp_path / "shadow.jsonl"
-    monkeypatch.setenv("SHADOW_LOG_PATH", str(p))
-    _write_records(p, 0, 500)
-    out = shadow.read_recent(limit=10)
-    assert [r["i"] for r in out] == list(range(490, 500))
-
-
-def test_shadow_rotation_and_archive_spanning(tmp_path, monkeypatch):
-    p = tmp_path / "shadow.jsonl"
-    monkeypatch.setenv("SHADOW_LOG_PATH", str(p))
-    # Tavanı minik yap: ilk record çağrısı mevcut dosyayı .1'e devirir.
-    monkeypatch.setenv("SHADOW_LOG_MAX_MB", "0.0001")
-    _write_records(p, 0, 50)
-    shadow.record({"i": 50})
-    assert p.with_name(p.name + ".1").exists()
-    # Aktif dosyada 1 kayıt var; okuyucu arşive uzanıp aynı kümeyi döner.
-    out = shadow.read_recent(limit=5)
-    assert [r["i"] for r in out] == [46, 47, 48, 49, 50]
-
-
-def test_shadow_read_recent_missing_file(tmp_path, monkeypatch):
-    monkeypatch.setenv("SHADOW_LOG_PATH", str(tmp_path / "yok.jsonl"))
-    assert shadow.read_recent(limit=5) == []
-
 
 # ── S1-3: agent_pipeline TF-sonuç memosu ─────────────────────────────────────
 

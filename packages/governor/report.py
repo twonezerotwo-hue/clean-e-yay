@@ -75,12 +75,6 @@ def _other_pending_approvals() -> dict:
         out["tf_targets"] = bool(tf_target_store.load().get("pending"))
     except Exception:
         out["tf_targets"] = None
-    try:
-        from packages.mode import store as mode_store
-
-        out["mode_overrides_active"] = bool(mode_store.load_overrides())
-    except Exception:
-        out["mode_overrides_active"] = None
     return out
 
 

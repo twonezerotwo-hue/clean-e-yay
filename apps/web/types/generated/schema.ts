@@ -687,23 +687,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/learning/promotion-criteria": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** F5-2 — champion/challenger terfi kriteri (read-only; terfi otomatik DEĞİL) */
-        get: operations["getPromotionCriteria"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/learning/activation-watchdog": {
         parameters: {
             query?: never;
@@ -800,41 +783,6 @@ export interface paths {
         get: operations["getConflictGateStatus"];
         put?: never;
         post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/agent-mode/config": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Faz 3 — Agent Mode etkin config (thresholds defaults + owner override) */
-        get: operations["getAgentModeConfig"];
-        put?: never;
-        /** Faz 3 — Agent Mode owner override'larını kaydet (ana config'e dokunmaz) */
-        post: operations["postAgentModeConfig"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/agent-mode/config/reset": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Faz 3 — Agent Mode override'larını sıfırla (saf config'e dön) */
-        post: operations["postAgentModeConfigReset"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1547,23 +1495,6 @@ export interface paths {
         };
         /** Trigger Engine (EVIDENCE only) — read-only; hiçbir karar zincirine bağlı değil */
         get: operations["getTriggerAnalysis"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/decision/shadow": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Step 9 controlled activation — latest live-vs-shadow comparison (observe-only, read-only) */
-        get: operations["getShadowComparison"];
         put?: never;
         post?: never;
         delete?: never;
@@ -2442,10 +2373,6 @@ export interface components {
             performance?: components["schemas"]["LearningPerformance"];
             /** @description Temiz öğrenme kohortunun 90+ kanıt hazırlığı. Salt gözlem; canlı eşik, ağırlık, RiskGate veya emir akışını değiştirmez. */
             performance_readiness?: components["schemas"]["PerformanceReadiness"];
-            /** @description Birleşik gölge kanıtı. Aday giriş ile final kapı sonucunu, yeni asset terfisini, haber teyidini ve exit canary önerilerini gösterir; canlı karar/ağırlık/paper state'ine uygulanmaz. */
-            shadow_routing?: {
-                [key: string]: unknown;
-            };
         };
         LearningCohorts: {
             auto: components["schemas"]["CohortStats"] & {
@@ -4272,76 +4199,6 @@ export interface components {
             timeframes: ("15m" | "1h" | "4h" | "1d" | "1w")[];
             symbols: components["schemas"]["AgentMatrixRow"][];
         };
-        ShadowTfCalibration: {
-            timeframe: string;
-            strategy: string;
-            trades: number;
-            win_rate: number;
-            /** @enum {string} */
-            trust: "PRIOR" | "CALIBRATED";
-        };
-        /** @description tf_weights trust verdict — PRIOR/untrusted until per-TF calibration validates. */
-        ShadowCalibration: {
-            tf_weights_trusted: boolean;
-            calibrated_timeframes: string[];
-            min_trades_per_tf?: number | null;
-            per_timeframe: components["schemas"]["ShadowTfCalibration"][];
-        };
-        /** @description Per-tick counts of how live and shadow intents agreed (observation only). */
-        ShadowAgreementSummary: {
-            agree_entry: number;
-            agree_flat: number;
-            disagree_direction: number;
-            live_only_entry: number;
-            shadow_only_entry: number;
-        };
-        ShadowRow: {
-            symbol: string;
-            /** @enum {string} */
-            agreement: "AGREE_ENTRY" | "AGREE_FLAT" | "DISAGREE_DIRECTION" | "LIVE_ONLY_ENTRY" | "SHADOW_ONLY_ENTRY";
-            live_wants_entry: boolean;
-            live_action?: string | null;
-            live_direction?: string | null;
-            live_timeframe?: string | null;
-            candidate_wants_entry?: boolean;
-            candidate_action?: string | null;
-            candidate_direction?: string | null;
-            candidate_timeframe?: string | null;
-            candidate_entry_cells?: number;
-            candidate_blocked_by?: string[];
-            shadow_wants_entry: boolean;
-            shadow_action?: string | null;
-            shadow_direction?: string | null;
-            shadow_entry_timeframe?: string | null;
-            shadow_stance?: string | null;
-            elliott_scenario?: string | null;
-            elliott_confidence?: number | null;
-            elliott_bias?: string | null;
-            historical_edge_sample_count?: number | null;
-            historical_edge_win_rate?: number | null;
-            historical_edge_confidence?: string | null;
-        };
-        /** @description Step 9 controlled activation (observation mode). Latest comparison of the live decide_matrix engine vs the NEW agent pipeline running in shadow. affected_paper is always false in Phase A — the shadow never moves paper; this is read-only. */
-        ShadowComparison: {
-            available: boolean;
-            recorded_at?: string | null;
-            snapshot_id?: string | null;
-            risk_action?: string | null;
-            affect_decision: boolean;
-            affected_paper: boolean;
-            summary: components["schemas"]["ShadowAgreementSummary"];
-            /** @description Candidate entries and final blockers; observation-only telemetry. */
-            candidate_summary?: {
-                symbols_with_candidate: number;
-                candidate_entry_cells: number;
-                candidate_not_actionable_symbols: number;
-                blocked_by: {
-                    [key: string]: number;
-                };
-            };
-            calibration: components["schemas"]["ShadowCalibration"];
-            rows: components["schemas"]["ShadowRow"][];
-        };
         /** @description Faz 9A — bir (trade_profile, route) hücresinin gerçekleşmiş trade istatistiği. */
         ConflictGateRouteStats: {
             n: number;
@@ -4354,43 +4211,6 @@ export interface components {
             profile_modes: {
                 [key: string]: "OFF" | "SOFT" | "SOFT_PLUS" | "HARD" | "HARD_MANUAL";
             };
-        };
-        /** @description Faz 3 — Agent Mode etkin değerleri (profil/strateji izinleri). */
-        AgentModeConfigValues: {
-            enabled_trade_profiles: string[];
-            disabled_trade_profiles: string[];
-            focus_mode?: string | null;
-            allow_counter_context_trades: boolean;
-            allow_reversal_trades: boolean;
-            allow_trend_follow_trades: boolean;
-            allow_range_trades: boolean;
-            allow_breakout_trades: boolean;
-            watch_disabled_profiles: boolean;
-            close_disabled_profile_positions: boolean;
-            close_requires_riskgate_pass: boolean;
-        };
-        /** @description Faz 3 — Owner override payload (tümü opsiyonel; bilinmeyen anahtar/profil sunucuda reddedilir). */
-        AgentModeConfigUpdate: {
-            enabled_trade_profiles?: string[];
-            disabled_trade_profiles?: string[];
-            focus_mode?: string | null;
-            allow_counter_context_trades?: boolean;
-            allow_reversal_trades?: boolean;
-            allow_trend_follow_trades?: boolean;
-            allow_range_trades?: boolean;
-            allow_breakout_trades?: boolean;
-            watch_disabled_profiles?: boolean;
-            close_disabled_profile_positions?: boolean;
-            close_requires_riskgate_pass?: boolean;
-        };
-        /** @description Faz 3 — Agent Mode görüntüsü (etkin config + profil listesi + ham override + etki alanı). */
-        AgentModeConfigView: {
-            trade_profiles: string[];
-            config: components["schemas"]["AgentModeConfigValues"];
-            overrides: {
-                [key: string]: unknown;
-            };
-            applies_to: string;
         };
         /** @description Faz 2 — sonuç sayıları (TP önce=missed_win, SL önce=avoided_loss, TTL=expired). */
         MissedOpportunityOutcomes: {
@@ -5917,28 +5737,6 @@ export interface operations {
             };
         };
     };
-    getPromotionCriteria: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
-                };
-            };
-        };
-    };
     getActivationWatchdog: {
         parameters: {
             query?: never;
@@ -6059,70 +5857,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ConflictGateStatus"];
-                };
-            };
-        };
-    };
-    getAgentModeConfig: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["AgentModeConfigView"];
-                };
-            };
-        };
-    };
-    postAgentModeConfig: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["AgentModeConfigUpdate"];
-            };
-        };
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["AgentModeConfigView"];
-                };
-            };
-        };
-    };
-    postAgentModeConfigReset: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["AgentModeConfigView"];
                 };
             };
         };
@@ -7056,26 +6790,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": Record<string, never>;
-                };
-            };
-        };
-    };
-    getShadowComparison: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ShadowComparison"];
                 };
             };
         };

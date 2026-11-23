@@ -273,8 +273,7 @@ def open_position(
     # SL/TP motoru seçimi: thresholds.timeframe_targets.enabled true ise TF-duyarlı
     # compute_tf_targets (ATR-çapalı + floor/cap; ATR yoksa TF-ölçekli fallback);
     # false ise mevcut compute_fixed_targets (sembol-bazlı sabit-% + tier). Geri
-    # dönüş tek flag ile — bozulma yok. shadow.evaluate_symbol her iki motoru
-    # her tick yan yana hesaplar, yani aktivasyon öncesi tam gözlem var.
+    # dönüş tek flag ile — bozulma yok.
     # P2 parça-2 — YAPISAL stop yerleşimi (flag default OFF → aşağıdaki ATR motoru,
     # bayt-aynı). Açıkken sl = son N-bar dip/tepe (owner "son dip altı"); yapı
     # geçersiz/bar yok → ATR motoruna düşer (uydurma seviye yok).

@@ -2444,69 +2444,6 @@ export type AgentMatrix = {
   symbols: AgentMatrixRow[];
 };
 
-// ── T2 step 9 — controlled activation: live-vs-shadow comparison (observe-only) ──
-export type ShadowAgreement =
-  | "AGREE_ENTRY"
-  | "AGREE_FLAT"
-  | "DISAGREE_DIRECTION"
-  | "LIVE_ONLY_ENTRY"
-  | "SHADOW_ONLY_ENTRY";
-
-export type ShadowTfCalibration = {
-  timeframe: string;
-  strategy: string;
-  trades: number;
-  win_rate: number;
-  trust: "PRIOR" | "CALIBRATED";
-};
-
-export type ShadowCalibration = {
-  tf_weights_trusted: boolean;
-  calibrated_timeframes: string[];
-  min_trades_per_tf?: number | null;
-  per_timeframe: ShadowTfCalibration[];
-};
-
-export type ShadowAgreementSummary = {
-  agree_entry: number;
-  agree_flat: number;
-  disagree_direction: number;
-  live_only_entry: number;
-  shadow_only_entry: number;
-};
-
-export type ShadowRow = {
-  symbol: string;
-  agreement: ShadowAgreement;
-  live_wants_entry: boolean;
-  live_action?: string | null;
-  live_direction?: string | null;
-  live_timeframe?: string | null;
-  shadow_wants_entry: boolean;
-  shadow_action?: string | null;
-  shadow_direction?: string | null;
-  shadow_entry_timeframe?: string | null;
-  shadow_stance?: string | null;
-  elliott_scenario?: string | null;
-  elliott_confidence?: number | null;
-  elliott_bias?: string | null;
-  historical_edge_sample_count?: number | null;
-  historical_edge_win_rate?: number | null;
-  historical_edge_confidence?: string | null;
-};
-
-export type ShadowComparison = {
-  available: boolean;
-  recorded_at?: string | null;
-  snapshot_id?: string | null;
-  risk_action?: string | null;
-  affect_decision: boolean;
-  affected_paper: boolean;
-  summary: ShadowAgreementSummary;
-  calibration: ShadowCalibration;
-  rows: ShadowRow[];
-};
-
 // Faz 8/9A — Conflict Gate (packages/decision/conflict_gate.py + conflict_gate_backtest.py)
 export type ConflictGateMode = "OFF" | "SOFT" | "SOFT_PLUS" | "HARD" | "HARD_MANUAL";
 
@@ -2988,29 +2925,6 @@ export type MissedOpportunityActive = {
   tp?: number | null;
   opened_at?: string | null;
 };
-
-export type AgentModeConfigValues = {
-  enabled_trade_profiles: string[];
-  disabled_trade_profiles: string[];
-  focus_mode?: string | null;
-  allow_counter_context_trades: boolean;
-  allow_reversal_trades: boolean;
-  allow_trend_follow_trades: boolean;
-  allow_range_trades: boolean;
-  allow_breakout_trades: boolean;
-  watch_disabled_profiles: boolean;
-  close_disabled_profile_positions: boolean;
-  close_requires_riskgate_pass: boolean;
-};
-
-export type AgentModeConfigView = {
-  trade_profiles: string[];
-  config: AgentModeConfigValues;
-  overrides: Record<string, unknown>;
-  applies_to: string;
-};
-
-export type AgentModeConfigUpdate = Partial<AgentModeConfigValues>;
 
 export type MissedOpportunitiesView = {
   available: boolean;

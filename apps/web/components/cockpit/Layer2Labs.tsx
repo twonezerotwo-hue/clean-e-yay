@@ -51,7 +51,6 @@ import {
   useReplayDecisionTrace,
   useReplayStatus,
   useRegimeReport,
-  useShadowComparison,
   useSystemHealth,
   useTechnicalChart,
   useTechnicalInsight,
@@ -1353,74 +1352,11 @@ function ZoneAnalysisPanel({ analysis }: { analysis?: ZoneAnalysis | null }) {
   );
 }
 
-function ShadowEvidenceRow({
-  row,
-}: {
-  row: {
-    symbol?: string | null;
-    elliott_scenario?: string | null;
-    elliott_confidence?: number | null;
-    elliott_bias?: string | null;
-    historical_edge_sample_count?: number | null;
-    historical_edge_win_rate?: number | null;
-    historical_edge_confidence?: string | null;
-    setup_type?: string | null;
-    trade_profile?: string | null;
-    mode_filter_passed?: boolean | null;
-    mode_filter_blocked_reason?: string | null;
-    conflict_final_action?: string | null;
-    conflict_blocked_by?: string[];
-  };
-}) {
-  return (
-    <div className="grid gap-2 rounded-xl border border-white/10 bg-white/[0.035] p-3 md:grid-cols-[0.5fr_0.9fr_0.9fr_0.9fr_0.9fr]">
-      <div>
-        <div className="text-[10px] uppercase tracking-widest text-white/32">symbol</div>
-        <div className="mt-1 font-display text-white">{row.symbol ?? "--"}</div>
-      </div>
-      <div>
-        <div className="text-[10px] uppercase tracking-widest text-white/32">elliott</div>
-        <div className="mt-1 font-mono text-cyan-100">
-          {row.elliott_scenario ?? "--"} ({formatNumber(row.elliott_confidence, 0)})
-        </div>
-        <div className="mt-1 text-[11px] text-white/45">{row.elliott_bias ?? "--"}</div>
-      </div>
-      <div>
-        <div className="text-[10px] uppercase tracking-widest text-white/32">historical edge</div>
-        <div className="mt-1 font-mono text-emerald-100">
-          N={row.historical_edge_sample_count ?? 0} / {formatPct(
-            row.historical_edge_win_rate == null ? null : row.historical_edge_win_rate * 100,
-          )}
-        </div>
-        <div className="mt-1 text-[11px] text-white/45">{row.historical_edge_confidence ?? "--"}</div>
-      </div>
-      <div>
-        <div className="text-[10px] uppercase tracking-widest text-white/32">setup / profile</div>
-        <div className="mt-1 font-mono text-amber-100">{row.setup_type ?? "--"}</div>
-        <div className="mt-1 text-[11px] text-white/45">
-          {row.trade_profile ?? "--"} {row.mode_filter_passed === false ? "(mode: blocked)" : ""}
-        </div>
-      </div>
-      <div>
-        <div className="text-[10px] uppercase tracking-widest text-white/32">conflict resolver</div>
-        <div className="mt-1 font-mono text-white/82">{row.conflict_final_action ?? "--"}</div>
-        <div className="mt-1 text-[11px] text-white/45 truncate">
-          {(row.conflict_blocked_by ?? []).join(", ") || "--"}
-        </div>
-      </div>
-    </div>
-  );
-}
-
 export function Layer2ElliottZoneLabPanel({ selectedSymbol }: Layer2AssetPanelProps) {
   const activeSymbol = resolveActiveSymbol(selectedSymbol);
   const elliott1d = useElliottScenario(activeSymbol, "1d");
   const elliott4h = useElliottScenario(activeSymbol, "4h");
   const zones = useZoneAnalysis(activeSymbol);
-  const shadow = useShadowComparison();
-  const shadowRows = (shadow.data?.rows ?? []).filter((row) =>
-    rowMatchesSymbol(row as Record<string, unknown>, activeSymbol),
-  );
 
   return (
     <div className="space-y-4">
@@ -1430,26 +1366,6 @@ export function Layer2ElliottZoneLabPanel({ selectedSymbol }: Layer2AssetPanelPr
       </div>
       <div className="grid gap-4 xl:grid-cols-1">
         <ZoneAnalysisPanel analysis={zones.data} />
-      </div>
-      <div className="rounded-2xl border border-white/10 bg-black/22 p-4">
-        <div className="text-[10px] uppercase tracking-[0.24em] text-white/42">
-          Shadow kanit ozeti (gozlem modu)
-        </div>
-        <div className="mt-1 text-xs text-white/45">
-          Bu satirlar packages/decision/shadow.py'nin gozlem kaydindan gelir; canli
-          karari etkilemez (affect_decision={String(shadow.data?.affect_decision ?? false)}).
-        </div>
-        <div className="mt-3 space-y-2">
-          {shadowRows.length > 0 ? (
-            shadowRows.map((row, index) => (
-              <ShadowEvidenceRow key={`${row.symbol}-${index}`} row={row} />
-            ))
-          ) : (
-            <div className="rounded-lg border border-white/10 bg-white/[0.035] p-3 text-sm text-white/45">
-              Shadow kaydi yok veya henuz uretilmedi.
-            </div>
-          )}
-        </div>
       </div>
     </div>
   );
@@ -1665,8 +1581,7 @@ export function Layer2SetupConflictLabPanel({ selectedSymbol }: Layer2AssetPanel
       </div>
       <div className="rounded-xl border border-white/10 bg-white/[0.035] p-3 text-xs leading-5 text-white/45">
         Bu altı motor (Volume/VWAP/Liquidity Sweep/Exhaustion/Location/Trigger) EVIDENCE
-        only'dir; hiçbir karar zincirine bağlı değildir. Setup Classifier + Conflict
-        Resolver çıktısı için "Elliott / Zone Lab" panelindeki Shadow kanıt tablosuna bakın.
+        only'dir; hiçbir karar zincirine bağlı değildir.
       </div>
     </div>
   );

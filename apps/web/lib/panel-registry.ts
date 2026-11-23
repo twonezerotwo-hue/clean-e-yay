@@ -9,7 +9,7 @@
  *     matrix  → Karar Matrisi (TF + Agent)
  *     watch   → İzlenecek Koşullar
  *   DETAY (collapsed, uzman bakışı):
- *     decision_detail → Karar İzi (trace · votes · shadow · checks · candidates)
+ *     decision_detail → Karar İzi (trace · votes · checks · candidates)
  *     market          → Piyasa Yapısı (türev · vol · options · korelasyon · rotasyon)
  *     macro           → Makro & Catalyst (etki · takvim · haber · senaryo)
  *     learning        → Öğrenme & Kalibrasyon (paper · ağırlık · platt · TF)
@@ -66,7 +66,6 @@ export type PanelKey =
   | "catalyst_impact"
   | "timeframe_matrix"
   | "agent_matrix"
-  | "shadow"
   | "tf_weights"
   | "tf_targets"
   | "exit_forensics"
@@ -74,7 +73,6 @@ export type PanelKey =
   | "backtest_challenger"
   | "missed_opportunities"
   | "calibration_jumps"
-  | "agent_mode"
   | "governor";
 
 export type PanelGroupId =
@@ -130,7 +128,6 @@ export const PANEL_REGISTRY: PanelMeta[] = [
   // ── DETAY — Karar İzi ────────────────────────────────────────────────────
   { id: "decision_trace",   title: "Decision Trace",       defaultVisible: true,  span: "2",    group: "decision_detail", tier: "detay" },
   { id: "agent_votes",      title: "Agent Kanıt Zinciri",  defaultVisible: true,  span: "1",    group: "decision_detail", tier: "detay" },
-  { id: "shadow",           title: "Shadow Gözlem",        defaultVisible: true,  span: "full", group: "decision_detail", tier: "detay" },
   { id: "position_checks",  title: "Pozisyon Kontrolleri", defaultVisible: true,  span: "1",    group: "decision_detail", tier: "detay" },
   { id: "command_signals",  title: "Aday Sinyalleri",      defaultVisible: true,  span: "full", group: "decision_detail", tier: "detay" },
   // ── DETAY — Piyasa Yapısı ────────────────────────────────────────────────
@@ -164,7 +161,6 @@ export const PANEL_REGISTRY: PanelMeta[] = [
   { id: "backtest_challenger", title: "Backtest Challenger", defaultVisible: true, span: "2",  group: "learning",        tier: "detay" },
   { id: "missed_opportunities", title: "Kaçan Fırsatlar",   defaultVisible: true, span: "2",   group: "learning",        tier: "detay" },
   { id: "calibration_jumps", title: "Kalibrasyon Sıçraması", defaultVisible: true, span: "2",  group: "learning",        tier: "detay" },
-  { id: "agent_mode",       title: "Agent Mode",           defaultVisible: true, span: "2",   group: "learning",        tier: "detay" },
 
   // ── DETAY — Governor (öz-yönetim) ────────────────────────────────────────
   { id: "governor",            title: "Governor",          defaultVisible: true, span: "full", group: "governor",       tier: "detay" },

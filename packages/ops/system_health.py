@@ -229,26 +229,10 @@ def _registry_runtime_summary(provider_status: dict | None) -> dict:
 def _effective_flags() -> dict:
     """Return the *effective* flags, including code-level safety overrides.
 
-    Historical shadow settings are reported separately from the effective
-    runtime route.  The runtime writer is intentionally disabled; old files
-    remain readable for audit but cannot enter the decision or learning path.
+    The shadow comparison and its flags were removed on 2026-11-22.
     """
     thresholds = load_thresholds() or {}
-    shadow_cfg = thresholds.get("shadow") or {}
     causal_cfg = thresholds.get("causal_world") or {}
-    try:
-        from packages.decision import shadow as decision_shadow
-
-        shadow = decision_shadow.load_config()
-        shadow_effective = bool(decision_shadow.affects_paper(shadow))
-        shadow_code = {
-            "enabled": bool(shadow.enabled),
-            "affect_decision": bool(shadow.affect_decision),
-            "manual_ready_only": bool(shadow.manual_ready_only),
-        }
-    except Exception:
-        shadow_effective = False
-        shadow_code = {"enabled": False, "affect_decision": False, "manual_ready_only": True}
     try:
         from packages.discovery import scan_enabled
 
@@ -265,20 +249,6 @@ def _effective_flags() -> dict:
         "paper_safe": True,
         "no_execution": True,
         "news_confluence_gate": confluence_gate,
-        "shadow_requested": {
-            "enabled": bool(shadow_cfg.get("enabled", False)),
-            "affect_decision": bool(shadow_cfg.get("affect_decision", False)),
-            "manual_ready_only": bool(shadow_cfg.get("manual_ready_only", True)),
-        },
-        "shadow_effective": {
-            **shadow_code,
-            "affects_paper": shadow_effective,
-            "runtime_writes": False,
-            "historical_read_only": True,
-            "routed_to_paper": False,
-            "manual_ready_route": False,
-            "paper_mutation": False,
-        },
         "causal_world_decision_apply": bool(causal_cfg.get("decision_apply", False)),
         "discovery_scan_enabled": discovery_scan_enabled,
     }

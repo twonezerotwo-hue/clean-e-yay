@@ -42,8 +42,7 @@ from packages.decision import (
     agent_pipeline,
     conflict_gate,
     final_gate,
-    shadow,
-    shadow_activation,
+    setup_conflict,
     tick_artifact,
 )
 from packages.decision.cockpit import (
@@ -53,9 +52,6 @@ from packages.decision.engine import decide_matrix, matrix_view
 from packages.learning import (
     calibration_audit,
     event_outcomes,
-    missed_opportunity,
-    tf_calibration,
-    tf_weight_trainer,
 )
 from packages.notifications import append_many
 from packages.notifications import detector as notif_detector
@@ -477,7 +473,7 @@ async def run_once() -> None:
                 for gv in gate_views:
                     gv_symbol = getattr(gv, "symbol", None)
                     if gv_symbol:
-                        conflict_by_symbol[gv_symbol] = shadow.evaluate_symbol(
+                        conflict_by_symbol[gv_symbol] = setup_conflict.evaluate_symbol(
                             gv, fingerprint=None, risk_action=_risk.action, dqs_status=snap.quality.status
                         )
             except Exception:
@@ -719,73 +715,6 @@ async def run_once() -> None:
         except Exception:
             observer_failed = True
             log.exception("gözlem yüzeyi (ticket/recheck/bildirim) üretimi başarısız — tick devam ediyor")
-
-        # Step 9 — controlled activation (OBSERVATION mode). Run the NEW agent
-        # pipeline in shadow and persist a comparison vs. the live engine. Runs
-        # AFTER paper is saved and never receives paper state — with
-        # affect_decision:false it cannot move paper. Best-effort: never breaks tick.
-        try:
-            shadow_cfg = shadow.load_config()
-            if shadow_cfg.enabled:
-                # tf_weights trust verdict (read-only; worker owns paper state `ps`).
-                # Surfaced in the record so applying PRIOR weights stays data-driven.
-                try:
-                    cal_report = tf_calibration.calibration_report(state=ps)
-                    cal_summary = shadow.calibration_summary(cal_report)
-                except Exception:
-                    cal_report = {}
-                    cal_summary = {}
-                # Trust-gated live tf_weights application: only when calibration trusts.
-                try:
-                    live_tf_weights = tf_weight_trainer.resolve_live_tf_weights(cal_report)
-                except Exception:
-                    live_tf_weights = None
-                shadow_record = shadow.observe(
-                    MATRIX_SYMBOLS,
-                    snapshot_id=snap.snapshot_id,
-                    risk_action=_risk.action,
-                    live_decisions=decisions,
-                    cfg=shadow_cfg,
-                    calibration=cal_summary,
-                    tf_weights=live_tf_weights,
-                    dqs_status=snap.quality.status,
-                )
-                shadow.record(shadow_record)
-                # Faz 2 — Missed Opportunity: açılmayan valid setup'ları (shadow
-                # CANDIDATE_OPEN ama canlı açmadı) TTL boyunca izle; paper'a ASLA
-                # dokunmaz, ayrı best-effort → gözlem tick'i kesmez. enabled=false
-                # iken inert (boş özet). Faz 4 conflict-gate kararına veri toplar.
-                try:
-                    mo = missed_opportunity.scan_and_track(shadow_record)
-                    if mo.get("tracked_new") or mo.get("resolved"):
-                        log.info(
-                            "missed_opp: +%d izleme, %d çözüldü, %d aktif",
-                            mo["tracked_new"], mo["resolved"], mo["active"],
-                        )
-                except Exception:
-                    log.exception("missed_opp scan failed (tick devam ediyor)")
-                if shadow.affects_paper(shadow_cfg):
-                    # Phase B — controlled activation: route shadow entries to
-                    # manual_ready ONLY (never auto-open; RiskGate re-runs at owner
-                    # approval). Inert under the shipped affect_decision:false config.
-                    # T3 — ana commit SONRASI çalışır: bayat ps'e yazmak yerine
-                    # kendi kısa transaction'ında taze state'e ekler.
-                    with paper_state.transaction("tick:shadow_activation") as ps_sa:
-                        queued = shadow_activation.activate(
-                            ps_sa,
-                            MATRIX_SYMBOLS,
-                            risk_action=_risk.action,
-                            prices=prices,
-                            snapshot_id=snap.snapshot_id,
-                            cfg=shadow_cfg,
-                            tf_weights=live_tf_weights,
-                        )
-                    if queued:
-                        log.info(
-                            "shadow activation: %d entry → manual_ready", len(queued)
-                        )
-        except Exception:
-            log.exception("shadow observe failed (tick devam ediyor)")
 
         # R1 — kararı disk snapshot store'a kaydet (replay temeli). Store yazımı
         # ASLA tick'i patlatmaz; başarısızsa loglanır ve döngü devam eder.

@@ -65,7 +65,6 @@ export const qk = {
   calibrationJumps: ["learning", "calibration-jumps"] as const,
   historicalEdge: (fingerprint: string) =>
     ["learning", "historical-edge", fingerprint] as const,
-  agentModeConfig: ["agent-mode", "config"] as const,
   governorReport: ["governor", "report"] as const,
   governorProposals: ["governor", "proposals"] as const,
   mistakes: ["learning", "mistakes"] as const,
@@ -73,7 +72,6 @@ export const qk = {
   riskHalts: ["risk", "halts"] as const,
   decisionMatrix: ["decision", "matrix"] as const,
   agentMatrix: ["technical", "agent-matrix"] as const,
-  shadowComparison: ["decision", "shadow"] as const,
   conflictGateStatus: ["learning", "conflict-gate-status"] as const,
   conflictGateValidation: ["learning", "conflict-gate-validation"] as const,
   cockpitBrief: ["cockpit", "brief"] as const,

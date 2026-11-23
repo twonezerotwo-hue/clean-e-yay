@@ -90,16 +90,6 @@ empirical_pwin:
 # panel söküldü; çürütme kanıtı exit_backtest ızgara ekseninde KALIR. TEKRAR
 # EKLEME — kanıt negatif.
 
-# F5-2 — champion/challenger terfi kriteri (flag'siz gözlem — davranış değişmez).
-# Kriter: (1) shadow log'da ≥ min_matched_decisions eşleşmiş karar; (2) missed-
-# opportunity çözümlü ayrışma ≥ min_resolved_disagreements; (3) challenger'ın
-# ayrışma isabetinin %95 Wilson ALT sınırı > 0.5. ÜÇÜ DE tutarsa learning worker
-# governor defterine OWNER ONAY PAKETİ sunar (STRATEGY_ENABLE, dedupe'lu).
-# Terfi otomatik DEĞİL — KIRMIZI ÇİZGİ; onay bile yalnız defteri günceller.
-promotion_criteria:
-  min_matched_decisions: 200
-  min_resolved_disagreements: 30
-
 # R5 — tf_scoring gölge YARIŞ defteri: gölge yönlerini gerçekleşen ileri-getiriyle
 # puanlar (v4 owner formülü vs canlı v1 motoru vs taban buy-hold). Terfi kapısı:
 # kararlı çözülmüş v4 çağrısı ≥ min_resolved + isabetin %95 Wilson alt sınırı > 0.5
@@ -774,23 +764,6 @@ trigger_engine:
   confirmed_min: 70.0
   pin_bar_wick_ratio: 2.0
 
-# Agent Mode Control (packages/mode/) — spec §5/§40. Henüz HİÇBİR karar
-# zincirine bağlı değil (yalnızca shadow gözlem kaydında okunur). Default'lar
-# bilinçli olarak muhafazakâr: hiçbir profili/stratejiyi kısıtlamaz — bu
-# config aktive edilene kadar davranış DEĞİŞMEZ.
-agent_mode_control:
-  enabled_trade_profiles: []   # boş = hepsi serbest (allowlist değil)
-  disabled_trade_profiles: []
-  focus_mode: null
-  allow_counter_context_trades: true
-  allow_reversal_trades: true
-  allow_trend_follow_trades: true
-  allow_range_trades: true
-  allow_breakout_trades: true
-  watch_disabled_profiles: true
-  close_disabled_profile_positions: false
-  close_requires_riskgate_pass: true
-
 agent:
   personas: [analyst, risk_officer, macro_strategist]
   quorum_required: 2          # 3'ten en az 2 hemfikir
@@ -932,15 +905,6 @@ trade_economics:
   costs: { taker_fee_bps: 10, est_spread_bps: 2, est_slippage_bps: 3 }
   min_net_edge_bps: 20
   min_rr: 1.5
-
-# Step 9 — legacy shadow records are retained for audit/replay only. Runtime
-# decision and learning paths do not write or activate shadow entries. The
-# modules remain importable so historical files can be inspected or archived;
-# they are not an execution route.
-shadow:
-  enabled: false
-  affect_decision: false
-  manual_ready_only: true
 
 # World State + Causal Intelligence — read-only context for reports. It does not
 # write shadow decisions or alter the live decision/risk path.

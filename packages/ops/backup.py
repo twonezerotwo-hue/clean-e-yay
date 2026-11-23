@@ -32,7 +32,6 @@ FILE_SOURCES: tuple[tuple[str, str], ...] = (
     ("COMPLIANCE_LOG_PATH", "data/runtime/compliance_log.jsonl"),
     ("RISK_HALT_PATH", "data/runtime/risk_halts.json"),
     ("WEIGHTS_MANIFEST_PATH", "data/runtime/weights_active.json"),
-    ("AGENT_MODE_STORE_PATH", "data/runtime/agent_mode.json"),
     ("GOVERNOR_PROPOSALS_PATH", "data/runtime/governor_proposals.json"),
     ("REGIME_STATE_PATH", "data/runtime/regime_state.json"),
     ("TICKETS_PATH", "data/runtime/tickets.json"),

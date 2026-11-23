@@ -1,12 +1,8 @@
 """Step 8 — tf_weights auto-tune (trust-gated proposal; owner-gated, never applied).
 
-Scope: full per-TF signal-CONTRIBUTION attribution IS NOW LIVE (CP4-fix #7). `shadow`
-records per-TF contribution shares at decision time (see `tf_contribution.compute_
-snapshot`); `_gather_attributed_pnl` reads recent shadow snapshots + verified closed
-outcomes and credits each closed trade's PnL to the timeframes that DROVE the entry
-(not just the entry TF). When those snapshots exist for closed trades the proposal
-switches to attributed-PnL nudging automatically; otherwise it falls back to the
-per-TF entry OUTCOME (hit-rate/expectancy from `tf_calibration`).
+Scope: the proposal follows the per-TF entry OUTCOME (hit-rate/expectancy from
+`tf_calibration`). The contribution-attribution path read the shadow comparison
+log and was removed with it on 2026-11-22.
 
 This trainer turns that into a conservative per-strategy `tf_weights` PROPOSAL:
 
@@ -20,9 +16,7 @@ This trainer turns that into a conservative per-strategy `tf_weights` PROPOSAL:
     `auto_weight_trainer`); this only proposes.
 
 Entry-TF weights are tuned within their strategy bucket (1d→swing, 1h/4h→intraday,
-15m→scalp); 1w yields bias only and is never an entry. Cross-TF weights follow the
-attributed-PnL share when contribution snapshots are available (attribution LIVE),
-falling back to PRIOR only when no contribution data matches the closed trades.
+15m→scalp); 1w yields bias only and is never an entry.
 """
 from __future__ import annotations
 
@@ -71,7 +65,7 @@ class TfWeightProposal:
     deltas: list[TfWeightDelta]
     calibrated_timeframes: list[str] = field(default_factory=list)
     note: str = (
-        "entry-outcome based, trust-gated; contribution attribution active when data matches"
+        "entry-outcome based, trust-gated"
     )
 
 
@@ -81,15 +75,6 @@ def _nudge_factor(win_rate: float, expectancy: float) -> float:
     if expectancy <= 0.0:
         factor = min(factor, 0.0)  # never up-weight a losing timeframe
     return factor
-
-
-def _attributed_factor(attributed_pnl: float, attributed_total: float) -> float:
-    """Edge in [-1, 1] from attributed PnL share — a TF is up-weighted only when its
-    share of realized PnL is materially positive. Symmetric for losses."""
-    if attributed_total <= 0.0:
-        return 0.0
-    share = attributed_pnl / attributed_total  # in [-1, 1] when total > 0
-    return max(-1.0, min(1.0, share))
 
 
 def resolve_live_tf_weights(
@@ -137,15 +122,10 @@ def propose(
     prior: dict | None = None,
     max_drift: float = MAX_DRIFT,
     min_trades: int = MIN_TRADES,
-    attributed_pnl: dict[str, dict[str, float]] | None = None,
 ) -> TfWeightProposal | dict:
     """Build a trust-gated tf_weights proposal, or a skip dict when there is no
     validated timeframe yet (the normal state until verified outcomes accumulate).
-
-    When `attributed_pnl` is supplied (per-strategy/per-TF realized PnL share from
-    the contribution snapshots — see `tf_contribution`), the nudge follows attributed
-    PnL share instead of raw entry-outcome win rate. Trust gate still applies: only
-    timeframes the calibration validated (CALIBRATED) may move."""
+    Trust gate: only timeframes the calibration validated (CALIBRATED) may move."""
     report = report if report is not None else tf_calibration.calibration_report(min_trades=min_trades)
     prior = prior if prior is not None else dict(report.get("tf_weights_prior", {}) or {})
     if not prior:
@@ -161,31 +141,15 @@ def propose(
     if not tunable:
         return {"status": "skipped", "reason": "no_calibrated_tf"}
 
-    # When attributed PnL is supplied, use it as the nudge driver (proper attribution)
-    # for any strategy that has positive total absolute PnL; otherwise fall back to
-    # entry-outcome per row (the honest default until contribution data accrues).
-    abs_totals: dict[str, float] = {}
-    if attributed_pnl:
-        for strat, by_tf in attributed_pnl.items():
-            abs_totals[strat] = sum(abs(float(v)) for v in by_tf.values())
-
     proposed = {strat: dict(weights) for strat, weights in prior.items()}
     deltas: list[TfWeightDelta] = []
     touched_strategies: set[str] = set()
-    attribution_used = False
     for c in tunable:
         strat = c["strategy"]
         tf_canonical = c["timeframe"]
         key = _TF_KEY[tf_canonical]
         old = float(prior[strat][key])
-        if attributed_pnl and abs_totals.get(strat, 0.0) > 0.0:
-            ap = float((attributed_pnl.get(strat) or {}).get(tf_canonical, 0.0))
-            factor = _attributed_factor(ap, abs_totals[strat])
-            attribution_used = True
-        else:
-            factor = _nudge_factor(
-                float(c.get("win_rate", 0.0)), float(c.get("expectancy", 0.0))
-            )
+        factor = _nudge_factor(float(c.get("win_rate", 0.0)), float(c.get("expectancy", 0.0)))
         new = round(old * (1.0 + max_drift * factor), 4)
         proposed[strat][key] = new
         touched_strategies.add(strat)
@@ -203,11 +167,7 @@ def propose(
     if not deltas:
         return {"status": "skipped", "reason": "no_change"}
 
-    note = (
-        "per-TF signal-contribution attribution from closed trades, trust-gated"
-        if attribution_used
-        else "entry-outcome based, trust-gated; contribution attribution falls back when no data"
-    )
+    note = "entry-outcome based, trust-gated"
     return TfWeightProposal(
         generated_at=datetime.now(UTC).isoformat(),
         prior=prior,
@@ -222,45 +182,13 @@ def proposal_to_dict(p: TfWeightProposal) -> dict:
     return asdict(p)
 
 
-def _gather_attributed_pnl() -> dict[str, dict[str, float]]:
-    """Best-effort: read recent closed trades from paper state and shadow contribution
-    snapshots, then attribute realized PnL per (strategy, TF). Returns {} on any
-    failure (defensive — trainer falls back to entry-outcome)."""
-    try:
-        from packages.decision import shadow
-        from packages.learning import outcomes as outcomes_mod
-        from packages.learning import tf_contribution
-
-        # Veri hijyeni (2026-07-12): legacy kayıtlar ağırlık öğrenmesine girmez.
-        outs = outcomes_mod.learning_grade(outcomes_mod.outcomes_from_state())
-        closed = [
-            {
-                "snapshot_id": o.snapshot_id,
-                "symbol": o.symbol,
-                "pnl": float(o.pnl),
-                "strategy": tf_calibration._TF_STRATEGY.get(o.timeframe, "unknown"),
-            }
-            for o in outs
-            if getattr(o, "data_verified", False) and o.snapshot_id
-        ]
-        if not closed:
-            return {}
-        snaps = shadow.read_recent(limit=500)
-        return tf_contribution.attributed_pnl_per_tf(closed, snaps)
-    except Exception:
-        return {}
-
-
 def report_viewmodel(report: dict | None = None) -> dict:
     """Flat, render-ready ViewModel: per-TF calibration + the trust-gated proposal.
 
     Frontend does no math — the per-TF rows and proposed deltas are shaped here. The
-    proposal status is `proposed` or the skip reason (e.g. `no_calibrated_tf`). When
-    contribution snapshots exist for closed trades, the proposal switches to attributed
-    PnL (proper attribution) automatically; otherwise it falls back to entry-outcome."""
+    proposal status is `proposed` or the skip reason (e.g. `no_calibrated_tf`)."""
     report = report if report is not None else tf_calibration.calibration_report()
-    attributed = _gather_attributed_pnl()
-    proposal = propose(report, attributed_pnl=attributed or None)
+    proposal = propose(report)
     if isinstance(proposal, TfWeightProposal):
         status = "proposed"
         deltas = [asdict(d) for d in proposal.deltas]
@@ -269,7 +197,7 @@ def report_viewmodel(report: dict | None = None) -> dict:
         status = str(proposal.get("reason", "skipped"))
         deltas = []
         note = (
-            "entry-outcome based, trust-gated; contribution attribution falls back when no data"
+            "entry-outcome based, trust-gated"
         )
     return {
         "tf_weights_trusted": bool(report.get("tf_weights_trusted", False)),
@@ -288,6 +216,5 @@ def report_viewmodel(report: dict | None = None) -> dict:
         ],
         "proposal_status": status,
         "deltas": deltas,
-        "attribution_active": bool(attributed),
         "note": note,
     }

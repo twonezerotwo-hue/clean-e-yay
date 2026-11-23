@@ -9,7 +9,6 @@ from packages.learning import (
     performance_readiness,
     rebalance_store,
     run_store,
-    shadow_routing,
     signal_quality,
 )
 from packages.learning import cohorts as cohorts_mod
@@ -203,8 +202,6 @@ def build_summary() -> dict:
         },
         "worker_last_run": run_store.load(),
         "proposal_status": _proposal_status(),
-        # Birleşik gölge kanıtı: yalnız gözlem, canlı karar/ağırlık/paper etkisi yok.
-        "shadow_routing": shadow_routing.viewmodel(),
     }
     # Tek, additive performans karnesi: yalnız gözlem; canlı karar zincirine
     # bağlanmaz. Ham/legacy metrikler geriye dönük uyumluluk için korunur.

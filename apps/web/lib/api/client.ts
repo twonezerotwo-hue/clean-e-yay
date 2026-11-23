@@ -33,7 +33,6 @@ import type {
   ReplaySnapshot,
   RegimeReport,
   ReplayStatus,
-  ShadowComparison,
   SystemHealth,
   TfWeightsReport,
   TfTargetsView,
@@ -52,8 +51,6 @@ import type {
   BacktestChallengerView,
   GuardSafetyView,
   CalibrationJumpsView,
-  AgentModeConfigView,
-  AgentModeConfigUpdate,
   GovernorReport,
   GovernorProposalsView,
   TradeTicketList,
@@ -728,17 +725,6 @@ export const api = {
     fetchJSON<HistoricalEdgeResponse>(
       `/api/v1/learning/historical-edge?fingerprint=${encodeURIComponent(fingerprint)}`,
     ),
-  agentModeConfig: () =>
-    fetchJSON<AgentModeConfigView>("/api/v1/agent-mode/config"),
-  agentModeConfigUpdate: (body: AgentModeConfigUpdate) =>
-    fetchJSON<AgentModeConfigView>("/api/v1/agent-mode/config", {
-      method: "POST",
-      body: JSON.stringify(body),
-    }),
-  agentModeConfigReset: () =>
-    fetchJSON<AgentModeConfigView>("/api/v1/agent-mode/config/reset", {
-      method: "POST",
-    }),
   // ── Governor (self-managing katman) ──────────────────────────────────────
   governorReport: () =>
     fetchJSON<GovernorReport>("/api/v1/governor/report"),
@@ -780,8 +766,6 @@ export const api = {
     fetchJSON<DecisionMatrix>("/api/v1/decision/matrix"),
   agentMatrix: () =>
     fetchJSON<AgentMatrix>("/api/v1/technical/agent-matrix"),
-  shadowComparison: () =>
-    fetchJSON<ShadowComparison>("/api/v1/decision/shadow"),
   conflictGateStatus: () =>
     fetchJSON<ConflictGateStatus>("/api/v1/learning/conflict-gate-status"),
   conflictGateValidation: () =>

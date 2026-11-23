@@ -19,7 +19,6 @@ import { MarketSessionsPanel } from "@/components/panels/MarketSessionsPanel";
 import { WatchConditionsPanel } from "@/components/panels/WatchConditionsPanel";
 import { DecisionTracePanel } from "@/components/panels/DecisionTracePanel";
 import { AgentVotesPanel } from "@/components/panels/AgentVotesPanel";
-import { ShadowPanel } from "@/components/panels/ShadowPanel";
 import { CommandSignalsPanel } from "@/components/panels/CommandSignalsPanel";
 import { CryptoDerivativesPanel } from "@/components/panels/CryptoDerivativesPanel";
 import { VolatilityPanel } from "@/components/panels/VolatilityPanel";
@@ -116,7 +115,6 @@ export default function DetailsPage() {
               { key: "ticket", label: "Sinyal oluşumu", node: <TradeTicketPanel /> },
               { key: "candidates", label: "Adaylar", node: <CommandSignalsPanel /> },
               { key: "watch", label: "İzleme koşulları", node: <WatchConditionsPanel /> },
-              { key: "shadow", label: "Gölge", node: <ShadowPanel /> },
             ]}
           />
         </GridCell>

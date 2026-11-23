@@ -10,7 +10,7 @@ from __future__ import annotations
 from fastapi import APIRouter
 
 from packages.data.provenance import data_provenance
-from packages.decision import read_model, shadow
+from packages.decision import read_model
 
 router = APIRouter(tags=["decision"])
 
@@ -29,12 +29,3 @@ def get_decision_matrix() -> dict:
     view["paper_state_revision"] = ps.revision
     return view
 
-
-@router.get("/decision/shadow")
-def get_shadow_comparison() -> dict:
-    """Step 9 — latest live-vs-shadow comparison (observe-only).
-
-    Thin read layer over the shadow log the tick_worker writes; it never runs the
-    pipeline, never touches paper, and `affected_paper` is always false (Phase A).
-    """
-    return shadow.latest_viewmodel()

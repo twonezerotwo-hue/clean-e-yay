@@ -589,20 +589,6 @@ paths:
               schema:
                 $ref: "#/components/schemas/TfWeightsReport"
 
-  /api/v1/learning/promotion-criteria:
-    get:
-      operationId: getPromotionCriteria
-      summary: F5-2 — champion/challenger terfi kriteri (read-only; terfi otomatik DEĞİL)
-      responses:
-        "200":
-          description: OK
-          content:
-            application/json:
-              schema:
-                type: object
-                description: promotion_criteria.evaluate() sonucu (additive).
-                additionalProperties: true
-
   /api/v1/learning/activation-watchdog:
     get:
       operationId: getActivationWatchdog
@@ -681,42 +667,6 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/ConflictGateStatus" }
-
-  /api/v1/agent-mode/config:
-    get:
-      operationId: getAgentModeConfig
-      summary: Faz 3 — Agent Mode etkin config (thresholds defaults + owner override)
-      responses:
-        "200":
-          description: OK
-          content:
-            application/json:
-              schema: { $ref: "#/components/schemas/AgentModeConfigView" }
-    post:
-      operationId: postAgentModeConfig
-      summary: Faz 3 — Agent Mode owner override'larını kaydet (ana config'e dokunmaz)
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema: { $ref: "#/components/schemas/AgentModeConfigUpdate" }
-      responses:
-        "200":
-          description: OK
-          content:
-            application/json:
-              schema: { $ref: "#/components/schemas/AgentModeConfigView" }
-
-  /api/v1/agent-mode/config/reset:
-    post:
-      operationId: postAgentModeConfigReset
-      summary: Faz 3 — Agent Mode override'larını sıfırla (saf config'e dön)
-      responses:
-        "200":
-          description: OK
-          content:
-            application/json:
-              schema: { $ref: "#/components/schemas/AgentModeConfigView" }
 
   /api/v1/learning/missed-opportunities:
     get:
@@ -1370,18 +1320,6 @@ paths:
               schema:
                 type: object
                 description: TriggerAnalysis (additive) — state, trigger_score, matched_triggers, validity, diagnostics.
-
-  /api/v1/decision/shadow:
-    get:
-      operationId: getShadowComparison
-      summary: Step 9 controlled activation — latest live-vs-shadow comparison (observe-only, read-only)
-      responses:
-        "200":
-          description: OK
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ShadowComparison"
 
   /api/v1/agent/briefing:
     get:
@@ -2560,13 +2498,6 @@ components:
             Temiz öğrenme kohortunun 90+ kanıt hazırlığı. Salt gözlem; canlı
             eşik, ağırlık, RiskGate veya emir akışını değiştirmez.
           $ref: "#/components/schemas/PerformanceReadiness"
-        shadow_routing:
-          description: >
-            Birleşik gölge kanıtı. Aday giriş ile final kapı sonucunu, yeni asset
-            terfisini, haber teyidini ve exit canary önerilerini gösterir; canlı
-            karar/ağırlık/paper state'ine uygulanmaz.
-          type: object
-          additionalProperties: true
 
     LearningCohorts:
       type: object
@@ -5193,108 +5124,6 @@ components:
           type: array
           items: { $ref: "#/components/schemas/AgentMatrixRow" }
 
-    ShadowTfCalibration:
-      type: object
-      required: [timeframe, strategy, trades, win_rate, trust]
-      properties:
-        timeframe: { type: string }
-        strategy: { type: string }
-        trades: { type: integer }
-        win_rate: { type: number }
-        trust: { type: string, enum: [PRIOR, CALIBRATED] }
-
-    ShadowCalibration:
-      type: object
-      description: tf_weights trust verdict — PRIOR/untrusted until per-TF calibration validates.
-      required: [tf_weights_trusted, calibrated_timeframes, per_timeframe]
-      properties:
-        tf_weights_trusted: { type: boolean }
-        calibrated_timeframes:
-          type: array
-          items: { type: string }
-        min_trades_per_tf: { type: integer, nullable: true }
-        per_timeframe:
-          type: array
-          items: { $ref: "#/components/schemas/ShadowTfCalibration" }
-
-    ShadowAgreementSummary:
-      type: object
-      description: Per-tick counts of how live and shadow intents agreed (observation only).
-      required: [agree_entry, agree_flat, disagree_direction, live_only_entry, shadow_only_entry]
-      properties:
-        agree_entry: { type: integer }
-        agree_flat: { type: integer }
-        disagree_direction: { type: integer }
-        live_only_entry: { type: integer }
-        shadow_only_entry: { type: integer }
-
-    ShadowRow:
-      type: object
-      required: [symbol, agreement, live_wants_entry, shadow_wants_entry]
-      properties:
-        symbol: { type: string }
-        agreement:
-          type: string
-          enum: [AGREE_ENTRY, AGREE_FLAT, DISAGREE_DIRECTION, LIVE_ONLY_ENTRY, SHADOW_ONLY_ENTRY]
-        live_wants_entry: { type: boolean }
-        live_action: { type: string, nullable: true }
-        live_direction: { type: string, nullable: true }
-        live_timeframe: { type: string, nullable: true }
-        # Additive candidate telemetry: preserves the distinction between an
-        # entry proposed by the signal cells and the final RiskGate decision.
-        candidate_wants_entry: { type: boolean }
-        candidate_action: { type: string, nullable: true }
-        candidate_direction: { type: string, nullable: true }
-        candidate_timeframe: { type: string, nullable: true }
-        candidate_entry_cells: { type: integer }
-        candidate_blocked_by:
-          type: array
-          items: { type: string }
-        shadow_wants_entry: { type: boolean }
-        shadow_action: { type: string, nullable: true }
-        shadow_direction: { type: string, nullable: true }
-        shadow_entry_timeframe: { type: string, nullable: true }
-        shadow_stance: { type: string, nullable: true }
-        # Additive — bkz. packages/decision/shadow.py::_evidence_for_symbol.
-        # Karar zincirini etkilemez; yalnızca gözlem amaçlı ek kanıt.
-        elliott_scenario: { type: string, nullable: true }
-        elliott_confidence: { type: number, nullable: true }
-        elliott_bias: { type: string, nullable: true }
-        historical_edge_sample_count: { type: integer, nullable: true }
-        historical_edge_win_rate: { type: number, nullable: true }
-        historical_edge_confidence: { type: string, nullable: true }
-
-    ShadowComparison:
-      type: object
-      description: >
-        Step 9 controlled activation (observation mode). Latest comparison of the live
-        decide_matrix engine vs the NEW agent pipeline running in shadow. affected_paper
-        is always false in Phase A — the shadow never moves paper; this is read-only.
-      required: [available, affect_decision, affected_paper, summary, calibration, rows]
-      properties:
-        available: { type: boolean }
-        recorded_at: { type: string, nullable: true }
-        snapshot_id: { type: string, nullable: true }
-        risk_action: { type: string, nullable: true }
-        affect_decision: { type: boolean }
-        affected_paper: { type: boolean }
-        summary: { $ref: "#/components/schemas/ShadowAgreementSummary" }
-        candidate_summary:
-          type: object
-          description: Candidate entries and final blockers; observation-only telemetry.
-          required: [symbols_with_candidate, candidate_entry_cells, candidate_not_actionable_symbols, blocked_by]
-          properties:
-            symbols_with_candidate: { type: integer }
-            candidate_entry_cells: { type: integer }
-            candidate_not_actionable_symbols: { type: integer }
-            blocked_by:
-              type: object
-              additionalProperties: { type: integer }
-        calibration: { $ref: "#/components/schemas/ShadowCalibration" }
-        rows:
-          type: array
-          items: { $ref: "#/components/schemas/ShadowRow" }
-
     ConflictGateRouteStats:
       type: object
       description: Faz 9A — bir (trade_profile, route) hücresinin gerçekleşmiş trade istatistiği.
@@ -5313,59 +5142,6 @@ components:
         profile_modes:
           type: object
           additionalProperties: { type: string, enum: ["OFF", "SOFT", "SOFT_PLUS", "HARD", "HARD_MANUAL"] }
-
-    AgentModeConfigValues:
-      type: object
-      description: Faz 3 — Agent Mode etkin değerleri (profil/strateji izinleri).
-      required:
-        - enabled_trade_profiles
-        - disabled_trade_profiles
-        - allow_counter_context_trades
-        - allow_reversal_trades
-        - allow_trend_follow_trades
-        - allow_range_trades
-        - allow_breakout_trades
-        - watch_disabled_profiles
-        - close_disabled_profile_positions
-        - close_requires_riskgate_pass
-      properties:
-        enabled_trade_profiles: { type: array, items: { type: string } }
-        disabled_trade_profiles: { type: array, items: { type: string } }
-        focus_mode: { type: string, nullable: true }
-        allow_counter_context_trades: { type: boolean }
-        allow_reversal_trades: { type: boolean }
-        allow_trend_follow_trades: { type: boolean }
-        allow_range_trades: { type: boolean }
-        allow_breakout_trades: { type: boolean }
-        watch_disabled_profiles: { type: boolean }
-        close_disabled_profile_positions: { type: boolean }
-        close_requires_riskgate_pass: { type: boolean }
-
-    AgentModeConfigUpdate:
-      type: object
-      description: Faz 3 — Owner override payload (tümü opsiyonel; bilinmeyen anahtar/profil sunucuda reddedilir).
-      properties:
-        enabled_trade_profiles: { type: array, items: { type: string } }
-        disabled_trade_profiles: { type: array, items: { type: string } }
-        focus_mode: { type: string, nullable: true }
-        allow_counter_context_trades: { type: boolean }
-        allow_reversal_trades: { type: boolean }
-        allow_trend_follow_trades: { type: boolean }
-        allow_range_trades: { type: boolean }
-        allow_breakout_trades: { type: boolean }
-        watch_disabled_profiles: { type: boolean }
-        close_disabled_profile_positions: { type: boolean }
-        close_requires_riskgate_pass: { type: boolean }
-
-    AgentModeConfigView:
-      type: object
-      description: Faz 3 — Agent Mode görüntüsü (etkin config + profil listesi + ham override + etki alanı).
-      required: [trade_profiles, config, overrides, applies_to]
-      properties:
-        trade_profiles: { type: array, items: { type: string } }
-        config: { $ref: "#/components/schemas/AgentModeConfigValues" }
-        overrides: { type: object, additionalProperties: true }
-        applies_to: { type: string }
 
     MissedOpportunityOutcomes:
       type: object

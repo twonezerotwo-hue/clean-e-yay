@@ -6,7 +6,7 @@ zincirine bağlı DEĞİLDİR.
 """
 from __future__ import annotations
 
-from packages.mode.config import TRADE_PROFILES
+TRADE_PROFILES = ("SCALP", "INTRADAY", "TACTICAL", "SWING", "POSITION")
 
 _TF_PROFILE = {
     "15m": "INTRADAY",

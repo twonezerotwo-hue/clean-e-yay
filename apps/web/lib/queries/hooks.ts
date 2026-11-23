@@ -684,16 +684,6 @@ export const useHistoricalEdge = (fingerprint: string) => {
   });
 };
 
-export const useAgentModeConfig = () => {
-  const policy = usePanelQueryPolicy(5 * 60_000);
-  return useQuery({
-    queryKey: qk.agentModeConfig,
-    queryFn: api.agentModeConfig,
-    staleTime: 60_000,
-    ...policy,
-  });
-};
-
 // ── Governor (self-managing katman) ─────────────────────────────────────────
 
 export const useGovernorReport = () => {
@@ -776,16 +766,6 @@ export const useAgentMatrix = () => {
     queryKey: qk.cockpitBrief,
     queryFn: api.cockpitBrief,
     select: (brief: CockpitBrief) => brief.agent_matrix as AgentMatrix,
-    staleTime: 15_000,
-    ...policy,
-  });
-};
-
-export const useShadowComparison = () => {
-  const policy = usePanelQueryPolicy(30_000);
-  return useQuery({
-    queryKey: qk.shadowComparison,
-    queryFn: api.shadowComparison,
     staleTime: 15_000,
     ...policy,
   });

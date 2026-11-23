@@ -100,30 +100,9 @@ def test_skip_when_no_prior():
     assert isinstance(out, dict) and out["reason"] == "no_prior_weights"
 
 
-# ── attributed PnL path: closes the deferred contribution-attribution route ──
-
-def test_proposal_uses_attributed_pnl_when_supplied():
-    # 1d calibrated under swing; attributed PnL says 1d earned +100, 4h earned -20.
-    rep = _report([_cal("1d", "swing", win_rate=0.6, expectancy=2.0)])
-    attributed = {"swing": {"1d": 100.0, "4h": -20.0}}
-    p = twt.propose(rep, attributed_pnl=attributed)
-    assert isinstance(p, TfWeightProposal)
-    assert "contribution attribution" in p.note  # attribution path used
-    # the validated 1d gets up-weighted vs its prior under attribution
-    assert p.proposed["swing"]["d1"] > _PRIOR["swing"]["d1"]
-
-
-def test_attributed_negative_share_downweights():
-    rep = _report([_cal("1h", "intraday", win_rate=0.6, expectancy=1.0)])
-    attributed = {"intraday": {"1h": -100.0, "4h": 20.0}}  # 1h lost
-    p = twt.propose(rep, attributed_pnl=attributed)
-    assert isinstance(p, TfWeightProposal)
-    assert p.proposed["intraday"]["h1"] < _PRIOR["intraday"]["h1"]
-
-
-def test_falls_back_to_entry_outcome_when_no_attribution():
+def test_proposal_is_entry_outcome_based():
     rep = _report([_cal("1d", "swing", win_rate=0.80, expectancy=5.0)])
-    p = twt.propose(rep, attributed_pnl=None)
+    p = twt.propose(rep)
     assert isinstance(p, TfWeightProposal)
     assert "entry-outcome" in p.note
 

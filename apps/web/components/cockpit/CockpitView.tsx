@@ -62,7 +62,6 @@ import { BacktestChallengerPanel } from "@/components/panels/BacktestChallengerP
 import { ThresholdAutotunePanel } from "@/components/panels/ThresholdAutotunePanel";
 import { ThresholdAbPanel } from "@/components/panels/ThresholdAbPanel";
 import { GuardSafetyPanel } from "@/components/panels/GuardSafetyPanel";
-import { AgentModePanel } from "@/components/panels/AgentModePanel";
 import { LearningBrainPanel } from "@/components/panels/LearningBrainPanel";
 import type { CockpitBrief } from "@/types/generated/api";
 
@@ -1460,13 +1459,12 @@ export function CockpitView() {
           <Layer2DetailGroup
             index="02"
             title="Sistem Yonetimi"
-            detail="Owner kontrolu modlar: governor ozeti ve agent modu."
+            detail="Owner kontrolu: governor ozeti."
             badge="owner kontrolu"
             badgeTone="border-emerald-400/30 bg-emerald-400/10 text-emerald-200"
           >
             <div className="grid gap-3 lg:grid-cols-2">
               <div className="lg:col-span-2"><GovernorPanel /></div>
-              <div className="lg:col-span-2"><AgentModePanel /></div>
             </div>
           </Layer2DetailGroup>
 

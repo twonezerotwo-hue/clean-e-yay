@@ -33,7 +33,6 @@ from packages.learning import (
     empirical_pwin,
     exit_forensics,
     guard_safety,
-    promotion_criteria,
     rebalance_store,
     run_store,
     tf_calibration,
@@ -172,7 +171,6 @@ def run_once() -> dict:
     rebalance_decision: str | None = None  # G3: auto_applied | pending_* | no_change
     rollback_status = "UNKNOWN"             # G3: no_active | monitoring | CONFIRMED | ROLLED_BACK
     guard_safety_status: dict = {}          # CP3: yön guard kasası (armed/rolled_back/...)
-    promotion_status = "UNKNOWN"            # F5-2: terfi kriteri (READY/NOT_READY)
     activation_watchdog_status: dict = {}   # F5-3: owner-flag izleyici (yalnız-öneri)
 
     try:
@@ -466,21 +464,6 @@ def run_once() -> dict:
             log.info("guard_safety ROLLBACK: %s", guard_safety_status["rolled_back"])
     except Exception as exc:  # defensive — worker patlamamalı
         errors.append(f"guard_safety:{type(exc).__name__}")
-
-    # F5-2 — champion/challenger terfi kriteri: her cycle değerlendirilir; READY
-    # olursa governor defterine OWNER ONAY PAKETİ sunulur (dedupe'lu — tek PENDING).
-    # Terfi otomatik DEĞİL (KIRMIZI ÇİZGİ); onay bile canlı config'i değiştirmez.
-    try:
-        promo = promotion_criteria.run()
-        promotion_status = promo.get("status", "UNKNOWN")
-        if promotion_status == "READY":
-            log.info(
-                "promotion_criteria READY — owner paketi sunuldu (proposal_id=%s)",
-                promo.get("proposal_id"),
-            )
-    except Exception as exc:  # defensive — worker patlamamalı
-        promotion_status = "UNKNOWN"
-        errors.append(f"promotion_criteria:{type(exc).__name__}")
 
     # F5-3 — aktivasyon watchdog'u: owner-flag OFF→ON geçişlerini izler,
     # post-enable expectancy düşerse DEGRADED önerir (YALNIZ-ÖNERİ — hiçbir
@@ -981,26 +964,6 @@ def run_once() -> dict:
         forward_test_status = f"ERROR:{type(exc).__name__}"
         errors.append(f"forward_test_90d:{type(exc).__name__}")
 
-    # Gölge yazıcıları kullanıcı kararıyla kapalıdır. Tarihsel artifact'lar
-    # silinmez; yeni dosya/öneri üretilmez ve öğrenme hesabına katılmaz.
-    shadow_routing_status = "DISABLED"
-    try:
-        from packages.data.registry.loader import load_thresholds
-        shadow_cfg = load_thresholds().get("shadow") or {}
-        if bool(shadow_cfg.get("enabled", False)):
-            from packages.learning import shadow_routing
-            shadow_route_result = shadow_routing.run()
-            shadow_routing_status = str(shadow_route_result.get("status", "UNKNOWN"))
-            if shadow_routing_status == "OK":
-                log.info(
-                    "shadow_routing: candidates=%s candidate_cells=%s",
-                    shadow_route_result.get("candidates"),
-                    shadow_route_result.get("candidate_cells"),
-                )
-    except Exception as exc:  # defensive — worker patlamamalı
-        shadow_routing_status = f"ERROR:{type(exc).__name__}"
-        errors.append(f"shadow_routing:{type(exc).__name__}")
-
     if errors:
         status = "COMPLETED_WITH_ERRORS"
     elif outcomes_seen == 0:
@@ -1028,7 +991,6 @@ def run_once() -> dict:
         "rebalance_decision": rebalance_decision,  # G3
         "rollback_status": rollback_status,          # G3
         "guard_safety_status": guard_safety_status,  # CP3
-        "promotion_status": promotion_status,        # F5-2 (READY/NOT_READY)
         "activation_watchdog_status": activation_watchdog_status,  # F5-3
         "macro_backfill_status": macro_backfill_status,  # 2026-07-13 arşiv bekçisi
 
@@ -1060,7 +1022,6 @@ def run_once() -> dict:
         "tf_scoring_v2_shadow_status": tf_scoring_v2_shadow_status,  # D6 v2 gölge skoru (DISABLED=flag OFF)
         "tf_scoring_race_status": tf_scoring_race_status,  # R5 yarış defteri (DISABLED=flag OFF)
         "forward_test_90d_status": forward_test_status,  # 90 günlük paper ileri test
-        "shadow_routing_status": shadow_routing_status,  # birleşik gölge kanıtı (salt-gözlem)
         "duration_ms": duration_ms,        # CP1 — perf görünürlüğü
         "over_budget": over_budget,        # CP1 — bütçe aşımı bayrağı
         "errors": errors,

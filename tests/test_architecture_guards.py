@@ -583,55 +583,23 @@ def test_reversal_patterns_not_consumed_by_decision_or_risk() -> None:
     )
 
 
-# ── Step 9: shadow NEVER auto-opens (observe in Phase A; queue-only in Phase B) ─
+# ── Kurulum/çakışma girdisi (setup_conflict) paper'a dokunmaz ─
 
-SHADOW_MODULE = REPO / "packages" / "decision" / "shadow.py"
-SHADOW_ACTIVATION = REPO / "packages" / "decision" / "shadow_activation.py"
-TICK_WORKER = REPO / "apps" / "tick_worker" / "main.py"
+SETUP_CONFLICT = REPO / "packages" / "decision" / "setup_conflict.py"
 
-# Full paper mutators — the OBSERVE module (shadow.py) must reach none of these.
+# Full paper mutators — setup_conflict must reach none of these.
 _PAPER_MUTATORS = ("attempt_open", "route_to_manual_ready", "flatten_all", "paper_state.save")
-# Auto-open/close entry points — FORBIDDEN anywhere on the shadow path (Phase A or B):
-# the shadow may only ever QUEUE to manual_ready, never auto-open a position.
-_AUTO_OPEN = ("attempt_open", "flatten_all")
 
-
-def test_shadow_module_is_observe_only() -> None:
-    """The shadow module records a comparison only — it never imports paper state
-    nor reaches any paper-mutating entry point (observation cannot move paper).
-    Activation lives in the separate shadow_activation module, not here."""
-    src = SHADOW_MODULE.read_text(encoding="utf-8")
+def test_setup_conflict_never_touches_paper() -> None:
+    """setup_conflict only classifies and resolves — it never imports paper state
+    nor reaches any paper-mutating entry point."""
+    src = SETUP_CONFLICT.read_text(encoding="utf-8")
     offenders = [m for m in _PAPER_MUTATORS if m in src]
     if "packages.paper" in src:
         offenders.append("packages.paper import")
     assert not offenders, (
-        "shadow observation must never open/queue/flatten/save paper: " + ", ".join(offenders)
+        "setup_conflict must never open/queue/flatten/save paper: " + ", ".join(offenders)
     )
-
-
-def test_tick_worker_shadow_block_never_auto_opens() -> None:
-    """The tick_worker shadow block never AUTO-OPENS: Phase B activation may queue to
-    manual_ready (owner-gated), but attempt_open / flatten_all must never appear in
-    the shadow path. RiskGate stays final (it re-runs at owner approval)."""
-    src = TICK_WORKER.read_text(encoding="utf-8")
-    start = src.index("OBSERVATION mode")
-    end = src.index("R1 — kararı disk snapshot", start)
-    block = src[start:end]
-    offenders = [m for m in _AUTO_OPEN if m in block]
-    assert not offenders, (
-        "tick_worker shadow path must never auto-open a position: " + ", ".join(offenders)
-    )
-
-
-def test_shadow_activation_only_queues_manual_ready() -> None:
-    """Phase B activation routes shadow entries to manual_ready ONLY — it calls
-    route_to_manual_ready, never attempt_open / flatten_all, and is gated by the
-    single activation authority `affects_paper` (inert under affect_decision:false)."""
-    src = SHADOW_ACTIVATION.read_text(encoding="utf-8")
-    auto = [m for m in _AUTO_OPEN if m in src]
-    assert not auto, "shadow_activation must never auto-open: " + ", ".join(auto)
-    assert "route_to_manual_ready" in src, "activation must queue to manual_ready"
-    assert "affects_paper" in src, "activation must be gated by affects_paper"
 
 
 def test_tf_weight_trainer_never_auto_applies_weights() -> None:
