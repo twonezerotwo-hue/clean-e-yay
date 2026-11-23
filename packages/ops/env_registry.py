@@ -69,7 +69,6 @@ REGISTRY: dict[str, str] = {
     "SUBSIGNAL_SCORECARD_INTERVAL_SEC": "runtime",
     "TICK_INTERVAL_SEC": "runtime",
     "WORLD_STATE_ARCHIVE_MAX": "runtime",
-    "ZERO_TWO_STRATEGY_INTERVAL_SEC": "runtime",
     "ZONE_PROPOSER_INTERVAL_SEC": "runtime",
     # ── provider
     "ALPHAVANTAGE_TTL_SEC": "provider",
@@ -222,7 +221,6 @@ REGISTRY: dict[str, str] = {
     "WORKER_HEARTBEAT_PATH": "path",
     "WORLD_GRAPH_CONFIG_PATH": "path",
     "WORLD_STATE_ARCHIVE_PATH": "path",
-    "ZERO_TWO_STRATEGY_PATH": "path",
     "ZONE_PLANS_PATH": "path",
     "ZONE_PROPOSER_PATH": "path",
     "ZONE_PROPOSER_PATH_CFG": "path",

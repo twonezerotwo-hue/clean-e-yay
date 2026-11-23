@@ -16,7 +16,7 @@ gömülmez (aşırı-uyum tuzağı yok), veri değiştikçe tablo kendini günce
   sabitlenmez. In-sample uyarısı artifact'ta taşınır.
 
 Veri hijyeni içerde: `outcomes.learning_grade` (legacy kayıt giremez).
-Config-flag YOK (zero_two_strategy deseni): salt-analiz, karara/paper'a
+Config-flag YOK: salt-analiz, karara/paper'a
 dokunmaz. Interval-kapılı (günlük). Kanıt: 2026-07-12 elle analizinde V6 üçlü
 filtre isabeti %42.9→%52.2 taşımıştı — bu modül o analizin kalıcı hâlidir.
 """

@@ -12,7 +12,7 @@ from typing import Any
 
 _LEARNING_ENGINES = (
     "council_scorecard", "exit_backtest", "reflection", "subsignal_scorecard",
-    "tf_scoring_race", "zero_two_strategy", "zone_proposer",
+    "tf_scoring_race", "zone_proposer",
 )
 
 

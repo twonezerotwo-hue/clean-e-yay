@@ -43,7 +43,6 @@ class EntryQualityConfig:
     # snapshots.  The entry gate itself remains controlled by the surrounding
     # pipeline; older snapshots may carry values such as ``shadow``.
     mode: str = "active"
-    zero_two_canonical: bool = False
     # --- konum
     range_extreme: float = 0.20
     range_weights: dict[str, float] = field(
@@ -119,10 +118,6 @@ def config() -> EntryQualityConfig:
         except (TypeError, ValueError):
             continue
     return EntryQualityConfig(**kwargs)
-
-
-def zero_two_canonical() -> bool:
-    return config().zero_two_canonical
 
 
 def _has_non_finite(obj: object) -> bool:
@@ -285,5 +280,4 @@ __all__ = [
     "config",
     "context_problem",
     "report_problem",
-    "zero_two_canonical",
 ]

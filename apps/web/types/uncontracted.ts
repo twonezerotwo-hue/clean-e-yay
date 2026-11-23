@@ -120,30 +120,6 @@ export interface ExitBacktestView {
   per_tf_best: Record<string, ExitBacktestTfBest>;
 }
 
-// 0-2 tam-strateji gölge karnesi — tek hücre (TF×pivot×grup).
-export interface ZeroTwoStrategyCell {
-  label: string; // "tf|rightN|grup"
-  tf: string;
-  n: number;
-  win_pct: number;
-  ilk_total_r: number;
-  hm_total_r: number;
-  reentry_n: number;
-  reentry_win: number;
-  real_wick: boolean; // gerçek fitilli (en güvenilir) mi
-}
-
-// 0-2 tam-strateji gölge karnesi görünümü (GET /learning/zero-two-strategy).
-// Owner nihai LONG akışı + sabit-bahis house-money; canlıya dokunmaz (salt-analiz).
-export interface ZeroTwoStrategyView {
-  status: string; // OK | NO_DATA
-  shadow_only?: boolean;
-  generated_at?: string | null;
-  engine?: string;
-  cells: ZeroTwoStrategyCell[];
-  flat_note: string[];
-}
-
 // Konsey karnesi — istatistik hücresi (n + isabet + R + PnL).
 export interface CouncilStats {
   n: number;

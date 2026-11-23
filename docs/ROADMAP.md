@@ -99,12 +99,12 @@ RiskGate → paper lifecycle` zinciridir. Bu override canlı broker eklemez ve
   (`entry_quality_v2`); golden replay bayt-aynı.
 - **EQ2** 5y-benzeri çok-rejim ölçüm (tools: `scripts/score_diag`, kanıt:
   `docs/evidence/entry_quality_v2/`): 9 kabul ölçütünden 3'ü kaldı → kanıt eşiği `active`
-  için geçilmedi. 0-2 kanonik merceği (`zero_two_canonical`) doğruluk düzeltmesi olarak hazır,
-  canlı yön girdisini değiştirdiği için kapalı.
+  için geçilmedi. 0-2 kanonik merceği (`zero_two_canonical`) kapalıydı; 22 Kasım 2026'da
+  silindi (arsiv/envanter-oncesi etiketinde).
 - **EQ4** (owner, CP5 onayı): giriş kalitesi v2 **birincil karar motoru** olur (`mode: active`).
   Eski motor silinmez: aynı turda gölge karşılaştırma + TEKNİK fallback (geçerli WAIT fallback
   değildir). Karar kanıt eşiğinden değil owner talebinden gelir → canlı izleme zorunlu (STATE.md
-  "Giriş kalitesi v2": `engine` bloğu). `zero_two_canonical` bu karara DAHİL DEĞİL (ayrı terfi).
+  "Giriş kalitesi v2": `engine` bloğu).
   Geri alma sırası: `mode: shadow` (legacy uygulanır, karşılaştırma sürer) → `off` → önceki SHA.
 
 ## Verilmiş owner kararları (2026-10-30 — haber kapısı)
@@ -116,13 +116,11 @@ RiskGate → paper lifecycle` zinciridir. Bu override canlı broker eklemez ve
 
 ## Açık owner kararları
 
-- **EQ3 `zero_two_canonical`'ı açmak + EQ4 sonrası canlı kanıt:** `zero_two_canonical` CP5
-  kırmızı çizgidir (canlı yön girdisini değiştirir), `active` motordan AYRI terfidir. Kanıt:
-  matrix `engine` bloğu + hücre `entry_quality` (new vs legacy) ≥ 30 gün + canlı evrende (BTC,
-  ETH, XAU, XAG, BRENT) bloklanan vs korunan işlemlerin kapanış-R kıyası; ayrıca sahibin
-  BAR_HISTORY arşivinde `python -m scripts.score_diag.run extract --bar-history ...` ile yeniden
-  ölçüm. Ölçümde yalnız endeks ETF'lerinde tutarlı fayda görüldü; petrolde ters yönde işaret
-  çıktı — canlı kanıt negatifse `mode: shadow`'a dönmek owner kararıdır.
+- **EQ4 sonrası canlı kanıt:** matrix `engine` bloğu + hücre `entry_quality` (new vs legacy)
+  ≥ 30 gün + canlı evrende (BTC, ETH, XAU, XAG, BRENT) bloklanan vs korunan işlemlerin
+  kapanış-R kıyası. Ölçümde yalnız endeks ETF'lerinde tutarlı fayda görüldü; petrolde ters
+  yönde işaret çıktı — canlı kanıt negatifse `mode: shadow`'a dönmek owner kararıdır.
+  (EQ3 `zero_two_canonical` 22 Kasım 2026'da silindi; `scripts/score_diag` de.)
 
 - **E4 Olay sonucunu karara bağlamak:** CP5 kırmızı çizgi — yeterli olay birikip
   kanıt çıkmadan yapılmaz; yalnız owner onayıyla. Kanıt: Olay Takvimi paneli /

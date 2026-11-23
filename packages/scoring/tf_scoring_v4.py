@@ -152,9 +152,8 @@ def elliott_lean(bars: list) -> float:
 
     UYARI (bilinen kusur, 2026-10 denetimi): ``find_setups(...)[-1]`` GEÇERLİLİĞİ
     (wave1_clean / IPTAL_DALGA1 / IPTAL_DALGA3) KONTROL ETMEZ — docstring "geçerli"
-    der, kod geometrik adayı alır. Canlı davranış değişmesin diye bu fonksiyon
-    aynen kalır; düzeltilmişi ``elliott_lean_canonical`` (flag: ``entry_quality_v2.
-    zero_two_canonical``)."""
+    der, kod geometrik adayı alır. Düzeltilmiş kapalı sürüm (elliott_lean_canonical)
+    22 Kasım 2026'da silindi; arsiv/envanter-oncesi etiketinde durur."""
     try:
         setups = zero_two.find_setups(bars, left=2, right=2)
     except Exception:
@@ -170,49 +169,10 @@ def elliott_lean(bars: list) -> float:
         return -1.0
     return 0.0
 
-ZERO_TWO_MAX_AGE = 60   # P2'den bu kadar bar sonra setup bayat: etkisi sıfır
-
-
-def elliott_lean_canonical(bars: list, *, max_age: int = ZERO_TWO_MAX_AGE) -> float:
-    """0-2 merceği — owner'ın geçerlilik kuralıyla (TEK kaynak: ``zero_two.analyze``).
-
-    - Yalnız ``STATUS_VALID`` setup skor üretir (IPTAL_DALGA1 / IPTAL_DALGA3 → 0).
-    - Çizgi kapanışla kırıldıysa (son etkileşim ``CLOSE_BREAK``) devam sinyali YOK:
-      trend lensi artık geçerli değil (kırılım ters-yön kanıtıdır; skoru değil, giriş
-      kalitesi/dönüş riski katmanını besler).
-    - Bayatlama: etki P2'den itibaren doğrusal sönümlenir, ``max_age`` barda 0.
-    Aynı geometri/yön kuralı: up + fiyat çizgi üstü → +; down + çizgi altı → −."""
-    if not bars:
-        return 0.0
-    try:
-        events = zero_two.analyze(bars, left=2, right=2)
-    except Exception:
-        return 0.0
-    valid = [e for e in events if e.status == zero_two.STATUS_VALID]
-    if not valid:
-        return 0.0
-    e = valid[-1]
-    if e.touches and e.touches[-1].kind == "CLOSE_BREAK":
-        return 0.0
-    n = len(bars)
-    age = (n - 1) - e.setup.p2.bar_index
-    if age < 0 or age >= max_age:
-        return 0.0
-    lv = zero_two.line_value(e.setup, n - 1)
-    px = bars[-1].close
-    decay = 1.0 - age / max_age
-    if e.setup.direction == "up" and lv > 0 and px > lv:
-        return decay
-    if e.setup.direction == "down" and lv > 0 and px < lv:
-        return -decay
-    return 0.0
-
-
 # ------------------------------- skorlama ---------------------------------
 
 def compute_leans(timeframe: str, bars: list, zones: list[dict],
-                  base_leans: dict[str, float],
-                  *, canonical_zero_two: bool = False) -> dict[str, float]:
+                  base_leans: dict[str, float]) -> dict[str, float]:
     """v4 lens sözlüğü. `base_leans` = v2.collect_leans çıktısı (trend/rsi/
     structure REUSE — yeniden hesaplanmaz); elliott yalnız 4h'de hesaplanır
     (formülde yalnız orada ağırlığı var — boşa hesap yok)."""
@@ -227,7 +187,7 @@ def compute_leans(timeframe: str, bars: list, zones: list[dict],
         "uyumsuzluk": gated_divergence(closes, zl),
     }
     if timeframe in WEIGHTS and "elliott" in WEIGHTS[timeframe]:
-        out["elliott"] = elliott_lean_canonical(bars) if canonical_zero_two else elliott_lean(bars)
+        out["elliott"] = elliott_lean(bars)
     return out
 
 def tf_direction(timeframe: str, leans: dict[str, float]) -> float | None:
@@ -253,7 +213,6 @@ __all__ = [
     "compute_leans",
     "direction",
     "elliott_lean",
-    "elliott_lean_canonical",
     "gated_divergence",
     "rsi_divergence_events",
     "rsi_divergence_lean",

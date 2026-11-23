@@ -15,7 +15,6 @@ GET /api/v1/learning/evidence-bus
 GET /api/v1/learning/guard-safety
 GET /api/v1/learning/threshold-ab
 GET /api/v1/learning/threshold-autotune
-GET /api/v1/learning/zero-two-strategy
 GET /api/v1/learning/zone-proposer
 GET /api/v1/learning/zone-proposer/chart/{symbol}
 GET /api/v1/paper-trading/orders

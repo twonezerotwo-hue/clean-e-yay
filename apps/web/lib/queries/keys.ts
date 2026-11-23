@@ -55,7 +55,6 @@ export const qk = {
   calibrationFit: ["learning", "calibration-fit"] as const,
   payoffReadiness: ["learning", "payoff-readiness"] as const,
   exitBacktest: ["learning", "exit-backtest"] as const,
-  zeroTwoStrategy: ["learning", "zero-two-strategy"] as const,
   zoneProposer: ["learning", "zone-proposer"] as const,
   council: ["learning", "council"] as const,
   newsEventStudy: ["learning", "news-event-study"] as const,

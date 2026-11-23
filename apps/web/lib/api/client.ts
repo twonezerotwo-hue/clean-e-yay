@@ -74,7 +74,6 @@ import type {
   ExitBacktestView,
   NewsEventStudyView,
   PayoffReadinessView,
-  ZeroTwoStrategyView,
   CouncilView,
   ZoneProposerView,
   SubsignalScorecardView,
@@ -690,8 +689,6 @@ export const api = {
     fetchJSON<PayoffReadinessView>("/api/v1/learning/payoff-readiness"),
   exitBacktest: () =>
     fetchJSON<ExitBacktestView>("/api/v1/learning/exit-backtest"),
-  zeroTwoStrategy: () =>
-    fetchJSON<ZeroTwoStrategyView>("/api/v1/learning/zero-two-strategy"),
   council: () => fetchJSON<CouncilView>("/api/v1/learning/council"),
   zoneProposer: () =>
     fetchJSON<ZoneProposerView>("/api/v1/learning/zone-proposer"),

@@ -61,7 +61,6 @@ CFG = entry_quality.EntryQualityConfig()
 # ------------------------------------------------------------------ config
 
 def test_config_parsing_is_safe():
-    assert entry_quality.EntryQualityConfig().zero_two_canonical is False
     with threshold_override({"entry_quality_v2": {"q_wait": 0.3}}):
         assert entry_quality.config().q_wait == 0.3
     with threshold_override({"entry_quality_v2": {"ema20": [2.0, 4.0], "range_weights": {"60": 1.0}}}):
@@ -278,48 +277,6 @@ def test_divergence_lean_refactor_is_byte_identical_on_random_walks():
         checked += 1
         nonzero += got != 0.0
     assert checked == 400 and nonzero > 20      # örneklem gerçekten uyumsuzluk içeriyor
-
-
-# ------------------------------------------------------------------ 0-2 kanonik mercek
-
-def _up_ext_bars() -> list[OHLCVBar]:
-    up = [104, 103, 102, 100, 103, 106, 109, 110, 109, 108, 107, 106, 105, 106, 107, 108]
-    return _walk([*up, 109, 111, 113, 114, 113, 112])
-
-
-def test_canonical_lens_matches_old_on_valid_setup_but_zeroes_invalid_one():
-    bars = _up_ext_bars()
-    assert v4.elliott_lean(bars) == 1.0
-    assert 0.0 < v4.elliott_lean_canonical(bars) <= 1.0          # geçerli: yön korunur (yaşla sönümlü)
-    # dalga-1 mumu çizgiye değsin → İPTAL_DALGA1
-    s = zero_two.find_setups(bars, left=2, right=2)[-1]
-    j = s.p0.bar_index + 2
-    lv = zero_two.line_value(s, j)
-    b = bars[j]
-    bars[j] = _bar(j, b.open, b.high, lv - 0.01, b.close)
-    ev = zero_two.analyze(bars, left=2, right=2)
-    assert ev[-1].status == zero_two.STATUS_WAVE1_TOUCH
-    assert v4.elliott_lean(bars) == 1.0                           # ESKİ: geçersiz setup yine +1 (kusur)
-    assert v4.elliott_lean_canonical(bars) == 0.0                 # YENİ: geçersiz → skor yok
-
-
-def test_canonical_lens_decays_with_age_and_dies_when_stale():
-    bars = _up_ext_bars()
-    fresh = v4.elliott_lean_canonical(bars)
-    assert fresh > 0
-    older = v4.elliott_lean_canonical(bars, max_age=len(bars) - 12 + 8)
-    assert older <= fresh                                         # daha kısa ömür → daha çok sönüm
-    assert v4.elliott_lean_canonical(bars, max_age=1) == 0.0      # P2'den ≥1 bar geçmiş → bayat
-    assert v4.elliott_lean_canonical([]) == 0.0
-
-
-def test_compute_leans_flag_switches_lens_only():
-    bars = _up_ext_bars()
-    off = v4.compute_leans("4h", bars, [], {})
-    on = v4.compute_leans("4h", bars, [], {}, canonical_zero_two=True)
-    assert off["elliott"] == v4.elliott_lean(bars)
-    assert on["elliott"] == v4.elliott_lean_canonical(bars)
-    assert {k: v for k, v in off.items() if k != "elliott"} == {k: v for k, v in on.items() if k != "elliott"}
 
 
 # ------------------------------------------------------------------ entry_context

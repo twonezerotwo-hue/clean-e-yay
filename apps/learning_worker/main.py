@@ -880,23 +880,6 @@ def run_once() -> dict:
         gate_counterfactual_status = f"ERROR:{type(exc).__name__}"
         errors.append(f"gate_counterfactual:{type(exc).__name__}")
 
-    # 0-2 TAM-STRATEJİ karnesi (SALT-ANALİZ, flag YOK). Owner'ın nihai LONG akışı
-    # (0.618 giriş + fib hedef + 0-2 trailing + house-money re-giriş) arşiv+canlı
-    # barlarda haftalık ölçülür; canlı karara dokunmaz (kanıt biriktirir).
-    zero_two_strategy_status = "ERROR"
-    try:
-        from packages.learning import zero_two_strategy as _zts2
-        zs = _zts2.run_if_due()
-        zero_two_strategy_status = str(zs.get("status", "UNKNOWN"))
-        if zero_two_strategy_status == "OK":
-            log.info(
-                "zero_two_strategy: scanned=%s cells=%s",
-                zs.get("scanned"), zs.get("cells"),
-            )
-    except Exception as exc:  # defensive — worker patlamamalı
-        zero_two_strategy_status = f"ERROR:{type(exc).__name__}"
-        errors.append(f"zero_two_strategy:{type(exc).__name__}")
-
     # Konsey karnesi (SALT-ANALİZ, flag YOK). Katmanlar-arası kombinasyon
     # analizi: modül yayılımları + ikili çiftler + rejim/güven kırılımları +
     # veriden-türetilen sanki-filtreler. Owner 2026-07-12 elle analizinin
@@ -1069,7 +1052,6 @@ def run_once() -> dict:
         "regime_brake_status": regime_brake_status,  # Y-1 rejim risk freni tablosu (gözlem; uygulama flag'le)
         "news_study_status": news_study_status,  # Y-6 haber olay-çalışması karnesi (SALT-GÖZLEM)
         "exit_backtest_status": exit_backtest_status,  # Çıkış stop-verim backtest (interval-kapılı; SKIP_FRESH=taze)
-        "zero_two_strategy_status": zero_two_strategy_status,  # 0-2 tam-strateji karnesi (0.618+fib+trailing+house-money; SALT-ANALİZ)
         "zone_proposer_status": zone_proposer_status,  # Aday bölge önericisi (makine ADAY önerir, owner süzer; SALT-ANALİZ)
         "council_status": council_status,  # Konsey karnesi (katmanlar-arası kombinasyon; SALT-ANALİZ)
         "reflection_status": reflection_status,  # Yansıma/hafıza döngüsü (kapanan işlem dersleri; SALT-GÖZLEM)

@@ -167,7 +167,6 @@ def _isolate_runtime_stores(tmp_path_factory: pytest.TempPathFactory) -> None:
         ("CAUSAL_EVENT_LEDGER_PATH", "causal_event_ledger.jsonl"),
         ("TF_WEIGHT_PROPOSAL_OUT_PATH", "tf_weight_proposal.json"),
         ("TF_CALIBRATION_OUT_PATH", "tf_calibration.json"),
-        ("ZERO_TWO_STRATEGY_PATH", "zero_two_strategy.json"),
         ("TF_TARGET_TRIGGER_PATH", "tf_target_trigger.json"),
         ("PAPER_STATE_PATH", "paper_state.json"),
         ("LEARNING_OUT_PATH", "learning_summary.json"),

@@ -289,15 +289,11 @@ technical_entry_gate:
 #   verdict=wait → hold (blocked_by entry_quality / reversal_risk), verdict=reduce →
 #   boyut küçülür. TEKNİK hata (istisna, NaN/inf, bozuk karar, eksik bağlam, geçersiz
 #   eylem, gecikme aşımı) → kapısız zincir. Geçerli WAIT hata değildir.
-#   zero_two_canonical: v4 0-2 merceğini zero_two.analyze() (geçerlilik + bayatlama) ile
-#                  hesapla; false → eski find_setups(...)[-1] (geçerlilik kontrolsüz).
-#                  AYRI terfi (canlı yön girdisini değiştirir): owner kararı bekliyor.
 entry_quality_v2:
   # 2026-10-12: ACTIVE — OWNER KARARI (CP5 onayı: owner talebiyle terfi). Dürüst not: 5y-benzeri
   # çok-rejim ölçümde (docs/evidence/entry_quality_v2) kabul ölçütlerinin 3/9'u KALDI (sinyal
   # z'si, trend-yakalama korunumu, enstrüman tutarlılığı); terfi kanıt eşiğinden değil owner
   # kararından gelir. Kapısız zincir yalnız teknik fallback olarak kalır.
-  zero_two_canonical: false
   # Kapı değerlendirmesi bu süreyi (ms) aşarsa teknik "timeout" sayılıp kapısız zincire düşülür.
   fallback_max_latency_ms: 1000
   range_extreme: 0.20

@@ -375,12 +375,6 @@ def test_never_flips_side_even_on_fallback(fresh_env, monkeypatch, side, ctx_fns
             assert d.size_multiplier <= 1.5
 
 
-def test_zero_two_canonical_stays_off_in_live_config():
-    """zero_two_canonical AYRI terfidir (canlı yön girdisini değiştirir): entry_quality_v2
-    aktivasyonuyla birlikte AÇILMAZ. Bilinçli terfide bu test birlikte güncellenir."""
-    assert entry_quality.config().zero_two_canonical is False
-
-
 def test_gate_never_raises_and_reports_technical_failure_even_for_garbage_snapshot():
     rep = entry_engine.gate(object(), "BTCUSD", "1d", "open_short")
     assert rep["fallback_reason"] == "missing_context" and rep["applied_engine"] == "legacy_fallback"

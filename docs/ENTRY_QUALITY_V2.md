@@ -87,6 +87,9 @@ uzaklığı, RSI bandı, Bollinger dışı, 5-bar hareket, ardışık impulsive 
 
 ## 0-2 düzeltmesi (ayrı bayrak: `zero_two_canonical`)
 
+> 22 Kasım 2026: kapalı bayrak ve `elliott_lean_canonical` silindi (gölge ve araştırma
+> envanteri, H7); aşağıdaki ölçüm kayıt için duruyor, kod `arsiv/envanter-oncesi` etiketinde.
+
 `tf_scoring_v4.elliott_lean` `zero_two.find_setups(...)[-1]` alıyor ve **geçerliliği
 kontrol etmiyordu** (wave1_clean / IPTAL_DALGA1 / IPTAL_DALGA3): docstring "geçerli" diyor,
 kod geometrik adayı alıyor. Ölçüm: lens 4h satırlarının ~%58'inde aktif, aktifken ~%49'u

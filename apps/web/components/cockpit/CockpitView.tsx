@@ -56,7 +56,6 @@ import { NewsEventStudyPanel } from "@/components/panels/NewsEventStudyPanel";
 import { CalibrationHealthPanel } from "@/components/panels/CalibrationHealthPanel";
 import { CouncilPanel } from "@/components/panels/CouncilPanel";
 import { ExitBacktestPanel } from "@/components/panels/ExitBacktestPanel";
-import { ZeroTwoStrategyPanel } from "@/components/panels/ZeroTwoStrategyPanel";
 import { ZoneProposerPanel } from "@/components/panels/ZoneProposerPanel";
 import { DiscoveryPanel } from "@/components/panels/DiscoveryPanel";
 import { BacktestChallengerPanel } from "@/components/panels/BacktestChallengerPanel";
@@ -1536,13 +1535,10 @@ export function CockpitView() {
               <LearnStep step="14" label="Çıkış verim backtest — en verimli sabit + trailing stop aralığı (gerçek fiyat geçmişi)" wide>
                 <ExitBacktestPanel />
               </LearnStep>
-              <LearnStep step="15" label="0-2 strateji (donduruldu) — owner LONG akışının gölge ölçümü; yeni karar yok" wide>
-                <ZeroTwoStrategyPanel />
-              </LearnStep>
-              <LearnStep step="16" label="Bölge önerileri — owner incelemesi için işaretli grafik; canlı SL/TP'ye otomatik etki etmez" wide>
+              <LearnStep step="15" label="Bölge önerileri — owner incelemesi için işaretli grafik; canlı SL/TP'ye otomatik etki etmez" wide>
                 <ZoneProposerPanel />
               </LearnStep>
-              <LearnStep step="17" label="Konsey karnesi — katmanlar birlikte ne söylüyor: modül yayılımları + veriden türetilen sanki-filtreler (in-sample kanıt)" wide>
+              <LearnStep step="16" label="Konsey karnesi — katmanlar birlikte ne söylüyor: modül yayılımları + veriden türetilen sanki-filtreler (in-sample kanıt)" wide>
                 <CouncilPanel />
               </LearnStep>
             </div>
