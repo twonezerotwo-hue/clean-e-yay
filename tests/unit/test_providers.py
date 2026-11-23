@@ -60,6 +60,8 @@ def test_runtime_unmapped_symbol_returns_data_unavailable(runtime) -> None:
     assert q.status == "DATA_UNAVAILABLE"
     assert q.verified is False
     assert q.error
+    # Evren dışı sembol sağlayıcı hatası sayılmaz: hiçbir satır bozulmaz.
+    assert all(row["status"] != "degraded" for row in runtime.get_provider_status().values())
 
 
 def test_candidate_assets_share_price_and_ohlcv_source_mapping() -> None:

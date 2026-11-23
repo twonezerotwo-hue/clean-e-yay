@@ -189,7 +189,9 @@ def _try_live(symbol: str) -> PriceQuote:
     """
     primary = _primary_for(symbol)
     if primary is None:
-        _mark("mock", ok=False, error="no_live_provider_mapped")
+        # Evren dışı sembol (ör. fikir panosundaki keşif adayı) bir sağlayıcı hatası
+        # değildir; sağlayıcı durumuna yazılmaz (23 Kasım 2026'ya dek 'mock' satırını
+        # bozuk gösterip tick'i sürekli DEGRADED yapıyordu).
         return _data_unavailable(
             symbol,
             source="none",
