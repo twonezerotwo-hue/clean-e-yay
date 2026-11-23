@@ -122,6 +122,8 @@ def isolated_runtime() -> Iterator[Path]:
         for n in names:
             os.environ[n] = str(rt / f"{n.lower()}.json")
         os.environ["OHLCV_CACHE_DIR"] = str(rt / "ohlcv")
+        # Bar arşivi her zaman açık (23 Kasım 2026): makinedeki arşiv golden'a girmesin.
+        os.environ["BAR_HISTORY_DIR"] = str(rt / "bar_history")
         os.environ["WEIGHTS_OUTPUT_DIR"] = str(rt / "weights")
         # K5: ağırlıkların tek kaynağı git (config/weights_active.json) — golden
         # canlı ağırlıkla koşar; WEIGHTS_MANIFEST_PATH bilerek SET EDİLMEZ.
