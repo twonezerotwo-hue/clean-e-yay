@@ -915,7 +915,6 @@ causal_world:
   geopolitical_enabled: true
   statements_enabled: true
   causal_graph_enabled: true
-  decision_apply: false
   source:
     official_bonus: 0.12
     rumor_cap: 0.25

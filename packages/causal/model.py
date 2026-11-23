@@ -85,7 +85,6 @@ class AssetImpact:
 class CausalShadow:
     generated_at: datetime
     enabled: bool
-    decision_apply: bool
     world_state: dict[str, Any]
     edges: tuple[CausalEdge, ...] = ()
     impacts: tuple[AssetImpact, ...] = ()

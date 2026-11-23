@@ -838,7 +838,6 @@ def _reconstruct_archive_row(row: dict, horizons: tuple[str, ...]) -> tuple[dict
             shadow = build_shadow(
                 world,
                 symbols,
-                decision_apply=False,
                 technicals=inputs.get("technicals"),
                 legacy_scores=inputs.get("legacy_scores"),
             )
@@ -872,7 +871,6 @@ def _reconstruct_archive_row(row: dict, horizons: tuple[str, ...]) -> tuple[dict
         shadow = build_shadow(
             state,
             symbols,
-            decision_apply=False,
             technicals=inputs.get("technicals"),
             legacy_scores=inputs.get("legacy_scores"),
         )

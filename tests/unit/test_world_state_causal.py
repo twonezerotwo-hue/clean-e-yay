@@ -256,20 +256,12 @@ def test_duplicate_headlines_do_not_create_duplicate_geopolitical_events():
 
 def test_causal_shadow_is_evidence_only_and_bounded():
     world = build(_snapshot())
-    shadow = build_shadow(world, ["XAUUSD", "BTCUSD", "SP500"], decision_apply=False)
+    shadow = build_shadow(world, ["XAUUSD", "BTCUSD", "SP500"])
     assert shadow.enabled is True
-    assert shadow.decision_apply is False
+    assert "decision_apply" not in shadow.to_dict()
     assert len(shadow.edges) > 0
     assert {item.symbol for item in shadow.impacts} == {"XAUUSD", "BTCUSD", "SP500"}
     assert all(item.direction_score is None or -1.0 <= item.direction_score <= 1.0 for item in shadow.impacts)
-
-
-def test_causal_apply_request_stays_locked_until_forward_test(monkeypatch, tmp_path):
-    monkeypatch.setenv("FORWARD_TEST_90D_PATH", str(tmp_path / "missing-forward.json"))
-    world = build(_snapshot())
-    shadow = build_shadow(world, ["BTCUSD"], decision_apply=True)
-    assert shadow.decision_apply is False
-    assert "causal_decision_locked_until_forward_test_90d" in shadow.warnings
 
 
 def test_causal_shadow_forecasts_are_additive_and_not_decision_inputs():
@@ -279,18 +271,15 @@ def test_causal_shadow_forecasts_are_additive_and_not_decision_inputs():
         ["BTCUSD"],
         prices={"BTCUSD": PriceQuote(symbol="BTCUSD", price=100.0, status="OK", verified=True)},
         technicals={"BTCUSD": {"1d": SimpleNamespace(key_levels=SimpleNamespace(atr=5.0))}},
-        decision_apply=False,
     )
-    assert shadow.decision_apply is False
     assert len(shadow.forecasts) == 4
     assert all(row["method"] == "normal_approximation_shadow_v1" for row in shadow.forecasts)
 
 
 def test_causal_shadow_can_be_disabled_without_side_effects():
     world = build(_snapshot())
-    shadow = build_shadow(world, ["BTCUSD"], enabled=False, decision_apply=True)
+    shadow = build_shadow(world, ["BTCUSD"], enabled=False)
     assert shadow.enabled is False
-    assert shadow.decision_apply is False
     assert shadow.impacts == ()
 
 
@@ -307,7 +296,6 @@ def test_technical_timing_is_observational_and_separate_from_thesis():
     assert impact.direction_score is not None
     assert impact.technical_confirmation == 0.35
     assert impact.timing_status == "CONFIRMED"
-    assert shadow.decision_apply is False
 
 
 def test_causal_ledger_deduplicates_and_study_is_observation_only(tmp_path, monkeypatch):

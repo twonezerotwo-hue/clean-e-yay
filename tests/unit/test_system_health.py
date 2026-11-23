@@ -80,6 +80,5 @@ def test_effective_flags_never_claim_live_execution():
     flags = _effective_flags()
     assert flags["paper_safe"] is True
     assert flags["no_execution"] is True
-    assert flags["causal_world_decision_apply"] is False
     assert "shadow_effective" not in flags
 

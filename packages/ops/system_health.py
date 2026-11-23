@@ -13,7 +13,7 @@ import os
 from datetime import UTC, datetime
 
 from packages.data import snapshot_store
-from packages.data.registry.loader import load_source_registry, load_thresholds, weights_fallback
+from packages.data.registry.loader import load_source_registry, weights_fallback
 from packages.ops import heartbeat
 from packages.paper import audit as paper_audit
 from packages.risk import halt as halt_store
@@ -229,10 +229,8 @@ def _registry_runtime_summary(provider_status: dict | None) -> dict:
 def _effective_flags() -> dict:
     """Return the *effective* flags, including code-level safety overrides.
 
-    The shadow comparison and its flags were removed on 2026-11-22.
+    The shadow comparison and causal decision_apply flags were removed on 2026-11-22.
     """
-    thresholds = load_thresholds() or {}
-    causal_cfg = thresholds.get("causal_world") or {}
     try:
         from packages.discovery import scan_enabled
 
@@ -249,7 +247,6 @@ def _effective_flags() -> dict:
         "paper_safe": True,
         "no_execution": True,
         "news_confluence_gate": confluence_gate,
-        "causal_world_decision_apply": bool(causal_cfg.get("decision_apply", False)),
         "discovery_scan_enabled": discovery_scan_enabled,
     }
 

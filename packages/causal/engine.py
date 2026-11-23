@@ -1,9 +1,7 @@
 """Pure deterministic propagation from world-state factors to asset evidence."""
 from __future__ import annotations
 
-import json
 import math
-import os
 from collections.abc import Iterable, Mapping
 from datetime import UTC, datetime
 
@@ -389,7 +387,6 @@ def build_shadow(
     symbols: Iterable[str],
     *,
     enabled: bool | None = None,
-    decision_apply: bool | None = None,
     technicals: Mapping[str, object] | None = None,
     prices: Mapping[str, object] | Iterable[object] | None = None,
     volatility: Mapping[str, object] | None = None,
@@ -403,25 +400,8 @@ def build_shadow(
         if enabled is None
         else bool(enabled)
     )
-    requested_apply = bool(config.get("decision_apply", False)) if decision_apply is None else bool(decision_apply)
-    apply = requested_apply
-    activation_warning: str | None = None
-    if requested_apply:
-        # The causal layer cannot become a paper decision input before the
-        # independent 90-day forward ledger is complete and promotable.  This
-        # is an explicit second lock, so a config typo cannot bypass it.
-        path = os.environ.get("FORWARD_TEST_90D_PATH", "data/runtime/forward_test_90d.json")
-        try:
-            with open(path, encoding="utf-8") as handle:
-                report = json.load(handle)
-            ready = bool(report.get("promotion_ready")) and report.get("status") == "COMPLETE"
-        except (OSError, TypeError, ValueError, json.JSONDecodeError):
-            ready = False
-        if not ready:
-            apply = False
-            activation_warning = "causal_decision_locked_until_forward_test_90d"
     if not active:
-        return CausalShadow(state.generated_at, False, False, state.to_dict(), warnings=("disabled",))
+        return CausalShadow(state.generated_at, False, state.to_dict(), warnings=("disabled",))
     factors, edges = _propagate(state, config)
     impacts = tuple(_impact(symbol, factors, state, technicals, prices) for symbol in symbols)
     consensus: list[dict[str, object]] = []
@@ -512,8 +492,6 @@ def build_shadow(
             # or worker path if a provider payload is malformed.
             forecasts = ()
     warnings = list(state.missing_inputs)
-    if activation_warning:
-        warnings.append(activation_warning)
     if state.confidence < 0.5:
         warnings.append("low_world_state_confidence")
     if prices is not None or volatility is not None:
@@ -522,7 +500,6 @@ def build_shadow(
     return CausalShadow(
         generated_at=datetime.now(UTC),
         enabled=True,
-        decision_apply=apply,
         world_state=state.to_dict(),
         edges=edges,
         impacts=impacts,

@@ -140,8 +140,7 @@ def get_dashboard_state() -> dict:
             "news": news_health,
         },
         "warnings": snap.warnings,
-        # Additive evidence only. Existing dashboard keys and legacy decision
-        # path remain unchanged while causal_world.decision_apply is false.
+        # Additive evidence only; the causal layer is not a decision input.
         "world_state": world_state.to_dict(),
         "world_brief": world_brief,
         "causal_shadow": causal_shadow.to_dict(),
