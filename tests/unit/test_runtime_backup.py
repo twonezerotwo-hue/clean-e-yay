@@ -33,7 +33,6 @@ def runtime(tmp_path, monkeypatch):
         ("GOVERNOR_PROPOSALS_PATH", "governor_proposals.json"),
         ("REGIME_STATE_PATH", "regime_state.json"),
         ("TICKETS_PATH", "tickets.json"),
-        ("PAPER_CANARY_PATH", "paper_canary.json"),
         ("WEIGHTS_OUTPUT_DIR", "weights"),
     ):
         monkeypatch.setenv(env, str(root / name))

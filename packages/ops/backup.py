@@ -36,7 +36,6 @@ FILE_SOURCES: tuple[tuple[str, str], ...] = (
     ("GOVERNOR_PROPOSALS_PATH", "data/runtime/governor_proposals.json"),
     ("REGIME_STATE_PATH", "data/runtime/regime_state.json"),
     ("TICKETS_PATH", "data/runtime/tickets.json"),
-    ("PAPER_CANARY_PATH", "data/runtime/paper_canary.json"),
 )
 DIR_SOURCES: tuple[tuple[str, str], ...] = (
     ("WEIGHTS_OUTPUT_DIR", "data/runtime/weights"),

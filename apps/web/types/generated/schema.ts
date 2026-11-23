@@ -977,23 +977,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/learning/paper-canary": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Kanıt-kapılı paper kanaryası — owner onayı bekleyen salt-gözlem raporu */
-        get: operations["getLearningPaperCanary"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/learning/payoff-readiness": {
         parameters: {
             query?: never;
@@ -1045,23 +1028,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/learning/external-edge": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Chronological external holdout edge report (paper-safe, read-only) */
-        get: operations["getLearningExternalEdge"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/learning/forward-test-90d": {
         parameters: {
             query?: never;
@@ -1071,23 +1037,6 @@ export interface paths {
         };
         /** Ninety-day automatic paper forward test (read-only) */
         get: operations["getLearningForwardTest90d"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/learning/technical-books-replay": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Teknik kitap kanıtı × gerçekleşmiş snapshot replay (shadow-only, read-only) */
-        get: operations["getLearningTechnicalBooksReplay"];
         put?: never;
         post?: never;
         delete?: never;
@@ -6342,28 +6291,6 @@ export interface operations {
             };
         };
     };
-    getLearningPaperCanary: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK (kanıt yoksa status=WAITING_EVIDENCE) */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
-                };
-            };
-        };
-    };
     getLearningPayoffReadiness: {
         parameters: {
             query?: never;
@@ -6430,28 +6357,6 @@ export interface operations {
             };
         };
     };
-    getLearningExternalEdge: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK (status is INSUFFICIENT, UNPROVEN, or READY) */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
-                };
-            };
-        };
-    };
     getLearningForwardTest90d: {
         parameters: {
             query?: never;
@@ -6462,28 +6367,6 @@ export interface operations {
         requestBody?: never;
         responses: {
             /** @description RUNNING or COMPLETE paper-safe metrics */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
-                };
-            };
-        };
-    };
-    getLearningTechnicalBooksReplay: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK (yeterli snapshot yoksa status=insufficient_snapshots) */
             200: {
                 headers: {
                     [name: string]: unknown;

@@ -30,17 +30,14 @@ from packages.learning import (
     evidence_bus,
     exit_backtest,
     exit_forensics,
-    external_edge,
     forward_test,
     guard_safety,
     historical_edge,
     missed_opportunity,
     mistake_memory,
     news_event_study,
-    paper_canary,
     promotion_criteria,
     subsignal_scorecard,
-    technical_books_replay,
     tf_calibration,
     tf_scoring_race,
     tf_scoring_shadow,
@@ -304,16 +301,6 @@ def get_entry_exit_quality() -> dict:
     granülerliğindeki boşluğu kapatır; karar zincirine etkisi yoktur (önerileri
     otonom uygulama ayrı bir slice — rollback net'iyle, edge STABLE kapısından)."""
     return entry_exit_quality.report()
-
-
-@router.get("/learning/paper-canary")
-def get_paper_canary() -> dict:
-    """Altı kanıt kapısının birleşik, salt-okuma paper kanaryası.
-
-    Rapor yalnız owner inceleme önerisi üretir. Hiçbir paper pozisyonu açmaz,
-    gerçek broker'a gitmez ve canlı karar/ağırlık/RiskGate akışını değiştirmez.
-    """
-    return paper_canary.viewmodel()
 
 
 @router.get("/learning/guard-safety")
@@ -625,31 +612,10 @@ def get_backtest_challenger() -> dict:
     return challenger_trainer.viewmodel()
 
 
-@router.get("/learning/external-edge")
-def get_external_edge() -> dict:
-    """Chronological external holdout edge report (read-only, paper-safe).
-
-    The holdout is measured from the isolated challenger stream and is never
-    promoted automatically into weights or execution.
-    """
-    return external_edge.viewmodel()
-
-
 @router.get("/learning/forward-test-90d")
 def get_forward_test_90d() -> dict:
     """Ninety-day automatic-paper forward test (read-only, no execution)."""
     return forward_test.viewmodel()
-
-
-@router.get("/learning/technical-books-replay")
-def get_technical_books_replay() -> dict:
-    """Book evidence × realised future-price replay (read-only challenger).
-
-    Stored snapshots only; no live refetch, paper mutation, decision recalculation,
-    weight update, or broker execution.  Topic results are promotion candidates,
-    never live configuration.
-    """
-    return technical_books_replay.run_replay()
 
 
 @router.get("/learning/calibration-jumps")

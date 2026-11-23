@@ -178,8 +178,6 @@ def _isolate_runtime_stores(tmp_path_factory: pytest.TempPathFactory) -> None:
         ("NEWS_FORECAST_LEDGER_PATH", "news_forecast_ledger.jsonl"),
         ("IDEA_BOARD_PATH", "idea_board.json"),
         ("NEWS_DISCOVERY_PATH", "news_discovery.json"),
-        ("PAPER_CANARY_PATH", "paper_canary.json"),
-        ("EXTERNAL_EDGE_PATH", "external_edge.json"),
         ("FORWARD_TEST_90D_PATH", "forward_test_90d.json"),
         ("PROVIDER_QUOTA_PATH", "provider_quota.json"),
         ("EXTERNAL_EVIDENCE_PATH", "external_evidence.json"),
