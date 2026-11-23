@@ -413,7 +413,7 @@ def test_execution_capability_long_and_short_still_reach_paper_open(
     assert d.action == f"open_{side}" and d.size_multiplier > 0
     assert d.entry_quality_report["applied_engine"] == ("legacy_fallback" if fallback else "new")
 
-    routed = gates.apply_gates(d, side=side, now=datetime.now(UTC), regime=regime,
+    routed = gates.apply_gates(d, side=side, now=datetime.now(UTC),
                                gate_cfg=conflict_gate.ConflictGateConfig(), conflict_by_symbol={})
     assert routed.route in ("open", "manual_ready")             # kapı/fallback rotayı bloke etmedi
 

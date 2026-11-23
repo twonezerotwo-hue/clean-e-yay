@@ -57,7 +57,7 @@ def _edge_specs(config: dict) -> tuple[tuple[str, str, int, str, float], ...]:
     return tuple((source, target, sign, key, float(graph.get(key, default))) for source, target, sign, key, default in _EDGE_DEFAULTS)
 
 
-def _propagate(state: WorldStateSnapshot, config: dict, horizon: str | None = None) -> tuple[dict[str, float], tuple[CausalEdge, ...]]:
+def _propagate(state: WorldStateSnapshot, config: dict) -> tuple[dict[str, float], tuple[CausalEdge, ...]]:
     factors: dict[str, float] = {}
     for name in (
         "liquidity", "usd_pressure", "rates_pressure", "real_yield_pressure",
@@ -73,25 +73,11 @@ def _propagate(state: WorldStateSnapshot, config: dict, horizon: str | None = No
     # feedback becoming an unbounded score multiplier.
     initial = set(factors)
     edges: list[CausalEdge] = []
-    calibration_cfg = config.get("calibration") or {}
-    calibration_apply = bool(calibration_cfg.get("apply", False))
     for source, target, sign, edge_key, prior_strength in _edge_specs(config):
-        resolved = {"weight": prior_strength, "weight_source": "PRIOR", "sample_n": 0, "confidence": 0.0, "confidence_interval": None}
-        if calibration_apply:
-            try:
-                from packages.learning.causal_calibration import resolve_weight
-                resolved = resolve_weight(
-                    edge_key,
-                    prior_strength,
-                    regime=getattr(state, "global_flow_regime", None),
-                    horizon=horizon,
-                )
-            except Exception:
-                pass
-        # Weight is always a non-negative magnitude.  Direction comes only
-        # from the configured topology sign; this prevents a legacy signed
-        # calibration artifact from double-flipping a negative edge.
-        strength = abs(float(resolved.get("weight", prior_strength)))
+        # Weight is the configured prior magnitude; direction comes only from
+        # the topology sign. (Calibrated weights stay recommendations: the
+        # calibration.apply path was removed 2026-11-22.)
+        strength = abs(float(prior_strength))
         source_value = factors.get(source)
         if source_value is None:
             continue
@@ -112,14 +98,14 @@ def _propagate(state: WorldStateSnapshot, config: dict, horizon: str | None = No
             target_before=target_before,
             target_after=target_after,
             reason="derived_target_updated" if applied else "direct_measurement_authoritative",
-            evidence=(f"{source}={source_value:.3f}", f"contribution={contribution:.3f}", f"weight_source={resolved.get('weight_source', 'PRIOR')}"),
+            evidence=(f"{source}={source_value:.3f}", f"contribution={contribution:.3f}", "weight_source=PRIOR"),
             prior_strength=prior_strength,
             weight=strength,
-            weight_source=str(resolved.get("weight_source", "PRIOR")),
-            sample_n=int(resolved.get("sample_n", 0) or 0),
+            weight_source="PRIOR",
+            sample_n=0,
             regime=getattr(state, "global_flow_regime", None),
-            horizon=horizon,
-            confidence_interval=tuple(resolved.get("confidence_interval")) if resolved.get("confidence_interval") else None,
+            horizon=None,
+            confidence_interval=None,
             edge_id=edge_key,
         ))
     return factors, tuple(edges)
@@ -436,16 +422,8 @@ def build_shadow(
             activation_warning = "causal_decision_locked_until_forward_test_90d"
     if not active:
         return CausalShadow(state.generated_at, False, False, state.to_dict(), warnings=("disabled",))
-    factors, edges = _propagate(state, config, horizon=None)
+    factors, edges = _propagate(state, config)
     impacts = tuple(_impact(symbol, factors, state, technicals, prices) for symbol in symbols)
-    horizon_edges: dict[str, tuple[CausalEdge, ...]] = {}
-    horizon_impacts: dict[tuple[str, str], AssetImpact] = {}
-    if bool((config.get("calibration") or {}).get("apply", False)):
-        for timeframe in ("15m", "1h", "4h", "1d"):
-            tf_factors, tf_edges = _propagate(state, config, horizon=timeframe)
-            horizon_edges[timeframe] = tf_edges
-            for symbol in symbols:
-                horizon_impacts[(symbol, timeframe)] = _impact(symbol, tf_factors, state, technicals, prices)
     consensus: list[dict[str, object]] = []
     conflict_shadow: list[dict[str, object]] = []
     for impact in impacts:
@@ -460,13 +438,9 @@ def build_shadow(
         tf_keys = [key for key in (legacy_scores or {}) if key.startswith(f"{impact.symbol}|")]
         rows = [(str((legacy_scores or {}).get(key, {}).get("timeframe") or key.split("|", 1)[1]), (legacy_scores or {}).get(key) or {}) for key in tf_keys]
         if not rows:
-            rows = (
-                [(tf, {}) for tf in ("15m", "1h", "4h", "1d")]
-                if horizon_edges
-                else [("shadow", (legacy_scores or {}).get(impact.symbol) or {})]
-            )
+            rows = [("shadow", (legacy_scores or {}).get(impact.symbol) or {})]
         for timeframe, legacy in rows:
-            tf_impact = horizon_impacts.get((impact.symbol, timeframe), impact)
+            tf_impact = impact
             if tf_impact.direction_score is None or tf_impact.confidence < 0.25:
                 direction = "ABSTAIN"
             elif tf_impact.direction_score > 0.15:
@@ -551,7 +525,6 @@ def build_shadow(
         decision_apply=apply,
         world_state=state.to_dict(),
         edges=edges,
-        edges_by_horizon=horizon_edges,
         impacts=impacts,
         causal_consensus=tuple(consensus),
         conflict_shadow=tuple(conflict_shadow),

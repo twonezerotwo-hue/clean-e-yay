@@ -35,7 +35,7 @@ _ON = conflict_gate.ConflictGateConfig(enabled=True)
 def test_session_block_short_circuits_before_conflict_gate(monkeypatch):
     monkeypatch.setattr(gates.session_gate, "evaluate_open", lambda *a, **k: _FakeSessionGate(route="block"))
     result = gates.apply_gates(
-        _decision(), side="long", now=datetime.now(UTC), regime="trend",
+        _decision(), side="long", now=datetime.now(UTC),
         gate_cfg=_ON, conflict_by_symbol={"BTCUSD": {"conflict_final_action": conflict_resolver.CANDIDATE_OPEN}},
     )
     assert result.route == "block"
@@ -44,7 +44,7 @@ def test_session_block_short_circuits_before_conflict_gate(monkeypatch):
 def test_session_open_conflict_gate_off_is_inert(monkeypatch):
     monkeypatch.setattr(gates.session_gate, "evaluate_open", lambda *a, **k: _FakeSessionGate(route="open"))
     result = gates.apply_gates(
-        _decision(), side="long", now=datetime.now(UTC), regime="trend",
+        _decision(), side="long", now=datetime.now(UTC),
         gate_cfg=_OFF, conflict_by_symbol={"BTCUSD": {"conflict_final_action": conflict_resolver.BLOCKED}},
     )
     assert (result.route, result.effective_multiplier) == ("open", 1.0)
@@ -53,7 +53,7 @@ def test_session_open_conflict_gate_off_is_inert(monkeypatch):
 def test_conflict_gate_blocks_after_session_allows(monkeypatch):
     monkeypatch.setattr(gates.session_gate, "evaluate_open", lambda *a, **k: _FakeSessionGate(route="open"))
     result = gates.apply_gates(
-        _decision(timeframe="1d"), side="short", now=datetime.now(UTC), regime="trend",
+        _decision(timeframe="1d"), side="short", now=datetime.now(UTC),
         gate_cfg=_ON, conflict_by_symbol={"BTCUSD": {"setup_type": "TREND_SHORT", "conflict_final_action": conflict_resolver.BLOCKED}},
     )
     # SWING (1d) HARD mode: anything but CANDIDATE_OPEN -> block
@@ -67,7 +67,7 @@ def test_no_trade_conflict_uses_timeframe_profile_to_block_live_entry(monkeypatc
         profile_modes={"INTRADAY": "HARD"},
     )
     result = gates.apply_gates(
-        _decision(timeframe="1h"), side="long", now=datetime.now(UTC), regime="trend",
+        _decision(timeframe="1h"), side="long", now=datetime.now(UTC),
         gate_cfg=cfg,
         conflict_by_symbol={"BTCUSD": {"setup_type": "NO_TRADE", "conflict_final_action": conflict_resolver.NO_TRADE}},
     )
@@ -81,7 +81,7 @@ def test_missing_conflict_precompute_stays_fail_open(monkeypatch):
         profile_modes={"INTRADAY": "HARD"},
     )
     result = gates.apply_gates(
-        _decision(timeframe="1h"), side="long", now=datetime.now(UTC), regime="trend",
+        _decision(timeframe="1h"), side="long", now=datetime.now(UTC),
         gate_cfg=cfg, conflict_by_symbol={},
     )
     assert (result.route, result.effective_multiplier) == ("open", 1.0)
@@ -90,7 +90,7 @@ def test_missing_conflict_precompute_stays_fail_open(monkeypatch):
 def test_conflict_gate_hard_manual_routes_manual_ready(monkeypatch):
     monkeypatch.setattr(gates.session_gate, "evaluate_open", lambda *a, **k: _FakeSessionGate(route="open"))
     result = gates.apply_gates(
-        _decision(timeframe="1w"), side="long", now=datetime.now(UTC), regime="trend",
+        _decision(timeframe="1w"), side="long", now=datetime.now(UTC),
         gate_cfg=_ON, conflict_by_symbol={"BTCUSD": {"setup_type": "TREND_LONG", "conflict_final_action": conflict_resolver.CANDIDATE_OPEN}},
     )
     # POSITION (1w) HARD_MANUAL mode: CANDIDATE_OPEN -> manual_ready
@@ -104,7 +104,7 @@ def test_session_manual_ready_wins_reason_over_conflict_gate(monkeypatch):
         lambda *a, **k: _FakeSessionGate(route="manual_ready", reason_code="market_session_closing_window"),
     )
     result = gates.apply_gates(
-        _decision(), side="long", now=datetime.now(UTC), regime="trend",
+        _decision(), side="long", now=datetime.now(UTC),
         gate_cfg=_OFF, conflict_by_symbol={},
     )
     assert result.route == "manual_ready"
@@ -117,7 +117,7 @@ def test_soft_mode_multiplies_session_and_conflict_gate_factors(monkeypatch):
         lambda *a, **k: _FakeSessionGate(route="open", effective_multiplier=0.8),
     )
     result = gates.apply_gates(
-        _decision(timeframe="1h"), side="long", now=datetime.now(UTC), regime="trend",
+        _decision(timeframe="1h"), side="long", now=datetime.now(UTC),
         gate_cfg=_ON, conflict_by_symbol={"BTCUSD": {"setup_type": "TREND_LONG", "conflict_final_action": conflict_resolver.NO_TRADE}},
     )
     # INTRADAY (1h) SOFT mode: NO_TRADE -> 0.5 factor; combined = 0.8 * 0.5
@@ -128,7 +128,7 @@ def test_soft_mode_multiplies_session_and_conflict_gate_factors(monkeypatch):
 def test_open_route_carries_session_attribution(monkeypatch):
     monkeypatch.setattr(gates.session_gate, "evaluate_open", lambda *a, **k: _FakeSessionGate(route="open"))
     result = gates.apply_gates(
-        _decision(), side="long", now=datetime.now(UTC), regime="trend",
+        _decision(), side="long", now=datetime.now(UTC),
         gate_cfg=_OFF, conflict_by_symbol={},
     )
     assert result.session_attribution == {"open_session_action": "fake", "open_session_size_multiplier": 1.0}

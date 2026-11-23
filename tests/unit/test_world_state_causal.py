@@ -472,32 +472,17 @@ def test_causal_calibration_reports_zero_source_cells_without_using_them():
     assert report["rejection_details"]["zero_source_value"] == {"energy_to_oil|1d": 1}
 
 
-def test_calibrated_negative_and_positive_edges_keep_topology_direction(monkeypatch):
+def test_negative_and_positive_edges_keep_topology_direction():
     state = WorldStateSnapshot(
         generated_at=datetime(2026, 1, 1, tzinfo=UTC),
         rates_pressure=1.0,
         shipping_risk=1.0,
     )
-    config = {"graph": {"rates_to_liquidity": 0.4, "shipping_to_energy": 0.4}, "calibration": {"apply": False}}
+    config = {"graph": {"rates_to_liquidity": 0.4, "shipping_to_energy": 0.4}}
     factors, edges = _propagate(state, config)
     by_id = {edge.edge_id: edge for edge in edges}
     assert by_id["rates_to_liquidity"].contribution < 0
     assert by_id["shipping_to_energy"].contribution > 0
-
-    import packages.learning.causal_calibration as calibration
-
-    monkeypatch.setattr(
-        calibration,
-        "resolve_weight",
-        lambda *args, **kwargs: {"weight": -0.4, "weight_source": "REGIME_HORIZON_CALIBRATED", "sample_n": 8},
-    )
-    factors, edges = _propagate(
-        state,
-        {"graph": {"rates_to_liquidity": 0.55}, "calibration": {"apply": True}},
-        horizon="4h",
-    )
-    assert factors["liquidity"] < 0
-    assert next(edge for edge in edges if edge.edge_id == "rates_to_liquidity").contribution < 0
 
 
 def _provenance_row(domains: dict, *, snapshot_as_of: str = "2026-01-01T00:00:00+00:00") -> dict:

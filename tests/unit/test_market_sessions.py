@@ -256,8 +256,7 @@ def test_size_multiplier_never_exceeds_one(cfg):
 def test_restriction_cannot_be_relaxed_by_risk_status(cfg):
     """risk_gate girdisi kısıtlayıcı seans kararını asla gevşetemez / çarpanı
     yükseltemez. (T5: eski `regime` girdisi input modelinden KALDIRILDI — motor
-    onu hiç okumuyordu; rejim rotası artık decision/gates.apply_gates'te ve
-    kendi testinde: test_regime_manual_ready.py.)"""
+    onu hiç okumuyordu; kapalı fırtına rotası da 22 Kasım 2026'da silindi.)"""
     base = _decide("SPY", MON_OPENING, cfg)
     for rg in ["allow", "block", None]:
         d = _decide("SPY", MON_OPENING, cfg, risk_gate_status=rg)

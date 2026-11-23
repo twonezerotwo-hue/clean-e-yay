@@ -19,30 +19,13 @@ hazırlar, kendisi hiçbir state mutate etmez.
 """
 from __future__ import annotations
 
-import logging
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any
 
-from packages.data.registry.loader import load_thresholds
 from packages.decision import conflict_gate
 from packages.mode import profile_selector
 from packages.paper import session_gate
-
-log = logging.getLogger("decision.gates")
-
-# T5 (dış denetim P0-3) — fırtına rejimleri: bu modlarda otomatik açılış owner
-# onayına düşmeliydi; eski kural API kopya motorundaki bozuk karşılaştırma
-# yüzünden HİÇ çalışmamıştı (T1'de motorla birlikte söküldü). Tamir buraya —
-# TEK rotalama noktasına — kondu.
-_STORM_LABELS = frozenset({"DEFENSIVE", "CRISIS"})
-
-
-def _regime_manual_ready_enabled() -> bool:
-    """YAML flag `gates.regime_manual_ready.enabled` (default KAPALI = izleme:
-    yalnız gölge log satırı; rota değişmez — bayt-aynı)."""
-    cfg = (load_thresholds().get("gates") or {}).get("regime_manual_ready") or {}
-    return bool(cfg.get("enabled", False))
 
 
 @dataclass(frozen=True)
@@ -118,17 +101,11 @@ def _manual_ready_reason(
     return False, None
 
 
-def _storm_label(regime: Any) -> str:
-    """Rejimin etiketini döner; yoksa/label'sızsa boş string (kural sessiz kalır)."""
-    return str(getattr(regime, "label", "") or "")
-
-
 def apply_gates(
     d: Any,
     *,
     side: str,
     now: datetime,
-    regime: Any,
     gate_cfg: conflict_gate.ConflictGateConfig,
     conflict_by_symbol: dict[str, dict],
 ) -> GateDecision:
@@ -154,23 +131,6 @@ def apply_gates(
             effective_multiplier=combined_mult,
             reason=reason,
             session_attribution=gate.attribution(),
-        )
-
-    # T5 — fırtına kuralı: rota "open" olacakken rejim DEFENSIVE/CRISIS ise owner
-    # onayına düşür. Flag KAPALIYKEN yalnız gölge kanıt satırı (tick log'unda
-    # birikir; owner rakamları görüp açar) — rota bayt-aynı kalır.
-    label = _storm_label(regime)
-    if label in _STORM_LABELS:
-        if _regime_manual_ready_enabled():
-            return GateDecision(
-                route="manual_ready",
-                effective_multiplier=combined_mult,
-                reason=f"regime_{label.lower()}",
-                session_attribution=gate.attribution(),
-            )
-        log.info(
-            "regime_manual_ready gölge: %s %s %s rejim=%s — flag açık olsa onaya düşerdi",
-            d.symbol, d.timeframe, side, label,
         )
 
     return GateDecision(

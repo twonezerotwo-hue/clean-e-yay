@@ -35,8 +35,8 @@ RiskGate → paper lifecycle` zinciridir. Bu override canlı broker eklemez ve
   (27 seri, 1h/4h/1d, 1055 işlem, canlı stop kuralı): açık/kapalı farkı +5R toplam,
   işlem başına +0.005R — zararsız, kayda değer fayda yok. Canlı teknik oy v4'ten
   geldiği için yalnız yedek teknik motoru ve rejim kripto katmanını etkiler.
-- Fırtına kuralı (`gates.regime_manual_ready`) ve kaynak politikası
-  (`consensus.enforce_decision_usage`) kalır; açma kararı ayrı.
+- Kaynak politikası (`consensus.enforce_decision_usage`) kalır; açma kararı ayrı.
+  Kapalı fırtına kuralı (`gates.regime_manual_ready`) 22 Kasım 2026'da silindi.
 
 - **K1b** Keşif trade'leri yalnız güven kalibrasyonuna girer (EXPLORATION kohortu).
 - **K2** tf_scoring v4 canlıda (`consensus.touche_v4: true`).

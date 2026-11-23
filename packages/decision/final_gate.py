@@ -257,7 +257,7 @@ def evaluate(
         return FinalGate(route="block", side=side, blocker=blocker, reason=news_effect["reason"], **evidence)
 
     routed = gates.apply_gates(
-        d, side=side, now=now, regime=regime, gate_cfg=gate_cfg, conflict_by_symbol=conflict_by_symbol,
+        d, side=side, now=now, gate_cfg=gate_cfg, conflict_by_symbol=conflict_by_symbol,
     )
     if routed.route == "block":
         return FinalGate(route="block", side=side, blocker="session_gate",
