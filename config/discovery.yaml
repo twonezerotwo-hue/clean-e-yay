@@ -128,13 +128,6 @@ news_discovery:
 
 # Haber → karar geçmiş karşılaştırma modülü. Runtime yazımı kapalıdır; mevcut
 # eski kayıtlar yalnızca audit/rapor için okunabilir.
-news_decision_shadow:
-  enabled: false
-  min_strength: 20        # bu güçten zayıf haber öngörüsü sayılmaz
-  horizons_hours: [4, 24]
-  dedupe_hours: 4         # aynı sembol/TF/yön/ilişki için tekrar damgalama aralığı
-  flat_pct: 0.1
-
 # İnceleme tavsiyesi bildirimi (owner kararı 2026-10-05, üçüncü tur) — packages/discovery/ideas.py.
 # Haberden bulunmuş fikir + haber öngörüsü yukarı (güç ≥ min_news_strength) + teknik
 # WOULD_OPEN_LONG → zil + anlık uyarı; varlık başına cooldown_hours'ta bir. İşlem önerisi değildir.

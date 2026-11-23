@@ -332,7 +332,8 @@ def _intel_headlines(cells) -> list[Headline]:
     çelişen güçlü haber öngörüsü. Kanıttır; karar değişmez (haber girdisi gölge)."""
     out: list[Headline] = []
     try:
-        from packages.discovery import ideas, news_decision_shadow, news_forecast
+        from packages.discovery import ideas, news_forecast
+        from packages.discovery.intel import forecast_checks
 
         for r in ideas.review_recommendations()[:2]:
             out.append(Headline(
@@ -340,9 +341,7 @@ def _intel_headlines(cells) -> list[Headline]:
                 f"İnceleme tavsiyesi: {r['symbol']} ({r['name']}) — haber zinciri + teknik sinyal.",
                 f"{r['chain']} · {r['technical']} · YZ {r['ai_verdict'] or '—'}. İşlem önerisi değildir.",
             ))
-        cfg = news_decision_shadow.config()
-        conflicts = [c for c in news_decision_shadow.checks(cells, news_forecast.load_forecasts(),
-                                                            cfg["min_strength"])
+        conflicts = [c for c in forecast_checks(cells, news_forecast.load_forecasts())
                      if c["relation"] == "conflict" and c["strength"] >= 40]
         for c in conflicts[:1]:
             arrow = "↑" if c["forecast"] == "up" else "↓"

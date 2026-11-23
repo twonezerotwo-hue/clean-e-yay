@@ -614,17 +614,6 @@ def run_once() -> dict:
 
     # Haber → karar geçmiş karşılaştırması. Runtime shadow yazımı kapalıdır;
     # eski dosyalar silinmez, yalnızca audit için korunur.
-    news_decision_shadow_status = "DISABLED"
-    try:
-        from packages.discovery import news_decision_shadow
-        if discovery.scan_enabled() and news_decision_shadow.config().get("enabled", False):
-            nds = news_decision_shadow.run()
-            news_decision_shadow_status = str(nds.get("status", "UNKNOWN"))
-            log.info("news_decision_shadow: created=%s resolved=%s rows=%s",
-                     nds.get("created"), nds.get("resolved"), nds.get("rows"))
-    except Exception as exc:  # defensive — worker patlamamalı
-        news_decision_shadow_status = f"ERROR:{type(exc).__name__}"
-        errors.append(f"news_decision_shadow:{type(exc).__name__}")
 
     # Fikir Panosu (owner kararı 2026-10-05, aynı kapı): keşif + haber + teknik →
     # şeffaf fikir skoru + YZ değerlendirmesi (yerel model; turda en çok 2 çağrı,
@@ -1120,7 +1109,6 @@ def run_once() -> dict:
         "discovery_scan_status": discovery_scan_status,  # K-1 tarayıcı
         "news_discovery_status": news_discovery_status,  # haber güdümlü keşif (2026-10-05)
         "news_forecast_status": news_forecast_status,  # haber öngörüsü (2026-10-05)
-        "news_decision_shadow_status": news_decision_shadow_status,  # haber → karar gölgesi (2026-10-05)
         "ideas_status": ideas_status,  # fikir panosu + YZ değerlendirmesi (2026-10-05)
         "discovery_promotion_status": discovery_promotion_status,  # K-4 terfi kriteri (DISABLED=flag OFF)
         "backtest_recon_status": backtest_recon_status,  # B-1 fidelity (DISABLED=flag OFF)

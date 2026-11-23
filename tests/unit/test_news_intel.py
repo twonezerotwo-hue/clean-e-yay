@@ -36,7 +36,7 @@ def _patch(monkeypatch):
 def test_context_section_is_quantized_evidence_not_decision(monkeypatch):
     _patch(monkeypatch)
     ni = intel.compact_for_context(CELLS)
-    assert "KANITTIR, karar değildir" in ni["note"] and ni["shadow_scorecard"]["affect_decision"] is False
+    assert "KANITTIR, karar değildir" in ni["note"] and "shadow_scorecard" not in ni
     assert [(f["symbol"], f["strength"], f["via_ai_chain"]) for f in ni["registry_forecasts"]] == [
         ("BTCUSD", 50, True), ("XAUUSD", 30, False)]                       # 10'luk kova, kayıt dışı yok
     assert ni["decision_check"][0] == {"symbol": "BTCUSD", "timeframe": "1h", "side": "long", "final_action": "hold",

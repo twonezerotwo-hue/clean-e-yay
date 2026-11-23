@@ -132,13 +132,11 @@ def _asset_evidence() -> dict[str, Any]:
 
 def _news_evidence() -> dict[str, Any]:
     try:
-        from packages.discovery import news_decision_shadow, news_forecast
+        from packages.discovery import news_forecast
 
-        # Keep decision-shadow and price-resolved forecast evidence separate:
-        # they use different horizons and must not be averaged into one score.
-        decision = news_decision_shadow.scorecard()
-        forecast = news_forecast.scorecard()
-        return {**decision, "forecast": forecast, "shadow_only": True}
+        # news_decision_shadow defteri 22 Kasım 2026'da silindi; yalnız fiyatla çözülen
+        # haber öngörüsü karnesi kalır.
+        return {"forecast": news_forecast.scorecard(), "shadow_only": True}
     except Exception as exc:
         return {"status": "ERROR", "error": type(exc).__name__, "shadow_only": True}
 
