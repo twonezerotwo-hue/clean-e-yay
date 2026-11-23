@@ -150,6 +150,7 @@ başına yeterli örnek, bloklanan işlemlerin kapanış-R'si ile korunanların 
 ## Yeniden ölçme (kendi arşivinde)
 
 ```bash
+# (22 Kasım 2026: scripts/score_diag silindi; git etiketi arsiv/envanter-oncesi)
 python -m scripts.score_diag.run extract  --bar-history data/runtime/bar_history --out OUT
 python -m scripts.score_diag.run diagnose --bar-history data/runtime/bar_history --sig OUT --out R
 python -m scripts.score_diag.run tune     --sig OUT --out R        # TRAIN tara, VALIDATION seç, config'i dondur
