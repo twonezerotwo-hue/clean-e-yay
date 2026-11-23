@@ -105,6 +105,10 @@ def _parse_bars(result: dict, symbol: str, timeframe: Timeframe) -> list[OHLCVBa
             continue
         if None in (o, h, lo, c):
             continue
+        # Yahoo bazen dip > açılış/kapanış ya da tepe < açılış/kapanış olan mum verir;
+        # düzeltilmez (uydurma yok), atılır.
+        if not (lo <= min(o, c) and max(o, c) <= h):
+            continue
         vol = None
         try:
             v = quote["volume"][i]

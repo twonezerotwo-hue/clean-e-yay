@@ -184,3 +184,17 @@ def test_price_and_bar_yahoo_tables_are_one_object() -> None:
     from packages.data.providers.price import yfinance as price_yfinance
 
     assert price_yfinance._SYMBOL_MAP is ohlcv_yfinance._SYMBOL_MAP
+
+
+def test_yahoo_parser_drops_inconsistent_candles() -> None:
+    from packages.data.providers.ohlcv import yfinance as ohlcv_yfinance
+
+    result = {
+        "timestamp": [1_700_000_000, 1_700_003_600, 1_700_007_200],
+        "indicators": {"quote": [{
+            "open": [10.0, 10.0, 10.0], "high": [11.0, 9.5, 11.0],
+            "low": [9.0, 9.0, 10.5], "close": [10.5, 10.2, 10.6], "volume": [1, 1, 1],
+        }]},
+    }
+    bars = ohlcv_yfinance._parse_bars(result, "XLRE", "1d")
+    assert [b.close for b in bars] == [10.5]  # tepe < kapanış ve dip > açılış olanlar atıldı
