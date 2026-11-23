@@ -183,6 +183,36 @@ sources:
     decision_usage: simulation_only
     fallback_to_mock: false
 
+  # ─── Yedek fiyat zinciri (birincil düşerse sırayla) ─────────────
+  # packages/data/providers/price/__init__.py _FALLBACK_CHAIN. Anahtar yoksa
+  # kaynak 'disabled'; AWS'de anahtarlar GitHub sırrından yazılır (2026-11-23).
+  - id: price_fallback_twelvedata
+    kind: price
+    asset: "BTCUSD, ETHUSD, XAUUSD, XAGUSD"
+    fetcher: twelvedata
+    role: fallback
+    cadence_sec: 60
+    decision_usage: verified_required
+    fallback_to_mock: false
+
+  - id: price_fallback_alphavantage
+    kind: price
+    asset: "BTCUSD, ETHUSD, XAUUSD, XAGUSD"
+    fetcher: alphavantage
+    role: fallback
+    cadence_sec: 900
+    decision_usage: verified_required
+    fallback_to_mock: false
+
+  - id: price_fallback_finnhub
+    kind: price
+    asset: "BTCUSD, ETHUSD"
+    fetcher: finnhub
+    role: fallback
+    cadence_sec: 60
+    decision_usage: verified_required
+    fallback_to_mock: false
+
   # ─── Teknik bar sağlayıcıları ─────────────────────────────────
   # Kraken yalnızca BTC/ETH için herkese açık, salt-okunur birincil canlı
   # kaynaktır. CoinGecko, Kraken başarısız olduğunda ikincil kaynaktır.

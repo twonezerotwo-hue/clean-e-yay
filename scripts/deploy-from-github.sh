@@ -136,6 +136,21 @@ if [ -n "${BENZINGA_API_KEY:-}" ]; then
   set_env BENZINGA_API_KEY "$BENZINGA_API_KEY"
   echo "deploy: BENZINGA_API_KEY .env'e yazildi (deger gosterilmez)"
 fi
+# Yedek fiyat zinciri (TwelveData, AlphaVantage, Finnhub; owner karari 2026-11-23)
+# — SIR: GitHub Actions secret'inda yasar. Secret yoksa dokunulmaz -> o yedek
+# kaynak kapali kalir. Degerler log'a yazilmaz.
+if [ -n "${TWELVEDATA_API_KEY:-}" ]; then
+  set_env TWELVEDATA_API_KEY "$TWELVEDATA_API_KEY"
+  echo "deploy: TWELVEDATA_API_KEY .env'e yazildi (deger gosterilmez)"
+fi
+if [ -n "${ALPHAVANTAGE_API_KEY:-}" ]; then
+  set_env ALPHAVANTAGE_API_KEY "$ALPHAVANTAGE_API_KEY"
+  echo "deploy: ALPHAVANTAGE_API_KEY .env'e yazildi (deger gosterilmez)"
+fi
+if [ -n "${FINNHUB_API_KEY:-}" ]; then
+  set_env FINNHUB_API_KEY "$FINNHUB_API_KEY"
+  echo "deploy: FINNHUB_API_KEY .env'e yazildi (deger gosterilmez)"
+fi
 
 echo "deploy: restart services"
 sudo systemctl restart eyay-supervisor.service

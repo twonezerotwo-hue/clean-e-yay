@@ -176,6 +176,24 @@ COVERAGE: dict[str, dict] = {
                   "bayrağı değil: yalnız ek haber kaynağını açar; yokken sağlayıcı "
                   "kapalı, hata akışı düşürmez. İzleme ilk görülme kaydında.",
     },
+    "TWELVEDATA_API_KEY": {
+        "mechanism": SHADOW_EXEMPT, "monitor": None,
+        "reason": "Yedek fiyat zinciri anahtarı (sır; değer GitHub secret'ta). Davranış "
+                  "bayrağı değil: yalnız birincil kaynak düşünce yedeği açar; yokken "
+                  "kaynak kapalı (disabled), fiyat DATA_UNAVAILABLE. İzleme sağlık ucunda.",
+    },
+    "ALPHAVANTAGE_API_KEY": {
+        "mechanism": SHADOW_EXEMPT, "monitor": None,
+        "reason": "Yedek fiyat zinciri anahtarı (sır; değer GitHub secret'ta). Davranış "
+                  "bayrağı değil: yalnız birincil kaynak düşünce yedeği açar; yokken "
+                  "kaynak kapalı (disabled), fiyat DATA_UNAVAILABLE. İzleme sağlık ucunda.",
+    },
+    "FINNHUB_API_KEY": {
+        "mechanism": SHADOW_EXEMPT, "monitor": None,
+        "reason": "Yedek fiyat zinciri anahtarı (sır; değer GitHub secret'ta). Davranış "
+                  "bayrağı değil: yalnız birincil kaynak düşünce yedeği açar; yokken "
+                  "kaynak kapalı (disabled), fiyat DATA_UNAVAILABLE. İzleme sağlık ucunda.",
+    },
 }
 
 

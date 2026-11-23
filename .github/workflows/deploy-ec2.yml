@@ -27,4 +27,9 @@ jobs:
           # Benzinga haber API anahtari (owner, 2026-11-13). Secret yoksa bos gecer,
           # haber saglayicisi kapali kalir.
           BENZINGA_API_KEY: ${{ secrets.BENZINGA_API_KEY }}
+          # Yedek fiyat zinciri anahtarlari (owner, 2026-11-23). Secret yoksa bos
+          # gecer, ilgili yedek kaynak kapali kalir.
+          TWELVEDATA_API_KEY: ${{ secrets.TWELVEDATA_API_KEY }}
+          ALPHAVANTAGE_API_KEY: ${{ secrets.ALPHAVANTAGE_API_KEY }}
+          FINNHUB_API_KEY: ${{ secrets.FINNHUB_API_KEY }}
         run: /opt/clean-e-yay/scripts/deploy-from-github.sh

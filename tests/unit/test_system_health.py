@@ -61,6 +61,10 @@ def test_registry_runtime_aliases_match_orchestrator_names():
     assert report["status"] == "OK"
     assert report["unknown_fetchers"] == []
     assert report["policy_only_fetchers"]
+    # Yedek fiyat kaynakları kayıtlı: çağrılmasalar da eksik sayılmaz, çağrılınca kayıtsız görünmez.
+    assert report["fallback_fetchers"] == ["alphavantage", "finnhub", "twelvedata"]
+    active = _registry_runtime_summary({"twelvedata": {"calls": 3, "status": "ok"}})
+    assert "twelvedata" not in active["unregistered_runtime_providers"]
 
 
 def test_registry_does_not_count_cold_optional_providers_as_runtime():

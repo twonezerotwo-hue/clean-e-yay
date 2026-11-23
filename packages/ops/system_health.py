@@ -210,9 +210,16 @@ def _registry_runtime_summary(provider_status: dict | None) -> dict:
         registry_rows = []
     expected = {str(row.get("fetcher") or "").lower() for row in registry_rows if isinstance(row, dict)}
     expected.discard("")
+    # Yedek kaynaklar yalnız birincil düşünce çağrılır; çağrılmamaları eksiklik değildir.
+    fallback_only = {
+        str(row.get("fetcher") or "").lower()
+        for row in registry_rows
+        if isinstance(row, dict) and row.get("role") == "fallback"
+    }
     missing = sorted(
         fetcher for fetcher in expected
-        if fetcher not in policy_only and not (fetcher_aliases.get(fetcher, {fetcher}) & observed)
+        if fetcher not in policy_only and fetcher not in fallback_only
+        and not (fetcher_aliases.get(fetcher, {fetcher}) & observed)
     )
     mapped_runtime = set().union(*(fetcher_aliases.get(fetcher, {fetcher}) for fetcher in expected))
     return {
@@ -221,6 +228,7 @@ def _registry_runtime_summary(provider_status: dict | None) -> dict:
         "runtime_providers": sorted(runtime),
         "unknown_fetchers": missing,
         "policy_only_fetchers": sorted(expected & policy_only),
+        "fallback_fetchers": sorted(fallback_only),
         "unregistered_runtime_providers": sorted(runtime - mapped_runtime),
         "status": "OK" if not missing else "INCOMPLETE",
     }
