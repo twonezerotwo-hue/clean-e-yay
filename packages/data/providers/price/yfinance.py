@@ -9,45 +9,16 @@ import json
 import urllib.error
 import urllib.request
 
+from packages.data.providers.ohlcv import yfinance as ohlcv_yfinance
 from packages.data.registry import custom_assets
 from packages.data.types import PriceQuote, utcnow
 
 API = "https://query1.finance.yahoo.com/v8/finance/chart"
 TIMEOUT_SEC = 4.0
 
-# Bizim sembol ↔ Yahoo ticker
-_SYMBOL_MAP = {
-    "XAUUSD": "GC=F",       # Gold futures
-    "XAGUSD": "SI=F",       # Silver futures
-    "BRENT":  "BZ=F",       # Brent crude
-    "WTI":    "CL=F",       # West Texas Intermediate crude
-    "COPPER": "HG=F",       # COMEX copper futures
-    "NATGAS": "NG=F",        # Henry Hub natural-gas futures
-    "SUGAR":  "SB=F",        # Sugar No. 11 futures
-    "CVX":    "CVX",         # Chevron
-    "DXY":    "DX-Y.NYB",   # Dollar index
-    "VIX":    "^VIX",
-    "SP500":  "^GSPC",
-    "QQQ":    "QQQ",
-    # Dashboard/rotation ETF'leri için fiyat ve OHLCV yönlendirmesi aynı
-    # Yahoo kaynağını kullanır; böylece aday paneli fiyat var diye gösterip
-    # emir ön-kontrolünde aynı sembolü kaybetmez.
-    "TLT": "TLT",
-    "HYG": "HYG",
-    "LQD": "LQD",
-    "XLK": "XLK",
-    "XLE": "XLE",
-    "XLF": "XLF",
-    "XLV": "XLV",
-    "XLI": "XLI",
-    "XLY": "XLY",
-    "XLP": "XLP",
-    "XLU": "XLU",
-    "XLB": "XLB",
-    "XLRE": "XLRE",
-    "XLC": "XLC",
-    "IYT": "IYT",
-}
+# Bizim sembol ↔ Yahoo ticker: bar sağlayıcısıyla TEK tablo (anlık fiyat ile
+# bar aynı kontrattan gelsin; 23 Kasım 2026'ya dek iki ayrı kopyaydı).
+_SYMBOL_MAP = ohlcv_yfinance._SYMBOL_MAP
 
 SUPPORTED = custom_assets.DynamicSymbolSet(frozenset(_SYMBOL_MAP.keys()), "yfinance")
 

@@ -177,3 +177,10 @@ def test_runtime_explicit_mock_sets_banner(monkeypatch) -> None:
     assert body["mode"]["mock_mode"] is True
     assert body["mode"]["mock_warning"] is True
     assert any("MOCK MODE" in w for w in body["warnings"])
+
+
+def test_price_and_bar_yahoo_tables_are_one_object() -> None:
+    from packages.data.providers.ohlcv import yfinance as ohlcv_yfinance
+    from packages.data.providers.price import yfinance as price_yfinance
+
+    assert price_yfinance._SYMBOL_MAP is ohlcv_yfinance._SYMBOL_MAP
