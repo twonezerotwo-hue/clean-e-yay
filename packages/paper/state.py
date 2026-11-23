@@ -23,6 +23,8 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from packages.data.registry.loader import load_thresholds
+from packages.ops.store import flock_acquire as _flock_acquire
+from packages.ops.store import flock_release as _flock_release
 from packages.ops.store import write_text_atomic
 from packages.paper import audit, execution_sim
 
@@ -565,42 +567,6 @@ def save(state: PaperState) -> None:
 
 def _txn_lock_path() -> Path:
     return STATE_PATH.with_name(STATE_PATH.name + ".lock")
-
-
-def _flock_acquire(fh) -> None:
-    if os.name == "nt":
-        import msvcrt
-
-        # LK_LOCK ~10 sn bekleyip OSError verir — kilit alınana dek yeniden dene
-        # (bloklayan davranış; tick birkaç saniyede biter, açlık pratikte yok).
-        while True:
-            try:
-                fh.seek(0)
-                msvcrt.locking(fh.fileno(), msvcrt.LK_LOCK, 1)
-                return
-            except OSError:
-                continue
-    else:
-        import fcntl
-
-        fcntl.flock(fh.fileno(), fcntl.LOCK_EX)
-
-
-def _flock_release(fh) -> None:
-    try:
-        if os.name == "nt":
-            import msvcrt
-
-            fh.seek(0)
-            msvcrt.locking(fh.fileno(), msvcrt.LK_UNLCK, 1)
-        else:
-            import fcntl
-
-            fcntl.flock(fh.fileno(), fcntl.LOCK_UN)
-    except OSError:
-        pass
-    finally:
-        fh.close()
 
 
 def _disk_revision() -> int | None:

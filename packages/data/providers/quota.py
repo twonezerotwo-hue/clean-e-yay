@@ -4,7 +4,10 @@ Sağlayıcı ağ çağrısından önce ``consume(name)`` sorar. İzin varsa ça�
 yapılır. Sınır doluysa çağrı yapılmaz: sağlayıcı önbelleğe ya da zincirdeki bir
 sonraki kaynağa düşer. Bayat veri "stale" etiketiyle gider; sahte veri üretilmez.
 Sayaç ``data/runtime/provider_quota.json``'da kalıcıdır, yani süreç yeniden başlasa
-da gün içi sayım sürer; UTC gün dönümünde sıfırlanır.
+da gün içi sayım sürer; UTC gün dönümünde sıfırlanır. API, tick ve öğrenme ayrı
+süreçlerdir: her çağrı dosyayı süreçler arası kilit altında taze okur, artırır ve
+yazar (23 Kasım 2026'ya dek her süreç kendi bellek kopyasını yazıyor, sayımın üçte
+ikisi kayboluyordu).
 
 Sınırlar sağlayıcıların ücretsiz planlarının biraz altında tutulur (2026-10-30
 ölçümü): CoinGecko aylık 10.000 çağrı (~320/gün), AlphaVantage 25/gün, TwelveData
@@ -20,7 +23,7 @@ from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
 
-from packages.ops.store import write_text_atomic
+from packages.ops.store import file_lock, write_text_atomic
 
 DEFAULT_LIMITS: dict[str, dict[str, int]] = {
     "coingecko": {"per_day": 300, "per_minute": 25},
@@ -31,8 +34,6 @@ DEFAULT_LIMITS: dict[str, dict[str, int]] = {
 }
 
 _LOCK = threading.Lock()
-_STATE: dict | None = None
-_STATE_PATH: str | None = None
 
 
 def _path() -> Path:
@@ -52,18 +53,11 @@ def limits(name: str) -> dict[str, int]:
 
 
 def _load() -> dict:
-    global _STATE, _STATE_PATH
-    path = _path()
-    if _STATE is not None and _STATE_PATH == str(path):
-        return _STATE
     try:
-        state = json.loads(path.read_text(encoding="utf-8"))
-        if not isinstance(state, dict):
-            state = {}
+        state = json.loads(_path().read_text(encoding="utf-8"))
     except (OSError, ValueError):
-        state = {}
-    _STATE, _STATE_PATH = state, str(path)
-    return state
+        return {}
+    return state if isinstance(state, dict) else {}
 
 
 def _save(state: dict) -> None:
@@ -81,7 +75,8 @@ def consume(name: str, *, now: Callable[[], datetime] | None = None) -> bool:
     day = current.strftime("%Y-%m-%d")
     minute = current.strftime("%Y-%m-%dT%H:%M")
     lim = limits(name)
-    with _LOCK:
+    path = _path()
+    with _LOCK, file_lock(path.with_name(path.name + ".lock")):
         state = _load()
         row = state.get(name) or {}
         if row.get("day") != day:
@@ -113,11 +108,4 @@ def usage() -> dict[str, dict]:
         }
 
 
-def reset_cache() -> None:
-    """Testler arası sızıntıyı önlemek için."""
-    global _STATE, _STATE_PATH
-    with _LOCK:
-        _STATE, _STATE_PATH = None, None
-
-
-__all__ = ["DEFAULT_LIMITS", "consume", "limits", "reset_cache", "usage"]
+__all__ = ["DEFAULT_LIMITS", "consume", "limits", "usage"]

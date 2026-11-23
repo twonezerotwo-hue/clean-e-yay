@@ -22,7 +22,6 @@ def env(tmp_path, monkeypatch):
     monkeypatch.setenv("BACKUP_STATUS_PATH", str(tmp_path / "backup_status.json"))
     monkeypatch.setenv("PROVIDER_QUOTA_PATH", str(tmp_path / "provider_quota.json"))
     monkeypatch.setattr(notifications, "NOTIFICATIONS_PATH", tmp_path / "notifications.jsonl")
-    quota.reset_cache()
     world = {
         "tick": {"stale": False, "age_seconds": 5.0, "duration_ms": 20_000},
         "snapshot": {"provider_status": {"kraken": {"status": "ok"}, "mock": {"status": "degraded"}}, "dqs": {"fallback_used": False}},
@@ -31,7 +30,6 @@ def env(tmp_path, monkeypatch):
     monkeypatch.setattr(snapshot_store, "latest", lambda: world["snapshot"])
     (tmp_path / "backup_status.json").write_text(json.dumps({"status": "OK", "last_ok_at": NOW.isoformat()}), encoding="utf-8")
     yield world
-    quota.reset_cache()
 
 
 def _sent():
@@ -74,7 +72,6 @@ def test_quota_exhausted_today_only(env, tmp_path):
     }), encoding="utf-8")
     from packages.data.providers import quota
 
-    quota.reset_cache()
     assert [k for k in alerts.collect(NOW) if k.startswith("quota:")] == ["quota:alphavantage"]
 
 

@@ -17,7 +17,8 @@ import os
 from datetime import UTC, datetime
 from pathlib import Path
 
-from packages.paper.state import _flock_acquire, _flock_release
+from packages.ops.store import flock_acquire as _flock_acquire
+from packages.ops.store import flock_release as _flock_release
 
 log = logging.getLogger(__name__)
 

@@ -55,11 +55,9 @@ def test_quota_exhausted_skips_network(monkeypatch, tmp_path) -> None:
     monkeypatch.setenv("PROVIDER_QUOTA_PATH", str(tmp_path / "quota.json"))
     monkeypatch.setenv("PROVIDER_QUOTA_COINGECKO_PER_DAY", "0")
     monkeypatch.setenv("PROVIDER_QUOTA_COINGECKO_PER_MINUTE", "1")
-    quota.reset_cache()
     assert quota.consume("coingecko") is True
     monkeypatch.setattr(coingecko.urllib.request, "urlopen", lambda *a, **k: (_ for _ in ()).throw(AssertionError("ağ")))
     assert coingecko._fetch_many({"BTCUSD": "bitcoin"}) == {}
-    quota.reset_cache()
 
 
 class _Resp:
@@ -85,7 +83,6 @@ def test_monthly_cap_pauses_key_and_retries_keyless(monkeypatch, tmp_path) -> No
 
     monkeypatch.setenv("PROVIDER_QUOTA_PATH", str(tmp_path / "quota.json"))
     monkeypatch.setenv("COINGECKO_API_KEY", "demo-key")
-    quota.reset_cache()
     seen = []
 
     def fake_urlopen(req, timeout=None):
@@ -102,7 +99,6 @@ def test_monthly_cap_pauses_key_and_retries_keyless(monkeypatch, tmp_path) -> No
     assert out["BTCUSD"].price == 77000.0
     assert seen == [True, False]
     assert coingecko_auth.key_paused() and "x-cg-demo-api-key" not in coingecko_auth.headers()
-    quota.reset_cache()
 
 
 def test_failed_fetch_backs_off(monkeypatch, tmp_path) -> None:

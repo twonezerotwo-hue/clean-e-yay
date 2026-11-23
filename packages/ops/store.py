@@ -137,8 +137,64 @@ def append_jsonl_rotating(
         fh.write(json.dumps(record, ensure_ascii=False, default=str) + "\n")
 
 
+def flock_acquire(fh) -> None:
+    """Açık dosya tanıtıcısında süreçler arası özel kilit (Windows msvcrt / POSIX flock).
+
+    Bloklar: kilit alınana dek bekler. Defter transaction'ı, uyum kaydı ve kota
+    sayacı aynı kilidi kullanır."""
+    if os.name == "nt":
+        import msvcrt
+
+        # LK_LOCK ~10 sn bekleyip OSError verir — kilit alınana dek yeniden dene.
+        while True:
+            try:
+                fh.seek(0)
+                msvcrt.locking(fh.fileno(), msvcrt.LK_LOCK, 1)
+                return
+            except OSError:
+                continue
+    else:
+        import fcntl
+
+        fcntl.flock(fh.fileno(), fcntl.LOCK_EX)
+
+
+def flock_release(fh) -> None:
+    """Kilidi bırakır ve tanıtıcıyı kapatır; hata yutulur."""
+    try:
+        if os.name == "nt":
+            import msvcrt
+
+            fh.seek(0)
+            msvcrt.locking(fh.fileno(), msvcrt.LK_UNLCK, 1)
+        else:
+            import fcntl
+
+            fcntl.flock(fh.fileno(), fcntl.LOCK_UN)
+    except OSError:
+        pass
+    finally:
+        fh.close()
+
+
+@contextlib.contextmanager
+def file_lock(lock_path: str | os.PathLike):
+    """`with file_lock(p):` — `p` kilit dosyası (yoksa oluşturulur)."""
+    p = Path(lock_path)
+    p.parent.mkdir(parents=True, exist_ok=True)
+    fh = open(p, "a+b")  # flock_release kapatır
+    flock_acquire(fh)
+    try:
+        yield
+    finally:
+        flock_release(fh)
+
+
 __all__ = [
     "append_jsonl_rotating",
+    "file_lock",
+    "flock_acquire",
+    "flock_release",
     "read_jsonl_tail",
     "read_tail_lines",
     "replace_with_retry",
