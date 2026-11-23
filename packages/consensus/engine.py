@@ -281,7 +281,7 @@ def _fundamental_v2(regime: RegimeOutput) -> float | None:
 # NOT: fundamental_v3 (rotasyonsuz saf-Likidite) 2026-07-15'te SÖKÜLDÜ — 5y
 # tezgâh ÇÜRÜTTÜ (BTC için TERS gösterge, M15 hükmü). Yerine v4.1 momentum
 # formülü geldi (rotasyon çifte-sayımını o da çözer, üstelik pozitif edge'le).
-# Tezgâh kıyas kaydı macro_backtest.fund_v3'te documented reference olarak kalır.
+# Tezgâh kıyas kaydı (macro_backtest) 22 Kasım 2026'da silindi; git etiketi arsiv/envanter-oncesi.
 
 
 def _fundamental_v4() -> float | None:

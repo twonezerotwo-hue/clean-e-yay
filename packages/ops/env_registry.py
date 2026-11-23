@@ -168,7 +168,6 @@ REGISTRY: dict[str, str] = {
     "LLM_BUDGET_PATH": "path",
     "LLM_CACHE_PATH": "path",
     "IDEA_BOARD_PATH": "path",
-    "MACRO_BACKTEST_PATH": "path",
     "MARKET_SHOCK_STATE_PATH": "path",
     "MISSED_OPP_LOG_PATH": "path",
     "NEWS_DECISION_SHADOW_PATH": "path",

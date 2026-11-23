@@ -2,8 +2,7 @@
 
 - flow.liquidity_momentum_score v4.1: ham DXY+faiz momentum ekseninin son-1-yıl
   yüzdelik sırası (clamp doygunluğu İMKÂNSIZ; sıkılaşma İVMESİ tepedeyse <50).
-- macro_backtest.mom_pct_series flow'a DELEGE (tek kaynak — drift yok);
-  cand_mom = v4.0 clamp'li DONMUŞ referans (kıyas için).
+- (macro_backtest 22 Kasım 2026 silindi; mom_pct_series flow.liquidity_momentum_pct_series idi)
 - consensus._fundamental_v4: bar arşivinden okur; arşiv yok/kapalı → None.
 - build() kademesi: flag OFF → v3/v2/v1 birebir + observe; ON → v4 tepede;
   ON ama arşiv yok → alt kademeye düşer (dürüst degrade).
@@ -18,7 +17,6 @@ import pytest
 
 from packages.consensus import engine as ce
 from packages.data.providers.rotation import flow, macro_liquidity
-from packages.learning import macro_backtest as mb
 from packages.regime.classifier import RegimeLayer, RegimeOutput
 
 
@@ -79,17 +77,6 @@ def test_score_is_last_of_pct_series():
     assert flow.liquidity_momentum_score(d, u) == flow.liquidity_momentum_pct_series(d, u)[-1]
 
 
-def test_mom_pct_series_delegates_to_flow():
-    """macro_backtest.mom_pct_series = flow.liquidity_momentum_pct_series birebir."""
-    d, u = _tighten(300), _easing(300, 6.0, 0.02)
-    assert mb.mom_pct_series(d, u) == flow.liquidity_momentum_pct_series(d, u)
-
-
-def test_cand_mom_is_frozen_v40_reference():
-    """cand_mom v4.0 clamp'li DONMUŞ referans — canlı v4.1'den bağımsız."""
-    d, u = _tighten(300), _tighten(300, 4.0, 0.02)
-    frozen = mb.cand_mom(d, u)
-    assert frozen is not None and frozen < 50.0  # eski clamp formülü davranışı
     # Donmuş referans ≠ canlı formül olabilir (kıyas amaçlı ayrı yaşarlar)
 
 

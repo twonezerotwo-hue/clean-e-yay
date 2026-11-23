@@ -165,7 +165,7 @@ def liquidity_momentum_score(
 ) -> float | None:
     """Makro likidite skoru v4.1 — YUZDELIK-normalize DEGISIM (0-100, yuksek =
     risk-on/gevseme). TEK KAYNAK: consensus fundamental_v4 + rejim Likidite
-    katmani + macro_backtest cand_mom_pct hepsi burayi okur.
+    katmani hepsi burayi okur.
 
     v4.0 (sabit +-3 clamp) 2026-07-13 clamp analiziyle revize edildi: DXY/US10Y
     ham momentumu +-10-25 gezerken clamp gunlerin %62-66'sinda bagliyordu; skor
