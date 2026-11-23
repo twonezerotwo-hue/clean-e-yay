@@ -55,6 +55,19 @@ def _no_tick_artifact_leak() -> None:
 
 
 @pytest.fixture(autouse=True)
+def _isolated_bar_archive(monkeypatch: pytest.MonkeyPatch, tmp_path_factory: pytest.TempPathFactory) -> None:
+    """Bar arşivi her zaman açık (23 Kasım 2026): her test kendi boş arşiv klasörünü
+    görür (gerçek arşive ve başka testin yazdığı barlara dokunmaz). Klasör ancak yazılırsa
+    oluşur; süreç içi son-ts önbelleği de sıfırlanır."""
+    import uuid
+
+    from packages.data.providers.ohlcv import history
+
+    monkeypatch.setenv("BAR_HISTORY_DIR", str(tmp_path_factory.getbasetemp() / "bar_history" / uuid.uuid4().hex))
+    history._LAST_TS.clear()
+
+
+@pytest.fixture(autouse=True)
 def _package1_flags_off_by_default(monkeypatch: pytest.MonkeyPatch) -> None:
     """Paket-1 aktivasyonu (2026-07-02, owner kararı) canlı config'te 5 girdi-düzeltme
     flag'ini AÇTI; unit testlerin çoğu v1 baseline davranışını varsayar (matrix
@@ -147,8 +160,6 @@ def _isolate_runtime_stores(tmp_path_factory: pytest.TempPathFactory) -> None:
     runtime = tmp_path_factory.mktemp("runtime")
     os.environ["DECISION_LOG_PATH"] = str(runtime / "decision_log.jsonl")
     os.environ["RISK_HALT_PATH"] = str(runtime / "risk_halts.json")
-    # Bar arşivi her zaman açık (23 Kasım 2026): suite gerçek arşivi okumasın/yazmasın.
-    os.environ["BAR_HISTORY_DIR"] = str(runtime / "bar_history")
     # H17 (temizlik, 2026-10-02) — suite canlı data/runtime'a YAZIYORDU (lokal
     # çalışma dizini = canlı sistem): öğrenme özeti, kalibrasyon, LLM cache, rejim
     # freni vb. Aşağıdakiler de session tmp'ye yönlendirilir; sessionfinish guard'ı
