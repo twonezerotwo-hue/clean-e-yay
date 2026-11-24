@@ -13,6 +13,7 @@ gerçek ilk görülme anı hiçbir yerde yoktu.
 from __future__ import annotations
 
 import json
+import logging
 import os
 import threading
 from collections.abc import Iterable
@@ -21,6 +22,8 @@ from pathlib import Path
 from typing import Any
 
 from packages.ops.store import write_text_atomic
+
+log = logging.getLogger(__name__)
 
 SCHEMA_VERSION = 2
 MAX_BYTES = 30 * 1024 * 1024
@@ -113,7 +116,8 @@ def record(feed_key: str, headlines: Iterable[Any], *, group: str, now: datetime
             if path.stat().st_size > MAX_BYTES:
                 _compact(path, now)
             return len(rows)
-    except Exception:  # gözlem kaydı haber akışını asla düşürmez
+    except Exception as exc:  # gözlem kaydı haber akışını asla düşürmez
+        log.warning("first_seen: ledger write failed: %s", type(exc).__name__)
         return 0
 
 

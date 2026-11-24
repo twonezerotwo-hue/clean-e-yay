@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import logging
 import os
 import threading
 import time
@@ -26,6 +27,8 @@ from typing import Any
 
 from packages.data.providers.news import classify
 from packages.data.types import NewsHeadline
+
+log = logging.getLogger(__name__)
 
 URL = "https://api.benzinga.com/api/v2/news"
 SOURCE = "Benzinga"
@@ -69,7 +72,8 @@ def _tradeable() -> set[str]:
         from packages.data.registry import assets as asset_registry
 
         return {str(a.symbol).upper() for a in asset_registry.all_assets()}
-    except Exception:
+    except Exception as exc:
+        log.warning("benzinga: seen-id store unreadable: %s", type(exc).__name__)
         return set()
 
 

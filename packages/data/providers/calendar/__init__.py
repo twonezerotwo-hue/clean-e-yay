@@ -14,6 +14,7 @@ Event risk yalnızca kısıtlayıcıdır: RiskGate'e `packages/risk/event_risk.p
 from __future__ import annotations
 
 import hashlib
+import logging
 import os
 import re
 import threading
@@ -25,6 +26,8 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 import yaml
 
 from packages.data.types import Catalyst, utcnow
+
+log = logging.getLogger(__name__)
 
 _REPO_ROOT = Path(__file__).resolve().parents[4]
 DEFAULT_CALENDAR_PATH = _REPO_ROOT / "config" / "event_calendar.yaml"
@@ -299,7 +302,8 @@ def events_in_window(
     path = yaml_path or DEFAULT_CALENDAR_PATH
     try:
         raw_events = (yaml.safe_load(path.read_text(encoding="utf-8")) or {}).get("events") or []
-    except Exception:
+    except Exception as exc:
+        log.warning("calendar: events_in_window load failed: %s", type(exc).__name__)
         return []
     lo = now - timedelta(hours=past_hours)
     hi = now + timedelta(hours=future_hours)

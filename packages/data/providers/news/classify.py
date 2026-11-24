@@ -5,11 +5,14 @@ asset_impact sembol → yön (-1.0 / 0.0 / +1.0) olarak üretilir.
 """
 from __future__ import annotations
 
+import logging
 import re
 from datetime import UTC, datetime
 from typing import Final
 
 from packages.data.types import NewsFreshness, Sentiment
+
+log = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
 # Sentiment sözlükleri (EN + TR)
@@ -640,7 +643,8 @@ def classify_asset_impact(title: str, sentiment: Sentiment) -> dict[str, float]:
                 named_hits[symbol] = sorted({*by_name, *by_class})
             elif by_class:
                 class_hits[symbol] = by_class
-    except Exception:
+    except Exception as exc:
+        log.warning("classify: asset registry mapping unavailable: %s", type(exc).__name__)
         # A registry/configuration failure must not take down RSS ingestion;
         # the built-in deterministic mappings above remain available.
         pass

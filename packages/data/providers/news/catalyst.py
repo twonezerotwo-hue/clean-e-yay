@@ -14,6 +14,7 @@ Politika ([docs/DATA_POLICY.md], [docs/SAFETY_RULES.md]):
 """
 from __future__ import annotations
 
+import logging
 import re
 from datetime import datetime, timedelta
 from typing import Final
@@ -29,6 +30,8 @@ from packages.data.types import (
     Timeframe,
     utcnow,
 )
+
+log = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
 # event_type sınıflandırma — sıralı kural seti (ilk eşleşen kazanır).
@@ -354,7 +357,8 @@ def build_impact(
         from packages.data.providers.news.article_enrichment import context_for
 
         analysis_text, article = context_for(headline)
-    except Exception:
+    except Exception as exc:
+        log.warning("catalyst: article context failed, title used: %s", type(exc).__name__)
         analysis_text, article = headline.title, None
     title = analysis_text or headline.title
     rumor = is_rumor(title)

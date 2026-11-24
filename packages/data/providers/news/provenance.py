@@ -8,12 +8,15 @@ decision path.
 """
 from __future__ import annotations
 
+import logging
 import re
 from collections import defaultdict
 from collections.abc import Iterable
 from datetime import UTC, datetime
 from typing import Any
 from urllib.parse import urlparse
+
+log = logging.getLogger(__name__)
 
 # These labels are query/proxy buckets in rss.py, not direct publisher feeds.
 _PROXY_BUCKETS = {
@@ -220,7 +223,8 @@ def build_consensus(headlines: Iterable[Any], *, now: datetime | None = None) ->
         from packages.data.providers.news.article_enrichment import cached
 
         _article_cache = cached(urls)
-    except Exception:
+    except Exception as exc:
+        log.warning("provenance: classifier/article cache unavailable: %s", type(exc).__name__)
         classify = None
         context_for_fn = None
         _article_cache = {}
@@ -246,7 +250,8 @@ def build_consensus(headlines: Iterable[Any], *, now: datetime | None = None) ->
         if context_for_fn is not None:
             try:
                 article_text, article = context_for_fn(h, article_rows=_article_cache)
-            except Exception:
+            except Exception as exc:
+                log.warning("provenance: article context failed: %s", type(exc).__name__)
                 article_text = title
         article_impacts: dict[str, float] = {}
         if classify is not None and article and article.get("excerpt"):
@@ -258,7 +263,8 @@ def build_consensus(headlines: Iterable[Any], *, now: datetime | None = None) ->
                     "word_count": int(article.get("word_count") or 0),
                     "excerpt": _clean(article.get("excerpt"))[:360],
                 })
-            except Exception:
+            except Exception as exc:
+                log.warning("provenance: article classification failed: %s", type(exc).__name__)
                 article_impacts = {}
         headline_impacts = dict(getattr(h, "asset_impact", None) or {})
         for symbol, impact in article_impacts.items():
