@@ -186,7 +186,6 @@ REGISTRY: dict[str, str] = {
     "OPS_ALERTS_STATE_PATH": "path",
     "OPS_ALERT_REPEAT_HOURS": "behavior",
     "OPS_ALERT_TICK_SLOW_MS": "behavior",
-    "EXTERNAL_EVIDENCE_PATH": "path",
     "PHYSICAL_COMMODITIES_CONFIG_PATH": "path",
     "REBALANCE_STORE_PATH": "path",
     "REFLECTION_PATH": "path",
