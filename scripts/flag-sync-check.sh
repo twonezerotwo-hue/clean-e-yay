@@ -48,13 +48,16 @@ BENZINGA_API_KEY
 TWELVEDATA_API_KEY
 ALPHAVANTAGE_API_KEY
 FINNHUB_API_KEY
+FRED_API_KEY
+EIA_API_KEY
+BLS_API_KEY
 "
 
 # SIR flag'leri: degeri repo'da YOK (GitHub Secret / wrangler secret) — deger
 # kiyasi anlamsiz, VARLIK kiyasi yapilir (lokal set + deploy direktifi var = ok;
 # lokal set + direktif yok = sapma). test_flag_sync kor-nokta guard'i icin
 # SYNC_FLAGS listesinde de dururlar.
-SECRET_FLAGS="API_AUTH_TOKEN BENZINGA_API_KEY TWELVEDATA_API_KEY ALPHAVANTAGE_API_KEY FINNHUB_API_KEY"
+SECRET_FLAGS="API_AUTH_TOKEN BENZINGA_API_KEY TWELVEDATA_API_KEY ALPHAVANTAGE_API_KEY FINNHUB_API_KEY FRED_API_KEY EIA_API_KEY BLS_API_KEY"
 
 _is_secret() {  # _is_secret KEY
   case " $SECRET_FLAGS " in *" $1 "*) return 0 ;; *) return 1 ;; esac

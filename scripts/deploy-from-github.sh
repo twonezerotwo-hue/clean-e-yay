@@ -145,6 +145,20 @@ if [ -n "${FINNHUB_API_KEY:-}" ]; then
   set_env FINNHUB_API_KEY "$FINNHUB_API_KEY"
   echo "deploy: FINNHUB_API_KEY .env'e yazildi (deger gosterilmez)"
 fi
+# Resmi makro kaynak anahtarlari (FRED, EIA, BLS; owner karari 2026-11-25) — SIR:
+# GitHub Actions secret'inda yasar. Secret yoksa dokunulmaz. Degerler log'a yazilmaz.
+if [ -n "${FRED_API_KEY:-}" ]; then
+  set_env FRED_API_KEY "$FRED_API_KEY"
+  echo "deploy: FRED_API_KEY .env'e yazildi (deger gosterilmez)"
+fi
+if [ -n "${EIA_API_KEY:-}" ]; then
+  set_env EIA_API_KEY "$EIA_API_KEY"
+  echo "deploy: EIA_API_KEY .env'e yazildi (deger gosterilmez)"
+fi
+if [ -n "${BLS_API_KEY:-}" ]; then
+  set_env BLS_API_KEY "$BLS_API_KEY"
+  echo "deploy: BLS_API_KEY .env'e yazildi (deger gosterilmez)"
+fi
 
 echo "deploy: restart services"
 sudo systemctl restart eyay-supervisor.service

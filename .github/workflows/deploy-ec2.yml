@@ -32,4 +32,9 @@ jobs:
           TWELVEDATA_API_KEY: ${{ secrets.TWELVEDATA_API_KEY }}
           ALPHAVANTAGE_API_KEY: ${{ secrets.ALPHAVANTAGE_API_KEY }}
           FINNHUB_API_KEY: ${{ secrets.FINNHUB_API_KEY }}
+          # Resmi makro kaynak anahtarlari (owner, 2026-11-25): FRED, EIA, BLS. Secret
+          # yoksa bos gecer, ilgili kaynak kapali kalir.
+          FRED_API_KEY: ${{ secrets.FRED_API_KEY }}
+          EIA_API_KEY: ${{ secrets.EIA_API_KEY }}
+          BLS_API_KEY: ${{ secrets.BLS_API_KEY }}
         run: /opt/clean-e-yay/scripts/deploy-from-github.sh

@@ -72,7 +72,6 @@ REGISTRY: dict[str, str] = {
     "ALPHAVANTAGE_TTL_SEC": "provider",
     "CHAT_LLM_LOCAL_FIRST": "provider",
     "CALENDAR_WEB_SHADOW": "provider",
-    "MACRO_OFFICIAL_SHADOW": "provider",
     "MACRO_RELEASE_TTL_SEC": "provider",
     "MACRO_BLS_TTL_SEC": "provider",
     "COINGECKO_OHLCV_TTL_SEC": "provider",

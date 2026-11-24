@@ -189,6 +189,24 @@ COVERAGE: dict[str, dict] = {
                   "bayrağı değil: yalnız birincil kaynak düşünce yedeği açar; yokken "
                   "kaynak kapalı (disabled), fiyat DATA_UNAVAILABLE. İzleme sağlık ucunda.",
     },
+    "FRED_API_KEY": {
+        "mechanism": SHADOW_EXEMPT, "monitor": None,
+        "reason": "Resmî makro kaynak anahtarı (sır; değer GitHub secret'ta). Davranış "
+                  "bayrağı değil: kaynağı açar; yokken kaynak kapalı (disabled), makro "
+                  "satırı ve arşiv eksik kalır. İzleme sağlık ucunda.",
+    },
+    "EIA_API_KEY": {
+        "mechanism": SHADOW_EXEMPT, "monitor": None,
+        "reason": "Resmî makro kaynak anahtarı (sır; değer GitHub secret'ta). Davranış "
+                  "bayrağı değil: kaynağı açar; yokken kaynak kapalı (disabled), makro "
+                  "satırı ve arşiv eksik kalır. İzleme sağlık ucunda.",
+    },
+    "BLS_API_KEY": {
+        "mechanism": SHADOW_EXEMPT, "monitor": None,
+        "reason": "Resmî makro kaynak anahtarı (sır; değer GitHub secret'ta). Davranış "
+                  "bayrağı değil: kaynağı açar; yokken kaynak kapalı (disabled), makro "
+                  "satırı ve arşiv eksik kalır. İzleme sağlık ucunda.",
+    },
 }
 
 

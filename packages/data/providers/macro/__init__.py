@@ -86,9 +86,9 @@ _CACHE: tuple[float, list[Catalyst]] | None = None
 
 
 def _enabled() -> bool:
-    if os.environ.get("TEST_USE_MOCK", "").lower() == "true":
-        return False
-    return os.environ.get("MACRO_OFFICIAL_SHADOW", "true").lower() not in {"0", "false", "no", "off"}
+    # Test/fixture modunda ağa çıkılmaz (sağlayıcılarla aynı kural). Eski kapatma
+    # anahtarı MACRO_OFFICIAL_SHADOW 25 Kasım 2026'da kalktı.
+    return os.environ.get("TEST_USE_MOCK", "").lower() != "true"
 
 
 def _ttl() -> float:
@@ -312,7 +312,7 @@ def list_releases(*, now: datetime | None = None) -> list[Catalyst]:
     global _CACHE
     if not _enabled():
         for name in _STATUS:
-            _mark(name, status="disabled", error="MACRO_OFFICIAL_SHADOW disabled")
+            _mark(name, status="disabled", error="fixture mode: no network")
         return []
     reference = now or utcnow()
     cached = _CACHE
