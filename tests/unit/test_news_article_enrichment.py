@@ -60,3 +60,20 @@ def test_enrich_keeps_rss_summary_when_publisher_blocks(tmp_path, monkeypatch):
     assert row["excerpt"] == summary
     assert row["fetch_error"] == "RuntimeError"
     assert ae.coverage([headline])["coverage_pct"] == 100.0
+
+
+def test_redirect_and_blocking_hosts_are_not_fetched(tmp_path, monkeypatch):
+    """Google News sarmalayıcısı ve Investing makale döndürmüyor: istek atılmaz, RSS özeti kullanılır."""
+    from types import SimpleNamespace
+
+    from packages.data.providers.news import article_enrichment as ae
+
+    monkeypatch.setenv("NEWS_ARTICLE_CACHE_PATH", str(tmp_path / "cache.json"))
+    summary = "Fed officials signalled patience on rate cuts while inflation stays above the two percent target."
+    heads = [
+        SimpleNamespace(id="g", url="https://news.google.com/rss/articles/CBMiabc", source="google", article_summary=summary),
+        SimpleNamespace(id="i", url="https://www.investing.com/news/economy/x-123", source="investing", article_summary=""),
+    ]
+    out = ae.enrich(heads, fetch=lambda *a, **k: (_ for _ in ()).throw(AssertionError("istek atılmamalı")))
+    statuses = sorted(r["status"] for r in out.values())
+    assert statuses == ["RSS_SUMMARY", "SKIPPED_URL"]

@@ -93,6 +93,16 @@ def _host_is_public(host: str) -> bool:
     return True
 
 
+# Makale değil yönlendirme ya da bot engeli döndüren alanlar (25 Kasım 2026 ölçümü:
+# 600 kaydın 279'u Google News sarmalayıcısı, 49'u Investing; sonuç hep RSS özetine
+# düşüyordu). Bunlara istek atılmaz, doğrudan RSS özeti kullanılır.
+_NO_FETCH_HOSTS = frozenset({"news.google.com", "www.investing.com", "investing.com"})
+
+
+def _fetch_useful(url: str) -> bool:
+    return (urlparse(url).hostname or "").lower() not in _NO_FETCH_HOSTS
+
+
 def allowed_url(url: Any) -> bool:
     parsed = urlparse(str(url or "").strip())
     return parsed.scheme in {"http", "https"} and bool(parsed.hostname) and _host_is_public(parsed.hostname)
@@ -222,7 +232,7 @@ def enrich(
             "fetched_at": _iso(now),
         }
         summary = str(getattr(headline, "article_summary", "") or "").strip()
-        if not allowed_url(url):
+        if not allowed_url(url) or not _fetch_useful(url):
             row = ({**base, "status": "RSS_SUMMARY", "excerpt": summary[:excerpt_chars],
                     "description": summary[:500], "word_count": len(summary.split())}
                    if len(summary) >= 80 else {**base, "status": "SKIPPED_URL"})
