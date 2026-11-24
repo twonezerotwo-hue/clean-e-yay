@@ -49,7 +49,7 @@ SPECS: tuple[Spec, ...] = (
     Spec("PCE_YOY", "PCEPI", "US PCE Price Index (YoY)", "yoy", "percent", 1.0, False, (15, 40), 0.2, ("pce price", "personal consumption expenditures price"), ("core",)),
     Spec("CORE_PCE_MOM", "PCEPILFE", "US Core PCE Price Index (MoM)", "mom", "percent", 1.0, False, (15, 40), 0.15, ("core pce",)),
     Spec("CORE_PCE_YOY", "PCEPILFE", "US Core PCE Price Index (YoY)", "yoy", "percent", 1.0, False, (15, 40), 0.2, ("core pce",)),
-    Spec("NFP", "PAYEMS", "US Nonfarm Payrolls", "diff", "scaled_count", 1000.0, False, (0, 12), 100_000.0, ("nonfarm payrolls", "non-farm payrolls"), ("private",)),
+    Spec("NFP", "PAYEMS", "US Nonfarm Payrolls", "diff", "scaled_count", 1000.0, False, (0, 12), 100_000.0, ("nonfarm payrolls", "non-farm payrolls", "non-farm employment change"), ("private", "adp")),
     Spec("UNEMPLOYMENT", "UNRATE", "US Unemployment Rate", "level", "percent", 1.0, False, (0, 12), 0.2, ("unemployment rate",)),
     Spec("JOLTS", "JTSJOL", "US JOLTS Job Openings", "level", "scaled_count", 1000.0, False, (25, 45), 500_000.0, ("jolts", "job openings")),
     Spec("GDP_QOQ", "A191RL1Q225SBEA", "US GDP (QoQ)", "level", "percent", 1.0, True, (20, 35), 1.0, ("gdp",), ("price", "deflator", "sales")),
@@ -135,12 +135,15 @@ def releases(now: datetime | None = None) -> list[Catalyst]:
 
 
 def _calendar_rows(now: datetime) -> list[Any]:
-    """Web takviminin önbellekteki satırları (açıklama günü ve sonrası); 8 satır sınırına takılmaz."""
+    """Herkese açık takvimin beklentili satırları (son KEEP_DAYS gün ve 2 gün ileri);
+    8 satır sınırına takılmaz. Hafta dönünce geçen haftanın açıklaması da eşleşir."""
     try:
         from packages.data.providers.calendar import web as web_calendar
 
-        return [r for r in web_calendar.list_catalysts(now=now, horizon_days=2) if getattr(r, "expected", None) is not None]
-    except Exception:
+        return [r for r in web_calendar.list_catalysts(now=now, horizon_days=2, past_days=web_calendar.KEEP_DAYS)
+                if getattr(r, "expected", None) is not None]
+    except Exception as exc:
+        log.warning("fred_derived: calendar rows unavailable: %s", type(exc).__name__)
         return []
 
 

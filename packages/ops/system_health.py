@@ -117,7 +117,7 @@ def _provider_summary(
     }
     # BLS is additive evidence only while causal decision application is off;
     # its public endpoint status must not inherit a quote fallback's severity.
-    always_observation = {"macro_bls"}
+    always_observation = {"macro_bls", "calendar_web"}  # calendar_web: doğrulanmamış beklenti gözlemi
     for name, info in (provider_status or {}).items():
         raw = info.get("status") if isinstance(info, dict) else info
         st = str(raw or "unknown").lower()
@@ -198,9 +198,9 @@ def _registry_runtime_summary(provider_status: dict | None) -> dict:
         "rss": {"rss", "news", "geo_news"},
         # Benzinga başlıkları "news" sağlayıcı durumuna katılır (2026-11-13).
         "benzinga": {"benzinga", "news"},
-        "investing_web_calendar": {"investing_web_calendar", "calendar", "calendar_web"},
-        "investing_web_calendar_plus_news": {
-            "investing_web_calendar_plus_news", "calendar", "calendar_web", "news", "geo_news",
+        "forexfactory_calendar": {"forexfactory_calendar", "calendar", "calendar_web"},
+        "forexfactory_calendar_plus_news": {
+            "forexfactory_calendar_plus_news", "calendar", "calendar_web", "news", "geo_news",
         },
     }
     policy_only = {"packages.macro.evidence", "packages.macro.correlation"}

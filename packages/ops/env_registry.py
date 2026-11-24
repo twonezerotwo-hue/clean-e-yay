@@ -71,7 +71,6 @@ REGISTRY: dict[str, str] = {
     # ── provider
     "ALPHAVANTAGE_TTL_SEC": "provider",
     "CHAT_LLM_LOCAL_FIRST": "provider",
-    "CALENDAR_WEB_SHADOW": "provider",
     "MACRO_RELEASE_TTL_SEC": "provider",
     "MACRO_BLS_TTL_SEC": "provider",
     "COINGECKO_OHLCV_TTL_SEC": "provider",
@@ -149,6 +148,7 @@ REGISTRY: dict[str, str] = {
     "DISCOVERY_SCAN_PATH": "path",
     "DISCOVERY_SHADOW_PATH": "path",
     "EMPIRICAL_PWIN_PATH": "path",
+    "CALENDAR_CONSENSUS_PATH": "path",
     "EVENT_OUTCOMES_PATH": "path",
     "EXIT_BACKTEST_PATH": "path",
     "EXIT_FORENSICS_OUT_PATH": "path",

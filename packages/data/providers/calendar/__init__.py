@@ -80,12 +80,9 @@ def _mark(*, ok: bool, error: str | None = None) -> None:
 def get_provider_status() -> dict[str, dict]:
     with _LOCK:
         status = {k: dict(v) for k, v in _STATUS.items()}
-    try:
-        from packages.data.providers.calendar import web as web_calendar
+    from packages.data.providers.calendar import web as web_calendar
 
-        status.update(web_calendar.get_provider_status())
-    except Exception:
-        pass
+    status.update(web_calendar.get_provider_status())
     return status
 
 
@@ -99,12 +96,9 @@ def reset_provider_status() -> None:
                 calls=0,
                 fallbacks=0,
             )
-    try:
-        from packages.data.providers.calendar import web as web_calendar
+    from packages.data.providers.calendar import web as web_calendar
 
-        web_calendar.reset_provider_status()
-    except Exception:
-        pass
+    web_calendar.reset_provider_status()
 
 
 # ---------------------------------------------------------------------------
@@ -220,9 +214,10 @@ def list_catalysts(
             from packages.data.providers.calendar import web as web_calendar
 
             web_events = web_calendar.list_catalysts(now=now, horizon_days=horizon_days)
-        except Exception:
+        except Exception as exc:
             # A public page is optional evidence; it must never break the
             # existing calendar provider or the snapshot pipeline.
+            log.warning("calendar: public calendar unavailable: %s", type(exc).__name__)
             web_events = []
 
     merged: list[Catalyst] = []

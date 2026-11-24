@@ -90,7 +90,7 @@ def test_calendar_expectation_attached_without_snapshot_limit(monkeypatch):
     from packages.data.providers.price import fred
 
     monkeypatch.setattr(fred, "get_series", lambda sid, start=None: _months([100.0 + 0.3 * i for i in range(14)]))
-    monkeypatch.setattr(web_calendar, "list_catalysts", lambda now=None, horizon_days=2: [
+    monkeypatch.setattr(web_calendar, "list_catalysts", lambda now=None, horizon_days=2, past_days=1: [
         _calendar(actual=None, expected=0.2), _calendar(title="Core CPI (MoM)", actual=None, expected=0.3)])
     rows = {r.title: r for r in derived.releases(datetime(2026, 10, 15, tzinfo=UTC))}
     assert rows["US CPI (MoM)"].expected == 0.2

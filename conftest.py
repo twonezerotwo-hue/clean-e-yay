@@ -182,6 +182,7 @@ def _isolate_runtime_stores(tmp_path_factory: pytest.TempPathFactory) -> None:
         ("LEARNING_RUN_PATH", "learning_run.json"),
         ("EXIT_BACKTEST_PATH", "exit_backtest.json"),
         ("EVENT_OUTCOMES_PATH", "event_outcomes.json"),
+        ("CALENDAR_CONSENSUS_PATH", "calendar_consensus.json"),
         ("NEWS_FORECAST_PATH", "news_forecast.json"),
         ("NEWS_FORECAST_LEDGER_PATH", "news_forecast_ledger.jsonl"),
         ("IDEA_BOARD_PATH", "idea_board.json"),

@@ -142,6 +142,7 @@ OPTIONAL_PROVIDERS = frozenset({
     "options_deribit",
     "macro_bls",
     "ohlcv_coingecko",
+    "calendar_web",  # herkese açık beklenti takvimi: doğrulanmamış gözlem kaynağı
 })
 
 
