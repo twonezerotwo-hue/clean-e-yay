@@ -1,7 +1,7 @@
 """G4-real — provenance helper + 3 router'da `mode` block.
 
 - LIVE: live providers patched success → mode.live_data=True, label=LIVE.
-- MOCK_MODE: PRICE_USE_MOCK=true → label=MOCK_MODE, mock_warning=True.
+- Çalışma anı mock anahtarı (PRICE_USE_MOCK) 25 Kasım 2026'da kalktı: anahtar verilse de mock açılmaz.
 - SIMULATION: test fixture (TEST_USE_MOCK=true) → label=SIMULATION.
 - INSUFFICIENT_DATA: live fail → DQS BLOCKED → label=INSUFFICIENT_DATA.
 - AIReport simulation altında verdict satırının önüne disclaimer eklenir.
@@ -17,9 +17,8 @@ from fastapi.testclient import TestClient
 
 @pytest.fixture
 def runtime(monkeypatch):
-    """Live-only runtime simüle et (TEST_USE_MOCK/PRICE_USE_MOCK kapalı)."""
+    """Live-only runtime simüle et (TEST_USE_MOCK kapalı)."""
     monkeypatch.delenv("TEST_USE_MOCK", raising=False)
-    monkeypatch.delenv("PRICE_USE_MOCK", raising=False)
     from packages.data.providers import price
     price.reset_provider_status()
     from packages.data.ingestion import pipeline as pl
@@ -95,10 +94,10 @@ def test_provenance_live_when_all_verified(runtime, monkeypatch) -> None:
     assert prov["label"] == "LIVE"
     assert prov["live_data"] is True
     assert prov["mock_mode"] is False
-    assert prov["mock_warning"] is False
+    assert "mock_warning" not in prov
 
 
-def test_provenance_mock_mode_when_runtime_opt_in(monkeypatch) -> None:
+def test_runtime_mock_switch_no_longer_exists(monkeypatch) -> None:
     monkeypatch.delenv("TEST_USE_MOCK", raising=False)
     monkeypatch.setenv("PRICE_USE_MOCK", "true")
     from packages.data.providers import price
@@ -108,9 +107,8 @@ def test_provenance_mock_mode_when_runtime_opt_in(monkeypatch) -> None:
     pl._CACHE.clear()
     snap = pl.build_snapshot()
     prov = data_provenance(snap)
-    assert prov["label"] == "MOCK_MODE"
-    assert prov["live_data"] is False
-    assert prov["mock_warning"] is True
+    assert prov["label"] != "MOCK_MODE"
+    assert prov["mock_mode"] is False and price.is_mock_mode() is False
 
 
 def test_custom_asset_ohlcv_degradation_does_not_poison_core_provenance():
@@ -127,11 +125,11 @@ def test_custom_asset_ohlcv_degradation_does_not_poison_core_provenance():
             }
         },
     )
-    label, _ = _resolve_label(snap, mock_warning=False, test_mock=False)
+    label, _ = _resolve_label(snap, test_mock=False)
     assert label == "LIVE"
 
     snap.provider_status["ohlcv_coingecko"]["degraded_symbols"] = ["BTCUSD"]
-    label, _ = _resolve_label(snap, mock_warning=False, test_mock=False)
+    label, _ = _resolve_label(snap, test_mock=False)
     assert label == "SIMULATION"
 
 
@@ -145,7 +143,6 @@ def test_provenance_simulation_under_test_fixture() -> None:
     assert prov["label"] == "SIMULATION"
     assert prov["live_data"] is False
     assert prov["test_mock"] is True
-    assert prov["mock_warning"] is False
 
 
 def test_provenance_insufficient_when_live_fail(runtime, monkeypatch) -> None:

@@ -120,12 +120,6 @@ REGISTRY: dict[str, str] = {
     "TAVILY_API_KEY": "secret",
     "TWELVEDATA_API_KEY": "secret",
     # ── test
-    "CALENDAR_USE_FIXTURE": "test",
-    "DERIVATIVES_USE_FIXTURE": "test",
-    "NEWS_USE_FIXTURE": "test",
-    "OHLCV_USE_FIXTURE": "test",
-    "OPTIONS_USE_FIXTURE": "test",
-    "PRICE_USE_MOCK": "test",
     "TEST_USE_MOCK": "test",
     "TICK_SKIP_SIGNAL_HANDLERS": "test",
     "TICK_WORKER_DISABLE_LOCK": "test",

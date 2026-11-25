@@ -3016,11 +3016,10 @@ export interface components {
             error?: string | null;
             fallback: boolean;
         };
-        /** @description Provenance damgası (LIVE / MOCK_MODE / SIMULATION / INSUFFICIENT_DATA). */
+        /** @description Provenance damgası (LIVE / SIMULATION / INSUFFICIENT_DATA). */
         ProvenanceMode: {
             live_data?: boolean;
             mock_mode: boolean;
-            mock_warning: boolean;
             test_mock: boolean;
             dqs_status?: string;
             label: string;

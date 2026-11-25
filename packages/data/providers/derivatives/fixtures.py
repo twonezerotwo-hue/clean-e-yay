@@ -1,7 +1,7 @@
 """Offline türev fixture'ları — yalnızca test/dev (v2.7 D2).
 
 DATA_POLICY: bu veriler `verified=False` damgalıdır ve **runtime'da asla**
-kullanılmaz; yalnızca `TEST_USE_MOCK=true` / `DERIVATIVES_USE_FIXTURE=true`
+kullanılmaz; yalnızca `TEST_USE_MOCK=true`
 path'inden gelir ve karar zincirine GİRMEZ (yalnızca dashboard bağlamı).
 """
 from __future__ import annotations

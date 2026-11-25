@@ -4,8 +4,7 @@
 portu). Politika ([docs/DATA_POLICY.md]):
 - Runtime'da **mock event yasaktır**. Dosya yoksa/bozuksa boş liste döner;
   pipeline `calendar_unavailable` warning ekler, provider status DEGRADED.
-- Fixture event'ler yalnızca test/dev path (`TEST_USE_MOCK=true` veya
-  `CALENDAR_USE_FIXTURE=true`) ve `verified=False` damgalı — event risk
+- Fixture event'ler yalnızca test/dev path (`TEST_USE_MOCK=true`) ve `verified=False` damgalı — event risk
   gate'i verified olmayan event'leri SAYMAZ.
 
 Event risk yalnızca kısıtlayıcıdır: RiskGate'e `packages/risk/event_risk.py`
@@ -57,10 +56,9 @@ def _truthy(v: str | None) -> bool:
 
 
 def is_fixture_mode() -> bool:
-    """Test/dev fixture path açık mı? Runtime'da false kalmalıdır."""
-    return _truthy(os.environ.get("TEST_USE_MOCK")) or _truthy(
-        os.environ.get("CALENDAR_USE_FIXTURE")
-    )
+    """Fikstür yalnız test modunda (TEST_USE_MOCK). Çalışma anı açma anahtarı
+    (CALENDAR_USE_FIXTURE) 25 Kasım 2026'da kalktı."""
+    return _truthy(os.environ.get("TEST_USE_MOCK"))
 
 
 def _mark(*, ok: bool, error: str | None = None) -> None:

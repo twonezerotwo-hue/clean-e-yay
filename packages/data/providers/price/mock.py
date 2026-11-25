@@ -2,7 +2,7 @@
 
 Önemli: bu modüldeki fonksiyonlar runtime'da çağrılmaz. Orchestrator
 (`packages.data.providers.price.__init__`) `TEST_USE_MOCK=true` veya
-açık `PRICE_USE_MOCK=true` durumunda devreye sokar. Her quote
+devreye sokar. Her quote
 `verified=False`, `status="MOCK"` damgalıdır; learning ve karar
 katmanları bu damgaya bakarak filtreler.
 """

@@ -1642,11 +1642,10 @@ export type CatalystSummary = {
   verified?: boolean;
 };
 
-// Provenance damgası (LIVE / MOCK_MODE / SIMULATION / INSUFFICIENT_DATA).
+// Provenance damgası (LIVE / SIMULATION / INSUFFICIENT_DATA).
 export type ProvenanceMode = {
   live_data: boolean;
   mock_mode: boolean;
-  mock_warning: boolean;
   test_mock: boolean;
   dqs_status: string;
   label: string;

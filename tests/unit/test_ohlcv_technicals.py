@@ -221,7 +221,6 @@ def test_pipeline_fills_technicals_by_tf_and_legacy_1d() -> None:
 def runtime_ohlcv(monkeypatch, tmp_path):
     """Fixture modunu kapat, cache'i boş tmp dizinine al."""
     monkeypatch.delenv("TEST_USE_MOCK", raising=False)
-    monkeypatch.delenv("OHLCV_USE_FIXTURE", raising=False)
     monkeypatch.setenv("OHLCV_CACHE_DIR", str(tmp_path / "ohlcv"))
     from packages.data.providers import ohlcv
     ohlcv.reset_provider_status()

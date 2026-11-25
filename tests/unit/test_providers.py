@@ -15,7 +15,6 @@ import pytest
 def runtime(monkeypatch):
     """Test mock fixture'ını kapat; live-only runtime simüle et."""
     monkeypatch.delenv("TEST_USE_MOCK", raising=False)
-    monkeypatch.delenv("PRICE_USE_MOCK", raising=False)
     from packages.data.providers import price
     price.reset_provider_status()
     return price
@@ -114,7 +113,7 @@ def test_data_snapshot_endpoint_runtime_blocked(runtime, monkeypatch) -> None:
     assert body["dqs"]["status"] == "BLOCKED"
     assert all(p["price"] is None for p in body["prices"])
     assert body["mode"]["mock_mode"] is False
-    assert body["mode"]["mock_warning"] is False
+    assert "mock_warning" not in body["mode"]
 
 
 def test_paper_tick_no_open_when_data_unavailable(
@@ -154,29 +153,7 @@ def test_data_snapshot_endpoint_test_mode() -> None:
     body = r.json()
     assert body["mode"]["mock_mode"] is True
     assert body["mode"]["test_mock"] is True
-    assert body["mode"]["mock_warning"] is False
     assert any(p["status"] == "MOCK" for p in body["prices"])
-
-
-def test_runtime_explicit_mock_sets_banner(monkeypatch) -> None:
-    monkeypatch.delenv("TEST_USE_MOCK", raising=False)
-    monkeypatch.setenv("PRICE_USE_MOCK", "true")
-    from packages.data.providers import price
-    price.reset_provider_status()
-
-    from packages.data.ingestion import pipeline as pl
-    pl._CACHE.clear()
-
-    from fastapi.testclient import TestClient
-    from apps.api.main import app
-
-    client = TestClient(app)
-    r = client.get("/api/v1/data/snapshot")
-    assert r.status_code == 200
-    body = r.json()
-    assert body["mode"]["mock_mode"] is True
-    assert body["mode"]["mock_warning"] is True
-    assert any("MOCK MODE" in w for w in body["warnings"])
 
 
 def test_price_and_bar_yahoo_tables_are_one_object() -> None:

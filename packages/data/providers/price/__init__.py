@@ -4,9 +4,8 @@ Politika ([docs/DATA_POLICY.md]):
 - Runtime'da **mock fallback yasaktır**.
 - Live provider başarısız olursa quote `price=None`, `status="DATA_UNAVAILABLE"`,
   `verified=False`, `error=<sebep>` ile döner. Mock'a düşülmez.
-- Mock yalnızca test/dev path için: `TEST_USE_MOCK=true` (conftest tarafından
-  set edilir) veya açık `PRICE_USE_MOCK=true` runtime opt-in (dashboard'da
-  kırmızı banner görünür).
+- Mock yalnızca test yolu için: `TEST_USE_MOCK=true` (conftest set eder).
+  Çalışma anı açma anahtarı (PRICE_USE_MOCK) 25 Kasım 2026'da kalktı.
 
 Env değişkenleri her çağrıda okunur (modül-seviyesi cache yok), böylece
 test monkeypatch ve runtime override doğru çalışır.
@@ -102,14 +101,9 @@ def is_test_mock_allowed() -> bool:
     return _truthy(os.environ.get("TEST_USE_MOCK"))
 
 
-def is_runtime_mock_explicit() -> bool:
-    """Runtime opt-in: PRICE_USE_MOCK=true → dashboard kırmızı banner."""
-    return _truthy(os.environ.get("PRICE_USE_MOCK"))
-
-
 def is_mock_mode() -> bool:
-    """Herhangi bir nedenle mock kullanılıyor mu?"""
-    return is_test_mock_allowed() or is_runtime_mock_explicit()
+    """Mock fiyat yalnız test modunda (TEST_USE_MOCK)."""
+    return is_test_mock_allowed()
 
 
 # ---------- Provider status ----------

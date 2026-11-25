@@ -21,9 +21,7 @@ router = APIRouter(tags=["dashboard"])
 
 
 def _data_module_health(prov: dict, dqs_status: str, now_iso: str) -> dict:
-    if prov["mock_warning"]:
-        status, notes = "degraded", "TEST/MOCK MODE — runtime mock veriyle çalışıyor"
-    elif dqs_status == "BLOCKED":
+    if dqs_status == "BLOCKED":
         status, notes = "down", "DQS BLOCKED — gerçek veri yok"
     elif dqs_status == "DEGRADED":
         status, notes = "degraded", "DQS DEGRADED — bazı kaynaklar veri sağlamıyor"
@@ -43,7 +41,7 @@ def _news_module_health(provider_status: dict, prov: dict, now_iso: str) -> dict
     providers were healthy.  Keeping this read-only and snapshot-scoped avoids
     inventing a second news probe or letting a UI-only call affect decisions.
     """
-    if prov.get("mock_warning") or prov.get("test_mock"):
+    if prov.get("test_mock"):
         return {
             "status": "degraded",
             "last_success_at": now_iso,

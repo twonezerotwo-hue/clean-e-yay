@@ -48,7 +48,6 @@ _FLAG_ENVS_TO_CLEAR = (
     "MISTAKE_MEMORY_V2",
     "EXIT_FORENSICS_NUDGE",
     "DISCOVERY_SCAN_ENABLED",
-    "PRICE_USE_MOCK",
 )
 
 # (ad, RiskInput alanları)

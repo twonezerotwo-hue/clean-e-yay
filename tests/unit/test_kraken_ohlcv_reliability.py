@@ -137,7 +137,6 @@ def test_ohlcv_routing(monkeypatch):
     )
 
     monkeypatch.setenv("TEST_USE_MOCK", "false")
-    monkeypatch.setenv("OHLCV_USE_FIXTURE", "false")
 
     now = datetime.now(UTC)
 

@@ -3,7 +3,6 @@
 import type { ReactNode } from "react";
 
 import { DashboardGrid, GridCell } from "@/components/shell/DashboardGrid";
-import { MockModeBanner } from "@/components/shell/MockModeBanner";
 import { TabbedBox } from "@/components/shell/TabbedBox";
 import { TradeTicketPanel } from "@/components/panels/TradeTicketPanel";
 import { RiskDurumuPanel } from "@/components/panels/RiskDurumuPanel";
@@ -63,7 +62,6 @@ export default function DetailsPage() {
         </div>
       </header>
 
-      <MockModeBanner />
 
       <nav className="flex flex-wrap items-center gap-1.5 border-b border-ink-700/50 pb-3 text-[10px] uppercase tracking-[0.14em]">
         {SECTIONS.map((s) => (

@@ -114,7 +114,6 @@ def test_list_headlines_merges_benzinga_but_never_in_injected_test_fetch(monkeyp
     xml = f"<rss><channel><item><title>Gold edges higher</title><pubDate>{pub}</pubDate></item></channel></rss>"
 
     monkeypatch.setenv("TEST_USE_MOCK", "false")  # test takımı haberi sahte veri modunda tutar; gerçek yol sınansın
-    monkeypatch.setenv("NEWS_USE_FIXTURE", "false")
 
     def must_not_call(**_):
         raise AssertionError("enjekte edilen getirmede Benzinga çağrılmamalı")

@@ -3408,12 +3408,11 @@ components:
 
     ProvenanceMode:
       type: object
-      description: Provenance damgası (LIVE / MOCK_MODE / SIMULATION / INSUFFICIENT_DATA).
-      required: [mock_mode, mock_warning, test_mock, label]
+      description: Provenance damgası (LIVE / SIMULATION / INSUFFICIENT_DATA).
+      required: [mock_mode, test_mock, label]
       properties:
         live_data: { type: boolean }
         mock_mode: { type: boolean }
-        mock_warning: { type: boolean }
         test_mock: { type: boolean }
         dqs_status: { type: string }
         label: { type: string }

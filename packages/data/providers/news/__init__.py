@@ -4,8 +4,7 @@ Politika ([docs/DATA_POLICY.md]):
 - Runtime'da **mock headline yasaktır**. Feed'ler başarısız olursa boş
   liste döner; pipeline `news_unavailable` warning ekler, consensus news
   skoru nötr 50 kalır, provider status DEGRADED görünür.
-- Fixture başlıklar yalnızca test/dev path (`TEST_USE_MOCK=true` veya
-  `NEWS_USE_FIXTURE=true`) ve `verified=False` damgalı — karar zincirine
+- Fixture başlıklar yalnızca test/dev path (`TEST_USE_MOCK=true`) ve `verified=False` damgalı — karar zincirine
   girmezler.
 
 İki feed grubu vardır: market (finansal) + geo (jeopolitik bağlam).
@@ -45,10 +44,9 @@ def _truthy(v: str | None) -> bool:
 
 
 def is_fixture_mode() -> bool:
-    """Test/dev fixture path açık mı? Runtime'da false kalmalıdır."""
-    return _truthy(os.environ.get("TEST_USE_MOCK")) or _truthy(
-        os.environ.get("NEWS_USE_FIXTURE")
-    )
+    """Fikstür yalnız test modunda (TEST_USE_MOCK). Çalışma anı açma anahtarı
+    (NEWS_USE_FIXTURE) 25 Kasım 2026'da kalktı."""
+    return _truthy(os.environ.get("TEST_USE_MOCK"))
 
 
 def _mark(name: str, *, ok: bool, error: str | None = None) -> None:

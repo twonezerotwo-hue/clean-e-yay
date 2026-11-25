@@ -1,6 +1,6 @@
 """Test/dev fixture başlıkları — RUNTIME'DA ASLA KULLANILMAZ.
 
-`TEST_USE_MOCK=true` veya `NEWS_USE_FIXTURE=true` iken orchestrator bu
+`TEST_USE_MOCK=true` iken orchestrator bu
 listeyi döner. Tüm başlıklar `verified=False` + `source="fixture"`
 damgalıdır; consensus news skoru verified olmayan başlıkları SAYMAZ —
 yani fixture haberler karar zincirini etkileyemez (DATA_POLICY).

@@ -230,7 +230,6 @@ def test_fixture_mode_snapshot_is_unverified() -> None:
 
 def test_provider_failure_is_degraded_no_crash(monkeypatch) -> None:
     monkeypatch.delenv("TEST_USE_MOCK", raising=False)
-    monkeypatch.delenv("OPTIONS_USE_FIXTURE", raising=False)
     monkeypatch.setattr(deribit, "fetch", lambda s: None)
     options_provider.reset_provider_status()
     out = options_provider.get_options(["BTCUSD"])

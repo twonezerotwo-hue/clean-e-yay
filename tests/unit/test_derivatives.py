@@ -148,7 +148,6 @@ def test_fixture_mode_snapshot_is_unverified() -> None:
 def test_provider_failure_is_degraded_no_crash(monkeypatch) -> None:
     # Live path (fixture kapalı) + provider None → DEGRADED, mock yok.
     monkeypatch.delenv("TEST_USE_MOCK", raising=False)
-    monkeypatch.delenv("DERIVATIVES_USE_FIXTURE", raising=False)
     monkeypatch.setattr(binance, "fetch", lambda s: None)
     deriv_provider.reset_provider_status()
     out = deriv_provider.get_derivatives(["BTCUSD"])

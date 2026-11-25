@@ -36,7 +36,6 @@ def _iso(tmp_path, monkeypatch):
     monkeypatch.setenv("EYAY_BINANCE_OHLCV_ENABLED", "true")
     monkeypatch.delenv("EYAY_KRAKEN_OHLCV_ENABLED", raising=False)
     monkeypatch.delenv("TEST_USE_MOCK", raising=False)
-    monkeypatch.delenv("OHLCV_USE_FIXTURE", raising=False)
     binance.reset_cache()
     ohlcv.reset_provider_status()
     yield

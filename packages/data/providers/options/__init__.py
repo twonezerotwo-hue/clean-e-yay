@@ -9,8 +9,7 @@ Politika ([docs/DATA_POLICY.md]):
 - Runtime'da **mock yasaktır**. Live provider başarısız olursa `status=
   "DEGRADED"`/`"UNAVAILABLE"`, alanlar None döner; karar zincirine girmez,
   crash olmaz.
-- Fixture verisi yalnızca test/dev path (`TEST_USE_MOCK` /
-  `OPTIONS_USE_FIXTURE`) ve `verified=False` damgalı (karar zincirine GİRMEZ).
+- Fixture verisi yalnızca test/dev path (`TEST_USE_MOCK`) ve `verified=False` damgalı (karar zincirine GİRMEZ).
 
 PAPER_SAFE / NO_EXECUTION — yalnızca gözlem.
 """
@@ -45,10 +44,9 @@ def _truthy(v: str | None) -> bool:
 
 
 def is_fixture_mode() -> bool:
-    """Test/dev fixture path açık mı? Runtime'da false kalmalıdır."""
-    return _truthy(os.environ.get("TEST_USE_MOCK")) or _truthy(
-        os.environ.get("OPTIONS_USE_FIXTURE")
-    )
+    """Fikstür yalnız test modunda (TEST_USE_MOCK). Çalışma anı açma anahtarı
+    (OPTIONS_USE_FIXTURE) 25 Kasım 2026'da kalktı."""
+    return _truthy(os.environ.get("TEST_USE_MOCK"))
 
 
 def _mark(*, ok: bool, error: str | None = None) -> None:

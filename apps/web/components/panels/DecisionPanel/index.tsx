@@ -75,7 +75,6 @@ export function DecisionPanel() {
           <DataQualityBadge
             dqs={dqs?.score ?? undefined}
             generatedAt={cockpit.data?.snapshot_generated_at ?? cockpit.data?.generated_at}
-            fallback={cockpit.data?.mode?.mock_warning}
           />
         }
       />

@@ -5,7 +5,7 @@ Politika ([docs/DATA_POLICY.md]):
   yalnız teknik tazelik sınırı içindeki gerçek cache kullanılır; daha eski
   cache hesaplamaya girmez ve boş liste döner → technicals None + DEGRADED.
 - Fixture barlar yalnızca test/dev path: `TEST_USE_MOCK=true` veya açık
-  `OHLCV_USE_FIXTURE=true`.
+  yalnız test modu.
 
 Routing:
 - BTCUSD/ETHUSD → Kraken spot OHLCV when enabled, CoinGecko market_chart
@@ -87,10 +87,9 @@ def _truthy(v: str | None) -> bool:
 
 
 def is_fixture_mode() -> bool:
-    """Test/dev fixture path açık mı? Runtime'da false kalmalıdır."""
-    return _truthy(os.environ.get("TEST_USE_MOCK")) or _truthy(
-        os.environ.get("OHLCV_USE_FIXTURE")
-    )
+    """Fikstür yalnız test modunda (TEST_USE_MOCK). Çalışma anı açma anahtarı
+    (OHLCV_USE_FIXTURE) 25 Kasım 2026'da kalktı."""
+    return _truthy(os.environ.get("TEST_USE_MOCK"))
 
 
 def _mark(

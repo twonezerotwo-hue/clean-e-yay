@@ -10,7 +10,6 @@ from packages.data.types import PriceQuote
 
 def test_parallel_quotes_match_sequential_and_keep_coingecko_in_one_task(monkeypatch):
     monkeypatch.setenv("TEST_USE_MOCK", "false")
-    monkeypatch.delenv("PRICE_USE_MOCK", raising=False)
     cg = {"BTCUSD", "ETHUSD"}
     seen_threads: dict[str, int] = {}
 

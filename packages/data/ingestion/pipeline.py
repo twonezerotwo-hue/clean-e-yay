@@ -398,8 +398,6 @@ def build_snapshot(symbols: list[str] | None = None) -> MarketSnapshot:
         **vol_provider.get_provider_status(),
         **options_provider.get_provider_status(),
     }
-    if price_provider.is_runtime_mock_explicit():
-        warnings.insert(0, "PRICE_USE_MOCK=true — TEST/MOCK MODE")
     market_data_as_of = _latest_timestamp(prices)
     events_available_as_of = _latest_timestamp(headlines)
     # Statements and expectations in World-State are deterministic views of
