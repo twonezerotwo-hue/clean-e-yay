@@ -36,6 +36,7 @@ from packages.agent.brief_id import build_brief_id
 from packages.causal.engine import build_shadow
 from packages.data import snapshot_store
 from packages.data.ingestion.pipeline import build_snapshot, publish_tick_snapshot
+from packages.data.ingestion.pipeline import last_snapshot_parts as pipeline_parts
 from packages.data.provenance import data_provenance
 from packages.data.registry import assets as asset_registry
 from packages.decision import (
@@ -774,7 +775,9 @@ async def run_once() -> None:
             mtm_equity_usd=round(ps.mtm_equity_usd, 2),
             degraded_reasons=reasons,
             stages={"snapshot": t_snap - t0, "decide": t_decide - t_snap,
-                    "paper": t_commit - t_decide, "observe": t_end - t_commit, "total": t_end - t0},
+                    "paper": t_commit - t_decide, "observe": t_end - t_commit, "total": t_end - t0,
+                    # Snapshot parçaları (25 Kasım 2026): süre dalgalanmasının kaynağı görünsün.
+                    **{f"snapshot.{k}": v for k, v in pipeline_parts().items()}},
         )
         # SSE: cockpit'in canlı nabzı — UI bu event'i alınca brief/decision/
         # paper cache'lerini invalidate eder.

@@ -211,6 +211,23 @@ def _domain_provenance(
     return {"status": "UNKNOWN", "as_of": None}
 
 
+_LAST_PARTS: dict[str, float] = {}
+_PARTS_LOCK = threading.Lock()
+
+
+def _set_last_parts(parts: dict[str, float]) -> None:
+    global _LAST_PARTS
+    with _PARTS_LOCK:
+        _LAST_PARTS = dict(parts)
+
+
+def last_snapshot_parts() -> dict[str, float]:
+    """Bu süreçteki son snapshot'ın parça süreleri (sn): fiyat, haber, takvim, makro,
+    rotasyon, türev (paralel; her biri kendi duvar süresi) ve teknik (seri)."""
+    with _PARTS_LOCK:
+        return dict(_LAST_PARTS)
+
+
 def build_snapshot(symbols: list[str] | None = None) -> MarketSnapshot:
     # Taze okunur (modül-seviyesi DEFAULT_SYMBOLS/MULTI_TF_SYMBOLS DEĞİL) —
     # kullanıcı runtime'da custom trade asset eklerse bir sonraki snapshot'ta
@@ -223,18 +240,27 @@ def build_snapshot(symbols: list[str] | None = None) -> MarketSnapshot:
     # Bağımsız ağ çağrılarını PARALEL çalıştır — seri toplam (~40s, provider'lar
     # yavaşken) yerine en yavaş çağrı kadar (~max). Her provider kendi HTTP
     # timeout'unu (4-8s) zaten uygular; havuz yalnızca eşzamanlılık ekler.
+    parts: dict[str, float] = {}
+
+    def _timed(name, fn, *args, **kwargs):
+        t_part = time.perf_counter()
+        try:
+            return fn(*args, **kwargs)
+        finally:
+            parts[name] = round(time.perf_counter() - t_part, 3)
+
     with ThreadPoolExecutor(max_workers=6) as _ex:
-        _f_prices = _ex.submit(price_provider.get_quotes, syms)
+        _f_prices = _ex.submit(_timed, "prices", price_provider.get_quotes, syms)
         # Foreign-affairs coverage is part of the world-state input, not only
         # a UI wall.  Keep a bounded but materially wider window so a fresh
         # US/Iran/China/Russia/Israel statement cannot be pushed out by market
         # headlines before causal + technical confluence is evaluated.
-        _f_news = _ex.submit(news_provider.list_headlines, 48)
-        _f_cal = _ex.submit(cal_provider.list_catalysts, 8)
-        _f_macro = _ex.submit(macro_provider.list_releases, now=now)
-        _f_rot = _ex.submit(rot_provider.get_rotation)
+        _f_news = _ex.submit(_timed, "news", news_provider.list_headlines, 48)
+        _f_cal = _ex.submit(_timed, "calendar", cal_provider.list_catalysts, 8)
+        _f_macro = _ex.submit(_timed, "macro", macro_provider.list_releases, now=now)
+        _f_rot = _ex.submit(_timed, "rotation", rot_provider.get_rotation)
         _f_deriv = _ex.submit(
-            deriv_provider.get_derivatives,
+            _timed, "derivatives", deriv_provider.get_derivatives,
             [s for s in syms if s in deriv_provider.CRYPTO_SYMBOLS],
         )
         prices = _f_prices.result()
@@ -245,6 +271,7 @@ def build_snapshot(symbols: list[str] | None = None) -> MarketSnapshot:
         derivatives = _f_deriv.result()
 
     # T1 — gerçek OHLCV'den multi-TF technicals (disk cache — hızlı, seri).
+    t_tech = time.perf_counter()
     technicals_by_tf = {
         s: {tf: tech_provider.get_snapshot(s, tf) for tf in TIMEFRAMES}
         for s in tf_syms
@@ -257,6 +284,8 @@ def build_snapshot(symbols: list[str] | None = None) -> MarketSnapshot:
         )
         for s in syms
     }
+    parts["technical"] = round(time.perf_counter() - t_tech, 3)
+    _set_last_parts(parts)
     # Giriş kalitesi v2: mode=off → atlanır (sıfır maliyet, bayt-aynı). shadow/active →
     # aynı önbellekli barlardan yön-bağımsız bağlam; hücre hatası kararı düşürmez.
     entry_contexts = _build_entry_contexts(tf_syms)

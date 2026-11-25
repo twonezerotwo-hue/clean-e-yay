@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import os
 import threading
+from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime
 
 from packages.data.providers.price import (
@@ -281,5 +282,23 @@ def get_quote(symbol: str) -> PriceQuote:
     return _try_live(symbol)
 
 
+_QUOTE_WORKERS = 6
+
+
 def get_quotes(symbols: list[str]) -> list[PriceQuote]:
-    return [get_quote(s) for s in symbols]
+    """Sembollerin fiyatı, girdi sırasıyla. Ağ istekleri sınırlı bir havuzda paralel
+    (25 Kasım 2026'ya dek 16 sembol sırayla çekiliyor, snapshot'ın ~7 sn'sini alıyordu).
+    CoinGecko sembolleri tek işte sırayla kalır: ilk istek ötekileri de toplu yeniler,
+    paralel çağrı aynı kotadan fazladan istek harcardı."""
+    if is_mock_mode() or len(symbols) <= 1:
+        return [get_quote(s) for s in symbols]
+    grouped = [s for s in symbols if _primary_for(s) is coingecko]
+    single = [s for s in symbols if _primary_for(s) is not coingecko]
+    out: dict[str, PriceQuote] = {}
+    with ThreadPoolExecutor(max_workers=_QUOTE_WORKERS) as pool:
+        group_future = pool.submit(lambda: [get_quote(s) for s in grouped]) if grouped else None
+        futures = {s: pool.submit(get_quote, s) for s in single}
+        if group_future is not None:
+            out.update(zip(grouped, group_future.result(), strict=True))
+        out.update({s: f.result() for s, f in futures.items()})
+    return [out[s] for s in symbols]
