@@ -16,8 +16,8 @@ from packages.learning import outcomes as outcomes_mod
 
 
 def _outcome_value(o) -> float | None:
-    """Beklenti örneği: pnl (USD)."""
-    return o.pnl
+    """Beklenti örneği: maliyet sonrası USD (26 Kasım 2026, L6)."""
+    return float(getattr(o, "net_pnl", o.pnl))
 
 
 def _parse_dt(value: str | None) -> datetime | None:

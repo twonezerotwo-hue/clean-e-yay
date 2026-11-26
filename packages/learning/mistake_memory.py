@@ -63,9 +63,21 @@ class MistakeVerdict:
 
 
 def _pnl(t) -> float:
-    """Trade (`pnl_usd`) ve CanonicalOutcome (`pnl`) için ortak PnL erişimi."""
+    """Kâr/zarar, maliyet sonrası (26 Kasım 2026, L6). CanonicalOutcome → net_pnl. Trade →
+    defter 22 Kasım 2026'dan beri net yazar (gross_pnl_usd alanı varsa pnl_usd nettir);
+    eski kayıtta brütten boyut × gidiş-dönüş maliyeti düşülür (aynı formül)."""
+    if hasattr(t, "net_pnl"):
+        return float(t.net_pnl)
     v = getattr(t, "pnl_usd", None)
-    return float(v if v is not None else getattr(t, "pnl", 0.0))
+    v = float(v if v is not None else getattr(t, "pnl", 0.0) or 0.0)
+    if getattr(t, "gross_pnl_usd", None) is not None:
+        return v
+    size = getattr(t, "size_usd", None)
+    if size:
+        from packages.paper.lifecycle import round_trip_cost_frac
+
+        v -= float(size) * round_trip_cost_frac(str(getattr(t, "symbol", "") or ""))
+    return v
 
 
 def wilson_bounds(wins: int, n: int, z: float = 1.96) -> tuple[float, float]:

@@ -6,13 +6,12 @@ kohortu da negatif). Ağırlık terfisi OFFENSIVE'da challenger'dan çıkamıyor
 (no_module_diversity — touche 185 kaydın 183'ünde baskın) → dürüst kaldıraç,
 yön değil BOYUT: kanıtı negatif rejimde küçül.
 
-Fren kuralı (yanlış-pozitif freni için kanıt ÇİFT kaynaklı olmak ZORUNDA):
-- CANLI: AUTO kohort (cohorts.classify == AUTO) outcome'ları rejim bazında —
-  n >= min_live_n VE toplam pnl_usd < 0.
-- BACKTEST: challenger kayıtları (B-2 İZOLE kanal, backtest_recon.read_challenger)
-  rejim bazında — yönlü karar n >= min_backtest_n VE directional_return toplamı < 0.
-İkisi de negatifse mult = brake_mult; guardrail [floor, 1.0] — ASLA büyütmez
-(no-boost invariant), ASLA floor altına inmez (fren kapatma değil kısma).
+Fren kuralı (26 Kasım 2026, owner onayı, revizyon L2 + L6): AUTO kohort
+(cohorts.classify == AUTO) canlı sonuçları rejim bazında — R taşıyan en az min_live_n
+işlem VE maliyet sonrası ortalama R (net_r) < 0 → mult = brake_mult; guardrail
+[floor, 1.0] — ASLA büyütmez (no-boost invariant), ASLA floor altına inmez (fren kapatma
+değil kısma). (Eskiden ikinci kanıt backtest challenger kayıtlarıydı; challenger 29 Ekim
+2026'dan beri kapalı ve kaydı donuktu, canlı ayak da boyuta duyarlı brüt USD toplamıydı.)
 
 Akış: `compute()` learning worker'da OFF-TICK koşar → öneri tablosu
 (regime_risk_brake_proposal.json). Sıcak yol (decision engine) yalnız mtime-cache'li
@@ -51,45 +50,33 @@ def _proposal_path() -> Path:
 
 
 def _live_by_regime(outcomes) -> dict[str, dict]:
-    """AUTO kohort canlı outcome'ları rejim bazında n + toplam pnl (USD)."""
+    """AUTO kohort canlı sonuçları rejim bazında: R taşıyan işlem sayısı, ortalama net R
+    ve net USD toplamı (gösterim)."""
     from packages.learning import cohorts
     agg: dict[str, dict] = {}
     for o in outcomes:
         if cohorts.classify(o) != cohorts.AUTO:
             continue
+        net_r = getattr(o, "net_r", None)
+        if net_r is None:
+            continue
         reg = (o.regime or "UNKNOWN").upper()
-        row = agg.setdefault(reg, {"n": 0, "pnl_usd": 0.0})
+        row = agg.setdefault(reg, {"n": 0, "sum_net_r": 0.0, "net_pnl_usd": 0.0})
         row["n"] += 1
-        row["pnl_usd"] += float(o.pnl or 0.0)
+        row["sum_net_r"] += float(net_r)
+        row["net_pnl_usd"] += float(getattr(o, "net_pnl", getattr(o, "pnl", 0.0)) or 0.0)
     for row in agg.values():
-        row["pnl_usd"] = round(row["pnl_usd"], 2)
+        row["mean_net_r"] = round(row.pop("sum_net_r") / row["n"], 4)
+        row["net_pnl_usd"] = round(row["net_pnl_usd"], 2)
     return agg
 
 
-def _backtest_by_regime(records) -> dict[str, dict]:
-    """Challenger kayıtları (B-2) rejim bazında yönlü n + directional_return toplamı."""
-    agg: dict[str, dict] = {}
-    for r in records:
-        reg = str(r.get("regime_label") or "UNKNOWN").upper()
-        dr = r.get("directional_return")
-        if r.get("direction") not in ("bullish", "bearish") or dr is None:
-            continue  # nötr/outcome'suz kayıt fren kanıtı değil
-        row = agg.setdefault(reg, {"n": 0, "sum_directional_return": 0.0})
-        row["n"] += 1
-        row["sum_directional_return"] += float(dr)
-    for row in agg.values():
-        row["sum_directional_return"] = round(row["sum_directional_return"], 4)
-    return agg
-
-
-def compute(outcomes=None, challenger_records=None, now: datetime | None = None) -> dict:
-    """Fren tablosunu üret (OFF-TICK — learning worker). Girdiler enjekte edilebilir (test).
-
-    Karar zincirine DOKUNMAZ — yalnız artifact yazar; tüketim engine'de flag'le."""
+def compute(outcomes=None, now: datetime | None = None) -> dict:
+    """Fren tablosu önerisini üret (OFF-TICK — learning worker). Girdi enjekte edilebilir
+    (test). Karar zincirine DOKUNMAZ — öneri dosyasına yazar; canlı tablo owner onayıyla."""
     now = now or datetime.now(UTC)
     cfg = _cfg()
     min_live = int(cfg.get("min_live_n", 10))
-    min_bt = int(cfg.get("min_backtest_n", 30))
     floor = max(0.0, min(1.0, float(cfg.get("floor", 0.4))))
     brake_mult = max(floor, min(1.0, float(cfg.get("brake_mult", 0.6))))
 
@@ -97,37 +84,25 @@ def compute(outcomes=None, challenger_records=None, now: datetime | None = None)
         from packages.learning import outcomes as outcomes_mod
         # Veri hijyeni (2026-07-12): legacy kayıtlar fren tablosuna girmez.
         outcomes = outcomes_mod.learning_grade(outcomes_mod.outcomes_from_state())
-    if challenger_records is None:
-        from packages.learning import backtest_recon
-        challenger_records = backtest_recon.read_challenger()
 
     live = _live_by_regime(outcomes)
-    backtest = _backtest_by_regime(challenger_records)
-
     per_regime: dict[str, dict] = {}
-    for reg in sorted(set(live) | set(backtest)):
-        lv = live.get(reg, {"n": 0, "pnl_usd": 0.0})
-        bt = backtest.get(reg, {"n": 0, "sum_directional_return": 0.0})
-        live_negative = lv["n"] >= min_live and lv["pnl_usd"] < 0
-        bt_negative = bt["n"] >= min_bt and bt["sum_directional_return"] < 0
-        braked = bool(live_negative and bt_negative)
+    for reg in sorted(live):
+        lv = live[reg]
+        negative = lv["n"] >= min_live and lv["mean_net_r"] < 0
         per_regime[reg] = {
-            "mult": brake_mult if braked else 1.0,
-            "braked": braked,
-            "evidence": {
-                "live": {**lv, "min_required": min_live, "negative": live_negative},
-                "backtest": {**bt, "min_required": min_bt, "negative": bt_negative},
-            },
+            "mult": brake_mult if negative else 1.0,
+            "braked": bool(negative),
+            "evidence": {"live": {**lv, "min_required": min_live, "negative": negative}},
         }
 
     report = {
         "generated_at": now.isoformat(),
-        "engine": "regime_risk_brake_v1",
-        "config": {"min_live_n": min_live, "min_backtest_n": min_bt,
-                   "brake_mult": brake_mult, "floor": floor},
+        "engine": "regime_risk_brake_v2",
+        "config": {"min_live_n": min_live, "brake_mult": brake_mult, "floor": floor},
         "per_regime": per_regime,
         "braked_regimes": sorted(r for r, v in per_regime.items() if v["braked"]),
-        "note": "fren YALNIZ kucultur; iki kaynak da negatif degilse 1.0",
+        "note": "fren YALNIZ kucultur; AUTO kohort ortalama net R < 0 ise",
     }
     _write(report)
     return report

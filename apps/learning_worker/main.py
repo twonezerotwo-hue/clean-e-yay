@@ -675,10 +675,8 @@ def run_once() -> dict:
         challenger_promotion_status = f"ERROR:{type(exc).__name__}"
         errors.append(_err("challenger_promotion", exc))
 
-    # Rejim risk freni tablosu (uygulama engine'de). Kanıt çift kaynak:
-    # canlı AUTO kohort + backtest challenger (İKİSİ de negatif + min örnek →
-    # fren). Ucuz (state + jsonl okur). Artifact bayatlarsa (max_age_hours)
-    # fren sıcak yolda kendiliğinden düşer — öğrenme durursa tik bağımsız kalır.
+    # Rejim risk freni önerisi: AUTO kohort ortalama net R < 0 (min örnek) → fren.
+    # Öneri dosyasına yazılır; engine donmuş canlı tabloyu okur (owner onayıyla değişir).
     regime_brake_status = "ERROR"
     laps.append(("regime_risk_brake", time.monotonic()))
     try:

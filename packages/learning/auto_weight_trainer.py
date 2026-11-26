@@ -160,8 +160,8 @@ def _aggregate(outcomes) -> tuple[list[ModulePerf], int]:
         n = len(items)
         if n < MIN_TRADES_PER_MODULE:
             continue
-        wins = sum(1 for o in items if o.pnl > 0)
-        pnls = [o.pnl for o in items]
+        pnls = [float(getattr(o, "net_pnl", o.pnl)) for o in items]  # maliyet sonrası (L6)
+        wins = sum(1 for v in pnls if v > 0)
         total_pnl = sum(pnls)
         win_rate = wins / n
         avg_pnl = total_pnl / n

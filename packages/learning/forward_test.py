@@ -41,8 +41,9 @@ def _auto(o: object) -> bool:
 
 def _metrics(outcomes: list[object]) -> dict[str, Any]:
     closed = [o for o in outcomes if getattr(o, "closed_at", None)]
-    wins = [o for o in closed if float(getattr(o, "pnl", 0.0) or 0.0) > 0]
-    pnl = [float(getattr(o, "pnl", 0.0) or 0.0) for o in closed]
+    # Maliyet sonrası (26 Kasım 2026, L6); brüt değerler yan alanlarda.
+    pnl = [float(getattr(o, "net_pnl", getattr(o, "pnl", 0.0)) or 0.0) for o in closed]
+    wins = [v for v in pnl if v > 0]
     equity = 0.0
     peak = 0.0
     max_dd = 0.0
@@ -50,7 +51,8 @@ def _metrics(outcomes: list[object]) -> dict[str, Any]:
         equity += value
         peak = max(peak, equity)
         max_dd = max(max_dd, peak - equity)
-    r_values = [float(o.r_multiple) for o in closed if getattr(o, "r_multiple", None) is not None]
+    r_values = [float(o.net_r) for o in closed if getattr(o, "net_r", None) is not None]
+    r_gross = [float(o.r_multiple) for o in closed if getattr(o, "r_multiple", None) is not None]
     return {
         "closed": len(closed),
         "open_or_unresolved": len(outcomes) - len(closed),
@@ -60,6 +62,8 @@ def _metrics(outcomes: list[object]) -> dict[str, Any]:
         "net_pnl": round(sum(pnl), 6),
         "avg_pnl": round(sum(pnl) / len(pnl), 6) if pnl else None,
         "expectancy_r": round(sum(r_values) / len(r_values), 6) if r_values else None,
+        "gross_pnl": round(sum(float(getattr(o, "pnl", 0.0) or 0.0) for o in closed), 6),
+        "expectancy_r_gross": round(sum(r_gross) / len(r_gross), 6) if r_gross else None,
         "max_drawdown": round(max_dd, 6),
         "verified": sum(1 for o in closed if bool(getattr(o, "data_verified", False))),
     }

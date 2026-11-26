@@ -83,6 +83,26 @@ class CanonicalOutcome:
     provenance_complete: bool = True
     provenance_missing: list[str] = field(default_factory=list)
 
+    @property
+    def net_r(self) -> float | None:
+        """Maliyet sonrası R (26 Kasım 2026, L6): r_multiple − işlem maliyeti R'si (EV
+        kapısıyla aynı gidiş-dönüş tablosu). R'siz kayıtta None."""
+        if self.r_multiple is None:
+            return None
+        from packages.learning import benchmark
+
+        return round(self.r_multiple - benchmark.trade_cost_r(self), 4)
+
+    @property
+    def net_pnl(self) -> float:
+        """Maliyet sonrası USD (L6): pnl (brüt) − boyut × gidiş-dönüş maliyet oranı; defterin
+        22 Kasım 2026'dan beri yazdığı netle aynı formül. Boyut bilinmiyorsa brüt."""
+        if self.size_usd is None:
+            return self.pnl
+        from packages.paper.lifecycle import round_trip_cost_frac
+
+        return round(self.pnl - self.size_usd * round_trip_cost_frac(self.symbol), 4)
+
 
 def _duration_seconds(opened_at: str | None, closed_at: str | None) -> float | None:
     if not opened_at or not closed_at:
@@ -159,10 +179,11 @@ def _trade_provenance(t: Trade) -> tuple[bool, list[str]]:
 
 
 def _learning_pnl(gross, pnl) -> float:
-    """Öğrenmenin kâr/zararı: brüt (maliyet öncesi). Defter 22 Kasım 2026'dan beri net
-    tutuyor (D2); R çarpanı fiyattan hesaplandığı ve EV kapısı maliyeti ayrıca düştüğü
-    için öğrenme brütte kalır, yoksa maliyet iki kez sayılır ve kayıp ortalamasına
-    pozitif R girer. Nete geçiş revizyon grubu 7'de ölçülerek yapılır. Legacy
+    """`pnl` alanı brüttür (maliyet öncesi). Defter 22 Kasım 2026'dan beri net tutuyor (D2);
+    p(win) ve EV yolu brütte kalır, çünkü R fiyattan hesaplanıyor ve EV kapısı maliyeti
+    ayrıca düşüyor (yoksa maliyet iki kez sayılır). "Para kazandı mı" diye bakan
+    yargıçlar (fren, hata hafızası, tarihsel edge, edge raporu, ağırlık eğiticisi,
+    gözcü, ileri sınama) 26 Kasım 2026'dan beri `net_pnl` / `net_r` okur. Legacy
     kayıtlarda brüt alan yok; pnl_usd zaten brüt."""
     value = gross if gross is not None else pnl
     try:

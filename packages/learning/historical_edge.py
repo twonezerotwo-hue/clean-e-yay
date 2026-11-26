@@ -152,9 +152,11 @@ def compute_edge(
                 strong_count += 1
 
     n = len(matched)
-    wins = sum(1 for o in matched if o.pnl > 0)
+    # Maliyet sonrası (26 Kasım 2026, L6).
+    nets = [float(getattr(o, "net_pnl", o.pnl)) for o in matched]
+    wins = sum(1 for v in nets if v > 0)
     win_rate = round(wins / n, 3) if n else 0.0
-    avg_pnl = round(sum(o.pnl for o in matched) / n, 2) if n else 0.0
+    avg_pnl = round(sum(nets) / n, 2) if n else 0.0
 
     return HistoricalEdgeResult(
         candidate_fingerprint=candidate_fingerprint,

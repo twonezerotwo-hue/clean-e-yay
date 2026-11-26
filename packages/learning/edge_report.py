@@ -89,7 +89,7 @@ def report() -> dict:
 
     # Veri hijyeni (2026-07-12): legacy kayıtlar edge kanıtına girmez.
     outs = outcomes_mod.learning_grade(outcomes_mod.outcomes_from_state())
-    pnls_raw = [o.pnl for o in outs]
+    pnls_raw = [float(getattr(o, "net_pnl", o.pnl)) for o in outs]  # maliyet sonrası (L6)
     # CP4-fix #2: stabilite verdict'i WINSORIZE edilmiş seride ölçülür → tek dev işlem
     # fold expectancy işaretini çevirip sahte STABLE üretemez.
     stab = walk_forward_stability(_winsorize(pnls_raw))
