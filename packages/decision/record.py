@@ -31,10 +31,7 @@ _CHECKPOINT_EVERY = timedelta(hours=1)
 # geçer; kayıt bundan kısa tutulursa sınama verisi silinir (~3 MB/gün).
 _RETENTION_DAYS = 90
 # Karar yolunu değiştirebilen bayraklar; değerleri kayıtta sürüm bilgisidir.
-_DECISION_FLAGS = (
-    "E_YAY_CANONICAL_RUNTIME",
-    "LEARNING_ADVISOR_APPLY", "TF_SCORING_V2_SHADOW", "LEARNING_AUDIT_LEDGER_ONLY",
-)
+_DECISION_FLAGS = ("E_YAY_CANONICAL_RUNTIME", "TF_SCORING_V2_SHADOW")
 _LOCK = threading.Lock()
 _STATE: dict[str, Any] = {"cells": {}, "checkpoint_at": None, "versions": None, "pruned_day": None}
 
