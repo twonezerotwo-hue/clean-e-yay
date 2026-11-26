@@ -62,7 +62,6 @@ def _perfs_for(records: list[dict]) -> list[ModulePerf]:
         if mod and r.get("directional_return") is not None:
             by_module.setdefault(str(mod), []).append(r)
 
-    loss_aware = awt._loss_aware_enabled()
     perfs: list[ModulePerf] = []
     for mod, items in by_module.items():
         n = len(items)
@@ -82,11 +81,7 @@ def _perfs_for(records: list[dict]) -> list[ModulePerf]:
         ]
         total = sum(drs)
         avg = total / len(drs) if drs else 0.0
-        score = (
-            awt._loss_aware_score(win_rate, drs)
-            if loss_aware
-            else awt._module_score(win_rate, avg)
-        )
+        score = awt._loss_aware_score(win_rate, drs)
         perfs.append(
             ModulePerf(
                 module=mod, trades=n, wins=wins, win_rate=round(win_rate, 3),
@@ -264,7 +259,7 @@ def run(records: list[dict] | None = None) -> dict:
         "engine": "challenger_trainer_v1",
         "status": "OK",
         "source_records": len(records),
-        "loss_aware": awt._loss_aware_enabled(),
+        "loss_aware": True,
         "proposed_regimes": proposed,
         "regimes": weights,
         "quantum_scorecard": scorecard,

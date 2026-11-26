@@ -124,25 +124,15 @@ def test_resolve_live_weights_returns_canonical_keyed_bucket_when_trusted():
         assert all(k in {"15m", "1h", "4h", "1d", "1w"} for k in out)
 
 
-# ── D4: per-TF trust kapısı (TF_TRUST_PER_BUCKET, default OFF) ────────────────
+# ── D4: per-TF trust kapısı (26 Kasım 2026'dan beri bayraksız) ────────────────
 
 _MANIFEST = {"tf_weights": {"intraday": {"m15": 0.8, "h1": 1.3, "h4": 1.2, "d1": 0.7}}}
-
-
-def test_per_bucket_off_is_byte_same(monkeypatch):
-    """KAPALI-bekçi: flag yokken kanıt yalnız 1h'de bile olsa BEŞ TF'in öğrenilmiş
-    ağırlığı aynen akar (eski gevşek davranış birebir — kural 1)."""
-    monkeypatch.setattr(twt, "load_active_weights", lambda: dict(_MANIFEST))
-    rep = _report([_cal("1h", "intraday", win_rate=0.7, expectancy=3.0)])
-    out = twt.resolve_live_tf_weights(rep)
-    assert out == {"15m": 0.8, "1h": 1.3, "4h": 1.2, "1d": 0.7}
 
 
 def test_per_bucket_on_neutralises_unproven_tfs(monkeypatch):
     """AÇIK: öğrenilmiş ağırlık yalnız kanıtlı TF'e akar; kanıtsızlar nötr 1.0
     (15m, 1d'nin kanıtıyla içeri giremez)."""
     monkeypatch.setattr(twt, "load_active_weights", lambda: dict(_MANIFEST))
-    monkeypatch.setenv(twt.FLAG_PER_BUCKET, "1")
     rep = _report([_cal("1h", "intraday", win_rate=0.7, expectancy=3.0)])
     out = twt.resolve_live_tf_weights(rep)
     assert out == {"15m": 1.0, "1h": 1.3, "4h": 1.0, "1d": 1.0}
@@ -151,7 +141,6 @@ def test_per_bucket_on_neutralises_unproven_tfs(monkeypatch):
 def test_per_bucket_on_all_proven_unchanged(monkeypatch):
     """AÇIK + tüm TF'ler kanıtlı → sertleştirme hiçbir şeyi değiştirmez."""
     monkeypatch.setattr(twt, "load_active_weights", lambda: dict(_MANIFEST))
-    monkeypatch.setenv(twt.FLAG_PER_BUCKET, "1")
     rep = _report([
         _cal("15m", "scalp", win_rate=0.6, expectancy=1.0),
         _cal("1h", "intraday", win_rate=0.7, expectancy=3.0),
@@ -166,7 +155,6 @@ def test_per_bucket_on_stale_report_without_field_is_honest(monkeypatch):
     """AÇIK + eski artifact'ta edge_proven_timeframes YOK → hiçbir TF kanıtlı
     sayılmaz, hepsi nötr (sahte kanıt uydurulmaz)."""
     monkeypatch.setattr(twt, "load_active_weights", lambda: dict(_MANIFEST))
-    monkeypatch.setenv(twt.FLAG_PER_BUCKET, "1")
     rep = _report([_cal("1h", "intraday", win_rate=0.7, expectancy=3.0)])
     del rep["edge_proven_timeframes"]
     out = twt.resolve_live_tf_weights(rep)
@@ -177,7 +165,6 @@ def test_per_bucket_negative_expectancy_tf_not_proven(monkeypatch):
     """AÇIK: bol örnekli ama para KAYBEDEN TF (CALIBRATED, expectancy<0) kanıtlı
     değildir → nötr kalır (B5 kuralının per-TF devamı)."""
     monkeypatch.setattr(twt, "load_active_weights", lambda: dict(_MANIFEST))
-    monkeypatch.setenv(twt.FLAG_PER_BUCKET, "1")
     rep = _report([
         _cal("1h", "intraday", win_rate=0.7, expectancy=3.0),
         _cal("4h", "intraday", win_rate=0.55, expectancy=-1.0),  # kaybeden

@@ -106,6 +106,9 @@ class _FakeOutcome:
         self.mae_pct = mae_pct
         self.mfe_pct = mfe_pct
         self.data_verified = verified
+        # Eğitici yalnız AUTO kohortla çalışır (fingerprint + verified).
+        self.fingerprint = "BTCUSD|v2|1h|NEUTRAL|bullish|S55|C|touche"
+        self.open_reason = "signal"
 
 
 def test_trainer_insufficient_when_no_verified(monkeypatch):
@@ -253,7 +256,7 @@ def test_classify_close_matches_live_reason_strings() -> None:
     assert _classify_close(None) == "other"
 
 
-# ── Dilim 4: TF_TARGET_AUTO_ONLY (girdi hijyeni) ─────────────────────────────
+# ── Dilim 4: girdi hijyeni (yalnız AUTO kohort) ─────────────────────────────
 
 def _mk_outcome(i: int, *, fingerprint, open_reason, verified=True):
     from packages.learning.outcomes import CanonicalOutcome
@@ -277,18 +280,7 @@ def _mixed_rows():
     return auto + manual
 
 
-def test_auto_only_off_uses_all_verified(monkeypatch):
-    monkeypatch.delenv("TF_TARGET_AUTO_ONLY", raising=False)
-    monkeypatch.setattr(trainer.outcomes_mod, "outcomes_from_state",
-                        lambda s=None: _mixed_rows())
-    monkeypatch.setattr(trainer.paper_state, "load", lambda: None)
-    p = trainer.train(timeframes=["1h"])
-    assert p.dataset_size == 35  # verified hepsi (manuel dahil) — mevcut davranış
-    assert "dataset=verified" in p.audit_note
-
-
-def test_auto_only_on_excludes_manual_verified(monkeypatch):
-    monkeypatch.setenv("TF_TARGET_AUTO_ONLY", "1")
+def test_excludes_manual_verified(monkeypatch):
     monkeypatch.setattr(trainer.outcomes_mod, "outcomes_from_state",
                         lambda s=None: _mixed_rows())
     monkeypatch.setattr(trainer.paper_state, "load", lambda: None)
@@ -297,47 +289,30 @@ def test_auto_only_on_excludes_manual_verified(monkeypatch):
     assert "dataset=auto_cohort" in p.audit_note
 
 
-def test_entry_exit_quality_honors_same_flag(monkeypatch):
+def test_entry_exit_quality_uses_auto_cohort(monkeypatch):
     from packages.learning import entry_exit_quality as eeq
     monkeypatch.setattr(eeq.outcomes_mod, "outcomes_from_state",
                         lambda s=None: _mixed_rows())
-    monkeypatch.delenv("TF_TARGET_AUTO_ONLY", raising=False)
-    assert eeq.report()["total"] == 35
-    monkeypatch.setenv("TF_TARGET_AUTO_ONLY", "1")
-    assert eeq.report()["total"] == 25
+    assert eeq.report()["total"] == 25  # trainer'la aynı: yalnız AUTO kohort
 
 
-def test_coverage_status_follows_active_flag(monkeypatch):
+def test_coverage_status_uses_auto_count(monkeypatch):
     """/learning/tf-targets coverage: status trainer'ın FİİLEN kullandığı sayıya
-    bakar — flag OFF verified_n (mevcut davranış), ON auto_n (dürüst gösterge)."""
+    (auto_n) bakar."""
     from apps.api.routers import learning as lr
     fp = "BTCUSD|v2|1h|NEUTRAL|bullish|S55|C|touche"
     rows = (
         [_mk_outcome(i, fingerprint=fp, open_reason="signal") for i in range(15)]
         + [_mk_outcome(100 + i, fingerprint=None, open_reason="owner_manual")
            for i in range(10)]
-    )  # auto_n=15 < 20 ≤ verified_n=25 → flag durumu status'u çevirir
+    )  # auto_n=15 < 20 ≤ verified_n=25
     monkeypatch.setattr(lr.outcomes_mod, "outcomes_from_state", lambda s=None: rows)
-    monkeypatch.delenv("TF_TARGET_AUTO_ONLY", raising=False)
-    assert lr._tf_target_coverage()["1h"]["status"] == "TRAINED"
-    monkeypatch.setenv("TF_TARGET_AUTO_ONLY", "1")
     cov = lr._tf_target_coverage()["1h"]
     assert cov["status"] == "UNTRAINED"
     assert cov["auto_n"] == 15 and cov["verified_n"] == 25
 
 
-# ── Dilim 5: EXIT_FORENSICS_NUDGE (oransal nudge adımı) ──────────────────────
-
-def _stats(**kw):
-    base = dict(
-        timeframe="1h", trades=20, wins=8, win_rate=0.4,
-        sl_hit=12, tp_hit=8, time_stop=0, other_exit=0,
-        sl_hit_rate=0.6, tp_hit_rate=0.4, time_stop_rate=0.0,
-        avg_mae_pct=0.3, avg_mfe_pct=2.0, avg_pnl=0.0,
-    )
-    base.update(kw)
-    return trainer.TfStats(**base)
-
+# ── Sabit nudge adımı ─────────────────────────────────────────────────────────
 
 def _tight_sl_rows():
     """test_trainer_nudges_sl_when_too_tight ile aynı TIGHT_SL fikstürü."""
@@ -351,71 +326,8 @@ def _tight_sl_rows():
     return rows
 
 
-def test_step_fixed_when_flag_off(monkeypatch):
-    """Regresyon bekçisi: flag OFF → forensics kanıtı olsa bile sabit NUDGE_STEP."""
-    monkeypatch.delenv("EXIT_FORENSICS_NUDGE", raising=False)
-    step, src, ev = trainer._step_for(
-        "TIGHT_SL", _stats(), {"sl_roundtrip_share": 1.0}, 0.1)
-    assert (step, src, ev) == (trainer.NUDGE_STEP, "fixed", "")
-    assert trainer.NUDGE_STEP == 0.10
-
-
-def test_step_clamped_between_min_and_max(monkeypatch):
-    monkeypatch.setenv("EXIT_FORENSICS_NUDGE", "1")
-    st = _stats()
-    s0, _, _ = trainer._step_for("TIGHT_SL", st, {"sl_roundtrip_share": 0.0}, 0.1)
-    assert s0 == trainer.STEP_MIN == 0.05
-    s1, _, _ = trainer._step_for("TIGHT_SL", st, {"sl_roundtrip_share": 1.0}, 0.1)
-    assert s1 == trainer.STEP_MAX == 0.15
-    # Bozuk/aşırı şiddet değeri de klamplanır
-    s2, _, _ = trainer._step_for("TIGHT_SL", st, {"sl_roundtrip_share": 5.0}, 0.1)
-    assert s2 == 0.15
-
-
-def test_step_forensics_preferred_stats_fallback(monkeypatch):
-    monkeypatch.setenv("EXIT_FORENSICS_NUDGE", "1")
-    st = _stats(sl_hit_rate=0.60)
-    s_fx, src_fx, ev_fx = trainer._step_for(
-        "TIGHT_SL", st, {"sl_roundtrip_share": 0.5}, 0.1)
-    assert src_fx == "proportional(forensics)"
-    assert "sl_roundtrip_share" in ev_fx
-    assert s_fx == 0.10  # 0.05 + 0.10×0.5
-    # Forensics kanıtı yok → TfStats fallback (o da ölçüm): (0.60-0.45)/0.30 = 0.5
-    s_st, src_st, ev_st = trainer._step_for("TIGHT_SL", st, None, 0.1)
-    assert src_st == "proportional(stats)"
-    assert "sl_hit_rate" in ev_st
-    assert s_st == 0.10
-
-
-def test_step_trailing_rule_paths(monkeypatch):
-    monkeypatch.setenv("EXIT_FORENSICS_NUDGE", "1")
-    st = _stats(avg_capture=0.25)
-    s_fx, src_fx, _ = trainer._step_for(
-        "TRAILING_LOOSE", st, {"trailing_giveback_ratio": 1.0}, 0.1)
-    assert (s_fx, src_fx) == (0.15, "proportional(forensics)")
-    # Fallback: (0.50-0.25)/0.50 = 0.5 → 0.10
-    s_st, src_st, ev = trainer._step_for("TRAILING_LOOSE", st, {}, 0.1)
-    assert (s_st, src_st) == (0.10, "proportional(stats)")
-    assert "avg_capture" in ev
-
-
-def test_max_step_stays_within_auto_band(isolated_store):
-    """STEP_MAX = AUTO_APPLY_BAND_PCT — oransal adımın tavanı hibrit kapıyı
-    yapısal olarak korur: en büyük nudge bile bant-içi kalıp auto-apply olur."""
-    assert trainer.STEP_MAX == store.AUTO_APPLY_BAND_PCT
-    baseline = {"1h": {"sl_atr_mult": 1.2, "rr": 1.8, "sl_pct_floor": 0.010, "sl_pct_cap": 0.035}}
-    proposal = {
-        "generated_at": "now",
-        "per_timeframe": {"1h": {"sl_atr_mult": round(1.2 * (1 + trainer.STEP_MAX), 4),
-                                 "rr": 1.8, "sl_pct_floor": 0.010, "sl_pct_cap": 0.035}},
-    }
-    rec = store.submit_proposal(proposal, current_baseline=baseline)
-    assert rec["decisions"]["1h"].startswith("auto_applied")
-
-
-def test_train_flag_off_keeps_fixed_step(monkeypatch):
-    """OFF yolu bayt-uyum bekçisi: nudge delta sabit 0.10, kaynak 'fixed'."""
-    monkeypatch.delenv("EXIT_FORENSICS_NUDGE", raising=False)
+def test_train_uses_fixed_step(monkeypatch):
+    """Nudge delta sabit 0.10, kaynak 'fixed'."""
     monkeypatch.setattr(trainer.paper_state, "load", lambda: object())
     monkeypatch.setattr(trainer.outcomes_mod, "outcomes_from_state",
                         lambda s: _tight_sl_rows())
@@ -424,20 +336,3 @@ def test_train_flag_off_keeps_fixed_step(monkeypatch):
     assert sl.delta_pct == trainer.NUDGE_STEP == 0.10
     assert sl.step_source == "fixed"
     assert sl.evidence == ""
-
-
-def test_train_flag_on_uses_forensics_evidence(monkeypatch):
-    """ON: trainer_evidence'tan gelen şiddet nudge adımına ve audit alanlarına yansır."""
-    monkeypatch.setenv("EXIT_FORENSICS_NUDGE", "1")
-    monkeypatch.setattr(trainer.paper_state, "load", lambda: object())
-    monkeypatch.setattr(trainer.outcomes_mod, "outcomes_from_state",
-                        lambda s: _tight_sl_rows())
-    from packages.learning import exit_forensics
-    monkeypatch.setattr(exit_forensics, "trainer_evidence",
-                        lambda outs=None, **kw: {"1h": {"sl_roundtrip_share": 1.0}})
-    p = trainer.train(timeframes=["1h"], store_overrides={})
-    sl = next(n for n in p.nudges if n.param == "sl_atr_mult")
-    assert sl.delta_pct == 0.15
-    assert sl.step_source == "proportional(forensics)"
-    assert "sl_roundtrip_share" in sl.evidence
-    assert sl.new == round(sl.old * 1.15, 4)

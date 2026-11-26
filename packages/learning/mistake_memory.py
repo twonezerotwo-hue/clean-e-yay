@@ -11,28 +11,16 @@ Politika:
   alınır (DATA_POLICY).
 - `MIN_TRADES` altında her zaman NEUTRAL fallback (no_adjustment).
 
-F3-3 (2026-07-02) — flag `MISTAKE_MEMORY_V2` (env, default KAPALI = bayt-aynı):
-denetim bulgusu 1.4/4.4 — exact-match + 200'lük volatile pencere yüzünden hafıza
-fiilen ölüydü (fingerprint kardinalitesi yüksek, aynı 8-parçalı imza 3 kez
-neredeyse hiç birikmiyor). AÇIKKEN üç düzeltme:
-1. Kaynak: recent_trades yerine outcomes_from_state (decision_log kalıcı kaynağı
-   dahil — trainer'la aynı desen).
-2. Hiyerarşik fallback: exact imza yetersizse önce L1 (symbol|tf|rejim|yön),
-   sonra L2 (symbol|yön) kovasına bakılır (`~L1|`/`~L2|` sentetik kayıtları —
-   gerçek fingerprint'le çakışamaz).
-3. Wilson güven sınırı: AVOID ancak üst sınır < eşik (gerçekten kötü olduğundan
-   eminsek), BOOST ancak alt sınır > eşik. 1W/2L gibi az-veri imzalar artık
-   AVOID yerine WARNING alır (aceleci blok yok). Streak kuralı aynen kalır.
+Kaynak: paper defterinin son kapanan işlemleri (recent_trades), exact imza eşleşmesi.
+(Kalıcı kaynak + hiyerarşik kova + Wilson modu olan v2 hiç açılmadı, 26 Kasım 2026'da
+kalktı; wilson_bounds keşif ve terfi kartlarında kullanılmaya devam ediyor.)
 """
 from __future__ import annotations
 
 import math
-import os
 from dataclasses import dataclass, field
 from typing import Literal
 
-from packages.learning import fingerprint as fp_mod
-from packages.learning import outcomes as outcomes_mod
 from packages.paper import state as paper_state
 
 MIN_TRADES = 3
@@ -74,13 +62,6 @@ class MistakeVerdict:
     record: Mistake | None = None
 
 
-_V2_OFF = {"0", "false", "no", "off", ""}
-
-
-def _v2_enabled() -> bool:
-    return os.environ.get("MISTAKE_MEMORY_V2", "0").strip().lower() not in _V2_OFF
-
-
 def _pnl(t) -> float:
     """Trade (`pnl_usd`) ve CanonicalOutcome (`pnl`) için ortak PnL erişimi."""
     v = getattr(t, "pnl_usd", None)
@@ -96,23 +77,6 @@ def wilson_bounds(wins: int, n: int, z: float = 1.96) -> tuple[float, float]:
     center = (phat + z * z / (2 * n)) / denom
     margin = z * math.sqrt(phat * (1 - phat) / n + z * z / (4 * n * n)) / denom
     return max(0.0, center - margin), min(1.0, center + margin)
-
-
-def _l1_key(fingerprint: str | None) -> str | None:
-    """L1 kovası: symbol|timeframe|rejim|yön (skor/confluence/modül düşer)."""
-    p = fp_mod.parse(fingerprint)
-    if not p["symbol"] or not p["direction"]:
-        return None
-    return "|".join(["~L1", p["symbol"], p["timeframe"] or "-",
-                     p["regime"] or "-", p["direction"]])
-
-
-def _l2_key(fingerprint: str | None) -> str | None:
-    """L2 kovası: symbol|yön (en kaba anlamlı seviye)."""
-    p = fp_mod.parse(fingerprint)
-    if not p["symbol"] or not p["direction"]:
-        return None
-    return "|".join(["~L2", p["symbol"], p["direction"]])
 
 
 def _aggregate_by(trades, key_fn) -> list[Mistake]:
@@ -166,17 +130,10 @@ def _aggregate(trades) -> list[Mistake]:
 
 def summary() -> list[Mistake]:
     s = paper_state.load()
-    if not _v2_enabled():
-        return _aggregate(s.recent_trades)
-    # F3-3 — kalıcı kaynak (decision_log + recent_trades) + hiyerarşik kovalar.
-    records = outcomes_mod.drop_execution_anomalies(outcomes_mod.outcomes_from_state(s))
-    out = _aggregate(records)
-    out.extend(_aggregate_by(records, _l1_key))
-    out.extend(_aggregate_by(records, _l2_key))
-    return out
+    return _aggregate(s.recent_trades)
 
 
-def _verdict_for(rec: Mistake | None, fp: str, *, use_wilson: bool = False) -> MistakeVerdict:
+def _verdict_for(rec: Mistake | None, fp: str) -> MistakeVerdict:
     # F1-2 — eşik KARARLI trade sayısına (wins+losses) bakar: 3 başabaş trade'lik
     # bir fingerprint win_rate=0 ile AVOID tetikleyemez (BE kayıp değildir).
     decided = (rec.wins + rec.losses) if rec else 0
@@ -201,17 +158,11 @@ def _verdict_for(rec: Mistake | None, fp: str, *, use_wilson: bool = False) -> M
             fingerprint=fp,
             record=rec,
         )
-    # F3-3 — Wilson modu: AVOID/BOOST nokta tahminiyle değil güven sınırıyla.
-    # AVOID ancak ÜST sınır eşiğin altındaysa (gerçekten kötü olduğundan
-    # eminiz); BOOST ancak ALT sınır eşiğin üstündeyse. Az veri → karar yok.
-    lo, hi = wilson_bounds(rec.wins, decided) if use_wilson else (rec.win_rate, rec.win_rate)
+    lo = hi = rec.win_rate
     if hi < AVOID_WIN_RATE:
         return MistakeVerdict(
             action="AVOID",
-            reason=(
-                f"düşük win_rate {rec.win_rate} (wilson üst {hi:.2f})"
-                if use_wilson else f"düşük win_rate {rec.win_rate}"
-            ),
+            reason=f"düşük win_rate {rec.win_rate}",
             size_factor=SIZE_FACTOR_AVOID,
             evidence=[
                 f"trades={rec.trades}",
@@ -223,10 +174,7 @@ def _verdict_for(rec: Mistake | None, fp: str, *, use_wilson: bool = False) -> M
     if lo > BOOST_WIN_RATE:
         return MistakeVerdict(
             action="BOOST",
-            reason=(
-                f"yüksek win_rate {rec.win_rate} (wilson alt {lo:.2f})"
-                if use_wilson else f"yüksek win_rate {rec.win_rate}"
-            ),
+            reason=f"yüksek win_rate {rec.win_rate}",
             size_factor=SIZE_FACTOR_BOOST,
             evidence=[f"trades={rec.trades}", f"total_pnl={rec.total_pnl}"],
             fingerprint=fp,
@@ -254,24 +202,7 @@ def _verdict_for(rec: Mistake | None, fp: str, *, use_wilson: bool = False) -> M
 def evaluate(fingerprint: str, mems: list[Mistake] | None = None) -> MistakeVerdict:
     mems = mems if mems is not None else summary()
     rec = next((m for m in mems if m.fingerprint == fingerprint), None)
-    if not _v2_enabled():
-        return _verdict_for(rec, fingerprint)
-    # F3-3 — hiyerarşik fallback: exact imza yetersizse L1 → L2 kovası.
-    level = "exact"
-    decided = (rec.wins + rec.losses) if rec else 0
-    if decided < MIN_TRADES:
-        for lvl, key_fn in (("L1", _l1_key), ("L2", _l2_key)):
-            key = key_fn(fingerprint)
-            cand = next((m for m in mems if m.fingerprint == key), None) if key else None
-            if cand is not None and (cand.wins + cand.losses) >= MIN_TRADES:
-                rec, level = cand, lvl
-                break
-    verdict = _verdict_for(rec, fingerprint, use_wilson=True)
-    if level != "exact":
-        verdict.reason = f"[{level}] {verdict.reason}"
-        verdict.evidence.append(f"fallback_level={level}")
-        verdict.evidence.append(f"bucket={rec.fingerprint}")
-    return verdict
+    return _verdict_for(rec, fingerprint)
 
 
 def thresholds() -> dict:

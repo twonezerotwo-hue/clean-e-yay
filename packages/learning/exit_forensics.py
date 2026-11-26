@@ -2,9 +2,7 @@
 olduğunu ölçer (denetim paketi 2026-07-03, ölçüm ekseni).
 
 Salt gözlem (observe-only): karar/ağırlık/geometri yoluna dokunmaz; learning
-worker snapshot yazar, API okur, panel gösterir. tf_target_trainer Dilim 5'te
-`trainer_evidence()` çıktısını (flag arkasında) adım-şiddeti kanıtı olarak
-tüketebilir — veri yetersizse {} döner, trainer sabit adıma düşer (sahtelik yok).
+worker snapshot yazar, API okur, panel gösterir.
 
 DÜRÜSTLÜK KURALLARI (yalnız kayıtlı veriden hesaplanabilen):
 - MAE/MFE yalnız pozisyon AÇIKKEN kaydedilir → kapanış-sonrası hiçbir şey
@@ -349,47 +347,6 @@ def _top_costs(bucket_rows: list[dict]) -> list[dict]:
     for c in cards:
         c.pop("rank", None)
     return cards[:3]
-
-
-def trainer_evidence(
-    outcomes: list[CanonicalOutcome] | None = None, *, rep: dict | None = None
-) -> dict[str, dict]:
-    """TF-başı şiddet oranları (Dilim 5 girdisi). Veri yetersiz → {} (fake yok).
-
-    - trailing_giveback_ratio: geri verilen / ort. tepe (trailing bucket)
-    - sl_roundtrip_share: roundtrip / tüm SL (sl bucket)
-    - timestop_missed_ratio: kaçan / ort. tepe (time_stop bucket)
-    """
-    r = rep if rep is not None else report(outcomes)
-    by_tf: dict[str, dict] = {}
-    for b in r["buckets"]:
-        if b["n"] < MIN_BUCKET:
-            continue
-        tf = b["timeframe"]
-        ev = by_tf.setdefault(tf, {"n": 0})
-        ev["n"] += b["n"]
-        if (
-            b["category"] == "trailing"
-            and b["avg_give_back_pct"] is not None
-            and b["avg_mfe_pct"]
-        ):
-            ev["trailing_giveback_ratio"] = round(
-                min(1.0, b["avg_give_back_pct"] / b["avg_mfe_pct"]), 4
-            )
-        elif b["category"] == "sl":
-            sl_n = b["sl_roundtrip"] + b["sl_straight"] + b["sl_gray"]
-            if sl_n:
-                ev["sl_roundtrip_share"] = round(b["sl_roundtrip"] / sl_n, 4)
-        elif (
-            b["category"] == "time_stop"
-            and b["avg_missed_capture_pct"] is not None
-            and b["avg_mfe_pct"]
-        ):
-            ev["timestop_missed_ratio"] = round(
-                min(1.0, b["avg_missed_capture_pct"] / b["avg_mfe_pct"]), 4
-            )
-    # Yalnız gerçekten oran taşıyan TF'ler (sadece n varsa kanıt yok demektir).
-    return {tf: ev for tf, ev in by_tf.items() if len(ev) > 1}
 
 
 def _total_bad_exit_cost(rep: dict) -> float | None:

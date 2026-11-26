@@ -178,7 +178,7 @@ def build_summary() -> dict:
         "module_attribution": outcomes_mod.module_attribution(outcomes),
         # FAZ-4 additive — rejim başına modül KALİTE AYRIM karnesi (kazanan vs
         # kaybeden katkı ayrımı + hüküm). module_attribution'ın rejim-ayrık +
-        # hükümlü hâli; WEIGHT_REGIME_FILTER aktivasyonu için kanıt kapısı.
+        # hükümlü hâli; rejim-bazlı ağırlık eğitimi için kanıt kapısı.
         # Salt-gözlem — hiçbir karar/ağırlık beslemez.
         "signal_quality": signal_quality.regime_module_scorecard(outcomes),
         # Denetim 2026-07-03 additive — AUTO/MANUAL/EXCLUDED kohort ayrımı.

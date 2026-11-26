@@ -352,7 +352,7 @@ def get_tf_targets() -> dict:
     rb = tf_target_rollback.load()
     # CP4 slice 3 — öğrenilen per-TF trailing çarpanı (açılışta tier.trail_distance ×).
     trail = {
-        "enabled": te.trail_autotune_enabled(),
+        "enabled": True,
         "guardrail": {
             "min": tf_target_store.GUARDRAIL["trail_mult"][0],
             "max": tf_target_store.GUARDRAIL["trail_mult"][1],
@@ -383,27 +383,23 @@ def get_tf_targets() -> dict:
         # yeterli AUTO kanıtı var? 1d gibi eksikler dürüstçe UNTRAINED görünür
         # (kanıt havuzlama / eşik indirme YOK).
         "coverage": _tf_target_coverage(),
-        "trainer_inputs": {
-            "auto_only_enabled": tf_target_trainer.auto_only_enabled(),
-            "forensics_nudge_enabled": tf_target_trainer.forensics_nudge_enabled(),
-        },
+        # 26 Kasım 2026: iki bayrak kalktı; eğitici hep AUTO kohortla, sabit adımla.
+        "trainer_inputs": {"auto_only_enabled": True, "forensics_nudge_enabled": False},
     }
 
 
 def _tf_target_coverage() -> dict:
     """TF-başı trainer kanıt sayımı (AUTO kohort vs verified).
 
-    status trainer'ın FİİLEN kullandığı sayıya bakar: TF_TARGET_AUTO_ONLY
-    açıkken auto_n, kapalıyken verified_n — gösterge makinenin gerçeğini söyler.
+    status trainer'ın FİİLEN kullandığı sayıya (auto_n) bakar.
     """
     outs = outcomes_mod.outcomes_from_state()
-    auto_only = tf_target_trainer.auto_only_enabled()
     cov: dict[str, dict] = {}
     for tf in ("15m", "1h", "4h", "1d"):
         items = [o for o in outs if o.timeframe == tf]
         auto_n = sum(1 for o in items if cohorts.classify(o) == cohorts.AUTO)
         verified_n = sum(1 for o in items if o.data_verified)
-        n_used = auto_n if auto_only else verified_n
+        n_used = auto_n
         cov[tf] = {
             "auto_n": auto_n,
             "verified_n": verified_n,

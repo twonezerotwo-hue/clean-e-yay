@@ -41,25 +41,9 @@ from packages.learning import rebalance_store, weight_autoapply_store
 _MIN_OUTCOMES_DEFAULT = 15
 _MONITOR_MAX_AGE_HOURS_DEFAULT = 336.0  # 14 gün; 0 → süre koruması kapalı
 
-# F1-1 — R-bazlı expectancy modu (owner-flag, default KAPALI = USD bayt-aynı).
-# USD-expectancy pozisyon boyutuyla confound olur (15m küçük poz + 1d büyük poz
-# aynı ortalamada); R-katı (pnl / açılış riski) boyut-bağımsız edge ölçer.
-# AÇIKKEN yalnız r_multiple taşıyan verified outcome'lar örneğe girer (legacy/
-# SL'siz dışarıda — dürüst daralma). DİKKAT: izleme penceresi ortasında mod
-# DEĞİŞTİRME — baseline apply anında aynı modla yazılır; mod değişirse baseline
-# ile post kıyası elmayla armut olur (yeni moda geçmeden aktif izlemeyi bitir).
-_R_MODE_OFF = {"0", "false", "no", "off", ""}
-
-
-def _r_mode() -> bool:
-    return os.environ.get("EXPECTANCY_R_MODE", "0").strip().lower() not in _R_MODE_OFF
-
-
 def _outcome_value(o) -> float | None:
-    """Expectancy örneği: R-mode'da r_multiple (yoksa None → örnek dışı),
-    USD-mode'da pnl (mevcut davranış birebir)."""
-    if _r_mode():
-        return o.r_multiple
+    """Expectancy örneği: pnl (USD). (R modu bayrağı EXPECTANCY_R_MODE hiç açılmadı,
+    26 Kasım 2026'da kalktı.)"""
     return o.pnl
 
 

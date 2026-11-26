@@ -376,14 +376,8 @@ def run_once() -> dict:
     # G2/G3: auto-weight trainer. Yeterli veri varsa proposal üretilir. G3 hibrit:
     # dar bant (|delta| ≤ REBALANCE_AUTO_APPLY_BAND) + auto-apply açık ise OTOMATİK
     # uygulanır; aksi halde PENDING (owner). API propose/approve yolu ETKİLENMEZ.
-    # F3-2: WEIGHT_REGIME_FILTER açıkken hedef = en son kapanan verified
-    # outcome'un rejimi (verisi en son değişen rejim); kapalıyken NEUTRAL (eski).
     try:
-        train_regime = "NEUTRAL"
-        if trainer.regime_filter_enabled():
-            train_regime = trainer.latest_outcome_regime() or "NEUTRAL"
-            log.info("regime-filtered training target: %s", train_regime)
-        result = trainer.train(regime=train_regime)
+        result = trainer.train()
         if isinstance(result, trainer.RebalanceProposal):
             # Baseline = apply öncesi EŞLEŞTİRİLMİŞ pencere (opened_at'e göre en son
             # N verified outcome) — post-apply penceresiyle aynı boyut/recency.
@@ -820,21 +814,6 @@ def run_once() -> dict:
         exit_backtest_status = f"ERROR:{type(exc).__name__}"
         errors.append(f"exit_backtest:{type(exc).__name__}")
 
-    # Yansıma/hafıza döngüsü (SALT-GÖZLEM, flag YOK — ucuz). Kapanan işlemlerden
-    # ders çıkarıp izlenebilir digest yazar; karar hattına BAĞLI DEĞİL (enjeksiyon
-    # ayrı owner adımı). TradingAgents deseninden alınan hafıza döngüsünün üretici
-    # yarısı — mistake_memory'nin sayısal vetosuna DİK (anlatısal ders).
-    reflection_status = "ERROR"
-    try:
-        from packages.learning import reflection as _refl
-        rf = _refl.write_digest()
-        reflection_status = str(rf.get("status", "UNKNOWN"))
-        if reflection_status == "OK":
-            log.info("reflection: %s ders", rf.get("total_lessons"))
-    except Exception as exc:  # defensive — worker patlamamalı
-        reflection_status = f"ERROR:{type(exc).__name__}"
-        errors.append(f"reflection:{type(exc).__name__}")
-
     # Kapı karşı-olgu defteri (salt ölçüm, flag yok): karar kaydındaki her aday
     # açılsaydı karar anındaki stop/hedef planıyla ne yapardı — kapıların bedeli.
     gate_counterfactual_status = "ERROR"
@@ -1001,7 +980,6 @@ def run_once() -> dict:
         "exit_backtest_status": exit_backtest_status,  # Çıkış stop-verim backtest (interval-kapılı; SKIP_FRESH=taze)
         "zone_proposer_status": zone_proposer_status,  # Aday bölge önericisi (makine ADAY önerir, owner süzer; SALT-ANALİZ)
         "council_status": council_status,  # Konsey karnesi (katmanlar-arası kombinasyon; SALT-ANALİZ)
-        "reflection_status": reflection_status,  # Yansıma/hafıza döngüsü (kapanan işlem dersleri; SALT-GÖZLEM)
         "gate_counterfactual_status": gate_counterfactual_status,  # kapı karşı-olgu defteri (salt ölçüm)
         "subsignal_scorecard_status": subsignal_scorecard_status,  # D5 sinyal karnesi (DISABLED=flag OFF)
         "tf_scoring_v2_shadow_status": tf_scoring_v2_shadow_status,  # D6 v2 gölge skoru (DISABLED=flag OFF)

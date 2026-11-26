@@ -39,7 +39,6 @@ from packages.data.types import TIMEFRAMES
 from packages.decision import (
     correlation_veto,
     entry_engine,
-    learning_advisor,
     sizing_layers,
 )
 from packages.decision.trace import stable_decision_id
@@ -112,10 +111,6 @@ class TradeDecision:
     # Rejim risk freni: rejim kanıtı çift-negatifse boyut kısılır ve kanıt
     # burada taşınır. Boş = frenlenecek kanıt yok.
     regime_brake_report: dict = field(default_factory=dict)
-    # Karar-kanıt tüketicisi (2026-07-09): tüm learning'lerin TEK birleşik fikri
-    # (CONFIRM/CAUTION/AVOID + gerekçe). VARSAYILAN GÖLGE — boyutu değiştirmez;
-    # canlı etki yalnız LEARNING_ADVISOR_APPLY=1 (owner). Boş = aday değil/hata.
-    learning_advice: dict = field(default_factory=dict)
     # Boyut katmanları: inanç-boyu + oynaklık-paritesi + son-edge freni; YALNIZ
     # KISAR (no-boost). Boş = aday değil/hesaplanamadı.
     sizing_layers_report: dict = field(default_factory=dict)
@@ -1003,29 +998,6 @@ def _decide_core(
             size = max(0.0, round(size * brake_mult, 3))
             blocked_by.append("regime_risk_brake")
 
-    # Karar-kanıt tüketicisi: tüm learning'leri TEK fikre indir. VARSAYILAN GÖLGE
-    # (boyut değişmez); LEARNING_ADVISOR_APPLY=1 iken advice yalnız KISAR (no-boost).
-    # Asla raise etmez — kararı düşürmez.
-    learning_advice: dict = {}
-    if candidate in ("open_long", "open_short"):
-        try:
-            adv = learning_advisor.advise(
-                symbol=symbol, timeframe=timeframe, regime=regime.label,
-                dominant_module=cons.dominant_module, mistake_action=verdict.action,
-                calibrated_confidence=cal_conf,
-                expected_value=expected_value, min_confidence=min_open_conf,
-            )
-            if learning_advisor.apply_enabled():
-                restrictors.append(adv.size_hint)
-            if learning_advisor.apply_enabled() and adv.size_hint < 1.0 and size > 0.0:
-                size = max(0.0, round(size * adv.size_hint, 3))
-                adv.applied = True
-                if adv.stance != "CONFIRM":
-                    blocked_by.append(f"learning_advisor:{adv.stance.lower()}")
-            learning_advice = learning_advisor.to_dict(adv)
-        except Exception:  # gölge/uygulama fikri kararı asla düşürmez
-            learning_advice = {}
-
     # ----- Boyut hesabı sayı üretmediyse açılış yok (fail-closed) -----
     # NaN/inf bir çarpan karşılaştırmalardan sessizce geçer ("kısma yok" gibi
     # görünür) ve eski sıkıştırma kalıbında en büyük boyuta dönüşürdü. Bozuk
@@ -1097,7 +1069,6 @@ def _decide_core(
         p_win_empirical=p_win_empirical,
         expected_value_empirical=expected_value_empirical,
         regime_brake_report=regime_brake_report,
-        learning_advice=learning_advice,
         sizing_layers_report=sizing_layers_report,
         correlation_veto_report=correlation_veto_report,
         entry_quality_report=eq_report,
@@ -1498,10 +1469,6 @@ def matrix_view(
                 # fren bilgisi + applied bayrağı. Owner aktivasyon kararını buradan
                 # izler (flag OFF iken applied=False ile birikir). Boş = kanıt yok.
                 "regime_brake": dict(d.regime_brake_report),
-                # Karar-kanıt tüketicisi (2026-07-09): tüm learning'lerin TEK
-                # birleşik fikri. VARSAYILAN GÖLGE (applied=False); owner
-                # LEARNING_ADVISOR_APPLY ile canlıya alır. Boş = aday değil.
-                "learning_advice": dict(d.learning_advice),
                 # Giriş kalitesi v2 (YÖN ≠ GİRİŞ ZAMANLAMASI): eski/yeni karar yan yana.
                 # Giriş kapısı raporu (kapıya ulaşılmadıysa anahtar yazılmaz).
                 **({"entry_quality": dict(d.entry_quality_report)} if d.entry_quality_report else {}),

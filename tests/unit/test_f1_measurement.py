@@ -1,6 +1,6 @@
 """F1 — ölçüm standardı slice testleri (bkz. docs/archive/AUDIT_ROADMAP.md).
 
-F1-1: R-multiple (risk_pct → r_multiple; EXPECTANCY_R_MODE flag'i default OFF)
+F1-1: R-multiple (risk_pct → r_multiple)
 F1-2: başabaş (pnl==0) kayıp değildir — bucketize + mistake_memory
 F1-3: modül katkı vektörü decision_log'a yazılır + module_attribution okur
 F1-4: gün çapası UTC
@@ -75,8 +75,8 @@ def test_close_position_stamps_risk_pct(env) -> None:
     assert trade.open_risk_pct == pytest.approx(abs(100.0 - pos.sl) / 100.0, rel=1e-4)
 
 
-def test_expectancy_r_mode_flag(env, monkeypatch) -> None:
-    """Flag OFF → USD ortalaması (bayt-aynı); ON → yalnız r_multiple örnekleri."""
+def test_expectancy_is_usd_mean(env) -> None:
+    """Beklenti USD ortalaması (R modu bayrağı 26 Kasım 2026'da kalktı)."""
     ps, _ = env
     state = ps.load()
     # USD büyük ama R küçük bir trade + USD küçük ama R büyük bir trade.
@@ -91,14 +91,9 @@ def test_expectancy_r_mode_flag(env, monkeypatch) -> None:
     )
     ps.save(state)
     from packages.learning import weight_rollback as wr
-    monkeypatch.delenv("EXPECTANCY_R_MODE", raising=False)
     n_usd, exp_usd = wr.pre_apply_expectancy(window=10)
     assert n_usd == 3
     assert exp_usd == pytest.approx((500.0 + 10.0 - 100.0) / 3, abs=0.01)
-    monkeypatch.setenv("EXPECTANCY_R_MODE", "1")
-    n_r, exp_r = wr.pre_apply_expectancy(window=10)
-    assert n_r == 2  # R'siz legacy örnek dışı (dürüst daralma)
-    assert exp_r == pytest.approx((0.5 + 3.0) / 2, abs=0.01)
 
 
 # --------------------------- F1-2: başabaş ayrımı ----------------------------

@@ -90,22 +90,7 @@ def _package1_flags_off_by_default(monkeypatch: pytest.MonkeyPatch) -> None:
     # repopulate the token from the developer .env file. Auth tests set it
     # explicitly when they need protected-route behaviour.
     monkeypatch.setenv("API_AUTH_TOKEN", "")
-    monkeypatch.delenv("TF_TARGET_AUTO_ONLY", raising=False)
-    monkeypatch.delenv("EXIT_FORENSICS_NUDGE", raising=False)
     monkeypatch.delenv("TF_TARGET_EDGE_GATE", raising=False)
-    # E-9 kök-neden fix'i: CP4 slice-3 flag'i bu listeye hiç girmemişti; geniş koşuda
-    # apps.api.main import'u .env'i yükleyince (TF_TARGET_TRAIL_AUTOTUNE=1) canlı
-    # tf_targets store çarpanı (4h trail_mult≠1.0) suite'e sızıp trailing sabitlerini
-    # bozuyordu (sıra-bağımlı flake). test_trail_autotune kendi setenv'iyle açar.
-    monkeypatch.delenv("TF_TARGET_TRAIL_AUTOTUNE", raising=False)
-    # Aynı sızıntı sınıfı, canlıda görüldü: apps.api.main import'u .env'i
-    # os.environ'a yükler; sabah aktivasyonu TF_CALIBRATION_AUTO_ONLY=1 tam
-    # koşuda tf_calibration testlerine sızıyordu (fingerprint'siz fikstürler
-    # boş dönüyor). Flag'i test eden testler kendi monkeypatch.setenv'iyle açar.
-    monkeypatch.delenv("TF_CALIBRATION_AUTO_ONLY", raising=False)
-    # Karar-kanıt tüketicisi (2026-07-09) — canlı-etki flag'i testlerde default OFF
-    # (advice yalnız gölge; boyut bayt-aynı). Flag'i test edenler kendi setenv'iyle açar.
-    monkeypatch.delenv("LEARNING_ADVISOR_APPLY", raising=False)
     # Chat model sırası (2026-07-03) — testler default Groq-önce sırayı varsayar;
     # dev .env'inde lokal-önce açık olabilir, sızdırma.
     monkeypatch.delenv("CHAT_LLM_LOCAL_FIRST", raising=False)
@@ -124,9 +109,6 @@ def _package1_flags_off_by_default(monkeypatch: pytest.MonkeyPatch) -> None:
     # sembollerini tarayıp ağa çıkmaya çalışır. Baseline = anahtarsız (FRED
     # sembolleri atlanır); FRED yolunu test edenler kendi setenv'iyle açar.
     monkeypatch.delenv("FRED_API_KEY", raising=False)
-    # D4 (2026-07-06) — per-TF trust kapısı testlerde default OFF (resolve_live_
-    # tf_weights bayt-aynı baseline); flag'i test eden testler kendisi açar.
-    monkeypatch.delenv("TF_TRUST_PER_BUCKET", raising=False)
     # D5 (2026-07-06) — sinyal karnesi worker-adımı testlerde default OFF
     # (learning koşusu bayt-eşdeğer); flag'i test eden testler kendisi açar.
     monkeypatch.delenv("SUBSIGNAL_SCORECARD_ENABLED", raising=False)
@@ -228,11 +210,6 @@ def _isolate_runtime_stores(tmp_path_factory: pytest.TempPathFactory) -> None:
     # görmesin (yoksa touche_observe satırı consensus testlerine sızardı).
     # Yol yoksa (None, None) → zemin motor.
     os.environ["TF_SCORING_V2_SHADOW_PATH"] = str(runtime / "tf_scoring_v2_shadow.json")
-    # Karar-kanıt tüketicisi (2026-07-09) — learning_advisor her açılış adayında
-    # reflection digest'ini OKUR; suite gerçek data/runtime/reflection_digest.json'ı
-    # görmesin (canlıda biriken sembol hafızası "kanıt yok" varsayan advisor/engine
-    # testlerine sızıyordu). Reflection okuyan testler kendi REFLECTION_PATH'ini kurar.
-    os.environ["REFLECTION_PATH"] = str(runtime / "reflection_digest.json")
     # Bölge onay defteri (2026-07-12) — zone_proposer viewmodel + review sayfası
     # verdict okur; suite gerçek data/runtime/zone_verdicts.json'ı görmesin
     # (owner'ın canlı iptal kararları test assert'lerine sızardı).

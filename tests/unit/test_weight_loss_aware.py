@@ -1,4 +1,4 @@
-"""CP4-fix #3 — kayıp-farkında ağırlık skoru (WEIGHT_LOSS_AWARE)."""
+"""CP4-fix #3 — kayıp-farkında ağırlık skoru (26 Kasım 2026'dan beri tek skor)."""
 from __future__ import annotations
 
 from packages.learning import auto_weight_trainer as t
@@ -41,20 +41,8 @@ def test_winsorize_resists_single_outlier():
     ) < 5.0
 
 
-def test_flag_off_uses_old_score(monkeypatch):
-    monkeypatch.delenv("WEIGHT_LOSS_AWARE", raising=False)
-    outs = [_o(10.0)] * 3 + [_o(-100.0)] * 3  # touche net -270
-    perfs, _ = t._aggregate(outs)
-    tou = next(p for p in perfs if p.module == "touche")
-    # Eski skor: win_rate*100 + clamp(avg/1000) → avg=-45 → term ~-0.045 → ~50
-    old = t._module_score(tou.win_rate, tou.avg_pnl)
-    assert abs(tou.score - old) < 0.01
-
-
-def test_flag_on_uses_loss_aware(monkeypatch):
-    monkeypatch.setenv("WEIGHT_LOSS_AWARE", "1")
+def test_aggregate_uses_loss_aware_score():
     outs = [_o(10.0)] * 3 + [_o(-100.0)] * 3
     perfs, _ = t._aggregate(outs)
     tou = next(p for p in perfs if p.module == "touche")
-    # Kayıp-farkında skor eski skordan belirgin düşük (net kaybeden cezalı)
-    assert tou.score < t._module_score(tou.win_rate, tou.avg_pnl)
+    assert tou.score == t._loss_aware_score(tou.win_rate, [p for p in [10.0] * 3 + [-100.0] * 3])

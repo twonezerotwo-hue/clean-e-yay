@@ -19,7 +19,7 @@ rejim-içi ayrım skorun ayrımını yansıtır (ham skor gerekmez). pnl==0 baş
 girmez (F1-2 ile tutarlı); vektör taşımayan legacy/manuel outcome atlanır.
 
 KIRMIZI ÇİZGİ: SALT-GÖZLEM. Hiçbir karar/ağırlık BU karneden beslenmez. Bu,
-WEIGHT_REGIME_FILTER aktivasyonu için KANIT kapısıdır (owner kararı ayrı) —
+rejim-bazlı ağırlık eğitimi için KANIT kapısıdır (owner kararı ayrı) —
 modüllerin gerçekten rejim-bazlı ayrıştığını (ya da ayrışmadığını) gösterir.
 
 PAPER_SAFE / NO_EXECUTION.
@@ -123,8 +123,8 @@ def regime_module_scorecard(outcomes) -> dict:
         "overall": _scorecard_for(outcomes),
         "summary": _summary(per_regime),
         "note": (
-            "salt-gözlem; hiçbir karar/ağırlık beslemez — WEIGHT_REGIME_FILTER "
-            "aktivasyonu için kanıt kapısı (modüller rejim-bazlı ayrışıyor mu?)"
+            "salt-gözlem; hiçbir karar/ağırlık beslemez — rejim-bazlı "
+            "ağırlık eğitimi için kanıt kapısı (modüller rejim-bazlı ayrışıyor mu?)"
         ),
     }
 

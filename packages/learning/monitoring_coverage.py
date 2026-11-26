@@ -46,63 +46,17 @@ MECHANISMS = frozenset({WATCHDOG, OWN_ROLLBACK, INPUT_HYGIENE, TUNING_PARAM, SHA
 #   reason:    düz-dil gerekçe (LLM/panel + insan denetimi için).
 COVERAGE: dict[str, dict] = {
     # --- WATCHDOG: activation_watchdog baseline-expectancy izleyicisi (6) ---
-    "TF_TARGET_AUTO_ONLY": {
-        "mechanism": WATCHDOG, "monitor": "tf_target_auto_only",
-        "reason": "TF-target girdi hijyeni aktivasyonu; OFF→ON'da watchdog baseline damgalar.",
-    },
     "TF_TARGET_EDGE_GATE": {
         "mechanism": WATCHDOG, "monitor": "tf_target_edge_gate",
         "reason": "TF-target edge-stability auto-apply kapısı; watchdog izler.",
     },
-    "EXIT_FORENSICS_NUDGE": {
-        "mechanism": WATCHDOG, "monitor": "exit_forensics_nudge",
-        "reason": "Çıkış otopsisi oransal nudge aktivasyonu; watchdog izler.",
-    },
-    "WEIGHT_REGIME_FILTER": {
-        "mechanism": WATCHDOG, "monitor": "weight_regime_filter",
-        "reason": "Rejim-filtreli ağırlık eğitimi aktivasyonu; watchdog izler.",
-    },
-    "MISTAKE_MEMORY_V2": {
-        "mechanism": WATCHDOG, "monitor": "mistake_memory_v2",
-        "reason": "Mistake memory v2 aktivasyonu; watchdog izler.",
-    },
-    "EXPECTANCY_R_MODE": {
-        "mechanism": WATCHDOG, "monitor": "expectancy_r_mode",
-        "reason": "R-bazlı expectancy aktivasyonu; watchdog izler.",
-    },
     # --- OWN_ROLLBACK: auto-apply kendi outcome-rollback'ine bağlı (1) ---
-    "TF_TARGET_TRAIL_AUTOTUNE": {
-        "mechanism": OWN_ROLLBACK,
-        "monitor": "packages.learning.tf_target_rollback:check_rollback",
-        "reason": "TF trailing çarpanı auto-apply; tf_target_store override'ı rollback'li.",
-    },
     # --- INPUT_HYGIENE: filtre/mod; zaten-izlenen mekanizmaya besler (3) ---
-    "TF_CALIBRATION_AUTO_ONLY": {
-        "mechanism": INPUT_HYGIENE, "monitor": None,
-        "reason": "TF kalibrasyonunun girdi filtresi (yalnız auto kohort); "
-                  "kalibrasyon her zaman açık — ayrı aktivasyon değil.",
-    },
-    "WEIGHT_LOSS_AWARE": {
-        "mechanism": INPUT_HYGIENE, "monitor": None,
-        "reason": "Ağırlık eğitimi skorlama MODU (winsorize profit-factor); ağırlık "
-                  "auto-apply zaten weight_rollback outcome-rollback'ine bağlı.",
-    },
-    "TF_TRUST_PER_BUCKET": {
-        "mechanism": INPUT_HYGIENE, "monitor": None,
-        "reason": "Canlı tf_weights kapısının per-TF SERTLEŞTİRMESİ (D4): kanıtsız "
-                  "TF nötr kalır — mevcut trust-gate'i kısar, yeni canlı-dokunuş "
-                  "eklemez; tf_weights zaten kalibrasyon+owner zincirinde.",
-    },
     "E_YAY_CANONICAL_RUNTIME": {
         "mechanism": INPUT_HYGIENE, "monitor": None,
         "reason": "Kanonik canlı karar yolunun süreç bayrağı: yalnız VERİSİ gelmeyen "
                   "modülü nötr 50 sayar ve hücreyi nötr/hold'a çeker — yalnız kısıtlar "
                   "(no-boost), açılış yetkisi eklemez; pytest/golden altında kapalı.",
-    },
-    "LEARNING_AUDIT_LEDGER_ONLY": {
-        "mechanism": INPUT_HYGIENE, "monitor": None,
-        "reason": "Öğrenme girdi filtresi: yalnız değişmez paper denetim defterindeki "
-                  "kapanışlar eğitir; öğrenicilerin kendi rollback/watchdog zinciri aynen.",
     },
     # --- TUNING_PARAM: bir izleyicinin parametresi (1) ---
     "REBALANCE_ROLLBACK_MIN_OUTCOMES": {
@@ -143,12 +97,6 @@ COVERAGE: dict[str, dict] = {
                   "flag'iyle kapılı (consensus.touche_v4; geri-alma tek satır). "
                   "Üretim durursa 3 saatte zemin motora KADEMELİ düşüş; v4 "
                   "performansı tf_scoring_race karnesiyle canlı ölçülür.",
-    },
-    "LEARNING_ADVISOR_APPLY": {
-        "mechanism": WATCHDOG, "monitor": "learning_advisor_apply",
-        "reason": "Karar-kanıt tüketicisi: tüm learning'lerin birleşik advice'ı canlı "
-                  "boyutu KISAR (no-boost). OFF (default)→gölge; ON'da watchdog "
-                  "OFF→ON baseline damgalar, post-enable çöküşte DEGRADED önerir.",
     },
     "OPENROUTER_MODEL": {
         "mechanism": SHADOW_EXEMPT, "monitor": None,

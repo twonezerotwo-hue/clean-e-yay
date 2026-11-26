@@ -8,7 +8,6 @@ PAPER_SAFE / NO_EXECUTION: yalnızca okuma + türetme; emir/karar üretmez.
 """
 from __future__ import annotations
 
-import os
 import sys
 from dataclasses import asdict, dataclass, field
 from datetime import datetime
@@ -371,11 +370,10 @@ def learning_grade(
             and (include_exploration or not is_exploration(o))
             and not is_execution_anomaly(o)
             and bool(getattr(o, "provenance_complete", True))]
-    if (
-        "pytest" not in sys.modules
-        and os.environ.get("LEARNING_AUDIT_LEDGER_ONLY", "").strip().lower()
-        in {"1", "true", "yes", "on"}
-    ):
+    # Yalnız değişmez paper denetim defterindeki kapanışlar eğitir (26 Kasım 2026'dan
+    # beri bayraksız; eski LEARNING_AUDIT_LEDGER_ONLY iki ortamda da açıktı). Test
+    # takımı defter kurmadan sonuç ürettiği için pytest altında bu süzgeç atlanır.
+    if "pytest" not in sys.modules:
         from packages.paper import audit as paper_audit
 
         closed = paper_audit.closed_trade_ids()

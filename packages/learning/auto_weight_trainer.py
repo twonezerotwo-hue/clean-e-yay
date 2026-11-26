@@ -17,7 +17,6 @@ Algoritma:
 """
 from __future__ import annotations
 
-import os
 from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime
 from typing import Literal
@@ -112,56 +111,9 @@ def _bump_version(version: str) -> str:
         return "1.1.0"
 
 
-def _module_score(win_rate: float, avg_pnl: float) -> float:
-    pnl_unit = 1000.0
-    pnl_term = max(-10.0, min(10.0, avg_pnl / pnl_unit))
-    return round(win_rate * 100.0 + pnl_term, 3)
-
-
-# CP4-fix #3 — kayıp-farkında skor. Eski `_module_score`'da avg_pnl terimi
-# clamp(±10) yüzünden ihmal edilir → "iyi yön, felaket stop" modülü (touche:
-# çok küçük kazanç + birkaç dev SL_HIT) yüksek win-rate'le yüksek skor alıp
-# cezalandırılmıyordu. Flag `WEIGHT_LOSS_AWARE` (default OFF = bayt-aynı) açıkken
-# skora WINSORIZE'lı profit-factor eklenir → kayıp-büyüklüğü gerçekten yansır,
-# tek dev kazanç (outlier) skoru şişiremez.
-_LOSS_AWARE_OFF = {"0", "false", "no", "off", ""}
-
-
-def _loss_aware_enabled() -> bool:
-    return os.environ.get("WEIGHT_LOSS_AWARE", "0").strip().lower() not in _LOSS_AWARE_OFF
-
-
-# F3-2 (2026-07-02) — rejim-filtreli eğitim. Flag KAPALI (default) → bayt-aynı:
-# tüm outcome'lar tek torbada, yalnız hedef rejimin ağırlık satırı güncellenir
-# (sakin piyasadan öğrenilen, fırtına satırına da yazılır — denetim bulgusu 1.2).
-# AÇIK → dataset hedef rejimin KENDİ outcome'larına daralır; MIN_TOTAL_TRADES/
-# MIN_TRADES_PER_MODULE eşikleri rejim başına doğal fren olur (az veri → eğitim
-# yok). Owner kararı 2026-07-02: F3-1 (CI'lı üç-durumlu karar) atlandı; güvenlik
-# ağı = bu minimum-örnek eşikleri + G3 outcome-rollback.
-def regime_filter_enabled() -> bool:
-    return (
-        os.environ.get("WEIGHT_REGIME_FILTER", "0").strip().lower()
-        not in _LOSS_AWARE_OFF
-    )
-
-
-def latest_outcome_regime(outcomes=None) -> str | None:
-    """En son kapanan verified outcome'un rejimi (flag açıkken worker'ın
-    eğiteceği rejim — verisi en son değişen rejim budur; saat değil veri
-    sürüyor: deterministik/replay-güvenli)."""
-    if outcomes is None:
-        # Veri hijyeni (2026-07-12): legacy kayıtlar eşik öğrenmesine girmez.
-        outcomes = outcomes_mod.learning_grade(
-            outcomes_mod.outcomes_from_state(paper_state.load()))
-    latest = None
-    for o in outcomes:
-        if not getattr(o, "data_verified", False) or not o.closed_at:
-            continue
-        if latest is None or o.closed_at > latest.closed_at:
-            latest = o
-    return latest.regime if latest is not None and latest.regime else None
-
-
+# CP4-fix #3 — kayıp-farkında skor (26 Kasım 2026'dan beri tek skor; eski bayrak
+# WEIGHT_LOSS_AWARE iki ortamda da açıktı). Skora WINSORIZE'lı profit-factor girer →
+# kayıp-büyüklüğü gerçekten yansır, tek dev kazanç (outlier) skoru şişiremez.
 def _winsorize(pnls: list[float], pct: float = 0.05) -> list[float]:
     """Uç değerleri kıstır (outlier-direnç). edge_report ile aynı desen."""
     n = len(pnls)
@@ -203,7 +155,6 @@ def _aggregate(outcomes) -> tuple[list[ModulePerf], int]:
             continue
         by_module.setdefault(mod, []).append(o)
 
-    loss_aware = _loss_aware_enabled()
     perfs: list[ModulePerf] = []
     for mod, items in by_module.items():
         n = len(items)
@@ -214,12 +165,7 @@ def _aggregate(outcomes) -> tuple[list[ModulePerf], int]:
         total_pnl = sum(pnls)
         win_rate = wins / n
         avg_pnl = total_pnl / n
-        # Flag OFF → eski skor (bayt-aynı); ON → kayıp-farkında (profit-factor).
-        score = (
-            _loss_aware_score(win_rate, pnls)
-            if loss_aware
-            else _module_score(win_rate, avg_pnl)
-        )
+        score = _loss_aware_score(win_rate, pnls)
         perfs.append(
             ModulePerf(
                 module=mod,
@@ -296,21 +242,13 @@ def train(regime: str = "NEUTRAL") -> RebalanceProposal | dict:
     # Veri hijyeni (2026-07-12): legacy kayıtlar eşik öğrenmesine girmez.
     outcomes = outcomes_mod.learning_grade(outcomes_mod.outcomes_from_state(s))
 
-    # F3-2 — rejim filtresi: flag açıkken yalnız hedef rejimin outcome'ları.
-    # Bilinmeyen rejim etiketi weights'e sahte satır açmasın → NEUTRAL'a düş.
-    regime_filtered = regime_filter_enabled()
-    if regime_filtered:
-        known = set((load_active_weights().get("regimes") or {}).keys())
-        if regime not in known:
-            regime = "NEUTRAL"
-        outcomes = [o for o in outcomes if (o.regime or "NEUTRAL") == regime]
 
     perfs, rejected = _aggregate(outcomes)
     eligible = sum(1 for o in outcomes if o.data_verified)
     total = len(outcomes)
 
     # F3-2 — rejim başına yetersiz veri görünürlüğü (flag kapalıyken de zararsız).
-    insufficient_base = {"regime": regime, "regime_filtered": regime_filtered}
+    insufficient_base = {"regime": regime, "regime_filtered": False}
     if eligible == 0:
         return {
             "status": "INSUFFICIENT",
@@ -401,7 +339,7 @@ def train(regime: str = "NEUTRAL") -> RebalanceProposal | dict:
         "audit": {
             "based_on_trades": eligible,
             "rejected_records": rejected,
-            "regime_filtered": regime_filtered,  # F3-2 — dataset rejime mi daraldı
+            "regime_filtered": False,  # F3-2 — dataset rejime mi daraldı
             "module_performance": [asdict(p) for p in perfs],
             "timeframe_distribution": tf_dist,
             "regime_distribution": regime_dist,

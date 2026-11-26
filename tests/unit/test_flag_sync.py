@@ -47,9 +47,3 @@ def test_checker_has_no_blind_spots() -> None:
         f"Bu flag'ler AWS deploy'da set ediliyor ama flag-sync-check SYNC_FLAGS'te "
         f"YOK (checker kör): {sorted(missing)} — scripts/flag-sync-check.sh'e ekle."
     )
-
-
-def test_auto_only_flags_are_tracked() -> None:
-    """E-4 aktivasyonunun senkron-flag'i (ve kardeşi) checker kapsamında."""
-    sync_flags = _sync_flags()
-    assert {"TF_TARGET_AUTO_ONLY", "TF_CALIBRATION_AUTO_ONLY"} <= sync_flags

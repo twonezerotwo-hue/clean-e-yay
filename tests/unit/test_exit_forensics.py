@@ -147,31 +147,6 @@ def test_no_excursion_legacy_skipped() -> None:
     assert rep["excluded"]["no_excursion"] == 1
 
 
-# ----------------------------- trainer_evidence -----------------------------
-
-def test_trainer_evidence_ratios_and_empty_on_insufficient() -> None:
-    outs = [_o(trade_id=f"tr{i}", close_reason="TRAILING_STOP_EXIT",
-               pnl_pct=0.5, mfe_pct=2.0) for i in range(5)]
-    ev = ef.trainer_evidence(outs)
-    assert "1h" in ev
-    assert 0.0 <= ev["1h"]["trailing_giveback_ratio"] <= 1.0
-    # Yetersiz veri → {} (trainer sabit adıma düşer, fake yok).
-    assert ef.trainer_evidence([_o(trade_id="one")]) == {}
-
-
-def test_trainer_evidence_sl_roundtrip_share() -> None:
-    outs = (
-        [_o(trade_id=f"r{i}", close_reason="SL_HIT", pnl_pct=-1.0, mfe_pct=0.8,
-            mae_pct=1.0, risk_pct=0.01) for i in range(3)]
-        + [_o(trade_id=f"s{i}", close_reason="SL_HIT", pnl_pct=-1.0, mfe_pct=0.0,
-              mae_pct=1.0, risk_pct=0.01) for i in range(2)]
-    )
-    ev = ef.trainer_evidence(outs)
-    assert ev["1h"]["sl_roundtrip_share"] == 0.6  # 3/5
-
-
-# ----------------------------- snapshot -----------------------------
-
 def test_write_snapshot_history_cap(tmp_path, monkeypatch) -> None:
     path = tmp_path / "exit_forensics.json"
     monkeypatch.setenv("EXIT_FORENSICS_OUT_PATH", str(path))

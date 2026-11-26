@@ -79,22 +79,12 @@ def test_off_to_on_arms_and_on_to_off_disarms(wd_env) -> None:
 
 
 def test_env_flag_transition(wd_env, monkeypatch) -> None:
+    monkeypatch.setitem(aw.REGISTRY, "demo_env_flag",
+                        {"label": "deneme", "source": ("env", "EYAY_DEMO_ENV_FLAG")})
     aw.sync()
-    monkeypatch.setenv("MISTAKE_MEMORY_V2", "1")
+    monkeypatch.setenv("EYAY_DEMO_ENV_FLAG", "1")
     out = aw.sync()
-    assert out["armed"] == ["mistake_memory_v2"]
-
-
-def test_tf_target_auto_only_arms_on_activation(wd_env, monkeypatch) -> None:
-    """E-4 aktivasyonu izlenir: ilk sync OFF snapshot'lar, AUTO_ONLY=1 → arm.
-    Aktivasyon sıralamasının (önce kaydet, sonra aç) kanıtı."""
-    aw.sync()  # ilk görüş: AUTO_ONLY OFF olarak last_seen'e yazılır
-    monkeypatch.setenv("TF_TARGET_AUTO_ONLY", "1")
-    out = aw.sync()
-    assert out["armed"] == ["tf_target_auto_only"]
-    flag = next(f for f in aw.report()["flags"] if f["flag_key"] == "tf_target_auto_only")
-    assert flag["monitoring"] is True
-    assert flag["monitor"]["baseline_expectancy"] == 10.0
+    assert out["armed"] == ["demo_env_flag"]
 
 
 def test_confirmed_and_degraded_decisions(wd_env, monkeypatch) -> None:
@@ -151,10 +141,6 @@ def test_corrupt_store_safe_default(wd_env, tmp_path) -> None:
 def test_registry_covers_pending_activations() -> None:
     """Roadmap'teki bekleyen aktivasyonlar kayıtlı (yeni flag → buraya satır)."""
     keys = set(aw.REGISTRY)
-    assert {
-        "weight_regime_filter", "mistake_memory_v2", "expectancy_r_mode",
-        # E serisi — çıkış/stop öğrenme flag'leri (denetim 2026-07-03)
-        "tf_target_auto_only", "tf_target_edge_gate", "exit_forensics_nudge",
-    } <= keys
+    assert {"elliott_confluence", "sr_strength", "candle_confirm", "tf_target_edge_gate"} <= keys
     payload = json.dumps(aw.report(), default=str)
     assert "recommend_only" in payload

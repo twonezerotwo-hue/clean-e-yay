@@ -10,39 +10,25 @@ from packages.risk import trade_economics as te
 @pytest.fixture
 def fresh_store(tmp_path, monkeypatch):
     monkeypatch.setenv("TF_TARGET_STORE_PATH", str(tmp_path / "tf_targets.json"))
-    monkeypatch.delenv("TF_TARGET_TRAIL_AUTOTUNE", raising=False)
     return tmp_path
 
 
 # ── seam: tf_trail_mult (açılış yolu bunu çarpan olarak kullanır) ───────────────
 
-def test_flag_off_is_neutral_even_with_override(fresh_store, monkeypatch):
-    # Store'da trail_mult=1.5 olsa BİLE flag kapalıyken 1.0 (bayt-aynı garanti).
-    tf_target_store.submit_proposal(
-        {"generated_at": "t", "per_timeframe": {"4h": {"trail_mult": 1.5}}},
-        current_baseline={"4h": {"trail_mult": 1.0}},
-    )
-    monkeypatch.delenv("TF_TARGET_TRAIL_AUTOTUNE", raising=False)
-    assert te.tf_trail_mult("4h") == 1.0
-
-
-def test_flag_on_applies_override(fresh_store, monkeypatch):
+def test_applies_override(fresh_store):
     tf_target_store.submit_proposal(
         {"generated_at": "t", "per_timeframe": {"4h": {"trail_mult": 1.15}}},
         current_baseline={"4h": {"trail_mult": 1.0}},
     )
-    monkeypatch.setenv("TF_TARGET_TRAIL_AUTOTUNE", "1")
     assert te.tf_trail_mult("4h") == pytest.approx(1.15)
 
 
-def test_flag_on_no_override_is_neutral(fresh_store, monkeypatch):
-    monkeypatch.setenv("TF_TARGET_TRAIL_AUTOTUNE", "1")
+def test_no_override_is_neutral(fresh_store):
     assert te.tf_trail_mult("1h") == 1.0
 
 
-def test_override_clamped_to_guardrail(fresh_store, monkeypatch):
+def test_override_clamped_to_guardrail(fresh_store):
     # Store guardrail clamp'i submit'te de var; resolver ikinci güvenlik kemeri.
-    monkeypatch.setenv("TF_TARGET_TRAIL_AUTOTUNE", "1")
     tf_target_store._save({"current": {"4h": {"trail_mult": 9.0}}, "history": []})
     assert te.tf_trail_mult("4h") == tf_target_store.GUARDRAIL["trail_mult"][1]  # 2.0
 

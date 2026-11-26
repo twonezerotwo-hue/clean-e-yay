@@ -11,7 +11,7 @@ import os
 from typing import Any
 
 _LEARNING_ENGINES = (
-    "council_scorecard", "exit_backtest", "reflection", "subsignal_scorecard",
+    "council_scorecard", "exit_backtest", "subsignal_scorecard",
     "tf_scoring_race", "zone_proposer",
 )
 

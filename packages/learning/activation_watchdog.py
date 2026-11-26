@@ -48,18 +48,6 @@ _ENV_TRUE = {"1", "true", "yes", "on"}
 # NOT: guard_safety'nin 5 yön guard'ı BURADA YOK (çifte izleme olmasın; onların
 # oto-kapatlı kasası var). Yeni owner-flag eklendiğinde buraya satır eklenir.
 REGISTRY: dict[str, dict] = {
-    "weight_regime_filter": {
-        "label": "Rejim-filtreli ağırlık eğitimi (F3-2)",
-        "source": ("env", "WEIGHT_REGIME_FILTER"),
-    },
-    "mistake_memory_v2": {
-        "label": "Mistake memory v2 (F3-3)",
-        "source": ("env", "MISTAKE_MEMORY_V2"),
-    },
-    "expectancy_r_mode": {
-        "label": "R-bazlı expectancy (F1-1)",
-        "source": ("env", "EXPECTANCY_R_MODE"),
-    },
     # T serisi — teknik analiz genişletmesi.
     "elliott_confluence": {
         "label": "Elliott × Fib confluence (T-2)",
@@ -76,25 +64,13 @@ REGISTRY: dict[str, dict] = {
     # E serisi — Çıkış/Stop öğrenme derinleştirme (denetim 2026-07-03). Bu üç
     # env flag'i de OFF→ON geçişinde diğerleri gibi izlensin (aktivasyon deliği
     # kapandı: önceden E flag'leri açılınca baseline damgalanmıyordu).
-    "tf_target_auto_only": {
-        "label": "TF-target girdi hijyeni — yalnız AUTO kohort (E-4)",
-        "source": ("env", "TF_TARGET_AUTO_ONLY"),
-    },
     "tf_target_edge_gate": {
         "label": "TF-target edge-stability auto-apply kapısı (E)",
         "source": ("env", "TF_TARGET_EDGE_GATE"),
     },
-    "exit_forensics_nudge": {
-        "label": "Çıkış otopsisi — oransal nudge adımı (E-5)",
-        "source": ("env", "EXIT_FORENSICS_NUDGE"),
-    },
     # Karar-kanıt tüketicisi (2026-07-09): tüm learning'lerin birleşik fikri
     # canlı boyuta uygulanınca (yalnız KISAR) OFF→ON'da baseline damgalansın;
     # post-enable expectancy düşerse DEGRADED önerisi.
-    "learning_advisor_apply": {
-        "label": "Karar-kanıt tüketicisi — birleşik advice canlı boyut kısması",
-        "source": ("env", "LEARNING_ADVISOR_APPLY"),
-    },
     # Dış denetim dalgası (2026-07-13, M7-M18) — bugün kurulan YAML gölge flag'leri
     # açılınca OFF→ON'da baseline damgalansın (E-6 dersi: kayıt ile aktivasyon
     # AYRI deploy — bu kayıt flag'ler OFF iken gider, aktivasyon sonraki deploy).

@@ -58,23 +58,11 @@ set_env() {  # set_env KEY VALUE — replace-or-add (değeri ZORLA ayarla; diğe
   echo "$1=$2" >> "$APP_DIR/.env.tmp"
   mv "$APP_DIR/.env.tmp" "$APP_DIR/.env"
 }
-ensure_env WEIGHT_LOSS_AWARE 1
 ensure_env REBALANCE_ROLLBACK_MIN_OUTCOMES 8
-# Grup C — tam otonom öz-ayar (CP5'e kadar). Trailing autotune AÇIK. Eşik otomatik
-# ayarı (THRESHOLD_AUTOTUNE) 21 Kasım 2026 owner kararıyla kodla birlikte kaldırıldı.
-ensure_env TF_TARGET_TRAIL_AUTOTUNE 1
 # Kalite tuning'i AKTİF: edge-gate KAPALI (0) → geometri/trailing stop/exit'i ŞİMDİ
 # düzeltsin (±%15 bant + outcome-rollback net). Owner kararı — bekletme, aktif çalışsın.
 # set_env: AWS .env'de =1 kalmışsa ZORLA 0'a çevirir (ensure_env yetmez).
 set_env TF_TARGET_EDGE_GATE 0
-# Denetim 2026-07-03 — TF kalibrasyon veri hijyeni: owner_manual gibi verified ama
-# fingerprint'siz kayıtlar TF kalibrasyonuna sızmasın (1d'de 6 manuel işlem sızıyordu,
-# 19→13). Lokal .env'de =1; AWS'e de aynısı (owner kuralı: lokal+AWS her zaman senkron).
-ensure_env TF_CALIBRATION_AUTO_ONLY 1
-# E-4 aktivasyon (2026-07-03, owner kararı): aynı veri hijyeni çıkış/geometri
-# öğrenmesinde de — tf_target_trainer + entry_exit_quality dataset'i yalnız AUTO
-# kohort. EDGE_GATE=0 KALIR (aktif tuning); EXIT_FORENSICS_NUDGE 2 hafta shadow sonra.
-ensure_env TF_TARGET_AUTO_ONLY 1
 # K-0b aktivasyonu (2026-07-04, owner karari): kesif motoru / sektor rotasyonu
 # AÇIK — salt-gozlem (karar zinciri/RiskGate/tik'e sifir temas), sektor karnesi
 # birikmeye baslar. Lokal .env'de de =1 (owner kurali: lokal+AWS senkron).
@@ -90,11 +78,6 @@ ensure_env EYAY_KRAKEN_OHLCV_ENABLED true
 # Binance spot gercek mumlari (owner karari 2026-10-30): kripto barlarinin
 # CoinGecko aylik kotasina bagimliligini kaldirir. Salt okuma; lokal .env=true.
 ensure_env EYAY_BINANCE_OHLCV_ENABLED true
-# D4 per-TF trust kapisi (2026-07-06, owner "10/10" hedefi): canli tf_weights
-# kapisi acildiginda ogrenilmis agirlik yalniz kendi kanitini getirmis TF'lere
-# akar (edge_proven), kanitsiz TF notr. SERTLESTIRME — yeni davranis ACMAZ,
-# mevcut kapiyi kisar; bugun kapi kapaliyken davranis degismez. Lokal .env=1.
-ensure_env TF_TRUST_PER_BUCKET 1
 # D5 sinyal karnesi (2026-07-06, owner "10/10" hedefi): learning worker haftada
 # bir 8 sinyal x 4 TF karnesini (v2 sert cetvel) uretir; pano step-14 izler.
 # SALT-GOZLEM: canli skora/karara/paper'a ASLA yazmaz; bar arsivi buyudukce
@@ -108,9 +91,8 @@ set_env TF_SCORING_V2_SHADOW 0
 # Kanonik canli karar yolu (2026-10-30): eksik veri modulu notr 50 sayilir ve
 # hucre notre zorlanir (missing_module_policy: fixed). Lokal .env'de =1; AWS'te
 # deploy betigi yazmadigi icin eski yolda kaliyordu (owner kurali: lokal+AWS
-# senkron). Ayni turde acilan denetim-defteri ogrenme kisiti da esitlenir.
+# senkron).
 ensure_env E_YAY_CANONICAL_RUNTIME 1
-ensure_env LEARNING_AUDIT_LEDGER_ONLY 1
 # YZ anlatici modelleri (owner karari 2026-10-30): OpenRouter ucretsiz katmanda
 # (bakiye 0) ucretli model cagrilamaz -> ucretsiz model; Groq fiilen kullanilan
 # modele sabitlenir. Yalniz anlatim; karar zincirine girmez. Lokal .env ile ayni.

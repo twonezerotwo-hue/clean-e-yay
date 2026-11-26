@@ -107,6 +107,5 @@ def test_coverage_summary_marks_watchdog_registered() -> None:
     for row in summary["flags"]:
         if row["mechanism"] == mc.WATCHDOG:
             assert row["registered"] is True, f"{row['flag']} REGISTRY'de görünmüyor"
-    # en az bir shadow-muaf ve bir own-rollback beklenir (sınıf çeşitliliği)
+    # en az bir shadow-muaf beklenir (sınıf çeşitliliği)
     assert summary["by_mechanism"].get(mc.SHADOW_EXEMPT, 0) >= 1
-    assert summary["by_mechanism"].get(mc.OWN_ROLLBACK, 0) >= 1
