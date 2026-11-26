@@ -142,6 +142,26 @@ if [ -n "${BLS_API_KEY:-}" ]; then
   echo "deploy: BLS_API_KEY .env'e yazildi (deger gosterilmez)"
 fi
 
+# Grup 7 olcumu (26 Kasim 2026, gecici): ogrenilen tablolarin AWS ozeti, salt okuma.
+# Tablolar git'e alinmadan once iki ortam karsilastirilir; goc commit'inde kalkar.
+.venv/bin/python - data/runtime <<'PY' || true
+import json, pathlib, sys
+rt = pathlib.Path(sys.argv[1])
+def load(name):
+    try:
+        return json.loads((rt / name).read_text(encoding="utf-8"))
+    except Exception as exc:
+        return {"_error": type(exc).__name__}
+t = load("tf_targets.json")
+print("G7 tf_targets.current", json.dumps(t.get("current"), sort_keys=True))
+c = load("calibration.json")
+print("G7 calibration", json.dumps({"global": [c.get("a"), c.get("b"), c.get("samples")], **{k: [v.get("a"), v.get("b"), v.get("samples"), v.get("status")] for k, v in (c.get("per_timeframe") or {}).items()}}, sort_keys=True))
+p = load("empirical_pwin.json")
+print("G7 empirical_pwin", json.dumps({k: [v.get("n"), v.get("p_win"), v.get("avg_win_r"), v.get("avg_loss_r")] for k, v in (p.get("cells") or {}).items()}, sort_keys=True))
+b = load("regime_risk_brake.json")
+print("G7 regime_brake", json.dumps({k: [v.get("braked"), (v.get("evidence") or {}).get("live")] for k, v in (b.get("per_regime") or {}).items()}, sort_keys=True))
+PY
+
 echo "deploy: restart services"
 sudo systemctl restart eyay-supervisor.service
 sudo systemctl restart eyay-web.service
