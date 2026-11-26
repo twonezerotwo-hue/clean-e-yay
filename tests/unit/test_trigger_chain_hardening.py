@@ -472,6 +472,13 @@ def cal_env(tmp_path, monkeypatch):
     return calibration_store
 
 
+def _approve(mod) -> None:
+    """Owner onayı: öneri dosyası canlıya kopyalanır (26 Kasım 2026'dan beri canlı tablo
+    kendiliğinden değişmez)."""
+    live = mod._store_path() if hasattr(mod, "_store_path") else mod._path()
+    live.write_text(mod._proposal_path().read_text(encoding="utf-8"), encoding="utf-8")
+
+
 def _inverted_samples(n: int = 14) -> list[tuple[str, float, bool]]:
     # Güçlü sinyal kaybediyor, zayıf sinyal kazanıyor → Platt eğimi negatif.
     out = []
@@ -492,6 +499,7 @@ def test_inverted_fit_is_rejected_per_timeframe(cal_env, monkeypatch) -> None:
     assert "1d" not in summary["tf_fitted"]
     # Küresel fit de aynı örneklerden ters çıkar → o da kullanılmaz.
     assert summary["status"] == "INSUFFICIENT"
+    _approve(cal_env)
     assert cal_env.predict_calibrated_tf(0.4, "1d") == (0.4, "insufficient")
 
 
@@ -505,6 +513,7 @@ def test_normal_fit_still_accepted(cal_env, monkeypatch) -> None:
     assert summary["status"] == "FITTED"
     assert summary["per_timeframe"]["1h"]["status"] == "fitted"
     assert summary["rejected_fits"] == {}
+    _approve(cal_env)
     strong, _ = cal_env.predict_calibrated_tf(0.8, "1h")
     weak, _ = cal_env.predict_calibrated_tf(0.2, "1h")
     assert strong > weak

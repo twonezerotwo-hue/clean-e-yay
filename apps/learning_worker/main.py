@@ -143,6 +143,42 @@ def _tf_target_save_trigger(outcomes_seen: int) -> None:
         pass
 
 
+def _learned_drift() -> dict:
+    """Donmuş canlı tablolar ile son öneri arasındaki fark (26 Kasım 2026, owner: "önce
+    dondur"). Canlı tablo yalnız owner onayıyla (öneri dosyasının kopyası) değişir."""
+    from packages.learning import calibration_store, empirical_pwin, regime_risk_brake
+
+    def _read(path) -> dict:
+        try:
+            data = json.loads(Path(path).read_text(encoding="utf-8"))
+            return data if isinstance(data, dict) else {}
+        except (OSError, ValueError):
+            return {}
+
+    out: dict = {}
+    live, prop = _read(calibration_store._store_path()), _read(calibration_store._proposal_path())
+    if prop:
+        tfs = sorted({*(live.get("per_timeframe") or {}), *(prop.get("per_timeframe") or {})})
+        out["calibration"] = {
+            tf: [(src.get("per_timeframe") or {}).get(tf, {}).get(k) for src in (live, prop) for k in ("a", "b")]
+            for tf in tfs
+        }
+    live, prop = _read(empirical_pwin._path()), _read(empirical_pwin._proposal_path())
+    if prop:
+        need = int(prop.get("min_samples") or 20)
+        lc, pc = live.get("cells") or {}, prop.get("cells") or {}
+        changed = [
+            k for k in sorted({*lc, *pc})
+            if ((lc.get(k) or {}).get("n", 0) >= need) != ((pc.get(k) or {}).get("n", 0) >= need)
+            or abs(float((lc.get(k) or {}).get("p_win") or 0) - float((pc.get(k) or {}).get("p_win") or 0)) >= 0.05
+        ]
+        out["empirical_pwin"] = {"cells_changed": changed, "cells_live": len(lc), "cells_proposal": len(pc)}
+    live, prop = _read(regime_risk_brake._path()), _read(regime_risk_brake._proposal_path())
+    if prop:
+        out["regime_brake"] = {"live": live.get("braked_regimes") or [], "proposal": prop.get("braked_regimes") or []}
+    return out
+
+
 def _err(step: str, exc: BaseException) -> str:
     """Hata kaydı: 'adım:Tür: mesaj' (mesaj ilk 200 karakter; 26 Kasım 2026'ya dek yalnız tür)."""
     msg = " ".join(str(exc).split())[:200]
@@ -885,6 +921,11 @@ def run_once() -> dict:
         status = "COMPLETED"  # skipped_reason trainer'dan (örn. below_min_total)
 
     # CP1 — perf bütçesi denetimi (off-tick; sistem ağırlaşmasın diye erken uyarı).
+    try:
+        learned_drift = _learned_drift()
+    except Exception as exc:  # defensive — worker patlamamalı
+        learned_drift = {}
+        errors.append(_err("learned_drift", exc))
     laps.append(("_end", time.monotonic()))
     step_ms = {name: int((laps[i + 1][1] - at) * 1000) for i, (name, at) in enumerate(laps[:-1])}
     duration_ms = int((time.monotonic() - t0) * 1000)
@@ -937,6 +978,7 @@ def run_once() -> dict:
         "duration_ms": duration_ms,        # CP1 — perf görünürlüğü
         "over_budget": over_budget,        # CP1 — bütçe aşımı bayrağı
         "step_ms": step_ms,                # adım süreleri (ms; 26 Kasım 2026)
+        "learned_drift": learned_drift,    # donmuş tablo ↔ öneri farkı (26 Kasım 2026)
         "errors": errors,
     }
     run_store.save(run)

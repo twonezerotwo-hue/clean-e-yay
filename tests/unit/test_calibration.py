@@ -18,6 +18,13 @@ import pytest
 from fastapi.testclient import TestClient
 
 
+def _approve(mod) -> None:
+    """Owner onayı: öneri dosyası canlıya kopyalanır (26 Kasım 2026'dan beri canlı tablo
+    kendiliğinden değişmez)."""
+    live = mod._store_path() if hasattr(mod, "_store_path") else mod._path()
+    live.write_text(mod._proposal_path().read_text(encoding="utf-8"), encoding="utf-8")
+
+
 @pytest.fixture
 def fresh_env(tmp_path, monkeypatch):
     monkeypatch.setenv("PAPER_STATE_PATH", str(tmp_path / "paper.json"))
@@ -96,6 +103,8 @@ def test_trainer_insufficient_below_min_samples(fresh_env) -> None:
     res = ct.train()
     assert res["status"] == "INSUFFICIENT"
     assert res["samples"] == 6
+    assert not cs._store_path().exists()  # canlı tablo kendiliğinden yazılmaz
+    _approve(cs)
     # Identity store yazıldı:
     p = cs.load()
     assert p.status == "insufficient"
@@ -109,6 +118,8 @@ def test_trainer_fits_when_enough_samples(fresh_env) -> None:
     res = ct.train()
     assert res["status"] == "FITTED"
     assert res["samples"] == 16
+    assert cs.load().status == "identity"  # öneri onaylanmadan canlı değişmez
+    _approve(cs)
     p = cs.load()
     assert p.status == "fitted"
     # Yüksek confidence kazançla pozitif korelasyon → a > 0.
@@ -263,6 +274,7 @@ def test_calibration_endpoint_returns_state(fresh_env) -> None:
     _seed_with_confidence(ps, n_high_win=6, n_low_loss=6)
     from packages.learning import calibration_trainer as ct
     ct.train()
+    _approve(_cs)
 
     # API fresh import etmemize gerek yok — env her çağrıda okunuyor.
     from apps.api.main import app

@@ -141,18 +141,23 @@ def build_table(outcomes) -> dict:
     }
 
 
+def _proposal_path() -> Path:
+    """Yeni tablonun yazıldığı öneri dosyası (canlının yanında). 26 Kasım 2026 owner
+    kararı: canlı tablo kendiliğinden değişmez, öneri owner onayıyla kopyalanır."""
+    live = _path()
+    return live.with_name(f"{live.stem}_proposal{live.suffix}")
+
+
 def write_table(state=None) -> dict:
-    """Tabloyu üret + atomik yaz (learning worker her cycle çağırır)."""
+    """Tabloyu üret + öneri dosyasına atomik yaz (learning worker her cycle çağırır).
+    Karar motorunun okuduğu canlı tablo değişmez."""
     from packages.learning import outcomes as outcomes_mod
 
     # Veri hijyeni (2026-07-12): legacy kayıtlar p_win tablosunu zehirlemesin.
     payload = build_table(
         outcomes_mod.learning_grade(outcomes_mod.outcomes_from_state(state)),
     )
-    p = _path()
-    with _LOCK:
-        write_text_atomic(p, json.dumps(payload, indent=2))
-        _CACHE.pop(str(p), None)
+    write_text_atomic(_proposal_path(), json.dumps(payload, indent=2))
     return payload
 
 

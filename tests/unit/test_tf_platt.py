@@ -17,6 +17,13 @@ from packages.data.registry.loader import threshold_override
 from packages.learning.calibration import apply_platt
 
 
+def _approve(mod) -> None:
+    """Owner onayı: öneri dosyası canlıya kopyalanır (26 Kasım 2026'dan beri canlı tablo
+    kendiliğinden değişmez)."""
+    live = mod._store_path() if hasattr(mod, "_store_path") else mod._path()
+    live.write_text(mod._proposal_path().read_text(encoding="utf-8"), encoding="utf-8")
+
+
 @pytest.fixture
 def fresh_env(tmp_path, monkeypatch):
     monkeypatch.setenv("PAPER_STATE_PATH", str(tmp_path / "paper.json"))
@@ -86,7 +93,9 @@ def test_trainer_fits_per_tf_and_marks_insufficient(fresh_env) -> None:
     assert per["15m"]["status"] == "fitted" and per["15m"]["samples"] == 12
     assert per["1d"]["status"] == "insufficient" and per["1d"]["samples"] == 3
     assert per["1d"]["a"] == 1.0 and per["1d"]["b"] == 0.0  # identity — sahte fit yok
-    # store'a da yazıldı
+    # öneri dosyasına yazıldı; owner onayıyla canlıya geçer
+    assert cs.load_tf("15m") is None
+    _approve(cs)
     assert cs.load_tf("15m").status == "fitted"
     assert cs.load_tf("1d").status == "insufficient"
 
@@ -100,6 +109,7 @@ def test_predict_tf_uses_tf_fit_or_falls_back(fresh_env) -> None:
     _seed(ps, "15m", n_high_win=6, n_low_loss=6)
     _seed(ps, "1d", n_high_win=2, n_low_loss=1)
     ct.train()
+    _approve(cs)
     tf_params = cs.load_tf("15m")
     val, source = cs.predict_calibrated_tf(0.8, "15m")
     assert source == "fitted_tf"

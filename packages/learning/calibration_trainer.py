@@ -1,5 +1,8 @@
 """G6 — Calibration trainer.
 
+Fit öneri dosyasına (`<canlı>_proposal.json`) yazılır; karar motorunun okuduğu canlı
+kalibrasyon 26 Kasım 2026'dan beri donmuştur ve yalnız owner onayıyla değişir.
+
 Politika:
 - Yalnızca `data_verified=True` ve `raw_confidence is not None` trade'ler
   örneklere alınır (DATA_POLICY). Fit girdisi HAM güvendir: predict_calibrated
@@ -109,7 +112,7 @@ def train() -> dict:
             fitted_at=fitted_at,
             status="insufficient",
         )
-        calibration_store.save(params, per_timeframe=per_tf)
+        calibration_store.save(params, per_timeframe=per_tf, proposal=True)
         return {
             "status": "INSUFFICIENT",
             "samples": n,
@@ -127,7 +130,7 @@ def train() -> dict:
         params = calibration_store.CalibrationParams(
             a=1.0, b=0.0, samples=n, fitted_at=fitted_at, status="insufficient",
         )
-        calibration_store.save(params, per_timeframe=per_tf)
+        calibration_store.save(params, per_timeframe=per_tf, proposal=True)
         return {
             "status": "INSUFFICIENT",
             "samples": n,
@@ -145,7 +148,7 @@ def train() -> dict:
         fitted_at=fitted_at,
         status="fitted",
     )
-    calibration_store.save(params, per_timeframe=per_tf)
+    calibration_store.save(params, per_timeframe=per_tf, proposal=True)
     bins = [asdict(x) for x in reliability_bins(samples, n_bins=5)]
     return {
         "status": "FITTED",

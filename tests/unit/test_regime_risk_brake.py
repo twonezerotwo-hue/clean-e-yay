@@ -94,31 +94,44 @@ def test_compute_floor_guardrail():
     assert rep["per_regime"]["OFFENSIVE"]["mult"] == 0.4  # taban: kısma, kapatma değil
 
 
+def _approve(mod) -> None:
+    """Owner onayı: öneri dosyası canlıya kopyalanır (26 Kasım 2026'dan beri canlı tablo
+    kendiliğinden değişmez)."""
+    live = mod._store_path() if hasattr(mod, "_store_path") else mod._path()
+    live.write_text(mod._proposal_path().read_text(encoding="utf-8"), encoding="utf-8")
+    if hasattr(mod, "_cache"):
+        mod._cache["mtime"] = None
+
+
 # ── active_mult (sıcak yol) ──────────────────────────────────────────────────
 
 def test_active_mult_reads_braked_regime():
     with threshold_override(_CFG):
         rrb.compute(outcomes=[_outcome(pnl=-5.0)] * 4,
                     challenger_records=[_bt(dr=-0.02)] * 6)
+        assert rrb.active_mult("OFFENSIVE") == (1.0, None)  # canlı tablo kendiliğinden değişmez
+        _approve(rrb)
         mult, ev = rrb.active_mult("OFFENSIVE")
         assert mult == 0.6 and ev is not None and ev["regime"] == "OFFENSIVE"
         assert rrb.active_mult("NEUTRAL") == (1.0, None)   # frensiz rejim
 
 
-def test_active_mult_missing_and_stale_artifact():
+def test_active_mult_missing_and_old_table():
     with threshold_override(_CFG):
-        assert rrb.active_mult("OFFENSIVE") == (1.0, None)  # artifact yok
+        assert rrb.active_mult("OFFENSIVE") == (1.0, None)  # tablo yok
         rrb.compute(outcomes=[_outcome(pnl=-5.0)] * 4,
                     challenger_records=[_bt(dr=-0.02)] * 6,
                     now=datetime.now(UTC) - timedelta(hours=72))
-        # 48h'ten yaşlı → fren düşer (öğrenme durmuş, uydurma fren yok).
-        assert rrb.active_mult("OFFENSIVE") == (1.0, None)
+        _approve(rrb)
+        # Donmuş canlı tablo yaşı yüzünden düşmez (eskiden 48 saatte fren kalkıyordu).
+        assert rrb.active_mult("OFFENSIVE")[0] == 0.6
 
 
 def test_active_mult_never_boosts_on_tampered_artifact():
     with threshold_override(_CFG):
         rrb.compute(outcomes=[_outcome(pnl=-5.0)] * 4,
                     challenger_records=[_bt(dr=-0.02)] * 6)
+        _approve(rrb)
         p = rrb._path()
         data = json.loads(p.read_text(encoding="utf-8"))
         data["per_regime"]["OFFENSIVE"]["mult"] = 1.7   # bozuk/kurcalanmış değer
@@ -151,14 +164,15 @@ def _decide(monkeypatch):
 
 
 def _write_brake_for(regime_label: str, mult: float = 0.5):
-    rrb._write({
+    rrb._path().parent.mkdir(parents=True, exist_ok=True)
+    rrb._path().write_text(json.dumps({
         "generated_at": datetime.now(UTC).isoformat(),
         "per_regime": {regime_label.upper(): {
             "mult": mult, "braked": True,
             "evidence": {"live": {"n": 4}, "backtest": {"n": 6}},
         }},
         "braked_regimes": [regime_label.upper()],
-    })
+    }), encoding="utf-8")
     rrb._cache["mtime"] = None
 
 

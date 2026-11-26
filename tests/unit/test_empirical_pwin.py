@@ -18,6 +18,13 @@ from packages.learning import empirical_pwin as ep
 _MIN5 = {"empirical_pwin": {"min_samples": 5}}
 
 
+
+def _approve(mod) -> None:
+    """Owner onayı: öneri dosyası canlıya kopyalanır (26 Kasım 2026'dan beri canlı tablo
+    kendiliğinden değişmez)."""
+    live = mod._store_path() if hasattr(mod, "_store_path") else mod._path()
+    live.write_text(mod._proposal_path().read_text(encoding="utf-8"), encoding="utf-8")
+
 def _o(tf: str, regime: str, pnl: float, verified: bool = True, r_multiple=None):
     return SimpleNamespace(
         timeframe=tf, regime=regime, pnl=pnl, data_verified=verified, r_multiple=r_multiple
@@ -143,6 +150,8 @@ def test_write_table_roundtrip_and_cache_refresh(ep_env, monkeypatch) -> None:
     with threshold_override(_MIN5):
         t = ep.write_table()
         assert t["sufficient_count"] == 1
+        assert ep.lookup("4h", "NEUTRAL") is None  # canlı tablo kendiliğinden değişmez
+        _approve(ep)
         hit = ep.lookup("4h", "NEUTRAL")
         assert hit is not None and hit.p_win == pytest.approx(0.6)
         # yeniden yazım cache'i tazeler
@@ -151,6 +160,7 @@ def test_write_table_roundtrip_and_cache_refresh(ep_env, monkeypatch) -> None:
             lambda state=None: [_o("4h", "NEUTRAL", +1) for _ in range(10)],
         )
         ep.write_table()
+        _approve(ep)
         assert ep.lookup("4h", "NEUTRAL").p_win == 1.0
 
 

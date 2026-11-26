@@ -14,10 +14,11 @@ Fren kuralı (yanlış-pozitif freni için kanıt ÇİFT kaynaklı olmak ZORUNDA
 İkisi de negatifse mult = brake_mult; guardrail [floor, 1.0] — ASLA büyütmez
 (no-boost invariant), ASLA floor altına inmez (fren kapatma değil kısma).
 
-Akış: `compute()` learning worker'da OFF-TICK koşar → data/runtime/regime_risk_brake.json.
-Sıcak yol (decision engine) yalnız mtime-cache'li `active_mult()` okur; artifact
-yok/bayat (> max_age_hours) → 1.0 (dürüst düşüş — uydurma fren yok, öğrenme durursa
-canlı tik bağımsız kalır). Frenlenen kararda engine fren kanıtını raporda taşır.
+Akış: `compute()` learning worker'da OFF-TICK koşar → öneri tablosu
+(regime_risk_brake_proposal.json). Sıcak yol (decision engine) yalnız mtime-cache'li
+`active_mult()` ile CANLI tabloyu okur; canlı tablo 26 Kasım 2026'dan beri donmuştur ve
+yalnız owner onayıyla (öneri kopyası) değişir; tablo yoksa 1.0. Frenlenen kararda engine
+fren kanıtını raporda taşır.
 """
 from __future__ import annotations
 
@@ -38,7 +39,15 @@ def _cfg() -> dict:
 
 
 def _path() -> Path:
+    """Canlı (donmuş) fren tablosu; karar motoru yalnız bunu okur."""
     return Path(os.environ.get("REGIME_RISK_BRAKE_PATH", "data/runtime/regime_risk_brake.json"))
+
+
+def _proposal_path() -> Path:
+    """compute()'un yazdığı öneri tablosu (canlının yanında). 26 Kasım 2026 owner
+    kararı: canlı tablo kendiliğinden değişmez, öneri owner onayıyla kopyalanır."""
+    live = _path()
+    return live.with_name(f"{live.stem}_proposal{live.suffix}")
 
 
 def _live_by_regime(outcomes) -> dict[str, dict]:
@@ -125,8 +134,7 @@ def compute(outcomes=None, challenger_records=None, now: datetime | None = None)
 
 
 def _write(report: dict) -> None:
-    p = _path()
-    write_text_atomic(p, json.dumps(report, ensure_ascii=False, indent=1))
+    write_text_atomic(_proposal_path(), json.dumps(report, ensure_ascii=False, indent=1))
 
 
 # ── sıcak yol okuyucu (decision engine) — mtime cache, ağ/hesap yok ─────────────
@@ -148,19 +156,14 @@ def _load_cached() -> dict | None:
 
 
 def active_mult(regime_label: str | None, now: datetime | None = None) -> tuple[float, dict | None]:
-    """(mult, evidence) — sıcak yol. Artifact yok/bayat/rejim yok → (1.0, None).
+    """(mult, evidence) — sıcak yol. Canlı tablo yok/rejim yok → (1.0, None).
 
-    Flag kontrolü BURADA DEĞİL: engine shadow için her zaman okur, yalnız
-    flag açıkken uygular (aktivasyon kanıtı flag'siz birikir)."""
+    Canlı tablo donmuştur (26 Kasım 2026): yaşı yüzünden düşmez; yalnız owner
+    onayıyla değişir. (Eskiden 48 saatten eski tablo freni kaldırıyordu.)"""
     data = _load_cached()
     if not data:
         return 1.0, None
     try:
-        max_age_h = float(_cfg().get("max_age_hours", 48))
-        gen = datetime.fromisoformat(str(data.get("generated_at")))
-        now = now or datetime.now(UTC)
-        if (now - gen).total_seconds() > max_age_h * 3600:
-            return 1.0, None  # öğrenme durmuş → fren düşer, uydurma yok
         row = (data.get("per_regime") or {}).get(str(regime_label or "").upper())
         if not row or not row.get("braked"):
             return 1.0, None

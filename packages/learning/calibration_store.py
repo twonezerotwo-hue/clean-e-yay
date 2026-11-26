@@ -23,8 +23,17 @@ _LOCK = threading.Lock()
 
 
 def _store_path() -> Path:
+    """Canlı (donmuş) kalibrasyon dosyası; karar motoru yalnız bunu okur."""
     p = Path(os.environ.get("CALIBRATION_STORE_PATH", "data/runtime/platt.json"))
     return p if p.is_absolute() else REPO_ROOT / p
+
+
+def _proposal_path() -> Path:
+    """Öğrenme işçisinin yeni uydurmayı yazdığı öneri dosyası (canlının yanında).
+    26 Kasım 2026 owner kararı: canlı tablo kendiliğinden değişmez, öneri owner
+    onayıyla kopyalanır."""
+    live = _store_path()
+    return live.with_name(f"{live.stem}_proposal{live.suffix}")
 
 
 @dataclass
@@ -89,12 +98,15 @@ def load_tf(timeframe: str) -> CalibrationParams | None:
 def save(
     params: CalibrationParams,
     per_timeframe: dict[str, CalibrationParams] | None = None,
+    *,
+    proposal: bool = False,
 ) -> CalibrationParams:
-    """Global parametreleri (ve verildiyse TF fit'lerini) atomik-yakın yaz.
+    """Global parametreleri (ve verildiyse TF fit'lerini) atomik yaz.
 
-    `per_timeframe=None` → dosyadaki mevcut TF fit'leri KORUNUR (global-only
-    çağrılar TF verisini silmesin)."""
-    path = _store_path()
+    `proposal=True` → öneri dosyasına (öğrenme işçisi); False → canlı dosyaya (owner
+    onayı / testler). `per_timeframe=None` → canlı dosyadaki mevcut TF fit'leri KORUNUR
+    (global-only çağrılar TF verisini silmesin)."""
+    path = _proposal_path() if proposal else _store_path()
     with _LOCK:
         payload = dict(asdict(params))
         if per_timeframe is None:
