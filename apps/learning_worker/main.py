@@ -49,6 +49,7 @@ from packages.learning import (
 )
 from packages.learning.summary import build_summary
 from packages.ops import heartbeat
+from packages.ops.store import write_text_atomic
 
 log = logging.getLogger("learning_worker")
 
@@ -146,14 +147,19 @@ def _tf_target_should_run(outcomes_seen: int) -> tuple[bool, int]:
 
 def _tf_target_save_trigger(outcomes_seen: int) -> None:
     try:
-        TF_TARGET_TRIGGER_PATH.parent.mkdir(parents=True, exist_ok=True)
-        TF_TARGET_TRIGGER_PATH.write_text(
+        write_text_atomic(
+            TF_TARGET_TRIGGER_PATH,
             json.dumps({"last_outcomes_seen": outcomes_seen,
                         "updated_at": datetime.now(UTC).isoformat()}, indent=2),
-            encoding="utf-8",
         )
     except OSError:
         pass
+
+
+def _err(step: str, exc: BaseException) -> str:
+    """Hata kaydı: 'adım:Tür: mesaj' (mesaj ilk 200 karakter; 26 Kasım 2026'ya dek yalnız tür)."""
+    msg = " ".join(str(exc).split())[:200]
+    return f"{step}:{type(exc).__name__}" + (f": {msg}" if msg else "")
 
 
 def run_once() -> dict:
@@ -162,6 +168,7 @@ def run_once() -> dict:
     started_at = datetime.now(UTC).isoformat()
     t0 = time.monotonic()
     errors: list[str] = []
+    laps: list[tuple[str, float]] = []  # adım süreleri (26 Kasım 2026)
     proposals_generated = 0
     calibration_status = "UNKNOWN"
     tf_calibration_status = "UNKNOWN"
@@ -173,28 +180,31 @@ def run_once() -> dict:
     guard_safety_status: dict = {}          # CP3: yön guard kasası (armed/rolled_back/...)
     activation_watchdog_status: dict = {}   # F5-3: owner-flag izleyici (yalnız-öneri)
 
+    laps.append(("outcomes", time.monotonic()))
     try:
         outcomes_seen = len(outcomes_mod.outcomes_from_state())
     except Exception as exc:  # defensive — worker patlamamalı
         outcomes_seen = 0
-        errors.append(f"outcomes:{type(exc).__name__}")
+        errors.append(_err("outcomes", exc))
 
     # Makro arşiv derinlik bekçisi (2026-07-13): fundamental_v4/rejim-momentum
     # 379+ gün DXY/US10Y ister; data/runtime git'e girmediği için her ortam
     # kendi arşivini kendisi doldurur (lokal↔AWS senkron, kural 6). Derinse
     # no-op; sığsa tek-seferlik 5y backfill (süreç-memo + 6h retry guard).
     macro_backfill_status: dict = {}
+    laps.append(("macro_backfill", time.monotonic()))
     try:
         from packages.learning import macro_backfill
         macro_backfill_status = macro_backfill.ensure_depth()
         if macro_backfill_status.get("status") != "DEEP":
             log.info("macro_backfill: %s", macro_backfill_status)
     except Exception as exc:  # defensive
-        errors.append(f"macro_backfill:{type(exc).__name__}")
+        errors.append(_err("macro_backfill", exc))
 
     # Piyasa şoku bildirimi (salt gözlem, 13 Kasım 2026 owner onayı): son tamamlanmış
     # 1h barlarda oynaklığa göre sert hareket varsa owner'a "ne oluyor, kimi etkiler,
     # sistem ne görüyor" özeti. Karara, kapılara ve pozisyonlara dokunmaz.
+    laps.append(("market_shock", time.monotonic()))
     try:
         from packages.notifications import append_many as _notify_many
         from packages.notifications import market_shock as _market_shock
@@ -203,24 +213,25 @@ def run_once() -> dict:
             _notify_many(_shock_notifs)
             log.info("market_shock: %d bildirim", len(_shock_notifs))
     except Exception as exc:  # defensive — worker patlamamalı
-        errors.append(f"market_shock:{type(exc).__name__}")
+        errors.append(_err("market_shock", exc))
 
     # Günlük "neden kaçırdım" incelemesi (salt gözlem, 13 Kasım 2026 owner onayı): dünün
     # büyük hareketleri, sistemin onlara karşı ne yaptığı ve hangi kapının durdurduğu.
     # Günde bir kez (00:15 UTC sonrası ilk koşu); karara dokunmaz.
+    laps.append(("daily_review", time.monotonic()))
     try:
         from packages.learning import daily_review as _daily_review
         _review = _daily_review.run_if_due()
         if _review is not None:
             log.info("daily_review: %s, %d büyük hareket", _review["day"], len(_review["movers"]))
     except Exception as exc:  # defensive — worker patlamamalı
-        errors.append(f"daily_review:{type(exc).__name__}")
+        errors.append(_err("daily_review", exc))
 
     # Özet (boş state'te de güvenli — total=0).
+    laps.append(("summary", time.monotonic()))
     try:
         summary = build_summary()
-        OUT_PATH.parent.mkdir(parents=True, exist_ok=True)
-        OUT_PATH.write_text(json.dumps(summary, indent=2, default=str), encoding="utf-8")
+        write_text_atomic(OUT_PATH, json.dumps(summary, indent=2, default=str))
         log.info(
             "learning_summary written: total=%s win_rate=%s sharpe=%s",
             summary.get("total_trades"),
@@ -228,9 +239,10 @@ def run_once() -> dict:
             summary.get("sharpe"),
         )
     except Exception as exc:  # defensive
-        errors.append(f"summary:{type(exc).__name__}")
+        errors.append(_err("summary", exc))
 
     # G6: confidence calibration. Yetersiz veri → identity (a=1, b=0).
+    laps.append(("calibration", time.monotonic()))
     try:
         cal = calibration_trainer.train()
         calibration_status = str(cal.get("status", "UNKNOWN"))
@@ -240,10 +252,11 @@ def run_once() -> dict:
             calibration_status, cal.get("samples"), cal.get("tf_fitted") or [],
         )
     except Exception as exc:  # defensive
-        errors.append(f"calibration:{type(exc).__name__}")
+        errors.append(_err("calibration", exc))
 
     # F4-2 — ampirik p(win) tablosu: (tf|rejim) hit-rate artifact'ı. Karar
     # motoru okur (flag kapalıyken salt-gözlem alanları için).
+    laps.append(("empirical_pwin", time.monotonic()))
     try:
         emp_table = empirical_pwin.write_table()
         log.info(
@@ -251,11 +264,12 @@ def run_once() -> dict:
             emp_table.get("cell_count"), emp_table.get("sufficient_count"),
         )
     except Exception as exc:  # defensive — worker patlamamalı
-        errors.append(f"empirical_pwin:{type(exc).__name__}")
+        errors.append(_err("empirical_pwin", exc))
 
     # Çıkış Otopsisi (denetim 2026-07-03) — kötü çıkışın nerede/kaça olduğu
     # (AUTO kohort, observe-only). Snapshot + trend geçmişi; panel/API okur.
     exit_forensics_status = "SKIPPED"
+    laps.append(("exit_forensics", time.monotonic()))
     try:
         ef = exit_forensics.write_snapshot()
         ef_latest = ef.get("latest") or {}
@@ -268,31 +282,30 @@ def run_once() -> dict:
         )
     except Exception as exc:  # defensive — worker patlamamalı
         exit_forensics_status = f"ERROR:{type(exc).__name__}"
-        errors.append(f"exit_forensics:{type(exc).__name__}")
+        errors.append(_err("exit_forensics", exc))
 
     # Step 8 — per-TF calibration + tf_weights trust gate. Derives per-timeframe
     # hit-rate/expectancy from VERIFIED outcomes and the trust verdict (PRIOR until a
     # TF has enough evidence). Persisted as a durable artifact so the trust gate reads
     # a stable as-of-last-run verdict. Attribution-based weight AUTO-TUNE stays deferred
     # (no faking): this lands the honest calibration + trust gate, not weight moves.
+    laps.append(("tf_calibration", time.monotonic()))
     try:
         tf_report = tf_calibration.calibration_report()
         tf_weights_trusted = bool(tf_report.get("tf_weights_trusted", False))
         tf_calibration_status = "TRUSTED" if tf_weights_trusted else "PRIOR"
-        TF_CALIBRATION_OUT_PATH.parent.mkdir(parents=True, exist_ok=True)
-        TF_CALIBRATION_OUT_PATH.write_text(
-            json.dumps(tf_report, indent=2, default=str), encoding="utf-8"
-        )
+        write_text_atomic(TF_CALIBRATION_OUT_PATH, json.dumps(tf_report, indent=2, default=str))
         log.info(
             "tf_calibration: %s trusted_tfs=%s",
             tf_calibration_status,
             tf_report.get("calibrated_timeframes"),
         )
     except Exception as exc:  # defensive — worker patlamamalı
-        errors.append(f"tf_calibration:{type(exc).__name__}")
+        errors.append(_err("tf_calibration", exc))
 
     # Step 8 — tf_weights auto-tune PROPOSAL (trust-gated). Owner approves; live weights
     # are NEVER auto-moved here. Until a TF is calibrated this skips (the normal state).
+    laps.append(("tf_weight", time.monotonic()))
     try:
         proposal = tf_weight_trainer.propose()
         if isinstance(proposal, tf_weight_trainer.TfWeightProposal):
@@ -301,19 +314,17 @@ def run_once() -> dict:
         else:
             tf_weight_proposal_status = str(proposal.get("reason", "skipped"))
             payload = proposal
-        TF_WEIGHT_PROPOSAL_OUT_PATH.parent.mkdir(parents=True, exist_ok=True)
-        TF_WEIGHT_PROPOSAL_OUT_PATH.write_text(
-            json.dumps(payload, indent=2, default=str), encoding="utf-8"
-        )
+        write_text_atomic(TF_WEIGHT_PROPOSAL_OUT_PATH, json.dumps(payload, indent=2, default=str))
         log.info("tf_weight proposal: %s", tf_weight_proposal_status)
     except Exception as exc:  # defensive — worker patlamamalı
-        errors.append(f"tf_weight:{type(exc).__name__}")
+        errors.append(_err("tf_weight", exc))
 
     # TF-target trainer (Faz B): TF başına SL/TP geometri nudge önerisi. Hibrit
     # uygulama — tf_target_store dar bantta auto, dışında PENDING. Tetik örnek-
     # kapılı: son koşudan beri ≥TF_TARGET_MIN_NEW yeni outcome biriktiyse çalışır.
     tf_target_status = "SKIPPED"
     tf_target_decisions: dict[str, str] = {}
+    laps.append(("tf_target", time.monotonic()))
     try:
         should_run, last_seen = _tf_target_should_run(outcomes_seen)
         if not should_run:
@@ -361,21 +372,19 @@ def run_once() -> dict:
                         )
                 else:
                     tf_target_status = "NO_NUDGE"
-                TF_TARGET_PROPOSAL_OUT_PATH.parent.mkdir(parents=True, exist_ok=True)
-                TF_TARGET_PROPOSAL_OUT_PATH.write_text(
-                    json.dumps(payload, indent=2, default=str), encoding="utf-8"
-                )
+                write_text_atomic(TF_TARGET_PROPOSAL_OUT_PATH, json.dumps(payload, indent=2, default=str))
             else:
                 tf_target_status = str(tt_result.get("status", "UNKNOWN"))
             _tf_target_save_trigger(outcomes_seen)
             log.info("tf_target_trainer: %s decisions=%s",
                      tf_target_status, tf_target_decisions)
     except Exception as exc:  # defensive — worker patlamamalı
-        errors.append(f"tf_target:{type(exc).__name__}")
+        errors.append(_err("tf_target", exc))
 
     # G2/G3: auto-weight trainer. Yeterli veri varsa proposal üretilir. G3 hibrit:
     # dar bant (|delta| ≤ REBALANCE_AUTO_APPLY_BAND) + auto-apply açık ise OTOMATİK
     # uygulanır; aksi halde PENDING (owner). API propose/approve yolu ETKİLENMEZ.
+    laps.append(("trainer", time.monotonic()))
     try:
         result = trainer.train()
         if isinstance(result, trainer.RebalanceProposal):
@@ -401,10 +410,11 @@ def run_once() -> dict:
             skipped_reason = result.get("reason")
             log.info("rebalance trainer skipped: %s", result)
     except Exception as exc:  # defensive
-        errors.append(f"trainer:{type(exc).__name__}")
+        errors.append(_err("trainer", exc))
 
     # G3: otomatik-uygulanan ağırlık için outcome-bazlı rollback denetimi. İzlenen
     # apply yoksa no_active; yeterli yeni outcome birikince CONFIRMED/ROLLED_BACK.
+    laps.append(("rollback", time.monotonic()))
     try:
         rb = weight_rollback.check_rollback()
         rollback_status = str(rb.get("status", "UNKNOWN"))
@@ -419,11 +429,12 @@ def run_once() -> dict:
         elif rollback_status == "CONFIRMED":
             log.info("weight auto-apply CONFIRMED: %s", rb.get("confirmed_version"))
     except Exception as exc:  # defensive — worker patlamamalı
-        errors.append(f"rollback:{type(exc).__name__}")
+        errors.append(_err("rollback", exc))
 
     # CP4 slice 2: otomatik-uygulanan TF-target (SL/TP geometri) için outcome-bazlı
     # rollback. İzlenen apply yoksa no_active; yeterli yeni outcome birikince
     # geometri CONFIRMED ya da önceki değerine ROLLED_BACK olur.
+    laps.append(("tf_target_rollback", time.monotonic()))
     try:
         gb = tf_target_rollback.check_rollback()
         gb_status = str(gb.get("status", "UNKNOWN"))
@@ -436,20 +447,22 @@ def run_once() -> dict:
         elif gb_status == "CONFIRMED":
             log.info("tf_target auto-apply CONFIRMED: %s", gb.get("confirmed_tfs"))
     except Exception as exc:  # defensive — worker patlamamalı
-        errors.append(f"tf_target_rollback:{type(exc).__name__}")
+        errors.append(_err("tf_target_rollback", exc))
 
     # Eşik önericisi: allowlist eşiklerini backtest'le dener, öneriyi geçmişe yazar.
     # Canlı eşiği DEĞİŞTİRMEZ (otomatik uygulama 21 Kasım 2026 owner kararıyla kalktı).
+    laps.append(("threshold_trainer", time.monotonic()))
     try:
         tt = threshold_trainer.train()
         if tt.get("status") == "PROPOSED":
             log.info("threshold PROPOSED (owner inceler): %s", tt.get("evaluated"))
     except Exception as exc:  # defensive — worker patlamamalı
-        errors.append(f"threshold_trainer:{type(exc).__name__}")
+        errors.append(_err("threshold_trainer", exc))
 
     # CP3: yön güvenlik kasası. Owner bir guard'ı canlıya aldıysa izlemeye alır;
     # yeterli yeni outcome birikince post-enable expectancy baseline'ın altına
     # düşerse guard'ı oto-kapatır (kill-override). Geçiş yoksa sessiz (no-op).
+    laps.append(("guard_safety", time.monotonic()))
     try:
         guard_safety_status = guard_safety.run()
         if guard_safety_status.get("armed"):
@@ -457,11 +470,12 @@ def run_once() -> dict:
         if guard_safety_status.get("rolled_back"):
             log.info("guard_safety ROLLBACK: %s", guard_safety_status["rolled_back"])
     except Exception as exc:  # defensive — worker patlamamalı
-        errors.append(f"guard_safety:{type(exc).__name__}")
+        errors.append(_err("guard_safety", exc))
 
     # F5-3 — aktivasyon watchdog'u: owner-flag OFF→ON geçişlerini izler,
     # post-enable expectancy düşerse DEGRADED önerir (YALNIZ-ÖNERİ — hiçbir
     # flag'i oto-kapatmaz; yön guard'larının oto-kapatlı kasası yukarıda).
+    laps.append(("activation_watchdog", time.monotonic()))
     try:
         aw = activation_watchdog.run()
         activation_watchdog_status = aw
@@ -471,13 +485,14 @@ def run_once() -> dict:
             log.info("activation_watchdog DEGRADED (öneri): %s", aw["degraded"])
     except Exception as exc:  # defensive — worker patlamamalı
         activation_watchdog_status = {}
-        errors.append(f"activation_watchdog:{type(exc).__name__}")
+        errors.append(_err("activation_watchdog", exc))
 
     # K-0b — keşif: sektör rotasyon motoru (DISCOVERY_SCAN_ENABLED, default
     # OFF → tam no-op: ağa çıkmaz, dosya yazmaz, learning koşusu bayt-eşdeğer).
     # Açıkken saatte bir (interval_sec) 12 sektör ETF'sinin S&P'ye göreli gücünü
     # ölçer + karne damgası/çözümü; canlı karar zincirine dokunmaz (salt-gözlem).
     discovery_status = "DISABLED"
+    laps.append(("sector_rotation", time.monotonic()))
     try:
         if discovery.scan_enabled():
             sr = sector_rotation.run_if_due()
@@ -490,13 +505,14 @@ def run_once() -> dict:
                 )
     except Exception as exc:  # defensive — worker patlamamalı
         discovery_status = f"ERROR:{type(exc).__name__}"
-        errors.append(f"sector_rotation:{type(exc).__name__}")
+        errors.append(_err("sector_rotation", exc))
 
     # Haber güdümlü keşif (owner kararı 2026-10-05, ikinci tur; aynı kapı): tüm haber
     # akışından yerel YZ olay → sonuç → etkilenen varlık çıkarır, sembol Yahoo'da
     # doğrulanır. Tarayıcıdan ÖNCE koşar: doğrulanan adaylar aynı turda taranabilir.
     # SALT-GÖZLEM; yerel model yoksa (AWS) LOCAL_LLM_OFF, ortak LLM bütçesini harcamaz.
     news_discovery_status = "DISABLED"
+    laps.append(("news_discovery", time.monotonic()))
     try:
         if discovery.scan_enabled():
             from packages.discovery import news_discovery
@@ -510,13 +526,14 @@ def run_once() -> dict:
             )
     except Exception as exc:  # defensive — worker patlamamalı
         news_discovery_status = f"ERROR:{type(exc).__name__}"
-        errors.append(f"news_discovery:{type(exc).__name__}")
+        errors.append(_err("news_discovery", exc))
 
     # K-1 — keşif tarayıcısı (aynı flag): kota kadar adayı (sıcak sektör ETF'leri
     # + kripto kısa listesi) gölge analiz eder, yalnız artifact yazar. İşlem
     # AÇMAZ; RiskGate'e girmez. Import lazy — flag kapalıyken decision-engine
     # bağımlılıkları hiç yüklenmez (bayt-eşdeğer koşu).
     discovery_scan_status = "DISABLED"
+    laps.append(("discovery_scan", time.monotonic()))
     try:
         if discovery.scan_enabled():
             from packages.discovery import scanner as discovery_scanner
@@ -530,12 +547,13 @@ def run_once() -> dict:
                 )
     except Exception as exc:  # defensive — worker patlamamalı
         discovery_scan_status = f"ERROR:{type(exc).__name__}"
-        errors.append(f"discovery_scan:{type(exc).__name__}")
+        errors.append(_err("discovery_scan", exc))
 
     # Haber öngörüsü (owner kararı 2026-10-05, aynı kapı): RSS + sınırlı web
     # araması → varlık başına yön/güç + öngörü karnesi. SALT-GÖZLEM: karar/
     # boyut/RiskGate/evren değişmez; fikir panosunu besler.
     news_forecast_status = "DISABLED"
+    laps.append(("news_forecast", time.monotonic()))
     try:
         if discovery.scan_enabled():
             from packages.discovery import news_forecast
@@ -550,10 +568,11 @@ def run_once() -> dict:
             )
     except Exception as exc:  # defensive — worker patlamamalı
         news_forecast_status = f"ERROR:{type(exc).__name__}"
-        errors.append(f"news_forecast:{type(exc).__name__}")
+        errors.append(_err("news_forecast", exc))
 
     # Kritik durum yedeği (hedef mimari 1. aşama): günde bir kez sıkıştırılmış
     # kopya + geçici klasöre geri yükleme denemesi. Yalnız okur; karar etkisi yok.
+    laps.append(("runtime_backup", time.monotonic()))
     try:
         from packages.ops import backup as runtime_backup
 
@@ -561,10 +580,11 @@ def run_once() -> dict:
         if bk.get("ran"):
             log.info("runtime_backup: %s %s", bk.get("status"), bk.get("archive"))
     except Exception as exc:  # defensive — worker patlamamalı
-        errors.append(f"runtime_backup:{type(exc).__name__}")
+        errors.append(_err("runtime_backup", exc))
 
     # Operasyon alarmları (hedef mimari 1. aşama): tick, kaynak, kota ve yedek
     # sorunlarını zile yazar; sessiz hata kalmasın. Salt gözlem, karar etkisi yok.
+    laps.append(("ops_alerts", time.monotonic()))
     try:
         from packages.ops import alerts as ops_alerts
 
@@ -572,7 +592,7 @@ def run_once() -> dict:
         if al.get("sent"):
             log.info("ops_alerts: active=%s sent=%s", al.get("active"), al.get("sent"))
     except Exception as exc:  # defensive — worker patlamamalı
-        errors.append(f"ops_alerts:{type(exc).__name__}")
+        errors.append(_err("ops_alerts", exc))
 
     # Haber → karar geçmiş karşılaştırması. Runtime shadow yazımı kapalıdır;
     # eski dosyalar silinmez, yalnızca audit için korunur.
@@ -581,6 +601,7 @@ def run_once() -> dict:
     # şeffaf fikir skoru + YZ değerlendirmesi (yerel model; turda en çok 2 çağrı,
     # yoksa kurallı yedek). Terfiden ÖNCE koşar: YZ hükmü pakete kanıt olur.
     ideas_status = "DISABLED"
+    laps.append(("ideas", time.monotonic()))
     try:
         if discovery.scan_enabled():
             from packages.discovery import ideas
@@ -591,7 +612,7 @@ def run_once() -> dict:
                      ib.get("llm_errors"))
     except Exception as exc:  # defensive — worker patlamamalı
         ideas_status = f"ERROR:{type(exc).__name__}"
-        errors.append(f"ideas:{type(exc).__name__}")
+        errors.append(_err("ideas", exc))
 
     # K-4 — keşif adayı TERFİ kriteri (aynı DISCOVERY_SCAN_ENABLED kapısı):
     # tarayıcı+defter tazelendikten SONRA aday gölge karnesini üç eşiğe (≥20
@@ -599,6 +620,7 @@ def run_once() -> dict:
     # defterine STRATEGY_ENABLE paketi (add_custom_asset, dedupe'lu). Varlık
     # OTOMATİK EKLENMEZ — onay bile canlı evreni değiştirmez (KIRMIZI ÇİZGİ).
     discovery_promotion_status = "DISABLED"
+    laps.append(("discovery_promotion", time.monotonic()))
     try:
         if discovery.scan_enabled():
             from packages.discovery import promotion as discovery_promotion
@@ -612,13 +634,14 @@ def run_once() -> dict:
                 )
     except Exception as exc:  # defensive — worker patlamamalı
         discovery_promotion_status = f"ERROR:{type(exc).__name__}"
-        errors.append(f"discovery_promotion:{type(exc).__name__}")
+        errors.append(_err("discovery_promotion", exc))
 
     # B-1 — geçmiş çok-modül yeniden-kurma sadakat (fidelity) kontrolü. Flag
     # BACKTEST_RECON_ENABLED OFF → tam no-op. SALT-ÖLÇÜM/İZOLE: canlı outcome
     # defterine/ağırlığa temas etmez, yalnız fidelity artifact'ı yazar. Import
     # lazy — flag kapalıyken decision/consensus bağımlılıkları yüklenmez.
     backtest_recon_status = "DISABLED"
+    laps.append(("backtest_recon", time.monotonic()))
     try:
         from packages.learning import backtest_recon
         if backtest_recon.enabled():
@@ -630,13 +653,14 @@ def run_once() -> dict:
             )
     except Exception as exc:  # defensive — worker patlamamalı
         backtest_recon_status = f"ERROR:{type(exc).__name__}"
-        errors.append(f"backtest_recon:{type(exc).__name__}")
+        errors.append(_err("backtest_recon", exc))
 
     # B-2 — rejim-çeşitli outcome üretimi (İZOLE challenger kanalı). Flag
     # BACKTEST_CHALLENGER_ENABLED OFF → tam no-op. B-1 fidelity'den AYRI flag
     # (üretim ağır: 1-2 yıl yürür). INTERVAL-kapılı (her cycle değil). Canlı
     # outcome defterine/ağırlığa/paper'a ASLA yazmaz — yalnız challenger artifact.
     backtest_challenger_status = "DISABLED"
+    laps.append(("backtest_challenger", time.monotonic()))
     try:
         from packages.learning import backtest_recon as _br_prod
         if _br_prod.challenger_enabled():
@@ -650,7 +674,7 @@ def run_once() -> dict:
                 )
     except Exception as exc:  # defensive — worker patlamamalı
         backtest_challenger_status = f"ERROR:{type(exc).__name__}"
-        errors.append(f"backtest_challenger:{type(exc).__name__}")
+        errors.append(_err("backtest_challenger", exc))
 
     # B-3 — challenger ağırlık eğitimi + quantum ayrım karnesi (cat 6). AYNI
     # BACKTEST_CHALLENGER_ENABLED kapısı (challenger boru hattı tek şey): B-2
@@ -658,6 +682,7 @@ def run_once() -> dict:
     # trainer matematiği reuse) + quantum karnesi, İZOLE rapora. Canlı ağırlığa/
     # config'e ASLA yazmaz (owner terfi = B-4, kırmızı çizgi). Ucuz (jsonl okur).
     challenger_train_status = "DISABLED"
+    laps.append(("challenger_trainer", time.monotonic()))
     try:
         from packages.learning import backtest_recon as _br_gate
         if _br_gate.challenger_enabled():
@@ -672,7 +697,7 @@ def run_once() -> dict:
                 )
     except Exception as exc:  # defensive — worker patlamamalı
         challenger_train_status = f"ERROR:{type(exc).__name__}"
-        errors.append(f"challenger_trainer:{type(exc).__name__}")
+        errors.append(_err("challenger_trainer", exc))
 
     # B-4 — challenger ağırlık TERFİ kriteri (owner ÖNERİ; KIRMIZI ÇİZGİ). AYNI
     # BACKTEST_CHALLENGER_ENABLED kapısı: B-3 eğitimden SONRA challenger ağırlık
@@ -681,6 +706,7 @@ def run_once() -> dict:
     # tek PENDING). Ağırlık terfisi OTOMATİK DEĞİL — onay bile canlı ağırlığı
     # değiştirmez (owner-gated rebalance ayrı). Ucuz (jsonl okur + yeniden-harman).
     challenger_promotion_status = "DISABLED"
+    laps.append(("challenger_promotion", time.monotonic()))
     try:
         from packages.learning import backtest_recon as _br_promo
         if _br_promo.challenger_enabled():
@@ -698,13 +724,14 @@ def run_once() -> dict:
                 )
     except Exception as exc:  # defensive — worker patlamamalı
         challenger_promotion_status = f"ERROR:{type(exc).__name__}"
-        errors.append(f"challenger_promotion:{type(exc).__name__}")
+        errors.append(_err("challenger_promotion", exc))
 
     # Rejim risk freni tablosu (uygulama engine'de). Kanıt çift kaynak:
     # canlı AUTO kohort + backtest challenger (İKİSİ de negatif + min örnek →
     # fren). Ucuz (state + jsonl okur). Artifact bayatlarsa (max_age_hours)
     # fren sıcak yolda kendiliğinden düşer — öğrenme durursa tik bağımsız kalır.
     regime_brake_status = "ERROR"
+    laps.append(("regime_risk_brake", time.monotonic()))
     try:
         from packages.learning import regime_risk_brake as _rrb
         rb = _rrb.compute()
@@ -713,7 +740,7 @@ def run_once() -> dict:
             log.info("regime_risk_brake: braked=%s", rb.get("braked_regimes"))
     except Exception as exc:  # defensive — worker patlamamalı
         regime_brake_status = f"ERROR:{type(exc).__name__}"
-        errors.append(f"regime_risk_brake:{type(exc).__name__}")
+        errors.append(_err("regime_risk_brake", exc))
 
     # Y-6 — haber olay-çalışması (SALT-GÖZLEM). Off-tick: o anki verified haberleri
     # damgala (dedupe) + olgunlaşan olaylar için N-bar ileri-getiri karnesi
@@ -793,7 +820,7 @@ def run_once() -> dict:
                      recorded, causal_recorded, nt.get("matured"), nt.get("global_verdict"), calibration_runtime.get("status"))
         except Exception as exc:  # defensive — worker patlamamalı
             news_study_status = f"ERROR:{type(exc).__name__}"
-            errors.append(f"news_event_study:{type(exc).__name__}")
+            errors.append(_err("news_event_study", exc))
     else:
         log.info(
             "news_event_study: skipped (artifact age < %ss; shadow-only)",
@@ -804,6 +831,7 @@ def run_once() -> dict:
     # interval-kapılı (haftalık; durum = artifact yaşı). Sabit+trailing stop için
     # en verimli aralığı gerçek OHLCV'den ölçer; canlı çıkışa dokunmaz.
     exit_backtest_status = "ERROR"
+    laps.append(("exit_backtest", time.monotonic()))
     try:
         from packages.learning import exit_backtest as _eb
         eb = _eb.run_if_due()
@@ -812,11 +840,12 @@ def run_once() -> dict:
             log.info("exit_backtest: %s entries taranıp güncellendi", eb.get("entries"))
     except Exception as exc:  # defensive — worker patlamamalı
         exit_backtest_status = f"ERROR:{type(exc).__name__}"
-        errors.append(f"exit_backtest:{type(exc).__name__}")
+        errors.append(_err("exit_backtest", exc))
 
     # Kapı karşı-olgu defteri (salt ölçüm, flag yok): karar kaydındaki her aday
     # açılsaydı karar anındaki stop/hedef planıyla ne yapardı — kapıların bedeli.
     gate_counterfactual_status = "ERROR"
+    laps.append(("gate_counterfactual", time.monotonic()))
     try:
         from packages.learning import gate_counterfactual as _gcf
         gcf = _gcf.run()
@@ -825,13 +854,14 @@ def run_once() -> dict:
                  gcf.get("new"), gcf.get("resolved"), gcf.get("pending"))
     except Exception as exc:  # defensive — worker patlamamalı
         gate_counterfactual_status = f"ERROR:{type(exc).__name__}"
-        errors.append(f"gate_counterfactual:{type(exc).__name__}")
+        errors.append(_err("gate_counterfactual", exc))
 
     # Konsey karnesi (SALT-ANALİZ, flag YOK). Katmanlar-arası kombinasyon
     # analizi: modül yayılımları + ikili çiftler + rejim/güven kırılımları +
     # veriden-türetilen sanki-filtreler. Owner 2026-07-12 elle analizinin
     # kalıcı hâli; canlı karara dokunmaz. Veri hijyeni içerde (legacy hariç).
     council_status = "ERROR"
+    laps.append(("council_scorecard", time.monotonic()))
     try:
         from packages.learning import council_scorecard as _cs
         cs_rep = _cs.run_if_due()
@@ -840,7 +870,7 @@ def run_once() -> dict:
             log.info("council_scorecard: n=%s", cs_rep.get("n"))
     except Exception as exc:  # defensive — worker patlamamalı
         council_status = f"ERROR:{type(exc).__name__}"
-        errors.append(f"council_scorecard:{type(exc).__name__}")
+        errors.append(_err("council_scorecard", exc))
 
     # Aday bölge önericisi (SALT-ANALİZ, flag YOK).
     # Owner'ın kesişim yöntemini makro evrende (rotasyon çekirdeği + ETF + keşif
@@ -848,6 +878,7 @@ def run_once() -> dict:
     # confluence) → aday bölge listesi. Makine bölge SEÇMEZ, ADAY önerir; owner
     # süzer, kabul edileni zone_plans.yaml'a taşır. Canlı karara dokunmaz.
     zone_proposer_status = "ERROR"
+    laps.append(("zone_proposer", time.monotonic()))
     try:
         from packages.learning import zone_proposer as _zpr
         zpr = _zpr.run_if_due()
@@ -857,7 +888,7 @@ def run_once() -> dict:
                      zpr.get("assets"), zpr.get("with_zones"))
     except Exception as exc:  # defensive — worker patlamamalı
         zone_proposer_status = f"ERROR:{type(exc).__name__}"
-        errors.append(f"zone_proposer:{type(exc).__name__}")
+        errors.append(_err("zone_proposer", exc))
 
     # D5 — sinyal karnesi (SUBSIGNAL_SCORECARD_ENABLED, default OFF → tam no-op).
     # INTERVAL-kapılı (haftalık; durum = artifact yaşı): 8 sinyal × 4 TF ileri-
@@ -865,6 +896,7 @@ def run_once() -> dict:
     # pencere kendiliğinden uzar. SALT-GÖZLEM: canlı skora/karara/paper'a yazmaz.
     # Import lazy — flag kapalıyken sinyal/vwap bağımlılıkları hiç yüklenmez.
     subsignal_scorecard_status = "DISABLED"
+    laps.append(("subsignal_scorecard", time.monotonic()))
     try:
         from packages.learning import subsignal_scorecard
         if subsignal_scorecard.enabled():
@@ -876,7 +908,7 @@ def run_once() -> dict:
                 )
     except Exception as exc:  # defensive — worker patlamamalı
         subsignal_scorecard_status = f"ERROR:{type(exc).__name__}"
-        errors.append(f"subsignal_scorecard:{type(exc).__name__}")
+        errors.append(_err("subsignal_scorecard", exc))
 
     # D6 — tf_scoring_v2 GÖLGE (TF_SCORING_V2_SHADOW, default OFF → tam no-op).
     # Karne kanıtıyla (kanıt-cap ağırlık) katmanlı v2 yön skorunu CANLI barlar
@@ -884,6 +916,7 @@ def run_once() -> dict:
     # skora/karara/paper'a yazmaz (D7 yarışın girdisi). Lazy import — flag
     # kapalıyken skorlama bağımlılıkları yüklenmez (bayt-eşdeğer koşu).
     tf_scoring_v2_shadow_status = "DISABLED"
+    laps.append(("tf_scoring_v2_shadow", time.monotonic()))
     try:
         from packages.learning import tf_scoring_shadow
         if tf_scoring_shadow.enabled():
@@ -895,7 +928,7 @@ def run_once() -> dict:
                 )
     except Exception as exc:  # defensive — worker patlamamalı
         tf_scoring_v2_shadow_status = f"ERROR:{type(exc).__name__}"
-        errors.append(f"tf_scoring_v2_shadow:{type(exc).__name__}")
+        errors.append(_err("tf_scoring_v2_shadow", exc))
 
     # R5 — tf_scoring_v2 YARIŞ DEFTERİ (gölgeyle AYNI kapı: TF_SCORING_V2_SHADOW).
     # Gölge yönünü fiyat damgasıyla deftere yazar, ufuk dolan barları gerçekleşen
@@ -903,6 +936,7 @@ def run_once() -> dict:
     # governor'a OWNER ONAY paketi sunar — terfi OTOMATİK DEĞİL (KIRMIZI ÇİZGİ).
     # SALT-GÖZLEM: canlı skora/karara/paper'a yazmaz.
     tf_scoring_race_status = "DISABLED"
+    laps.append(("tf_scoring_race", time.monotonic()))
     try:
         from packages.learning import tf_scoring_race
         if tf_scoring_shadow.enabled():
@@ -916,17 +950,18 @@ def run_once() -> dict:
                 )
     except Exception as exc:  # defensive — worker patlamamalı
         tf_scoring_race_status = f"ERROR:{type(exc).__name__}"
-        errors.append(f"tf_scoring_race:{type(exc).__name__}")
+        errors.append(_err("tf_scoring_race", exc))
 
     # 90 günlük paper ileri sınaması (salt-okuma kanıt; ağırlık/kapı/paper'a dokunmaz).
     forward_test_status = "ERROR"
+    laps.append(("forward_test_90d", time.monotonic()))
     try:
         from packages.learning import forward_test
         forward_result = forward_test.run()
         forward_test_status = str(forward_result.get("status", "UNKNOWN"))
     except Exception as exc:  # defensive — worker patlamamalı
         forward_test_status = f"ERROR:{type(exc).__name__}"
-        errors.append(f"forward_test_90d:{type(exc).__name__}")
+        errors.append(_err("forward_test_90d", exc))
 
     if errors:
         status = "COMPLETED_WITH_ERRORS"
@@ -937,6 +972,8 @@ def run_once() -> dict:
         status = "COMPLETED"  # skipped_reason trainer'dan (örn. below_min_total)
 
     # CP1 — perf bütçesi denetimi (off-tick; sistem ağırlaşmasın diye erken uyarı).
+    laps.append(("_end", time.monotonic()))
+    step_ms = {name: int((laps[i + 1][1] - at) * 1000) for i, (name, at) in enumerate(laps[:-1])}
     duration_ms = int((time.monotonic() - t0) * 1000)
     over_budget = duration_ms > LEARNING_BUDGET_MS
     if over_budget:
@@ -987,6 +1024,7 @@ def run_once() -> dict:
         "forward_test_90d_status": forward_test_status,  # 90 günlük paper ileri test
         "duration_ms": duration_ms,        # CP1 — perf görünürlüğü
         "over_budget": over_budget,        # CP1 — bütçe aşımı bayrağı
+        "step_ms": step_ms,                # adım süreleri (ms; 26 Kasım 2026)
         "errors": errors,
     }
     run_store.save(run)

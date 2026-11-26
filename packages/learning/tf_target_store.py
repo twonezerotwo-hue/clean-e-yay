@@ -24,6 +24,7 @@ from pathlib import Path
 from typing import Literal
 
 from packages.data.registry.loader import REPO_ROOT
+from packages.ops.store import write_text_atomic
 
 # Hibrit kapı — bu eşiğin altındaki nudge'lar otomatik uygulanır.
 AUTO_APPLY_BAND_PCT = 0.15
@@ -74,8 +75,7 @@ def load() -> dict:
 def _save(data: dict) -> None:
     path = _store_path()
     with _LOCK:
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(json.dumps(data, indent=2), encoding="utf-8")
+        write_text_atomic(path, json.dumps(data, indent=2))
 
 
 def active_overrides() -> dict[str, dict[str, float]]:

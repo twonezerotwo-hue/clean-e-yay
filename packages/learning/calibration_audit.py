@@ -19,6 +19,7 @@ from pathlib import Path
 
 from packages.data.registry.loader import REPO_ROOT
 from packages.learning import calibration_store
+from packages.ops.store import write_text_atomic
 
 _DEFAULT_KEEP = 500  # ledger'da tutulan son N satır (sınırsız büyümeyi önler)
 
@@ -101,7 +102,7 @@ def _trim(path: Path, keep: int = _DEFAULT_KEEP) -> None:
     try:
         lines = path.read_text(encoding="utf-8").splitlines()
         if len(lines) > keep:
-            path.write_text("\n".join(lines[-keep:]) + "\n", encoding="utf-8")
+            write_text_atomic(path, "\n".join(lines[-keep:]) + "\n")
     except OSError:
         pass
 

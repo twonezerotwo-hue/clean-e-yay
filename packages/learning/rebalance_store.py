@@ -213,29 +213,21 @@ def _apply_payload(
     tek kaynak. Yazılan yaml'ın repo-göreli yolunu döner."""
     yaml_filename = f"weights_v{to_version}.yaml"
     yaml_path = _weights_output_dir() / yaml_filename
-    yaml_path.parent.mkdir(parents=True, exist_ok=True)
-    yaml_path.write_text(
-        yaml.safe_dump(proposed_yaml, sort_keys=False, allow_unicode=True),
-        encoding="utf-8",
-    )
+    write_text_atomic(yaml_path, yaml.safe_dump(proposed_yaml, sort_keys=False, allow_unicode=True))
     try:
         yaml_path_str = str(yaml_path.relative_to(REPO_ROOT))
     except ValueError:
         yaml_path_str = str(yaml_path)
     manifest = weights_manifest_path()
-    manifest.parent.mkdir(parents=True, exist_ok=True)
-    manifest.write_text(
-        json.dumps(
-            {
-                "version": to_version,
-                "yaml_path": yaml_path_str,
-                "approved_by": approved_by,
-                "approved_at": approved_at,
-            },
-            indent=2,
-        ),
-        encoding="utf-8",
-    )
+    write_text_atomic(manifest, json.dumps(
+        {
+            "version": to_version,
+            "yaml_path": yaml_path_str,
+            "approved_by": approved_by,
+            "approved_at": approved_at,
+        },
+        indent=2,
+    ))
     return yaml_path_str
 
 
@@ -267,7 +259,7 @@ def revert_to_manifest(prev_manifest: dict | None) -> None:
         except OSError:
             pass
         return
-    m.write_text(json.dumps(prev_manifest, indent=2), encoding="utf-8")
+    write_text_atomic(m, json.dumps(prev_manifest, indent=2))
 
 
 def _all_deltas_within_band(proposal: dict, band: float) -> bool:
