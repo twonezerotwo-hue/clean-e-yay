@@ -18,8 +18,9 @@ def fresh_store(tmp_path, monkeypatch):
 def test_applies_override(fresh_store):
     tf_target_store.submit_proposal(
         {"generated_at": "t", "per_timeframe": {"4h": {"trail_mult": 1.15}}},
-        current_baseline={"4h": {"trail_mult": 1.0}},
     )
+    assert te.tf_trail_mult("4h") == 1.0  # öneri onaylanmadan canlıya geçmez
+    tf_target_store.approve_pending()
     assert te.tf_trail_mult("4h") == pytest.approx(1.15)
 
 

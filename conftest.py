@@ -90,7 +90,6 @@ def _package1_flags_off_by_default(monkeypatch: pytest.MonkeyPatch) -> None:
     # repopulate the token from the developer .env file. Auth tests set it
     # explicitly when they need protected-route behaviour.
     monkeypatch.setenv("API_AUTH_TOKEN", "")
-    monkeypatch.delenv("TF_TARGET_EDGE_GATE", raising=False)
     # Chat model sırası (2026-07-03) — testler default Groq-önce sırayı varsayar;
     # dev .env'inde lokal-önce açık olabilir, sızdırma.
     monkeypatch.delenv("CHAT_LLM_LOCAL_FIRST", raising=False)

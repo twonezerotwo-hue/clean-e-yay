@@ -59,7 +59,6 @@ export function TfTargetsPanel() {
   }
   const d: TfTargetsView | undefined = data;
   const enabled = !!d?.enabled;
-  const bandPct = Math.round((d?.auto_apply_band_pct ?? 0) * 100);
   const pendingRec = d?.pending as
     | { decisions?: Record<string, string>; pending_changes?: Record<string, TfTargetParams>; nudges?: Array<Record<string, unknown>> }
     | null
@@ -99,7 +98,7 @@ export function TfTargetsPanel() {
         {enabled
           ? "Live açılışlar bu geometriyle SL/TP koyuyor."
           : "Faz A — shadow mode: motor hesaplıyor, log birikiyor; canlı SL/TP hâlâ sabit-%. Aktivasyon ayrı onayla."}{" "}
-        Trainer ±{bandPct}% bant içi nudge'u yalnız edge doğrulanırsa uygular; diğerleri owner onayı bekler.
+        Trainer önerileri yalnız owner onayıyla uygulanır.
       </p>
       {d?.coverage ? (
         <div className="mb-2 flex flex-wrap items-center gap-1.5">
@@ -192,45 +191,9 @@ export function TfTargetsPanel() {
         </div>
       ) : (
         <div className="mt-3 text-[10px] text-white/40">
-          Bekleyen değişiklik yok — edge doğrulanmadan otomatik nudge uygulanmaz.
+          Bekleyen değişiklik yok.
         </div>
       )}
-
-      {d?.edge_gate ? (
-        <div className="mt-3 rounded border border-white/10 bg-white/[0.02] px-2 py-1.5 text-[11px]">
-          <div className="flex items-center justify-between">
-            <span className="text-[10px] uppercase tracking-widest text-white/40">
-              Edge-gate (otonom güvenlik)
-            </span>
-            <span
-              className={`rounded px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide ${
-                d.edge_gate.enabled
-                  ? "bg-signal-up/20 text-signal-up"
-                  : "bg-white/10 text-white/55"
-              }`}
-            >
-              {d.edge_gate.enabled ? "AÇIK" : "KAPALI"}
-            </span>
-          </div>
-          <p className="mt-1 leading-4 text-white/55">
-            {d.edge_gate.enabled
-              ? d.edge_gate.safe_to_autotune
-                ? "Edge STABİL → geometri nudge'ları otomatik uygulanıyor + rollback izleniyor."
-                : "Edge TUTARSIZ → otomatik uygulama duraklatıldı (gated_pending, owner onayına düşer)."
-              : "Kapalı: güvenlik nedeniyle nudge'lar otomatik uygulanmıyor; TF_TARGET_EDGE_GATE=1 ile edge kapısı etkinleştirilmeli."}
-          </p>
-          {d.edge_gate.active_monitor ? (
-            <p className="mt-1 text-[10px] text-amber-300/80">
-              İzlemede: bir geometri değişimi outcome-rollback bekliyor.
-            </p>
-          ) : null}
-          {d.edge_gate.rollback_history.length ? (
-            <p className="mt-1 text-[10px] text-white/40">
-              Son: {(d.edge_gate.rollback_history[0] as { event?: string })?.event ?? "—"}
-            </p>
-          ) : null}
-        </div>
-      ) : null}
 
       {d?.trail_autotune ? (
         <div className="mt-2 rounded border border-white/10 bg-white/[0.02] px-2 py-1.5 text-[11px]">
@@ -251,9 +214,6 @@ export function TfTargetsPanel() {
           <p className="mt-1 leading-4 text-white/55">
             EXIT_EARLY (trailing erken kesiyor) bulgusunda trainer per-TF trail çarpanını
             yükseltir → kâr daha çok koşar. 1.0 = nötr.
-            {d.trail_autotune.enabled
-              ? ""
-              : " Kapalı: trailing birebir tier varsayılanı. TF_TARGET_TRAIL_AUTOTUNE=1 ile aç."}
           </p>
           <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-[10px] tabular-nums text-white/55">
             {TFS.map((tf) => {

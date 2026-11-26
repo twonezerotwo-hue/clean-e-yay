@@ -22,10 +22,3 @@ def test_owner_approval_writes_into_git_config(monkeypatch) -> None:
     from packages.learning import rebalance_store
 
     assert rebalance_store._weights_output_dir() == loader.CONFIG_DIR
-
-
-def test_auto_rollback_is_retired_under_git_manifest(monkeypatch) -> None:
-    monkeypatch.delenv("WEIGHTS_MANIFEST_PATH", raising=False)
-    from packages.learning import weight_rollback
-
-    assert weight_rollback.check_rollback() == {"status": "owner_gated"}

@@ -18,7 +18,7 @@ _LEARNING_ENGINES = (
 
 _HISTORY_SOURCES = {
     "weights": ("packages.learning.rebalance_store", "history"),
-    "tf_targets": ("packages.learning.tf_target_rollback", "history"),
+    "tf_targets": ("packages.learning.tf_target_store", "history"),
     "guards": ("packages.learning.guard_monitor_store", "history"),
 }
 

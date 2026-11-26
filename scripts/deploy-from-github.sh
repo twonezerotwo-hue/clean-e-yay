@@ -58,11 +58,6 @@ set_env() {  # set_env KEY VALUE — replace-or-add (değeri ZORLA ayarla; diğe
   echo "$1=$2" >> "$APP_DIR/.env.tmp"
   mv "$APP_DIR/.env.tmp" "$APP_DIR/.env"
 }
-ensure_env REBALANCE_ROLLBACK_MIN_OUTCOMES 8
-# Kalite tuning'i AKTİF: edge-gate KAPALI (0) → geometri/trailing stop/exit'i ŞİMDİ
-# düzeltsin (±%15 bant + outcome-rollback net). Owner kararı — bekletme, aktif çalışsın.
-# set_env: AWS .env'de =1 kalmışsa ZORLA 0'a çevirir (ensure_env yetmez).
-set_env TF_TARGET_EDGE_GATE 0
 # K-0b aktivasyonu (2026-07-04, owner karari): kesif motoru / sektor rotasyonu
 # AÇIK — salt-gozlem (karar zinciri/RiskGate/tik'e sifir temas), sektor karnesi
 # birikmeye baslar. Lokal .env'de de =1 (owner kurali: lokal+AWS senkron).

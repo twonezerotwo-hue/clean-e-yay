@@ -21,8 +21,6 @@ DEPLOY="$ROOT/scripts/deploy-from-github.sh"
 
 # AWS'e senkronlanması gereken davranış/öğrenme flag'leri (tek doğruluk kaynağı).
 SYNC_FLAGS="
-TF_TARGET_EDGE_GATE
-REBALANCE_ROLLBACK_MIN_OUTCOMES
 DISCOVERY_SCAN_ENABLED
 BACKTEST_CHALLENGER_ENABLED
 EYAY_KRAKEN_OHLCV_ENABLED

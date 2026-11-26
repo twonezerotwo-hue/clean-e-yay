@@ -1,67 +1,23 @@
-"""G3 — otomatik-uygulanan ağırlıkların outcome-bazlı rollback denetimi.
+"""Eşleştirilmiş-pencere beklenti yardımcıları (aktivasyon gözcüsü ve guard_safety için).
 
-learning_worker her koşuda `check_rollback()` çağırır. İzlenen (MONITORING) bir
-auto-apply varsa: uygulama anından (applied_at) SONRA **AÇILAN** (opened_at)
-verified outcome'ları toplar. Ağırlık değişikliği GİRİŞ kararını (consensus →
-hangi pozisyon açılır) etkiler; bu yüzden değişikliğe yalnız yeni ağırlıkla
-açılmış trade'ler atfedilebilir. (Eskiden `closed_at > applied_at` kullanılıyordu
-— eski ağırlıkla açılıp uygulamadan SONRA kapanan uzun-vade pozisyonları, örn.
-1d/672sa time-stop, post-apply penceresini kirletiyordu.) Henüz
-≥REBALANCE_ROLLBACK_MIN_OUTCOMES yeni outcome yoksa beklemeye devam eder. Yeterli
-örnek biriktiğinde post-apply expectancy'i baseline ile karşılaştırır:
+Eskiden burada otomatik uygulanan ağırlıkların outcome-bazlı geri alma denetimi
+(check_rollback) vardı; 26 Kasım 2026'da ağırlık oto-uygulamasıyla birlikte kalktı
+(REBALANCE_AUTO_APPLY hiç açılmamıştı, geri alma ağırlıklar git'te olduğu için
+'owner_gated' dönüyordu). Ağırlık yalnız owner onayıyla değişir.
 
-  * post < baseline  → ROLLED_BACK: manifest önceki versiyona geri alınır.
-  * post ≥ baseline  → CONFIRMED: promosyon kalıcılaşır (active temizlenir).
-
-Baseline, apply anında EŞLEŞTİRİLMİŞ bir pencereden gelir (bkz.
-`pre_apply_expectancy`): post penceresiyle aynı boyut/recency'deki son verified
-outcome'ların ortalaması — ömür-boyu ortalama değil. Böylece kıyas like-for-like
-olur (piyasa rejimi/örneklem-boyu çarpıklığı azalır).
-
-SONSUZ BEKLEME KORUMASI: izlenen apply REBALANCE_MONITOR_MAX_AGE_HOURS'tan
-(default 336sa = 14 gün) eskiyse ve hâlâ yeterli örnek birikmediyse, izleme
-güvenli tarafta sonuçlandırılır (kanıt yoksa known-good manifest'e geri alınır) ve
-`active` temizlenir — aksi halde düşük hacimli rejimde apply süresiz MONITORING'de
-takılıp tüm auto-apply hattını kilitlerdi (tek-değişiklik-tek-doğrulama).
-
-Karar verince `active` temizlenir → bir sonraki uygun proposal yeniden otomatik
-uygulanabilir.
-
-PAPER_SAFE / NO_EXECUTION: yalnız manifest pointer'ını (owner-onaylı yüzeyin aynı
-mekanizması) geri alır; emir üretmez.
+Pencereler opened_at'e göre: değişiklikten SONRA AÇILAN işlemler değişikliğe atfedilir.
+PAPER_SAFE / NO_EXECUTION.
 """
 from __future__ import annotations
 
-import os
 from datetime import UTC, datetime
 
 from packages.learning import outcomes as outcomes_mod
-from packages.learning import rebalance_store, weight_autoapply_store
 
-_MIN_OUTCOMES_DEFAULT = 15
-_MONITOR_MAX_AGE_HOURS_DEFAULT = 336.0  # 14 gün; 0 → süre koruması kapalı
 
 def _outcome_value(o) -> float | None:
-    """Expectancy örneği: pnl (USD). (R modu bayrağı EXPECTANCY_R_MODE hiç açılmadı,
-    26 Kasım 2026'da kalktı.)"""
+    """Beklenti örneği: pnl (USD)."""
     return o.pnl
-
-
-def _min_outcomes() -> int:
-    try:
-        return max(1, int(os.environ.get("REBALANCE_ROLLBACK_MIN_OUTCOMES", _MIN_OUTCOMES_DEFAULT)))
-    except (TypeError, ValueError):
-        return _MIN_OUTCOMES_DEFAULT
-
-
-def _monitor_max_age_hours() -> float:
-    try:
-        return max(
-            0.0,
-            float(os.environ.get("REBALANCE_MONITOR_MAX_AGE_HOURS", _MONITOR_MAX_AGE_HOURS_DEFAULT)),
-        )
-    except (TypeError, ValueError):
-        return _MONITOR_MAX_AGE_HOURS_DEFAULT
 
 
 def _parse_dt(value: str | None) -> datetime | None:
@@ -84,19 +40,10 @@ def _after(ts: str | None, ref: str | None) -> bool:
     return a > b
 
 
-def _monitor_age_hours(applied_at: str) -> float | None:
-    """İzlenen apply'ın yaşı (saat). applied_at parse edilemezse None."""
-    dt = _parse_dt(applied_at)
-    if dt is None:
-        return None
-    return (datetime.now(UTC) - dt).total_seconds() / 3600.0
-
-
-def pre_apply_expectancy(window: int | None = None) -> tuple[int, float]:
+def pre_apply_expectancy(window: int) -> tuple[int, float]:
     """Apply ANINDAKİ baseline: opened_at'e göre en son `window` verified outcome'un
-    (sayı, ortalama PnL). `window` verilmezse rollback eşiği (_min_outcomes) kullanılır
-    → baseline ile post-apply penceresi EŞLEŞTİRİLMİŞ boyut/recency olur."""
-    need = window if window is not None else _min_outcomes()
+    (sayı, ortalama PnL); izleyici kendi pencere boyunu verir."""
+    need = window
     outs = [
         o
         for o in outcomes_mod.outcomes_from_state()
@@ -116,8 +63,8 @@ def post_open_expectancy(since: str) -> tuple[int, float]:
     Outcome'lar yalnız kapalı trade'lerden türer; opened_at>since filtresi →
     değişiklikten sonra açılmış + kapanmış (değişikliğe atfedilebilir) trade'ler.
 
-    CP3 guard_safety kasası bunu yeniden kullanır (guard enable anından sonraki
-    canlı expectancy); böylece eşleştirilmiş-pencere mantığı tek yerde kalır."""
+    Aktivasyon gözcüsü ve guard_safety kasası kullanır; eşleştirilmiş-pencere
+    mantığı tek yerde kalır."""
     outs = [
         o
         for o in outcomes_mod.outcomes_from_state()
@@ -130,93 +77,4 @@ def post_open_expectancy(since: str) -> tuple[int, float]:
     return n, exp
 
 
-def _post_apply_metrics(applied_at: str) -> tuple[int, float]:
-    """applied_at SONRASI AÇILAN verified outcome'ların (sayı, ort PnL) — G3 ağırlık
-    rollback'i için `post_open_expectancy`'nin niyet-açık (intent-revealing) sarmalı."""
-    return post_open_expectancy(applied_at)
-
-
-def _decide(active: dict, *, post_exp: float, post_n: int, baseline: float,
-            reason: str | None = None) -> dict:
-    """post < baseline → ROLLED_BACK (manifest geri al); aksi CONFIRMED. Her iki
-    durumda `active` temizlenir. `reason` verilirse sonuca eklenir (örn. expiry)."""
-    if post_exp < baseline:
-        rebalance_store.revert_to_manifest(active.get("prev_manifest"))
-        weight_autoapply_store.resolve_active(
-            outcome="ROLLED_BACK", post_expectancy=post_exp, post_n=post_n
-        )
-        out = {
-            "status": "ROLLED_BACK",
-            "post_expectancy": post_exp,
-            "baseline_expectancy": baseline,
-            "post_n": post_n,
-            "reverted_to": active.get("prev_version"),
-            "reverted_from": active.get("applied_version"),
-        }
-    else:
-        weight_autoapply_store.resolve_active(
-            outcome="CONFIRMED", post_expectancy=post_exp, post_n=post_n
-        )
-        out = {
-            "status": "CONFIRMED",
-            "post_expectancy": post_exp,
-            "baseline_expectancy": baseline,
-            "post_n": post_n,
-            "confirmed_version": active.get("applied_version"),
-        }
-    if reason:
-        out["reason"] = reason
-    return out
-
-
-def check_rollback() -> dict:
-    """İzlenen auto-apply'ı değerlendir. Durum: no_active | monitoring | CONFIRMED |
-    ROLLED_BACK. Defensive: hata vermez biçimde tasarlandı (worker patlamasın).
-
-    K5 (owner, 2026-10-02): ağırlıklar git'teyse (config/weights_active.json)
-    otomatik geri alma YAPILMAZ — geri alma git manifest'ini yerelde değiştirip iki
-    ortamı ayrıştırırdı. Değişiklik yalnız owner onayı + PR ile."""
-    from packages.data.registry import loader
-
-    if loader.weights_manifest_path() == loader.GIT_WEIGHTS_MANIFEST:
-        return {"status": "owner_gated"}
-    active = weight_autoapply_store.get_active()
-    if not active:
-        return {"status": "no_active"}
-
-    need = _min_outcomes()
-    applied_at = str(active.get("applied_at") or "")
-    post_n, post_exp = _post_apply_metrics(applied_at)
-    baseline = float(active.get("baseline_expectancy", 0.0))
-
-    if post_n < need:
-        # Sonsuz bekleme koruması: izleme çok eskiyse güvenli tarafta kapat.
-        max_age = _monitor_max_age_hours()
-        age_h = _monitor_age_hours(applied_at)
-        if max_age > 0 and age_h is not None and age_h >= max_age:
-            if post_n == 0:
-                # Hiç kanıt yok → known-good manifest'e dön (conservative).
-                rebalance_store.revert_to_manifest(active.get("prev_manifest"))
-                weight_autoapply_store.resolve_active(
-                    outcome="ROLLED_BACK", post_expectancy=post_exp, post_n=post_n
-                )
-                return {
-                    "status": "ROLLED_BACK",
-                    "post_expectancy": post_exp,
-                    "baseline_expectancy": baseline,
-                    "post_n": post_n,
-                    "reverted_to": active.get("prev_version"),
-                    "reverted_from": active.get("applied_version"),
-                    "reason": "monitor_expired_no_evidence",
-                }
-            # Kısmi kanıtla (post_n<need) karar ver — izlemeyi sonsuza taşımaktansa.
-            return _decide(
-                active, post_exp=post_exp, post_n=post_n, baseline=baseline,
-                reason="monitor_expired_partial",
-            )
-        return {"status": "monitoring", "post_n": post_n, "need": need}
-
-    return _decide(active, post_exp=post_exp, post_n=post_n, baseline=baseline)
-
-
-__all__ = ["check_rollback", "post_open_expectancy", "pre_apply_expectancy"]
+__all__ = ["post_open_expectancy", "pre_apply_expectancy"]

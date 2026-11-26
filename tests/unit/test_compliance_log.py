@@ -41,19 +41,6 @@ def test_denied_attempt_is_logged_and_tampering_is_detected(tmp_path, monkeypatc
     assert compliance.verify() == {"chain_ok": False, "broken_at": 0}
 
 
-def test_automatic_promotions_join_the_same_chain(tmp_path, monkeypatch):
-    monkeypatch.setenv("COMPLIANCE_LOG_PATH", str(tmp_path / "compliance.jsonl"))
-    from packages.learning import weight_autoapply_store as was
-
-    monkeypatch.setattr(was, "_save", lambda _d: None)
-    monkeypatch.setattr(was, "load", lambda: {"active": None, "history": []})
-    was.record_apply(applied_version="1.0.1", prev_version="1.0.0", prev_manifest=None,
-                     baseline_expectancy=0.1, baseline_n=30, regime=None, deltas={})
-    rep = compliance.report()
-    assert rep["chain_ok"] and rep["entries"][0]["action"] == "WEIGHTS_AUTO_APPLIED"
-    assert rep["entries"][0]["actor"] == "auto" and rep["entries"][0]["detail"]["version"] == "1.0.1"
-
-
 def test_speech_synthesis_is_not_a_command():
     assert not compliance.is_command("POST", "/api/voice/speak")
     assert not compliance.is_command("POST", "/api/v1/chat/stream")

@@ -29,19 +29,16 @@ from packages.discovery import sector_rotation
 from packages.learning import (
     activation_watchdog,
     calibration_trainer,
-    edge_report,
     empirical_pwin,
     exit_forensics,
     guard_safety,
     rebalance_store,
     run_store,
     tf_calibration,
-    tf_target_rollback,
     tf_target_store,
     tf_target_trainer,
     tf_weight_trainer,
     threshold_trainer,
-    weight_rollback,
 )
 from packages.learning import auto_weight_trainer as trainer
 from packages.learning import (
@@ -82,16 +79,6 @@ TF_TARGET_TRIGGER_PATH = Path(
 TF_TARGET_MIN_NEW = int(os.environ.get("TF_TARGET_MIN_NEW", "20"))
 
 
-def _tf_target_edge_gate_on() -> bool:
-    """Edge-gate + rollback kapısı; güvenli varsayılan AÇIKTIR.
-
-    Edge kanıtı stabil değilse geometri önerisi yalnızca PENDING olarak kalır.
-    Bu koruma işlem döngüsünü değiştirmez; doğrulanmamış otomatik nudge'ı
-    durdurur.
-    """
-    return os.environ.get("TF_TARGET_EDGE_GATE", "1").strip().lower() not in {
-        "0", "false", "no", "off", ""
-    }
 # CP1 — performans bütçesi: learning koşusu bu süreyi aşarsa WARN + run meta'da
 # over_budget=True. Tick'e dokunmaz; yalnız off-tick learning loop'unu izler ki
 # yeni öğrenici eklendikçe sistem sessizce AĞIRLAŞMASIN (ana kural).
@@ -175,8 +162,7 @@ def run_once() -> dict:
     tf_weights_trusted = False
     tf_weight_proposal_status = "UNKNOWN"
     skipped_reason: str | None = None
-    rebalance_decision: str | None = None  # G3: auto_applied | pending_* | no_change
-    rollback_status = "UNKNOWN"             # G3: no_active | monitoring | CONFIRMED | ROLLED_BACK
+    rebalance_decision: str | None = None  # pending | no_change
     guard_safety_status: dict = {}          # CP3: yön guard kasası (armed/rolled_back/...)
     activation_watchdog_status: dict = {}   # F5-3: owner-flag izleyici (yalnız-öneri)
 
@@ -319,9 +305,9 @@ def run_once() -> dict:
     except Exception as exc:  # defensive — worker patlamamalı
         errors.append(_err("tf_weight", exc))
 
-    # TF-target trainer (Faz B): TF başına SL/TP geometri nudge önerisi. Hibrit
-    # uygulama — tf_target_store dar bantta auto, dışında PENDING. Tetik örnek-
-    # kapılı: son koşudan beri ≥TF_TARGET_MIN_NEW yeni outcome biriktiyse çalışır.
+    # TF-target trainer (Faz B): TF başına SL/TP geometri nudge önerisi; store'a PENDING
+    # yazılır, yalnız owner uygular. Tetik örnek-kapılı: son koşudan beri
+    # ≥TF_TARGET_MIN_NEW yeni outcome biriktiyse çalışır.
     tf_target_status = "SKIPPED"
     tf_target_decisions: dict[str, str] = {}
     laps.append(("tf_target", time.monotonic()))
@@ -340,36 +326,9 @@ def run_once() -> dict:
             if isinstance(tt_result, tf_target_trainer.TfTargetProposal):
                 payload = tf_target_trainer.proposal_to_dict(tt_result)
                 if tt_result.per_timeframe:
-                    # Trainer önerdiyse store hibrit kapısından geçir.
-                    baseline = {
-                        tf: tf_target_trainer._baseline_for_tf(
-                            tf, tf_target_store.active_overrides()
-                        )
-                        for tf in tt_result.per_timeframe
-                    }
-                    # Fail-safe: gate kapalı veya edge güvenli değilse hiçbir
-                    # geometri nudge'ı otomatik uygulanmaz; owner onayına düşer.
-                    gate_on = _tf_target_edge_gate_on()
-                    auto_allowed = bool(
-                        gate_on and edge_report.report().get("safe_to_autotune")
-                    )
-                    rec = tf_target_store.submit_proposal(
-                        payload, current_baseline=baseline,
-                        auto_apply_allowed=auto_allowed,
-                    )
+                    rec = tf_target_store.submit_proposal(payload)
                     tf_target_decisions = dict(rec.get("decisions") or {})
                     tf_target_status = "PROPOSED"
-                    # Gate açık + gerçekten auto-apply olduysa rollback'e al (tek aktif
-                    # izleme; mevcut izleme bitmeden yenisini başlatma).
-                    applied = rec.get("applied_changes") or {}
-                    if gate_on and applied and tf_target_rollback.get_active() is None:
-                        base_n, base_exp = weight_rollback.pre_apply_expectancy()
-                        tf_target_rollback.record_apply(
-                            prev_overrides=applied,
-                            applied_tfs=list(applied.keys()),
-                            baseline_expectancy=base_exp,
-                            baseline_n=base_n,
-                        )
                 else:
                     tf_target_status = "NO_NUDGE"
                 write_text_atomic(TF_TARGET_PROPOSAL_OUT_PATH, json.dumps(payload, indent=2, default=str))
@@ -381,23 +340,14 @@ def run_once() -> dict:
     except Exception as exc:  # defensive — worker patlamamalı
         errors.append(_err("tf_target", exc))
 
-    # G2/G3: auto-weight trainer. Yeterli veri varsa proposal üretilir. G3 hibrit:
-    # dar bant (|delta| ≤ REBALANCE_AUTO_APPLY_BAND) + auto-apply açık ise OTOMATİK
-    # uygulanır; aksi halde PENDING (owner). API propose/approve yolu ETKİLENMEZ.
+    # Ağırlık eğiticisi: yeterli veri varsa öneri üretilir ve PENDING kaydedilir; ağırlık
+    # yalnız owner onayıyla değişir (oto-uygulama 26 Kasım 2026'da kalktı).
     laps.append(("trainer", time.monotonic()))
     try:
         result = trainer.train()
         if isinstance(result, trainer.RebalanceProposal):
-            # Baseline = apply öncesi EŞLEŞTİRİLMİŞ pencere (opened_at'e göre en son
-            # N verified outcome) — post-apply penceresiyle aynı boyut/recency.
-            # Ömür-boyu ortalama DEĞİL: rollback like-for-like kıyas yapabilsin.
-            base_n, base_exp = weight_rollback.pre_apply_expectancy()
-            decision = rebalance_store.maybe_auto_apply(
-                trainer.proposal_to_dict(result),
-                baseline_expectancy=base_exp,
-                baseline_n=base_n,
-            )
-            rebalance_decision = str(decision.get("decision"))
+            saved = rebalance_store.set_pending(trainer.proposal_to_dict(result))
+            rebalance_decision = "no_change" if saved.get("status") == "NO_CHANGE" else "pending"
             proposals_generated = 1
             log.info(
                 "rebalance proposal %s: %s → %s (n=%s)",
@@ -411,43 +361,6 @@ def run_once() -> dict:
             log.info("rebalance trainer skipped: %s", result)
     except Exception as exc:  # defensive
         errors.append(_err("trainer", exc))
-
-    # G3: otomatik-uygulanan ağırlık için outcome-bazlı rollback denetimi. İzlenen
-    # apply yoksa no_active; yeterli yeni outcome birikince CONFIRMED/ROLLED_BACK.
-    laps.append(("rollback", time.monotonic()))
-    try:
-        rb = weight_rollback.check_rollback()
-        rollback_status = str(rb.get("status", "UNKNOWN"))
-        if rollback_status == "ROLLED_BACK":
-            log.info(
-                "weight ROLLBACK: %s → %s (post_exp=%s < baseline=%s)",
-                rb.get("reverted_from"),
-                rb.get("reverted_to"),
-                rb.get("post_expectancy"),
-                rb.get("baseline_expectancy"),
-            )
-        elif rollback_status == "CONFIRMED":
-            log.info("weight auto-apply CONFIRMED: %s", rb.get("confirmed_version"))
-    except Exception as exc:  # defensive — worker patlamamalı
-        errors.append(_err("rollback", exc))
-
-    # CP4 slice 2: otomatik-uygulanan TF-target (SL/TP geometri) için outcome-bazlı
-    # rollback. İzlenen apply yoksa no_active; yeterli yeni outcome birikince
-    # geometri CONFIRMED ya da önceki değerine ROLLED_BACK olur.
-    laps.append(("tf_target_rollback", time.monotonic()))
-    try:
-        gb = tf_target_rollback.check_rollback()
-        gb_status = str(gb.get("status", "UNKNOWN"))
-        if gb_status == "ROLLED_BACK":
-            log.info(
-                "tf_target ROLLBACK: %s (post_exp=%s < baseline=%s)",
-                gb.get("reverted_tfs"), gb.get("post_expectancy"),
-                gb.get("baseline_expectancy"),
-            )
-        elif gb_status == "CONFIRMED":
-            log.info("tf_target auto-apply CONFIRMED: %s", gb.get("confirmed_tfs"))
-    except Exception as exc:  # defensive — worker patlamamalı
-        errors.append(_err("tf_target_rollback", exc))
 
     # Eşik önericisi: allowlist eşiklerini backtest'le dener, öneriyi geçmişe yazar.
     # Canlı eşiği DEĞİŞTİRMEZ (otomatik uygulama 21 Kasım 2026 owner kararıyla kalktı).
@@ -990,7 +903,6 @@ def run_once() -> dict:
         "outcomes_seen": outcomes_seen,
         "proposals_generated": proposals_generated,
         "rebalance_decision": rebalance_decision,  # G3
-        "rollback_status": rollback_status,          # G3
         "guard_safety_status": guard_safety_status,  # CP3
         "activation_watchdog_status": activation_watchdog_status,  # F5-3
         "macro_backfill_status": macro_backfill_status,  # 2026-07-13 arşiv bekçisi

@@ -141,6 +141,6 @@ def test_corrupt_store_safe_default(wd_env, tmp_path) -> None:
 def test_registry_covers_pending_activations() -> None:
     """Roadmap'teki bekleyen aktivasyonlar kayıtlı (yeni flag → buraya satır)."""
     keys = set(aw.REGISTRY)
-    assert {"elliott_confluence", "sr_strength", "candle_confirm", "tf_target_edge_gate"} <= keys
+    assert {"elliott_confluence", "sr_strength", "candle_confirm"} <= keys
     payload = json.dumps(aw.report(), default=str)
     assert "recommend_only" in payload

@@ -313,9 +313,6 @@ def test_learning_worker_empty_data_no_crash(learn_env) -> None:
 
 def test_learning_worker_metadata_with_data(learn_env, monkeypatch) -> None:
     ps, ld = learn_env
-    # Bu test "owner onayı olmadan PENDING kalır" davranışını doğrular → G3 dar-bant
-    # otomatik-uygulamayı KAPAT (aksi halde narrow-band proposal auto-apply olur).
-    monkeypatch.setenv("REBALANCE_AUTO_APPLY", "0")
     # Rebalance ≥2 modül çeşitliliği ister: touche + sentinel (toplam 10).
     _seed_v2(ps, n=7, module="touche", tf="1d")
     _seed_v2(ps, n=3, module="sentinel", tf="1d")

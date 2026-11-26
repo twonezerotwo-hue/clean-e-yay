@@ -1,7 +1,7 @@
 """TF-target trainer + store unit tests.
 
 Trainer kapanmış paper trade'lerden TF başına SL/TP nudge üretir.
-Store hibrit uygular: ±AUTO_APPLY_BAND_PCT içi auto, dışı PENDING.
+Store her öneriyi PENDING kaydeder; yalnız owner uygular.
 Mutlak guardrail clamp her zaman zorlanır.
 """
 from __future__ import annotations
@@ -21,54 +21,37 @@ def isolated_store(tmp_path, monkeypatch):
     return tmp_path
 
 
-# ── Store: hibrit auto-apply ──────────────────────────────────────────────────
+# ── Store: her öneri PENDING, yalnız owner uygular ──────────────────────────────
 
-def test_within_band_auto_applies(isolated_store):
-    """Mevcut değerin ±%15 bandındaki öneri AUTO_APPLIED."""
-    baseline = {"1h": {"sl_atr_mult": 1.2, "rr": 1.8, "sl_pct_floor": 0.010, "sl_pct_cap": 0.035}}
+def test_proposal_is_pending_even_within_band(isolated_store):
+    """Küçük (eskiden bant içi otomatik uygulanan) öneri de PENDING; current değişmez."""
     proposal = {
         "generated_at": "now",
         "per_timeframe": {"1h": {"sl_atr_mult": 1.3, "rr": 1.85, "sl_pct_floor": 0.011, "sl_pct_cap": 0.036}},
     }
-    rec = store.submit_proposal(proposal, current_baseline=baseline)
-    assert rec["decisions"]["1h"].startswith("auto_applied")
-    assert store.active_overrides()["1h"]["sl_atr_mult"] == 1.3
-    assert store.get_pending() is None
-
-
-def test_out_of_band_pending(isolated_store):
-    """Bandın dışı PENDING (owner onayı bekler), current değişmez."""
-    baseline = {"1h": {"sl_atr_mult": 1.2, "rr": 1.8, "sl_pct_floor": 0.010, "sl_pct_cap": 0.035}}
-    proposal = {
-        "generated_at": "now",
-        "per_timeframe": {"1h": {"sl_atr_mult": 2.5, "rr": 1.8, "sl_pct_floor": 0.010, "sl_pct_cap": 0.035}},
-    }
-    rec = store.submit_proposal(proposal, current_baseline=baseline)
+    rec = store.submit_proposal(proposal)
     assert rec["decisions"]["1h"].startswith("pending")
-    assert store.active_overrides() == {}  # current değişmedi
+    assert store.active_overrides() == {}
     assert store.get_pending() is not None
 
 
 def test_approve_pending_applies(isolated_store):
     """approve_pending: bekleyen değişiklikleri current'a yazar."""
-    baseline = {"1h": {"sl_atr_mult": 1.2, "rr": 1.8, "sl_pct_floor": 0.010, "sl_pct_cap": 0.035}}
     store.submit_proposal(
         {"generated_at": "now",
          "per_timeframe": {"1h": {"sl_atr_mult": 2.5, "rr": 1.8, "sl_pct_floor": 0.010, "sl_pct_cap": 0.035}}},
-        current_baseline=baseline,
     )
     ap = store.approve_pending()
     assert ap is not None and ap["status"] == "APPROVED"
     assert store.active_overrides()["1h"]["sl_atr_mult"] == 2.5
     assert store.get_pending() is None
+    assert store.history(1)[0]["status"] == "APPROVED"
 
 
 def test_reject_pending_keeps_current(isolated_store):
-    baseline = {"1h": {"sl_atr_mult": 1.2, "rr": 1.8, "sl_pct_floor": 0.010, "sl_pct_cap": 0.035}}
     store.submit_proposal(
         {"generated_at": "now",
          "per_timeframe": {"1h": {"sl_atr_mult": 2.5, "rr": 1.8, "sl_pct_floor": 0.010, "sl_pct_cap": 0.035}}},
-        current_baseline=baseline,
     )
     rj = store.reject_pending("test")
     assert rj is not None and rj["status"] == "REJECTED"
@@ -77,14 +60,11 @@ def test_reject_pending_keeps_current(isolated_store):
 
 
 def test_guardrail_clamps_extreme_values(isolated_store):
-    """sl_atr_mult > 3.0 olsa bile clamp 3.0'a kıstırır (kötü öneri güvenli)."""
-    baseline = {"1h": {"sl_atr_mult": 1.2, "rr": 1.8, "sl_pct_floor": 0.010, "sl_pct_cap": 0.035}}
+    """sl_atr_mult > 3.0 önerilse bile onayda 3.0'a kıstırılır (kötü öneri güvenli)."""
     store.submit_proposal(
         {"generated_at": "now",
          "per_timeframe": {"1h": {"sl_atr_mult": 99.0, "rr": 1.85, "sl_pct_floor": 0.011, "sl_pct_cap": 0.036}}},
-        current_baseline=baseline,
     )
-    # sl_atr_mult 99 → bandın dışı → pending; ama approve edersek clamp 3.0
     ap = store.approve_pending()
     assert ap is not None
     assert store.active_overrides()["1h"]["sl_atr_mult"] == 3.0  # clamped
@@ -212,12 +192,13 @@ def test_effective_params_use_store_override(isolated_store):
     """compute_tf_targets._tf_params store override'larını okur."""
     from packages.risk.trade_economics import _tf_params
     baseline_15m = _tf_params("15m")  # store boş → defaults
-    # Store'a override yaz
+    assert baseline_15m["sl_atr_mult"] != 1.05
+    # Store'a override yaz (owner onayıyla)
     store.submit_proposal(
         {"generated_at": "now",
          "per_timeframe": {"15m": {"sl_atr_mult": 1.05, "rr": 1.5, "sl_pct_floor": 0.005, "sl_pct_cap": 0.020}}},
-        current_baseline={"15m": baseline_15m},
     )
+    store.approve_pending()
     after = _tf_params("15m")
     assert after["sl_atr_mult"] == 1.05  # store override etkili
 

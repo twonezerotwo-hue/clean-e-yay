@@ -1,11 +1,9 @@
-"""TF-target override store — file-backed, hibrit auto-apply gate.
+"""TF-target override store — file-backed, owner onaylı.
 
-Trainer ürettiği `TfTargetProposal`'ı bu modül kalıcılaştırır. Politika
-`auto_weight_trainer` + `rebalance_store` desenine paralel ama **hibrit**:
-
-- Yeni değer mevcut değerin ±AUTO_APPLY_BAND_PCT (%15) bandındaysa →
-  status=AUTO_APPLIED, doğrudan store'a yazılır. Mutlak guardrail kıstırılır.
-- Band dışındaysa → status=PENDING; owner `approve_current()` ile onaylar.
+Trainer ürettiği `TfTargetProposal`'ı bu modül kalıcılaştırır: her öneri PENDING olur,
+yalnız owner `approve_pending()` ile uygular. (26 Kasım 2026'ya dek ±%15 bant içi
+öneriler TF_TARGET_EDGE_GATE açıkken kendiliğinden uygulanıyordu; yerelde 7 kez oldu.
+Owner kararıyla kalktı; her ortam bugünkü override'ında dondu.)
 
 `compute_tf_targets` config'i okurken bu store'u override olarak uygular:
     final = clamp_guardrails(base_config[tf] → store[tf])
@@ -26,12 +24,9 @@ from typing import Literal
 from packages.data.registry.loader import REPO_ROOT
 from packages.ops.store import write_text_atomic
 
-# Hibrit kapı — bu eşiğin altındaki nudge'lar otomatik uygulanır.
-AUTO_APPLY_BAND_PCT = 0.15
-
 # Mutlak guardrail bantları (öğrenme hiç bunların dışına çıkamaz). Bu sınırlar
-# `compute_tf_targets`'ın config defaults'unun da uzaktan üstü — yani kötü bir
-# proposal AUTO_APPLIED olsa bile bu clamp güvenlik bandı.
+# `compute_tf_targets`'ın config defaults'unun da uzaktan üstü — onaylanan kötü bir
+# öneri bile bu güvenlik bandının dışına çıkamaz.
 GUARDRAIL: dict[str, tuple[float, float]] = {
     "sl_atr_mult":  (0.5, 3.0),
     "rr":           (1.5, 5.0),   # 15m için trade_economics.min_rr (1.5) zemin
@@ -43,7 +38,7 @@ GUARDRAIL: dict[str, tuple[float, float]] = {
     "trail_mult":   (0.5, 2.0),
 }
 
-ProposalStatus = Literal["PENDING", "APPROVED", "REJECTED", "AUTO_APPLIED", "SUPERSEDED"]
+ProposalStatus = Literal["PENDING", "APPROVED", "REJECTED", "SUPERSEDED"]
 
 _LOCK = threading.Lock()
 
@@ -104,83 +99,29 @@ def _clamp_guardrails(params: dict[str, float]) -> tuple[dict[str, float], list[
     return out, notes
 
 
-def _within_auto_band(old: float, new: float, band: float = AUTO_APPLY_BAND_PCT) -> bool:
-    """new değeri |Δ/old| ≤ band → otomatik uygulanabilir."""
-    if old <= 0:
-        return False  # mevcut yok → otomatik uygulama (ilk öneri owner onayına)
-    return abs(new - old) / old <= band
+def submit_proposal(proposal: dict) -> dict:
+    """Trainer'dan gelen öneriyi PENDING olarak kaydet (guardrail'e kıstırılmış).
 
-
-def submit_proposal(
-    proposal: dict,
-    *,
-    current_baseline: dict[str, dict[str, float]],
-    auto_apply_allowed: bool = True,
-) -> dict:
-    """Trainer'dan gelen proposal'ı işle: TF başına AUTO_APPLY veya PENDING.
-
-    `proposal` formatı:
-        {
-            "generated_at": iso,
-            "audit_note": str,
-            "per_timeframe": {"15m": {"sl_atr_mult": ..., "rr": ..., ...}, ...},
-            "dataset_size": int,
-            "evidence": [...],  # opsiyonel
-        }
-
-    `current_baseline`: o anki aktif değerler (config + mevcut store override).
-
-    `auto_apply_allowed` (CP4 slice 2 — edge-gate): False ise band-içi nudge'lar bile
-    AUTO_APPLIED edilmez, PENDING'e yönlendirilir (owner yine onaylayabilir). Worker
-    bunu `edge_report.safe_to_autotune` + `TF_TARGET_EDGE_GATE` flag'inden hesaplar.
-    Default True → eski davranış birebir (bayt-aynı; flag OFF iken gate yok).
-
-    Dönüş: aynı proposal + her TF için "decision" ("auto_applied" | "pending" |
-    "gated_pending") + `applied_changes` (auto uygulanan TF'lerin önceki→yeni değeri,
-    rollback baseline'ı için).
-    """
+    `proposal` formatı: {"generated_at", "audit_note", "per_timeframe": {tf: {...}},
+    "dataset_size", ...}. Dönüş: aynı öneri + her TF için "decision" ("pending").
+    Canlı değer (current) değişmez; owner `approve_pending()` ile uygular."""
     data = load()
-    current = dict(data.get("current") or {})
     decisions: dict[str, str] = {}
     pending_changes: dict[str, dict[str, float]] = {}
-    applied_changes: dict[str, dict[str, float]] = {}  # rollback için prev snapshot
-
     for tf, new_params in (proposal.get("per_timeframe") or {}).items():
-        baseline = current_baseline.get(tf) or {}
-        # Tüm parametreler band içinde mi?
-        all_within = True
-        for key, new_val in new_params.items():
-            old_val = float(baseline.get(key, 0.0) or 0.0)
-            if not _within_auto_band(old_val, float(new_val)):
-                all_within = False
-                break
-
         clamped, clamp_notes = _clamp_guardrails(new_params)
-        if all_within and auto_apply_allowed:
-            applied_changes[tf] = dict(current.get(tf) or baseline)  # önceki değer
-            current[tf] = clamped
-            decisions[tf] = "auto_applied"
-            if clamp_notes:
-                decisions[tf] += f" ({'; '.join(clamp_notes)})"
-        else:
-            pending_changes[tf] = clamped
-            decisions[tf] = "gated_pending" if (all_within and not auto_apply_allowed) else "pending"
-            if clamp_notes:
-                decisions[tf] += f" ({'; '.join(clamp_notes)})"
-
-    record = dict(proposal, status="MIXED", decisions=decisions,
-                  pending_changes=pending_changes, applied_changes=applied_changes)
-    # Önceki PENDING varsa SUPERSEDED olarak history'e taşı.
+        pending_changes[tf] = clamped
+        decisions[tf] = "pending" + (f" ({'; '.join(clamp_notes)})" if clamp_notes else "")
+    record = dict(proposal, status="PENDING", decisions=decisions, pending_changes=pending_changes)
     history = list(data.get("history") or [])
     cur_pending = data.get("pending")
     if cur_pending:
         history = [dict(cur_pending, status="SUPERSEDED"), *history][:50]
-    data = {
-        "current": current,
+    _save({
+        "current": dict(data.get("current") or {}),
         "pending": record if pending_changes else None,
         "history": [record, *history][:50],
-    }
-    _save(data)
+    })
     return record
 
 
@@ -215,21 +156,9 @@ def reject_pending(reason: str = "owner_reject") -> dict | None:
     return rejected
 
 
-def revert_overrides(prev: dict[str, dict[str, float]]) -> dict[str, dict[str, float]]:
-    """CP4 slice 2 rollback — auto-apply edilmiş TF override'larını önceki değerine
-    döndür. `prev` = {tf: {param: eski_değer}} (submit_proposal'ın `applied_changes`'i).
-    Boş prev dict olan TF → override'ı tamamen kaldır (config default'a düş).
-    Sadece manifest-pointer değil, gerçek değer geri yazılır. Dönüş = yeni current."""
-    data = load()
-    current = dict(data.get("current") or {})
-    for tf, params in (prev or {}).items():
-        if params:
-            current[tf] = dict(params)
-        else:
-            current.pop(tf, None)
-    _save({"current": current, "pending": data.get("pending"),
-           "history": list(data.get("history") or [])})
-    return current
+def history(limit: int = 10) -> list[dict]:
+    """Öneri/onay geçmişi (en yeni önce)."""
+    return list(load().get("history") or [])[:limit]
 
 
 def reset() -> None:
@@ -238,14 +167,13 @@ def reset() -> None:
 
 
 __all__ = [
-    "AUTO_APPLY_BAND_PCT",
     "GUARDRAIL",
     "active_overrides",
     "approve_pending",
     "get_pending",
+    "history",
     "load",
     "reject_pending",
     "reset",
-    "revert_overrides",
     "submit_proposal",
 ]

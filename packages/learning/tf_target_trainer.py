@@ -3,8 +3,7 @@
 Politika `auto_weight_trainer` ile aynı felsefe:
   - DATA_POLICY: yalnızca `data_verified=True` outcome'lar dataset'e girer.
   - Min örnek bantları: TF başına ≥MIN_TRADES_PER_TF (default 20) gerekir.
-  - Trainer ÖNERİ üretir; uygulama kararını `tf_target_store` verir (hibrit:
-    ±AUTO_APPLY_BAND_PCT içi auto, dışı owner onayı).
+  - Trainer ÖNERİ üretir; `tf_target_store` PENDING kaydeder, yalnız owner uygular.
 
 Nudge mantığı (TF başına, sınırlı delta):
   - SL-hit oranı yüksek (>HIGH_SL_HIT) VE ortalama MAE / SL_mesafe küçük
@@ -43,8 +42,7 @@ RICH_MFE_RATIO    = 0.90    # MFE / TP_mesafe > bu → TP'ye sık değdi, daha u
 HIGH_TRAILING_RATE = 0.30   # trailing-stop çıkış oranı bu eşiğin üstünde
 LOW_CAPTURE        = 0.50   # ort. yakalama bu eşiğin altında → kâr masada kalıyor
 
-# Tek seferde her parametreye uygulanan maksimum nudge oranı (%). Store ayrıca
-# AUTO_APPLY_BAND_PCT ile sınırlar — bu trainer-içi ikinci güvenlik kemeri.
+# Tek seferde her parametreye önerilen nudge oranı (%).
 NUDGE_STEP = 0.10  # %10
 
 

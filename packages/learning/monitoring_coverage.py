@@ -46,11 +46,6 @@ MECHANISMS = frozenset({WATCHDOG, OWN_ROLLBACK, INPUT_HYGIENE, TUNING_PARAM, SHA
 #   reason:    düz-dil gerekçe (LLM/panel + insan denetimi için).
 COVERAGE: dict[str, dict] = {
     # --- WATCHDOG: activation_watchdog baseline-expectancy izleyicisi (6) ---
-    "TF_TARGET_EDGE_GATE": {
-        "mechanism": WATCHDOG, "monitor": "tf_target_edge_gate",
-        "reason": "TF-target edge-stability auto-apply kapısı; watchdog izler.",
-    },
-    # --- OWN_ROLLBACK: auto-apply kendi outcome-rollback'ine bağlı (1) ---
     # --- INPUT_HYGIENE: filtre/mod; zaten-izlenen mekanizmaya besler (3) ---
     "E_YAY_CANONICAL_RUNTIME": {
         "mechanism": INPUT_HYGIENE, "monitor": None,
@@ -59,11 +54,6 @@ COVERAGE: dict[str, dict] = {
                   "(no-boost), açılış yetkisi eklemez; pytest/golden altında kapalı.",
     },
     # --- TUNING_PARAM: bir izleyicinin parametresi (1) ---
-    "REBALANCE_ROLLBACK_MIN_OUTCOMES": {
-        "mechanism": TUNING_PARAM, "monitor": None,
-        "reason": "weight_rollback'in min-outcome eşiği — aç/kapa aktivasyonu değil, "
-                  "rollback mekanizmasının ta kendisinin parametresi.",
-    },
     "EYAY_BINANCE_OHLCV_ENABLED": {
         "mechanism": TUNING_PARAM, "monitor": None,
         "reason": "Binance spot salt-okuma gerçek mum kaynağı (Kraken'den sonra, CoinGecko'dan "
