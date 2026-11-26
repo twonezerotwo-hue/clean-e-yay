@@ -3317,34 +3317,10 @@ export interface components {
             deltas?: components["schemas"]["WeightDelta"][];
             evidence?: components["schemas"]["ModulePerf"][];
         };
-        /** @description G3 — otomatik-uygulanan ağırlık değişikliği kaydı (izleme + ledger). Alanlar olaya göre değişir (AUTO_APPLIED/CONFIRMED/ROLLED_BACK); presentation-only. */
-        WeightAutoApplyEntry: {
-            /** @enum {string} */
-            event?: "AUTO_APPLIED" | "CONFIRMED" | "ROLLED_BACK";
-            /** @enum {string} */
-            status?: "MONITORING" | "CONFIRMED" | "ROLLED_BACK";
-            applied_version?: string;
-            prev_version?: string;
-            regime?: string | null;
-            baseline_expectancy?: number;
-            baseline_n?: number;
-            post_expectancy?: number;
-            post_n?: number;
-            applied_at?: string;
-            resolved_at?: string;
-        } & {
-            [key: string]: unknown;
-        };
-        /** @description G3 — izlenen aktif otomatik-uygulama + son ledger olayları. */
-        WeightAutoApplyState: {
-            active: components["schemas"]["WeightAutoApplyEntry"] | null;
-            ledger: components["schemas"]["WeightAutoApplyEntry"][];
-        };
         RebalanceState: {
             active_version: string;
             current?: components["schemas"]["RebalanceProposalRecord"] | null;
             history: components["schemas"]["RebalanceProposalRecord"][];
-            auto_apply?: components["schemas"]["WeightAutoApplyState"];
         };
         /** @description UX1 — agent'ın TEK ana engeli ("veya" yok). Öncelik DQS/provider > halt/kill-switch > RiskGate kısıtı. */
         MainBlocker: {
@@ -4206,7 +4182,6 @@ export interface components {
         /** @description Faz B — TF-aware SL/TP öğrenmesinin durumu. `effective` o anki canlı değerleri (config → store override) gösterir; `pending` bekleyen owner-onayını taşır. */
         TfTargetsView: {
             enabled: boolean;
-            auto_apply_band_pct: number;
             guardrail: {
                 [key: string]: components["schemas"]["TfTargetGuardrailBand"];
             };

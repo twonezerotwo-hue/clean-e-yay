@@ -355,7 +355,6 @@ def get_tf_targets() -> dict:
     }
     return {
         "enabled": te.tf_targets_enabled(),
-        "auto_apply_band_pct": 0.0,  # 26 Kasım 2026: oto-uygulama yok; alan L4-B'de kalkar
         "guardrail": {
             k: {"min": v[0], "max": v[1]}
             for k, v in tf_target_store.GUARDRAIL.items()

@@ -3839,38 +3839,6 @@ components:
           type: array
           items: { $ref: "#/components/schemas/ModulePerf" }
 
-    WeightAutoApplyEntry:
-      type: object
-      description: >
-        G3 — otomatik-uygulanan ağırlık değişikliği kaydı (izleme + ledger). Alanlar
-        olaya göre değişir (AUTO_APPLIED/CONFIRMED/ROLLED_BACK); presentation-only.
-      additionalProperties: true
-      properties:
-        event: { type: string, enum: [AUTO_APPLIED, CONFIRMED, ROLLED_BACK] }
-        status: { type: string, enum: [MONITORING, CONFIRMED, ROLLED_BACK] }
-        applied_version: { type: string }
-        prev_version: { type: string }
-        regime: { type: string, nullable: true }
-        baseline_expectancy: { type: number }
-        baseline_n: { type: integer }
-        post_expectancy: { type: number }
-        post_n: { type: integer }
-        applied_at: { type: string }
-        resolved_at: { type: string }
-
-    WeightAutoApplyState:
-      type: object
-      description: G3 — izlenen aktif otomatik-uygulama + son ledger olayları.
-      required: [active, ledger]
-      properties:
-        active:
-          oneOf:
-            - { $ref: "#/components/schemas/WeightAutoApplyEntry" }
-            - { type: "null" }
-        ledger:
-          type: array
-          items: { $ref: "#/components/schemas/WeightAutoApplyEntry" }
-
     RebalanceState:
       type: object
       required: [active_version, history]
@@ -3883,8 +3851,6 @@ components:
         history:
           type: array
           items: { $ref: "#/components/schemas/RebalanceProposalRecord" }
-        auto_apply:
-          $ref: "#/components/schemas/WeightAutoApplyState"
 
     # ---------------- R1 — gerçek snapshot replay foundation ----------------
     # Replay = kaydedilmiş gerçek state'in incelenmesi. Sahte backtest / uydurma
@@ -5166,10 +5132,9 @@ components:
         Faz B — TF-aware SL/TP öğrenmesinin durumu. `effective` o anki canlı
         değerleri (config → store override) gösterir; `pending` bekleyen
         owner-onayını taşır.
-      required: [enabled, auto_apply_band_pct, guardrail, effective, store_current, history]
+      required: [enabled, guardrail, effective, store_current, history]
       properties:
         enabled: { type: boolean }
-        auto_apply_band_pct: { type: number }
         guardrail:
           type: object
           additionalProperties: { $ref: "#/components/schemas/TfTargetGuardrailBand" }

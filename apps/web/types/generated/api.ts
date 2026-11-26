@@ -1335,31 +1335,10 @@ export type RebalanceProposalRecord = {
   active_yaml?: string;
 };
 
-// G3 — otomatik-uygulanan ağırlık değişikliği kaydı (izleme + ledger).
-export type WeightAutoApplyEntry = {
-  event?: "AUTO_APPLIED" | "CONFIRMED" | "ROLLED_BACK";
-  status?: "MONITORING" | "CONFIRMED" | "ROLLED_BACK";
-  applied_version?: string;
-  prev_version?: string;
-  regime?: string | null;
-  baseline_expectancy?: number;
-  baseline_n?: number;
-  post_expectancy?: number;
-  post_n?: number;
-  applied_at?: string;
-  resolved_at?: string;
-};
-
-export type WeightAutoApplyState = {
-  active: WeightAutoApplyEntry | null;
-  ledger: WeightAutoApplyEntry[];
-};
-
 export type RebalanceState = {
   active_version: string;
   current: RebalanceProposalRecord | null;
   history: RebalanceProposalRecord[];
-  auto_apply?: WeightAutoApplyState;
 };
 
 export type CalibrationParams = {
@@ -2451,14 +2430,6 @@ export type TfTargetGuardrailBand = {
   max: number;
 };
 
-// CP4 slice 2 — edge-gate + outcome-rollback durumu.
-export type TfTargetEdgeGate = {
-  enabled: boolean;
-  safe_to_autotune: boolean;
-  active_monitor: Record<string, unknown> | null;
-  rollback_history: Array<Record<string, unknown>>;
-};
-
 // CP4 slice 3 — öğrenilen per-TF trailing çarpanı.
 export type TfTargetTrailAutotune = {
   enabled: boolean;
@@ -2468,13 +2439,11 @@ export type TfTargetTrailAutotune = {
 
 export type TfTargetsView = {
   enabled: boolean;
-  auto_apply_band_pct: number;
   guardrail: Record<string, TfTargetGuardrailBand>;
   effective: Record<string, TfTargetParams>;
   store_current: Record<string, TfTargetParams>;
   pending: Record<string, unknown> | null;
   history: Array<Record<string, unknown>>;
-  edge_gate: TfTargetEdgeGate;
   trail_autotune: TfTargetTrailAutotune;
   // Denetim 2026-07-03 additive — TF-başı eğitim kapsamı + girdi-hijyen flag'leri.
   coverage?: Record<string, TfTargetCoverage>;
