@@ -33,7 +33,6 @@ from packages.learning import (
     forward_test,
     guard_safety,
     historical_edge,
-    missed_opportunity,
     mistake_memory,
     news_event_study,
     subsignal_scorecard,
@@ -245,8 +244,7 @@ def get_dataset_health() -> dict:
 @router.get("/learning/edge-report")
 def get_edge_report() -> dict:
     """CP2 — edge kanıt/stabilite özeti (observe-only). Biriken outcome'lar
-    üstünde çok-katlı walk-forward stabilite (edge tutarlı mı) + missed
-    opportunity counterfactual + tek-kelime verdict (STABLE/UNSTABLE/
+    üstünde çok-katlı walk-forward stabilite (edge tutarlı mı) + tek-kelime verdict (STABLE/UNSTABLE/
     INSUFFICIENT). Mevcut backtest motorunu (replay/strategy-backtest) tekrar
     etmez; CP4 öz-ayar bir öneriyi uygulamadan önce güven tartmak için okur."""
     return edge_report.report()
@@ -551,15 +549,6 @@ def get_conflict_gate_validation() -> dict:
     gerçek win-rate/avg_pnl gösterir. Read-only; karar zincirini etkilemez —
     profil aktivasyon kararına (conflict_gate.enabled) veri sağlar."""
     return conflict_gate_backtest.validation_report()
-
-
-@router.get("/learning/missed-opportunities")
-def get_missed_opportunities() -> dict:
-    """Faz 2 — Missed Opportunity özeti (read-only). Açılmayan valid setup'ların
-    (CANDIDATE_OPEN ama canlı açmadı) TTL sonucu: missed_win / avoided_loss /
-    expired, trade_profile bazında. PAPER_SAFE — paper'a dokunmaz, yalnızca
-    izleme logundan sayar. Faz 4 (conflict-gate genişletme) kararına veri."""
-    return missed_opportunity.summary_viewmodel()
 
 
 @router.get("/learning/evidence-bus")

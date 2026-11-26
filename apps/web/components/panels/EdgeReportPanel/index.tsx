@@ -7,8 +7,7 @@ import { useEdgeReport } from "@/lib/queries/hooks";
 import type { EdgeReportView } from "@/types/generated/api";
 
 // CP2 — edge kanıt/stabilite paneli. Biriken outcome'lar üstünde çok-katlı
-// walk-forward stabilite (edge tutarlı mı, fluke mı) + missed opportunity
-// counterfactual. Frontend hesap YAPMAZ; tüm sayım /learning/edge-report'tan.
+// walk-forward stabilite (edge tutarlı mı, fluke mı). Frontend hesap YAPMAZ; tüm sayım /learning/edge-report'tan.
 // Gerçek historical backtest ayrı (Soul/replay); bu hafif güven katmanı.
 
 const VERDICT: Record<string, { label: string; chip: string }> = {
@@ -32,7 +31,6 @@ export function EdgeReportPanel() {
   const d: EdgeReportView | undefined = data;
   const v = VERDICT[d?.verdict ?? "INSUFFICIENT"] ?? VERDICT.INSUFFICIENT;
   const stab = d?.stability;
-  const cf = d?.counterfactual;
 
   return (
     <PanelFrame id="edge_report">
@@ -87,14 +85,6 @@ export function EdgeReportPanel() {
           Yeterli kapanmış işlem yok ({stab?.have ?? 0}/{stab?.need ?? "—"}). Veri biriktikçe stabilite ölçülür.
         </div>
       )}
-
-      {cf && (cf.missed_win || cf.avoided_loss || cf.expired) ? (
-        <div className="mt-2 flex gap-2 text-[10px] uppercase tracking-wide text-white/45">
-          <span>Kaçan: <span className="text-signal-up">{cf.missed_win}</span></span>
-          <span>Önlenen: <span className="text-signal-down">{cf.avoided_loss}</span></span>
-          <span>Süre: <span className="text-white/60">{cf.expired}</span></span>
-        </div>
-      ) : null}
 
       {d?.outlier_concentration != null ? (
         <div

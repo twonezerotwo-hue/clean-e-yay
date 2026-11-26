@@ -79,13 +79,3 @@ def test_reliability_bins_no_double_count():
     bins = reliability_bins(samples, n_bins=5)
     assert sum(b.count for b in bins) == len(samples)  # eski kodda 9+9=18 çıkardı
     assert bins[-1].count == 2  # yalnız p∈[0.8,1.0]
-
-
-def test_mfe_r_clamped():
-    from datetime import UTC, datetime
-
-    from packages.learning.missed_opportunity import _resolve_event
-    ev = _resolve_event({}, "missed_win", datetime.now(UTC), 250.176, 1)
-    assert ev["mfe_r"] == 20.0
-    ev2 = _resolve_event({}, "avoided_loss", datetime.now(UTC), 0.47, 1)
-    assert ev2["mfe_r"] == 0.47

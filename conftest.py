@@ -266,7 +266,6 @@ def _isolate_runtime_stores(tmp_path_factory: pytest.TempPathFactory) -> None:
     # data/runtime kanıtını kirletmesin (dev makinesinde test artefaktı canlı
     # gölge/audit kanıtına karışıyordu — GET /decision/shadow testinde yakalandı).
     os.environ["PAPER_AUDIT_PATH"] = str(runtime / "paper_audit.jsonl")
-    os.environ["MISSED_OPP_LOG_PATH"] = str(runtime / "missed_opportunity.jsonl")
     os.environ["CALIBRATION_AUDIT_PATH"] = str(runtime / "calibration_jumps.jsonl")
 
 

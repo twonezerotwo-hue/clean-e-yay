@@ -2884,33 +2884,6 @@ export type BacktestChallengerView = {
   honesty: string;
 };
 
-export type MissedOpportunityOutcomes = {
-  missed_win: number;
-  avoided_loss: number;
-  expired: number;
-};
-
-export type MissedOpportunityActive = {
-  symbol: string;
-  timeframe: string;
-  side: string;
-  trade_profile?: string | null;
-  setup_type?: string | null;
-  entry?: number | null;
-  sl?: number | null;
-  tp?: number | null;
-  opened_at?: string | null;
-};
-
-export type MissedOpportunitiesView = {
-  available: boolean;
-  enabled?: boolean;
-  outcomes: MissedOpportunityOutcomes;
-  by_profile: Record<string, MissedOpportunityOutcomes>;
-  active: MissedOpportunityActive[];
-  recent: Array<Record<string, unknown>>;
-};
-
 export type BookAuditSeverity = "CRITICAL" | "WARNING" | "INFO";
 
 export type BookAuditLesson = {
@@ -2981,7 +2954,6 @@ export type EdgeReportView = {
   total: number;
   verdict: "STABLE" | "UNSTABLE" | "INSUFFICIENT";
   stability: EdgeStability;
-  counterfactual: { missed_win: number; avoided_loss: number; expired: number };
   safe_to_autotune: boolean;
   // CP4-fix #2 — outlier-direnç teşhisi.
   outlier_concentration?: number;
@@ -3271,7 +3243,6 @@ export type GovernorReport = {
   paper_safe: boolean;
   no_execution: boolean;
   learned?: GovernorReportSection;
-  found_missed_opportunities?: GovernorReportSection;
   proposals?: GovernorReportSection;
   other_pending_approvals?: GovernorReportSection;
   data_trust?: GovernorReportSection;

@@ -772,23 +772,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/learning/missed-opportunities": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Faz 2 — Missed Opportunity özeti (açılmayan valid setup'ların TTL sonucu, read-only) */
-        get: operations["getMissedOpportunities"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/learning/calibration-jumps": {
         parameters: {
             query?: never;
@@ -4163,37 +4146,6 @@ export interface components {
                 [key: string]: "OFF" | "SOFT" | "SOFT_PLUS" | "HARD" | "HARD_MANUAL";
             };
         };
-        /** @description Faz 2 — sonuç sayıları (TP önce=missed_win, SL önce=avoided_loss, TTL=expired). */
-        MissedOpportunityOutcomes: {
-            missed_win?: number;
-            avoided_loss?: number;
-            expired?: number;
-        };
-        /** @description Faz 2 — şu an izlenen (henüz çözülmemiş) açılmamış setup. */
-        MissedOpportunityActive: {
-            symbol: string;
-            timeframe: string;
-            side: string;
-            trade_profile?: string | null;
-            setup_type?: string | null;
-            entry?: number | null;
-            sl?: number | null;
-            tp?: number | null;
-            opened_at?: string | null;
-        };
-        /** @description Faz 2 — Missed Opportunity özeti (read-only, paper-safe; açılmayan valid setup'ların TTL sonucu). */
-        MissedOpportunitiesView: {
-            available: boolean;
-            enabled?: boolean;
-            outcomes: components["schemas"]["MissedOpportunityOutcomes"];
-            by_profile: {
-                [key: string]: components["schemas"]["MissedOpportunityOutcomes"];
-            };
-            active: components["schemas"]["MissedOpportunityActive"][];
-            recent: {
-                [key: string]: unknown;
-            }[];
-        };
         /** @description Calibration inflation guardrail (otomatik kısma) flag durumu. */
         CalibrationGuardrailStatus: {
             enabled: boolean;
@@ -4780,7 +4732,6 @@ export interface components {
             paper_safe: boolean;
             no_execution: boolean;
             learned?: components["schemas"]["GovernorReportSection"];
-            found_missed_opportunities?: components["schemas"]["GovernorReportSection"];
             proposals?: components["schemas"]["GovernorReportSection"];
             other_pending_approvals?: components["schemas"]["GovernorReportSection"];
             data_trust?: components["schemas"]["GovernorReportSection"];
@@ -5788,26 +5739,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ConflictGateStatus"];
-                };
-            };
-        };
-    };
-    getMissedOpportunities: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["MissedOpportunitiesView"];
                 };
             };
         };

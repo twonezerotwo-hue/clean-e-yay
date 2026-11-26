@@ -4,8 +4,9 @@ Gerçek backtest motoru ZATEN VAR (packages/data/strategy_backtest.py canlı
 teknik motoru geçmiş barlarda yeniden çalıştırır; packages/data/backtest.py R2
 rolling). Bu modül onu TEKRARLAMAZ — eksik olan **karar-değeri taşıyan kanıt
 sentezini** ekler: biriken kapalı outcome'lar üstünde **çok-katlı walk-forward
-stabilite** (edge zaman içinde tutarlı mı, fluke mı?) + missed_opportunity
-counterfactual (açmadıklarımızın sonucu). CP4 öz-ayar bir öneriyi uygulamadan
+stabilite** (edge zaman içinde tutarlı mı, fluke mı?). (Kaçan fırsat sayıları 26 Kasım
+2026'da kaçan fırsat hattıyla kalktı; açılmayan adayların sonucu kapı karşı-olgu
+defterinde.) CP4 öz-ayar bir öneriyi uygulamadan
 ÖNCE buraya bakıp "edge yeterince stabil mi" diye güven tartar.
 
 Hafif: yalnız mevcut outcomes (~yüzlerce kayıt) üstünde aritmetik — ağır
@@ -83,8 +84,7 @@ def walk_forward_stability(pnls: list[float], folds: int = _MIN_FOLDS) -> dict:
 
 
 def report() -> dict:
-    """Edge kanıt özeti: stabilite + counterfactual + tek-kelime verdict."""
-    from packages.learning import missed_opportunity
+    """Edge kanıt özeti: stabilite + tek-kelime verdict."""
     from packages.learning import outcomes as outcomes_mod
 
     # Veri hijyeni (2026-07-12): legacy kayıtlar edge kanıtına girmez.
@@ -96,14 +96,6 @@ def report() -> dict:
     concentration = _outlier_concentration(pnls_raw)
     labeled = sum(1 for o in outs if (o.regime or "UNKNOWN") != "UNKNOWN")
     regime_coverage = round(labeled / len(outs), 3) if outs else 0.0
-
-    mo = missed_opportunity.summary_viewmodel()
-    moc = mo.get("outcomes") or {}
-    counterfactual = {
-        "missed_win": int(moc.get("missed_win", 0) or 0),
-        "avoided_loss": int(moc.get("avoided_loss", 0) or 0),
-        "expired": int(moc.get("expired", 0) or 0),
-    }
 
     if not stab["ready"]:
         verdict = "INSUFFICIENT"
@@ -117,7 +109,6 @@ def report() -> dict:
         "total": len(outs),
         "verdict": verdict,
         "stability": stab,
-        "counterfactual": counterfactual,
         # CP4-fix #2: outlier-yoğunlaşma + rejim kapsaması teşhisi.
         "outlier_concentration": concentration,
         "outlier_dependent": outlier_dependent,

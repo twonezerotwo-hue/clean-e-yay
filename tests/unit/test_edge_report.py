@@ -44,7 +44,7 @@ def test_stability_unstable_drift() -> None:
 def test_report_shape(fresh_env) -> None:
     r = edge_report.report()
     assert "verdict" in r and r["verdict"] in {"STABLE", "UNSTABLE", "INSUFFICIENT"}
-    assert "stability" in r and "counterfactual" in r
+    assert "stability" in r and "counterfactual" not in r
     assert "safe_to_autotune" in r
     # Boş state → yetersiz → oto-tune güvenli değil.
     assert r["verdict"] == "INSUFFICIENT"

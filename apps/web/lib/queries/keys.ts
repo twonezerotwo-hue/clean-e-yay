@@ -40,7 +40,6 @@ export const qk = {
   calibration: ["learning", "calibration"] as const,
   tfWeights: ["learning", "tf-weights"] as const,
   tfTargets: ["learning", "tf-targets"] as const,
-  missedOpportunities: ["learning", "missed-opportunities"] as const,
   bookAudit: ["learning", "book-audit"] as const,
   datasetHealth: ["learning", "dataset-health"] as const,
   edgeReport: ["learning", "edge-report"] as const,

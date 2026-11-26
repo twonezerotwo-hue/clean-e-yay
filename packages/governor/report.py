@@ -47,12 +47,6 @@ def _learned() -> dict:
     return {k: s[k] for k in keys if k in s}
 
 
-def _missed() -> dict:
-    from packages.learning import missed_opportunity
-
-    return missed_opportunity.summary_viewmodel()
-
-
 def _proposals() -> dict:
     from packages.governor import proposals
 
@@ -100,7 +94,6 @@ def build_report() -> dict:
         "paper_safe": True,
         "no_execution": True,
         "learned": _safe(_learned),
-        "found_missed_opportunities": _safe(_missed),
         "proposals": _safe(_proposals),
         "other_pending_approvals": _safe(_other_pending_approvals),
         "data_trust": _safe(_data_trust),

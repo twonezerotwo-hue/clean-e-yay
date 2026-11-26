@@ -79,8 +79,7 @@ regime:
 # EV/Kelly p(win) kaynağı: yeterli örnekli (tf|rejim → tf) hücrede GERÇEKLEŞMİŞ
 # isabet oranı; hücre yoksa kalibre güven (sahte p uydurulmaz). Tabloyu learning
 # worker yazar (data/runtime/empirical_pwin.json). min_samples: hücrenin sayılması
-# için kazanç+kayıp adedi (başabaş paydaya girmez). Counterfactual'lar tabloda
-# AYRI kanalda (cf_by_tf) yalnız gözlem olarak durur.
+# için kazanç+kayıp adedi (başabaş paydaya girmez).
 empirical_pwin:
   min_samples: 20
 
@@ -1016,21 +1015,6 @@ news_prepared_setups:
   ttl_hours: 72
   max_active: 16
 
-# Missed Opportunity motoru (learning yakıtı; spec v2.3). Açılmayan valid
-# setup'ları (conflict_final_action=CANDIDATE_OPEN ama canlı açmadı) TTL boyunca
-# izler: fiyat önce TP'ye mi (missed_win) SL'e mi (avoided_loss) değdi?
-# PAPER_SAFE — paper'a ASLA dokunmaz, yalnızca shadow kaydı + cached barlardan
-# ölçer. enabled=false (varsayılan) → inert. Gözlem amaçlı; açmak risksiz, Faz 4
-# (conflict-gate genişletme) kararına veri toplar. Owner true yapınca toplanır.
-missed_opportunity:
-  # 2026-06-29: AÇILDI. INTRADAY/TACTICAL conflict_gate HARD'a alındığı için
-  # bloklanan NO_TRADE/WATCH setup'larının gerçekte TP'ye mi (missed_win) SL'e mi
-  # (avoided_loss) gideceğini ölçer — fazla-bloklama olup olmadığını izler.
-  # PAPER_SAFE: paper'a dokunmaz, yalnızca cached barlardan ölçer.
-  enabled: true
-  min_rr: 1.0
-  ttl_hours: { "15m": 6, "1h": 24, "4h": 72, "1d": 240, "1w": 0 }
-
 # Faz 8 — Conflict Gate (spec v2.3 §28 devamı): eski decide_matrix önerisini
 # yeni Conflict Resolver'ın verdict'iyle, trade_profile bazlı KADEMELİ sıkılıkla
 # süzer (bkz. packages/decision/conflict_gate.py docstring). enabled=false (varsayılan) → her zaman fail-open, eski sistemin
@@ -1043,7 +1027,7 @@ missed_opportunity:
 # eski engine score<=45'te zayıf/geçersiz setup'lara short açıyordu; HARD'da
 # resolver NO_TRADE/WATCH/BLOCKED derse paper açılışı BLOKLANIR, yalnız
 # CANDIDATE_OPEN açılır (gerçek tetiklenmiş + geçerli RR/size). Fazla-bloklama
-# riski missed_opportunity (yukarıda AÇIK) ile izleniyor. SCALP/SWING henüz OFF.
+# riski kapı karşı-olgu defterinde izleniyor. SCALP/SWING henüz OFF.
 conflict_gate:
   enabled: true
   profile_modes:

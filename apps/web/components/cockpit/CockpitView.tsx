@@ -43,7 +43,6 @@ import { WeightProposalPanel } from "@/components/panels/WeightProposalPanel";
 import { WeightHistoryPanel } from "@/components/panels/WeightHistoryPanel";
 import { TfWeightsPanel } from "@/components/panels/TfWeightsPanel";
 import { TfTargetsPanel } from "@/components/panels/TfTargetsPanel";
-import { MissedOpportunitiesPanel } from "@/components/panels/MissedOpportunitiesPanel";
 import { BookAuditPanel } from "@/components/panels/BookAuditPanel";
 import { DatasetHealthPanel } from "@/components/panels/DatasetHealthPanel";
 import { EdgeReportPanel } from "@/components/panels/EdgeReportPanel";
@@ -1596,16 +1595,6 @@ export function CockpitView() {
 
           <Layer2DetailGroup
             index="S1"
-            title="Kacan Firsatlar"
-            detail="Acilmayan valid setup'larin sonucu: kacan kazanc, onlenen zarar ve sure dolan adaylar (gozlem)."
-            badge="shadow"
-            badgeTone="border-fuchsia-400/30 bg-fuchsia-400/10 text-fuchsia-200"
-          >
-            <MissedOpportunitiesPanel />
-          </Layer2DetailGroup>
-
-          <Layer2DetailGroup
-            index="S2"
             title="Conflict Gate Ogrenmesi"
             detail="Conflict gate profil modlari ve gecmis route dogrulama performansi — gate aktivasyon kararina veri (gozlem)."
             badge="shadow"

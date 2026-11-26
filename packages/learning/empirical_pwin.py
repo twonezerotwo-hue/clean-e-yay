@@ -43,11 +43,7 @@ def _path() -> Path:
 
 
 def cfg() -> dict:
-    """`empirical_pwin` config'i (min_samples default 20).
-
-    Counterfactual (missed-opportunity) sayımları tabloda AYRI kanalda (cf_by_tf)
-    yalnız gözlem olarak durur; p(win)'e harmanlanmaz (F5-1 harman flag'i hiç
-    açılmadı — temizlikte söküldü)."""
+    """`empirical_pwin` config'i (min_samples default 20)."""
     try:
         raw = load_thresholds().get("empirical_pwin") or {}
         return {"min_samples": max(1, int(raw.get("min_samples", DEFAULT_MIN_SAMPLES)))}
@@ -77,16 +73,11 @@ def _cell_key(timeframe: str, regime: str) -> str:
     return f"{timeframe}|{regime}"
 
 
-def build_table(outcomes, counterfactuals: list[dict] | None = None) -> dict:
-    """Verified outcome'lardan (tf|rejim) + tf hücre tablosu (pure).
-
-    F5-1 — `counterfactuals` (missed_opportunity çözümleri) AYRI kanala
-    yazılır (`cf_by_tf`): win=missed_win, loss=avoided_loss, expired paydaya
-    girmez. Gerçek ölçüm hücreleri counterfactual ile KİRLETİLMEZ — harman
-    yalnız lookup'ta, flag'le ve son-çare fallback olarak yapılır."""
+def build_table(outcomes) -> dict:
+    """Verified outcome'lardan (tf|rejim) + tf hücre tablosu (pure). (Kaçan fırsat
+    kanalı `cf_by_tf` 26 Kasım 2026'da kalktı; karar motoru onu hiç okumuyordu.)"""
     cells: dict[str, dict] = {}
     by_tf: dict[str, dict] = {}
-    cf_by_tf: dict[str, dict] = {}
 
     def _bump(bucket: dict, key: str, won: bool, r_mult: float | None = None) -> None:
         c = bucket.setdefault(
@@ -116,14 +107,6 @@ def build_table(outcomes, counterfactuals: list[dict] | None = None) -> dict:
         _bump(cells, _cell_key(tf, regime), won, r_mult)
         _bump(by_tf, tf, won, r_mult)
 
-    for r in counterfactuals or []:
-        oc = r.get("outcome")
-        if oc not in ("missed_win", "avoided_loss"):
-            continue  # expired: net sonuç yok
-        # Counterfactual'ların gerçekleşen R'si yok (paper açılmadı) → R istatistiği
-        # yalnız gerçek outcome'lardan; cf sadece p_win harmanına girer.
-        _bump(cf_by_tf, str(r.get("timeframe") or "1d"), oc == "missed_win")
-
     def _finalize(bucket: dict) -> dict:
         out = {}
         for key, c in sorted(bucket.items()):
@@ -151,8 +134,6 @@ def build_table(outcomes, counterfactuals: list[dict] | None = None) -> dict:
         "min_samples": min_samples,
         "cells": fin_cells,
         "by_tf": fin_tf,
-        # F5-1 — counterfactual kanalı (ayrı; gerçek hücreleri kirletmez)
-        "cf_by_tf": _finalize(cf_by_tf),
         "cell_count": len(fin_cells),
         "sufficient_count": sum(
             1 for c in fin_cells.values() if c["n"] >= min_samples
@@ -162,17 +143,11 @@ def build_table(outcomes, counterfactuals: list[dict] | None = None) -> dict:
 
 def write_table(state=None) -> dict:
     """Tabloyu üret + atomik yaz (learning worker her cycle çağırır)."""
-    from packages.learning import missed_opportunity
     from packages.learning import outcomes as outcomes_mod
 
-    try:
-        cf = missed_opportunity.resolutions()
-    except Exception:
-        cf = []  # counterfactual kanalı best-effort — tabloyu düşürmez
     # Veri hijyeni (2026-07-12): legacy kayıtlar p_win tablosunu zehirlemesin.
     payload = build_table(
         outcomes_mod.learning_grade(outcomes_mod.outcomes_from_state(state)),
-        counterfactuals=cf,
     )
     p = _path()
     with _LOCK:

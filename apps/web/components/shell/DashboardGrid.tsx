@@ -53,7 +53,6 @@ const PANEL_ID_BY_COMPONENT: Record<string, string> = {
   SystemHealthBar: "system_health",
   TfWeightsPanel: "tf_weights",
   TfTargetsPanel: "tf_targets",
-  MissedOpportunitiesPanel: "missed_opportunities",
   CalibrationJumpsPanel: "calibration_jumps",
   GovernorPanel: "governor",
   TimeframeMatrixPanel: "timeframe_matrix",

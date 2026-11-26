@@ -136,7 +136,6 @@ def test_report_structure_and_crash_safe(iso_store) -> None:
     for key in (
         "generated_at",
         "learned",
-        "found_missed_opportunities",
         "proposals",
         "other_pending_approvals",
         "data_trust",
