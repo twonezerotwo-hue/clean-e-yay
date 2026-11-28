@@ -611,16 +611,6 @@ export const useOpenIdeaPaperPosition = () => {
   });
 };
 
-export const useBacktestChallenger = () => {
-  const policy = usePanelQueryPolicy(5 * 60_000);
-  return useQuery({
-    queryKey: qk.backtestChallenger,
-    queryFn: api.backtestChallenger,
-    staleTime: 60_000,
-    ...policy,
-  });
-};
-
 // I6 — Öğrenme Beyni (evidence_bus): tüm öğrenme kanıtı + I2 olgunluk damgası.
 export const useEvidenceBus = () => {
   const policy = usePanelQueryPolicy(5 * 60_000);

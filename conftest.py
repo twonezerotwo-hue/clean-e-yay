@@ -95,11 +95,6 @@ def _package1_flags_off_by_default(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("CHAT_LLM_LOCAL_FIRST", raising=False)
     monkeypatch.delenv("OLLAMA_NUM_CTX", raising=False)
     monkeypatch.delenv("OLLAMA_MAX_INPUT_CHARS", raising=False)
-    # B-1 (2026-07-04) — geçmiş yeniden-kurma fidelity flag'i testlerde OFF.
-    monkeypatch.delenv("BACKTEST_RECON_ENABLED", raising=False)
-    # B-2 (2026-07-05) — challenger üretim flag'i testlerde default OFF (üretim
-    # ağır + izole kanal; flag'i test eden testler kendisi açar).
-    monkeypatch.delenv("BACKTEST_CHALLENGER_ENABLED", raising=False)
     # K-0b (2026-07-04) — keşif motoru testlerde default OFF (baseline'da
     # learning koşusu bayt-eşdeğer); flag'i test eden testler kendisi açar.
     monkeypatch.delenv("DISCOVERY_SCAN_ENABLED", raising=False)

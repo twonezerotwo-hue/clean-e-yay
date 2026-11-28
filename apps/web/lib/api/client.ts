@@ -47,7 +47,6 @@ import type {
   DiscoveryView,
   IdeaBoardView,
   IdeaPaperOpenResult,
-  BacktestChallengerView,
   GuardSafetyView,
   CalibrationJumpsView,
   GovernorReport,
@@ -706,8 +705,6 @@ export const api = {
       { method: "POST" },
     ),
   evidenceBus: () => fetchJSON<EvidenceBusView>("/api/v1/learning/evidence-bus"),
-  backtestChallenger: () =>
-    fetchJSON<BacktestChallengerView>("/api/v1/learning/backtest-challenger"),
   guardSafety: () =>
     fetchJSON<GuardSafetyView>("/api/v1/learning/guard-safety"),
   guardSafetyAdopt: () =>

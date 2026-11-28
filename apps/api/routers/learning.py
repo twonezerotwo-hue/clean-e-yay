@@ -19,7 +19,6 @@ from packages.learning import (
     calibration_audit,
     calibration_store,
     calibration_trainer,
-    challenger_trainer,
     cohorts,
     council_scorecard,
     dataset_health,
@@ -549,17 +548,6 @@ def get_news_event_study() -> dict:
     dürüst `global_verdict=UNPROVEN` ("news ağırlığı kanıtsız"). Hiçbir çıktı
     karara/ağırlığa dokunmaz — news görünürlüğü challenger'a AYRI owner kararı."""
     return news_event_study.viewmodel()
-
-
-@router.get("/learning/backtest-challenger")
-def get_backtest_challenger() -> dict:
-    """B serisi — backtest-challenger kanıt görünümü (read-only, PAPER_SAFE).
-
-    İZOLE/SHADOW: geçmiş backtest'ten türeyen quantum ayrım karnesi (rejim başına
-    DISCRIMINATES/INVERSE/FLAT), challenger ağırlık önerileri (champion delta) ve
-    B-4 terfi durumu. Canlı ağırlık/paper/karara ASLA dokunmaz. Flag
-    BACKTEST_CHALLENGER_ENABLED kapalıysa enabled=false + boş görünüm."""
-    return challenger_trainer.viewmodel()
 
 
 @router.get("/learning/forward-test-90d")

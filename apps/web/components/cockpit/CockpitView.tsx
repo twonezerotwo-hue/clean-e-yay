@@ -57,7 +57,6 @@ import { CouncilPanel } from "@/components/panels/CouncilPanel";
 import { ExitBacktestPanel } from "@/components/panels/ExitBacktestPanel";
 import { ZoneProposerPanel } from "@/components/panels/ZoneProposerPanel";
 import { DiscoveryPanel } from "@/components/panels/DiscoveryPanel";
-import { BacktestChallengerPanel } from "@/components/panels/BacktestChallengerPanel";
 import { ThresholdAutotunePanel } from "@/components/panels/ThresholdAutotunePanel";
 import { ThresholdAbPanel } from "@/components/panels/ThresholdAbPanel";
 import { GuardSafetyPanel } from "@/components/panels/GuardSafetyPanel";
@@ -1498,7 +1497,7 @@ export function CockpitView() {
               <LearnStep step="06" label="Çıkış otopsisi — en pahalı çıkış hataları">
                 <ExitForensicsPanel />
               </LearnStep>
-              <LearnStep step="07" label="Eşikler — otomatik ince-ayar + elle A/B deney">
+              <LearnStep step="07" label="Eşikler — öneri + elle A/B deney (canlı eşik yalnız owner onayıyla)">
                 <TabbedBox
                   tabs={[
                     { key: "autotune", label: "İnce-ayar", node: <ThresholdAutotunePanel /> },
@@ -1506,19 +1505,16 @@ export function CockpitView() {
                   ]}
                 />
               </LearnStep>
-              <LearnStep step="08" label="Koruma filtreleri — zarar verirse oto-kapanır">
+              <LearnStep step="08" label="Koruma filtreleri — zarar verirse kapatma önerir">
                 <GuardSafetyPanel />
               </LearnStep>
               <LearnStep step="09" label="Keşif — yeni aday tarama (hipotetik, işlem açmaz)">
                 <DiscoveryPanel />
               </LearnStep>
-              <LearnStep step="10" label="Backtest challenger — geçmiş-prova kanıtı (izole, canlıya dokunmaz)">
-                <BacktestChallengerPanel />
-              </LearnStep>
-              <LearnStep step="11" label="Sinyal karnesi — hangi sinyal hangi zaman diliminde kanıtlı" wide>
+              <LearnStep step="10" label="Sinyal karnesi — hangi sinyal hangi zaman diliminde kanıtlı" wide>
                 <SubsignalScorecardPanel />
               </LearnStep>
-              <LearnStep step="12" label="Teknik oy (v4, canlı) — üretici + doğrulama karnesi; geri alma owner kararı" wide>
+              <LearnStep step="11" label="Teknik oy (v4, canlı) — üretici + doğrulama karnesi; geri alma owner kararı" wide>
                 <TabbedBox
                   tabs={[
                     { key: "producer", label: "Canlı yön", node: <TfScoringShadowPanel /> },
@@ -1526,16 +1522,16 @@ export function CockpitView() {
                   ]}
                 />
               </LearnStep>
-              <LearnStep step="13" label="Haberin edge'i (gölge) — haber sonrası fiyat yönü tutuyor mu, ölçer karar vermez" wide>
+              <LearnStep step="12" label="Haberin edge'i (gölge) — haber sonrası fiyat yönü tutuyor mu, ölçer karar vermez" wide>
                 <NewsEventStudyPanel />
               </LearnStep>
-              <LearnStep step="14" label="Çıkış verim backtest — en verimli sabit + trailing stop aralığı (gerçek fiyat geçmişi)" wide>
+              <LearnStep step="13" label="Çıkış verim backtest — en verimli sabit + trailing stop aralığı (gerçek fiyat geçmişi)" wide>
                 <ExitBacktestPanel />
               </LearnStep>
-              <LearnStep step="15" label="Bölge önerileri — owner incelemesi için işaretli grafik; canlı SL/TP'ye otomatik etki etmez" wide>
+              <LearnStep step="14" label="Bölge önerileri — owner incelemesi için işaretli grafik; canlı SL/TP'ye otomatik etki etmez" wide>
                 <ZoneProposerPanel />
               </LearnStep>
-              <LearnStep step="16" label="Konsey karnesi — katmanlar birlikte ne söylüyor: modül yayılımları + veriden türetilen sanki-filtreler (in-sample kanıt)" wide>
+              <LearnStep step="15" label="Konsey karnesi — katmanlar birlikte ne söylüyor: modül yayılımları + veriden türetilen sanki-filtreler (in-sample kanıt)" wide>
                 <CouncilPanel />
               </LearnStep>
             </div>

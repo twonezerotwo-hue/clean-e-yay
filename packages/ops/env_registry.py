@@ -21,8 +21,6 @@ REGISTRY: dict[str, str] = {
     # ── behavior
     "ACTIVATION_MIN_OUTCOMES": "behavior",
     "ACTIVATION_MONITOR_MAX_AGE_HOURS": "behavior",
-    "BACKTEST_CHALLENGER_ENABLED": "behavior",
-    "BACKTEST_RECON_ENABLED": "behavior",
     "DISCOVERY_SCAN_ENABLED": "behavior",
     "E_YAY_CANONICAL_RUNTIME": "behavior",
     "GUARD_MONITOR_MAX_AGE_HOURS": "behavior",
@@ -33,7 +31,6 @@ REGISTRY: dict[str, str] = {
     # ── runtime
     "API_HOST": "runtime",
     "API_PORT": "runtime",
-    "BACKTEST_CHALLENGER_INTERVAL_SEC": "runtime",
     "CAUSAL_OBSERVE_INTERVAL_SEC": "runtime",
     "CORS_EXTRA_ORIGINS": "runtime",
     "COUNCIL_SCORECARD_INTERVAL_SEC": "runtime",
@@ -107,10 +104,6 @@ REGISTRY: dict[str, str] = {
     "TICK_WORKER_DISABLE_LOCK": "test",
     # ── path
     "ACTIVATION_WATCHDOG_PATH": "path",
-    "BACKTEST_CHALLENGER_META_PATH": "path",
-    "BACKTEST_CHALLENGER_PATH": "path",
-    "BACKTEST_CHALLENGER_REPORT_PATH": "path",
-    "BACKTEST_RECON_PATH": "path",
     "BAR_HISTORY_DIR": "path",
     "CALIBRATION_AUDIT_PATH": "path",
     "CALIBRATION_STORE_PATH": "path",

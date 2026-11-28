@@ -22,7 +22,6 @@ DEPLOY="$ROOT/scripts/deploy-from-github.sh"
 # AWS'e senkronlanması gereken davranış/öğrenme flag'leri (tek doğruluk kaynağı).
 SYNC_FLAGS="
 DISCOVERY_SCAN_ENABLED
-BACKTEST_CHALLENGER_ENABLED
 EYAY_KRAKEN_OHLCV_ENABLED
 EYAY_BINANCE_OHLCV_ENABLED
 SUBSIGNAL_SCORECARD_ENABLED

@@ -5,7 +5,6 @@ DELETE /api/v1/paper-trading/orders
 DELETE /api/v1/paper-trading/orders/{order_id}
 GET /api/v1/analysis/asset/{symbol}
 GET /api/v1/assets
-GET /api/v1/learning/backtest-challenger
 GET /api/v1/learning/book-audit
 GET /api/v1/learning/council
 GET /api/v1/learning/dataset-health

@@ -70,11 +70,6 @@ COVERAGE: dict[str, dict] = {
         "reason": "Keşif tarayıcı GÖLGEDE koşar (K serisi); işlem açmaz, canlı karar "
                   "zinciri/RiskGate'e dokunmaz — izleme gereksiz.",
     },
-    "BACKTEST_CHALLENGER_ENABLED": {
-        "mechanism": SHADOW_EXEMPT, "monitor": None,
-        "reason": "İzole backtest challenger kanalı (B serisi); canlı ağırlık/paper/"
-                  "karara ASLA yazmaz — ayrı kanal.",
-    },
     "SUBSIGNAL_SCORECARD_ENABLED": {
         "mechanism": SHADOW_EXEMPT, "monitor": None,
         "reason": "Sinyal karnesi (D5) salt-gözlem: haftalık sinyal×TF ileri-getiri "

@@ -59,7 +59,6 @@ export const qk = {
   newsEventStudy: ["learning", "news-event-study"] as const,
   discovery: ["learning", "discovery"] as const,
   evidenceBus: ["learning", "evidence-bus"] as const,
-  backtestChallenger: ["learning", "backtest-challenger"] as const,
   guardSafety: ["learning", "guard-safety"] as const,
   calibrationJumps: ["learning", "calibration-jumps"] as const,
   historicalEdge: (fingerprint: string) =>

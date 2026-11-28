@@ -25,7 +25,7 @@ from packages.learning import maturity_gate
 # Kaynak sınıfları (I3 kaynak seçicinin temeli).
 LIVE = "live"          # canlı paper outcome'larından
 SHADOW = "shadow"      # gölge kanallardan (keşif/missed-opp)
-BACKTEST = "backtest"  # geçmiş-prova (challenger) kayıtlarından
+BACKTEST = "backtest"  # geçmiş-prova kayıtları (challenger hattı 26 Kasım 2026'da kalktı; sınıf boş)
 
 
 @dataclass
@@ -64,24 +64,6 @@ def _signal_quality_records() -> list[EvidenceRecord]:
                 detail={"n_win": nw, "n_loss": nl, "separation": d.get("separation")},
             ))
     return out
-
-
-def _quantum_records() -> list[EvidenceRecord]:
-    """Quantum ayrım karnesi (BACKTEST challenger): rejim başına DISCRIMINATES/…"""
-    from packages.learning import challenger_trainer as ct
-
-    vm = ct.viewmodel()
-    if not vm.get("enabled"):
-        return []
-    return [
-        EvidenceRecord(
-            topic="quantum_discrimination", subject=f"quantum@{q.get('regime')}",
-            source=BACKTEST, regime=q.get("regime"), n_samples=q.get("n"),
-            statistic=q.get("separation"), verdict=q.get("verdict"),
-            detail={"correlation": q.get("correlation")},
-        )
-        for q in (vm.get("quantum") or [])
-    ]
 
 
 def _edge_records() -> list[EvidenceRecord]:
@@ -183,7 +165,6 @@ def _tf_calibration_records() -> list[EvidenceRecord]:
 # Kayıtlı kaynak adaptörleri (yeni öğrenici eklendikçe buraya bir satır).
 _SOURCES = (
     _signal_quality_records,
-    _quantum_records,
     _edge_records,
     _discovery_records,
     _tf_calibration_records,

@@ -62,11 +62,6 @@ set_env() {  # set_env KEY VALUE — replace-or-add (değeri ZORLA ayarla; diğe
 # AÇIK — salt-gozlem (karar zinciri/RiskGate/tik'e sifir temas), sektor karnesi
 # birikmeye baslar. Lokal .env'de de =1 (owner kurali: lokal+AWS senkron).
 ensure_env DISCOVERY_SCAN_ENABLED 1
-# B serisi backtest-challenger (2026-07-05, owner karari): izole/shadow gecmis-
-# yeniden-kurma verisi otomatik biriksin. Canli agirlik/paper/karara temas ETMEZ
-# (yalniz backtest_challenger dosyalari); B-2 uretim (gunluk interval) + B-3 karne
-# + B-4 terfi degerlendirmesi. Lokal .env'de de =1 (owner kurali: lokal+AWS senkron).
-set_env BACKTEST_CHALLENGER_ENABLED 0
 # Public, read-only crypto OHLCV fallback. CoinGecko remains secondary;
 # this prevents a rate-limit from making technical cells use old disk bars.
 ensure_env EYAY_KRAKEN_OHLCV_ENABLED true

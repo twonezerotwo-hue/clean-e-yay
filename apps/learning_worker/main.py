@@ -585,96 +585,6 @@ def run_once() -> dict:
         discovery_promotion_status = f"ERROR:{type(exc).__name__}"
         errors.append(_err("discovery_promotion", exc))
 
-    # B-1 — geçmiş çok-modül yeniden-kurma sadakat (fidelity) kontrolü. Flag
-    # BACKTEST_RECON_ENABLED OFF → tam no-op. SALT-ÖLÇÜM/İZOLE: canlı outcome
-    # defterine/ağırlığa temas etmez, yalnız fidelity artifact'ı yazar. Import
-    # lazy — flag kapalıyken decision/consensus bağımlılıkları yüklenmez.
-    backtest_recon_status = "DISABLED"
-    laps.append(("backtest_recon", time.monotonic()))
-    try:
-        from packages.learning import backtest_recon
-        if backtest_recon.enabled():
-            fr = backtest_recon.fidelity_report()
-            backtest_recon_status = str(fr.get("verdict", "UNKNOWN"))
-            log.info(
-                "backtest_recon: verdict=%s quantum_delta=%s",
-                backtest_recon_status, fr.get("quantum_delta"),
-            )
-    except Exception as exc:  # defensive — worker patlamamalı
-        backtest_recon_status = f"ERROR:{type(exc).__name__}"
-        errors.append(_err("backtest_recon", exc))
-
-    # B-2 — rejim-çeşitli outcome üretimi (İZOLE challenger kanalı). Flag
-    # BACKTEST_CHALLENGER_ENABLED OFF → tam no-op. B-1 fidelity'den AYRI flag
-    # (üretim ağır: 1-2 yıl yürür). INTERVAL-kapılı (her cycle değil). Canlı
-    # outcome defterine/ağırlığa/paper'a ASLA yazmaz — yalnız challenger artifact.
-    backtest_challenger_status = "DISABLED"
-    laps.append(("backtest_challenger", time.monotonic()))
-    try:
-        from packages.learning import backtest_recon as _br_prod
-        if _br_prod.challenger_enabled():
-            bc = _br_prod.run_if_due()
-            backtest_challenger_status = str(bc.get("status", "UNKNOWN"))
-            if backtest_challenger_status == "OK":
-                log.info(
-                    "backtest_challenger: records=%s regimes=%s labels=%s fred_liq=%s",
-                    bc.get("records"), bc.get("regime_histogram"),
-                    bc.get("label_histogram"), bc.get("fred_liquidity"),
-                )
-    except Exception as exc:  # defensive — worker patlamamalı
-        backtest_challenger_status = f"ERROR:{type(exc).__name__}"
-        errors.append(_err("backtest_challenger", exc))
-
-    # B-3 — challenger ağırlık eğitimi + quantum ayrım karnesi (cat 6). AYNI
-    # BACKTEST_CHALLENGER_ENABLED kapısı (challenger boru hattı tek şey): B-2
-    # üretiminden SONRA jsonl'i okur → rejim başına challenger ağırlık (canlı
-    # trainer matematiği reuse) + quantum karnesi, İZOLE rapora. Canlı ağırlığa/
-    # config'e ASLA yazmaz (owner terfi = B-4, kırmızı çizgi). Ucuz (jsonl okur).
-    challenger_train_status = "DISABLED"
-    laps.append(("challenger_trainer", time.monotonic()))
-    try:
-        from packages.learning import backtest_recon as _br_gate
-        if _br_gate.challenger_enabled():
-            from packages.learning import challenger_trainer
-            ct = challenger_trainer.run()
-            challenger_train_status = str(ct.get("status", "UNKNOWN"))
-            if challenger_train_status == "OK":
-                log.info(
-                    "challenger_trainer: proposed_regimes=%s quantum=%s",
-                    ct.get("proposed_regimes"),
-                    (ct.get("quantum_scorecard") or {}).get("summary"),
-                )
-    except Exception as exc:  # defensive — worker patlamamalı
-        challenger_train_status = f"ERROR:{type(exc).__name__}"
-        errors.append(_err("challenger_trainer", exc))
-
-    # B-4 — challenger ağırlık TERFİ kriteri (owner ÖNERİ; KIRMIZI ÇİZGİ). AYNI
-    # BACKTEST_CHALLENGER_ENABLED kapısı: B-3 eğitimden SONRA challenger ağırlık
-    # setlerini champion'a karşı EŞLEŞMELİ kıyaslar (kayıtları yeniden-harmanlar);
-    # üç kriter tutarsa governor defterine STRATEGY_ENABLE paketi sunar (dedupe'lu,
-    # tek PENDING). Ağırlık terfisi OTOMATİK DEĞİL — onay bile canlı ağırlığı
-    # değiştirmez (owner-gated rebalance ayrı). Ucuz (jsonl okur + yeniden-harman).
-    challenger_promotion_status = "DISABLED"
-    laps.append(("challenger_promotion", time.monotonic()))
-    try:
-        from packages.learning import backtest_recon as _br_promo
-        if _br_promo.challenger_enabled():
-            from packages.learning import challenger_promotion
-            cp = challenger_promotion.run()
-            challenger_promotion_status = str(cp.get("status", "UNKNOWN"))
-            if challenger_promotion_status == "READY":
-                log.info(
-                    "challenger_promotion READY — owner paketi sunuldu "
-                    "(proposal_id=%s challenger_wins=%s/%s regimes=%s)",
-                    cp.get("proposal_id"),
-                    cp.get("challenger_wins"),
-                    cp.get("challenger_wins", 0) + cp.get("champion_wins", 0),
-                    cp.get("proposed_regimes"),
-                )
-    except Exception as exc:  # defensive — worker patlamamalı
-        challenger_promotion_status = f"ERROR:{type(exc).__name__}"
-        errors.append(_err("challenger_promotion", exc))
-
     # Rejim risk freni önerisi: AUTO kohort ortalama net R < 0 (min örnek) → fren.
     # Öneri dosyasına yazılır; engine donmuş canlı tabloyu okur (owner onayıyla değişir).
     regime_brake_status = "ERROR"
@@ -959,10 +869,6 @@ def run_once() -> dict:
         "news_forecast_status": news_forecast_status,  # haber öngörüsü (2026-10-05)
         "ideas_status": ideas_status,  # fikir panosu + YZ değerlendirmesi (2026-10-05)
         "discovery_promotion_status": discovery_promotion_status,  # K-4 terfi kriteri (DISABLED=flag OFF)
-        "backtest_recon_status": backtest_recon_status,  # B-1 fidelity (DISABLED=flag OFF)
-        "backtest_challenger_status": backtest_challenger_status,  # B-2 üretim (DISABLED=flag OFF)
-        "challenger_train_status": challenger_train_status,  # B-3 ağırlık+quantum karne (DISABLED=flag OFF)
-        "challenger_promotion_status": challenger_promotion_status,  # B-4 terfi kriteri (DISABLED=flag OFF)
         "regime_brake_status": regime_brake_status,  # Y-1 rejim risk freni tablosu (gözlem; uygulama flag'le)
         "news_study_status": news_study_status,  # Y-6 haber olay-çalışması karnesi (SALT-GÖZLEM)
         "exit_backtest_status": exit_backtest_status,  # Çıkış stop-verim backtest (interval-kapılı; SKIP_FRESH=taze)
