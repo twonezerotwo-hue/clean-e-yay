@@ -18,10 +18,7 @@ import pytest
 from packages.data.registry.loader import threshold_override
 from packages.learning import regime_risk_brake as rrb
 
-_CFG = {"regime_risk_brake": {
-    "min_live_n": 3, "min_backtest_n": 5,
-    "brake_mult": 0.6, "floor": 0.4, "max_age_hours": 48,
-}}
+_CFG = {"regime_risk_brake": {"min_live_n": 3, "brake_mult": 0.6, "floor": 0.4}}
 
 
 @pytest.fixture(autouse=True)
